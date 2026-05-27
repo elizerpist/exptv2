@@ -5,6 +5,9 @@ import 'models/transaction_category.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_menu_overlay.dart';
+import 'models/category_budget_bar_data.dart';
+import 'widgets/header_card/category_budget_stage.dart';
+import 'widgets/header_card/category_limit_editor_sheet.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/summary_pill.dart';
@@ -90,6 +93,11 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   ),
                 ],
               ),
+              if (_headerExpanded)
+                CategoryBudgetStage(
+                  bars: widget.store.categoryBudgetBars,
+                  onBarTap: _openLimitEditor,
+                ),
               TransactionHeaderCard(
                 balanceText: widget.store.totalBalanceText,
                 expanded: _headerExpanded,
@@ -122,6 +130,34 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       _categoryMode = null;
       _editingCategory = null;
     });
+  }
+
+  void _openLimitEditor(CategoryBudgetBarData bar) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: CategoryLimitEditorSheet(
+            bar: bar,
+            onCancel: () => Navigator.of(sheetContext).pop(),
+            onSave: ({required limitAmount, required alertActive}) async {
+              await widget.store.saveCategoryLimitForBar(
+                bar,
+                limitAmount: limitAmount,
+                alertActive: alertActive,
+              );
+              if (!sheetContext.mounted) return;
+              Navigator.of(sheetContext).pop();
+            },
+          ),
+        );
+      },
+    );
   }
 
   void _openCategoryMenu() {
