@@ -124,7 +124,7 @@ class _InstalledAppPickerSheet extends StatelessWidget {
             }
             return ListView.separated(
               itemCount: apps.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (context, index) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final app = apps[index];
                 return ListTile(
