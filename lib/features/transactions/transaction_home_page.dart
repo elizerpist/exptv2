@@ -9,6 +9,7 @@ import 'widgets/category_menu/category_menu_overlay.dart';
 import 'models/category_budget_bar_data.dart';
 import 'widgets/header_card/category_budget_stage.dart';
 import 'widgets/header_card/category_limit_editor_sheet.dart';
+import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/summary_pill.dart';
@@ -65,7 +66,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
             children: [
               Column(
                 children: [
-                  const SizedBox(height: 185),
+                  const SizedBox(height: TransactionHeaderMetrics.contentTop),
                   TransactionTypePills(
                     activeType: widget.store.activeType,
                     onChanged: _setActiveType,

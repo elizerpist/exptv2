@@ -1,4 +1,5 @@
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,7 +26,7 @@ void main() {
       tester
           .getSize(find.byKey(const ValueKey('transaction-header-card')))
           .height,
-      204,
+      TransactionHeaderMetrics.cardHeight,
     );
     expect(find.text('ExpenseTracker'), findsOneWidget);
     expect(find.text('Egyenleg'), findsOneWidget);

@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../models/category_budget_bar_data.dart';
 import 'category_budget_bar.dart';
 import 'category_summary_outline_bar.dart';
+import 'transaction_header_metrics.dart';
 
 class CategoryBudgetStage extends StatefulWidget {
   const CategoryBudgetStage({
@@ -34,13 +35,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage> {
     if (widget.bars.isEmpty) {
       return const SizedBox(
         key: ValueKey('category-budget-stage-empty'),
-        height: 205,
+        height: TransactionHeaderMetrics.cardHeight,
       );
     }
     final current = widget.bars[_index];
     return SizedBox(
       key: const ValueKey('category-budget-stage'),
-      height: 205,
+      height: TransactionHeaderMetrics.cardHeight,
       width: double.infinity,
       child: Stack(
         children: [

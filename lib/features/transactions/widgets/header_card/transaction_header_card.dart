@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import 'transaction_header_metrics.dart';
 
 class TransactionHeaderCard extends StatelessWidget {
   const TransactionHeaderCard({
@@ -18,7 +19,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final VoidCallback onExpandPressed;
   final bool expanded;
 
-  static const height = 204.0;
+  static const height = TransactionHeaderMetrics.cardHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +30,10 @@ class TransactionHeaderCard extends StatelessWidget {
       child: AnimatedSlide(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
-        offset: Offset(0, expanded ? -160 / height : 0),
+        offset: Offset(
+          0,
+          expanded ? -TransactionHeaderMetrics.expandedSlideDistance / height : 0,
+        ),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -51,7 +55,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             const Positioned(
-              top: 45,
+              top: TransactionHeaderMetrics.titleTop,
               left: 30,
               child: Text(
                 'ExpenseTracker',
@@ -63,7 +67,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 37,
+              top: TransactionHeaderMetrics.calendarTop,
               right: 27,
               child: IconButton(
                 key: const ValueKey('header-calendar-button'),
@@ -82,7 +86,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 75,
+              top: TransactionHeaderMetrics.cameraTop,
               left: 30,
               child: Container(
                 width: 45,
@@ -101,7 +105,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 120,
+              top: TransactionHeaderMetrics.magnetTop,
               left: 0,
               right: 0,
               child: SizedBox(
@@ -110,7 +114,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 129,
+              top: TransactionHeaderMetrics.balanceTop,
               left: 30,
               right: 90,
               child: AnimatedOpacity(
@@ -155,7 +159,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 140,
+              top: TransactionHeaderMetrics.categoryButtonTop,
               right: 25,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 180),
@@ -164,7 +168,7 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 188,
+              top: TransactionHeaderMetrics.expandButtonTop,
               left: 0,
               right: 0,
               child: Center(
