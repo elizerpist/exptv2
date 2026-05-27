@@ -19,12 +19,13 @@ class TransactionFilter {
     String? merchant,
     int? categoryId,
     bool clearMerchant = false,
+    bool clearCategory = false,
   }) {
     return TransactionFilter(
       type: type ?? this.type,
       searchQuery: searchQuery ?? this.searchQuery,
       merchant: clearMerchant ? null : merchant ?? this.merchant,
-      categoryId: categoryId ?? this.categoryId,
+      categoryId: clearCategory ? null : categoryId ?? this.categoryId,
     );
   }
 }

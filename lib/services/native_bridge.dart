@@ -108,6 +108,52 @@ class NativeBridge {
     return TransactionRecord.fromMap(row ?? <dynamic, dynamic>{});
   }
 
+  Future<TransactionCategory> expenseAddCategory(
+    Map<String, Object?> payload,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseAddCategory',
+      payload,
+    );
+    return TransactionCategory.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<TransactionCategory> expenseUpdateCategory(
+    int id,
+    Map<String, Object?> payload,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateCategory',
+      {'id': id, ...payload},
+    );
+    return TransactionCategory.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<bool> expenseDeleteCategory(int id) async {
+    final deleted = await _methodChannel.invokeMethod<bool>(
+      'expenseDeleteCategory',
+      {'id': id},
+    );
+    return deleted ?? false;
+  }
+
+  Future<Map<int, int>> expenseCategoryCounts() async {
+    final rows = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseCategoryCounts',
+    );
+    final counts = <int, int>{};
+    for (final entry in (rows ?? <dynamic, dynamic>{}).entries) {
+      final key = entry.key is int
+          ? entry.key as int
+          : int.parse(entry.key.toString());
+      final value = entry.value is int
+          ? entry.value as int
+          : int.parse(entry.value.toString());
+      counts[key] = value;
+    }
+    return counts;
+  }
+
   Future<bool> expenseDeleteTransaction(int id) async {
     final deleted = await _methodChannel.invokeMethod<bool>(
       'expenseDeleteTransaction',

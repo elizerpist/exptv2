@@ -25,6 +25,27 @@ class TransactionStore extends ChangeNotifier {
   SummaryWindow get summaryWindow => _summaryWindow;
   String get searchQuery => _filter.searchQuery;
   String? get merchantFilter => _filter.merchant;
+  TransactionCategory? get activeCategory {
+    final id = _filter.categoryId;
+    if (id == null) return null;
+    for (final category in _categories) {
+      if (category.transactionCategoryID == id) return category;
+    }
+    return null;
+  }
+
+  Map<int, int> get categoryTransactionCounts {
+    final counts = <int, int>{};
+    for (final transaction in _transactions) {
+      counts.update(
+        transaction.transactionCategoryID,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    return counts;
+  }
+
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionRecord> get transactions => List.unmodifiable(_transactions);
 
@@ -87,8 +108,24 @@ class TransactionStore extends ChangeNotifier {
     _filter = _filter.copyWith(
       type: type,
       clearMerchant: true,
+      clearCategory: true,
       searchQuery: '',
     );
+    notifyListeners();
+  }
+
+  void setCategoryFilter(TransactionCategory category) {
+    _filter = _filter.copyWith(
+      type: category.normalizedType,
+      categoryId: category.transactionCategoryID,
+      clearMerchant: true,
+      searchQuery: '',
+    );
+    notifyListeners();
+  }
+
+  void clearCategoryFilter() {
+    _filter = _filter.copyWith(clearCategory: true);
     notifyListeners();
   }
 
@@ -132,6 +169,53 @@ class TransactionStore extends ChangeNotifier {
       'date': date,
       'time': time,
     });
+    await _reload();
+  }
+
+  Future<void> addCategory({
+    required String name,
+    required TransactionType type,
+    required int colorSlot,
+    required int iconSlot,
+  }) async {
+    await _repository.addCategory({
+      'name': name,
+      'type': type.nativeValue,
+      'colorSlot': colorSlot,
+      'iconSlot': iconSlot,
+    });
+    await _reload();
+  }
+
+  Future<void> updateCategory(
+    TransactionCategory category, {
+    required String name,
+    required int colorSlot,
+    required int iconSlot,
+  }) async {
+    await _repository.updateCategory(category.transactionCategoryID, {
+      'name': name,
+      'type': category.normalizedType.nativeValue,
+      'colorSlot': colorSlot,
+      'iconSlot': iconSlot,
+    });
+    await _reload();
+  }
+
+  Future<bool> deleteCategory(TransactionCategory category) async {
+    final deleted = await _repository.deleteCategory(
+      category.transactionCategoryID,
+    );
+    if (deleted) {
+      if (_filter.categoryId == category.transactionCategoryID) {
+        _filter = _filter.copyWith(clearCategory: true);
+      }
+      await _reload();
+    }
+    return deleted;
+  }
+
+  Future<void> _reload() async {
     final payload = await _repository.loadBootstrap();
     _categories = payload.categories;
     _transactions = _sort(payload.transactions);

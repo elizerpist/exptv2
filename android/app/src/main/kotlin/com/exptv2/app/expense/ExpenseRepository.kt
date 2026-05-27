@@ -29,6 +29,81 @@ class ExpenseRepository(context: Context) {
         return rows.map { it.toMap() }
     }
 
+    suspend fun categoryCounts(): Map<Int, Int> {
+        seedIfEmpty()
+        return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
+    }
+
+    suspend fun addCategory(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val name = args["name"]?.toString()?.trim().orEmpty()
+        if (name.isEmpty()) {
+            throw ExpenseValidationException("INVALID_CATEGORY_NAME", "Category name is required")
+        }
+        val type = normalizeHungarianType(args["type"]?.toString())
+            ?: throw ExpenseValidationException("INVALID_CATEGORY_TYPE", "Category type is required")
+        val colorSlot = optionalInt(args["colorSlot"]) ?: 4
+        val iconSlot = optionalInt(args["iconSlot"]) ?: 0
+        val row = TransactionCategoryEntity(
+            transactionCategoryID = nextCategoryId(),
+            name = name,
+            type = type,
+            colorSlot = colorSlot,
+            iconSlot = iconSlot,
+            backgroundColor = args["backgroundColor"]?.toString() ?: colorForSlot(colorSlot),
+            icon = args["icon"]?.toString(),
+            notification = args["notification"]?.toString(),
+            hasLimit = boolArg(args["hasLimit"], false),
+            limitAmount = doubleArg(args["limitAmount"], 0.0),
+            alertActive = boolArg(args["alertActive"], false),
+            isCustomIcon = boolArg(args["isCustomIcon"], true),
+            originalIcon = args["originalIcon"]?.toString(),
+        )
+        categories.insert(row)
+        return row.toMap()
+    }
+
+    suspend fun updateCategory(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val id = optionalInt(args["id"])
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category id is required")
+        val existing = categories.byId(id)
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val name = args["name"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: throw ExpenseValidationException("INVALID_CATEGORY_NAME", "Category name is required")
+        val type = normalizeHungarianType(args["type"]?.toString()) ?: existing.type
+        val colorSlot = optionalInt(args["colorSlot"]) ?: existing.colorSlot
+        val iconSlot = optionalInt(args["iconSlot"]) ?: existing.iconSlot
+        val row = existing.copy(
+            name = name,
+            type = type,
+            colorSlot = colorSlot,
+            iconSlot = iconSlot,
+            backgroundColor = args["backgroundColor"]?.toString()
+                ?: colorSlot?.let { colorForSlot(it) }
+                ?: existing.backgroundColor,
+            icon = args["icon"]?.toString() ?: existing.icon,
+            notification = args["notification"]?.toString() ?: existing.notification,
+            hasLimit = boolArg(args["hasLimit"], existing.hasLimit),
+            limitAmount = doubleArg(args["limitAmount"], existing.limitAmount),
+            alertActive = boolArg(args["alertActive"], existing.alertActive),
+            isCustomIcon = boolArg(args["isCustomIcon"], existing.isCustomIcon),
+            originalIcon = args["originalIcon"]?.toString() ?: existing.originalIcon,
+        )
+        categories.update(row)
+        return row.toMap()
+    }
+
+    suspend fun deleteCategory(id: Int): Boolean {
+        seedIfEmpty()
+        val row = categories.byId(id) ?: return false
+        if (transactions.countByCategory(id) > 0) {
+            throw ExpenseValidationException("CATEGORY_IN_USE", "Category has transactions")
+        }
+        categories.delete(row)
+        return true
+    }
+
     suspend fun listTransactions(args: Map<*, *>): List<Map<String, Any?>> {
         seedIfEmpty()
         val type = args["type"]?.toString()
@@ -110,6 +185,8 @@ class ExpenseRepository(context: Context) {
         return if (max == null) "${prefix}01".toInt() else max + 1
     }
 
+    private suspend fun nextCategoryId(): Int = (categories.maxId() ?: 0) + 1
+
     private fun typeFromAmount(amount: Double): String = if (amount > 0) "income" else "expense"
 
     private fun displayMerchant(row: ExpenseTransactionEntity): String {
@@ -122,6 +199,49 @@ class ExpenseRepository(context: Context) {
         "expense", "kiadás" -> "kiadás"
         else -> null
     }
+
+    private fun optionalInt(value: Any?): Int? {
+        return (value as? Number)?.toInt() ?: value?.toString()?.toIntOrNull()
+    }
+
+    private fun doubleArg(value: Any?, fallback: Double): Double {
+        return (value as? Number)?.toDouble() ?: value?.toString()?.toDoubleOrNull() ?: fallback
+    }
+
+    private fun boolArg(value: Any?, fallback: Boolean): Boolean {
+        return when (value) {
+            null -> fallback
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            else -> value.toString() == "true"
+        }
+    }
+
+    private fun colorForSlot(slot: Int): String = slotColors[slot] ?: slotColors[4]!!
+
+    private val slotColors = mapOf(
+        0 to "#ef4444",
+        1 to "#f97316",
+        2 to "#eab308",
+        3 to "#84cc16",
+        4 to "#22c55e",
+        5 to "#10b981",
+        6 to "#06b6d4",
+        7 to "#0ea5e9",
+        8 to "#3b82f6",
+        9 to "#6366f1",
+        10 to "#8b5cf6",
+        11 to "#a855f7",
+        12 to "#d946ef",
+        13 to "#ec4899",
+        14 to "#f43f5e",
+        15 to "#6b7280",
+        16 to "#374151",
+        17 to "#1f2937",
+        18 to "#064e3b",
+        19 to "#7c2d12",
+        20 to "#4c1d95",
+    )
 
     private fun formatDate(value: String?): String {
         val input = value?.trim().takeUnless { it.isNullOrEmpty() }

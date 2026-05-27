@@ -47,10 +47,56 @@ void main() {
     expect(repository.savedPayloads.single['merchant'], 'New Shop');
     expect(store.visibleTransactions.first.displayMerchant, 'New Shop');
   });
+
+  test('store filters and manages categories', () async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(repository);
+    await store.start();
+
+    final category = store.categories.firstWhere((item) => item.name == 'Q');
+    store.setCategoryFilter(category);
+    expect(store.visibleTransactions.length, 3);
+    expect(store.activeCategory?.name, 'Q');
+    expect(store.categoryTransactionCounts[6], 3);
+
+    await store.addCategory(
+      name: 'Travel',
+      type: TransactionType.expense,
+      colorSlot: 8,
+      iconSlot: 3,
+    );
+    expect(repository.savedCategories.single['name'], 'Travel');
+    expect(store.activeCategories.any((item) => item.name == 'Travel'), isTrue);
+
+    final created = store.activeCategories.firstWhere(
+      (item) => item.name == 'Travel',
+    );
+    await store.updateCategory(
+      created,
+      name: 'Travel Edit',
+      colorSlot: 9,
+      iconSlot: 4,
+    );
+    expect(
+      repository.updatedCategories.single['id'],
+      created.transactionCategoryID,
+    );
+    expect(
+      store.activeCategories.any((item) => item.name == 'Travel Edit'),
+      isTrue,
+    );
+
+    final deleted = await store.deleteCategory(created);
+    expect(deleted, isTrue);
+    expect(repository.deletedCategoryIds.single, created.transactionCategoryID);
+  });
 }
 
 class FakeTransactionRepository implements TransactionRepositoryContract {
   final savedPayloads = <Map<String, Object?>>[];
+  final savedCategories = <Map<String, Object?>>[];
+  final updatedCategories = <Map<String, Object?>>[];
+  final deletedCategoryIds = <int>[];
   final categories = <TransactionCategory>[
     TransactionCategory.fromMap({
       'transactionCategoryID': 5,
@@ -119,6 +165,60 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   @override
   Future<TransactionBootstrap> loadBootstrap() async =>
       TransactionBootstrap(categories: categories, transactions: transactions);
+
+  @override
+  Future<TransactionCategory> addCategory(Map<String, Object?> payload) async {
+    savedCategories.add(payload);
+    final category = TransactionCategory.fromMap({
+      'transactionCategoryID': 14,
+      'name': payload['name'],
+      'type': 'kiadás',
+      'colorSlot': payload['colorSlot'],
+      'iconSlot': payload['iconSlot'],
+      'backgroundColor': '#3b82f6',
+      'hasLimit': false,
+      'limitAmount': 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    });
+    categories.add(category);
+    return category;
+  }
+
+  @override
+  Future<TransactionCategory> updateCategory(
+    int id,
+    Map<String, Object?> payload,
+  ) async {
+    updatedCategories.add({'id': id, ...payload});
+    final index = categories.indexWhere(
+      (category) => category.transactionCategoryID == id,
+    );
+    final category = TransactionCategory.fromMap({
+      'transactionCategoryID': id,
+      'name': payload['name'],
+      'type': 'kiadás',
+      'colorSlot': payload['colorSlot'],
+      'iconSlot': payload['iconSlot'],
+      'backgroundColor': '#6366f1',
+      'hasLimit': false,
+      'limitAmount': 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    });
+    categories[index] = category;
+    return category;
+  }
+
+  @override
+  Future<bool> deleteCategory(int id) async {
+    deletedCategoryIds.add(id);
+    categories.removeWhere((category) => category.transactionCategoryID == id);
+    return true;
+  }
+
+  @override
+  Future<Map<int, int>> categoryCounts() async => {5: 1, 6: 3};
 
   @override
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload) async {

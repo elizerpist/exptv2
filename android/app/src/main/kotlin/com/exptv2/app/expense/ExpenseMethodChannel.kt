@@ -26,6 +26,21 @@ class ExpenseMethodChannel(
             "expenseAddTransaction" -> scope.launchResult(result) {
                 repository.addTransaction(call.argumentsMap())
             }
+            "expenseAddCategory" -> scope.launchResult(result) {
+                repository.addCategory(call.argumentsMap())
+            }
+            "expenseUpdateCategory" -> scope.launchResult(result) {
+                repository.updateCategory(call.argumentsMap())
+            }
+            "expenseDeleteCategory" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: call.argumentsMap()["id"]?.toString()?.toIntOrNull()
+                    ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category id is required")
+                repository.deleteCategory(id)
+            }
+            "expenseCategoryCounts" -> scope.launchResult(result) {
+                repository.categoryCounts()
+            }
             "expenseDeleteTransaction" -> scope.launchResult(result) {
                 val id = (call.argumentsMap()["id"] as? Number)?.toInt()
                     ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction id is required")
