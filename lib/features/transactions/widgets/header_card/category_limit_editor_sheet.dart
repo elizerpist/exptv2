@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../data/limit_partition_manager.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/transaction_record.dart';
 import '../amount_field.dart';
 import 'category_budget_bar.dart';
+import 'category_limit_partition_bar.dart';
+import 'category_limit_slider.dart';
 import 'category_progress_bar.dart';
 
 typedef CategoryLimitSave =
@@ -19,9 +22,11 @@ class CategoryLimitEditorSheet extends StatefulWidget {
     required this.bar,
     required this.onCancel,
     required this.onSave,
+    this.allBars = const [],
   });
 
   final CategoryBudgetBarData bar;
+  final List<CategoryBudgetBarData> allBars;
   final VoidCallback onCancel;
   final CategoryLimitSave onSave;
 
@@ -57,11 +62,12 @@ class _CategoryLimitEditorSheetState extends State<CategoryLimitEditorSheet> {
   Widget build(BuildContext context) {
     final preview = _previewBar;
     final hasLimit = preview.hasLimit;
+    final partitionBars = _partitionBars;
     return SafeArea(
       child: Material(
         color: AppColors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -80,7 +86,21 @@ class _CategoryLimitEditorSheetState extends State<CategoryLimitEditorSheet> {
                 const SizedBox(height: 10),
                 _RemainingBar(bar: preview),
               ],
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
+              CategoryLimitPartitionBar(
+                bars: partitionBars,
+                activeBar: widget.bar,
+                activeLimitAmount: _amount,
+              ),
+              const SizedBox(height: 6),
+              CategoryLimitSlider(
+                value: _amount,
+                max: _sliderMaxAmount(partitionBars),
+                divisions: _sliderDivisions(partitionBars),
+                activeColor: widget.bar.color,
+                onChanged: _setAmountFromSlider,
+              ),
+              const SizedBox(height: 8),
               TextField(
                 key: const ValueKey('limit-amount-input'),
                 controller: _controller,
@@ -167,9 +187,49 @@ class _CategoryLimitEditorSheetState extends State<CategoryLimitEditorSheet> {
     );
   }
 
+  List<CategoryBudgetBarData> get _partitionBars {
+    final bars = widget.allBars.isEmpty ? <CategoryBudgetBarData>[] : widget.allBars;
+    final hasCurrent = bars.any((bar) => _sameTarget(bar, widget.bar));
+    if (hasCurrent) return bars;
+    return [widget.bar, ...bars];
+  }
+
   double get _amount {
     final value = _controller.text.trim().replaceAll(' ', '');
     return double.tryParse(value) ?? 0;
+  }
+
+  double _sliderMaxAmount(List<CategoryBudgetBarData> bars) {
+    return LimitPartitionManager.sliderMaxAmount(
+      bars,
+      activeBar: widget.bar,
+      activeLimitAmount: _amount,
+    );
+  }
+
+  int _sliderDivisions(List<CategoryBudgetBarData> bars) {
+    return LimitPartitionManager.sliderDivisions(
+      bars,
+      activeBar: widget.bar,
+      activeLimitAmount: _amount,
+    );
+  }
+
+  void _setAmountFromSlider(double amount) {
+    final roundedAmount = amount.round();
+    final text = roundedAmount <= 0 ? '' : roundedAmount.toString();
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {
+    return left.targetType == right.targetType &&
+        left.targetId == right.targetId &&
+        left.transactionType == right.transactionType &&
+        left.window == right.window &&
+        left.periodKey == right.periodKey;
   }
 
   Future<void> _save() async {

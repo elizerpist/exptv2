@@ -144,6 +144,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
           ),
           child: CategoryLimitEditorSheet(
             bar: bar,
+            allBars: widget.store.categoryBudgetBars,
             onCancel: () => Navigator.of(sheetContext).pop(),
             onSave: ({required limitAmount, required alertActive}) async {
               await widget.store.saveCategoryLimitForBar(
