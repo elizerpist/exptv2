@@ -170,7 +170,12 @@ void main() {
         .getRect(find.byKey(const ValueKey('transaction-editor-card')))
         .top;
 
-    expect(find.byType(ModalBarrier), findsNothing);
+    final visibleBarriers = tester
+        .widgetList<ModalBarrier>(find.byType(ModalBarrier))
+        .where((barrier) => barrier.color != null);
+
+    expect(visibleBarriers, isEmpty);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
   });
 
@@ -229,6 +234,7 @@ void main() {
       'New Shop',
     );
     await tester.enterText(find.widgetWithText(TextField, 'Összeg'), '42');
+    await tester.ensureVisible(find.text('Mentés'));
     await tester.tap(find.text('Mentés'));
     await tester.pumpAndSettle();
 

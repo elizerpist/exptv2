@@ -85,63 +85,66 @@ class _SearchPillState extends State<SearchPill> {
         ),
     ];
 
-    return Container(
-      key: const ValueKey('search-pill-container'),
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-      constraints: const BoxConstraints(minHeight: 46),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(
-          color: _focusNode.hasFocus ? AppColors.primary : AppColors.gray200,
-          width: _focusNode.hasFocus ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            offset: const Offset(0, 2),
-            blurRadius: 3,
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        key: const ValueKey('search-pill-container'),
+        margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+        constraints: const BoxConstraints(minHeight: 46),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(
+            color: _focusNode.hasFocus ? AppColors.primary : AppColors.gray200,
+            width: _focusNode.hasFocus ? 1.5 : 1,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, size: 16, color: AppColors.gray400),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              focusNode: _focusNode,
-              controller: _controller,
-              onChanged: widget.onQueryChanged,
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: hasFilters
-                    ? '${widget.filteredCount} tranzakció találva'
-                    : 'Keresés tranzakciók között...',
-                isDense: true,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              offset: const Offset(0, 2),
+              blurRadius: 3,
             ),
-          ),
-          if (capsules.isNotEmpty) ...[
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search, size: 16, color: AppColors.gray400),
             const SizedBox(width: 8),
-            Flexible(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                reverse: true,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var index = 0; index < capsules.length; index++) ...[
-                      if (index > 0) const SizedBox(width: 6),
-                      capsules[index],
-                    ],
-                  ],
+            Expanded(
+              child: TextField(
+                focusNode: _focusNode,
+                controller: _controller,
+                onChanged: widget.onQueryChanged,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  hintText: hasFilters
+                      ? '${widget.filteredCount} tranzakció találva'
+                      : 'Keresés tranzakciók között...',
+                  isDense: true,
                 ),
               ),
             ),
+            if (capsules.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var index = 0; index < capsules.length; index++) ...[
+                        if (index > 0) const SizedBox(width: 6),
+                        capsules[index],
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

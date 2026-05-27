@@ -143,7 +143,7 @@ class _ExptShellState extends State<ExptShell> {
               left: 0,
               right: 0,
               top: TransactionMenuMetrics.overlayTop,
-              bottom: AppDimensions.bottomNavHeight,
+              bottom: 0,
               child: AddTransactionSheet(
                 store: _transactionStore,
                 initialTransaction: _editingTransaction,
