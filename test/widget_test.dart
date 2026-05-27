@@ -40,6 +40,8 @@ void main() {
     await tester.pump();
     expect(find.text('PushParserV2'), findsOneWidget);
     expect(find.text('Permission setup'), findsOneWidget);
+    expect(find.textContaining('Restricted settings'), findsOneWidget);
+    expect(find.text('Open app info'), findsOneWidget);
     expect(find.byIcon(Icons.settings), findsOneWidget);
   });
 }
