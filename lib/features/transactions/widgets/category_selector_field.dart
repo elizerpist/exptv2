@@ -18,7 +18,7 @@ class CategorySelectorField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<TransactionCategory>(
-      value: selected,
+      initialValue: selected,
       items: categories.map((category) {
         return DropdownMenuItem<TransactionCategory>(
           value: category,
