@@ -72,11 +72,19 @@ class TransactionStore extends ChangeNotifier {
     );
   }
 
+  List<TransactionRecord> get windowedTransactions {
+    return LimitManager.recordsForWindow(
+      transactions: _transactions,
+      activeType: _filter.type,
+      summaryWindow: _summaryWindow,
+      referenceDate: _clock(),
+    ).toList();
+  }
+
   List<TransactionRecord> get visibleTransactions {
     final query = _filter.searchQuery.trim().toLowerCase();
     final merchant = _filter.merchant?.trim();
-    return _transactions.where((record) {
-      if (record.type != _filter.type) return false;
+    return windowedTransactions.where((record) {
       if (_filter.categoryId != null &&
           record.transactionCategoryID != _filter.categoryId) {
         return false;
@@ -93,14 +101,22 @@ class TransactionStore extends ChangeNotifier {
   String get totalBalanceText =>
       TransactionSummary.fromRecords(_transactions).formattedBalance;
 
-  TransactionSummary get activeSummary {
-    final source = LimitManager.recordsForWindow(
-      transactions: _transactions,
-      activeType: _filter.type,
-      summaryWindow: _summaryWindow,
-      referenceDate: _clock(),
-    );
-    return TransactionSummary.fromRecords(source);
+  TransactionSummary get activeSummary =>
+      TransactionSummary.fromRecords(visibleTransactions);
+
+  String get activeSummaryTitle {
+    final now = _clock();
+    final base = switch (_summaryWindow) {
+      SummaryWindow.allTime => 'Sum',
+      SummaryWindow.yearly => now.year.toString(),
+      SummaryWindow.monthly => '${_hungarianMonth(now.month)} ${now.year}',
+    };
+    final parts = <String>[base];
+    final merchant = _filter.merchant;
+    if (merchant != null) parts.add(merchant);
+    final category = activeCategory;
+    if (category != null) parts.add(category.name);
+    return parts.join(' · ');
   }
 
   Future<void> start() async {
@@ -134,7 +150,6 @@ class TransactionStore extends ChangeNotifier {
     _filter = _filter.copyWith(
       type: category.normalizedType,
       categoryId: category.transactionCategoryID,
-      clearMerchant: true,
       searchQuery: '',
     );
     notifyListeners();
@@ -264,4 +279,22 @@ class TransactionStore extends ChangeNotifier {
     rows.sort((left, right) => right.id.compareTo(left.id));
     return rows;
   }
+}
+
+String _hungarianMonth(int month) {
+  const months = <int, String>{
+    1: 'Január',
+    2: 'Február',
+    3: 'Március',
+    4: 'Április',
+    5: 'Május',
+    6: 'Június',
+    7: 'Július',
+    8: 'Augusztus',
+    9: 'Szeptember',
+    10: 'Október',
+    11: 'November',
+    12: 'December',
+  };
+  return months[month] ?? month.toString();
 }
