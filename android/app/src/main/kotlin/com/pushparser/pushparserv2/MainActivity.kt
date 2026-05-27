@@ -35,6 +35,10 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(events)
                     }
+                    "listInstalledApps" -> scope.launch {
+                        val apps = withContext(Dispatchers.IO) { installedApps() }
+                        result.success(apps)
+                    }
                     "getStatus" -> scope.launch {
                         val status = withContext(Dispatchers.IO) {
                             statusReader.status(repository, modeStore)
@@ -93,6 +97,28 @@ class MainActivity : FlutterActivity() {
                     EventBroadcaster.detach()
                 }
             })
+    }
+
+    private fun installedApps(): List<Map<String, String>> {
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val pm = packageManager
+        val seenPackages = mutableSetOf<String>()
+
+        return pm.queryIntentActivities(launcherIntent, 0)
+            .mapNotNull { resolveInfo ->
+                val applicationInfo = resolveInfo.activityInfo?.applicationInfo ?: return@mapNotNull null
+                val packageName = applicationInfo.packageName
+                if (packageName.isNullOrBlank() || !seenPackages.add(packageName)) {
+                    return@mapNotNull null
+                }
+                mapOf(
+                    "packageName" to packageName,
+                    "label" to pm.getApplicationLabel(applicationInfo).toString(),
+                )
+            }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it["label"].orEmpty() })
     }
 
     companion object {

@@ -97,6 +97,8 @@ class _MainScreenState extends State<MainScreen> {
             errorText: widget.store.filterError,
             onTextChanged: widget.store.setFilterText,
             onEnabledChanged: widget.store.setFilterEnabled,
+            onLoadInstalledApps: widget.store.listInstalledApps,
+            onAppSelected: widget.store.selectInstalledApp,
           ),
         ],
       ),

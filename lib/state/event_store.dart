@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
 import '../services/native_bridge.dart';
@@ -54,6 +55,17 @@ class EventStore extends ChangeNotifier {
   Future<void> setCaptureMode(CaptureMode mode) async {
     await _bridge.setCaptureMode(mode);
     await refreshStatus();
+  }
+
+  Future<List<InstalledApp>> listInstalledApps() => _bridge.listInstalledApps();
+
+  void selectInstalledApp(InstalledApp app) {
+    final packageRegex = '^${RegExp.escape(app.packageName)}\$';
+    filterText = packageRegex;
+    filterEnabled = true;
+    filterError = null;
+    _lastValidRegex = RegExp(packageRegex, caseSensitive: false);
+    notifyListeners();
   }
 
   void setFilterEnabled(bool value) {

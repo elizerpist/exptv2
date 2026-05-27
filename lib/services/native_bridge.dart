@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
 
@@ -26,6 +27,14 @@ class NativeBridge {
   Future<ServiceStatus> getStatus() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>('getStatus');
     return ServiceStatus.fromMap(map ?? <dynamic, dynamic>{});
+  }
+
+  Future<List<InstalledApp>> listInstalledApps() async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>('listInstalledApps');
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(InstalledApp.fromMap)
+        .toList();
   }
 
   Future<void> setCaptureMode(CaptureMode mode) async {

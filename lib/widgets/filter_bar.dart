@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-class FilterBar extends StatelessWidget {
+import '../models/installed_app.dart';
+
+class FilterBar extends StatefulWidget {
   const FilterBar({
     super.key,
     required this.value,
@@ -8,6 +10,8 @@ class FilterBar extends StatelessWidget {
     required this.errorText,
     required this.onTextChanged,
     required this.onEnabledChanged,
+    required this.onLoadInstalledApps,
+    required this.onAppSelected,
   });
 
   final String value;
@@ -15,6 +19,49 @@ class FilterBar extends StatelessWidget {
   final String? errorText;
   final ValueChanged<String> onTextChanged;
   final ValueChanged<bool> onEnabledChanged;
+  final Future<List<InstalledApp>> Function() onLoadInstalledApps;
+  final ValueChanged<InstalledApp> onAppSelected;
+
+  @override
+  State<FilterBar> createState() => _FilterBarState();
+}
+
+class _FilterBarState extends State<FilterBar> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant FilterBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openAppPicker() async {
+    final selected = await showModalBottomSheet<InstalledApp>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return _InstalledAppPickerSheet(appsFuture: widget.onLoadInstalledApps());
+      },
+    );
+    if (selected != null) widget.onAppSelected(selected);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,20 +76,66 @@ class FilterBar extends StatelessWidget {
             children: [
               Expanded(
                 child: TextFormField(
-                  initialValue: value,
+                  controller: _controller,
                   decoration: InputDecoration(
                     labelText: 'App regex',
-                    errorText: errorText,
+                    errorText: widget.errorText,
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  onChanged: onTextChanged,
+                  onChanged: widget.onTextChanged,
                 ),
               ),
               const SizedBox(width: 8),
-              Switch(value: enabled, onChanged: onEnabledChanged),
+              IconButton.outlined(
+                tooltip: 'Pick installed app',
+                icon: const Icon(Icons.apps),
+                onPressed: _openAppPicker,
+              ),
+              const SizedBox(width: 4),
+              Switch(value: widget.enabled, onChanged: widget.onEnabledChanged),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InstalledAppPickerSheet extends StatelessWidget {
+  const _InstalledAppPickerSheet({required this.appsFuture});
+
+  final Future<List<InstalledApp>> appsFuture;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.65,
+        child: FutureBuilder<List<InstalledApp>>(
+          future: appsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final apps = snapshot.data ?? <InstalledApp>[];
+            if (apps.isEmpty) {
+              return const Center(child: Text('No installed apps found'));
+            }
+            return ListView.separated(
+              itemCount: apps.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final app = apps[index];
+                return ListTile(
+                  leading: const Icon(Icons.android),
+                  title: Text(app.displayName),
+                  subtitle: Text(app.packageName),
+                  onTap: () => Navigator.of(context).pop(app),
+                );
+              },
+            );
+          },
         ),
       ),
     );
