@@ -77,6 +77,41 @@ class _ExptShellState extends State<ExptShell> {
     });
   }
 
+  Future<void> _confirmDeleteTransaction(TransactionRecord transaction) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Tranzakció törlése'),
+          content: Text(
+            'Biztosan törlöd ezt a tranzakciót: ${transaction.displayMerchant}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Mégse'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.expense,
+                foregroundColor: AppColors.white,
+              ),
+              child: const Text('Törlés'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
+
+    final deleted = await _transactionStore.deleteTransaction(transaction);
+    if (!mounted || !deleted) return;
+    if (_editingTransaction?.id == transaction.id) {
+      _closeTransactionEditor();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -94,6 +129,7 @@ class _ExptShellState extends State<ExptShell> {
                   TransactionHomePage(
                     store: _transactionStore,
                     onEditTransaction: _openEditTransaction,
+                    onDeleteTransactionRequested: _confirmDeleteTransaction,
                   ),
                   const BlankTabPage(tab: AppTab.groceries),
                   const BlankTabPage(tab: AppTab.notifications),
