@@ -203,6 +203,36 @@ class TransactionStore extends ChangeNotifier {
     await _reload();
   }
 
+  Future<void> updateTransaction(
+    TransactionRecord transaction, {
+    required String merchant,
+    required double amount,
+    required TransactionType type,
+    required int categoryId,
+    required String date,
+    required String time,
+    String? userAssignedName,
+  }) async {
+    await _repository.updateTransaction(transaction.id, {
+      'merchant': merchant,
+      'amount': amount,
+      'type': type.nativeValue,
+      'transactionCategoryID': categoryId,
+      'date': date,
+      'time': time,
+      'userAssignedName': userAssignedName,
+    });
+    await _reload();
+  }
+
+  Future<bool> deleteTransaction(TransactionRecord transaction) async {
+    final deleted = await _repository.deleteTransaction(transaction.id);
+    if (deleted) {
+      await _reload();
+    }
+    return deleted;
+  }
+
   Future<void> addCategory({
     required String name,
     required TransactionType type,

@@ -221,6 +221,50 @@ class ExpenseRepository(context: Context) {
         return row.toMap()
     }
 
+    suspend fun updateTransaction(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val id = optionalInt(args["id"])
+            ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction id is required")
+        val existing = transactions.byId(id)
+            ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction does not exist")
+        val merchant = args["merchant"]?.toString()?.trim().orEmpty()
+        if (merchant.isEmpty()) {
+            throw ExpenseValidationException("INVALID_TRANSACTION_NAME", "Transaction name is required")
+        }
+
+        val rawAmount = (args["amount"] as? Number)?.toDouble()
+            ?: args["amount"]?.toString()?.toDoubleOrNull()
+            ?: throw ExpenseValidationException("INVALID_AMOUNT", "Amount must be numeric")
+        if (rawAmount <= 0.0) {
+            throw ExpenseValidationException("INVALID_AMOUNT", "Amount must be greater than zero")
+        }
+
+        val type = args["type"]?.toString() ?: typeFromAmount(existing.amount)
+        if (type != "income" && type != "expense") {
+            throw ExpenseValidationException("INVALID_TRANSACTION_TYPE", "Type must be income or expense")
+        }
+
+        val categoryId = optionalInt(args["transactionCategoryID"]) ?: existing.transactionCategoryID
+        categories.byId(categoryId)
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+
+        val signedAmount = if (type == "income") kotlin.math.abs(rawAmount) else -kotlin.math.abs(rawAmount)
+        val row = existing.copy(
+            date = formatDate(args["date"]?.toString() ?: existing.date),
+            time = args["time"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: existing.time,
+            merchant = merchant,
+            amount = signedAmount,
+            userAssignedName = if (args.containsKey("userAssignedName")) {
+                args["userAssignedName"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            } else {
+                existing.userAssignedName
+            },
+            transactionCategoryID = categoryId,
+        )
+        transactions.insert(row)
+        return row.toMap()
+    }
+
     suspend fun deleteTransaction(id: Int): Boolean {
         seedIfEmpty()
         val row = transactions.byId(id) ?: return false

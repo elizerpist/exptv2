@@ -18,6 +18,11 @@ class TransactionBootstrap {
 abstract class TransactionRepositoryContract {
   Future<TransactionBootstrap> loadBootstrap();
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload);
+  Future<TransactionRecord> updateTransaction(
+    int id,
+    Map<String, Object?> payload,
+  );
+  Future<bool> deleteTransaction(int id);
   Future<TransactionCategory> addCategory(Map<String, Object?> payload);
   Future<TransactionCategory> updateCategory(
     int id,
@@ -51,6 +56,19 @@ class TransactionRepository implements TransactionRepositoryContract {
   @override
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload) {
     return _bridge.expenseAddTransaction(payload);
+  }
+
+  @override
+  Future<TransactionRecord> updateTransaction(
+    int id,
+    Map<String, Object?> payload,
+  ) {
+    return _bridge.expenseUpdateTransaction(id, payload);
+  }
+
+  @override
+  Future<bool> deleteTransaction(int id) {
+    return _bridge.expenseDeleteTransaction(id);
   }
 
   @override

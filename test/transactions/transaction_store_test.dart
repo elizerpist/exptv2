@@ -338,4 +338,31 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
     transactions.insert(0, record);
     return record;
   }
+
+  @override
+  Future<TransactionRecord> updateTransaction(
+    int id,
+    Map<String, Object?> payload,
+  ) async {
+    updatedPayloads.add({'id': id, ...payload});
+    final index = transactions.indexWhere((transaction) => transaction.id == id);
+    final record = TransactionRecord.fromMap({
+      'id': id,
+      'date': '2025.09.27',
+      'time': payload['time'],
+      'merchant': payload['merchant'],
+      'amount': -123,
+      'userAssignedName': payload['userAssignedName'],
+      'transactionCategoryID': payload['transactionCategoryID'],
+    });
+    transactions[index] = record;
+    return record;
+  }
+
+  @override
+  Future<bool> deleteTransaction(int id) async {
+    deletedTransactionIds.add(id);
+    transactions.removeWhere((transaction) => transaction.id == id);
+    return true;
+  }
 }

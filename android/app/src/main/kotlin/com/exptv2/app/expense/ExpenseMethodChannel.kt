@@ -26,6 +26,9 @@ class ExpenseMethodChannel(
             "expenseAddTransaction" -> scope.launchResult(result) {
                 repository.addTransaction(call.argumentsMap())
             }
+            "expenseUpdateTransaction" -> scope.launchResult(result) {
+                repository.updateTransaction(call.argumentsMap())
+            }
             "expenseAddCategory" -> scope.launchResult(result) {
                 repository.addCategory(call.argumentsMap())
             }

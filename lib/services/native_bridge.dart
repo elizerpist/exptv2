@@ -116,6 +116,17 @@ class NativeBridge {
     return TransactionRecord.fromMap(row ?? <dynamic, dynamic>{});
   }
 
+  Future<TransactionRecord> expenseUpdateTransaction(
+    int id,
+    Map<String, Object?> payload,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateTransaction',
+      {'id': id, ...payload},
+    );
+    return TransactionRecord.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
   Future<TransactionCategory> expenseAddCategory(
     Map<String, Object?> payload,
   ) async {

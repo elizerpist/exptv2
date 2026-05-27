@@ -126,6 +126,20 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
     Map<String, Object?> payload,
   ) async => throw UnimplementedError();
 
+
+  @override
+  Future<TransactionRecord> updateTransaction(
+    int id,
+    Map<String, Object?> payload,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<bool> deleteTransaction(int id) async {
+    throw UnimplementedError();
+  }
+
   @override
   Future<TransactionCategory> addCategory(Map<String, Object?> payload) async =>
       throw UnimplementedError();
