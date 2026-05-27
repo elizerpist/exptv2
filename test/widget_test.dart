@@ -5,15 +5,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+final savedTransactions = <Map<dynamic, dynamic>>[];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    savedTransactions.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
           call,
         ) async {
           if (call.method == 'loadEvents') return <Map<String, Object?>>[];
+          if (call.method == 'expenseLoadBootstrap') {
+            return expenseBootstrapPayload();
+          }
+          if (call.method == 'expenseAddTransaction') {
+            final payload = Map<dynamic, dynamic>.from(
+              call.arguments as Map<dynamic, dynamic>,
+            );
+            savedTransactions.add(payload);
+            final amount = payload['amount'] as num;
+            final type = payload['type']?.toString();
+            return <String, Object?>{
+              'id': 250914,
+              'date': payload['date'],
+              'time': payload['time'],
+              'merchant': payload['merchant'],
+              'amount': type == 'income' ? amount : -amount.abs(),
+              'userAssignedName': null,
+              'transactionCategoryID': payload['transactionCategoryID'],
+            };
+          }
           if (call.method == 'listInstalledApps') {
             return <Map<String, Object?>>[
               <String, Object?>{
@@ -49,14 +72,22 @@ void main() {
   });
 
   Widget buildApp() {
-    return Exptv2App(store: EventStore(NativeBridge(), realtimeEnabled: false));
+    final bridge = NativeBridge();
+    return Exptv2App(
+      store: EventStore(bridge, realtimeEnabled: false),
+      nativeBridge: bridge,
+    );
   }
 
-  testWidgets('renders blank shell with bottom nav and FAB', (tester) async {
+  testWidgets('renders transaction home with bottom nav and FAB', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildApp());
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('blank-page-home')), findsOneWidget);
+    expect(find.text('Kiadás'), findsOneWidget);
+    expect(find.text('Bevétel'), findsOneWidget);
+    expect(find.text('Test Store'), findsOneWidget);
     expect(find.text('Főoldal'), findsOneWidget);
     expect(find.text('Groceries'), findsOneWidget);
     expect(find.text('Értesítések'), findsOneWidget);
@@ -64,9 +95,9 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
-  testWidgets('bottom nav taps switch blank pages', (tester) async {
+  testWidgets('bottom nav taps switch blank secondary pages', (tester) async {
     await tester.pumpWidget(buildApp());
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Groceries'));
     await tester.pumpAndSettle();
@@ -81,14 +112,50 @@ void main() {
 
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('blank-page-home')), findsOneWidget);
+    expect(find.text('Kiadás'), findsOneWidget);
+  });
+
+  testWidgets('FAB opens add transaction sheet on home tab', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    expect(find.text('Tranzakció neve'), findsOneWidget);
+    expect(find.text('Összeg'), findsOneWidget);
+    expect(find.text('Kategória'), findsOneWidget);
+  });
+
+  testWidgets('add transaction sheet saves through native bridge', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Tranzakció neve'),
+      'New Shop',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Összeg'), '42');
+    await tester.tap(find.text('Mentés'));
+    await tester.pumpAndSettle();
+
+    expect(savedTransactions, hasLength(1));
+    expect(savedTransactions.single['merchant'], 'New Shop');
+    expect(savedTransactions.single['amount'], 42.0);
+    expect(savedTransactions.single['type'], 'expense');
+    expect(savedTransactions.single['transactionCategoryID'], 6);
   });
 
   testWidgets('settings contains push parser app filter input and app picker', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Beállítások'));
     await tester.pumpAndSettle();
@@ -107,4 +174,61 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Notification Test'), findsOneWidget);
   });
+}
+
+Map<String, Object?> expenseBootstrapPayload() {
+  final transactions = <Map<String, Object?>>[
+    <String, Object?>{
+      'id': 250909,
+      'date': '2025.09.25',
+      'time': '20:30:00',
+      'merchant': 'Test Store',
+      'amount': -505,
+      'userAssignedName': null,
+      'transactionCategoryID': 6,
+    },
+  ];
+  if (savedTransactions.isNotEmpty) {
+    final payload = savedTransactions.last;
+    final amount = payload['amount'] as num;
+    transactions.insert(0, <String, Object?>{
+      'id': 250914,
+      'date': payload['date'],
+      'time': payload['time'],
+      'merchant': payload['merchant'],
+      'amount': -amount.abs(),
+      'userAssignedName': null,
+      'transactionCategoryID': payload['transactionCategoryID'],
+    });
+  }
+
+  return <String, Object?>{
+    'categories': <Map<String, Object?>>[
+      <String, Object?>{
+        'transactionCategoryID': 5,
+        'name': 'Rr',
+        'type': 'bevétel',
+        'colorSlot': 2,
+        'iconSlot': 0,
+        'backgroundColor': '#3b82f6',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 6,
+        'name': 'Q',
+        'type': 'kiadás',
+        'colorSlot': 7,
+        'iconSlot': 2,
+        'backgroundColor': '#dc2626',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+    ],
+    'transactions': transactions,
+  };
 }

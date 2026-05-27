@@ -7,5 +7,6 @@ import 'state/event_store.dart';
 export 'exptv2_app.dart';
 
 void main() {
-  runApp(Exptv2App(store: EventStore(NativeBridge())));
+  final bridge = NativeBridge();
+  runApp(Exptv2App(store: EventStore(bridge), nativeBridge: bridge));
 }
