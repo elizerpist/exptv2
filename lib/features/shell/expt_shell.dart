@@ -6,9 +6,11 @@ import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
 import '../settings/settings_page.dart';
 import '../transactions/data/transaction_repository.dart';
+import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
+import '../transactions/widgets/transaction_menu_metrics.dart';
 import 'app_tab.dart';
 import 'widgets/blank_tab_page.dart';
 import 'widgets/expt_bottom_nav.dart';
@@ -27,6 +29,8 @@ class ExptShell extends StatefulWidget {
 class _ExptShellState extends State<ExptShell> {
   AppTab _activeTab = AppTab.home;
   late final TransactionStore _transactionStore;
+  var _transactionEditorOpen = false;
+  TransactionRecord? _editingTransaction;
 
   @override
   void initState() {
@@ -44,20 +48,33 @@ class _ExptShellState extends State<ExptShell> {
 
   void _selectTab(AppTab tab) {
     if (_activeTab == tab) return;
-    setState(() => _activeTab = tab);
+    setState(() {
+      _activeTab = tab;
+      _transactionEditorOpen = false;
+      _editingTransaction = null;
+    });
   }
 
   void _handleFabPressed() {
     if (_activeTab != AppTab.home) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      builder: (_) => AddTransactionSheet(store: _transactionStore),
-    );
+    setState(() {
+      _transactionEditorOpen = true;
+      _editingTransaction = null;
+    });
+  }
+
+  void _openEditTransaction(TransactionRecord transaction) {
+    setState(() {
+      _transactionEditorOpen = true;
+      _editingTransaction = transaction;
+    });
+  }
+
+  void _closeTransactionEditor() {
+    setState(() {
+      _transactionEditorOpen = false;
+      _editingTransaction = null;
+    });
   }
 
   @override
@@ -74,7 +91,10 @@ class _ExptShellState extends State<ExptShell> {
               child: IndexedStack(
                 index: appTabs.indexOf(_activeTab),
                 children: [
-                  TransactionHomePage(store: _transactionStore),
+                  TransactionHomePage(
+                    store: _transactionStore,
+                    onEditTransaction: _openEditTransaction,
+                  ),
                   const BlankTabPage(tab: AppTab.groceries),
                   const BlankTabPage(tab: AppTab.notifications),
                   SettingsPage(store: widget.store),
@@ -82,6 +102,18 @@ class _ExptShellState extends State<ExptShell> {
               ),
             ),
           ),
+          if (_activeTab == AppTab.home && _transactionEditorOpen)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: TransactionMenuMetrics.overlayTop,
+              bottom: AppDimensions.bottomNavHeight,
+              child: AddTransactionSheet(
+                store: _transactionStore,
+                initialTransaction: _editingTransaction,
+                onClose: _closeTransactionEditor,
+              ),
+            ),
           Positioned(
             left: 0,
             right: 0,
