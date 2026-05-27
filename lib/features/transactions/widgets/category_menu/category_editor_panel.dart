@@ -81,6 +81,18 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
       ),
       child: Column(
         children: [
+          const SizedBox(height: 20),
+          Center(
+            child: Container(
+              width: 42,
+              height: 4,
+              decoration: const BoxDecoration(
+                color: AppColors.gray200,
+                borderRadius: BorderRadius.all(Radius.circular(2)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             height: 50,
             child: Stack(

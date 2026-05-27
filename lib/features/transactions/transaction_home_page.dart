@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import 'models/transaction_category.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
+import 'widgets/category_menu/category_editor_sheet.dart';
 import 'widgets/calendar_menu/calendar_menu_overlay.dart';
 import 'widgets/category_menu/category_menu_overlay.dart';
 import 'models/category_budget_bar_data.dart';
@@ -29,7 +30,6 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   var _headerExpanded = false;
   var _calendarOpen = false;
   CategoryOverlayMode? _categoryMode;
-  TransactionCategory? _editingCategory;
 
   @override
   void initState() {
@@ -119,13 +119,10 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
               if (_categoryMode != null)
                 CategoryMenuOverlay(
                   store: widget.store,
-                  mode: _categoryMode!,
-                  editingCategory: _editingCategory,
                   onClose: _closeCategoryMenu,
                   onAdd: _openAddCategory,
                   onModify: _openModifyCategory,
                   onSelect: _selectCategory,
-                  onSave: _saveCategory,
                   onDelete: _deleteCategory,
                 ),
             ],
@@ -140,7 +137,6 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     setState(() {
       _calendarOpen = false;
       _categoryMode = null;
-      _editingCategory = null;
     });
   }
 
@@ -178,7 +174,6 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       _headerExpanded = false;
       _calendarOpen = true;
       _categoryMode = null;
-      _editingCategory = null;
     });
   }
 
@@ -191,29 +186,21 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       _headerExpanded = false;
       _calendarOpen = false;
       _categoryMode = CategoryOverlayMode.picker;
-      _editingCategory = null;
     });
   }
 
   void _closeCategoryMenu() {
     setState(() {
       _categoryMode = null;
-      _editingCategory = null;
     });
   }
 
   void _openAddCategory() {
-    setState(() {
-      _categoryMode = CategoryOverlayMode.add;
-      _editingCategory = null;
-    });
+    _openCategoryEditorSheet();
   }
 
   void _openModifyCategory(TransactionCategory category) {
-    setState(() {
-      _categoryMode = CategoryOverlayMode.modify;
-      _editingCategory = category;
-    });
+    _openCategoryEditorSheet(initialCategory: category);
   }
 
   void _selectCategory(TransactionCategory category) {
@@ -221,8 +208,11 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     _closeCategoryMenu();
   }
 
-  Future<void> _saveCategory(CategoryDraft draft) async {
-    final editing = _editingCategory;
+  Future<void> _saveCategory(
+    CategoryDraft draft, [
+    TransactionCategory? editingCategory,
+  ]) async {
+    final editing = editingCategory;
     if (draft.id == null || editing == null) {
       await widget.store.addCategory(
         name: draft.name,
@@ -241,8 +231,35 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     if (!mounted) return;
     setState(() {
       _categoryMode = CategoryOverlayMode.picker;
-      _editingCategory = null;
     });
+  }
+
+  void _openCategoryEditorSheet({TransactionCategory? initialCategory}) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return CategoryEditorSheet(
+          activeType: widget.store.activeType,
+          initialCategory: initialCategory,
+          onClose: () => Navigator.of(sheetContext).pop(),
+          onSave: (draft) async {
+            await _saveCategory(draft, initialCategory);
+            if (!sheetContext.mounted) return;
+            Navigator.of(sheetContext).pop();
+          },
+          onDelete: initialCategory == null
+              ? null
+              : (category) async {
+                  await _deleteCategory(category);
+                  if (!sheetContext.mounted) return;
+                  Navigator.of(sheetContext).pop();
+                },
+        );
+      },
+    );
   }
 
   Future<void> _deleteCategory(TransactionCategory category) async {
@@ -250,7 +267,6 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     if (!mounted || !deleted) return;
     setState(() {
       _categoryMode = CategoryOverlayMode.picker;
-      _editingCategory = null;
     });
   }
 }

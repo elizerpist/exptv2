@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../models/transaction_category.dart';
+import 'transaction_menu_metrics.dart';
 
 class TransactionTypePills extends StatelessWidget {
   const TransactionTypePills({
@@ -16,7 +17,12 @@ class TransactionTypePills extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      padding: const EdgeInsets.fromLTRB(
+        20,
+        TransactionMenuMetrics.typePillTopPadding,
+        20,
+        TransactionMenuMetrics.typePillBottomPadding,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -62,7 +68,9 @@ class _TransactionTypePill extends StatelessWidget {
         borderRadius: BorderRadius.circular(25),
         onTap: () => onTap(type),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
+          constraints: const BoxConstraints(
+            minHeight: TransactionMenuMetrics.typePillMinHeight,
+          ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(25),

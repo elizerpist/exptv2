@@ -7,6 +7,7 @@ import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
 import 'calendar_canvas.dart';
 import 'calendar_mode_selector.dart';
+import '../transaction_menu_metrics.dart';
 import 'calendar_value_slider_panel.dart';
 
 class CalendarMenuOverlay extends StatefulWidget {
@@ -60,7 +61,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
         ),
         Positioned(
           key: const ValueKey('calendar-menu-overlay'),
-          top: 286,
+          top: TransactionMenuMetrics.overlayTop,
           left: 0,
           right: 0,
           bottom: 0,

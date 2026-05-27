@@ -75,7 +75,7 @@ void main() {
   });
 
   testWidgets(
-    'category picker and editor cards start on the summary pill top edge',
+    'category picker and add editor cards start on the summary pill top edge',
     (tester) async {
       final store = TransactionStore(HeaderLayoutRepository());
       await tester.pumpWidget(
@@ -115,8 +115,43 @@ void main() {
       expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
     },
   );
-}
 
+  testWidgets('category modify editor card starts on the summary pill top edge', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final summaryTop = tester
+        .getRect(find.byKey(const ValueKey('summary-pill')))
+        .top;
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byKey(const ValueKey('category-icon-6')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kategória módosítása'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-editor-slide-card')),
+      findsOneWidget,
+    );
+    final editorTop = tester
+        .getRect(find.byKey(const ValueKey('category-editor-slide-card')))
+        .top;
+    expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+  });
+}
 
 class HeaderLayoutRepository implements TransactionRepositoryContract {
   @override
