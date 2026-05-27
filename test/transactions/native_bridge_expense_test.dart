@@ -83,4 +83,56 @@ void main() {
     expect(record.id, 250914);
     expect(record.amount, 1000);
   });
+
+  test('updates transaction through native bridge', () async {
+    String? invokedMethod;
+    Map<dynamic, dynamic>? invokedPayload;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          invokedMethod = call.method;
+          invokedPayload = call.arguments as Map<dynamic, dynamic>;
+          return {
+            'id': 250905,
+            'date': '2025.09.26',
+            'time': '11:20',
+            'merchant': 'Salary edit',
+            'amount': -1234,
+            'userAssignedName': 'Edited',
+            'transactionCategoryID': 5,
+          };
+        });
+
+    final record = await bridge.expenseUpdateTransaction(250905, {
+      'merchant': 'Salary edit',
+      'amount': 1234,
+      'type': 'expense',
+      'transactionCategoryID': 5,
+      'date': '2025-09-26',
+      'time': '11:20',
+      'userAssignedName': 'Edited',
+    });
+
+    expect(invokedMethod, 'expenseUpdateTransaction');
+    expect(invokedPayload?['id'], 250905);
+    expect(record.id, 250905);
+    expect(record.amount, -1234);
+    expect(record.displayMerchant, 'Edited');
+  });
+
+  test('deletes transaction through native bridge', () async {
+    String? invokedMethod;
+    Map<dynamic, dynamic>? invokedPayload;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          invokedMethod = call.method;
+          invokedPayload = call.arguments as Map<dynamic, dynamic>;
+          return true;
+        });
+
+    final deleted = await bridge.expenseDeleteTransaction(250905);
+
+    expect(invokedMethod, 'expenseDeleteTransaction');
+    expect(invokedPayload?['id'], 250905);
+    expect(deleted, isTrue);
+  });
 }

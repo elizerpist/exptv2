@@ -49,6 +49,44 @@ void main() {
     expect(store.visibleTransactions.first.displayMerchant, 'New Shop');
   });
 
+  test('store updates transaction then reloads bootstrap', () async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(repository);
+    await store.start();
+
+    final record = store.visibleTransactions.first;
+    await store.updateTransaction(
+      record,
+      merchant: 'Edited Shop',
+      amount: 123,
+      type: TransactionType.expense,
+      categoryId: 6,
+      date: '2025-09-27',
+      time: '11:20',
+      userAssignedName: 'Edited Alias',
+    );
+
+    expect(repository.updatedPayloads.single['id'], record.id);
+    expect(repository.updatedPayloads.single['merchant'], 'Edited Shop');
+    expect(store.visibleTransactions.first.displayMerchant, 'Edited Alias');
+  });
+
+  test('store deletes transaction then reloads bootstrap', () async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(repository);
+    await store.start();
+
+    final record = store.visibleTransactions.first;
+    final deleted = await store.deleteTransaction(record);
+
+    expect(deleted, isTrue);
+    expect(repository.deletedTransactionIds.single, record.id);
+    expect(
+      store.transactions.any((transaction) => transaction.id == record.id),
+      isFalse,
+    );
+  });
+
   test('store filters and manages categories', () async {
     final repository = FakeTransactionRepository();
     final store = TransactionStore(repository);
@@ -142,9 +180,11 @@ void main() {
 
 class FakeTransactionRepository implements TransactionRepositoryContract {
   final savedPayloads = <Map<String, Object?>>[];
+  final updatedPayloads = <Map<String, Object?>>[];
   final savedCategories = <Map<String, Object?>>[];
   final updatedCategories = <Map<String, Object?>>[];
   final deletedCategoryIds = <int>[];
+  final deletedTransactionIds = <int>[];
   final categories = <TransactionCategory>[
     TransactionCategory.fromMap({
       'transactionCategoryID': 5,
