@@ -161,7 +161,7 @@ class _EditableLimitTextState extends State<_EditableLimitText> {
         ),
         onSubmitted: (text) {
           final parsed = double.tryParse(text);
-          widget.onSubmitted(parsed == null ? widget.value : parsed);
+          widget.onSubmitted(parsed ?? widget.value);
         },
       ),
     );

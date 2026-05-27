@@ -34,7 +34,7 @@ class CalendarRenderBuilder {
     double? customThresholdMin,
     double? customThresholdMax,
   }) {
-    final todayValue = today == null ? DateTime.now() : today;
+    final todayValue = today ?? DateTime.now();
     final normalizedToday = _dateOnly(todayValue);
     final byDate = <DateTime, List<TransactionRecord>>{};
     for (final record in transactions) {
@@ -58,12 +58,8 @@ class CalendarRenderBuilder {
     final calculatedMax = dailyExpenses.isEmpty
         ? 1000.0
         : dailyExpenses.reduce((a, b) => a > b ? a : b);
-    final thresholdMin = customThresholdMin == null
-        ? calculatedMin
-        : customThresholdMin;
-    final thresholdMax = customThresholdMax == null
-        ? calculatedMax
-        : customThresholdMax;
+    final thresholdMin = customThresholdMin ?? calculatedMin;
+    final thresholdMax = customThresholdMax ?? calculatedMax;
 
     final categoryColors = <int, Color>{
       for (final category in categories)

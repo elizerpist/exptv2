@@ -113,7 +113,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   transactions: widget.store.transactions,
                   categories: widget.store.categories,
                   onClose: _closeCalendarMenu,
-                  onMonthSelect: (_, __) {},
+                  onMonthSelect: (_, _) {},
                 ),
               if (_categoryMode != null)
                 CategoryMenuOverlay(
