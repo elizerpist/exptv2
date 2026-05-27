@@ -1,23 +1,28 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/limit_manager.dart';
 import '../data/transaction_filter.dart';
 import '../data/transaction_repository.dart';
+import '../models/category_budget_bar_data.dart';
+import '../models/category_limit.dart';
+import '../models/summary_window.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../models/transaction_summary.dart';
 
-enum SummaryWindow { monthly, yearly, allTime }
-
 class TransactionStore extends ChangeNotifier {
-  TransactionStore(this._repository);
+  TransactionStore(this._repository, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
 
   final TransactionRepositoryContract _repository;
+  final DateTime Function() _clock;
   var _filter = const TransactionFilter();
   var _summaryWindow = SummaryWindow.allTime;
   var _loading = false;
   String? _error;
   List<TransactionCategory> _categories = [];
   List<TransactionRecord> _transactions = [];
+  List<CategoryLimit> _limits = [];
 
   bool get loading => _loading;
   String? get error => _error;
@@ -48,11 +53,23 @@ class TransactionStore extends ChangeNotifier {
 
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionRecord> get transactions => List.unmodifiable(_transactions);
+  List<CategoryLimit> get limits => List.unmodifiable(_limits);
 
   List<TransactionCategory> get activeCategories {
     return _categories
         .where((category) => category.normalizedType == _filter.type)
         .toList();
+  }
+
+  List<CategoryBudgetBarData> get categoryBudgetBars {
+    return LimitManager.buildBars(
+      categories: _categories,
+      transactions: _transactions,
+      limits: _limits,
+      activeType: _filter.type,
+      summaryWindow: _summaryWindow,
+      referenceDate: _clock(),
+    );
   }
 
   List<TransactionRecord> get visibleTransactions {
@@ -77,17 +94,12 @@ class TransactionStore extends ChangeNotifier {
       TransactionSummary.fromRecords(_transactions).formattedBalance;
 
   TransactionSummary get activeSummary {
-    final now = DateTime.now();
-    final year = now.year.toString();
-    final month = '${now.year}-${now.month.toString().padLeft(2, '0')}';
-    final source = _transactions.where((record) {
-      if (record.type != _filter.type) return false;
-      return switch (_summaryWindow) {
-        SummaryWindow.monthly => record.yearMonthKey == month,
-        SummaryWindow.yearly => record.yearMonthKey.startsWith(year),
-        SummaryWindow.allTime => true,
-      };
-    });
+    final source = LimitManager.recordsForWindow(
+      transactions: _transactions,
+      activeType: _filter.type,
+      summaryWindow: _summaryWindow,
+      referenceDate: _clock(),
+    );
     return TransactionSummary.fromRecords(source);
   }
 
@@ -99,6 +111,7 @@ class TransactionStore extends ChangeNotifier {
       final payload = await _repository.loadBootstrap();
       _categories = payload.categories;
       _transactions = _sort(payload.transactions);
+      _limits = payload.limits;
     } catch (error) {
       _error = error.toString();
     } finally {
@@ -218,10 +231,31 @@ class TransactionStore extends ChangeNotifier {
     return deleted;
   }
 
+  Future<void> saveCategoryLimitForBar(
+    CategoryBudgetBarData bar, {
+    required double limitAmount,
+    required bool alertActive,
+  }) async {
+    final amount = limitAmount < 0 ? 0.0 : limitAmount;
+    final hasLimit = amount > 0;
+    await _repository.upsertCategoryLimit({
+      'targetType': bar.targetType.nativeValue,
+      'targetId': bar.targetId,
+      'transactionType': bar.transactionType.nativeValue,
+      'window': bar.window.nativeValue,
+      'periodKey': bar.periodKey,
+      'hasLimit': hasLimit,
+      'limitAmount': hasLimit ? amount : 0.0,
+      'alertActive': hasLimit && alertActive,
+    });
+    await _reload();
+  }
+
   Future<void> _reload() async {
     final payload = await _repository.loadBootstrap();
     _categories = payload.categories;
     _transactions = _sort(payload.transactions);
+    _limits = payload.limits;
     notifyListeners();
   }
 

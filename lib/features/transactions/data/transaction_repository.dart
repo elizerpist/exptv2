@@ -1,4 +1,5 @@
 import '../../../services/native_bridge.dart';
+import '../models/category_limit.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 
@@ -6,10 +7,12 @@ class TransactionBootstrap {
   const TransactionBootstrap({
     required this.categories,
     required this.transactions,
+    required this.limits,
   });
 
   final List<TransactionCategory> categories;
   final List<TransactionRecord> transactions;
+  final List<CategoryLimit> limits;
 }
 
 abstract class TransactionRepositoryContract {
@@ -22,6 +25,12 @@ abstract class TransactionRepositoryContract {
   );
   Future<bool> deleteCategory(int id);
   Future<Map<int, int>> categoryCounts();
+  Future<List<CategoryLimit>> listCategoryLimits({
+    String? transactionType,
+    String? window,
+    String? periodKey,
+  });
+  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload);
 }
 
 class TransactionRepository implements TransactionRepositoryContract {
@@ -35,6 +44,7 @@ class TransactionRepository implements TransactionRepositoryContract {
     return TransactionBootstrap(
       categories: payload.categories,
       transactions: payload.transactions,
+      limits: payload.limits,
     );
   }
 
@@ -64,5 +74,23 @@ class TransactionRepository implements TransactionRepositoryContract {
   @override
   Future<Map<int, int>> categoryCounts() {
     return _bridge.expenseCategoryCounts();
+  }
+
+  @override
+  Future<List<CategoryLimit>> listCategoryLimits({
+    String? transactionType,
+    String? window,
+    String? periodKey,
+  }) {
+    return _bridge.expenseListCategoryLimits(
+      transactionType: transactionType,
+      window: window,
+      periodKey: periodKey,
+    );
+  }
+
+  @override
+  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) {
+    return _bridge.expenseUpsertCategoryLimit(payload);
   }
 }
