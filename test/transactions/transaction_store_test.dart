@@ -91,7 +91,54 @@ void main() {
     expect(deleted, isTrue);
     expect(repository.deletedCategoryIds.single, created.transactionCategoryID);
   });
+
+  test('store applies merchant and category filters together', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+
+    final category = store.categories.firstWhere((item) => item.name == 'Q');
+    store.setMerchantFilter('Rrr');
+    store.setCategoryFilter(category);
+
+    expect(store.merchantFilter, 'Rrr');
+    expect(store.activeCategory?.name, 'Q');
+    expect(store.visibleTransactions.length, 2);
+    expect(
+      store.visibleTransactions.every(
+        (record) => record.displayMerchant == 'Rrr',
+      ),
+      isTrue,
+    );
+  });
+
+  test('active summary is calculated from visible filtered records', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+
+    store.setMerchantFilter('Rrr');
+
+    expect(store.visibleTransactions.length, 2);
+    expect(
+      store.activeSummary.formattedFor(TransactionType.expense),
+      '-13 135 Ft',
+    );
+  });
+
+  test('summary title includes interval and active filters', () async {
+    final store = TransactionStore(
+      FakeTransactionRepository(),
+      clock: () => DateTime(2026, 3, 15),
+    );
+    await store.start();
+
+    expect(store.activeSummaryTitle, contains('Sum'));
+    store.cycleSummaryWindow();
+    expect(store.activeSummaryTitle, contains('Március 2026'));
+    store.cycleSummaryWindow();
+    expect(store.activeSummaryTitle, contains('2026'));
+  });
 }
+
 
 class FakeTransactionRepository implements TransactionRepositoryContract {
   final savedPayloads = <Map<String, Object?>>[];
