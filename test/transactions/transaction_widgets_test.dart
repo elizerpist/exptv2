@@ -4,6 +4,7 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_box.dart';
+import 'package:exptv2/features/transactions/widgets/transaction_log_list.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_type_pills.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -122,14 +123,39 @@ void main() {
     expect(border.top.color, AppColors.primary);
   });
 
-  testWidgets('logbox left swipe triggers fast filter', (tester) async {
+  testWidgets('log list groups records by date', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 400,
+          child: TransactionLogList(
+            records: [sampleRecord(), sampleExpenseRecord()],
+            categories: [sampleCategory(), sampleExpenseCategory()],
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) {},
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('2025.09.24'), findsOneWidget);
+    expect(find.text('2025.09.25'), findsOneWidget);
+  });
+
+  testWidgets('logbox left swipe triggers fast filter with category', (tester) async {
     String? merchant;
+    String? categoryName;
     await tester.pumpWidget(
       MaterialApp(
         home: TransactionLogBox(
           record: sampleRecord(),
           category: sampleCategory(),
-          onFastFilter: (value) => merchant = value,
+          onFastFilter: (record, category) {
+            merchant = record.displayMerchant;
+            categoryName = category?.name;
+          },
         ),
       ),
     );
@@ -140,6 +166,53 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(merchant, 'Gguu');
+    expect(categoryName, 'Rr');
+  });
+
+  testWidgets('logbox tap requests edit and right swipe requests delete', (tester) async {
+    int? editedId;
+    int? deletedId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          onTap: (record) => editedId = record.id,
+          onDeleteRequested: (record) => deletedId = record.id,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('transaction-logbox-250905')));
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const ValueKey('transaction-logbox-250905')),
+      const Offset(120, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(editedId, 250905);
+    expect(deletedId, 250905);
+  });
+
+  testWidgets('logbox avatar tap requests category filter', (tester) async {
+    String? categoryName;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          onCategoryFilter: (category) => categoryName = category.name,
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-logbox-avatar-250905')),
+    );
+    await tester.pump();
+
+    expect(categoryName, 'Rr');
   });
 }
 
@@ -160,6 +233,30 @@ TransactionCategory sampleCategory() => TransactionCategory.fromMap({
   'colorSlot': 2,
   'iconSlot': 0,
   'backgroundColor': '#3b82f6',
+  'hasLimit': false,
+  'limitAmount': 0,
+  'alertActive': false,
+  'isCustomIcon': true,
+});
+
+
+TransactionRecord sampleExpenseRecord() => TransactionRecord.fromMap({
+  'id': 250909,
+  'date': '2025.09.25',
+  'time': '20:30:00',
+  'merchant': 'Test Store',
+  'amount': -505,
+  'userAssignedName': null,
+  'transactionCategoryID': 6,
+});
+
+TransactionCategory sampleExpenseCategory() => TransactionCategory.fromMap({
+  'transactionCategoryID': 6,
+  'name': 'Q',
+  'type': 'kiadás',
+  'colorSlot': 7,
+  'iconSlot': 2,
+  'backgroundColor': '#dc2626',
   'hasLimit': false,
   'limitAmount': 0,
   'alertActive': false,
