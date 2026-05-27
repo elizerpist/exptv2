@@ -2,6 +2,8 @@ package com.pushparser.pushparserv2
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -100,25 +102,38 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun installedApps(): List<Map<String, String>> {
-        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-        }
         val pm = packageManager
-        val seenPackages = mutableSetOf<String>()
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            PackageManager.MATCH_DISABLED_COMPONENTS
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_DISABLED_COMPONENTS
+        }
+        val applications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getInstalledApplications(flags)
+        }
 
-        return pm.queryIntentActivities(launcherIntent, 0)
-            .mapNotNull { resolveInfo ->
-                val applicationInfo = resolveInfo.activityInfo?.applicationInfo ?: return@mapNotNull null
-                val packageName = applicationInfo.packageName
-                if (packageName.isNullOrBlank() || !seenPackages.add(packageName)) {
-                    return@mapNotNull null
-                }
+        return applications
+            .filter { app -> app.packageName.isNotBlank() }
+            .map { app ->
                 mapOf(
-                    "packageName" to packageName,
-                    "label" to pm.getApplicationLabel(applicationInfo).toString(),
+                    "packageName" to app.packageName,
+                    "label" to app.safeLabel(pm),
                 )
             }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it["label"].orEmpty() })
+            .sortedWith(
+                compareBy<Map<String, String>>(String.CASE_INSENSITIVE_ORDER) {
+                    it["label"].orEmpty()
+                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it["packageName"].orEmpty() },
+            )
+    }
+
+    private fun ApplicationInfo.safeLabel(pm: PackageManager): String {
+        return runCatching { pm.getApplicationLabel(this).toString() }
+            .getOrDefault(packageName)
     }
 
     companion object {
