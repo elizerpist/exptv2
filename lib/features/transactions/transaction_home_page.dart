@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import 'models/transaction_category.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
+import 'widgets/calendar_menu/calendar_menu_overlay.dart';
 import 'widgets/category_menu/category_menu_overlay.dart';
 import 'models/category_budget_bar_data.dart';
 import 'widgets/header_card/category_budget_stage.dart';
@@ -25,6 +26,7 @@ class TransactionHomePage extends StatefulWidget {
 
 class _TransactionHomePageState extends State<TransactionHomePage> {
   var _headerExpanded = false;
+  var _calendarOpen = false;
   CategoryOverlayMode? _categoryMode;
   TransactionCategory? _editingCategory;
 
@@ -102,9 +104,17 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                 balanceText: widget.store.totalBalanceText,
                 expanded: _headerExpanded,
                 onCategoryPressed: _openCategoryMenu,
+                onCalendarPressed: _openCalendarMenu,
                 onExpandPressed: () =>
                     setState(() => _headerExpanded = !_headerExpanded),
               ),
+              if (_calendarOpen)
+                CalendarMenuOverlay(
+                  transactions: widget.store.transactions,
+                  categories: widget.store.categories,
+                  onClose: _closeCalendarMenu,
+                  onMonthSelect: (_, __) {},
+                ),
               if (_categoryMode != null)
                 CategoryMenuOverlay(
                   store: widget.store,
@@ -127,6 +137,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   void _setActiveType(TransactionType type) {
     widget.store.setActiveType(type);
     setState(() {
+      _calendarOpen = false;
       _categoryMode = null;
       _editingCategory = null;
     });
@@ -161,9 +172,23 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     );
   }
 
+  void _openCalendarMenu() {
+    setState(() {
+      _headerExpanded = false;
+      _calendarOpen = true;
+      _categoryMode = null;
+      _editingCategory = null;
+    });
+  }
+
+  void _closeCalendarMenu() {
+    setState(() => _calendarOpen = false);
+  }
+
   void _openCategoryMenu() {
     setState(() {
       _headerExpanded = false;
+      _calendarOpen = false;
       _categoryMode = CategoryOverlayMode.picker;
       _editingCategory = null;
     });

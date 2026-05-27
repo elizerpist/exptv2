@@ -7,12 +7,14 @@ class TransactionHeaderCard extends StatelessWidget {
     super.key,
     required this.balanceText,
     required this.onCategoryPressed,
+    required this.onCalendarPressed,
     required this.onExpandPressed,
     this.expanded = false,
   });
 
   final String balanceText;
   final VoidCallback onCategoryPressed;
+  final VoidCallback onCalendarPressed;
   final VoidCallback onExpandPressed;
   final bool expanded;
 
@@ -65,7 +67,7 @@ class TransactionHeaderCard extends StatelessWidget {
               right: 27,
               child: IconButton(
                 key: const ValueKey('header-calendar-button'),
-                onPressed: () {},
+                onPressed: onCalendarPressed,
                 icon: const Icon(
                   Icons.calendar_month_outlined,
                   size: 20,
