@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../slots/category_color_manager.dart';
 
 enum TransactionType { income, expense }
 
@@ -64,11 +64,13 @@ class TransactionCategory {
 
   String get slotColorHex {
     final slot = colorSlot;
-    if (slot == null) return backgroundColor ?? '#64748b';
-    return AppColors.slotColorHex(slot);
+    if (slot == null) {
+      return backgroundColor ?? CategoryColorManager.fallbackHex;
+    }
+    return CategoryColorManager.hex(slot);
   }
 
-  Color get slotColor => AppColors.fromHex(slotColorHex);
+  Color get slotColor => CategoryColorManager.fromHex(slotColorHex);
 
   factory TransactionCategory.fromMap(Map<dynamic, dynamic> map) {
     return TransactionCategory(
