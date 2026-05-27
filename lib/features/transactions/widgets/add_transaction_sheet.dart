@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimensions.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../state/transaction_store.dart';
@@ -91,7 +92,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     left: 20,
                     right: 20,
                     top: 20,
-                    bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+                    bottom:
+                        MediaQuery.viewInsetsOf(context).bottom +
+                        AppDimensions.bottomNavHeight +
+                        AppDimensions.fabSize,
                   ),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(minHeight: constraints.maxHeight),

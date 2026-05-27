@@ -71,14 +71,14 @@ class _SearchPillState extends State<SearchPill> {
     final capsules = <Widget>[
       if (hasMerchant)
         _FilterCapsule(
-          key: const ValueKey('search-pill-capsule-merchant'),
+          capsuleKey: const ValueKey('search-pill-capsule-merchant'),
           value: widget.merchantFilter!,
           color: widget.merchantFilterColor ?? AppColors.primary,
           onClear: widget.onClearMerchant,
         ),
       if (hasCategory)
         _FilterCapsule(
-          key: const ValueKey('search-pill-capsule-category'),
+          capsuleKey: const ValueKey('search-pill-capsule-category'),
           value: widget.categoryFilter!,
           color: widget.categoryFilterColor ?? AppColors.primary,
           onClear: widget.onClearCategory,
@@ -152,12 +152,13 @@ class _SearchPillState extends State<SearchPill> {
 
 class _FilterCapsule extends StatelessWidget {
   const _FilterCapsule({
-    super.key,
+    required this.capsuleKey,
     required this.value,
     required this.color,
     required this.onClear,
   });
 
+  final Key capsuleKey;
   final String value;
   final Color color;
   final VoidCallback? onClear;
@@ -165,6 +166,7 @@ class _FilterCapsule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: capsuleKey,
       height: 30,
       padding: const EdgeInsets.only(left: 12),
       decoration: BoxDecoration(
