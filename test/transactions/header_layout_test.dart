@@ -44,7 +44,79 @@ void main() {
     expect(topGap, moreOrLessEquals(bottomGap, epsilon: 0.1));
     expect(topGap, moreOrLessEquals(12, epsilon: 0.1));
   });
+
+  testWidgets('calendar overlay starts on the summary pill top edge', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final summaryTop = tester
+        .getRect(find.byKey(const ValueKey('summary-pill')))
+        .top;
+    await tester.tap(find.byKey(const ValueKey('header-calendar-button')));
+    await tester.pumpAndSettle();
+
+    final overlayTop = tester
+        .getRect(find.byKey(const ValueKey('calendar-menu-overlay')))
+        .top;
+    expect(overlayTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+  });
+
+  testWidgets(
+    'category picker and editor cards start on the summary pill top edge',
+    (tester) async {
+      final store = TransactionStore(HeaderLayoutRepository());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: TransactionHomePage(store: store),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final summaryTop = tester
+          .getRect(find.byKey(const ValueKey('summary-pill')))
+          .top;
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
+
+      final pickerTop = tester
+          .getRect(find.byKey(const ValueKey('category-menu-overlay')))
+          .top;
+      expect(pickerTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+
+      await tester.tap(find.byKey(const ValueKey('category-add-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('category-editor-slide-card')),
+        findsOneWidget,
+      );
+      final editorTop = tester
+          .getRect(find.byKey(const ValueKey('category-editor-slide-card')))
+          .top;
+      expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+    },
+  );
 }
+
 
 class HeaderLayoutRepository implements TransactionRepositoryContract {
   @override
