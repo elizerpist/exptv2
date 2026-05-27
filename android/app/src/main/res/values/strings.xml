@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Captures notification-related accessibility events for PushParser testing.</string>
+</resources>
