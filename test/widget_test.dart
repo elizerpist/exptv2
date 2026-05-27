@@ -17,6 +17,7 @@ void main() {
           <String, Object?>{
             'packageName': 'com.mand.notitest',
             'label': 'Notification Test',
+            'iconBase64': 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
           },
         ];
       }
@@ -43,7 +44,7 @@ void main() {
 
 
 
-  testWidgets('app picker selects package regex and enables filtering', (tester) async {
+  testWidgets('app picker shows icons and selects app label for filtering', (tester) async {
     await tester.pumpWidget(PushParserApp(
       store: EventStore(NativeBridge(), realtimeEnabled: false),
     ));
@@ -52,11 +53,13 @@ void main() {
     await tester.tap(find.byTooltip('Pick installed app'));
     await tester.pumpAndSettle();
     expect(find.text('Notification Test'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
 
     await tester.tap(find.text('Notification Test'));
     await tester.pumpAndSettle();
 
-    expect(find.text(r'^com\.mand\.notitest$'), findsOneWidget);
+    expect(find.text('Notification Test'), findsOneWidget);
+    expect(find.text(r'^com\.mand\.notitest$'), findsNothing);
     final filterSwitch = tester.widget<Switch>(find.byType(Switch));
     expect(filterSwitch.value, isTrue);
   });
