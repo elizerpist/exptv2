@@ -46,6 +46,58 @@ void main() {
     expect(tapped?.title, 'Travel');
   });
 
+  testWidgets('stage floats a smaller category bar over the summary outline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              bars: [
+                barFixture(6, 'Food', 100, 150),
+                barFixture(7, 'Travel', 40, 0),
+                barFixture(8, 'Bills', 20, 0),
+              ],
+              onBarTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('category-summary-outline-bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-summary-segment-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-summary-segment-1')),
+      findsOneWidget,
+    );
+
+    final outlineWidth = tester
+        .getSize(find.byKey(const ValueKey('category-summary-outline-bar')))
+        .width;
+    final activeBarWidth = tester
+        .getSize(find.byKey(const ValueKey('category-budget-bar')))
+        .width;
+    final firstSegmentWidth = tester
+        .getSize(find.byKey(const ValueKey('category-summary-segment-0')))
+        .width;
+    final secondSegmentWidth = tester
+        .getSize(find.byKey(const ValueKey('category-summary-segment-1')))
+        .width;
+
+    expect(activeBarWidth, lessThan(outlineWidth));
+    expect(firstSegmentWidth, greaterThan(secondSegmentWidth));
+  });
+
   testWidgets('category limit editor saves input and reset clears limit', (
     tester,
   ) async {

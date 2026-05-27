@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/category_budget_bar_data.dart';
 import 'category_budget_bar.dart';
+import 'category_summary_outline_bar.dart';
 
 class CategoryBudgetStage extends StatefulWidget {
   const CategoryBudgetStage({
@@ -57,11 +58,19 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage> {
             top: 70,
             left: 20,
             right: 20,
+            child: CategorySummaryOutlineBar(bars: widget.bars),
+          ),
+          Positioned(
+            top: 78,
+            left: 40,
+            right: 40,
             child: GestureDetector(
               onHorizontalDragUpdate: (details) => _dragDx += details.delta.dx,
               onHorizontalDragEnd: (_) => _settleDrag(),
               child: CategoryBudgetBar(
                 bar: current,
+                height: 54,
+                compactIcon: true,
                 onTap: () => widget.onBarTap(current),
               ),
             ),

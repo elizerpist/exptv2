@@ -11,11 +11,13 @@ class CategoryBudgetBar extends StatelessWidget {
     required this.bar,
     required this.onTap,
     this.compactIcon = false,
+    this.height = 70,
   });
 
   final CategoryBudgetBarData bar;
   final VoidCallback onTap;
   final bool compactIcon;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +34,7 @@ class CategoryBudgetBar extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(25),
         child: Container(
-          height: 70,
+          height: height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(25),
             border: Border.all(color: AppColors.white),
