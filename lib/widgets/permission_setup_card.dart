@@ -8,11 +8,13 @@ class PermissionSetupCard extends StatelessWidget {
     required this.status,
     required this.onOpenNotificationAccess,
     required this.onOpenAccessibility,
+    required this.onOpenAppInfo,
   });
 
   final ServiceStatus? status;
   final VoidCallback onOpenNotificationAccess;
   final VoidCallback onOpenAccessibility;
+  final VoidCallback onOpenAppInfo;
 
   bool get _needsSetup {
     final current = status;
@@ -31,6 +33,16 @@ class PermissionSetupCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Permission setup', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            const Text(
+              'If Android shows Restricted settings, open App info, use the top-right menu, allow restricted settings, then return here.',
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: onOpenAppInfo,
+              icon: const Icon(Icons.info_outline),
+              label: const Text('Open app info'),
+            ),
             const SizedBox(height: 8),
             _PermissionRow(
               label: 'Notification Access',

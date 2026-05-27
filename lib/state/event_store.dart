@@ -82,6 +82,8 @@ class EventStore extends ChangeNotifier {
 
   Future<void> openAccessibilitySettings() => _bridge.openAccessibilitySettings();
 
+  Future<void> openAppInfoSettings() => _bridge.openAppInfoSettings();
+
   Future<void> requestPostNotifications() => _bridge.requestPostNotifications();
 
   Future<void> sendTestNotification() => _bridge.sendTestNotification();

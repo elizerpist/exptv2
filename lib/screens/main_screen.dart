@@ -75,6 +75,7 @@ class _MainScreenState extends State<MainScreen> {
             status: widget.store.status,
             onOpenNotificationAccess: widget.store.openNotificationAccessSettings,
             onOpenAccessibility: widget.store.openAccessibilitySettings,
+            onOpenAppInfo: widget.store.openAppInfoSettings,
           ),
           Expanded(
             child: widget.store.loading

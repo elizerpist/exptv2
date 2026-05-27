@@ -2,6 +2,7 @@ package com.pushparser.pushparserv2
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
@@ -51,6 +52,13 @@ class MainActivity : FlutterActivity() {
                     }
                     "openAccessibilitySettings" -> {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(null)
+                    }
+                    "openAppInfoSettings" -> {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
                         result.success(null)
                     }
                     "requestPostNotifications" -> {
