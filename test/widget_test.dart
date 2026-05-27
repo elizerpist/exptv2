@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
+final deletedTransactionIds = <int>[];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ void main() {
   setUp(() {
     savedTransactions.clear();
     updatedTransactions.clear();
+    deletedTransactionIds.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
           call,
@@ -55,6 +57,13 @@ void main() {
               'userAssignedName': null,
               'transactionCategoryID': payload['transactionCategoryID'],
             };
+          }
+          if (call.method == 'expenseDeleteTransaction') {
+            final payload = Map<dynamic, dynamic>.from(
+              call.arguments as Map<dynamic, dynamic>,
+            );
+            deletedTransactionIds.add(payload['id'] as int);
+            return true;
           }
           if (call.method == 'listInstalledApps') {
             return <Map<String, Object?>>[
@@ -188,6 +197,25 @@ void main() {
     expect(find.byKey(const ValueKey('transaction-editor-card')), findsOneWidget);
   });
 
+  testWidgets('right swipe asks before deleting a transaction', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('transaction-logbox-250909')),
+      const Offset(120, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tranzakció törlése'), findsOneWidget);
+    expect(find.text('Törlés'), findsOneWidget);
+
+    await tester.tap(find.text('Törlés'));
+    await tester.pumpAndSettle();
+
+    expect(deletedTransactionIds, [250909]);
+  });
+
   testWidgets('add transaction sheet saves through native bridge', (
     tester,
   ) async {
@@ -238,15 +266,16 @@ void main() {
 
 Map<String, Object?> expenseBootstrapPayload() {
   final transactions = <Map<String, Object?>>[
-    <String, Object?>{
-      'id': 250909,
-      'date': '2025.09.25',
-      'time': '20:30:00',
-      'merchant': 'Test Store',
-      'amount': -505,
-      'userAssignedName': null,
-      'transactionCategoryID': 6,
-    },
+    if (!deletedTransactionIds.contains(250909))
+      <String, Object?>{
+        'id': 250909,
+        'date': '2025.09.25',
+        'time': '20:30:00',
+        'merchant': 'Test Store',
+        'amount': -505,
+        'userAssignedName': null,
+        'transactionCategoryID': 6,
+      },
   ];
   if (savedTransactions.isNotEmpty) {
     final payload = savedTransactions.last;
