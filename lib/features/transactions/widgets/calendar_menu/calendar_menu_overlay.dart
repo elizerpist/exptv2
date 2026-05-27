@@ -205,6 +205,8 @@ class _YearNavigator extends StatelessWidget {
           onPressed: onPrevious,
           icon: const Icon(Icons.chevron_left, color: AppColors.gray500),
           iconSize: 24,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 42, height: 48),
         ),
         Text(
           '$year',
@@ -219,6 +221,8 @@ class _YearNavigator extends StatelessWidget {
           onPressed: onNext,
           icon: const Icon(Icons.chevron_right, color: AppColors.gray500),
           iconSize: 24,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 42, height: 48),
         ),
       ],
     );
