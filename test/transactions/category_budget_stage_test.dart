@@ -46,9 +46,9 @@ void main() {
     expect(tapped?.title, 'Travel');
   });
 
-  testWidgets('stage floats a smaller category bar over the summary outline', (
-    tester,
-  ) async {
+  testWidgets(
+    'stage summary outline uses equal partition units before limits are set',
+    (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -57,7 +57,7 @@ void main() {
             height: 260,
             child: CategoryBudgetStage(
               bars: [
-                barFixture(6, 'Food', 100, 150),
+                barFixture(6, 'Food', 100, 0),
                 barFixture(7, 'Travel', 40, 0),
                 barFixture(8, 'Bills', 20, 0),
               ],
@@ -94,9 +94,10 @@ void main() {
         .getSize(find.byKey(const ValueKey('category-summary-segment-1')))
         .width;
 
-    expect(activeBarWidth, lessThan(outlineWidth));
-    expect(firstSegmentWidth, greaterThan(secondSegmentWidth));
-  });
+      expect(activeBarWidth, lessThan(outlineWidth));
+      expect(firstSegmentWidth, moreOrLessEquals(secondSegmentWidth, epsilon: 1));
+    },
+  );
 
   testWidgets('category limit editor saves input and reset clears limit', (
     tester,
@@ -134,6 +135,42 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
     expect(savedAmount, 0);
+  });
+
+  testWidgets('category limit editor slider updates the limit amount', (
+    tester,
+  ) async {
+    double? savedAmount;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryLimitEditorSheet(
+            bar: barFixture(6, 'Food', 100, 0),
+            onCancel: () {},
+            onSave: ({required limitAmount, required alertActive}) async {
+              savedAmount = limitAmount;
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('category-limit-slider')), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('category-limit-slider')),
+      const Offset(220, 0),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(savedAmount, isNotNull);
+    expect(savedAmount!, greaterThan(0));
   });
 
   testWidgets('progress bar uses limit manager threshold color', (
