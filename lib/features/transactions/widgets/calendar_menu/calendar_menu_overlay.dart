@@ -197,9 +197,12 @@ class _YearNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
         IconButton(
           key: const ValueKey('calendar-prev-year'),
           onPressed: onPrevious,
@@ -224,7 +227,8 @@ class _YearNavigator extends StatelessWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints.tightFor(width: 42, height: 48),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
