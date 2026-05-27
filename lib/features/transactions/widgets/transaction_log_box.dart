@@ -5,17 +5,28 @@ import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import 'category_menu/category_icon_badge.dart';
 
+typedef TransactionLogContextCallback = void Function(
+  TransactionRecord record,
+  TransactionCategory? category,
+);
+
 class TransactionLogBox extends StatefulWidget {
   const TransactionLogBox({
     super.key,
     required this.record,
     required this.category,
-    required this.onFastFilter,
+    this.onFastFilter,
+    this.onTap,
+    this.onDeleteRequested,
+    this.onCategoryFilter,
   });
 
   final TransactionRecord record;
   final TransactionCategory? category;
-  final ValueChanged<String> onFastFilter;
+  final TransactionLogContextCallback? onFastFilter;
+  final ValueChanged<TransactionRecord>? onTap;
+  final ValueChanged<TransactionRecord>? onDeleteRequested;
+  final ValueChanged<TransactionCategory>? onCategoryFilter;
 
   @override
   State<TransactionLogBox> createState() => _TransactionLogBoxState();
@@ -33,10 +44,15 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   void _handleDragUpdate(DragUpdateDetails details) {
     if (_triggered) return;
     _dragDx += details.delta.dx;
-    if (_dragDx > -80) return;
-
-    _triggered = true;
-    widget.onFastFilter(widget.record.displayMerchant);
+    if (_dragDx < -80) {
+      _triggered = true;
+      widget.onFastFilter?.call(widget.record, widget.category);
+      return;
+    }
+    if (_dragDx > 80) {
+      _triggered = true;
+      widget.onDeleteRequested?.call(widget.record);
+    }
   }
 
   @override
@@ -46,6 +62,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
         : AppColors.expense;
     return GestureDetector(
       key: ValueKey('transaction-logbox-${widget.record.id}'),
+      onTap: () => widget.onTap?.call(widget.record),
       onHorizontalDragStart: (_) => _resetDrag(),
       onHorizontalDragUpdate: _handleDragUpdate,
       onHorizontalDragCancel: _resetDrag,
@@ -68,11 +85,19 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
         ),
         child: Row(
           children: [
-            CategoryIconBadge(
-              category: widget.category,
-              backgroundColor: widget.category?.slotColor ?? AppColors.gray500,
-              size: 46,
-              iconSize: 28,
+            GestureDetector(
+              key: ValueKey('transaction-logbox-avatar-${widget.record.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.category == null || widget.onCategoryFilter == null
+                  ? null
+                  : () => widget.onCategoryFilter!(widget.category!),
+              child: CategoryIconBadge(
+                category: widget.category,
+                backgroundColor:
+                    widget.category?.slotColor ?? AppColors.gray500,
+                size: 46,
+                iconSize: 28,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'models/transaction_category.dart';
+import 'models/transaction_record.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
@@ -18,9 +19,16 @@ import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
 class TransactionHomePage extends StatefulWidget {
-  const TransactionHomePage({super.key, required this.store});
+  const TransactionHomePage({
+    super.key,
+    required this.store,
+    this.onEditTransaction,
+    this.onDeleteTransactionRequested,
+  });
 
   final TransactionStore store;
+  final ValueChanged<TransactionRecord>? onEditTransaction;
+  final ValueChanged<TransactionRecord>? onDeleteTransactionRequested;
 
   @override
   State<TransactionHomePage> createState() => _TransactionHomePageState();
@@ -93,7 +101,10 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                     child: TransactionLogList(
                       records: widget.store.visibleTransactions,
                       categories: widget.store.categories,
-                      onFastFilter: widget.store.setMerchantFilter,
+                      onFastFilter: _setMerchantFastFilter,
+                      onRecordTap: _editTransaction,
+                      onDeleteRequested: _requestDeleteTransaction,
+                      onCategoryFilter: widget.store.setCategoryFilter,
                     ),
                   ),
                 ],
@@ -145,6 +156,24 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   Color? _merchantFilterColor() {
     final hex = widget.store.merchantFilterColorHex;
     return hex == null ? null : AppColors.fromHex(hex);
+  }
+
+  void _setMerchantFastFilter(
+    TransactionRecord record,
+    TransactionCategory? category,
+  ) {
+    widget.store.setMerchantFilter(
+      record.displayMerchant,
+      colorHex: category?.slotColorHex,
+    );
+  }
+
+  void _editTransaction(TransactionRecord record) {
+    widget.onEditTransaction?.call(record);
+  }
+
+  void _requestDeleteTransaction(TransactionRecord record) {
+    widget.onDeleteTransactionRequested?.call(record);
   }
 
   void _openLimitEditor(CategoryBudgetBarData bar) {
