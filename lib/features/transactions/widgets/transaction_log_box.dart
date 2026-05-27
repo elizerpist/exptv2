@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
+import 'category_menu/category_icon_badge.dart';
 
 class TransactionLogBox extends StatefulWidget {
   const TransactionLogBox({
@@ -67,18 +68,11 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: widget.category?.slotColor ?? AppColors.gray500,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.category,
-                color: AppColors.white,
-                size: 24,
-              ),
+            CategoryIconBadge(
+              category: widget.category,
+              backgroundColor: widget.category?.slotColor ?? AppColors.gray500,
+              size: 46,
+              iconSize: 28,
             ),
             const SizedBox(width: 12),
             Expanded(

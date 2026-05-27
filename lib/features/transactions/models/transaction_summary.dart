@@ -20,6 +20,13 @@ class TransactionSummary {
     return TransactionSummary(income: income, expense: expense);
   }
 
+  double get balance => income - expense;
+
+  String get formattedBalance {
+    final sign = balance < 0 ? '-' : '';
+    return '$sign${formatHuf(balance.abs())}';
+  }
+
   String formattedFor(TransactionType type) {
     return type == TransactionType.income
         ? '+${formatHuf(income)}'

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'models/transaction_category.dart';
 import 'state/transaction_store.dart';
+import 'widgets/category_menu/category_editor_panel.dart';
+import 'widgets/category_menu/category_menu_overlay.dart';
+import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/summary_pill.dart';
 import 'widgets/transaction_log_list.dart';
@@ -18,6 +21,10 @@ class TransactionHomePage extends StatefulWidget {
 }
 
 class _TransactionHomePageState extends State<TransactionHomePage> {
+  var _headerExpanded = false;
+  CategoryOverlayMode? _categoryMode;
+  TransactionCategory? _editingCategory;
+
   @override
   void initState() {
     super.initState();
@@ -49,40 +56,138 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
             );
           }
 
-          return Column(
+          return Stack(
             children: [
-              const SizedBox(height: 185),
-              TransactionTypePills(
-                activeType: widget.store.activeType,
-                onChanged: widget.store.setActiveType,
+              Column(
+                children: [
+                  const SizedBox(height: 185),
+                  TransactionTypePills(
+                    activeType: widget.store.activeType,
+                    onChanged: _setActiveType,
+                  ),
+                  SummaryPill(
+                    title: widget.store.activeType == TransactionType.income
+                        ? 'Bevételek'
+                        : 'Kiadások',
+                    value: widget.store.activeSummary.formattedFor(
+                      widget.store.activeType,
+                    ),
+                    onSwipe: widget.store.cycleSummaryWindow,
+                  ),
+                  SearchPill(
+                    query: widget.store.searchQuery,
+                    onQueryChanged: widget.store.setSearchQuery,
+                    merchantFilter: widget.store.merchantFilter,
+                    filteredCount: widget.store.visibleTransactions.length,
+                    onClearMerchant: widget.store.clearMerchantFilter,
+                  ),
+                  Expanded(
+                    child: TransactionLogList(
+                      records: widget.store.visibleTransactions,
+                      categories: widget.store.categories,
+                      onFastFilter: widget.store.setMerchantFilter,
+                    ),
+                  ),
+                ],
               ),
-              SummaryPill(
-                title: widget.store.activeType == TransactionType.income
-                    ? 'Bevételek'
-                    : 'Kiadások',
-                value: widget.store.activeSummary.formattedFor(
-                  widget.store.activeType,
+              TransactionHeaderCard(
+                balanceText: widget.store.totalBalanceText,
+                expanded: _headerExpanded,
+                onCategoryPressed: _openCategoryMenu,
+                onExpandPressed: () =>
+                    setState(() => _headerExpanded = !_headerExpanded),
+              ),
+              if (_categoryMode != null)
+                CategoryMenuOverlay(
+                  store: widget.store,
+                  mode: _categoryMode!,
+                  editingCategory: _editingCategory,
+                  onClose: _closeCategoryMenu,
+                  onAdd: _openAddCategory,
+                  onModify: _openModifyCategory,
+                  onSelect: _selectCategory,
+                  onSave: _saveCategory,
+                  onDelete: _deleteCategory,
                 ),
-                onSwipe: widget.store.cycleSummaryWindow,
-              ),
-              SearchPill(
-                query: widget.store.searchQuery,
-                onQueryChanged: widget.store.setSearchQuery,
-                merchantFilter: widget.store.merchantFilter,
-                filteredCount: widget.store.visibleTransactions.length,
-                onClearMerchant: widget.store.clearMerchantFilter,
-              ),
-              Expanded(
-                child: TransactionLogList(
-                  records: widget.store.visibleTransactions,
-                  categories: widget.store.categories,
-                  onFastFilter: widget.store.setMerchantFilter,
-                ),
-              ),
             ],
           );
         },
       ),
     );
+  }
+
+  void _setActiveType(TransactionType type) {
+    widget.store.setActiveType(type);
+    setState(() {
+      _categoryMode = null;
+      _editingCategory = null;
+    });
+  }
+
+  void _openCategoryMenu() {
+    setState(() {
+      _headerExpanded = false;
+      _categoryMode = CategoryOverlayMode.picker;
+      _editingCategory = null;
+    });
+  }
+
+  void _closeCategoryMenu() {
+    setState(() {
+      _categoryMode = null;
+      _editingCategory = null;
+    });
+  }
+
+  void _openAddCategory() {
+    setState(() {
+      _categoryMode = CategoryOverlayMode.add;
+      _editingCategory = null;
+    });
+  }
+
+  void _openModifyCategory(TransactionCategory category) {
+    setState(() {
+      _categoryMode = CategoryOverlayMode.modify;
+      _editingCategory = category;
+    });
+  }
+
+  void _selectCategory(TransactionCategory category) {
+    widget.store.setCategoryFilter(category);
+    _closeCategoryMenu();
+  }
+
+  Future<void> _saveCategory(CategoryDraft draft) async {
+    final editing = _editingCategory;
+    if (draft.id == null || editing == null) {
+      await widget.store.addCategory(
+        name: draft.name,
+        type: draft.type,
+        colorSlot: draft.colorSlot,
+        iconSlot: draft.iconSlot,
+      );
+    } else {
+      await widget.store.updateCategory(
+        editing,
+        name: draft.name,
+        colorSlot: draft.colorSlot,
+        iconSlot: draft.iconSlot,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _categoryMode = CategoryOverlayMode.picker;
+      _editingCategory = null;
+    });
+  }
+
+  Future<void> _deleteCategory(TransactionCategory category) async {
+    final deleted = await widget.store.deleteCategory(category);
+    if (!mounted || !deleted) return;
+    setState(() {
+      _categoryMode = CategoryOverlayMode.picker;
+      _editingCategory = null;
+    });
   }
 }

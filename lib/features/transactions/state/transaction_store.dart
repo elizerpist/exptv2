@@ -73,6 +73,9 @@ class TransactionStore extends ChangeNotifier {
     }).toList();
   }
 
+  String get totalBalanceText =>
+      TransactionSummary.fromRecords(_transactions).formattedBalance;
+
   TransactionSummary get activeSummary {
     final now = DateTime.now();
     final year = now.year.toString();
