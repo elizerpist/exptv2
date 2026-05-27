@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    id("org.jetbrains.kotlin.kapt")
+    id("com.google.devtools.ksp")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -42,7 +42,7 @@ flutter {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 }
