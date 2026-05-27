@@ -12,6 +12,14 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (call) async {
       if (call.method == 'loadEvents') return <Map<String, Object?>>[];
+      if (call.method == 'listInstalledApps') {
+        return <Map<String, Object?>>[
+          <String, Object?>{
+            'packageName': 'com.mand.notitest',
+            'label': 'Notification Test',
+          },
+        ];
+      }
       if (call.method == 'getStatus') {
         return <String, Object?>{
           'captureMode': 'both',
@@ -31,6 +39,26 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), null);
+  });
+
+
+
+  testWidgets('app picker selects package regex and enables filtering', (tester) async {
+    await tester.pumpWidget(PushParserApp(
+      store: EventStore(NativeBridge(), realtimeEnabled: false),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Pick installed app'));
+    await tester.pumpAndSettle();
+    expect(find.text('Notification Test'), findsOneWidget);
+
+    await tester.tap(find.text('Notification Test'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(r'^com\.mand\.notitest$'), findsOneWidget);
+    final filterSwitch = tester.widget<Switch>(find.byType(Switch));
+    expect(filterSwitch.value, isTrue);
   });
 
   testWidgets('app renders main title and permission setup', (tester) async {
