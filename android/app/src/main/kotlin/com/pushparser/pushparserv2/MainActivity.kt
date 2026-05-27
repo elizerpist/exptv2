@@ -124,11 +124,16 @@ class MainActivity : FlutterActivity() {
                     "label" to app.safeLabel(pm),
                 )
             }
-            .sortedWith(
-                compareBy<Map<String, String>>(String.CASE_INSENSITIVE_ORDER) {
-                    it["label"].orEmpty()
-                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it["packageName"].orEmpty() },
-            )
+            .sortedWith { left, right ->
+                val labelCompare = left["label"].orEmpty()
+                    .compareTo(right["label"].orEmpty(), ignoreCase = true)
+                if (labelCompare != 0) {
+                    labelCompare
+                } else {
+                    left["packageName"].orEmpty()
+                        .compareTo(right["packageName"].orEmpty(), ignoreCase = true)
+                }
+            }
     }
 
     private fun ApplicationInfo.safeLabel(pm: PackageManager): String {
