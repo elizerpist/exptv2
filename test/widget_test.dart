@@ -6,12 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final savedTransactions = <Map<dynamic, dynamic>>[];
+final updatedTransactions = <Map<dynamic, dynamic>>[];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
     savedTransactions.clear();
+    updatedTransactions.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
           call,
@@ -29,6 +31,23 @@ void main() {
             final type = payload['type']?.toString();
             return <String, Object?>{
               'id': 250914,
+              'date': payload['date'],
+              'time': payload['time'],
+              'merchant': payload['merchant'],
+              'amount': type == 'income' ? amount : -amount.abs(),
+              'userAssignedName': null,
+              'transactionCategoryID': payload['transactionCategoryID'],
+            };
+          }
+          if (call.method == 'expenseUpdateTransaction') {
+            final payload = Map<dynamic, dynamic>.from(
+              call.arguments as Map<dynamic, dynamic>,
+            );
+            updatedTransactions.add(payload);
+            final amount = payload['amount'] as num;
+            final type = payload['type']?.toString();
+            return <String, Object?>{
+              'id': payload['id'],
               'date': payload['date'],
               'time': payload['time'],
               'merchant': payload['merchant'],
@@ -126,6 +145,47 @@ void main() {
     expect(find.text('Tranzakció neve'), findsOneWidget);
     expect(find.text('Összeg'), findsOneWidget);
     expect(find.text('Kategória'), findsOneWidget);
+  });
+
+  testWidgets('transaction editor is non modal and aligned to summary pill', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    final summaryTop = tester
+        .getRect(find.byKey(const ValueKey('summary-pill')))
+        .top;
+    final editorTop = tester
+        .getRect(find.byKey(const ValueKey('transaction-editor-card')))
+        .top;
+
+    expect(find.byType(ModalBarrier), findsNothing);
+    expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+  });
+
+  testWidgets('type pills remain tappable while transaction editor is open', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bevétel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Új bevételi tranzakció'), findsOneWidget);
+  });
+
+  testWidgets('logbox tap opens transaction editor in edit mode', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('transaction-logbox-250909')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
+    expect(find.byKey(const ValueKey('transaction-editor-card')), findsOneWidget);
   });
 
   testWidgets('add transaction sheet saves through native bridge', (
