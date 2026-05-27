@@ -149,6 +149,19 @@ void main() {
     );
   });
 
+  test('store keeps fast filter color while category filter is active', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+
+    final category = store.categories.firstWhere((item) => item.name == 'Q');
+    store.setMerchantFilter('Rrr', colorHex: category.slotColorHex);
+    store.setCategoryFilter(category);
+
+    expect(store.merchantFilter, 'Rrr');
+    expect(store.merchantFilterColorHex, category.slotColorHex);
+    expect(store.activeCategory?.name, 'Q');
+  });
+
   test('active summary is calculated from visible filtered records', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();
