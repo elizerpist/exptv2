@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
-        android:label="PushParserV2"
+        android:label="Exptv2"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -27,7 +27,7 @@
         <service
             android:name=".PushNotificationListenerService"
             android:exported="true"
-            android:label="PushParser Notification Listener"
+            android:label="Exptv2 Notification Listener"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
@@ -37,7 +37,7 @@
         <service
             android:name=".PushAccessibilityService"
             android:exported="true"
-            android:label="PushParser Accessibility Capture"
+            android:label="Exptv2 Accessibility Capture"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

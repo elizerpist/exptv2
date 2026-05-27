@@ -7,11 +7,10 @@ import '../models/notification_event.dart';
 import '../models/service_status.dart';
 
 class NativeBridge {
-  NativeBridge({
-    MethodChannel? methodChannel,
-    EventChannel? eventChannel,
-  })  : _methodChannel = methodChannel ?? const MethodChannel('pushparser/methods'),
-        _eventChannel = eventChannel ?? const EventChannel('pushparser/events');
+  NativeBridge({MethodChannel? methodChannel, EventChannel? eventChannel})
+    : _methodChannel =
+          methodChannel ?? const MethodChannel('pushparser/methods'),
+      _eventChannel = eventChannel ?? const EventChannel('pushparser/events');
 
   final MethodChannel _methodChannel;
   final EventChannel _eventChannel;
@@ -25,12 +24,16 @@ class NativeBridge {
   }
 
   Future<ServiceStatus> getStatus() async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>('getStatus');
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'getStatus',
+    );
     return ServiceStatus.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<List<InstalledApp>> listInstalledApps() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>('listInstalledApps');
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'listInstalledApps',
+    );
     return (rows ?? <dynamic>[])
         .cast<Map<dynamic, dynamic>>()
         .map(InstalledApp.fromMap)

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pushparserv2/models/notification_event.dart';
+import 'package:exptv2/models/notification_event.dart';
 
 void main() {
   test('fromMap parses native event payload', () {

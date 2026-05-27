@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pushparserv2/services/native_bridge.dart';
-import 'package:pushparserv2/state/event_store.dart';
+import 'package:exptv2/services/native_bridge.dart';
+import 'package:exptv2/state/event_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -12,26 +12,30 @@ void main() {
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(methodChannel, (call) async {
-      if (call.method == 'loadEvents') {
-        return <Map<String, Object?>>[
-          sampleEvent(id: 1, appLabel: 'Telegram', packageName: 'org.telegram.messenger'),
-          sampleEvent(id: 2, appLabel: 'Signal', packageName: 'org.signal'),
-        ];
-      }
-      if (call.method == 'getStatus') {
-        return <String, Object?>{
-          'captureMode': 'both',
-          'notificationListenerEnabled': true,
-          'accessibilityEnabled': false,
-          'notificationListenerActive': true,
-          'accessibilityActive': false,
-          'lastNotificationListenerEvent': 1710000000000,
-          'lastAccessibilityEvent': 0,
-          'totalEvents': 2,
-        };
-      }
-      return null;
-    });
+          if (call.method == 'loadEvents') {
+            return <Map<String, Object?>>[
+              sampleEvent(
+                id: 1,
+                appLabel: 'Telegram',
+                packageName: 'org.telegram.messenger',
+              ),
+              sampleEvent(id: 2, appLabel: 'Signal', packageName: 'org.signal'),
+            ];
+          }
+          if (call.method == 'getStatus') {
+            return <String, Object?>{
+              'captureMode': 'both',
+              'notificationListenerEnabled': true,
+              'accessibilityEnabled': false,
+              'notificationListenerActive': true,
+              'accessibilityActive': false,
+              'lastNotificationListenerEvent': 1710000000000,
+              'lastAccessibilityEvent': 0,
+              'totalEvents': 2,
+            };
+          }
+          return null;
+        });
   });
 
   tearDown(() {

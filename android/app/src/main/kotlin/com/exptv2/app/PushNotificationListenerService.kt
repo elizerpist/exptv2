@@ -1,4 +1,4 @@
-package com.pushparser.pushparserv2
+package com.exptv2.app
 
 import android.app.Notification
 import android.service.notification.NotificationListenerService

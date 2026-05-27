@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.pushparser.pushparserv2"
+    namespace = "com.exptv2.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.pushparser.pushparserv2"
+        applicationId = "com.exptv2.app"
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -1,4 +1,4 @@
-package com.pushparser.pushparserv2
+package com.exptv2.app
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

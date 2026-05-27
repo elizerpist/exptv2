@@ -43,12 +43,16 @@ class ServiceStatus {
     }
 
     return ServiceStatus(
-      captureMode: CaptureMode.fromNative((map['captureMode'] as String?) ?? 'both'),
+      captureMode: CaptureMode.fromNative(
+        (map['captureMode'] as String?) ?? 'both',
+      ),
       notificationListenerEnabled: map['notificationListenerEnabled'] == true,
       accessibilityEnabled: map['accessibilityEnabled'] == true,
       notificationListenerActive: map['notificationListenerActive'] == true,
       accessibilityActive: map['accessibilityActive'] == true,
-      lastNotificationListenerEvent: readMillis('lastNotificationListenerEvent'),
+      lastNotificationListenerEvent: readMillis(
+        'lastNotificationListenerEvent',
+      ),
       lastAccessibilityEvent: readMillis('lastAccessibilityEvent'),
       totalEvents: ((map['totalEvents'] as num?) ?? 0).toInt(),
     );

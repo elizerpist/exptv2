@@ -40,10 +40,11 @@ class NotificationEvent {
   String get displayApp => appLabel.isNotEmpty ? appLabel : packageName;
 
   String get bodyText {
-    final parts = <String>[text, bigText, subText]
-        .where((value) => value.trim().isNotEmpty)
-        .toSet()
-        .toList();
+    final parts = <String>[
+      text,
+      bigText,
+      subText,
+    ].where((value) => value.trim().isNotEmpty).toSet().toList();
     return parts.join('\n');
   }
 

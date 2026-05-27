@@ -1,4 +1,4 @@
-package com.pushparser.pushparserv2
+package com.exptv2.app
 
 enum class CaptureMode(val value: String) {
     NOTIFICATION_LISTENER("notification_listener"),
