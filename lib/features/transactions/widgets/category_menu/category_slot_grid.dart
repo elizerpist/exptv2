@@ -9,21 +9,21 @@ class CategorySlotGrid extends StatelessWidget {
     super.key,
     required this.selectedSlot,
     required this.onSelected,
-  }) : mode = _SlotGridMode.colors;
+  }) : mode = CategorySlotGridMode.colors;
 
   const CategorySlotGrid.icons({
     super.key,
     required this.selectedSlot,
     required this.onSelected,
-  }) : mode = _SlotGridMode.icons;
+  }) : mode = CategorySlotGridMode.icons;
 
-  final _SlotGridMode mode;
+  final CategorySlotGridMode mode;
   final int selectedSlot;
   final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final slots = mode == _SlotGridMode.colors
+    final slots = mode == CategorySlotGridMode.colors
         ? CategoryColorManager.slots
         : CategoryIconManager.slots;
     return GridView.builder(
@@ -41,12 +41,12 @@ class CategorySlotGrid extends StatelessWidget {
         final selected = selectedSlot == slot;
         return GestureDetector(
           key: ValueKey(
-            mode == _SlotGridMode.colors
+            mode == CategorySlotGridMode.colors
                 ? 'color-slot-$slot'
                 : 'icon-slot-$slot',
           ),
           onTap: () => onSelected(slot),
-          child: mode == _SlotGridMode.colors
+          child: mode == CategorySlotGridMode.colors
               ? _ColorSlot(slot: slot, selected: selected)
               : _IconSlot(slot: slot, selected: selected),
         );
@@ -55,7 +55,7 @@ class CategorySlotGrid extends StatelessWidget {
   }
 }
 
-enum _SlotGridMode { colors, icons }
+enum CategorySlotGridMode { colors, icons }
 
 class _ColorSlot extends StatelessWidget {
   const _ColorSlot({required this.slot, required this.selected});
