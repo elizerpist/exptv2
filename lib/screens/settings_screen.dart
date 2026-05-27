@@ -17,7 +17,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChanged);
-    widget.store.refreshStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.store.refreshStatus();
+    });
   }
 
   @override

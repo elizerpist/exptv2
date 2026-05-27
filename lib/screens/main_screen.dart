@@ -22,7 +22,9 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChanged);
-    widget.store.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.store.start();
+    });
   }
 
   @override
