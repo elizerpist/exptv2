@@ -4,9 +4,13 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Base64
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -122,6 +127,7 @@ class MainActivity : FlutterActivity() {
                 mapOf(
                     "packageName" to app.packageName,
                     "label" to app.safeLabel(pm),
+                    "iconBase64" to app.safeIconBase64(pm),
                 )
             }
             .sortedWith { left, right ->
@@ -141,7 +147,26 @@ class MainActivity : FlutterActivity() {
             .getOrDefault(packageName)
     }
 
+    private fun ApplicationInfo.safeIconBase64(pm: PackageManager): String {
+        return runCatching { pm.getApplicationIcon(this).toPngBase64() }
+            .getOrDefault("")
+    }
+
+    private fun Drawable.toPngBase64(): String {
+        val bitmap = Bitmap.createBitmap(APP_ICON_SIZE, APP_ICON_SIZE, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val previousBounds = copyBounds()
+        setBounds(0, 0, canvas.width, canvas.height)
+        draw(canvas)
+        setBounds(previousBounds)
+
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        return Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+    }
+
     companion object {
         private const val REQUEST_POST_NOTIFICATIONS = 42
+        private const val APP_ICON_SIZE = 96
     }
 }

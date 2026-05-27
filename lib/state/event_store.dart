@@ -60,11 +60,14 @@ class EventStore extends ChangeNotifier {
   Future<List<InstalledApp>> listInstalledApps() => _bridge.listInstalledApps();
 
   void selectInstalledApp(InstalledApp app) {
-    final packageRegex = '^${RegExp.escape(app.packageName)}\$';
-    filterText = packageRegex;
+    final appName = app.displayName;
+    filterText = appName;
     filterEnabled = true;
     filterError = null;
-    _lastValidRegex = RegExp(packageRegex, caseSensitive: false);
+    _lastValidRegex = RegExp(
+      '^${RegExp.escape(appName)}\$',
+      caseSensitive: false,
+    );
     notifyListeners();
   }
 

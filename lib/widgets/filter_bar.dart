@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../models/installed_app.dart';
@@ -128,7 +130,7 @@ class _InstalledAppPickerSheet extends StatelessWidget {
               itemBuilder: (context, index) {
                 final app = apps[index];
                 return ListTile(
-                  leading: const Icon(Icons.android),
+                  leading: _InstalledAppIcon(app: app),
                   title: Text(app.displayName),
                   subtitle: Text(app.packageName),
                   onTap: () => Navigator.of(context).pop(app),
@@ -137,6 +139,28 @@ class _InstalledAppPickerSheet extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+
+class _InstalledAppIcon extends StatelessWidget {
+  const _InstalledAppIcon({required this.app});
+
+  final InstalledApp app;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!app.hasIcon) return const Icon(Icons.android);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.memory(
+        base64Decode(app.iconBase64),
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
       ),
     );
   }
