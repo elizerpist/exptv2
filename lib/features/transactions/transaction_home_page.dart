@@ -72,9 +72,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                     onChanged: _setActiveType,
                   ),
                   SummaryPill(
-                    title: widget.store.activeType == TransactionType.income
-                        ? 'Bevételek'
-                        : 'Kiadások',
+                    title: widget.store.activeSummaryTitle,
                     value: widget.store.activeSummary.formattedFor(
                       widget.store.activeType,
                     ),
@@ -84,8 +82,12 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                     query: widget.store.searchQuery,
                     onQueryChanged: widget.store.setSearchQuery,
                     merchantFilter: widget.store.merchantFilter,
+                    merchantFilterColor: _merchantFilterColor(),
+                    categoryFilter: widget.store.activeCategory?.name,
+                    categoryFilterColor: widget.store.activeCategory?.slotColor,
                     filteredCount: widget.store.visibleTransactions.length,
                     onClearMerchant: widget.store.clearMerchantFilter,
+                    onClearCategory: widget.store.clearCategoryFilter,
                   ),
                   Expanded(
                     child: TransactionLogList(
@@ -138,6 +140,11 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       _calendarOpen = false;
       _categoryMode = null;
     });
+  }
+
+  Color? _merchantFilterColor() {
+    final hex = widget.store.merchantFilterColorHex;
+    return hex == null ? null : AppColors.fromHex(hex);
   }
 
   void _openLimitEditor(CategoryBudgetBarData bar) {

@@ -30,6 +30,7 @@ class TransactionStore extends ChangeNotifier {
   SummaryWindow get summaryWindow => _summaryWindow;
   String get searchQuery => _filter.searchQuery;
   String? get merchantFilter => _filter.merchant;
+  String? get merchantFilterColorHex => _filter.merchantColorHex;
   TransactionCategory? get activeCategory {
     final id = _filter.categoryId;
     if (id == null) return null;
@@ -165,8 +166,12 @@ class TransactionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setMerchantFilter(String merchant) {
-    _filter = _filter.copyWith(merchant: merchant, searchQuery: '');
+  void setMerchantFilter(String merchant, {String? colorHex}) {
+    _filter = _filter.copyWith(
+      merchant: merchant,
+      merchantColorHex: colorHex,
+      searchQuery: '',
+    );
     notifyListeners();
   }
 

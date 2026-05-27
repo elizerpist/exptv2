@@ -2,33 +2,101 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 
-class SearchPill extends StatelessWidget {
+class SearchPill extends StatefulWidget {
   const SearchPill({
     super.key,
     required this.query,
     required this.onQueryChanged,
     required this.filteredCount,
     this.merchantFilter,
+    this.merchantFilterColor,
     this.onClearMerchant,
+    this.categoryFilter,
+    this.categoryFilterColor,
+    this.onClearCategory,
   });
 
   final String query;
   final ValueChanged<String> onQueryChanged;
   final int filteredCount;
   final String? merchantFilter;
+  final Color? merchantFilterColor;
   final VoidCallback? onClearMerchant;
+  final String? categoryFilter;
+  final Color? categoryFilterColor;
+  final VoidCallback? onClearCategory;
+
+  @override
+  State<SearchPill> createState() => _SearchPillState();
+}
+
+class _SearchPillState extends State<SearchPill> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.query);
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(SearchPill oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query == _controller.text) return;
+    _controller.value = TextEditingValue(
+      text: widget.query,
+      selection: TextSelection.collapsed(offset: widget.query.length),
+    );
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChanged);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hasMerchant = merchantFilter != null;
+    final hasMerchant = widget.merchantFilter != null;
+    final hasCategory = widget.categoryFilter != null;
+    final hasFilters = hasMerchant || hasCategory;
+    final capsules = <Widget>[
+      if (hasMerchant)
+        _FilterCapsule(
+          key: const ValueKey('search-pill-capsule-merchant'),
+          value: widget.merchantFilter!,
+          color: widget.merchantFilterColor ?? AppColors.primary,
+          onClear: widget.onClearMerchant,
+        ),
+      if (hasCategory)
+        _FilterCapsule(
+          key: const ValueKey('search-pill-capsule-category'),
+          value: widget.categoryFilter!,
+          color: widget.categoryFilterColor ?? AppColors.primary,
+          onClear: widget.onClearCategory,
+        ),
+    ];
+
     return Container(
+      key: const ValueKey('search-pill-container'),
       margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       constraints: const BoxConstraints(minHeight: 46),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: AppColors.gray200),
+        border: Border.all(
+          color: _focusNode.hasFocus ? AppColors.primary : AppColors.gray200,
+          width: _focusNode.hasFocus ? 1.5 : 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
@@ -42,36 +110,53 @@ class SearchPill extends StatelessWidget {
           const Icon(Icons.search, size: 16, color: AppColors.gray400),
           const SizedBox(width: 8),
           Expanded(
-            child: hasMerchant
-                ? Text(
-                    '$filteredCount tranzakció találva',
-                    style: const TextStyle(color: AppColors.gray400),
-                  )
-                : TextField(
-                    onChanged: onQueryChanged,
-                    controller: TextEditingController(text: query)
-                      ..selection = TextSelection.collapsed(
-                        offset: query.length,
-                      ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Keresés tranzakciók között...',
-                      isDense: true,
-                    ),
-                  ),
+            child: TextField(
+              focusNode: _focusNode,
+              controller: _controller,
+              onChanged: widget.onQueryChanged,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: hasFilters
+                    ? '${widget.filteredCount} tranzakció találva'
+                    : 'Keresés tranzakciók között...',
+                isDense: true,
+              ),
+            ),
           ),
-          if (hasMerchant)
-            _MerchantCapsule(value: merchantFilter!, onClear: onClearMerchant),
+          if (capsules.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Flexible(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                reverse: true,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var index = 0; index < capsules.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 6),
+                      capsules[index],
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _MerchantCapsule extends StatelessWidget {
-  const _MerchantCapsule({required this.value, required this.onClear});
+class _FilterCapsule extends StatelessWidget {
+  const _FilterCapsule({
+    super.key,
+    required this.value,
+    required this.color,
+    required this.onClear,
+  });
 
   final String value;
+  final Color color;
   final VoidCallback? onClear;
 
   @override
@@ -80,18 +165,22 @@ class _MerchantCapsule extends StatelessWidget {
       height: 30,
       padding: const EdgeInsets.only(left: 12),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: color,
         borderRadius: BorderRadius.circular(15),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 86),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           IconButton(
