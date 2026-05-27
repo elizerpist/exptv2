@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../features/transactions/models/category_limit.dart';
 import '../features/transactions/models/transaction_category.dart';
 import '../features/transactions/models/transaction_record.dart';
 import '../models/installed_app.dart';
@@ -12,10 +13,12 @@ class ExpenseBootstrapPayload {
   const ExpenseBootstrapPayload({
     required this.categories,
     required this.transactions,
+    required this.limits,
   });
 
   final List<TransactionCategory> categories;
   final List<TransactionRecord> transactions;
+  final List<CategoryLimit> limits;
 }
 
 class NativeBridge {
@@ -66,9 +69,14 @@ class NativeBridge {
             .cast<Map<dynamic, dynamic>>()
             .map(TransactionRecord.fromMap)
             .toList();
+    final limits = (payload['limits'] as List<dynamic>? ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(CategoryLimit.fromMap)
+        .toList();
     return ExpenseBootstrapPayload(
       categories: categories,
       transactions: transactions,
+      limits: limits,
     );
   }
 
@@ -152,6 +160,35 @@ class NativeBridge {
       counts[key] = value;
     }
     return counts;
+  }
+
+  Future<List<CategoryLimit>> expenseListCategoryLimits({
+    String? transactionType,
+    String? window,
+    String? periodKey,
+  }) async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseListCategoryLimits',
+      {
+        'transactionType': transactionType,
+        'window': window,
+        'periodKey': periodKey,
+      },
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(CategoryLimit.fromMap)
+        .toList();
+  }
+
+  Future<CategoryLimit> expenseUpsertCategoryLimit(
+    Map<String, Object?> payload,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpsertCategoryLimit',
+      payload,
+    );
+    return CategoryLimit.fromMap(row ?? <dynamic, dynamic>{});
   }
 
   Future<bool> expenseDeleteTransaction(int id) async {

@@ -7,14 +7,17 @@ class ExpenseRepository(context: Context) {
     private val db = ExpenseTrackerDatabase.get(context)
     private val transactions = db.transactions()
     private val categories = db.categories()
+    private val categoryLimits = db.categoryLimits()
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
         val categoryRows = categories.all()
         val transactionRows = transactions.all()
+        val limitRows = categoryLimits.list(null, null, null)
         return mapOf(
             "categories" to categoryRows.map { it.toMap() },
             "transactions" to transactionRows.map { it.toMap() },
+            "limits" to limitRows.map { it.toMap() },
         )
     }
 
@@ -32,6 +35,58 @@ class ExpenseRepository(context: Context) {
     suspend fun categoryCounts(): Map<Int, Int> {
         seedIfEmpty()
         return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
+    }
+
+
+    suspend fun listCategoryLimits(args: Map<*, *>): List<Map<String, Any?>> {
+        seedIfEmpty()
+        val transactionType = normalizeNativeTransactionType(args["transactionType"]?.toString())
+        val window = normalizeLimitWindow(args["window"]?.toString())
+        val periodKey = args["periodKey"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        return categoryLimits.list(transactionType, window, periodKey).map { it.toMap() }
+    }
+
+    suspend fun upsertCategoryLimit(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val targetType = normalizeTargetType(args["targetType"]?.toString())
+            ?: throw ExpenseValidationException("INVALID_LIMIT_TARGET", "Limit target type is required")
+        val targetId = optionalInt(args["targetId"])
+            ?: throw ExpenseValidationException("INVALID_LIMIT_TARGET", "Limit target id is required")
+        if (targetType == "overview" && targetId != 0) {
+            throw ExpenseValidationException("INVALID_LIMIT_TARGET", "Overview limit target id must be 0")
+        }
+        if (targetType == "category" && categories.byId(targetId) == null) {
+            throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        }
+        val transactionType = normalizeNativeTransactionType(args["transactionType"]?.toString())
+            ?: throw ExpenseValidationException("INVALID_LIMIT_TYPE", "Limit transaction type is required")
+        val window = normalizeLimitWindow(args["window"]?.toString())
+            ?: throw ExpenseValidationException("INVALID_LIMIT_WINDOW", "Limit window is required")
+        val periodKey = args["periodKey"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: throw ExpenseValidationException("INVALID_LIMIT_PERIOD", "Limit period key is required")
+        val amount = doubleArg(args["limitAmount"], 0.0)
+        if (amount < 0.0) {
+            throw ExpenseValidationException("INVALID_LIMIT_AMOUNT", "Limit amount cannot be negative")
+        }
+        val hasLimit = boolArg(args["hasLimit"], amount > 0.0) && amount > 0.0
+        val alertActive = hasLimit && boolArg(args["alertActive"], false)
+        val existing = categoryLimits.byKey(targetType, targetId, transactionType, window, periodKey)
+        val now = System.currentTimeMillis()
+        val row = CategoryLimitEntity(
+            id = existing?.id ?: 0,
+            targetType = targetType,
+            targetId = targetId,
+            transactionType = transactionType,
+            window = window,
+            periodKey = periodKey,
+            hasLimit = hasLimit,
+            limitAmount = if (hasLimit) amount else 0.0,
+            alertActive = alertActive,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+        )
+        val newId = categoryLimits.insert(row).toInt()
+        return row.copy(id = if (row.id == 0) newId else row.id).toMap()
     }
 
     suspend fun addCategory(args: Map<*, *>): Map<String, Any?> {
@@ -197,6 +252,27 @@ class ExpenseRepository(context: Context) {
         null, "" -> null
         "income", "bevétel" -> "bevétel"
         "expense", "kiadás" -> "kiadás"
+        else -> null
+    }
+
+    private fun normalizeNativeTransactionType(type: String?): String? = when (type) {
+        null, "" -> null
+        "income", "bevétel" -> "income"
+        "expense", "kiadás" -> "expense"
+        else -> null
+    }
+
+    private fun normalizeLimitWindow(window: String?): String? = when (window) {
+        null, "" -> null
+        "monthly" -> "monthly"
+        "yearly" -> "yearly"
+        "all_time", "allTime", "sum" -> "all_time"
+        else -> null
+    }
+
+    private fun normalizeTargetType(targetType: String?): String? = when (targetType) {
+        "overview" -> "overview"
+        "category" -> "category"
         else -> null
     }
 
