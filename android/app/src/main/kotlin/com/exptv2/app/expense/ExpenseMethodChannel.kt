@@ -24,6 +24,22 @@ class ExpenseMethodChannel(
             "expenseUpdateFastInfoConfig" -> scope.launchResult(result) {
                 repository.updateFastInfoConfig(call.argumentsMap())
             }
+            "expenseListNotificationCards" -> scope.launchResult(result) {
+                repository.listNotificationCards()
+            }
+            "expenseMarkNotificationCardRead" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: throw ExpenseValidationException("INVALID_NOTIFICATION_ID", "Notification id is required")
+                repository.markNotificationCardRead(id)
+            }
+            "expenseDeleteNotificationCard" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: throw ExpenseValidationException("INVALID_NOTIFICATION_ID", "Notification id is required")
+                repository.deleteNotificationCard(id)
+            }
+            "expenseClearNotificationCards" -> scope.launchResult(result) {
+                repository.clearNotificationCards(call.argumentsMap())
+            }
             "expenseListRecurringTransactions" -> scope.launchResult(result) {
                 repository.listRecurringTransactions()
             }

@@ -11,6 +11,7 @@ class ExpenseRepository(context: Context) {
     private val categoryLimits = db.categoryLimits()
     private val recurringTransactions = db.recurringTransactions()
     private val recurringGhosts = db.recurringGhostTransactions()
+    private val notificationCards = db.notificationCards()
     private val settingsStore = ExpenseSettingsStore(appContext)
     private val notificationHelper = RecurringNotificationHelper(appContext)
 
@@ -53,6 +54,29 @@ class ExpenseRepository(context: Context) {
     fun updateThemeSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updateThemeSettings(args)
 
     fun updateFastInfoConfig(args: Map<*, *>): Map<String, Any?> = settingsStore.updateFastInfoConfig(args)
+
+
+    suspend fun listNotificationCards(): List<Map<String, Any?>> {
+        seedIfEmpty()
+        return notificationCards.active().map { it.toMap() }
+    }
+
+    suspend fun markNotificationCardRead(id: Int): Boolean {
+        seedIfEmpty()
+        return notificationCards.markRead(id, System.currentTimeMillis()) > 0
+    }
+
+    suspend fun deleteNotificationCard(id: Int): Boolean {
+        seedIfEmpty()
+        return notificationCards.delete(id, System.currentTimeMillis()) > 0
+    }
+
+    suspend fun clearNotificationCards(args: Map<*, *>): Int {
+        seedIfEmpty()
+        val now = System.currentTimeMillis()
+        val monthKey = args["monthKey"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        return if (monthKey == null) notificationCards.clearAll(now) else notificationCards.clearMonth(monthKey, now)
+    }
 
     suspend fun listRecurringTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()

@@ -135,4 +135,54 @@ void main() {
     expect(invokedPayload?['id'], 250905);
     expect(deleted, isTrue);
   });
+
+  test(
+    'loads, reads, and deletes notification cards through native bridge',
+    () async {
+      final invoked = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            invoked.add(call.method);
+            if (call.method == 'expenseListNotificationCards') {
+              return [
+                {
+                  'id': 1,
+                  'type': 'recurring_transaction_alert',
+                  'title': 'Ismétlődő tranzakció',
+                  'message': 'Rent automatikusan hozzáadva',
+                  'timestamp': 1778803200000,
+                  'isRead': false,
+                  'isActive': true,
+                  'priority': 'medium',
+                  'categoryId': 6,
+                  'categoryName': 'Q',
+                  'categoryColor': '#dc2626',
+                  'categoryIconSlot': 2,
+                  'recurringTransactionId': 9,
+                  'transactionId': 26051501,
+                  'amount': 500,
+                  'triggerDate': '2026-05-15T00:00:00.000',
+                  'nextDueDate': '2026-06-15T00:00:00.000',
+                  'createdAt': 1778803200000,
+                  'updatedAt': 1778803200000,
+                },
+              ];
+            }
+            return true;
+          });
+
+      final cards = await bridge.expenseListNotificationCards();
+      final read = await bridge.expenseMarkNotificationCardRead(1);
+      final deleted = await bridge.expenseDeleteNotificationCard(1);
+
+      expect(cards.single.title, 'Ismétlődő tranzakció');
+      expect(read, isTrue);
+      expect(deleted, isTrue);
+      expect(invoked, [
+        'expenseListNotificationCards',
+        'expenseMarkNotificationCardRead',
+        'expenseDeleteNotificationCard',
+      ]);
+    },
+  );
 }

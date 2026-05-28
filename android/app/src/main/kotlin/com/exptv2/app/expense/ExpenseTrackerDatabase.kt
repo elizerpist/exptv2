@@ -14,8 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryLimitEntity::class,
         RecurringTransactionEntity::class,
         RecurringGhostTransactionEntity::class,
+        NotificationCardEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
     abstract fun categoryLimits(): CategoryLimitDao
     abstract fun recurringTransactions(): RecurringTransactionDao
     abstract fun recurringGhostTransactions(): RecurringGhostTransactionDao
+    abstract fun notificationCards(): NotificationCardDao
 
     companion object {
         @Volatile private var instance: ExpenseTrackerDatabase? = null
@@ -134,13 +136,52 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS notification_cards (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        isRead INTEGER NOT NULL,
+                        isActive INTEGER NOT NULL,
+                        priority TEXT NOT NULL,
+                        categoryId INTEGER,
+                        categoryName TEXT,
+                        categoryColor TEXT,
+                        categoryIconSlot INTEGER,
+                        recurringTransactionId INTEGER,
+                        transactionId INTEGER,
+                        amount REAL,
+                        triggerDate TEXT,
+                        nextDueDate TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notification_cards_timestamp ON notification_cards(timestamp)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notification_cards_type ON notification_cards(type)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notification_cards_isRead ON notification_cards(isRead)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notification_cards_isActive ON notification_cards(isActive)")
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     ExpenseTrackerDatabase::class.java,
                     "expense_tracker.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                    )
                     .build().also { instance = it }
             }
         }

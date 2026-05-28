@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../features/notifications/models/expense_notification_card.dart';
 import '../features/settings/models/app_theme_settings.dart';
 import '../features/settings/models/fast_info_config.dart';
 import '../features/settings/models/recurring_transaction.dart';
@@ -360,6 +361,40 @@ class NativeBridge {
         .cast<Map<dynamic, dynamic>>()
         .map(RecurringGhostRecord.fromMap)
         .toList();
+  }
+
+  Future<List<ExpenseNotificationCard>> expenseListNotificationCards() async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseListNotificationCards',
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(ExpenseNotificationCard.fromMap)
+        .toList();
+  }
+
+  Future<bool> expenseMarkNotificationCardRead(int id) async {
+    final updated = await _methodChannel.invokeMethod<bool>(
+      'expenseMarkNotificationCardRead',
+      {'id': id},
+    );
+    return updated ?? false;
+  }
+
+  Future<bool> expenseDeleteNotificationCard(int id) async {
+    final deleted = await _methodChannel.invokeMethod<bool>(
+      'expenseDeleteNotificationCard',
+      {'id': id},
+    );
+    return deleted ?? false;
+  }
+
+  Future<int> expenseClearNotificationCards({String? monthKey}) async {
+    final count = await _methodChannel.invokeMethod<int>(
+      'expenseClearNotificationCards',
+      {'monthKey': monthKey},
+    );
+    return count ?? 0;
   }
 
   Future<void> setCaptureMode(CaptureMode mode) async {
