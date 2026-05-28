@@ -273,10 +273,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    final logbox = tester.getRect(
-      find.byKey(const ValueKey('transaction-logbox-card-250909')),
-    );
-    await tester.tapAt(logbox.centerRight - const Offset(24, 0));
+    await tester.tap(find.byKey(const ValueKey('transaction-logbox-250909')));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
