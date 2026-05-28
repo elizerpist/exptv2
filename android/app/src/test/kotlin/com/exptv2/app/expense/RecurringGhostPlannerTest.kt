@@ -13,7 +13,7 @@ class RecurringGhostPlannerTest {
     @Test
     fun createsPendingGhostForCurrentMonthBeforeTriggerDate() {
         val plan = RecurringGhostPlanner.plan(
-            targetMillis = millis(2026, Calendar.MAY, 10),
+            targetMillis = millis(2026, Calendar.MAY, 10, 9, 0),
             dayOfMonth = 15,
             lastProcessedPeriodKey = "2026-04",
             timeZone = utc,
@@ -28,7 +28,7 @@ class RecurringGhostPlannerTest {
     @Test
     fun activatesGhostWhenTargetReachesTriggerDate() {
         val plan = RecurringGhostPlanner.plan(
-            targetMillis = millis(2026, Calendar.MAY, 15),
+            targetMillis = millis(2026, Calendar.MAY, 15, 9, 0),
             dayOfMonth = 15,
             lastProcessedPeriodKey = "2026-04",
             timeZone = utc,
@@ -43,7 +43,7 @@ class RecurringGhostPlannerTest {
     @Test
     fun doesNotShowOrActivateProcessedPeriodAgain() {
         val plan = RecurringGhostPlanner.plan(
-            targetMillis = millis(2026, Calendar.MAY, 20),
+            targetMillis = millis(2026, Calendar.MAY, 20, 9, 0),
             dayOfMonth = 15,
             lastProcessedPeriodKey = "2026-05",
             timeZone = utc,
@@ -56,7 +56,7 @@ class RecurringGhostPlannerTest {
     @Test
     fun rollsPendingGhostToTheNextMonth() {
         val plan = RecurringGhostPlanner.plan(
-            targetMillis = millis(2026, Calendar.JUNE, 1),
+            targetMillis = millis(2026, Calendar.JUNE, 1, 9, 0),
             dayOfMonth = 15,
             lastProcessedPeriodKey = "2026-05",
             timeZone = utc,
@@ -68,10 +68,38 @@ class RecurringGhostPlannerTest {
         assertTrue(plan.shouldShowGhost)
     }
 
-    private fun millis(year: Int, month: Int, day: Int): Long {
+    @Test
+    fun doesNotActivateBeforeOneMinuteAfterMidnightOnDueDate() {
+        val plan = RecurringGhostPlanner.plan(
+            targetMillis = millis(2026, Calendar.MAY, 15, 0, 0),
+            dayOfMonth = 15,
+            lastProcessedPeriodKey = "2026-04",
+            timeZone = utc,
+        )
+
+        assertEquals("2026-05", plan.periodKey)
+        assertEquals("2026.05.15", plan.date)
+        assertFalse(plan.shouldActivate)
+        assertTrue(plan.shouldShowGhost)
+    }
+
+    @Test
+    fun activatesAtOneMinuteAfterMidnightOnDueDate() {
+        val plan = RecurringGhostPlanner.plan(
+            targetMillis = millis(2026, Calendar.MAY, 15, 0, 1),
+            dayOfMonth = 15,
+            lastProcessedPeriodKey = "2026-04",
+            timeZone = utc,
+        )
+
+        assertTrue(plan.shouldActivate)
+        assertEquals(millis(2026, Calendar.MAY, 15, 0, 1), plan.triggerMillis)
+    }
+
+    private fun millis(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long {
         return Calendar.getInstance(utc).apply {
             clear()
-            set(year, month, day, 9, 0, 0)
+            set(year, month, day, hour, minute, 0)
         }.timeInMillis
     }
 }

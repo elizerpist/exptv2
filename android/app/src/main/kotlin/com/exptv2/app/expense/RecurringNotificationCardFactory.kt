@@ -10,7 +10,7 @@ object RecurringNotificationCardFactory {
         now: Long,
     ): NotificationCardEntity {
         return NotificationCardEntity(
-            type = "recurring_activation",
+            type = "recurring_transaction_alert",
             title = "Ismétlődő tranzakció aktiválva",
             message = "${recurring.name} teljes értékű tranzakcióként rögzítve.",
             timestamp = now,

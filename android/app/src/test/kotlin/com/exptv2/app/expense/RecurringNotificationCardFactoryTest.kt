@@ -64,7 +64,7 @@ class RecurringNotificationCardFactoryTest {
             now = now,
         )
 
-        assertEquals("recurring_activation", card.type)
+        assertEquals("recurring_transaction_alert", card.type)
         assertEquals("Ismétlődő tranzakció aktiválva", card.title)
         assertTrue(card.message.contains("Rent"))
         assertFalse(card.isRead)

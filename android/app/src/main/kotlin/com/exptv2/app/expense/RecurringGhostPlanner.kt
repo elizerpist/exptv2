@@ -22,7 +22,6 @@ object RecurringGhostPlanner {
         val calendar = Calendar.getInstance(timeZone).apply { timeInMillis = targetMillis }
         val year = calendar.get(Calendar.YEAR)
         val month = calendar.get(Calendar.MONTH)
-        val today = calendar.get(Calendar.DAY_OF_MONTH)
         val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
         val effectiveDay = dayOfMonth.coerceIn(1, maxDay)
         val periodKey = "%04d-%02d".format(year, month + 1)
@@ -30,7 +29,7 @@ object RecurringGhostPlanner {
         val processedThisPeriod = lastProcessedPeriodKey == periodKey
         val trigger = Calendar.getInstance(timeZone).apply {
             clear()
-            set(year, month, effectiveDay, 0, 0, 0)
+            set(year, month, effectiveDay, 0, 1, 0)
             set(Calendar.MILLISECOND, 0)
         }
         return RecurringGhostPlan(
@@ -39,7 +38,7 @@ object RecurringGhostPlanner {
             effectiveDayOfMonth = effectiveDay,
             triggerMillis = trigger.timeInMillis,
             shouldShowGhost = !processedThisPeriod,
-            shouldActivate = !processedThisPeriod && today >= effectiveDay,
+            shouldActivate = !processedThisPeriod && targetMillis >= trigger.timeInMillis,
         )
     }
 }
