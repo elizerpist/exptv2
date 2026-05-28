@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.util.Base64
 import androidx.core.app.ActivityCompat
 import com.exptv2.app.expense.ExpenseMethodChannel
+import com.exptv2.app.expense.RecurringTransactionScheduler
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -34,6 +35,7 @@ class MainActivity : FlutterActivity() {
         val modeStore = CaptureModeStore(this)
         val statusReader = PermissionStatusReader(this)
         val expenseChannel = ExpenseMethodChannel(this, scope)
+        RecurringTransactionScheduler.schedule(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pushparser/methods")
             .setMethodCallHandler { call, result ->

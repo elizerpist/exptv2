@@ -4,10 +4,14 @@ import android.content.Context
 import java.util.Calendar
 
 class ExpenseRepository(context: Context) {
-    private val db = ExpenseTrackerDatabase.get(context)
+    private val appContext = context.applicationContext
+    private val db = ExpenseTrackerDatabase.get(appContext)
     private val transactions = db.transactions()
     private val categories = db.categories()
     private val categoryLimits = db.categoryLimits()
+    private val recurringTransactions = db.recurringTransactions()
+    private val settingsStore = ExpenseSettingsStore(appContext)
+    private val notificationHelper = RecurringNotificationHelper(appContext)
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
@@ -37,6 +41,104 @@ class ExpenseRepository(context: Context) {
         return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
     }
 
+
+
+
+    fun loadSettings(): Map<String, Any?> = settingsStore.loadSettings()
+
+    fun updateThemeSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updateThemeSettings(args)
+
+    fun updateFastInfoConfig(args: Map<*, *>): Map<String, Any?> = settingsStore.updateFastInfoConfig(args)
+
+    suspend fun listRecurringTransactions(): List<Map<String, Any?>> {
+        seedIfEmpty()
+        return recurringTransactions.all().map { it.toMap() }
+    }
+
+    suspend fun addRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val row = buildRecurringRow(args, null)
+        val id = recurringTransactions.insert(row).toInt()
+        RecurringTransactionScheduler.schedule(appContext)
+        return row.copy(id = id).toMap()
+    }
+
+    suspend fun updateRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val id = optionalInt(args["id"])
+            ?: throw ExpenseValidationException("INVALID_RECURRING_ID", "Recurring transaction id is required")
+        val existing = recurringTransactions.byId(id)
+            ?: throw ExpenseValidationException("INVALID_RECURRING_ID", "Recurring transaction does not exist")
+        val row = buildRecurringRow(args, existing)
+        recurringTransactions.update(row)
+        RecurringTransactionScheduler.schedule(appContext)
+        return row.toMap()
+    }
+
+    suspend fun toggleRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val id = optionalInt(args["id"])
+            ?: throw ExpenseValidationException("INVALID_RECURRING_ID", "Recurring transaction id is required")
+        val existing = recurringTransactions.byId(id)
+            ?: throw ExpenseValidationException("INVALID_RECURRING_ID", "Recurring transaction does not exist")
+        val row = existing.copy(
+            isActive = boolArg(args["isActive"], !existing.isActive),
+            updatedAt = System.currentTimeMillis(),
+        )
+        recurringTransactions.update(row)
+        RecurringTransactionScheduler.schedule(appContext)
+        return row.toMap()
+    }
+
+    suspend fun deleteRecurringTransaction(id: Int): Boolean {
+        seedIfEmpty()
+        val existing = recurringTransactions.byId(id) ?: return false
+        recurringTransactions.delete(existing)
+        RecurringTransactionScheduler.schedule(appContext)
+        return true
+    }
+
+    suspend fun processDueRecurringTransactions(targetMillis: Long = System.currentTimeMillis()): List<Map<String, Any?>> {
+        seedIfEmpty()
+        val processed = mutableListOf<RecurringTransactionEntity>()
+        for (recurring in recurringTransactions.active()) {
+            val decision = RecurringScheduleCalculator.decision(
+                targetMillis = targetMillis,
+                dayOfMonth = recurring.dayOfMonth,
+                lastProcessedPeriodKey = recurring.lastProcessedPeriodKey,
+            )
+            if (!decision.isDue) continue
+            val date = recurringDate(targetMillis, decision.effectiveDayOfMonth)
+            val time = recurringTime(targetMillis)
+            val signedAmount = if (recurring.transactionType == "income") {
+                kotlin.math.abs(recurring.amount)
+            } else {
+                -kotlin.math.abs(recurring.amount)
+            }
+            val transaction = ExpenseTransactionEntity(
+                id = nextId(date),
+                date = date,
+                time = time,
+                latitude = null,
+                longitude = null,
+                address = "Recurring transaction",
+                merchant = recurring.name,
+                amount = signedAmount,
+                userAssignedName = recurring.name,
+                transactionCategoryID = recurring.categoryId,
+            )
+            transactions.insert(transaction)
+            val updated = recurring.copy(
+                lastProcessedPeriodKey = decision.periodKey,
+                lastProcessedAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+            )
+            recurringTransactions.update(updated)
+            processed.add(updated)
+        }
+        notificationHelper.notifyProcessed(processed)
+        return processed.map { it.toMap() }
+    }
 
     suspend fun listCategoryLimits(args: Map<*, *>): List<Map<String, Any?>> {
         seedIfEmpty()
@@ -270,6 +372,67 @@ class ExpenseRepository(context: Context) {
         val row = transactions.byId(id) ?: return false
         transactions.delete(row)
         return true
+    }
+
+
+
+    private suspend fun buildRecurringRow(args: Map<*, *>, existing: RecurringTransactionEntity?): RecurringTransactionEntity {
+        val name = args["name"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: existing?.name
+            ?: throw ExpenseValidationException("INVALID_RECURRING_NAME", "Recurring transaction name is required")
+        val amount = doubleArg(args["amount"], existing?.amount ?: 0.0)
+        if (amount <= 0.0) {
+            throw ExpenseValidationException("INVALID_RECURRING_AMOUNT", "Recurring transaction amount must be greater than zero")
+        }
+        val transactionType = normalizeNativeTransactionType(args["transactionType"]?.toString())
+            ?: existing?.transactionType
+            ?: "expense"
+        val dayOfMonth = optionalInt(args["dayOfMonth"]) ?: existing?.dayOfMonth
+            ?: throw ExpenseValidationException("INVALID_RECURRING_DAY", "Day of month is required")
+        if (dayOfMonth !in 1..31) {
+            throw ExpenseValidationException("INVALID_RECURRING_DAY", "Day of month must be between 1 and 31")
+        }
+        val categoryId = optionalInt(args["categoryId"]) ?: existing?.categoryId
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category is required")
+        val category = categories.byId(categoryId)
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val now = System.currentTimeMillis()
+        return RecurringTransactionEntity(
+            id = existing?.id ?: 0,
+            name = name,
+            amount = kotlin.math.abs(amount),
+            transactionType = transactionType,
+            dayOfMonth = dayOfMonth,
+            categoryId = category.transactionCategoryID,
+            categoryName = category.name,
+            categoryColor = category.backgroundColor ?: colorForSlot(category.colorSlot ?: 4),
+            categoryIconSlot = category.iconSlot ?: 0,
+            isActive = boolArg(args["isActive"], existing?.isActive ?: true),
+            lastProcessedPeriodKey = existing?.lastProcessedPeriodKey,
+            lastProcessedAt = existing?.lastProcessedAt,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+        )
+    }
+
+    private fun recurringDate(targetMillis: Long, effectiveDayOfMonth: Int): String {
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = targetMillis
+            set(Calendar.DAY_OF_MONTH, effectiveDayOfMonth)
+        }
+        return "%04d.%02d.%02d".format(
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH) + 1,
+            calendar.get(Calendar.DAY_OF_MONTH),
+        )
+    }
+
+    private fun recurringTime(targetMillis: Long): String {
+        val calendar = Calendar.getInstance().apply { timeInMillis = targetMillis }
+        return "%02d:%02d".format(
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+        )
     }
 
     private suspend fun seedIfEmpty() {

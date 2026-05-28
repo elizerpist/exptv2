@@ -197,6 +197,62 @@ void main() {
       expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
     },
   );
+
+  testWidgets('header expand button stays fixed when header card slides up', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final buttonTop = tester
+        .getRect(find.byKey(const ValueKey('header-expand-button')))
+        .top;
+    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(find.byKey(const ValueKey('header-expand-button'))).top,
+      moreOrLessEquals(buttonTop, epsilon: 0.1),
+    );
+  });
+
+  testWidgets('pulling down the header reveals FastInfo panel', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(const Offset(180, 80));
+    await gesture.moveBy(const Offset(0, 160));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('fast-info-panel')), findsOneWidget);
+    expect(find.text('Megtakarítás'), findsOneWidget);
+  });
+
 }
 
 double _screenHeight(WidgetTester tester) =>

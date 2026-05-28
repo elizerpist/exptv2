@@ -24,6 +24,27 @@ void main() {
           if (call.method == 'expenseLoadBootstrap') {
             return expenseBootstrapPayload();
           }
+          if (call.method == 'expenseLoadSettings') {
+            return <String, Object?>{
+              'themeSettings': <String, Object?>{
+                'magnetType': 'fade',
+                'cardColor': 'lightgray',
+                'theme': 'Türkiz',
+                'backgroundColor': 'gray',
+                'boxColor': 'gray',
+              },
+              'fastInfoConfig': <String, Object?>{
+                'pills': <Object?>[null, null, null],
+                'boxes': <Object?>[null, null, null],
+              },
+            };
+          }
+          if (call.method == 'expenseListRecurringTransactions') {
+            return <Map<String, Object?>>[];
+          }
+          if (call.method == 'expenseListCategories') {
+            return (expenseBootstrapPayload()['categories'] as List<Map<String, Object?>>);
+          }
           if (call.method == 'expenseAddTransaction') {
             final payload = Map<dynamic, dynamic>.from(
               call.arguments as Map<dynamic, dynamic>,
@@ -295,6 +316,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.pumpAndSettle();
+
     expect(find.byType(TextFormField), findsOneWidget);
     expect(find.text('App regex'), findsOneWidget);
     expect(find.byTooltip('Pick installed app'), findsOneWidget);

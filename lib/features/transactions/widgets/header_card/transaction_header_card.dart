@@ -10,6 +10,8 @@ class TransactionHeaderCard extends StatelessWidget {
     required this.onCategoryPressed,
     required this.onCalendarPressed,
     required this.onExpandPressed,
+    this.onVerticalDragUpdate,
+    this.onVerticalDragEnd,
     this.expanded = false,
   });
 
@@ -17,6 +19,8 @@ class TransactionHeaderCard extends StatelessWidget {
   final VoidCallback onCategoryPressed;
   final VoidCallback onCalendarPressed;
   final VoidCallback onExpandPressed;
+  final GestureDragUpdateCallback? onVerticalDragUpdate;
+  final GestureDragEndCallback? onVerticalDragEnd;
   final bool expanded;
 
   static const height = TransactionHeaderMetrics.cardHeight;
@@ -27,175 +31,185 @@ class TransactionHeaderCard extends StatelessWidget {
       key: const ValueKey('transaction-header-card'),
       height: height,
       width: double.infinity,
-      child: AnimatedSlide(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-        offset: Offset(
-          0,
-          expanded ? -TransactionHeaderMetrics.expandedSlideDistance / height : 0,
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.gray100,
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      offset: const Offset(0, 4),
-                      blurRadius: 8,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragUpdate: onVerticalDragUpdate,
+            onVerticalDragEnd: onVerticalDragEnd,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              offset: Offset(
+                0,
+                expanded ? -TransactionHeaderMetrics.expandedSlideDistance / height : 0,
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.gray100,
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(24),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            offset: const Offset(0, 4),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            const Positioned(
-              top: TransactionHeaderMetrics.titleTop,
-              left: 30,
-              child: Text(
-                'ExpenseTracker',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.gray800,
-                ),
-              ),
-            ),
-            Positioned(
-              top: TransactionHeaderMetrics.calendarTop,
-              right: 27,
-              child: IconButton(
-                key: const ValueKey('header-calendar-button'),
-                onPressed: onCalendarPressed,
-                icon: const Icon(
-                  Icons.calendar_month_outlined,
-                  size: 20,
-                  color: AppColors.gray600,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 32,
-                  height: 32,
-                ),
-                splashRadius: 20,
-              ),
-            ),
-            Positioned(
-              top: TransactionHeaderMetrics.cameraTop,
-              left: 30,
-              child: Container(
-                width: 45,
-                height: 35,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFBBF24),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.white, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.photo_camera_outlined,
-                  color: AppColors.white,
-                  size: 26,
-                ),
-              ),
-            ),
-            Positioned(
-              top: TransactionHeaderMetrics.magnetTop,
-              left: 0,
-              right: 0,
-              child: SizedBox(
-                height: 35,
-                child: CustomPaint(painter: _HeaderMagnetPainter()),
-              ),
-            ),
-            Positioned(
-              top: TransactionHeaderMetrics.balanceTop,
-              left: 30,
-              right: 90,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 180),
-                opacity: expanded ? 0 : 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Egyenleg',
+                  ),
+                  const Positioned(
+                    top: TransactionHeaderMetrics.titleTop,
+                    left: 30,
+                    child: Text(
+                      'ExpenseTracker',
                       style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.gray600,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.gray800,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            balanceText,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.gray800,
+                  ),
+                  Positioned(
+                    top: TransactionHeaderMetrics.calendarTop,
+                    right: 27,
+                    child: IconButton(
+                      key: const ValueKey('header-calendar-button'),
+                      onPressed: onCalendarPressed,
+                      icon: const Icon(
+                        Icons.calendar_month_outlined,
+                        size: 20,
+                        color: AppColors.gray600,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 32,
+                        height: 32,
+                      ),
+                      splashRadius: 20,
+                    ),
+                  ),
+                  Positioned(
+                    top: TransactionHeaderMetrics.cameraTop,
+                    left: 30,
+                    child: Container(
+                      width: 45,
+                      height: 35,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFBBF24),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.white, width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.photo_camera_outlined,
+                        color: AppColors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: TransactionHeaderMetrics.magnetTop,
+                    left: 0,
+                    right: 0,
+                    child: SizedBox(
+                      height: 35,
+                      child: CustomPaint(painter: _HeaderMagnetPainter()),
+                    ),
+                  ),
+                  Positioned(
+                    top: TransactionHeaderMetrics.balanceTop,
+                    left: 30,
+                    right: 90,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: expanded ? 0 : 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Egyenleg',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.gray600,
+                              letterSpacing: 1.5,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.visibility_outlined,
-                          color: AppColors.gray800,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              top: TransactionHeaderMetrics.categoryButtonTop,
-              right: 25,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 180),
-                opacity: expanded ? 0 : 1,
-                child: _HeaderCategoryButton(onPressed: onCategoryPressed),
-              ),
-            ),
-            Positioned(
-              top: TransactionHeaderMetrics.expandButtonTop,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Material(
-                  color: AppColors.primary,
-                  elevation: 6,
-                  shadowColor: Colors.black.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(15),
-                  child: InkWell(
-                    key: const ValueKey('header-expand-button'),
-                    onTap: onExpandPressed,
-                    borderRadius: BorderRadius.circular(15),
-                    child: const SizedBox(
-                      width: 30,
-                      height: 30,
-                      child: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: AppColors.white,
-                        size: 18,
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  balanceText,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.gray800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.visibility_outlined,
+                                color: AppColors.gray800,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
+                  ),
+                  Positioned(
+                    top: TransactionHeaderMetrics.categoryButtonTop,
+                    right: 25,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: expanded ? 0 : 1,
+                      child: _HeaderCategoryButton(onPressed: onCategoryPressed),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: TransactionHeaderMetrics.expandButtonTop,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Material(
+                color: AppColors.primary,
+                elevation: 6,
+                shadowColor: Colors.black.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(15),
+                child: InkWell(
+                  key: const ValueKey('header-expand-button'),
+                  onTap: onExpandPressed,
+                  borderRadius: BorderRadius.circular(15),
+                  child: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Icon(
+                      expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      color: AppColors.white,
+                      size: 18,
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

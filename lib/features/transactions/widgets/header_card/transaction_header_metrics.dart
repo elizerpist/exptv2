@@ -2,6 +2,7 @@ class TransactionHeaderMetrics {
   const TransactionHeaderMetrics._();
 
   static const cardHeight = 176.0;
+  static const fastInfoHeight = 300.0;
   static const expandedSlideDistance = 132.0;
   static const contentTop = 192.0;
 

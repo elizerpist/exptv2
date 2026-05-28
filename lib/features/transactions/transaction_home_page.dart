@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../settings/models/fast_info_config.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
 import 'state/transaction_store.dart';
@@ -11,6 +12,7 @@ import 'widgets/category_menu/category_menu_overlay.dart';
 import 'models/category_budget_bar_data.dart';
 import 'widgets/header_card/category_budget_stage.dart';
 import 'widgets/header_card/category_limit_editor_sheet.dart';
+import 'widgets/header_card/fast_info_panel.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
@@ -38,6 +40,7 @@ class TransactionHomePage extends StatefulWidget {
 class _TransactionHomePageState extends State<TransactionHomePage> {
   var _headerExpanded = false;
   var _calendarOpen = false;
+  var _fastInfoExtent = 0.0;
   CategoryOverlayMode? _categoryMode;
   var _categoryEditorOpen = false;
   TransactionCategory? _editingCategory;
@@ -114,18 +117,35 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   ),
                 ],
               ),
+              if (_fastInfoExtent > 0)
+                Positioned(
+                  top: -TransactionHeaderMetrics.fastInfoHeight + _fastInfoExtent,
+                  left: 0,
+                  right: 0,
+                  child: Opacity(
+                    opacity: (_fastInfoExtent / TransactionHeaderMetrics.fastInfoHeight).clamp(0.0, 1.0),
+                    child: FastInfoPanel(config: FastInfoConfig.defaults()),
+                  ),
+                ),
               if (_headerExpanded)
                 CategoryBudgetStage(
                   bars: widget.store.categoryBudgetBars,
                   onBarTap: _openLimitEditor,
                 ),
-              TransactionHeaderCard(
-                balanceText: widget.store.totalBalanceText,
-                expanded: _headerExpanded,
-                onCategoryPressed: _openCategoryMenu,
-                onCalendarPressed: _openCalendarMenu,
-                onExpandPressed: () =>
-                    setState(() => _headerExpanded = !_headerExpanded),
+              Transform.translate(
+                offset: Offset(0, _fastInfoExtent),
+                child: TransactionHeaderCard(
+                  balanceText: widget.store.totalBalanceText,
+                  expanded: _headerExpanded,
+                  onCategoryPressed: _openCategoryMenu,
+                  onCalendarPressed: _openCalendarMenu,
+                  onVerticalDragUpdate: _handleHeaderDragUpdate,
+                  onVerticalDragEnd: _handleHeaderDragEnd,
+                  onExpandPressed: () => setState(() {
+                    _fastInfoExtent = 0;
+                    _headerExpanded = !_headerExpanded;
+                  }),
+                ),
               ),
               if (_calendarOpen)
                 CalendarMenuOverlay(
@@ -166,10 +186,31 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     );
   }
 
+
+  void _handleHeaderDragUpdate(DragUpdateDetails details) {
+    if (_headerExpanded || _calendarOpen || _categoryMode != null || _categoryEditorOpen) {
+      return;
+    }
+    final next = (_fastInfoExtent + details.delta.dy)
+        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    if (next == _fastInfoExtent) return;
+    setState(() => _fastInfoExtent = next);
+  }
+
+  void _handleHeaderDragEnd(DragEndDetails details) {
+    if (_headerExpanded) return;
+    final shouldOpen = _fastInfoExtent >= 80;
+    setState(() {
+      _fastInfoExtent = shouldOpen ? TransactionHeaderMetrics.fastInfoHeight : 0;
+    });
+  }
+
   void _setActiveType(TransactionType type) {
     widget.store.setActiveType(type);
     setState(() {
       _calendarOpen = false;
+      _fastInfoExtent = 0;
       _categoryMode = null;
       _categoryEditorOpen = false;
       _editingCategory = null;
@@ -231,6 +272,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   void _openCalendarMenu() {
     setState(() {
       _headerExpanded = false;
+      _fastInfoExtent = 0;
       _calendarOpen = true;
       _categoryMode = null;
       _categoryEditorOpen = false;
@@ -252,6 +294,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       }
       _headerExpanded = false;
       _calendarOpen = false;
+      _fastInfoExtent = 0;
       _categoryMode = CategoryOverlayMode.picker;
     });
   }

@@ -17,6 +17,36 @@ class ExpenseMethodChannel(
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "expenseLoadBootstrap" -> scope.launchResult(result) { repository.bootstrap() }
+            "expenseLoadSettings" -> scope.launchResult(result) { repository.loadSettings() }
+            "expenseUpdateThemeSettings" -> scope.launchResult(result) {
+                repository.updateThemeSettings(call.argumentsMap())
+            }
+            "expenseUpdateFastInfoConfig" -> scope.launchResult(result) {
+                repository.updateFastInfoConfig(call.argumentsMap())
+            }
+            "expenseListRecurringTransactions" -> scope.launchResult(result) {
+                repository.listRecurringTransactions()
+            }
+            "expenseAddRecurringTransaction" -> scope.launchResult(result) {
+                repository.addRecurringTransaction(call.argumentsMap())
+            }
+            "expenseUpdateRecurringTransaction" -> scope.launchResult(result) {
+                repository.updateRecurringTransaction(call.argumentsMap())
+            }
+            "expenseToggleRecurringTransaction" -> scope.launchResult(result) {
+                repository.toggleRecurringTransaction(call.argumentsMap())
+            }
+            "expenseDeleteRecurringTransaction" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: call.argumentsMap()["id"]?.toString()?.toIntOrNull()
+                    ?: throw ExpenseValidationException("INVALID_RECURRING_ID", "Recurring transaction id is required")
+                repository.deleteRecurringTransaction(id)
+            }
+            "expenseProcessRecurringTransactions" -> scope.launchResult(result) {
+                val targetMillis = (call.argumentsMap()["targetMillis"] as? Number)?.toLong()
+                    ?: System.currentTimeMillis()
+                repository.processDueRecurringTransactions(targetMillis)
+            }
             "expenseListTransactions" -> scope.launchResult(result) {
                 repository.listTransactions(call.argumentsMap())
             }

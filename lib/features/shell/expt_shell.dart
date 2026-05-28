@@ -129,7 +129,10 @@ class _ExptShellState extends State<ExptShell> {
                 ),
                 const BlankTabPage(tab: AppTab.groceries),
                 const BlankTabPage(tab: AppTab.notifications),
-                SettingsPage(store: widget.store),
+                SettingsPage(
+                  store: widget.store,
+                  nativeBridge: widget.nativeBridge,
+                ),
               ],
             ),
           ),

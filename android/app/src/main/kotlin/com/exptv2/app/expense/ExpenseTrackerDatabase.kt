@@ -12,14 +12,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TransactionCategoryEntity::class,
         ExpenseTransactionEntity::class,
         CategoryLimitEntity::class,
+        RecurringTransactionEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
     abstract fun transactions(): ExpenseTransactionDao
     abstract fun categories(): TransactionCategoryDao
     abstract fun categoryLimits(): CategoryLimitDao
+    abstract fun recurringTransactions(): RecurringTransactionDao
 
     companion object {
         @Volatile private var instance: ExpenseTrackerDatabase? = null
@@ -58,13 +60,45 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS recurring_transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        transactionType TEXT NOT NULL,
+                        dayOfMonth INTEGER NOT NULL,
+                        categoryId INTEGER NOT NULL,
+                        categoryName TEXT NOT NULL,
+                        categoryColor TEXT NOT NULL,
+                        categoryIconSlot INTEGER NOT NULL,
+                        isActive INTEGER NOT NULL,
+                        lastProcessedPeriodKey TEXT,
+                        lastProcessedAt INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(categoryId) REFERENCES transaction_categories(transactionCategoryID) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_transactions_categoryId ON recurring_transactions(categoryId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_transactions_transactionType ON recurring_transactions(transactionType)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_transactions_dayOfMonth ON recurring_transactions(dayOfMonth)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_transactions_isActive ON recurring_transactions(isActive)")
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     ExpenseTrackerDatabase::class.java,
                     "expense_tracker.db",
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { instance = it }
             }
         }
