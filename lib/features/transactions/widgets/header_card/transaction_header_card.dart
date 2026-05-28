@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
+import 'magnet_strip.dart';
 import 'transaction_header_metrics.dart';
 
 class TransactionHeaderCard extends StatelessWidget {
@@ -13,6 +15,11 @@ class TransactionHeaderCard extends StatelessWidget {
     this.onVerticalDragUpdate,
     this.onVerticalDragEnd,
     this.expanded = false,
+    this.magnetType = MagnetType.fade,
+    this.accent = AppColors.primary,
+    this.cardColor = AppColors.gray100,
+    this.totalIncome = 0,
+    this.totalExpense = 0,
   });
 
   final String balanceText;
@@ -22,6 +29,11 @@ class TransactionHeaderCard extends StatelessWidget {
   final GestureDragUpdateCallback? onVerticalDragUpdate;
   final GestureDragEndCallback? onVerticalDragEnd;
   final bool expanded;
+  final MagnetType magnetType;
+  final Color accent;
+  final Color cardColor;
+  final double totalIncome;
+  final double totalExpense;
 
   static const height = TransactionHeaderMetrics.cardHeight;
 
@@ -51,7 +63,7 @@ class TransactionHeaderCard extends StatelessWidget {
                   Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: AppColors.gray100,
+                        color: cardColor,
                         borderRadius: const BorderRadius.vertical(
                           bottom: Radius.circular(24),
                         ),
@@ -121,7 +133,13 @@ class TransactionHeaderCard extends StatelessWidget {
                     right: 0,
                     child: SizedBox(
                       height: 35,
-                      child: CustomPaint(painter: _HeaderMagnetPainter()),
+                      child: MagnetStrip(
+                        type: magnetType,
+                        totalIncome: totalIncome,
+                        totalExpense: totalExpense,
+                        accent: accent,
+                        height: 35,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -266,36 +284,3 @@ class _MenuBar extends StatelessWidget {
   }
 }
 
-class _HeaderMagnetPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final incomePaint = Paint()
-      ..color = const Color(0xFF2C2C2C).withValues(alpha: 0.30)
-      ..style = PaintingStyle.fill;
-    final expensePaint = Paint()
-      ..color = const Color(0xFF2C2C2C).withValues(alpha: 0.05)
-      ..style = PaintingStyle.fill;
-    final centerY = size.height / 2;
-    final segmentWidth = size.width / 18;
-    for (var i = 0; i < 18; i += 1) {
-      final left = i * segmentWidth;
-      final height = i.isEven ? 16.0 : 25.0;
-      final paint = i < 6 ? incomePaint : expensePaint;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            left + 2,
-            centerY - height / 2,
-            segmentWidth - 4,
-            height,
-          ),
-          const Radius.circular(8),
-        ),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../models/app_theme_settings.dart';
+import '../../../transactions/widgets/header_card/magnet_strip.dart';
 import 'settings_option_widgets.dart';
 
 class ThemeOptionsPanel extends StatelessWidget {
@@ -152,41 +153,15 @@ class _MagnetPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(62, 24),
-      painter: _MagnetPreviewPainter(type),
+    return SizedBox(
+      width: 62,
+      height: 24,
+      child: MagnetStrip(
+        type: type,
+        totalIncome: 60,
+        totalExpense: 40,
+        height: 24,
+      ),
     );
   }
-}
-
-class _MagnetPreviewPainter extends CustomPainter {
-  _MagnetPreviewPainter(this.type);
-  final MagnetType type;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final base = RRect.fromRectAndRadius(rect.deflate(4), const Radius.circular(8));
-    if (type == MagnetType.magnetcard) {
-      final paint = Paint()
-        ..color = AppColors.gray800.withValues(alpha: 0.40)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
-      canvas.drawLine(Offset(4, 7), Offset(size.width - 4, 7), paint);
-      canvas.drawLine(Offset(4, size.height - 7), Offset(size.width - 4, size.height - 7), paint);
-      canvas.drawLine(Offset(size.width * 0.35, 7), Offset(size.width * 0.35, size.height - 7), paint);
-      return;
-    }
-    final shader = switch (type) {
-      MagnetType.budget => const LinearGradient(colors: [Color(0xFF16A34A), Color(0xFFDC2626)]).createShader(rect),
-      MagnetType.adaptive => const LinearGradient(colors: [AppColors.white, AppColors.primary]).createShader(rect),
-      MagnetType.nofade => const LinearGradient(colors: [Color(0x4D2C2C2C), Color(0x4D2C2C2C), Color(0x0D2C2C2C)]).createShader(rect),
-      MagnetType.fade => const LinearGradient(colors: [Color(0x4D2C2C2C), Color(0x0D2C2C2C)]).createShader(rect),
-      MagnetType.magnetcard => null,
-    };
-    canvas.drawRRect(base, Paint()..shader = shader);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MagnetPreviewPainter oldDelegate) => oldDelegate.type != type;
 }

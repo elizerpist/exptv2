@@ -149,6 +149,11 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                 child: TransactionHeaderCard(
                   balanceText: widget.store.totalBalanceText,
                   expanded: _headerExpanded,
+                  magnetType: expenseTheme.settings.magnetType,
+                  accent: expenseTheme.accent,
+                  cardColor: expenseTheme.headerCard,
+                  totalIncome: _totalIncome(),
+                  totalExpense: _totalExpense(),
                   onCategoryPressed: _openCategoryMenu,
                   onCalendarPressed: _openCalendarMenu,
                   onVerticalDragUpdate: _handleHeaderDragUpdate,
@@ -198,6 +203,18 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     );
   }
 
+
+  double _totalIncome() {
+    return widget.store.transactions
+        .where((record) => record.amount > 0)
+        .fold<double>(0, (sum, record) => sum + record.amount.abs());
+  }
+
+  double _totalExpense() {
+    return widget.store.transactions
+        .where((record) => record.amount < 0)
+        .fold<double>(0, (sum, record) => sum + record.amount.abs());
+  }
 
   void _handleHeaderDragUpdate(DragUpdateDetails details) {
     if (_headerExpanded || _calendarOpen || _categoryMode != null || _categoryEditorOpen) {
