@@ -31,6 +31,9 @@ abstract class TransactionRepositoryContract {
     String userAssignedName,
   );
   Future<int> resetTransactionNamesByMerchant(String originalMerchant);
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  });
   Future<TransactionCategory> addCategory(Map<String, Object?> payload);
   Future<TransactionCategory> updateCategory(
     int id,
@@ -94,6 +97,15 @@ class TransactionRepository implements TransactionRepositoryContract {
   @override
   Future<int> resetTransactionNamesByMerchant(String originalMerchant) {
     return _bridge.expenseResetTransactionNamesByMerchant(originalMerchant);
+  }
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) {
+    return _bridge.expenseEnsureRecurringGhostTransactions(
+      targetDate: targetDate,
+    );
   }
 
   @override

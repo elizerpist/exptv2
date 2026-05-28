@@ -177,6 +177,9 @@ class TransactionStore extends ChangeNotifier {
       _recurringGhostTransactions = _sortGhosts(
         payload.recurringGhostTransactions,
       );
+      DebugConsole.log(
+        '[Recurring] loaded ${_recurringGhostTransactions.length} pending ghosts',
+      );
       _limits = payload.limits;
     } catch (error) {
       _error = error.toString();
@@ -229,16 +232,17 @@ class TransactionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void cycleSummaryWindow() {
+  Future<void> cycleSummaryWindow() async {
     _summaryWindow = switch (_summaryWindow) {
       SummaryWindow.monthly => SummaryWindow.yearly,
       SummaryWindow.yearly => SummaryWindow.allTime,
       SummaryWindow.allTime => SummaryWindow.monthly,
     };
     notifyListeners();
+    await _projectRecurringGhostsForActiveWindow();
   }
 
-  void shiftSummaryPeriod(int direction) {
+  Future<void> shiftSummaryPeriod(int direction) async {
     if (direction == 0 || _summaryWindow == SummaryWindow.allTime) return;
     _periodReferenceDate = switch (_summaryWindow) {
       SummaryWindow.monthly => DateTime(
@@ -249,6 +253,7 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.allTime => _periodReferenceDate,
     };
     notifyListeners();
+    await _projectRecurringGhostsForActiveWindow();
   }
 
   Future<void> addTransaction({
@@ -395,6 +400,25 @@ class TransactionStore extends ChangeNotifier {
     await _reload();
   }
 
+  Future<void> _projectRecurringGhostsForActiveWindow() async {
+    if (_summaryWindow == SummaryWindow.allTime) return;
+    final targetDate = DateTime(
+      _periodReferenceDate.year,
+      _periodReferenceDate.month,
+    );
+    final periodKey =
+        '${targetDate.year.toString().padLeft(4, '0')}-${targetDate.month.toString().padLeft(2, '0')}';
+    DebugConsole.log('[Recurring] ensuring ghosts for $periodKey');
+    final ghosts = await _repository.ensureRecurringGhostTransactions(
+      targetDate: targetDate,
+    );
+    _recurringGhostTransactions = _sortGhosts(ghosts);
+    DebugConsole.log(
+      '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
+    );
+    notifyListeners();
+  }
+
   Future<void> _reload() async {
     final payload = await _repository.loadBootstrap();
     _categories = payload.categories;
@@ -408,7 +432,7 @@ class TransactionStore extends ChangeNotifier {
 
   bool _ghostInActiveWindow(RecurringGhostRecord ghost) {
     return switch (_summaryWindow) {
-      SummaryWindow.allTime => true,
+      SummaryWindow.allTime => false,
       SummaryWindow.monthly =>
         ghost.yearMonthKey ==
             '${_periodReferenceDate.year.toString().padLeft(4, '0')}-${_periodReferenceDate.month.toString().padLeft(2, '0')}',

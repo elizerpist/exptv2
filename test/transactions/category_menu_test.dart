@@ -1,5 +1,6 @@
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
@@ -169,6 +170,11 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   @override
   Future<int> resetTransactionNamesByMerchant(String originalMerchant) async =>
       throw UnimplementedError();
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) async => const [];
 
   @override
   Future<Map<int, int>> categoryCounts() async => const {6: 1};

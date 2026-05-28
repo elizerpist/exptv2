@@ -113,8 +113,12 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                     value: widget.store.activeSummary.formattedFor(
                       widget.store.activeType,
                     ),
-                    onSwipe: widget.store.cycleSummaryWindow,
-                    onVerticalSwipe: widget.store.shiftSummaryPeriod,
+                    onSwipe: () {
+                      widget.store.cycleSummaryWindow();
+                    },
+                    onVerticalSwipe: (direction) {
+                      widget.store.shiftSummaryPeriod(direction);
+                    },
                   ),
                   SearchPill(
                     query: widget.store.searchQuery,
@@ -286,6 +290,22 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       record.displayMerchant,
       colorHex: category?.slotColorHex,
     );
+  }
+
+  Future<void> _renameTransactionsByMerchant(
+    TransactionRecord transaction,
+    String userAssignedName,
+  ) async {
+    await widget.store.renameTransactionsByMerchant(
+      transaction,
+      userAssignedName,
+    );
+  }
+
+  Future<void> _resetTransactionNamesByMerchant(
+    TransactionRecord transaction,
+  ) async {
+    await widget.store.resetTransactionNamesByMerchant(transaction);
   }
 
   void _editTransaction(TransactionRecord record) {

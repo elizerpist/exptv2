@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../../transactions/models/transaction_category.dart';
 import '../data/settings_repository.dart';
 import '../models/app_theme_settings.dart';
@@ -21,7 +22,8 @@ class SettingsStore extends ChangeNotifier {
   String? get error => _error;
   AppThemeSettings get themeSettings => _themeSettings;
   FastInfoConfig get fastInfoConfig => _fastInfoConfig;
-  List<RecurringTransaction> get recurringTransactions => List.unmodifiable(_recurringTransactions);
+  List<RecurringTransaction> get recurringTransactions =>
+      List.unmodifiable(_recurringTransactions);
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionCategory> get expenseCategories => _categories
       .where((category) => category.normalizedType == TransactionType.expense)
@@ -71,6 +73,9 @@ class SettingsStore extends ChangeNotifier {
       categoryId: categoryId,
       isActive: isActive,
     );
+    DebugConsole.log(
+      '[Recurring] save $name day=$dayOfMonth amount=${_debugAmount(amount)}',
+    );
     if (id == null) {
       await _repository.addRecurringTransaction(draft);
     } else {
@@ -79,12 +84,19 @@ class SettingsStore extends ChangeNotifier {
     await _reloadRecurring();
   }
 
-  Future<void> toggleRecurringTransaction(RecurringTransaction transaction) async {
-    await _repository.toggleRecurringTransaction(transaction.id, !transaction.isActive);
+  Future<void> toggleRecurringTransaction(
+    RecurringTransaction transaction,
+  ) async {
+    final nextActive = !transaction.isActive;
+    DebugConsole.log('[Recurring] toggle ${transaction.id} active=$nextActive');
+    await _repository.toggleRecurringTransaction(transaction.id, nextActive);
     await _reloadRecurring();
   }
 
-  Future<void> deleteRecurringTransaction(RecurringTransaction transaction) async {
+  Future<void> deleteRecurringTransaction(
+    RecurringTransaction transaction,
+  ) async {
+    DebugConsole.log('[Recurring] delete ${transaction.id}');
     await _repository.deleteRecurringTransaction(transaction.id);
     await _reloadRecurring();
   }
@@ -93,4 +105,10 @@ class SettingsStore extends ChangeNotifier {
     _recurringTransactions = await _repository.listRecurringTransactions();
     notifyListeners();
   }
+}
+
+String _debugAmount(double amount) {
+  final rounded = amount.roundToDouble();
+  if (amount == rounded) return rounded.toInt().toString();
+  return amount.toString();
 }

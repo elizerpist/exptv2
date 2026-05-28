@@ -1,5 +1,6 @@
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
@@ -371,6 +372,11 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
     categories.removeWhere((category) => category.transactionCategoryID == id);
     return true;
   }
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) async => const [];
 
   @override
   Future<Map<int, int>> categoryCounts() async => {5: 1, 6: 3};

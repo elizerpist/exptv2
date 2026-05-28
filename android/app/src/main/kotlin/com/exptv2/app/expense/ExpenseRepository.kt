@@ -92,7 +92,7 @@ class ExpenseRepository(context: Context) {
 
     suspend fun ensureRecurringGhostTransactions(targetMillis: Long = System.currentTimeMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
-        syncRecurringGhosts(targetMillis)
+        ensureRecurringGhostsForActivePeriod(targetMillis)
         return recurringGhosts.pending().map { it.toMap() }
     }
 
@@ -411,10 +411,14 @@ class ExpenseRepository(context: Context) {
 
 
     private suspend fun syncRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
+        ensureRecurringGhostsForActivePeriod(targetMillis)
+        return activateDueRecurringGhosts(targetMillis)
+    }
+
+    private suspend fun ensureRecurringGhostsForActivePeriod(targetMillis: Long) {
         for (recurring in recurringTransactions.active()) {
             ensureRecurringGhost(recurring, targetMillis)
         }
-        return activateDueRecurringGhosts(targetMillis)
     }
 
     private suspend fun ensureRecurringGhost(recurring: RecurringTransactionEntity, targetMillis: Long) {
@@ -495,6 +499,14 @@ class ExpenseRepository(context: Context) {
             )
             recurringTransactions.update(updated)
             recurringGhosts.markActivated(ghost.id, transaction.id, now)
+            notificationCards.insert(
+                RecurringNotificationCardFactory.activationCard(
+                    recurring = updated,
+                    ghost = ghost,
+                    transaction = transaction,
+                    now = now,
+                ),
+            )
             processed.add(updated)
         }
         return processed

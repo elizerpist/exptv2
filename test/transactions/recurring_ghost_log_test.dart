@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -10,18 +11,39 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'store merges pending ghosts for display and excludes them from summary',
+    'store projects pending ghosts for monthly windows and hides them from sum',
     () async {
-      final store = TransactionStore(GhostRepository());
+      DebugConsole.clear();
+      final repository = GhostRepository();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 10),
+      );
       await store.start();
 
       expect(store.visibleTransactions.single.displayMerchant, 'Real Shop');
-      expect(store.visibleGhostTransactions.single.name, 'Rent');
-      expect(store.visibleLogEntries.length, 2);
+      expect(store.visibleGhostTransactions, isEmpty);
+      expect(store.visibleLogEntries.length, 1);
       expect(
         store.activeSummary.formattedFor(TransactionType.expense),
         '-100 Ft',
       );
+
+      await store.cycleSummaryWindow();
+      expect(repository.ensureTargets.single, DateTime(2026, 5));
+      expect(store.visibleGhostTransactions.single.periodKey, '2026-05');
+      expect(store.visibleLogEntries.length, 2);
+      expect(
+        DebugConsole.entries.any(
+          (entry) =>
+              entry.contains('[Recurring] projected 1 ghosts for 2026-05'),
+        ),
+        isTrue,
+      );
+
+      await store.shiftSummaryPeriod(1);
+      expect(repository.ensureTargets.last, DateTime(2026, 6));
+      expect(store.visibleGhostTransactions.single.periodKey, '2026-06');
     },
   );
 
@@ -55,6 +77,8 @@ void main() {
 }
 
 class GhostRepository implements TransactionRepositoryContract {
+  final ensureTargets = <DateTime>[];
+
   @override
   Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
     categories: [categoryFixture()],
@@ -111,6 +135,18 @@ class GhostRepository implements TransactionRepositoryContract {
       throw UnimplementedError();
 
   @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) async {
+    final target = targetDate ?? DateTime(2026, 5);
+    final month = DateTime(target.year, target.month);
+    ensureTargets.add(month);
+    return [
+      ghostFixture(year: month.year, month: month.month, id: month.month),
+    ];
+  }
+
+  @override
   Future<Map<int, int>> categoryCounts() async => const {};
 
   @override
@@ -126,25 +162,35 @@ class GhostRepository implements TransactionRepositoryContract {
   ) async => throw UnimplementedError();
 }
 
-RecurringGhostRecord ghostFixture() => RecurringGhostRecord.fromMap({
-  'id': 1,
-  'recurringTransactionId': 9,
-  'periodKey': '2026-05',
-  'name': 'Rent',
-  'amount': 500,
-  'transactionType': 'expense',
-  'date': '2026.05.15',
-  'time': '00:00',
-  'categoryId': 6,
-  'categoryName': 'Q',
-  'categoryColor': '#dc2626',
-  'categoryIconSlot': 2,
-  'triggerMillis': 1778803200000,
-  'isActivated': false,
-  'activatedTransactionId': null,
-  'createdAt': 1778360000000,
-  'updatedAt': 1778360000000,
-});
+RecurringGhostRecord ghostFixture({
+  int year = 2026,
+  int month = 5,
+  int id = 1,
+}) {
+  final periodKey =
+      '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}';
+  final date =
+      '${year.toString().padLeft(4, '0')}.${month.toString().padLeft(2, '0')}.15';
+  return RecurringGhostRecord.fromMap({
+    'id': id,
+    'recurringTransactionId': 9,
+    'periodKey': periodKey,
+    'name': 'Rent',
+    'amount': 500,
+    'transactionType': 'expense',
+    'date': date,
+    'time': '00:00',
+    'categoryId': 6,
+    'categoryName': 'Q',
+    'categoryColor': '#dc2626',
+    'categoryIconSlot': 2,
+    'triggerMillis': 1778803200000,
+    'isActivated': false,
+    'activatedTransactionId': null,
+    'createdAt': 1778360000000,
+    'updatedAt': 1778360000000,
+  });
+}
 
 TransactionCategory categoryFixture() => TransactionCategory.fromMap({
   'transactionCategoryID': 6,
