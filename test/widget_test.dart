@@ -273,7 +273,12 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('transaction-logbox-250909')));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('transaction-logbox-250909')),
+        matching: find.text('-505 Ft'),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
