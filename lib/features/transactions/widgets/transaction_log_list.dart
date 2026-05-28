@@ -17,6 +17,8 @@ class TransactionLogList extends StatelessWidget {
     required this.onRecordTap,
     required this.onDeleteRequested,
     required this.onCategoryFilter,
+    this.onRenameMerchant,
+    this.onResetMerchantName,
   });
 
   final List<TransactionRecord> records;
@@ -26,6 +28,8 @@ class TransactionLogList extends StatelessWidget {
   final ValueChanged<TransactionRecord> onRecordTap;
   final ValueChanged<TransactionRecord> onDeleteRequested;
   final ValueChanged<TransactionCategory> onCategoryFilter;
+  final TransactionRenameCallback? onRenameMerchant;
+  final TransactionRecordAction? onResetMerchantName;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +65,8 @@ class TransactionLogList extends StatelessWidget {
           onTap: onRecordTap,
           onDeleteRequested: onDeleteRequested,
           onCategoryFilter: onCategoryFilter,
+          onRenameMerchant: onRenameMerchant,
+          onResetMerchantName: onResetMerchantName,
         );
       },
     );

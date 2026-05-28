@@ -136,6 +136,8 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                       onRecordTap: _editTransaction,
                       onDeleteRequested: _requestDeleteTransaction,
                       onCategoryFilter: widget.store.setCategoryFilter,
+                      onRenameMerchant: _renameTransactionsByMerchant,
+                      onResetMerchantName: _resetTransactionNamesByMerchant,
                     ),
                   ),
                 ],

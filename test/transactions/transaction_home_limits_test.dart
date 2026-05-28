@@ -126,7 +126,6 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
     Map<String, Object?> payload,
   ) async => throw UnimplementedError();
 
-
   @override
   Future<TransactionRecord> updateTransaction(
     int id,
@@ -152,6 +151,16 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
 
   @override
   Future<bool> deleteCategory(int id) async => throw UnimplementedError();
+
+  @override
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) async =>
+      throw UnimplementedError();
 
   @override
   Future<Map<int, int>> categoryCounts() async => const {6: 1};

@@ -194,6 +194,25 @@ void main() {
   });
 
   test(
+    'store bulk renames and resets by original merchant then reloads',
+    () async {
+      final repository = FakeTransactionRepository();
+      final store = TransactionStore(repository);
+      await store.start();
+
+      final record = repository.transactions.firstWhere(
+        (transaction) => transaction.merchant == 'Zzz',
+      );
+      await store.renameTransactionsByMerchant(record, 'Tesco Market');
+      await store.resetTransactionNamesByMerchant(record);
+
+      expect(repository.renameArgs, ['Zzz', 'Tesco Market']);
+      expect(repository.resetMerchant, 'Zzz');
+      expect(repository.loadCount, 3);
+    },
+  );
+
+  test(
     'summary period can be shifted for monthly and yearly windows',
     () async {
       final store = TransactionStore(
@@ -224,6 +243,9 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   final updatedCategories = <Map<String, Object?>>[];
   final deletedCategoryIds = <int>[];
   final deletedTransactionIds = <int>[];
+  final renameArgs = <String>[];
+  String? resetMerchant;
+  var loadCount = 0;
   final categories = <TransactionCategory>[
     TransactionCategory.fromMap({
       'transactionCategoryID': 5,
@@ -290,11 +312,14 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   ];
 
   @override
-  Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
-    categories: categories,
-    transactions: transactions,
-    limits: const [],
-  );
+  Future<TransactionBootstrap> loadBootstrap() async {
+    loadCount += 1;
+    return TransactionBootstrap(
+      categories: categories,
+      transactions: transactions,
+      limits: const [],
+    );
+  }
 
   @override
   Future<TransactionCategory> addCategory(Map<String, Object?> payload) async {
@@ -405,5 +430,40 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
     deletedTransactionIds.add(id);
     transactions.removeWhere((transaction) => transaction.id == id);
     return true;
+  }
+
+  @override
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) async {
+    renameArgs
+      ..add(originalMerchant)
+      ..add(userAssignedName);
+    var count = 0;
+    for (var index = 0; index < transactions.length; index += 1) {
+      final transaction = transactions[index];
+      if (transaction.merchant != originalMerchant) continue;
+      final map = transaction.toMap();
+      map['userAssignedName'] = userAssignedName;
+      transactions[index] = TransactionRecord.fromMap(map);
+      count += 1;
+    }
+    return count;
+  }
+
+  @override
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) async {
+    resetMerchant = originalMerchant;
+    var count = 0;
+    for (var index = 0; index < transactions.length; index += 1) {
+      final transaction = transactions[index];
+      if (transaction.merchant != originalMerchant) continue;
+      final map = transaction.toMap();
+      map['userAssignedName'] = null;
+      transactions[index] = TransactionRecord.fromMap(map);
+      count += 1;
+    }
+    return count;
   }
 }

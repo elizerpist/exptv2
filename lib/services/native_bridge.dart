@@ -233,6 +233,30 @@ class NativeBridge {
     return deleted ?? false;
   }
 
+  Future<int> expenseRenameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) async {
+    final count = await _methodChannel.invokeMethod<int>(
+      'expenseRenameTransactionsByMerchant',
+      {
+        'originalMerchant': originalMerchant,
+        'userAssignedName': userAssignedName,
+      },
+    );
+    return count ?? 0;
+  }
+
+  Future<int> expenseResetTransactionNamesByMerchant(
+    String originalMerchant,
+  ) async {
+    final count = await _methodChannel.invokeMethod<int>(
+      'expenseResetTransactionNamesByMerchant',
+      {'originalMerchant': originalMerchant},
+    );
+    return count ?? 0;
+  }
+
   Future<ExpenseSettingsPayload> expenseLoadSettings() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'expenseLoadSettings',

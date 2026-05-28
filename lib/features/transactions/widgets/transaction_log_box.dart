@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -7,6 +9,10 @@ import 'category_menu/category_icon_badge.dart';
 
 typedef TransactionLogContextCallback =
     void Function(TransactionRecord record, TransactionCategory? category);
+typedef TransactionRenameCallback =
+    FutureOr<void> Function(TransactionRecord record, String userAssignedName);
+typedef TransactionRecordAction =
+    FutureOr<void> Function(TransactionRecord record);
 
 class TransactionLogBox extends StatefulWidget {
   const TransactionLogBox({
@@ -17,6 +23,8 @@ class TransactionLogBox extends StatefulWidget {
     this.onTap,
     this.onDeleteRequested,
     this.onCategoryFilter,
+    this.onRenameMerchant,
+    this.onResetMerchantName,
   });
 
   final TransactionRecord record;
@@ -25,6 +33,8 @@ class TransactionLogBox extends StatefulWidget {
   final ValueChanged<TransactionRecord>? onTap;
   final ValueChanged<TransactionRecord>? onDeleteRequested;
   final ValueChanged<TransactionCategory>? onCategoryFilter;
+  final TransactionRenameCallback? onRenameMerchant;
+  final TransactionRecordAction? onResetMerchantName;
 
   @override
   State<TransactionLogBox> createState() => _TransactionLogBoxState();
@@ -34,6 +44,9 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   double _dragDx = 0;
   double _visualDx = 0;
   bool _triggered = false;
+
+  bool get _hasCustomName =>
+      widget.record.userAssignedName?.trim().isNotEmpty ?? false;
 
   void _resetDrag() {
     _dragDx = 0;
@@ -60,6 +73,26 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       _triggered = true;
       widget.onDeleteRequested?.call(widget.record);
     }
+  }
+
+  Future<void> _openNameEditor() async {
+    final rename = widget.onRenameMerchant;
+    if (rename == null) return;
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return _TransactionNameDialog(
+          initialValue: widget.record.displayMerchant,
+        );
+      },
+    );
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return;
+    await rename(widget.record, trimmed);
+  }
+
+  Future<void> _resetName() async {
+    await widget.onResetMerchantName?.call(widget.record);
   }
 
   @override
@@ -123,17 +156,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        widget.record.displayMerchant,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gray800,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                    Expanded(child: _NameBlock()),
                     const SizedBox(width: 12),
                     Column(
                       mainAxisSize: MainAxisSize.min,
@@ -182,9 +205,98 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     );
   }
 
+  Widget _NameBlock() {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            key: ValueKey('transaction-logbox-name-${widget.record.id}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _openNameEditor,
+            child: Text(
+              widget.record.displayMerchant,
+              key: ValueKey('transaction-logbox-name-text-${widget.record.id}'),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _hasCustomName ? AppColors.gray800 : AppColors.gray500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        if (_hasCustomName && widget.onResetMerchantName != null)
+          IconButton(
+            key: ValueKey('transaction-name-reset-${widget.record.id}'),
+            onPressed: _resetName,
+            icon: const Icon(Icons.restart_alt, size: 16),
+            color: AppColors.gray500,
+            tooltip: 'Eredeti név visszaállítása',
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            padding: EdgeInsets.zero,
+          ),
+      ],
+    );
+  }
+
   double _borderOpacity(double distance) {
     if (distance <= 0) return 0;
     return (distance / 80).clamp(0.0, 1.0).toDouble();
+  }
+}
+
+class _TransactionNameDialog extends StatefulWidget {
+  const _TransactionNameDialog({required this.initialValue});
+
+  final String initialValue;
+
+  @override
+  State<_TransactionNameDialog> createState() => _TransactionNameDialogState();
+}
+
+class _TransactionNameDialogState extends State<_TransactionNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tranzakció név'),
+      content: TextField(
+        key: const ValueKey('transaction-name-editor-field'),
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Megjelenített név',
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: AppColors.primary, width: 2),
+          ),
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Mégse'),
+        ),
+        FilledButton(
+          key: const ValueKey('transaction-name-editor-save'),
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Mentés'),
+        ),
+      ],
+    );
   }
 }
 

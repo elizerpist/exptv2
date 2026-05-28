@@ -185,4 +185,26 @@ void main() {
       ]);
     },
   );
+
+  test('renames and resets all transactions by original merchant', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return 3;
+        });
+
+    final renamed = await bridge.expenseRenameTransactionsByMerchant(
+      'Tesco',
+      'Tesco Market',
+    );
+    final reset = await bridge.expenseResetTransactionNamesByMerchant('Tesco');
+
+    expect(renamed, 3);
+    expect(reset, 3);
+    expect(calls[0].method, 'expenseRenameTransactionsByMerchant');
+    expect((calls[0].arguments as Map)['originalMerchant'], 'Tesco');
+    expect((calls[0].arguments as Map)['userAssignedName'], 'Tesco Market');
+    expect(calls[1].method, 'expenseResetTransactionNamesByMerchant');
+  });
 }

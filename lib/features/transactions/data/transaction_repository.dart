@@ -26,6 +26,11 @@ abstract class TransactionRepositoryContract {
     Map<String, Object?> payload,
   );
   Future<bool> deleteTransaction(int id);
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  );
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant);
   Future<TransactionCategory> addCategory(Map<String, Object?> payload);
   Future<TransactionCategory> updateCategory(
     int id,
@@ -73,6 +78,22 @@ class TransactionRepository implements TransactionRepositoryContract {
   @override
   Future<bool> deleteTransaction(int id) {
     return _bridge.expenseDeleteTransaction(id);
+  }
+
+  @override
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) {
+    return _bridge.expenseRenameTransactionsByMerchant(
+      originalMerchant,
+      userAssignedName,
+    );
+  }
+
+  @override
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) {
+    return _bridge.expenseResetTransactionNamesByMerchant(originalMerchant);
   }
 
   @override

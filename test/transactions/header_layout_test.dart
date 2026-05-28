@@ -276,12 +276,13 @@ void main() {
     await tester.drag(header, const Offset(0, 80));
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
 
-    await tester.tap(find.byKey(const ValueKey('header-expand-button-hit-area')));
+    await tester.tap(
+      find.byKey(const ValueKey('header-expand-button-hit-area')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('category-budget-stage')), findsOneWidget);
   });
-
 }
 
 double _screenHeight(WidgetTester tester) =>
@@ -353,6 +354,16 @@ class HeaderLayoutRepository implements TransactionRepositoryContract {
   Future<bool> deleteCategory(int id) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) async =>
+      throw UnimplementedError();
 
   @override
   Future<Map<int, int>> categoryCounts() async => const {6: 1};

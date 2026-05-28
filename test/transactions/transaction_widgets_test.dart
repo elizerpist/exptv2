@@ -289,6 +289,66 @@ void main() {
 
     expect(categoryName, 'Rr');
   });
+
+  testWidgets(
+    'logbox name tap opens name editor without opening transaction editor',
+    (tester) async {
+      var editOpened = false;
+      String? renamedMerchant;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TransactionLogBox(
+            record: sampleExpenseRecord(),
+            category: sampleExpenseCategory(),
+            onTap: (_) => editOpened = true,
+            onRenameMerchant: (record, value) async {
+              renamedMerchant = '${record.merchant}:$value';
+            },
+            onResetMerchantName: (_) {},
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('transaction-logbox-name-250909')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('transaction-name-editor-field')),
+        'Test Market Custom',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('transaction-name-editor-save')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(editOpened, isFalse);
+      expect(renamedMerchant, 'Test Store:Test Market Custom');
+    },
+  );
+
+  testWidgets('custom transaction name shows reset button and darker style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          onResetMerchantName: (_) {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('transaction-name-reset-250905')),
+      findsOneWidget,
+    );
+    final text = tester.widget<Text>(
+      find.byKey(const ValueKey('transaction-logbox-name-text-250905')),
+    );
+    expect(text.style?.color, AppColors.gray800);
+  });
 }
 
 TransactionRecord sampleRecord() => TransactionRecord.fromMap({

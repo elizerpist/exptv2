@@ -31,6 +31,12 @@ interface ExpenseTransactionDao {
     @Delete
     suspend fun delete(transaction: ExpenseTransactionEntity)
 
+    @Query("UPDATE transactions SET userAssignedName = :userAssignedName WHERE merchant = :originalMerchant")
+    suspend fun renameByMerchant(originalMerchant: String, userAssignedName: String): Int
+
+    @Query("UPDATE transactions SET userAssignedName = NULL WHERE merchant = :originalMerchant")
+    suspend fun resetNamesByMerchant(originalMerchant: String): Int
+
     @Query("SELECT MAX(id) FROM transactions WHERE CAST(id AS TEXT) LIKE :prefix || '%'")
     suspend fun maxIdForPrefix(prefix: String): Int?
 

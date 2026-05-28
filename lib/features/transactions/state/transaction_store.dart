@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../data/limit_manager.dart';
 import '../data/transaction_filter.dart';
 import '../data/transaction_repository.dart';
@@ -297,6 +298,38 @@ class TransactionStore extends ChangeNotifier {
       await _reload();
     }
     return deleted;
+  }
+
+  Future<int> renameTransactionsByMerchant(
+    TransactionRecord transaction,
+    String userAssignedName,
+  ) async {
+    DebugConsole.log(
+      '[Transactions] rename ${transaction.merchant} -> $userAssignedName',
+    );
+    final count = await _repository.renameTransactionsByMerchant(
+      transaction.merchant,
+      userAssignedName,
+    );
+    await _reload();
+    DebugConsole.log(
+      '[Transactions] renamed $count rows for ${transaction.merchant}',
+    );
+    return count;
+  }
+
+  Future<int> resetTransactionNamesByMerchant(
+    TransactionRecord transaction,
+  ) async {
+    DebugConsole.log('[Transactions] reset name ${transaction.merchant}');
+    final count = await _repository.resetTransactionNamesByMerchant(
+      transaction.merchant,
+    );
+    await _reload();
+    DebugConsole.log(
+      '[Transactions] reset $count rows for ${transaction.merchant}',
+    );
+    return count;
   }
 
   Future<void> addCategory({

@@ -273,6 +273,16 @@ class CalendarHomeRepository implements TransactionRepositoryContract {
   }
 
   @override
+  Future<int> renameTransactionsByMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) async => throw UnimplementedError();
+
+  @override
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) async =>
+      throw UnimplementedError();
+
+  @override
   Future<Map<int, int>> categoryCounts() async => const {};
 
   @override

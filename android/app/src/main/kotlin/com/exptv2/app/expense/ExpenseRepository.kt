@@ -392,6 +392,23 @@ class ExpenseRepository(context: Context) {
     }
 
 
+    suspend fun renameTransactionsByMerchant(args: Map<*, *>): Int {
+        seedIfEmpty()
+        val originalMerchant = args["originalMerchant"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: throw ExpenseValidationException("INVALID_MERCHANT", "Original merchant is required")
+        val userAssignedName = args["userAssignedName"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: throw ExpenseValidationException("INVALID_MERCHANT_NAME", "Custom merchant name is required")
+        return transactions.renameByMerchant(originalMerchant, userAssignedName)
+    }
+
+    suspend fun resetTransactionNamesByMerchant(args: Map<*, *>): Int {
+        seedIfEmpty()
+        val originalMerchant = args["originalMerchant"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: throw ExpenseValidationException("INVALID_MERCHANT", "Original merchant is required")
+        return transactions.resetNamesByMerchant(originalMerchant)
+    }
+
+
 
     private suspend fun syncRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
         for (recurring in recurringTransactions.active()) {
