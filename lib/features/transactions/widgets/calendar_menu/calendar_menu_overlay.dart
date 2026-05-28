@@ -7,6 +7,7 @@ import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
 import 'calendar_canvas.dart';
 import 'calendar_mode_selector.dart';
+import 'category_donut_chart.dart';
 import '../transaction_menu_metrics.dart';
 import 'calendar_value_slider_panel.dart';
 
@@ -71,7 +72,9 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
             clipBehavior: Clip.antiAlias,
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(30),
+                ),
                 border: Border.all(color: AppColors.gray200),
               ),
               child: Stack(
@@ -107,7 +110,17 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                           color: AppColors.gray800,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      if (_mode == CalendarMenuMode.category)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: CategoryDonutChart(
+                            transactions: widget.transactions,
+                            categories: widget.categories,
+                            year: _year,
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 8),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -129,15 +142,16 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                       value: _thresholdValue,
                       min: data.thresholdRange.min,
                       max: data.thresholdRange.max,
-                      onChanged: (value) => setState(() => _thresholdValue = value),
+                      onChanged: (value) =>
+                          setState(() => _thresholdValue = value),
                       onMinChanged: (value) => setState(
                         () => _customThresholdMin = value < 0 ? 0 : value,
                       ),
                       onMaxChanged: (value) => setState(
                         () => _customThresholdMax =
                             value <= data.thresholdRange.min
-                                ? data.thresholdRange.min + 1
-                                : value,
+                            ? data.thresholdRange.min + 1
+                            : value,
                       ),
                     ),
                   if (_mode == CalendarMenuMode.heatmap)
@@ -204,30 +218,30 @@ class _YearNavigator extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-        IconButton(
-          key: const ValueKey('calendar-prev-year'),
-          onPressed: onPrevious,
-          icon: const Icon(Icons.chevron_left, color: AppColors.gray500),
-          iconSize: 24,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(width: 42, height: 48),
-        ),
-        Text(
-          '$year',
-          style: const TextStyle(
-            color: AppColors.gray800,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+          IconButton(
+            key: const ValueKey('calendar-prev-year'),
+            onPressed: onPrevious,
+            icon: const Icon(Icons.chevron_left, color: AppColors.gray500),
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 42, height: 48),
           ),
-        ),
-        IconButton(
-          key: const ValueKey('calendar-next-year'),
-          onPressed: onNext,
-          icon: const Icon(Icons.chevron_right, color: AppColors.gray500),
-          iconSize: 24,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(width: 42, height: 48),
-        ),
+          Text(
+            '$year',
+            style: const TextStyle(
+              color: AppColors.gray800,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('calendar-next-year'),
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right, color: AppColors.gray500),
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 42, height: 48),
+          ),
         ],
       ),
     );

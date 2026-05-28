@@ -14,7 +14,7 @@ class CalendarCanvasLayout {
   }) {
     final cardGap = width * 0.04;
     final cardWidth = width * 0.48;
-    final cardHeight = mode == CalendarMenuMode.summary ? 200.0 : 140.0;
+    const cardHeight = 200.0;
     const rowGap = 15.0;
     final rects = <Rect>[];
     for (var index = 0; index < 12; index += 1) {

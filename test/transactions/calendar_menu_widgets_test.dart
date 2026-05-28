@@ -31,42 +31,49 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('calendar-mode-selector')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-mode-selector')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('calendar-mode-normal')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-summary')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-heatmap')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-mode-category')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-mode-category')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('calendar-mode-heatmap')));
     expect(selected, CalendarMenuMode.heatmap);
   });
 
-  testWidgets('threshold slider panel shows editable Hungarian threshold label', (
-    tester,
-  ) async {
-    var changed = 1000.0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: CalendarValueSliderPanel.threshold(
-            value: 1000,
-            min: 0,
-            max: 2000,
-            onChanged: (value) => changed = value,
-            onMinChanged: (_) {},
-            onMaxChanged: (_) {},
+  testWidgets(
+    'threshold slider panel shows editable Hungarian threshold label',
+    (tester) async {
+      var changed = 1000.0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CalendarValueSliderPanel.threshold(
+              value: 1000,
+              min: 0,
+              max: 2000,
+              onChanged: (value) => changed = value,
+              onMinChanged: (_) {},
+              onMaxChanged: (_) {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.text('Küszöbérték: 1 000 Ft'), findsOneWidget);
-    await tester.drag(
-      find.byKey(const ValueKey('calendar-threshold-slider')),
-      const Offset(80, 0),
-    );
-    expect(changed, isNot(1000));
-  });
+      expect(find.text('Küszöbérték: 1 000 Ft'), findsOneWidget);
+      await tester.drag(
+        find.byKey(const ValueKey('calendar-threshold-slider')),
+        const Offset(80, 0),
+      );
+      expect(changed, isNot(1000));
+    },
+  );
 
   testWidgets('heatmap slider panel shows editable current coloring label', (
     tester,
@@ -87,7 +94,10 @@ void main() {
     );
 
     expect(find.text('Aktuális színezés: 10 000 Ft'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      findsOneWidget,
+    );
   });
 
   test('calendar canvas layout creates two columns and six rows', () {
@@ -100,6 +110,22 @@ void main() {
     expect(layout.monthRects[1].left, greaterThan(layout.monthRects[0].right));
     expect(layout.monthRects[2].top, greaterThan(layout.monthRects[0].bottom));
   });
+
+  test(
+    'calendar canvas layout keeps month card size consistent in every mode',
+    () {
+      final summary = CalendarCanvasLayout.calculate(
+        width: 390,
+        mode: CalendarMenuMode.summary,
+      );
+
+      for (final mode in CalendarMenuMode.values) {
+        final layout = CalendarCanvasLayout.calculate(width: 390, mode: mode);
+        expect(layout.monthRects.first.size, summary.monthRects.first.size);
+        expect(layout.size.height, summary.size.height);
+      }
+    },
+  );
 
   testWidgets('calendar canvas renders annual body as one CustomPaint', (
     tester,
@@ -159,17 +185,27 @@ void main() {
     );
 
     expect(find.text('Küszöbérték nézet'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-threshold-slider')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-slider')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('calendar-mode-heatmap')));
     await tester.pumpAndSettle();
     expect(find.text('Hőtérkép'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('calendar-mode-category')));
     await tester.pumpAndSettle();
     expect(find.text('Domináns kategória'), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('calendar-category-donut-chart')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('home calendar button opens calendar overlay', (tester) async {
@@ -197,17 +233,13 @@ void main() {
 
 class CalendarHomeRepository implements TransactionRepositoryContract {
   @override
-  Future<TransactionBootstrap> loadBootstrap() async => const TransactionBootstrap(
-    categories: [],
-    transactions: [],
-    limits: [],
-  );
+  Future<TransactionBootstrap> loadBootstrap() async =>
+      const TransactionBootstrap(categories: [], transactions: [], limits: []);
 
   @override
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload) async {
     throw UnimplementedError();
   }
-
 
   @override
   Future<TransactionRecord> updateTransaction(
@@ -253,7 +285,9 @@ class CalendarHomeRepository implements TransactionRepositoryContract {
   }
 
   @override
-  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) async {
+  Future<CategoryLimit> upsertCategoryLimit(
+    Map<String, Object?> payload,
+  ) async {
     throw UnimplementedError();
   }
 }
