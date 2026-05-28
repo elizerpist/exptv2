@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/debug/debug_console.dart';
+import '../../core/debug/debug_floating_button.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -39,6 +41,7 @@ class _ExptShellState extends State<ExptShell> {
   @override
   void initState() {
     super.initState();
+    DebugConsole.log('[Shell] start');
     _transactionStore = TransactionStore(
       TransactionRepository(widget.nativeBridge),
     );
@@ -193,6 +196,7 @@ class _ExptShellState extends State<ExptShell> {
                 onClose: _closeTransactionEditor,
               ),
             ),
+          const DebugFloatingButton(),
         ],
       ),
     );
