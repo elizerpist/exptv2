@@ -1,6 +1,8 @@
 package com.exptv2.app.expense
 
 import android.content.Context
+import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
+import com.exptv2.app.expense.recurring.RecurringDebugClockStore
 import java.util.Calendar
 
 class ExpenseRepository(context: Context) {
@@ -14,10 +16,11 @@ class ExpenseRepository(context: Context) {
     private val notificationCards = db.notificationCards()
     private val settingsStore = ExpenseSettingsStore(appContext)
     private val notificationHelper = RecurringNotificationHelper(appContext)
+    private val debugClockStore = RecurringDebugClockStore(appContext)
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
-        syncRecurringGhosts(System.currentTimeMillis())
+        syncRecurringGhosts(recurringTargetMillis())
         val categoryRows = categories.all()
         val transactionRows = transactions.all()
         val limitRows = categoryLimits.list(null, null, null)
@@ -80,17 +83,17 @@ class ExpenseRepository(context: Context) {
 
     suspend fun listRecurringTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()
-        syncRecurringGhosts(System.currentTimeMillis())
+        syncRecurringGhosts(recurringTargetMillis())
         return recurringTransactions.all().map { it.toMap() }
     }
 
     suspend fun listRecurringGhostTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()
-        syncRecurringGhosts(System.currentTimeMillis())
+        syncRecurringGhosts(recurringTargetMillis())
         return recurringGhosts.pending().map { it.toMap() }
     }
 
-    suspend fun ensureRecurringGhostTransactions(targetMillis: Long = System.currentTimeMillis()): List<Map<String, Any?>> {
+    suspend fun ensureRecurringGhostTransactions(targetMillis: Long = recurringTargetMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
         ensureRecurringGhostsForActivePeriod(targetMillis)
         return recurringGhosts.pending().map { it.toMap() }
@@ -101,9 +104,9 @@ class ExpenseRepository(context: Context) {
         val row = buildRecurringRow(args, null)
         val id = recurringTransactions.insert(row).toInt()
         val saved = row.copy(id = id)
-        ensureRecurringGhost(saved, System.currentTimeMillis())
-        syncRecurringGhosts(System.currentTimeMillis())
-        RecurringTransactionScheduler.schedule(appContext)
+        ensureRecurringGhost(saved, recurringTargetMillis())
+        syncRecurringGhosts(recurringTargetMillis())
+        RecurringAlarmScheduler(appContext).sync()
         return saved.toMap()
     }
 
@@ -116,8 +119,8 @@ class ExpenseRepository(context: Context) {
         val row = buildRecurringRow(args, existing)
         recurringTransactions.update(row)
         recurringGhosts.deletePendingForRecurring(row.id)
-        syncRecurringGhosts(System.currentTimeMillis())
-        RecurringTransactionScheduler.schedule(appContext)
+        syncRecurringGhosts(recurringTargetMillis())
+        RecurringAlarmScheduler(appContext).sync()
         return row.toMap()
     }
 
@@ -133,11 +136,11 @@ class ExpenseRepository(context: Context) {
         )
         recurringTransactions.update(row)
         if (row.isActive) {
-            syncRecurringGhosts(System.currentTimeMillis())
+            syncRecurringGhosts(recurringTargetMillis())
         } else {
             recurringGhosts.deletePendingForRecurring(row.id)
         }
-        RecurringTransactionScheduler.schedule(appContext)
+        RecurringAlarmScheduler(appContext).sync()
         return row.toMap()
     }
 
@@ -146,15 +149,44 @@ class ExpenseRepository(context: Context) {
         val existing = recurringTransactions.byId(id) ?: return false
         recurringGhosts.deleteForRecurring(id)
         recurringTransactions.delete(existing)
-        RecurringTransactionScheduler.schedule(appContext)
+        RecurringAlarmScheduler(appContext).sync()
         return true
     }
 
-    suspend fun processDueRecurringTransactions(targetMillis: Long = System.currentTimeMillis()): List<Map<String, Any?>> {
+    suspend fun processDueRecurringTransactions(targetMillis: Long = recurringTargetMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
         val processed = syncRecurringGhosts(targetMillis)
         notificationHelper.notifyProcessed(processed)
         return processed.map { it.toMap() }
+    }
+
+    suspend fun nextRecurringTriggerMillis(targetMillis: Long = recurringTargetMillis()): Long? {
+        seedIfEmpty()
+        ensureRecurringGhostsForActivePeriod(targetMillis)
+        nextPendingRecurringTriggerAtOrAfter(targetMillis)?.let { return it }
+        ensureRecurringGhostsForActivePeriod(nextRecurringMonthMillis(targetMillis))
+        return nextPendingRecurringTriggerAtOrAfter(targetMillis)
+    }
+
+    private suspend fun nextPendingRecurringTriggerAtOrAfter(targetMillis: Long): Long? {
+        return recurringGhosts.pending()
+            .asSequence()
+            .filter { !it.isActivated }
+            .map { it.triggerMillis }
+            .filter { it >= targetMillis }
+            .minOrNull()
+    }
+
+    private fun nextRecurringMonthMillis(targetMillis: Long): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = targetMillis
+            add(Calendar.MONTH, 1)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 1)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 
     suspend fun listCategoryLimits(args: Map<*, *>): List<Map<String, Any?>> {
@@ -409,6 +441,8 @@ class ExpenseRepository(context: Context) {
     }
 
 
+
+    private fun recurringTargetMillis(): Long = debugClockStore.effectiveNow()
 
     private suspend fun syncRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
         ensureRecurringGhostsForActivePeriod(targetMillis)
