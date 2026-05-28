@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/recurring_alarm_service.dart';
+
 class DebugConsole {
   DebugConsole._();
 
@@ -28,7 +30,14 @@ class DebugConsole {
 }
 
 class DebugConsoleDialog extends StatefulWidget {
-  const DebugConsoleDialog({super.key});
+  const DebugConsoleDialog({
+    super.key,
+    this.recurringAlarmService,
+    this.onRecurringChanged,
+  });
+
+  final RecurringAlarmService? recurringAlarmService;
+  final VoidCallback? onRecurringChanged;
 
   @override
   State<DebugConsoleDialog> createState() => _DebugConsoleDialogState();
@@ -37,12 +46,18 @@ class DebugConsoleDialog extends StatefulWidget {
 class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   final TextEditingController _controller = TextEditingController();
   bool _copied = false;
+  bool _alarmLoading = false;
+  String? _alarmError;
+  RecurringAlarmDebugState? _alarmState;
 
   @override
   void initState() {
     super.initState();
     _controller.text = DebugConsole.allText;
     DebugConsole.notifier.addListener(_refresh);
+    if (widget.recurringAlarmService != null) {
+      _loadAlarmState();
+    }
   }
 
   @override
@@ -69,6 +84,217 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     setState(() => _copied = true);
   }
 
+  Future<void> _loadAlarmState() async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    await _runAlarmAction(() async {
+      _alarmState = await service.loadDebugState();
+    }, logSuccess: false);
+  }
+
+  Future<void> _syncRecurringAlarms() async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    await _runAlarmAction(() async {
+      await service.syncRecurringAlarms();
+      _alarmState = await service.loadDebugState();
+      DebugConsole.log('[RecurringAlarm] sync requested from debug console');
+    });
+  }
+
+  Future<void> _processRecurringNow() async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    await _runAlarmAction(() async {
+      final result = await service.processRecurringNow();
+      _alarmState = result.state;
+      DebugConsole.log(
+        '[RecurringAlarm] debug processed ${result.processedCount} recurring rows',
+      );
+      widget.onRecurringChanged?.call();
+    });
+  }
+
+  Future<void> _shiftDebugDate(int days) async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    await _runAlarmAction(() async {
+      final base = _alarmState?.effectiveDate ?? DateTime.now();
+      final target = DateTime(base.year, base.month, base.day + days);
+      final result = await service.setDebugDateOverride(target);
+      _alarmState = result.state;
+      DebugConsole.log(
+        '[RecurringAlarm] debug date ${_formatDate(target)} processed ${result.processedCount}',
+      );
+      widget.onRecurringChanged?.call();
+    });
+  }
+
+  Future<void> _clearDebugDateOverride() async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    await _runAlarmAction(() async {
+      _alarmState = await service.clearDebugDateOverride();
+      DebugConsole.log('[RecurringAlarm] debug date reset to phone date');
+      widget.onRecurringChanged?.call();
+    });
+  }
+
+  Future<void> _clearNativeDebugLog() async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    await _runAlarmAction(() async {
+      await service.clearDebugLog();
+      _alarmState = await service.loadDebugState();
+      DebugConsole.log('[RecurringAlarm] native debug log cleared');
+    });
+  }
+
+  Future<void> _runAlarmAction(
+    Future<void> Function() action, {
+    bool logSuccess = true,
+  }) async {
+    if (_alarmLoading) return;
+    setState(() {
+      _alarmLoading = true;
+      _alarmError = null;
+    });
+    try {
+      await action();
+    } catch (error) {
+      _alarmError = error.toString();
+      DebugConsole.log('[RecurringAlarm] debug action failed: $error');
+    } finally {
+      if (!mounted) return;
+      setState(() => _alarmLoading = false);
+      if (logSuccess) _refresh();
+    }
+  }
+
+  Widget _buildRecurringAlarmPanel() {
+    final service = widget.recurringAlarmService;
+    if (service == null) return const SizedBox.shrink();
+
+    final state = _alarmState;
+    final effective = state?.effectiveDate;
+    final logs = state?.logs ?? const <String>[];
+    return Container(
+      key: const ValueKey('debug-console-recurring-section'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFF111827),
+        border: Border(bottom: BorderSide(color: Color(0xFF313244))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.alarm,
+                size: 14,
+                color: Color(0xFFF59E0B),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  effective == null
+                      ? 'Recurring alarm'
+                      : 'Recurring alarm · ${_formatDate(effective)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFE5E7EB),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (_alarmLoading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-prev-day'),
+                icon: Icons.chevron_left,
+                tooltip: 'Previous debug day',
+                onPressed: _alarmLoading ? null : () => _shiftDebugDate(-1),
+              ),
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-next-day'),
+                icon: Icons.chevron_right,
+                tooltip: 'Next debug day',
+                onPressed: _alarmLoading ? null : () => _shiftDebugDate(1),
+              ),
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-process-now'),
+                icon: Icons.play_arrow,
+                tooltip: 'Process recurring now',
+                onPressed: _alarmLoading ? null : _processRecurringNow,
+              ),
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-sync'),
+                icon: Icons.sync,
+                tooltip: 'Sync recurring alarms',
+                onPressed: _alarmLoading ? null : _syncRecurringAlarms,
+              ),
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-reset'),
+                icon: Icons.restore,
+                tooltip: 'Reset debug date',
+                onPressed: _alarmLoading ? null : _clearDebugDateOverride,
+              ),
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-native-log-clear'),
+                icon: Icons.layers_clear_outlined,
+                tooltip: 'Clear native recurring log',
+                onPressed: _alarmLoading ? null : _clearNativeDebugLog,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            state?.usingOverride == true ? 'Override active' : 'Phone date',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+          ),
+          if (_alarmError != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _alarmError!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFFF87171), fontSize: 11),
+            ),
+          ],
+          if (logs.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...logs.reversed.take(3).map(
+                  (entry) => Text(
+                    entry,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF9CA3AF),
+                      fontSize: 10.5,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final count = DebugConsole.entries.length;
@@ -78,7 +304,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 40),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.78,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -135,6 +361,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
               ),
             ),
             const Divider(height: 1, color: Color(0xFF313244)),
+            _buildRecurringAlarmPanel(),
             Flexible(
               child: count == 0
                   ? const Padding(
@@ -165,4 +392,47 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       ),
     );
   }
+}
+
+class _SmallDebugIconButton extends StatelessWidget {
+  const _SmallDebugIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: const Color(0xFF1F2937),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 34,
+            height: 30,
+            child: Icon(
+              icon,
+              size: 16,
+              color: onPressed == null
+                  ? const Color(0xFF4B5563)
+                  : const Color(0xFFCBD5E1),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatDate(DateTime date) {
+  return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }

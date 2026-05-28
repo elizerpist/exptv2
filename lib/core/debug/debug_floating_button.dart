@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../services/recurring_alarm_service.dart';
 import 'debug_console.dart';
 
 class DebugFloatingButton extends StatelessWidget {
-  const DebugFloatingButton({super.key});
+  const DebugFloatingButton({
+    super.key,
+    this.recurringAlarmService,
+    this.onRecurringChanged,
+  });
+
+  final RecurringAlarmService? recurringAlarmService;
+  final VoidCallback? onRecurringChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +37,10 @@ class DebugFloatingButton extends StatelessWidget {
               ),
               onPressed: () => showDialog<void>(
                 context: context,
-                builder: (_) => const DebugConsoleDialog(),
+                builder: (_) => DebugConsoleDialog(
+                  recurringAlarmService: recurringAlarmService,
+                  onRecurringChanged: onRecurringChanged,
+                ),
               ),
             ),
           ),

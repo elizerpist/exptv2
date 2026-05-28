@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/debug/debug_console.dart';
@@ -5,6 +7,7 @@ import '../../core/debug/debug_floating_button.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
+import '../../services/recurring_alarm_service.dart';
 import '../../state/event_store.dart';
 import '../notifications/notifications_page.dart';
 import '../settings/models/app_theme_settings.dart';
@@ -31,9 +34,10 @@ class ExptShell extends StatefulWidget {
   State<ExptShell> createState() => _ExptShellState();
 }
 
-class _ExptShellState extends State<ExptShell> {
+class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   AppTab _activeTab = AppTab.home;
   late final TransactionStore _transactionStore;
+  late final RecurringAlarmService _recurringAlarmService;
   var _transactionEditorOpen = false;
   var _homeBlockingOverlayOpen = false;
   TransactionRecord? _editingTransaction;
@@ -42,17 +46,49 @@ class _ExptShellState extends State<ExptShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     DebugConsole.log('[Shell] start');
+    _recurringAlarmService = RecurringAlarmService();
     _transactionStore = TransactionStore(
       TransactionRepository(widget.nativeBridge),
     );
-    _loadThemeSettings();
+    unawaited(_syncRecurringAlarms());
+    unawaited(_loadThemeSettings());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _transactionStore.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(_processRecurringOnResume());
+  }
+
+  Future<void> _syncRecurringAlarms() async {
+    try {
+      await _recurringAlarmService.syncRecurringAlarms();
+      DebugConsole.log('[RecurringAlarm] shell sync complete');
+    } catch (error) {
+      DebugConsole.log('[RecurringAlarm] shell sync failed: $error');
+    }
+  }
+
+  Future<void> _processRecurringOnResume() async {
+    try {
+      final result = await _recurringAlarmService.processRecurringNow();
+      DebugConsole.log(
+        '[RecurringAlarm] resume processed ${result.processedCount} recurring rows',
+      );
+      if (!mounted) return;
+      await _transactionStore.refreshAfterRecurringProcessing();
+    } catch (error) {
+      DebugConsole.log('[RecurringAlarm] resume processing failed: $error');
+    }
   }
 
   Future<void> _loadThemeSettings() async {
@@ -197,7 +233,10 @@ class _ExptShellState extends State<ExptShell> {
                 onClose: _closeTransactionEditor,
               ),
             ),
-          const DebugFloatingButton(),
+          DebugFloatingButton(
+            recurringAlarmService: _recurringAlarmService,
+            onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
+          ),
         ],
       ),
     );

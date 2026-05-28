@@ -305,6 +305,11 @@ class TransactionStore extends ChangeNotifier {
     return deleted;
   }
 
+  Future<void> refreshAfterRecurringProcessing() async {
+    await _reload();
+    DebugConsole.log('[RecurringAlarm] store refreshed after processing');
+  }
+
   Future<int> renameTransactionsByMerchant(
     TransactionRecord transaction,
     String userAssignedName,
