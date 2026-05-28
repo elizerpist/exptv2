@@ -1,5 +1,6 @@
 import '../../../services/native_bridge.dart';
 import '../models/category_limit.dart';
+import '../models/recurring_ghost_record.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 
@@ -8,11 +9,13 @@ class TransactionBootstrap {
     required this.categories,
     required this.transactions,
     required this.limits,
+    this.recurringGhostTransactions = const [],
   });
 
   final List<TransactionCategory> categories;
   final List<TransactionRecord> transactions;
   final List<CategoryLimit> limits;
+  final List<RecurringGhostRecord> recurringGhostTransactions;
 }
 
 abstract class TransactionRepositoryContract {
@@ -50,6 +53,7 @@ class TransactionRepository implements TransactionRepositoryContract {
       categories: payload.categories,
       transactions: payload.transactions,
       limits: payload.limits,
+      recurringGhostTransactions: payload.recurringGhostTransactions,
     );
   }
 

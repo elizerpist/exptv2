@@ -10,18 +10,22 @@ class ExpenseRepository(context: Context) {
     private val categories = db.categories()
     private val categoryLimits = db.categoryLimits()
     private val recurringTransactions = db.recurringTransactions()
+    private val recurringGhosts = db.recurringGhostTransactions()
     private val settingsStore = ExpenseSettingsStore(appContext)
     private val notificationHelper = RecurringNotificationHelper(appContext)
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
+        syncRecurringGhosts(System.currentTimeMillis())
         val categoryRows = categories.all()
         val transactionRows = transactions.all()
         val limitRows = categoryLimits.list(null, null, null)
+        val ghostRows = recurringGhosts.pending()
         return mapOf(
             "categories" to categoryRows.map { it.toMap() },
             "transactions" to transactionRows.map { it.toMap() },
             "limits" to limitRows.map { it.toMap() },
+            "recurringGhostTransactions" to ghostRows.map { it.toMap() },
         )
     }
 
@@ -52,15 +56,31 @@ class ExpenseRepository(context: Context) {
 
     suspend fun listRecurringTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()
+        syncRecurringGhosts(System.currentTimeMillis())
         return recurringTransactions.all().map { it.toMap() }
+    }
+
+    suspend fun listRecurringGhostTransactions(): List<Map<String, Any?>> {
+        seedIfEmpty()
+        syncRecurringGhosts(System.currentTimeMillis())
+        return recurringGhosts.pending().map { it.toMap() }
+    }
+
+    suspend fun ensureRecurringGhostTransactions(targetMillis: Long = System.currentTimeMillis()): List<Map<String, Any?>> {
+        seedIfEmpty()
+        syncRecurringGhosts(targetMillis)
+        return recurringGhosts.pending().map { it.toMap() }
     }
 
     suspend fun addRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
         seedIfEmpty()
         val row = buildRecurringRow(args, null)
         val id = recurringTransactions.insert(row).toInt()
+        val saved = row.copy(id = id)
+        ensureRecurringGhost(saved, System.currentTimeMillis())
+        syncRecurringGhosts(System.currentTimeMillis())
         RecurringTransactionScheduler.schedule(appContext)
-        return row.copy(id = id).toMap()
+        return saved.toMap()
     }
 
     suspend fun updateRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
@@ -71,6 +91,8 @@ class ExpenseRepository(context: Context) {
             ?: throw ExpenseValidationException("INVALID_RECURRING_ID", "Recurring transaction does not exist")
         val row = buildRecurringRow(args, existing)
         recurringTransactions.update(row)
+        recurringGhosts.deletePendingForRecurring(row.id)
+        syncRecurringGhosts(System.currentTimeMillis())
         RecurringTransactionScheduler.schedule(appContext)
         return row.toMap()
     }
@@ -86,6 +108,11 @@ class ExpenseRepository(context: Context) {
             updatedAt = System.currentTimeMillis(),
         )
         recurringTransactions.update(row)
+        if (row.isActive) {
+            syncRecurringGhosts(System.currentTimeMillis())
+        } else {
+            recurringGhosts.deletePendingForRecurring(row.id)
+        }
         RecurringTransactionScheduler.schedule(appContext)
         return row.toMap()
     }
@@ -93,6 +120,7 @@ class ExpenseRepository(context: Context) {
     suspend fun deleteRecurringTransaction(id: Int): Boolean {
         seedIfEmpty()
         val existing = recurringTransactions.byId(id) ?: return false
+        recurringGhosts.deleteForRecurring(id)
         recurringTransactions.delete(existing)
         RecurringTransactionScheduler.schedule(appContext)
         return true
@@ -100,42 +128,7 @@ class ExpenseRepository(context: Context) {
 
     suspend fun processDueRecurringTransactions(targetMillis: Long = System.currentTimeMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
-        val processed = mutableListOf<RecurringTransactionEntity>()
-        for (recurring in recurringTransactions.active()) {
-            val decision = RecurringScheduleCalculator.decision(
-                targetMillis = targetMillis,
-                dayOfMonth = recurring.dayOfMonth,
-                lastProcessedPeriodKey = recurring.lastProcessedPeriodKey,
-            )
-            if (!decision.isDue) continue
-            val date = recurringDate(targetMillis, decision.effectiveDayOfMonth)
-            val time = recurringTime(targetMillis)
-            val signedAmount = if (recurring.transactionType == "income") {
-                kotlin.math.abs(recurring.amount)
-            } else {
-                -kotlin.math.abs(recurring.amount)
-            }
-            val transaction = ExpenseTransactionEntity(
-                id = nextId(date),
-                date = date,
-                time = time,
-                latitude = null,
-                longitude = null,
-                address = "Recurring transaction",
-                merchant = recurring.name,
-                amount = signedAmount,
-                userAssignedName = recurring.name,
-                transactionCategoryID = recurring.categoryId,
-            )
-            transactions.insert(transaction)
-            val updated = recurring.copy(
-                lastProcessedPeriodKey = decision.periodKey,
-                lastProcessedAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-            )
-            recurringTransactions.update(updated)
-            processed.add(updated)
-        }
+        val processed = syncRecurringGhosts(targetMillis)
         notificationHelper.notifyProcessed(processed)
         return processed.map { it.toMap() }
     }
@@ -374,6 +367,97 @@ class ExpenseRepository(context: Context) {
         return true
     }
 
+
+
+    private suspend fun syncRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
+        for (recurring in recurringTransactions.active()) {
+            ensureRecurringGhost(recurring, targetMillis)
+        }
+        return activateDueRecurringGhosts(targetMillis)
+    }
+
+    private suspend fun ensureRecurringGhost(recurring: RecurringTransactionEntity, targetMillis: Long) {
+        if (!recurring.isActive) {
+            recurringGhosts.deletePendingForRecurring(recurring.id)
+            return
+        }
+        val plan = RecurringGhostPlanner.plan(
+            targetMillis = targetMillis,
+            dayOfMonth = recurring.dayOfMonth,
+            lastProcessedPeriodKey = recurring.lastProcessedPeriodKey,
+        )
+        if (!plan.shouldShowGhost) {
+            recurringGhosts.deletePendingForRecurring(recurring.id)
+            return
+        }
+        if (recurringGhosts.pendingByRecurringAndPeriod(recurring.id, plan.periodKey) != null) return
+        val now = System.currentTimeMillis()
+        recurringGhosts.insert(
+            RecurringGhostTransactionEntity(
+                recurringTransactionId = recurring.id,
+                periodKey = plan.periodKey,
+                name = recurring.name,
+                amount = recurring.amount,
+                transactionType = recurring.transactionType,
+                date = plan.date,
+                time = "00:00",
+                categoryId = recurring.categoryId,
+                categoryName = recurring.categoryName,
+                categoryColor = recurring.categoryColor,
+                categoryIconSlot = recurring.categoryIconSlot,
+                triggerMillis = plan.triggerMillis,
+                isActivated = false,
+                activatedTransactionId = null,
+                createdAt = now,
+                updatedAt = now,
+            ),
+        )
+    }
+
+    private suspend fun activateDueRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
+        val processed = mutableListOf<RecurringTransactionEntity>()
+        for (ghost in recurringGhosts.due(targetMillis)) {
+            val recurring = recurringTransactions.byId(ghost.recurringTransactionId) ?: continue
+            if (!recurring.isActive) {
+                recurringGhosts.deletePendingForRecurring(recurring.id)
+                continue
+            }
+            val plan = RecurringGhostPlanner.plan(
+                targetMillis = targetMillis,
+                dayOfMonth = recurring.dayOfMonth,
+                lastProcessedPeriodKey = recurring.lastProcessedPeriodKey,
+            )
+            if (!plan.shouldActivate || plan.periodKey != ghost.periodKey) continue
+            val signedAmount = if (ghost.transactionType == "income") {
+                kotlin.math.abs(ghost.amount)
+            } else {
+                -kotlin.math.abs(ghost.amount)
+            }
+            val transaction = ExpenseTransactionEntity(
+                id = nextId(ghost.date),
+                date = ghost.date,
+                time = recurringTime(targetMillis),
+                latitude = null,
+                longitude = null,
+                address = "Recurring transaction",
+                merchant = ghost.name,
+                amount = signedAmount,
+                userAssignedName = ghost.name,
+                transactionCategoryID = ghost.categoryId,
+            )
+            transactions.insert(transaction)
+            val now = System.currentTimeMillis()
+            val updated = recurring.copy(
+                lastProcessedPeriodKey = ghost.periodKey,
+                lastProcessedAt = now,
+                updatedAt = now,
+            )
+            recurringTransactions.update(updated)
+            recurringGhosts.markActivated(ghost.id, transaction.id, now)
+            processed.add(updated)
+        }
+        return processed
+    }
 
 
     private suspend fun buildRecurringRow(args: Map<*, *>, existing: RecurringTransactionEntity?): RecurringTransactionEntity {

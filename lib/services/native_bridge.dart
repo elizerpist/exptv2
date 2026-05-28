@@ -6,12 +6,12 @@ import '../features/settings/models/app_theme_settings.dart';
 import '../features/settings/models/fast_info_config.dart';
 import '../features/settings/models/recurring_transaction.dart';
 import '../features/transactions/models/category_limit.dart';
+import '../features/transactions/models/recurring_ghost_record.dart';
 import '../features/transactions/models/transaction_category.dart';
 import '../features/transactions/models/transaction_record.dart';
 import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
-
 
 class ExpenseSettingsPayload {
   const ExpenseSettingsPayload({
@@ -28,11 +28,13 @@ class ExpenseBootstrapPayload {
     required this.categories,
     required this.transactions,
     required this.limits,
+    required this.recurringGhostTransactions,
   });
 
   final List<TransactionCategory> categories;
   final List<TransactionRecord> transactions;
   final List<CategoryLimit> limits;
+  final List<RecurringGhostRecord> recurringGhostTransactions;
 }
 
 class NativeBridge {
@@ -87,10 +89,16 @@ class NativeBridge {
         .cast<Map<dynamic, dynamic>>()
         .map(CategoryLimit.fromMap)
         .toList();
+    final recurringGhostTransactions =
+        (payload['recurringGhostTransactions'] as List<dynamic>? ?? <dynamic>[])
+            .cast<Map<dynamic, dynamic>>()
+            .map(RecurringGhostRecord.fromMap)
+            .toList();
     return ExpenseBootstrapPayload(
       categories: categories,
       transactions: transactions,
       limits: limits,
+      recurringGhostTransactions: recurringGhostTransactions,
     );
   }
 
@@ -224,7 +232,6 @@ class NativeBridge {
     return deleted ?? false;
   }
 
-
   Future<ExpenseSettingsPayload> expenseLoadSettings() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'expenseLoadSettings',
@@ -325,6 +332,33 @@ class NativeBridge {
     return (rows ?? <dynamic>[])
         .cast<Map<dynamic, dynamic>>()
         .map(RecurringTransaction.fromMap)
+        .toList();
+  }
+
+  Future<List<RecurringGhostRecord>>
+  expenseListRecurringGhostTransactions() async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseListRecurringGhostTransactions',
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(RecurringGhostRecord.fromMap)
+        .toList();
+  }
+
+  Future<List<RecurringGhostRecord>> expenseEnsureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseEnsureRecurringGhostTransactions',
+      {
+        if (targetDate != null)
+          'targetMillis': targetDate.millisecondsSinceEpoch,
+      },
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(RecurringGhostRecord.fromMap)
         .toList();
   }
 

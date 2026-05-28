@@ -130,6 +130,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   Expanded(
                     child: TransactionLogList(
                       records: widget.store.visibleTransactions,
+                      ghostRecords: widget.store.visibleGhostTransactions,
                       categories: widget.store.categories,
                       onFastFilter: _setMerchantFastFilter,
                       onRecordTap: _editTransaction,

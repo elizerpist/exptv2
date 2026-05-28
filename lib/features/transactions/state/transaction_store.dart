@@ -5,7 +5,9 @@ import '../data/transaction_filter.dart';
 import '../data/transaction_repository.dart';
 import '../models/category_budget_bar_data.dart';
 import '../models/category_limit.dart';
+import '../models/recurring_ghost_record.dart';
 import '../models/summary_window.dart';
+import '../models/transaction_log_entry.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../models/transaction_summary.dart';
@@ -25,6 +27,7 @@ class TransactionStore extends ChangeNotifier {
   String? _error;
   List<TransactionCategory> _categories = [];
   List<TransactionRecord> _transactions = [];
+  List<RecurringGhostRecord> _recurringGhostTransactions = [];
   List<CategoryLimit> _limits = [];
 
   bool get loading => _loading;
@@ -57,6 +60,8 @@ class TransactionStore extends ChangeNotifier {
 
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionRecord> get transactions => List.unmodifiable(_transactions);
+  List<RecurringGhostRecord> get recurringGhostTransactions =>
+      List.unmodifiable(_recurringGhostTransactions);
   List<CategoryLimit> get limits => List.unmodifiable(_limits);
 
   List<TransactionCategory> get activeCategories {
@@ -102,6 +107,42 @@ class TransactionStore extends ChangeNotifier {
     }).toList();
   }
 
+  List<RecurringGhostRecord> get visibleGhostTransactions {
+    final query = _filter.searchQuery.trim().toLowerCase();
+    final merchant = _filter.merchant?.trim();
+    return _recurringGhostTransactions.where((ghost) {
+      if (ghost.isActivated) return false;
+      if (ghost.type != _filter.type) return false;
+      if (!_ghostInActiveWindow(ghost)) return false;
+      if (_filter.categoryId != null &&
+          ghost.categoryId != _filter.categoryId) {
+        return false;
+      }
+      if (merchant != null && ghost.name != merchant) return false;
+      if (query.isNotEmpty && !ghost.name.toLowerCase().contains(query)) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  List<TransactionLogEntry> get visibleLogEntries {
+    final entries = <TransactionLogEntry>[
+      for (final record in visibleTransactions)
+        TransactionLogEntry.record(record),
+      for (final ghost in visibleGhostTransactions)
+        TransactionLogEntry.ghost(ghost),
+    ];
+    entries.sort((left, right) {
+      final date = right.date.compareTo(left.date);
+      if (date != 0) return date;
+      final time = right.time.compareTo(left.time);
+      if (time != 0) return time;
+      return right.sortId.compareTo(left.sortId);
+    });
+    return entries;
+  }
+
   String get totalBalanceText =>
       TransactionSummary.fromRecords(_transactions).formattedBalance;
 
@@ -132,6 +173,9 @@ class TransactionStore extends ChangeNotifier {
       final payload = await _repository.loadBootstrap();
       _categories = payload.categories;
       _transactions = _sort(payload.transactions);
+      _recurringGhostTransactions = _sortGhosts(
+        payload.recurringGhostTransactions,
+      );
       _limits = payload.limits;
     } catch (error) {
       _error = error.toString();
@@ -322,8 +366,35 @@ class TransactionStore extends ChangeNotifier {
     final payload = await _repository.loadBootstrap();
     _categories = payload.categories;
     _transactions = _sort(payload.transactions);
+    _recurringGhostTransactions = _sortGhosts(
+      payload.recurringGhostTransactions,
+    );
     _limits = payload.limits;
     notifyListeners();
+  }
+
+  bool _ghostInActiveWindow(RecurringGhostRecord ghost) {
+    return switch (_summaryWindow) {
+      SummaryWindow.allTime => true,
+      SummaryWindow.monthly =>
+        ghost.yearMonthKey ==
+            '${_periodReferenceDate.year.toString().padLeft(4, '0')}-${_periodReferenceDate.month.toString().padLeft(2, '0')}',
+      SummaryWindow.yearly => ghost.normalizedDate.startsWith(
+        _periodReferenceDate.year.toString(),
+      ),
+    };
+  }
+
+  List<RecurringGhostRecord> _sortGhosts(List<RecurringGhostRecord> records) {
+    final rows = [...records];
+    rows.sort((left, right) {
+      final date = right.date.compareTo(left.date);
+      if (date != 0) return date;
+      final time = right.time.compareTo(left.time);
+      if (time != 0) return time;
+      return right.id.compareTo(left.id);
+    });
+    return rows;
   }
 
   List<TransactionRecord> _sort(List<TransactionRecord> records) {

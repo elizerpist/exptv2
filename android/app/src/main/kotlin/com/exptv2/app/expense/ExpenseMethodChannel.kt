@@ -27,6 +27,14 @@ class ExpenseMethodChannel(
             "expenseListRecurringTransactions" -> scope.launchResult(result) {
                 repository.listRecurringTransactions()
             }
+            "expenseListRecurringGhostTransactions" -> scope.launchResult(result) {
+                repository.listRecurringGhostTransactions()
+            }
+            "expenseEnsureRecurringGhostTransactions" -> scope.launchResult(result) {
+                val targetMillis = (call.argumentsMap()["targetMillis"] as? Number)?.toLong()
+                    ?: System.currentTimeMillis()
+                repository.ensureRecurringGhostTransactions(targetMillis)
+            }
             "expenseAddRecurringTransaction" -> scope.launchResult(result) {
                 repository.addRecurringTransaction(call.argumentsMap())
             }

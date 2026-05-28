@@ -13,8 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ExpenseTransactionEntity::class,
         CategoryLimitEntity::class,
         RecurringTransactionEntity::class,
+        RecurringGhostTransactionEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
     abstract fun categories(): TransactionCategoryDao
     abstract fun categoryLimits(): CategoryLimitDao
     abstract fun recurringTransactions(): RecurringTransactionDao
+    abstract fun recurringGhostTransactions(): RecurringGhostTransactionDao
 
     companion object {
         @Volatile private var instance: ExpenseTrackerDatabase? = null
@@ -92,13 +94,53 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS recurring_ghost_transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        recurringTransactionId INTEGER NOT NULL,
+                        periodKey TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        transactionType TEXT NOT NULL,
+                        date TEXT NOT NULL,
+                        time TEXT NOT NULL,
+                        categoryId INTEGER NOT NULL,
+                        categoryName TEXT NOT NULL,
+                        categoryColor TEXT NOT NULL,
+                        categoryIconSlot INTEGER NOT NULL,
+                        triggerMillis INTEGER NOT NULL,
+                        isActivated INTEGER NOT NULL,
+                        activatedTransactionId INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(recurringTransactionId) REFERENCES recurring_transactions(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(categoryId) REFERENCES transaction_categories(transactionCategoryID) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_recurring_ghost_transactions_recurringTransactionId_periodKey
+                    ON recurring_ghost_transactions(recurringTransactionId, periodKey)
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_ghost_transactions_categoryId ON recurring_ghost_transactions(categoryId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_ghost_transactions_periodKey ON recurring_ghost_transactions(periodKey)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_ghost_transactions_triggerMillis ON recurring_ghost_transactions(triggerMillis)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_ghost_transactions_isActivated ON recurring_ghost_transactions(isActivated)")
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     ExpenseTrackerDatabase::class.java,
                     "expense_tracker.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build().also { instance = it }
             }
         }
