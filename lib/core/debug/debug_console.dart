@@ -165,9 +165,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       _alarmError = error.toString();
       DebugConsole.log('[RecurringAlarm] debug action failed: $error');
     } finally {
-      if (!mounted) return;
-      setState(() => _alarmLoading = false);
-      if (logSuccess) _refresh();
+      if (mounted) {
+        setState(() => _alarmLoading = false);
+        if (logSuccess) _refresh();
+      }
     }
   }
 
