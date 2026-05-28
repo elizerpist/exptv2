@@ -32,6 +32,7 @@ class _ExptShellState extends State<ExptShell> {
   AppTab _activeTab = AppTab.home;
   late final TransactionStore _transactionStore;
   var _transactionEditorOpen = false;
+  var _homeBlockingOverlayOpen = false;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
@@ -65,6 +66,7 @@ class _ExptShellState extends State<ExptShell> {
     setState(() {
       _activeTab = tab;
       _transactionEditorOpen = false;
+      _homeBlockingOverlayOpen = false;
       _editingTransaction = null;
     });
   }
@@ -89,6 +91,11 @@ class _ExptShellState extends State<ExptShell> {
       _transactionEditorOpen = false;
       _editingTransaction = null;
     });
+  }
+
+  void _setHomeBlockingOverlay(bool open) {
+    if (_homeBlockingOverlayOpen == open) return;
+    setState(() => _homeBlockingOverlayOpen = open);
   }
 
   Future<void> _confirmDeleteTransaction(TransactionRecord transaction) async {
@@ -129,6 +136,8 @@ class _ExptShellState extends State<ExptShell> {
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+    final hideShellNavigation =
+        _activeTab == AppTab.home && _homeBlockingOverlayOpen;
     return Scaffold(
       backgroundColor: expenseTheme.appBackground,
       body: Stack(
@@ -142,6 +151,7 @@ class _ExptShellState extends State<ExptShell> {
                   expenseTheme: expenseTheme,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
+                  onBlockingOverlayChanged: _setHomeBlockingOverlay,
                 ),
                 const BlankTabPage(tab: AppTab.groceries),
                 const BlankTabPage(tab: AppTab.notifications),
@@ -154,21 +164,23 @@ class _ExptShellState extends State<ExptShell> {
               ],
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ExptBottomNav(
-              activeTab: _activeTab,
-              onTabSelected: _selectTab,
+          if (!hideShellNavigation)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ExptBottomNav(
+                activeTab: _activeTab,
+                onTabSelected: _selectTab,
+              ),
             ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: AppDimensions.fabBottom,
-            child: Center(child: ExptFab(onPressed: _handleFabPressed)),
-          ),
+          if (!hideShellNavigation)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: AppDimensions.fabBottom,
+              child: Center(child: ExptFab(onPressed: _handleFabPressed)),
+            ),
           if (_activeTab == AppTab.home && _transactionEditorOpen)
             Positioned(
               left: 0,

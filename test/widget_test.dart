@@ -43,7 +43,8 @@ void main() {
             return <Map<String, Object?>>[];
           }
           if (call.method == 'expenseListCategories') {
-            return (expenseBootstrapPayload()['categories'] as List<Map<String, Object?>>);
+            return (expenseBootstrapPayload()['categories']
+                as List<Map<String, Object?>>);
           }
           if (call.method == 'expenseAddTransaction') {
             final payload = Map<dynamic, dynamic>.from(
@@ -175,6 +176,29 @@ void main() {
     expect(find.text('Tranzakció neve'), findsOneWidget);
     expect(find.text('Összeg'), findsOneWidget);
     expect(find.text('Kategória'), findsOneWidget);
+  });
+
+  testWidgets('calendar and category overlays hide shell navigation controls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-calendar-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
+    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
+    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
   });
 
   testWidgets('transaction editor is non modal and aligned to summary pill', (

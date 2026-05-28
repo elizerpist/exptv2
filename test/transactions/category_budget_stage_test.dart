@@ -32,6 +32,10 @@ void main() {
 
     expect(find.text('Food'), findsOneWidget);
     expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-budget-progress-text')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('category-budget-dot-0')), findsOneWidget);
 
     await tester.drag(
@@ -49,53 +53,56 @@ void main() {
   testWidgets(
     'stage summary outline uses equal partition units before limits are set',
     (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 260,
-            child: CategoryBudgetStage(
-              bars: [
-                barFixture(6, 'Food', 100, 0),
-                barFixture(7, 'Travel', 40, 0),
-                barFixture(8, 'Bills', 20, 0),
-              ],
-              onBarTap: (_) {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 260,
+              child: CategoryBudgetStage(
+                bars: [
+                  barFixture(6, 'Food', 100, 0),
+                  barFixture(7, 'Travel', 40, 0),
+                  barFixture(8, 'Bills', 20, 0),
+                ],
+                onBarTap: (_) {},
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      find.byKey(const ValueKey('category-summary-outline-bar')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('category-summary-segment-0')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('category-summary-segment-1')),
-      findsOneWidget,
-    );
+      expect(
+        find.byKey(const ValueKey('category-summary-outline-bar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('category-summary-segment-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('category-summary-segment-1')),
+        findsOneWidget,
+      );
 
-    final outlineWidth = tester
-        .getSize(find.byKey(const ValueKey('category-summary-outline-bar')))
-        .width;
-    final activeBarWidth = tester
-        .getSize(find.byKey(const ValueKey('category-budget-bar')))
-        .width;
-    final firstSegmentWidth = tester
-        .getSize(find.byKey(const ValueKey('category-summary-segment-0')))
-        .width;
-    final secondSegmentWidth = tester
-        .getSize(find.byKey(const ValueKey('category-summary-segment-1')))
-        .width;
+      final outlineWidth = tester
+          .getSize(find.byKey(const ValueKey('category-summary-outline-bar')))
+          .width;
+      final activeBarWidth = tester
+          .getSize(find.byKey(const ValueKey('category-budget-bar')))
+          .width;
+      final firstSegmentWidth = tester
+          .getSize(find.byKey(const ValueKey('category-summary-segment-0')))
+          .width;
+      final secondSegmentWidth = tester
+          .getSize(find.byKey(const ValueKey('category-summary-segment-1')))
+          .width;
 
       expect(activeBarWidth, lessThan(outlineWidth));
-      expect(firstSegmentWidth, moreOrLessEquals(secondSegmentWidth, epsilon: 1));
+      expect(
+        firstSegmentWidth,
+        moreOrLessEquals(secondSegmentWidth, epsilon: 1),
+      );
     },
   );
 

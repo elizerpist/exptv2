@@ -30,12 +30,14 @@ class TransactionHomePage extends StatefulWidget {
     this.expenseTheme,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
+    this.onBlockingOverlayChanged,
   });
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final ValueChanged<TransactionRecord>? onDeleteTransactionRequested;
+  final ValueChanged<bool>? onBlockingOverlayChanged;
 
   @override
   State<TransactionHomePage> createState() => _TransactionHomePageState();
@@ -47,6 +49,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   var _fastInfoExtent = 0.0;
   CategoryOverlayMode? _categoryMode;
   var _categoryEditorOpen = false;
+  var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
 
   @override
@@ -57,14 +60,17 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final expenseTheme = widget.expenseTheme ??
-        ExpenseTheme.fromSettings(const AppThemeSettings(
-          magnetType: MagnetType.fade,
-          cardColor: AppCardColor.lightgray,
-          theme: AppTheme.turquoise,
-          backgroundColor: AppBackgroundColor.gray,
-          boxColor: AppBoxColor.gray,
-        ));
+    final expenseTheme =
+        widget.expenseTheme ??
+        ExpenseTheme.fromSettings(
+          const AppThemeSettings(
+            magnetType: MagnetType.fade,
+            cardColor: AppCardColor.lightgray,
+            theme: AppTheme.turquoise,
+            backgroundColor: AppBackgroundColor.gray,
+            boxColor: AppBoxColor.gray,
+          ),
+        );
     return ColoredBox(
       color: expenseTheme.appBackground,
       child: ListenableBuilder(
@@ -87,6 +93,10 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
               ),
             );
           }
+
+          _notifyBlockingOverlay(
+            _calendarOpen || _categoryMode != null || _categoryEditorOpen,
+          );
 
           return Stack(
             clipBehavior: Clip.none,
@@ -131,11 +141,16 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
               ),
               if (_fastInfoExtent > 0)
                 Positioned(
-                  top: -TransactionHeaderMetrics.fastInfoHeight + _fastInfoExtent,
+                  top:
+                      -TransactionHeaderMetrics.fastInfoHeight +
+                      _fastInfoExtent,
                   left: 0,
                   right: 0,
                   child: Opacity(
-                    opacity: (_fastInfoExtent / TransactionHeaderMetrics.fastInfoHeight).clamp(0.0, 1.0),
+                    opacity:
+                        (_fastInfoExtent /
+                                TransactionHeaderMetrics.fastInfoHeight)
+                            .clamp(0.0, 1.0),
                     child: FastInfoPanel(config: FastInfoConfig.defaults()),
                   ),
                 ),
@@ -204,6 +219,14 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     );
   }
 
+  void _notifyBlockingOverlay(bool active) {
+    if (_blockingOverlayNotified == active) return;
+    _blockingOverlayNotified = active;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onBlockingOverlayChanged?.call(active);
+    });
+  }
 
   double _totalIncome() {
     return widget.store.transactions
@@ -218,7 +241,10 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   }
 
   void _handleHeaderDragUpdate(DragUpdateDetails details) {
-    if (_headerExpanded || _calendarOpen || _categoryMode != null || _categoryEditorOpen) {
+    if (_headerExpanded ||
+        _calendarOpen ||
+        _categoryMode != null ||
+        _categoryEditorOpen) {
       return;
     }
     final next = (_fastInfoExtent + details.delta.dy)

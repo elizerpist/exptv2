@@ -82,6 +82,11 @@ class CategoryBudgetBar extends StatelessWidget {
                           Flexible(
                             child: Text(
                               amountText,
+                              key: bar.hasLimit
+                                  ? const ValueKey(
+                                      'category-budget-progress-text',
+                                    )
+                                  : null,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.right,
