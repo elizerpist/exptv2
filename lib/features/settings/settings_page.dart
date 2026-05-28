@@ -5,6 +5,8 @@ import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
 import 'data/settings_repository.dart';
+import 'models/app_theme_settings.dart';
+import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/app_filter_control.dart';
 import 'widgets/options/fast_info_options_panel.dart';
@@ -35,10 +37,14 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.store,
     required this.nativeBridge,
+    this.expenseTheme,
+    this.onThemeSettingsChanged,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
+  final ExpenseTheme? expenseTheme;
+  final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -87,11 +93,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final expenseTheme = widget.expenseTheme ??
+        ExpenseTheme.fromSettings(_settingsStore.themeSettings);
     return Material(
-      color: AppColors.gray100,
+      color: expenseTheme.appBackground,
       child: ColoredBox(
         key: const ValueKey('settings-page'),
-        color: AppColors.gray100,
+        color: expenseTheme.appBackground,
         child: SafeArea(
           bottom: false,
           child: _buildActiveMenu(),
@@ -227,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.fastInfo => FastInfoOptionsPanel(config: _settingsStore.fastInfoConfig),
       _SettingsMenu.theme => ThemeOptionsPanel(
           settings: _settingsStore.themeSettings,
-          onChanged: _settingsStore.updateThemeSettings,
+          onChanged: _updateThemeSettings,
         ),
       _SettingsMenu.recurring => RecurringOptionsPanel(store: _settingsStore),
       _SettingsMenu.currency => const SimpleOptionsPanel(
@@ -287,6 +295,13 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.contact => 'Kapcsolat',
       _SettingsMenu.root => 'Beállítások',
     };
+  }
+
+  void _updateThemeSettings(AppThemeSettings settings) {
+    _settingsStore.updateThemeSettings(settings).then((_) {
+      if (!mounted) return;
+      widget.onThemeSettingsChanged?.call(_settingsStore.themeSettings);
+    });
   }
 
   void _open(_SettingsMenu menu) {

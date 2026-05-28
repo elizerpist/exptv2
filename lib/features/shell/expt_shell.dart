@@ -4,7 +4,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
+import '../settings/models/app_theme_settings.dart';
 import '../settings/settings_page.dart';
+import '../settings/theme/expense_theme.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
@@ -31,6 +33,7 @@ class _ExptShellState extends State<ExptShell> {
   late final TransactionStore _transactionStore;
   var _transactionEditorOpen = false;
   TransactionRecord? _editingTransaction;
+  AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
   @override
   void initState() {
@@ -38,12 +41,23 @@ class _ExptShellState extends State<ExptShell> {
     _transactionStore = TransactionStore(
       TransactionRepository(widget.nativeBridge),
     );
+    _loadThemeSettings();
   }
 
   @override
   void dispose() {
     _transactionStore.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadThemeSettings() async {
+    final payload = await widget.nativeBridge.expenseLoadSettings();
+    if (!mounted) return;
+    setState(() => _themeSettings = payload.themeSettings);
+  }
+
+  void _applyThemeSettings(AppThemeSettings settings) {
+    setState(() => _themeSettings = settings);
   }
 
   void _selectTab(AppTab tab) {
@@ -114,8 +128,9 @@ class _ExptShellState extends State<ExptShell> {
 
   @override
   Widget build(BuildContext context) {
+    final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     return Scaffold(
-      backgroundColor: AppColors.gray50,
+      backgroundColor: expenseTheme.appBackground,
       body: Stack(
         children: [
           Positioned.fill(
@@ -124,6 +139,7 @@ class _ExptShellState extends State<ExptShell> {
               children: [
                 TransactionHomePage(
                   store: _transactionStore,
+                  expenseTheme: expenseTheme,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                 ),
@@ -132,6 +148,8 @@ class _ExptShellState extends State<ExptShell> {
                 SettingsPage(
                   store: widget.store,
                   nativeBridge: widget.nativeBridge,
+                  expenseTheme: expenseTheme,
+                  onThemeSettingsChanged: _applyThemeSettings,
                 ),
               ],
             ),

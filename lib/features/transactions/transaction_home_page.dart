@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../settings/models/app_theme_settings.dart';
+import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
@@ -25,11 +27,13 @@ class TransactionHomePage extends StatefulWidget {
   const TransactionHomePage({
     super.key,
     required this.store,
+    this.expenseTheme,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
   });
 
   final TransactionStore store;
+  final ExpenseTheme? expenseTheme;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final ValueChanged<TransactionRecord>? onDeleteTransactionRequested;
 
@@ -53,8 +57,16 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final expenseTheme = widget.expenseTheme ??
+        ExpenseTheme.fromSettings(const AppThemeSettings(
+          magnetType: MagnetType.fade,
+          cardColor: AppCardColor.lightgray,
+          theme: AppTheme.turquoise,
+          backgroundColor: AppBackgroundColor.gray,
+          boxColor: AppBoxColor.gray,
+        ));
     return ColoredBox(
-      color: AppColors.gray50,
+      color: expenseTheme.appBackground,
       child: ListenableBuilder(
         listenable: widget.store,
         builder: (context, _) {
