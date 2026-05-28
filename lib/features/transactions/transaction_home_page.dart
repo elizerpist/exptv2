@@ -15,6 +15,7 @@ import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/summary_pill.dart';
+import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
@@ -38,6 +39,8 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   var _headerExpanded = false;
   var _calendarOpen = false;
   CategoryOverlayMode? _categoryMode;
+  var _categoryEditorOpen = false;
+  TransactionCategory? _editingCategory;
 
   @override
   void initState() {
@@ -71,6 +74,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
           }
 
           return Stack(
+            clipBehavior: Clip.none,
             children: [
               Column(
                 children: [
@@ -85,6 +89,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                       widget.store.activeType,
                     ),
                     onSwipe: widget.store.cycleSummaryWindow,
+                    onVerticalSwipe: widget.store.shiftSummaryPeriod,
                   ),
                   SearchPill(
                     query: widget.store.searchQuery,
@@ -138,6 +143,22 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   onSelect: _selectCategory,
                   onDelete: _deleteCategory,
                 ),
+              if (_categoryEditorOpen)
+                Positioned(
+                  top: TransactionMenuMetrics.overlayTop,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: CategoryEditorSheet(
+                    activeType: widget.store.activeType,
+                    initialCategory: _editingCategory,
+                    onClose: _closeCategoryEditor,
+                    onSave: (draft) => _saveCategory(draft, _editingCategory),
+                    onDelete: _editingCategory == null
+                        ? null
+                        : (category) => _deleteCategory(category),
+                  ),
+                ),
             ],
           );
         },
@@ -150,6 +171,8 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     setState(() {
       _calendarOpen = false;
       _categoryMode = null;
+      _categoryEditorOpen = false;
+      _editingCategory = null;
     });
   }
 
@@ -210,6 +233,8 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
       _headerExpanded = false;
       _calendarOpen = true;
       _categoryMode = null;
+      _categoryEditorOpen = false;
+      _editingCategory = null;
     });
   }
 
@@ -219,6 +244,12 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
 
   void _openCategoryMenu() {
     setState(() {
+      if (_categoryMode != null || _categoryEditorOpen) {
+        _categoryMode = null;
+        _categoryEditorOpen = false;
+        _editingCategory = null;
+        return;
+      }
       _headerExpanded = false;
       _calendarOpen = false;
       _categoryMode = CategoryOverlayMode.picker;
@@ -232,11 +263,27 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   }
 
   void _openAddCategory() {
-    _openCategoryEditorSheet();
+    setState(() {
+      _categoryMode = null;
+      _categoryEditorOpen = true;
+      _editingCategory = null;
+    });
   }
 
   void _openModifyCategory(TransactionCategory category) {
-    _openCategoryEditorSheet(initialCategory: category);
+    setState(() {
+      _categoryMode = null;
+      _categoryEditorOpen = true;
+      _editingCategory = category;
+    });
+  }
+
+  void _closeCategoryEditor() {
+    setState(() {
+      _categoryEditorOpen = false;
+      _editingCategory = null;
+      _categoryMode = CategoryOverlayMode.picker;
+    });
   }
 
   void _selectCategory(TransactionCategory category) {
@@ -266,42 +313,18 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     }
     if (!mounted) return;
     setState(() {
+      _categoryEditorOpen = false;
+      _editingCategory = null;
       _categoryMode = CategoryOverlayMode.picker;
     });
-  }
-
-  void _openCategoryEditorSheet({TransactionCategory? initialCategory}) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return CategoryEditorSheet(
-          activeType: widget.store.activeType,
-          initialCategory: initialCategory,
-          onClose: () => Navigator.of(sheetContext).pop(),
-          onSave: (draft) async {
-            await _saveCategory(draft, initialCategory);
-            if (!sheetContext.mounted) return;
-            Navigator.of(sheetContext).pop();
-          },
-          onDelete: initialCategory == null
-              ? null
-              : (category) async {
-                  await _deleteCategory(category);
-                  if (!sheetContext.mounted) return;
-                  Navigator.of(sheetContext).pop();
-                },
-        );
-      },
-    );
   }
 
   Future<void> _deleteCategory(TransactionCategory category) async {
     final deleted = await widget.store.deleteCategory(category);
     if (!mounted || !deleted) return;
     setState(() {
+      _categoryEditorOpen = false;
+      _editingCategory = null;
       _categoryMode = CategoryOverlayMode.picker;
     });
   }

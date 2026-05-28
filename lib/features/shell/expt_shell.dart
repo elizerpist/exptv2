@@ -119,37 +119,20 @@ class _ExptShellState extends State<ExptShell> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.only(
-                bottom: AppDimensions.bottomNavHeight,
-              ),
-              child: IndexedStack(
-                index: appTabs.indexOf(_activeTab),
-                children: [
-                  TransactionHomePage(
-                    store: _transactionStore,
-                    onEditTransaction: _openEditTransaction,
-                    onDeleteTransactionRequested: _confirmDeleteTransaction,
-                  ),
-                  const BlankTabPage(tab: AppTab.groceries),
-                  const BlankTabPage(tab: AppTab.notifications),
-                  SettingsPage(store: widget.store),
-                ],
-              ),
+            child: IndexedStack(
+              index: appTabs.indexOf(_activeTab),
+              children: [
+                TransactionHomePage(
+                  store: _transactionStore,
+                  onEditTransaction: _openEditTransaction,
+                  onDeleteTransactionRequested: _confirmDeleteTransaction,
+                ),
+                const BlankTabPage(tab: AppTab.groceries),
+                const BlankTabPage(tab: AppTab.notifications),
+                SettingsPage(store: widget.store),
+              ],
             ),
           ),
-          if (_activeTab == AppTab.home && _transactionEditorOpen)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: TransactionMenuMetrics.overlayTop,
-              bottom: 0,
-              child: AddTransactionSheet(
-                store: _transactionStore,
-                initialTransaction: _editingTransaction,
-                onClose: _closeTransactionEditor,
-              ),
-            ),
           Positioned(
             left: 0,
             right: 0,
@@ -165,6 +148,18 @@ class _ExptShellState extends State<ExptShell> {
             bottom: AppDimensions.fabBottom,
             child: Center(child: ExptFab(onPressed: _handleFabPressed)),
           ),
+          if (_activeTab == AppTab.home && _transactionEditorOpen)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: TransactionMenuMetrics.overlayTop,
+              bottom: 0,
+              child: AddTransactionSheet(
+                store: _transactionStore,
+                initialTransaction: _editingTransaction,
+                onClose: _closeTransactionEditor,
+              ),
+            ),
         ],
       ),
     );

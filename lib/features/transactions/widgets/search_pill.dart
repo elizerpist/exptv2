@@ -110,27 +110,12 @@ class _SearchPillState extends State<SearchPill> {
         child: Row(
           children: [
             const Icon(Icons.search, size: 16, color: AppColors.gray400),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                focusNode: _focusNode,
-                controller: _controller,
-                onChanged: widget.onQueryChanged,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: hasFilters
-                      ? '${widget.filteredCount} tranzakció találva'
-                      : 'Keresés tranzakciók között...',
-                  isDense: true,
-                ),
-              ),
-            ),
             if (capsules.isNotEmpty) ...[
               const SizedBox(width: 8),
               Flexible(
+                flex: 3,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  reverse: true,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -143,6 +128,28 @@ class _SearchPillState extends State<SearchPill> {
                 ),
               ),
             ],
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 1,
+              child: TextField(
+                focusNode: _focusNode,
+                controller: _controller,
+                onChanged: widget.onQueryChanged,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: hasFilters
+                      ? '${widget.filteredCount} tranzakció találva'
+                      : 'Keresés tranzakciók között...',
+                  isDense: true,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -177,7 +184,7 @@ class _FilterCapsule extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 86),
+            constraints: const BoxConstraints(maxWidth: 64),
             child: Text(
               value,
               style: const TextStyle(

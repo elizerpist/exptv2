@@ -102,9 +102,91 @@ void main() {
           .top;
       expect(pickerTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
 
+      expect(
+        find.byKey(const ValueKey('category-menu-close-button')),
+        findsNothing,
+      );
+
       await tester.tap(find.byKey(const ValueKey('category-add-button')));
       await tester.pumpAndSettle();
 
+      expect(
+        find.byKey(const ValueKey('category-editor-slide-card')),
+        findsOneWidget,
+      );
+      expect(find.byType(BottomSheet), findsNothing);
+      final editorRect = tester.getRect(
+        find.byKey(const ValueKey('category-editor-slide-card')),
+      );
+      expect(editorRect.top, moreOrLessEquals(summaryTop, epsilon: 0.1));
+      expect(
+        editorRect.bottom,
+        moreOrLessEquals(_screenHeight(tester), epsilon: 0.1),
+      );
+    },
+  );
+
+  testWidgets(
+    'header category button toggles the full height category picker',
+    (tester) async {
+      final store = TransactionStore(HeaderLayoutRepository());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: TransactionHomePage(store: store),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
+
+      final pickerRect = tester.getRect(
+        find.byKey(const ValueKey('category-menu-overlay')),
+      );
+      expect(
+        pickerRect.bottom,
+        moreOrLessEquals(_screenHeight(tester), epsilon: 0.1),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'category modify editor card starts on the summary pill top edge',
+    (tester) async {
+      final store = TransactionStore(HeaderLayoutRepository());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: TransactionHomePage(store: store),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final summaryTop = tester
+          .getRect(find.byKey(const ValueKey('summary-pill')))
+          .top;
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const ValueKey('category-icon-6')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kategória módosítása'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('category-editor-slide-card')),
         findsOneWidget,
@@ -115,43 +197,10 @@ void main() {
       expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
     },
   );
-
-  testWidgets('category modify editor card starts on the summary pill top edge', (
-    tester,
-  ) async {
-    final store = TransactionStore(HeaderLayoutRepository());
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 780,
-            child: TransactionHomePage(store: store),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final summaryTop = tester
-        .getRect(find.byKey(const ValueKey('summary-pill')))
-        .top;
-    await tester.tap(find.byKey(const ValueKey('header-category-button')));
-    await tester.pumpAndSettle();
-    await tester.longPress(find.byKey(const ValueKey('category-icon-6')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Kategória módosítása'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('category-editor-slide-card')),
-      findsOneWidget,
-    );
-    final editorTop = tester
-        .getRect(find.byKey(const ValueKey('category-editor-slide-card')))
-        .top;
-    expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
-  });
 }
+
+double _screenHeight(WidgetTester tester) =>
+    tester.view.physicalSize.height / tester.view.devicePixelRatio;
 
 class HeaderLayoutRepository implements TransactionRepositoryContract {
   @override
@@ -188,7 +237,6 @@ class HeaderLayoutRepository implements TransactionRepositoryContract {
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload) async {
     throw UnimplementedError();
   }
-
 
   @override
   Future<TransactionRecord> updateTransaction(
@@ -234,7 +282,9 @@ class HeaderLayoutRepository implements TransactionRepositoryContract {
   }
 
   @override
-  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) async {
+  Future<CategoryLimit> upsertCategoryLimit(
+    Map<String, Object?> payload,
+  ) async {
     throw UnimplementedError();
   }
 }

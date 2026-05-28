@@ -12,12 +12,15 @@ import '../models/transaction_summary.dart';
 
 class TransactionStore extends ChangeNotifier {
   TransactionStore(this._repository, {DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+    : _clock = clock ?? DateTime.now {
+    _periodReferenceDate = _monthStart(_clock());
+  }
 
   final TransactionRepositoryContract _repository;
   final DateTime Function() _clock;
   var _filter = const TransactionFilter();
   var _summaryWindow = SummaryWindow.allTime;
+  late DateTime _periodReferenceDate;
   var _loading = false;
   String? _error;
   List<TransactionCategory> _categories = [];
@@ -69,7 +72,7 @@ class TransactionStore extends ChangeNotifier {
       limits: _limits,
       activeType: _filter.type,
       summaryWindow: _summaryWindow,
-      referenceDate: _clock(),
+      referenceDate: _periodReferenceDate,
     );
   }
 
@@ -78,7 +81,7 @@ class TransactionStore extends ChangeNotifier {
       transactions: _transactions,
       activeType: _filter.type,
       summaryWindow: _summaryWindow,
-      referenceDate: _clock(),
+      referenceDate: _periodReferenceDate,
     ).toList();
   }
 
@@ -106,11 +109,12 @@ class TransactionStore extends ChangeNotifier {
       TransactionSummary.fromRecords(visibleTransactions);
 
   String get activeSummaryTitle {
-    final now = _clock();
+    final reference = _periodReferenceDate;
     final base = switch (_summaryWindow) {
       SummaryWindow.allTime => 'Sum',
-      SummaryWindow.yearly => now.year.toString(),
-      SummaryWindow.monthly => '${_hungarianMonth(now.month)} ${now.year}',
+      SummaryWindow.yearly => reference.year.toString(),
+      SummaryWindow.monthly =>
+        '${_hungarianMonth(reference.month)} ${reference.year}',
     };
     final parts = <String>[base];
     final merchant = _filter.merchant;
@@ -185,6 +189,19 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.monthly => SummaryWindow.yearly,
       SummaryWindow.yearly => SummaryWindow.allTime,
       SummaryWindow.allTime => SummaryWindow.monthly,
+    };
+    notifyListeners();
+  }
+
+  void shiftSummaryPeriod(int direction) {
+    if (direction == 0 || _summaryWindow == SummaryWindow.allTime) return;
+    _periodReferenceDate = switch (_summaryWindow) {
+      SummaryWindow.monthly => DateTime(
+        _periodReferenceDate.year,
+        _periodReferenceDate.month + direction,
+      ),
+      SummaryWindow.yearly => DateTime(_periodReferenceDate.year + direction),
+      SummaryWindow.allTime => _periodReferenceDate,
     };
     notifyListeners();
   }
@@ -315,6 +332,8 @@ class TransactionStore extends ChangeNotifier {
     return rows;
   }
 }
+
+DateTime _monthStart(DateTime value) => DateTime(value.year, value.month);
 
 String _hungarianMonth(int month) {
   const months = <int, String>{

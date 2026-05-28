@@ -156,7 +156,9 @@ void main() {
     expect(find.text('Kategória'), findsOneWidget);
   });
 
-  testWidgets('transaction editor is non modal and aligned to summary pill', (tester) async {
+  testWidgets('transaction editor is non modal and aligned to summary pill', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -166,9 +168,10 @@ void main() {
     final summaryTop = tester
         .getRect(find.byKey(const ValueKey('summary-pill')))
         .top;
-    final editorTop = tester
-        .getRect(find.byKey(const ValueKey('transaction-editor-card')))
-        .top;
+    final editorRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+    );
+    final editorTop = editorRect.top;
 
     final visibleBarriers = tester
         .widgetList<ModalBarrier>(find.byType(ModalBarrier))
@@ -177,9 +180,41 @@ void main() {
     expect(visibleBarriers, isEmpty);
     expect(find.byType(BottomSheet), findsNothing);
     expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+    expect(
+      editorRect.bottom,
+      moreOrLessEquals(
+        tester.view.physicalSize.height / tester.view.devicePixelRatio,
+      ),
+    );
   });
 
-  testWidgets('type pills remain tappable while transaction editor is open', (tester) async {
+  testWidgets('transaction editor drags down to close', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+
+    final cardTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('transaction-editor-card')),
+    );
+    final gesture = await tester.startGesture(
+      cardTopLeft + const Offset(200, 24),
+    );
+    await gesture.moveBy(const Offset(0, 140));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
+  });
+
+  testWidgets('type pills remain tappable while transaction editor is open', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -191,7 +226,9 @@ void main() {
     expect(find.text('Új bevételi tranzakció'), findsOneWidget);
   });
 
-  testWidgets('logbox tap opens transaction editor in edit mode', (tester) async {
+  testWidgets('logbox tap opens transaction editor in edit mode', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -199,7 +236,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
-    expect(find.byKey(const ValueKey('transaction-editor-card')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('right swipe asks before deleting a transaction', (tester) async {
@@ -208,7 +248,7 @@ void main() {
 
     await tester.drag(
       find.byKey(const ValueKey('transaction-logbox-250909')),
-      const Offset(120, 0),
+      const Offset(160, 0),
     );
     await tester.pumpAndSettle();
 

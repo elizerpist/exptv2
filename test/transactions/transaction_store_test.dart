@@ -1,5 +1,6 @@
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
@@ -149,18 +150,21 @@ void main() {
     );
   });
 
-  test('store keeps fast filter color while category filter is active', () async {
-    final store = TransactionStore(FakeTransactionRepository());
-    await store.start();
+  test(
+    'store keeps fast filter color while category filter is active',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      await store.start();
 
-    final category = store.categories.firstWhere((item) => item.name == 'Q');
-    store.setMerchantFilter('Rrr', colorHex: category.slotColorHex);
-    store.setCategoryFilter(category);
+      final category = store.categories.firstWhere((item) => item.name == 'Q');
+      store.setMerchantFilter('Rrr', colorHex: category.slotColorHex);
+      store.setCategoryFilter(category);
 
-    expect(store.merchantFilter, 'Rrr');
-    expect(store.merchantFilterColorHex, category.slotColorHex);
-    expect(store.activeCategory?.name, 'Q');
-  });
+      expect(store.merchantFilter, 'Rrr');
+      expect(store.merchantFilterColorHex, category.slotColorHex);
+      expect(store.activeCategory?.name, 'Q');
+    },
+  );
 
   test('active summary is calculated from visible filtered records', () async {
     final store = TransactionStore(FakeTransactionRepository());
@@ -188,8 +192,30 @@ void main() {
     store.cycleSummaryWindow();
     expect(store.activeSummaryTitle, contains('2026'));
   });
-}
 
+  test(
+    'summary period can be shifted for monthly and yearly windows',
+    () async {
+      final store = TransactionStore(
+        FakeTransactionRepository(),
+        clock: () => DateTime(2026, 3, 15),
+      );
+      await store.start();
+
+      store.cycleSummaryWindow();
+      expect(store.summaryWindow, SummaryWindow.monthly);
+      store.shiftSummaryPeriod(1);
+      expect(store.activeSummaryTitle, contains('Április 2026'));
+      store.shiftSummaryPeriod(-2);
+      expect(store.activeSummaryTitle, contains('Február 2026'));
+
+      store.cycleSummaryWindow();
+      expect(store.summaryWindow, SummaryWindow.yearly);
+      store.shiftSummaryPeriod(1);
+      expect(store.activeSummaryTitle, contains('2027'));
+    },
+  );
+}
 
 class FakeTransactionRepository implements TransactionRepositoryContract {
   final savedPayloads = <Map<String, Object?>>[];
@@ -358,7 +384,9 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
     Map<String, Object?> payload,
   ) async {
     updatedPayloads.add({'id': id, ...payload});
-    final index = transactions.indexWhere((transaction) => transaction.id == id);
+    final index = transactions.indexWhere(
+      (transaction) => transaction.id == id,
+    );
     final record = TransactionRecord.fromMap({
       'id': id,
       'date': '2025.09.27',

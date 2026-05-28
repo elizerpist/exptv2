@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/transaction_category.dart';
 import '../../state/transaction_store.dart';
+import '../slide_up_menu_card.dart';
 import '../transaction_menu_metrics.dart';
 import 'category_menu_panel.dart';
 
@@ -28,22 +29,25 @@ class CategoryMenuOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      key: const ValueKey('category-menu-overlay'),
       top: TransactionMenuMetrics.overlayTop,
       left: 0,
       right: 0,
       bottom: 0,
-      child: CategoryMenuPanel(
-        key: const ValueKey('category-picker-panel'),
-        activeType: store.activeType,
-        categories: store.categories,
-        categoryTransactionCounts: store.categoryTransactionCounts,
-        activeCategory: store.activeCategory,
-        onSelect: onSelect,
-        onModify: onModify,
-        onDelete: onDelete,
-        onAdd: onAdd,
-        onClose: onClose,
+      child: SlideUpMenuCard(
+        cardKey: const ValueKey('category-menu-overlay'),
+        onDismissed: onClose,
+        child: CategoryMenuPanel(
+          key: const ValueKey('category-picker-panel'),
+          activeType: store.activeType,
+          categories: store.categories,
+          categoryTransactionCounts: store.categoryTransactionCounts,
+          activeCategory: store.activeCategory,
+          onSelect: onSelect,
+          onModify: onModify,
+          onDelete: onDelete,
+          onAdd: onAdd,
+          onClose: onClose,
+        ),
       ),
     );
   }

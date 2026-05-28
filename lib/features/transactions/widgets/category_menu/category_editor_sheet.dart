@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/transaction_category.dart';
-import '../transaction_menu_metrics.dart';
+import '../slide_up_menu_card.dart';
 import 'category_editor_panel.dart';
 
 class CategoryEditorSheet extends StatelessWidget {
@@ -22,14 +22,12 @@ class CategoryEditorSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final cardHeight = screenHeight - TransactionMenuMetrics.overlayTop;
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        key: const ValueKey('category-editor-slide-card'),
-        height: cardHeight,
-        width: double.infinity,
+    return SlideUpMenuCard(
+      cardKey: const ValueKey('category-editor-slide-card'),
+      onDismissed: onClose,
+      child: SafeArea(
+        top: false,
+        bottom: false,
         child: CategoryEditorPanel(
           activeType: activeType,
           initialCategory: initialCategory,

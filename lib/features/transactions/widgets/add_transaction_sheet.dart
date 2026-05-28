@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_dimensions.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../state/transaction_store.dart';
 import 'amount_field.dart';
 import 'category_selector_field.dart';
 import 'date_time_fields.dart';
+import 'slide_up_menu_card.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
@@ -70,113 +70,110 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             .toList();
         _category = _resolvedCategory(categories);
 
-        return Container(
-          key: const ValueKey('transaction-editor-card'),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.14),
-                offset: const Offset(0, -2),
-                blurRadius: 12,
-              ),
-            ],
-          ),
+        return SlideUpMenuCard(
+          cardKey: const ValueKey('transaction-editor-card'),
+          onDismissed: _close,
           child: SafeArea(
             top: false,
+            bottom: false,
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+                final contentHeight =
+                    constraints.maxHeight - keyboardInset - 44;
                 return SingleChildScrollView(
                   padding: EdgeInsets.only(
                     left: 20,
                     right: 20,
                     top: 20,
-                    bottom:
-                        MediaQuery.viewInsetsOf(context).bottom +
-                        AppDimensions.bottomNavHeight +
-                        AppDimensions.fabSize,
+                    bottom: keyboardInset + 24,
                   ),
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 42,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: AppColors.gray200,
-                              borderRadius: BorderRadius.circular(2),
+                    constraints: BoxConstraints(
+                      minHeight: contentHeight < 0 ? 0.0 : contentHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.gray200,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            const SizedBox(width: 40),
-                            Expanded(
-                              child: Text(
-                                _title(type),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.gray800,
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              const SizedBox(width: 40),
+                              Expanded(
+                                child: Text(
+                                  _title(type),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.gray800,
+                                  ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              onPressed: _close,
-                              icon: const Icon(Icons.close, size: 20),
-                              color: AppColors.gray500,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints.tightFor(
-                                width: 40,
-                                height: 40,
+                              IconButton(
+                                onPressed: _close,
+                                icon: const Icon(Icons.close, size: 20),
+                                color: AppColors.gray500,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 40,
+                                  height: 40,
+                                ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          TextField(
+                            controller: _name,
+                            decoration: transactionFieldDecoration(
+                              'Tranzakció neve',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          AmountField(controller: _amount),
+                          const SizedBox(height: 18),
+                          CategorySelectorField(
+                            categories: categories,
+                            selected: _category,
+                            onChanged: (value) =>
+                                setState(() => _category = value),
+                          ),
+                          const SizedBox(height: 18),
+                          DateTimeFields(
+                            dateController: _date,
+                            timeController: _time,
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: AppColors.expense),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _name,
-                          decoration: transactionFieldDecoration(
-                            'Tranzakció neve',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        AmountField(controller: _amount),
-                        const SizedBox(height: 12),
-                        CategorySelectorField(
-                          categories: categories,
-                          selected: _category,
-                          onChanged: (value) => setState(() => _category = value),
-                        ),
-                        const SizedBox(height: 12),
-                        DateTimeFields(
-                          dateController: _date,
-                          timeController: _time,
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _error!,
-                            style: const TextStyle(color: AppColors.expense),
+                          const Spacer(),
+                          const SizedBox(height: 22),
+                          FilledButton(
+                            onPressed: _saving ? null : _save,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.white,
+                              minimumSize: const Size.fromHeight(50),
+                            ),
+                            child: Text(_saving ? 'Mentés...' : 'Mentés'),
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: _saving ? null : _save,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: AppColors.white,
-                            minimumSize: const Size.fromHeight(50),
-                          ),
-                          child: Text(_saving ? 'Mentés...' : 'Mentés'),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 );
