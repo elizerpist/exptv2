@@ -2,12 +2,26 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../features/settings/models/app_theme_settings.dart';
+import '../features/settings/models/fast_info_config.dart';
+import '../features/settings/models/recurring_transaction.dart';
 import '../features/transactions/models/category_limit.dart';
 import '../features/transactions/models/transaction_category.dart';
 import '../features/transactions/models/transaction_record.dart';
 import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
+
+
+class ExpenseSettingsPayload {
+  const ExpenseSettingsPayload({
+    required this.themeSettings,
+    required this.fastInfoConfig,
+  });
+
+  final AppThemeSettings themeSettings;
+  final FastInfoConfig fastInfoConfig;
+}
 
 class ExpenseBootstrapPayload {
   const ExpenseBootstrapPayload({
@@ -208,6 +222,110 @@ class NativeBridge {
       {'id': id},
     );
     return deleted ?? false;
+  }
+
+
+  Future<ExpenseSettingsPayload> expenseLoadSettings() async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseLoadSettings',
+    );
+    final payload = map ?? <dynamic, dynamic>{};
+    final theme = payload['themeSettings'];
+    final fastInfo = payload['fastInfoConfig'];
+    return ExpenseSettingsPayload(
+      themeSettings: theme is Map<dynamic, dynamic>
+          ? AppThemeSettings.fromMap(theme)
+          : AppThemeSettings.defaults(),
+      fastInfoConfig: fastInfo is Map<dynamic, dynamic>
+          ? FastInfoConfig.fromMap(fastInfo)
+          : FastInfoConfig.defaults(),
+    );
+  }
+
+  Future<AppThemeSettings> expenseUpdateThemeSettings(
+    AppThemeSettings settings,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateThemeSettings',
+      settings.toMap(),
+    );
+    return AppThemeSettings.fromMap(row ?? settings.toMap());
+  }
+
+  Future<FastInfoConfig> expenseUpdateFastInfoConfig(
+    FastInfoConfig config,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateFastInfoConfig',
+      config.toMap(),
+    );
+    return FastInfoConfig.fromMap(row ?? config.toMap());
+  }
+
+  Future<List<RecurringTransaction>> expenseListRecurringTransactions() async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseListRecurringTransactions',
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(RecurringTransaction.fromMap)
+        .toList();
+  }
+
+  Future<RecurringTransaction> expenseAddRecurringTransaction(
+    RecurringTransactionDraft draft,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseAddRecurringTransaction',
+      draft.toMap(),
+    );
+    return RecurringTransaction.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<RecurringTransaction> expenseUpdateRecurringTransaction(
+    int id,
+    RecurringTransactionDraft draft,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateRecurringTransaction',
+      {'id': id, ...draft.toMap()},
+    );
+    return RecurringTransaction.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<RecurringTransaction> expenseToggleRecurringTransaction(
+    int id,
+    bool isActive,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseToggleRecurringTransaction',
+      {'id': id, 'isActive': isActive},
+    );
+    return RecurringTransaction.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<bool> expenseDeleteRecurringTransaction(int id) async {
+    final deleted = await _methodChannel.invokeMethod<bool>(
+      'expenseDeleteRecurringTransaction',
+      {'id': id},
+    );
+    return deleted ?? false;
+  }
+
+  Future<List<RecurringTransaction>> expenseProcessRecurringTransactions({
+    DateTime? targetDate,
+  }) async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseProcessRecurringTransactions',
+      {
+        if (targetDate != null)
+          'targetMillis': targetDate.millisecondsSinceEpoch,
+      },
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(RecurringTransaction.fromMap)
+        .toList();
   }
 
   Future<void> setCaptureMode(CaptureMode mode) async {
