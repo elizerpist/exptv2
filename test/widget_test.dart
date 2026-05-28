@@ -277,7 +277,7 @@ void main() {
       find.byKey(const ValueKey('transaction-logbox-card-250909')),
     );
     await tester.tapAt(logbox.centerRight - const Offset(24, 0));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
     expect(

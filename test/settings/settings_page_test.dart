@@ -141,7 +141,10 @@ void main() {
     expect(find.text('Lakbér'), findsOneWidget);
 
     final colorDot = tester.widget<Container>(
-      find.byKey(const ValueKey('recurring-category-color-7')),
+      find.descendant(
+        of: find.byKey(const ValueKey('recurring-category-color-7')),
+        matching: find.byType(Container),
+      ),
     );
     final decoration = colorDot.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFF0EA5E9));
