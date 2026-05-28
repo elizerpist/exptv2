@@ -11,23 +11,26 @@ class DebugFloatingButton extends StatelessWidget {
     return Positioned(
       key: const ValueKey('debug-floating-button-position'),
       top: top,
-      right: 14,
+      left: 0,
+      right: 0,
       child: SafeArea(
-        child: Material(
-          color: const Color(0xFF1E293B),
-          shape: const CircleBorder(),
-          elevation: 8,
-          child: IconButton(
-            key: const ValueKey('debug-floating-button'),
-            tooltip: 'Debug log',
-            icon: const Icon(
-              Icons.terminal,
-              size: 18,
-              color: Color(0xFF06B6D4),
-            ),
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => const DebugConsoleDialog(),
+        child: Center(
+          child: Material(
+            color: const Color(0xFF1E293B),
+            shape: const CircleBorder(),
+            elevation: 8,
+            child: IconButton(
+              key: const ValueKey('debug-floating-button'),
+              tooltip: 'Debug log',
+              icon: const Icon(
+                Icons.terminal,
+                size: 18,
+                color: Color(0xFF06B6D4),
+              ),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const DebugConsoleDialog(),
+              ),
             ),
           ),
         ),

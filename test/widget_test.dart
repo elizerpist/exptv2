@@ -145,7 +145,7 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
-  testWidgets('bottom nav taps switch blank secondary pages', (tester) async {
+  testWidgets('bottom nav taps switch secondary pages', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -156,9 +156,10 @@ void main() {
     await tester.tap(find.text('Értesítések'));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('blank-page-notifications')),
+      find.byKey(const ValueKey('notification-month-header')),
       findsOneWidget,
     );
+    expect(find.text('Nincsenek értesítések'), findsOneWidget);
 
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
@@ -277,7 +278,10 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('transaction-logbox-250909')));
+    final logbox = tester.getRect(
+      find.byKey(const ValueKey('transaction-logbox-card-250909')),
+    );
+    await tester.tapAt(logbox.centerRight - const Offset(24, 0));
     await tester.pumpAndSettle();
 
     expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);

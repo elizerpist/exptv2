@@ -156,7 +156,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: _NameBlock()),
+                    Expanded(child: _nameBlock()),
                     const SizedBox(width: 12),
                     Column(
                       mainAxisSize: MainAxisSize.min,
@@ -205,7 +205,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     );
   }
 
-  Widget _NameBlock() {
+  Widget _nameBlock() {
     return Row(
       children: [
         Expanded(
