@@ -13,6 +13,7 @@ import '../notifications/notifications_page.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/settings_page.dart';
 import '../settings/theme/expense_theme.dart';
+import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
@@ -20,7 +21,6 @@ import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import 'app_tab.dart';
-import 'widgets/blank_tab_page.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
 
@@ -193,7 +193,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
                 ),
-                const BlankTabPage(tab: AppTab.groceries),
+                StatsPage(store: _transactionStore),
                 NotificationsPage(nativeBridge: widget.nativeBridge),
                 SettingsPage(
                   store: widget.store,
@@ -214,7 +214,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 onTabSelected: _selectTab,
               ),
             ),
-          if (!hideShellNavigation)
+          if (!hideShellNavigation && _activeTab == AppTab.home)
             Positioned(
               left: 0,
               right: 0,

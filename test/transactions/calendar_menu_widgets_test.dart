@@ -6,7 +6,7 @@ import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart'
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
-import 'package:exptv2/features/transactions/transaction_home_page.dart';
+import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_canvas.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_canvas_layout.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
@@ -209,24 +209,23 @@ void main() {
     );
   });
 
-  testWidgets('home calendar button opens calendar overlay', (tester) async {
+  testWidgets('stats page renders calendar as a full screen tab', (tester) async {
     final store = TransactionStore(CalendarHomeRepository());
+    await store.start();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: SizedBox(
             width: 390,
             height: 780,
-            child: TransactionHomePage(store: store),
+            child: StatsPage(store: store),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-calendar-button')));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
     expect(find.text('Küszöbérték nézet'), findsOneWidget);
   });

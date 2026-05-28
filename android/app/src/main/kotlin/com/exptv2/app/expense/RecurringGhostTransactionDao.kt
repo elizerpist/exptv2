@@ -22,6 +22,15 @@ interface RecurringGhostTransactionDao {
     @Query("UPDATE recurring_ghost_transactions SET isActivated = 1, activatedTransactionId = :transactionId, updatedAt = :updatedAt WHERE id = :id")
     suspend fun markActivated(id: Int, transactionId: Int, updatedAt: Long)
 
+    @Query("UPDATE recurring_ghost_transactions SET categoryName = :categoryName, categoryColor = :categoryColor, categoryIconSlot = :categoryIconSlot, updatedAt = :updatedAt WHERE categoryId = :categoryId AND isActivated = 0")
+    suspend fun updatePendingCategorySnapshot(
+        categoryId: Int,
+        categoryName: String,
+        categoryColor: String,
+        categoryIconSlot: Int,
+        updatedAt: Long,
+    )
+
     @Query("DELETE FROM recurring_ghost_transactions WHERE recurringTransactionId = :recurringId AND isActivated = 0")
     suspend fun deletePendingForRecurring(recurringId: Int)
 

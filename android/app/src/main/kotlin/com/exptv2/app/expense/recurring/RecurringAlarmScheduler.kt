@@ -26,9 +26,24 @@ class RecurringAlarmScheduler(
     }
 
     fun schedule(triggerMillis: Long) {
+        val result = scheduleAt(triggerMillis, REQUEST_CODE, REQUEST_CODE_OPEN)
+        logger.log("[RecurringAlarm] scheduled next=$triggerMillis mode=${result.mode} exact=${result.canExact}")
+    }
+
+    fun scheduleDebugTestAlarm(delayMillis: Long): Long {
+        val delay = delayMillis.coerceAtLeast(1_000L)
+        val triggerMillis = System.currentTimeMillis() + delay
+        val result = scheduleAt(triggerMillis, REQUEST_CODE_DEBUG_TEST, REQUEST_CODE_DEBUG_TEST_OPEN)
+        logger.log(
+            "[RecurringAlarm] debug test alarm scheduled next=$triggerMillis delay=$delay mode=${result.mode} exact=${result.canExact}",
+        )
+        return triggerMillis
+    }
+
+    private fun scheduleAt(triggerMillis: Long, requestCode: Int, openRequestCode: Int): ScheduleResult {
         val intent = PendingIntent.getBroadcast(
             appContext,
-            REQUEST_CODE,
+            requestCode,
             Intent(appContext, RecurringAlarmReceiver::class.java).setAction(ACTION_PROCESS),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -37,7 +52,7 @@ class RecurringAlarmScheduler(
             canExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP -> {
                 val showIntent = PendingIntent.getActivity(
                     appContext,
-                    REQUEST_CODE_OPEN,
+                    openRequestCode,
                     appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
                         ?: Intent(appContext, MainActivity::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -58,7 +73,7 @@ class RecurringAlarmScheduler(
                 "set"
             }
         }
-        logger.log("[RecurringAlarm] scheduled next=$triggerMillis mode=$mode exact=$canExact")
+        return ScheduleResult(mode = mode, canExact = canExact)
     }
 
     fun cancel() {
@@ -72,9 +87,16 @@ class RecurringAlarmScheduler(
         logger.log("[RecurringAlarm] cancelled")
     }
 
+    private data class ScheduleResult(
+        val mode: String,
+        val canExact: Boolean,
+    )
+
     companion object {
         const val ACTION_PROCESS = "com.exptv2.app.RECURRING_ALARM_PROCESS"
         private const val REQUEST_CODE = 92601
         private const val REQUEST_CODE_OPEN = 92602
+        private const val REQUEST_CODE_DEBUG_TEST = 92603
+        private const val REQUEST_CODE_DEBUG_TEST_OPEN = 92604
     }
 }

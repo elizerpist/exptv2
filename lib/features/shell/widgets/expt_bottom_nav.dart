@@ -43,9 +43,9 @@ class ExptBottomNav extends StatelessWidget {
             onTap: () => onTabSelected(AppTab.home),
           ),
           BottomNavItem(
-            tab: AppTab.groceries,
-            active: activeTab == AppTab.groceries,
-            onTap: () => onTabSelected(AppTab.groceries),
+            tab: AppTab.stats,
+            active: activeTab == AppTab.stats,
+            onTap: () => onTabSelected(AppTab.stats),
           ),
           const Expanded(child: SizedBox.shrink()),
           BottomNavItem(

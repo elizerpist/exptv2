@@ -44,8 +44,27 @@ void main() {
       await store.shiftSummaryPeriod(1);
       expect(repository.ensureTargets.last, DateTime(2026, 6));
       expect(store.visibleGhostTransactions.single.periodKey, '2026-06');
+
+      await store.shiftSummaryPeriod(-2);
+      expect(repository.ensureTargets.last, DateTime(2026, 4));
+      expect(store.visibleGhostTransactions, isEmpty);
     },
   );
+
+  test('store hides activated ghosts from visible rows', () async {
+    final repository = GhostRepository(
+      bootstrapGhosts: [ghostFixture(activated: true)],
+      projectedGhosts: [ghostFixture(activated: true)],
+    );
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 10),
+    );
+    await store.start();
+    await store.cycleSummaryWindow();
+
+    expect(store.visibleGhostTransactions, isEmpty);
+  });
 
   testWidgets('log list renders pending recurring ghost logboxes', (
     tester,
@@ -77,6 +96,13 @@ void main() {
 }
 
 class GhostRepository implements TransactionRepositoryContract {
+  GhostRepository({
+    List<RecurringGhostRecord>? bootstrapGhosts,
+    this.projectedGhosts,
+  }) : bootstrapGhosts = bootstrapGhosts ?? [ghostFixture()];
+
+  final List<RecurringGhostRecord> bootstrapGhosts;
+  final List<RecurringGhostRecord>? projectedGhosts;
   final ensureTargets = <DateTime>[];
 
   @override
@@ -94,7 +120,7 @@ class GhostRepository implements TransactionRepositoryContract {
       }),
     ],
     limits: const [],
-    recurringGhostTransactions: [ghostFixture()],
+    recurringGhostTransactions: bootstrapGhosts,
   );
 
   @override
@@ -141,6 +167,8 @@ class GhostRepository implements TransactionRepositoryContract {
     final target = targetDate ?? DateTime(2026, 5);
     final month = DateTime(target.year, target.month);
     ensureTargets.add(month);
+    final projected = projectedGhosts;
+    if (projected != null) return projected;
     return [
       ghostFixture(year: month.year, month: month.month, id: month.month),
     ];
@@ -166,6 +194,7 @@ RecurringGhostRecord ghostFixture({
   int year = 2026,
   int month = 5,
   int id = 1,
+  bool activated = false,
 }) {
   final periodKey =
       '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}';
@@ -185,8 +214,8 @@ RecurringGhostRecord ghostFixture({
     'categoryColor': '#dc2626',
     'categoryIconSlot': 2,
     'triggerMillis': 1778803200000,
-    'isActivated': false,
-    'activatedTransactionId': null,
+    'isActivated': activated,
+    'activatedTransactionId': activated ? 120 : null,
     'createdAt': 1778360000000,
     'updatedAt': 1778360000000,
   });

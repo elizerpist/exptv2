@@ -50,6 +50,11 @@ class RecurringAlarmMethodChannel(
                 scheduler.sync()
                 debugState()
             }
+            "scheduleRecurringDebugTestAlarm" -> scope.launchResult(result) {
+                val delay = (call.argumentsMap()["delayMillis"] as? Number)?.toLong() ?: 120_000L
+                val triggerMillis = scheduler.scheduleDebugTestAlarm(delay)
+                debugState() + mapOf("scheduledDebugAlarmMillis" to triggerMillis)
+            }
             "loadRecurringAlarmDebugState" -> scope.launchResult(result) {
                 debugState()
             }

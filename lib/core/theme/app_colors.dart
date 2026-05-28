@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'category_color_manager.dart';
+
 class AppColors {
   const AppColors._();
 
@@ -26,36 +28,11 @@ class AppColors {
   static const navShadow = Color(0x33000000);
   static const fabShadow = Color(0x40000000);
 
-  static const slotColorHexes = <int, String>{
-    0: '#ef4444',
-    1: '#f97316',
-    2: '#eab308',
-    3: '#84cc16',
-    4: '#22c55e',
-    5: '#10b981',
-    6: '#06b6d4',
-    7: '#0ea5e9',
-    8: '#3b82f6',
-    9: '#6366f1',
-    10: '#8b5cf6',
-    11: '#a855f7',
-    12: '#d946ef',
-    13: '#ec4899',
-    14: '#f43f5e',
-    15: '#6b7280',
-    16: '#374151',
-    17: '#1f2937',
-    18: '#064e3b',
-    19: '#7c2d12',
-    20: '#4c1d95',
-  };
+  static const slotColorHexes = CategoryColorManager.hexes;
 
-  static Color slotColor(int slot) => fromHex(slotColorHex(slot));
+  static Color slotColor(int slot) => CategoryColorManager.color(slot);
 
-  static String slotColorHex(int slot) => slotColorHexes[slot] ?? '#64748b';
+  static String slotColorHex(int slot) => CategoryColorManager.hex(slot);
 
-  static Color fromHex(String value) {
-    final clean = value.replaceFirst('#', '');
-    return Color(int.parse('ff$clean', radix: 16));
-  }
+  static Color fromHex(String value) => CategoryColorManager.fromHex(value);
 }

@@ -4,14 +4,14 @@ import '../../core/theme/app_colors.dart';
 
 const appTabs = <AppTab>[
   AppTab.home,
-  AppTab.groceries,
+  AppTab.stats,
   AppTab.notifications,
   AppTab.settings,
 ];
 
 enum AppTab {
   home,
-  groceries,
+  stats,
   notifications,
   settings;
 
@@ -19,8 +19,8 @@ enum AppTab {
     switch (this) {
       case AppTab.home:
         return 'home';
-      case AppTab.groceries:
-        return 'groceries';
+      case AppTab.stats:
+        return 'stats';
       case AppTab.notifications:
         return 'notifications';
       case AppTab.settings:
@@ -32,8 +32,8 @@ enum AppTab {
     switch (this) {
       case AppTab.home:
         return 'Főoldal';
-      case AppTab.groceries:
-        return 'Groceries';
+      case AppTab.stats:
+        return 'Stats';
       case AppTab.notifications:
         return 'Értesítések';
       case AppTab.settings:
@@ -45,8 +45,8 @@ enum AppTab {
     switch (this) {
       case AppTab.home:
         return Icons.home_outlined;
-      case AppTab.groceries:
-        return Icons.shopping_cart_outlined;
+      case AppTab.stats:
+        return Icons.query_stats_outlined;
       case AppTab.notifications:
         return Icons.notifications_none;
       case AppTab.settings:

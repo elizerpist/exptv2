@@ -127,6 +127,18 @@ class RecurringAlarmService {
     );
   }
 
+  Future<RecurringAlarmDebugState> scheduleDebugTestAlarm({
+    Duration delay = const Duration(minutes: 2),
+  }) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'scheduleRecurringDebugTestAlarm',
+      {'delayMillis': delay.inMilliseconds},
+    );
+    return RecurringAlarmDebugState.fromMap(
+      map ?? <dynamic, dynamic>{},
+    );
+  }
+
   Future<RecurringAlarmDebugState> loadDebugState() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'loadRecurringAlarmDebugState',

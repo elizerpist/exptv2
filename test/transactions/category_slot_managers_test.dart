@@ -1,5 +1,6 @@
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
+import 'package:exptv2/features/transactions/slots/category_color_resolver.dart';
 import 'package:exptv2/features/transactions/slots/category_icon_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -62,4 +63,31 @@ void main() {
     expect(category.slotColorHex, CategoryColorManager.hex(9));
     expect(category.slotColor.toARGB32(), 0xff6366f1);
   });
+  test('category color resolver prefers live category slot over snapshots', () {
+    final category = TransactionCategory.fromMap({
+      'transactionCategoryID': 6,
+      'name': 'Q',
+      'type': 'kiadás',
+      'colorSlot': 9,
+      'iconSlot': 2,
+      'backgroundColor': '#dc2626',
+      'hasLimit': false,
+      'limitAmount': 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    });
+
+    expect(
+      CategoryColorResolver.color(
+        category: category,
+        snapshotHex: '#dc2626',
+      ).toARGB32(),
+      0xff6366f1,
+    );
+    expect(
+      CategoryColorResolver.findById([category], 6),
+      same(category),
+    );
+  });
+
 }

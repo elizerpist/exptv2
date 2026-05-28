@@ -1,5 +1,6 @@
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/debug/debug_floating_button.dart';
+import 'package:exptv2/core/theme/app_dimensions.dart';
 import 'package:exptv2/services/recurring_alarm_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,16 @@ void main() {
       const MaterialApp(
         home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
       ),
+    );
+
+    final buttonRect = tester.getRect(
+      find.byKey(const ValueKey('debug-floating-button')),
+    );
+    final screenSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(buttonRect.right, moreOrLessEquals(screenSize.width - 16));
+    expect(
+      buttonRect.bottom,
+      moreOrLessEquals(screenSize.height - AppDimensions.bottomNavHeight - 12),
     );
 
     await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
@@ -52,6 +63,14 @@ void main() {
                   'logs': <String>['[RecurringAlarm] debug override set'],
                 },
                 'processedCount': 2,
+              };
+            case 'scheduleRecurringDebugTestAlarm':
+              return <String, Object?>{
+                'overrideMillis': null,
+                'effectiveMillis': DateTime(2026, 5, 31, 0, 1)
+                    .millisecondsSinceEpoch,
+                'usingOverride': false,
+                'logs': <String>['[RecurringAlarm] debug test alarm scheduled'],
               };
           }
           throw PlatformException(code: 'unexpected', message: call.method);
@@ -93,6 +112,20 @@ void main() {
     expect(changedCount, 1);
     expect(
       DebugConsole.entries.any((entry) => entry.contains('processed 2')),
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('recurring-debug-test-alarm')));
+    await tester.pumpAndSettle();
+
+    expect(
+      calls.map((call) => call.method),
+      contains('scheduleRecurringDebugTestAlarm'),
+    );
+    expect(
+      DebugConsole.entries.any(
+        (entry) => entry.contains('debug test alarm scheduled'),
+      ),
       isTrue,
     );
   });

@@ -140,6 +140,18 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     });
   }
 
+  Future<void> _scheduleDebugTestAlarm() async {
+    final service = widget.recurringAlarmService;
+    if (service == null) return;
+    const delay = Duration(minutes: 2);
+    await _runAlarmAction(() async {
+      _alarmState = await service.scheduleDebugTestAlarm(delay: delay);
+      DebugConsole.log(
+        '[RecurringAlarm] debug test alarm scheduled in ${delay.inMinutes} minutes',
+      );
+    });
+  }
+
   Future<void> _clearNativeDebugLog() async {
     final service = widget.recurringAlarmService;
     if (service == null) return;
@@ -253,6 +265,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                 icon: Icons.restore,
                 tooltip: 'Reset debug date',
                 onPressed: _alarmLoading ? null : _clearDebugDateOverride,
+              ),
+              _SmallDebugIconButton(
+                key: const ValueKey('recurring-debug-test-alarm'),
+                icon: Icons.alarm_add_outlined,
+                tooltip: 'Schedule background test alarm',
+                onPressed: _alarmLoading ? null : _scheduleDebugTestAlarm,
               ),
               _SmallDebugIconButton(
                 key: const ValueKey('recurring-debug-native-log-clear'),

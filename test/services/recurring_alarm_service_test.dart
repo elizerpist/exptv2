@@ -56,6 +56,13 @@ void main() {
                 'usingOverride': false,
                 'logs': <String>[],
               };
+            case 'scheduleRecurringDebugTestAlarm':
+              return <String, Object?>{
+                'overrideMillis': null,
+                'effectiveMillis': DateTime(2026, 6, 1).millisecondsSinceEpoch,
+                'usingOverride': false,
+                'logs': <String>['[RecurringAlarm] debug test alarm scheduled'],
+              };
             case 'syncRecurringAlarms':
             case 'clearRecurringAlarmDebugLog':
               return true;
@@ -113,6 +120,19 @@ void main() {
     expect(state.usingOverride, isFalse);
     expect(state.overrideDate, isNull);
     expect(state.effectiveDate, DateTime(2026, 6, 1));
+  });
+
+  test('schedules background debug test alarm', () async {
+    final state = await service.scheduleDebugTestAlarm(
+      delay: const Duration(minutes: 3),
+    );
+
+    expect(calls.single.method, 'scheduleRecurringDebugTestAlarm');
+    expect(
+      (calls.single.arguments as Map<dynamic, dynamic>)['delayMillis'],
+      180000,
+    );
+    expect(state.logs.single, contains('debug test alarm scheduled'));
   });
 
   test('sync and native log clear return success flags', () async {

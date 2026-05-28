@@ -5,11 +5,11 @@ import '../../data/calendar_render_builder.dart';
 import '../../models/calendar_menu_mode.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
+import '../transaction_menu_metrics.dart';
 import 'calendar_canvas.dart';
 import 'calendar_mode_selector.dart';
-import 'category_donut_chart.dart';
-import '../transaction_menu_metrics.dart';
 import 'calendar_value_slider_panel.dart';
+import 'category_donut_chart.dart';
 
 class CalendarMenuOverlay extends StatefulWidget {
   const CalendarMenuOverlay({
@@ -18,12 +18,14 @@ class CalendarMenuOverlay extends StatefulWidget {
     required this.categories,
     required this.onClose,
     required this.onMonthSelect,
+    this.fullScreen = false,
   });
 
   final List<TransactionRecord> transactions;
   final List<TransactionCategory> categories;
   final VoidCallback onClose;
   final void Function(int year, int month) onMonthSelect;
+  final bool fullScreen;
 
   @override
   State<CalendarMenuOverlay> createState() => _CalendarMenuOverlayState();
@@ -42,6 +44,28 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final panel = _buildPanel();
+    if (widget.fullScreen) return panel;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: widget.onClose,
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        Positioned(
+          top: TransactionMenuMetrics.overlayTop,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: panel,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPanel() {
     final data = CalendarRenderBuilder.buildYear(
       year: _year,
       transactions: widget.transactions,
@@ -52,138 +76,129 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
       customThresholdMin: _customThresholdMin,
       customThresholdMax: _customThresholdMax,
     );
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: widget.onClose,
-            child: Container(color: Colors.transparent),
+    final radius = widget.fullScreen
+        ? BorderRadius.zero
+        : const BorderRadius.vertical(top: Radius.circular(30));
+    final topInset = widget.fullScreen
+        ? MediaQuery.paddingOf(context).top
+        : 0.0;
+    return Material(
+      key: const ValueKey('calendar-menu-overlay'),
+      color: AppColors.white,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(
+            color: widget.fullScreen ? AppColors.white : AppColors.gray200,
           ),
         ),
-        Positioned(
-          key: const ValueKey('calendar-menu-overlay'),
-          top: TransactionMenuMetrics.overlayTop,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Material(
-            color: AppColors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            clipBehavior: Clip.antiAlias,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(30),
-                ),
-                border: Border.all(color: AppColors.gray200),
-              ),
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      SizedBox(
-                        height: 50,
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 100),
-                            Expanded(
-                              child: _YearNavigator(
-                                year: _year,
-                                onPrevious: () => setState(() => _year -= 1),
-                                onNext: () => setState(() => _year += 1),
-                              ),
-                            ),
-                            CalendarModeSelector(
-                              activeMode: _mode,
-                              transitionLocked: _transitionLocked,
-                              onModeChanged: _setMode,
-                            ),
-                            const SizedBox(width: 12),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        _mode.title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.gray800,
-                        ),
-                      ),
-                      if (_mode == CalendarMenuMode.category)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: CategoryDonutChart(
-                            transactions: widget.transactions,
-                            categories: widget.categories,
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                SizedBox(
+                  height: (widget.fullScreen ? 58 : 50) + topInset,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: topInset),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 100),
+                        Expanded(
+                          child: _YearNavigator(
                             year: _year,
-                          ),
-                        )
-                      else
-                        const SizedBox(height: 8),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: CalendarCanvas(
-                            data: data,
-                            mode: _mode,
-                            thresholdValue: _thresholdValue,
-                            heatmapMinValue: _heatmapMinValue,
-                            heatmapCurrentValue: _heatmapCurrentValue,
-                            onMonthSelected: widget.onMonthSelect,
+                            onPrevious: () => setState(() => _year -= 1),
+                            onNext: () => setState(() => _year += 1),
                           ),
                         ),
-                      ),
-                    ],
+                        CalendarModeSelector(
+                          activeMode: _mode,
+                          transitionLocked: _transitionLocked,
+                          onModeChanged: _setMode,
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                    ),
                   ),
-                  if (_mode == CalendarMenuMode.normal &&
-                      data.thresholdRange.min != data.thresholdRange.max)
-                    CalendarValueSliderPanel.threshold(
-                      value: _thresholdValue,
-                      min: data.thresholdRange.min,
-                      max: data.thresholdRange.max,
-                      onChanged: (value) =>
-                          setState(() => _thresholdValue = value),
-                      onMinChanged: (value) => setState(
-                        () => _customThresholdMin = value < 0 ? 0 : value,
-                      ),
-                      onMaxChanged: (value) => setState(
-                        () => _customThresholdMax =
-                            value <= data.thresholdRange.min
-                            ? data.thresholdRange.min + 1
-                            : value,
-                      ),
+                ),
+                Text(
+                  _mode.title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.gray800,
+                  ),
+                ),
+                if (_mode == CalendarMenuMode.category)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: CategoryDonutChart(
+                      transactions: widget.transactions,
+                      categories: widget.categories,
+                      year: _year,
                     ),
-                  if (_mode == CalendarMenuMode.heatmap)
-                    CalendarValueSliderPanel.heatmap(
-                      value: _heatmapCurrentValue,
-                      min: _heatmapMinValue,
-                      max: _heatmapMaxValue,
-                      onChanged: (value) {
-                        setState(() => _heatmapCurrentValue = value);
-                      },
-                      onMinChanged: (value) {
-                        setState(() {
-                          _heatmapMinValue = value < 0 ? 0 : value;
-                          if (_heatmapCurrentValue <= _heatmapMinValue) {
-                            _heatmapCurrentValue = _heatmapMinValue + 100;
-                          }
-                        });
-                      },
-                      onMaxChanged: (value) {
-                        setState(() {
-                          _heatmapMaxValue = value <= _heatmapMinValue
-                              ? _heatmapMinValue + 1000
-                              : value;
-                        });
-                      },
+                  )
+                else
+                  const SizedBox(height: 8),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: CalendarCanvas(
+                      data: data,
+                      mode: _mode,
+                      thresholdValue: _thresholdValue,
+                      heatmapMinValue: _heatmapMinValue,
+                      heatmapCurrentValue: _heatmapCurrentValue,
+                      onMonthSelected: widget.onMonthSelect,
                     ),
-                ],
-              ),
+                  ),
+                ),
+              ],
             ),
-          ),
+            if (_mode == CalendarMenuMode.normal &&
+                data.thresholdRange.min != data.thresholdRange.max)
+              CalendarValueSliderPanel.threshold(
+                value: _thresholdValue,
+                min: data.thresholdRange.min,
+                max: data.thresholdRange.max,
+                onChanged: (value) => setState(() => _thresholdValue = value),
+                onMinChanged: (value) => setState(
+                  () => _customThresholdMin = value < 0 ? 0 : value,
+                ),
+                onMaxChanged: (value) => setState(
+                  () => _customThresholdMax = value <= data.thresholdRange.min
+                      ? data.thresholdRange.min + 1
+                      : value,
+                ),
+              ),
+            if (_mode == CalendarMenuMode.heatmap)
+              CalendarValueSliderPanel.heatmap(
+                value: _heatmapCurrentValue,
+                min: _heatmapMinValue,
+                max: _heatmapMaxValue,
+                onChanged: (value) {
+                  setState(() => _heatmapCurrentValue = value);
+                },
+                onMinChanged: (value) {
+                  setState(() {
+                    _heatmapMinValue = value < 0 ? 0 : value;
+                    if (_heatmapCurrentValue <= _heatmapMinValue) {
+                      _heatmapCurrentValue = _heatmapMinValue + 100;
+                    }
+                  });
+                },
+                onMaxChanged: (value) {
+                  setState(() {
+                    _heatmapMaxValue = value <= _heatmapMinValue
+                        ? _heatmapMinValue + 1000
+                        : value;
+                  });
+                },
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

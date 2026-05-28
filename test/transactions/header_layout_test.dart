@@ -46,9 +46,7 @@ void main() {
     expect(topGap, moreOrLessEquals(12, epsilon: 0.1));
   });
 
-  testWidgets('calendar overlay starts on the summary pill top edge', (
-    tester,
-  ) async {
+  testWidgets('header no longer owns the calendar entry point', (tester) async {
     final store = TransactionStore(HeaderLayoutRepository());
     await tester.pumpWidget(
       MaterialApp(
@@ -63,16 +61,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final summaryTop = tester
-        .getRect(find.byKey(const ValueKey('summary-pill')))
-        .top;
-    await tester.tap(find.byKey(const ValueKey('header-calendar-button')));
-    await tester.pumpAndSettle();
-
-    final overlayTop = tester
-        .getRect(find.byKey(const ValueKey('calendar-menu-overlay')))
-        .top;
-    expect(overlayTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+    expect(find.byKey(const ValueKey('header-calendar-button')), findsNothing);
+    expect(find.byKey(const ValueKey('header-category-button')), findsOneWidget);
   });
 
   testWidgets(

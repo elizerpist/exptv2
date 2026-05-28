@@ -24,6 +24,15 @@ interface RecurringTransactionDao {
     @Update
     suspend fun update(row: RecurringTransactionEntity)
 
+    @Query("UPDATE recurring_transactions SET categoryName = :categoryName, categoryColor = :categoryColor, categoryIconSlot = :categoryIconSlot, updatedAt = :updatedAt WHERE categoryId = :categoryId")
+    suspend fun updateCategorySnapshot(
+        categoryId: Int,
+        categoryName: String,
+        categoryColor: String,
+        categoryIconSlot: Int,
+        updatedAt: Long,
+    )
+
     @Delete
     suspend fun delete(row: RecurringTransactionEntity)
 }

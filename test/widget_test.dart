@@ -139,7 +139,7 @@ void main() {
     expect(find.text('Bevétel'), findsOneWidget);
     expect(find.text('Test Store'), findsOneWidget);
     expect(find.text('Főoldal'), findsOneWidget);
-    expect(find.text('Groceries'), findsOneWidget);
+    expect(find.text('Stats'), findsOneWidget);
     expect(find.text('Értesítések'), findsOneWidget);
     expect(find.text('Beállítások'), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
@@ -149,9 +149,11 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Groceries'));
+    await tester.tap(find.text('Stats'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('blank-page-groceries')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
 
     await tester.tap(find.text('Értesítések'));
     await tester.pumpAndSettle();
@@ -179,21 +181,14 @@ void main() {
     expect(find.text('Kategória'), findsOneWidget);
   });
 
-  testWidgets('calendar and category overlays hide shell navigation controls', (
+  testWidgets('category overlay hides shell navigation controls', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-calendar-button')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('header-calendar-button')), findsNothing);
 
-    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
-    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
-    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
-
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
     await tester.pumpAndSettle();
 

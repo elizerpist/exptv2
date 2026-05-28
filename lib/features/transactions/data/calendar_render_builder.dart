@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/calendar_render_models.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
+import '../slots/category_color_manager.dart';
 
 class CalendarRenderBuilder {
   const CalendarRenderBuilder._();
@@ -182,18 +183,7 @@ class CalendarRenderBuilder {
   }
 
   static Color _categoryColor(int? id, Map<int, Color> categoryColors) {
-    if (id == null) return const Color(0xFF9CA3AF);
-    final explicitColor = categoryColors[id];
-    if (explicitColor != null) return explicitColor;
-    return switch (id) {
-      1 => const Color(0xFFEF4444),
-      2 => const Color(0xFFF97316),
-      4 => const Color(0xFF22C55E),
-      6 => const Color(0xFFF472B6),
-      11 => const Color(0xFF38BDF8),
-      15 => const Color(0xFF64748B),
-      21 => const Color(0xFFEC4899),
-      _ => const Color(0xFF9CA3AF),
-    };
+    if (id == null) return CategoryColorManager.color(null);
+    return categoryColors[id] ?? CategoryColorManager.color(null);
   }
 }

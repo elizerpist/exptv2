@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../transactions/slots/category_color_resolver.dart';
 import '../models/expense_notification_card.dart';
 
 class NotificationLogBox extends StatefulWidget {
@@ -53,9 +54,10 @@ class _NotificationLogBoxState extends State<NotificationLogBox> {
 
   @override
   Widget build(BuildContext context) {
-    final categoryColor = widget.card.categoryColor == null
-        ? AppColors.primary
-        : AppColors.fromHex(widget.card.categoryColor!);
+    final categoryColor = CategoryColorResolver.color(
+      snapshotHex: widget.card.categoryColor,
+      fallback: AppColors.primary,
+    );
     final deleteOpacity = _borderOpacity(_dragDx > 0 ? _dragDx : 0);
     final readOpacity = _borderOpacity(_dragDx < 0 ? -_dragDx : 0);
     return GestureDetector(

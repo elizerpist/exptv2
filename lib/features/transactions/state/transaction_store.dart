@@ -113,6 +113,7 @@ class TransactionStore extends ChangeNotifier {
     final merchant = _filter.merchant?.trim();
     return _recurringGhostTransactions.where((ghost) {
       if (ghost.isActivated) return false;
+      if (_ghostIsBeforeCurrentMonth(ghost)) return false;
       if (ghost.type != _filter.type) return false;
       if (!_ghostInActiveWindow(ghost)) return false;
       if (_filter.categoryId != null &&
@@ -433,6 +434,14 @@ class TransactionStore extends ChangeNotifier {
     );
     _limits = payload.limits;
     notifyListeners();
+  }
+
+  bool _ghostIsBeforeCurrentMonth(RecurringGhostRecord ghost) {
+    final ghostDate = DateTime.tryParse(ghost.normalizedDate);
+    if (ghostDate == null) return false;
+    return DateTime(ghostDate.year, ghostDate.month).isBefore(
+      _monthStart(_clock()),
+    );
   }
 
   bool _ghostInActiveWindow(RecurringGhostRecord ghost) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/recurring_transaction.dart';
 import '../../../transactions/models/transaction_category.dart';
+import '../../../transactions/slots/category_color_resolver.dart';
 import '../../state/settings_store.dart';
 import 'settings_option_widgets.dart';
 
@@ -90,12 +91,19 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
                   ),
                 ]
               : widget.store.recurringTransactions
-                    .map((transaction) => _RecurringCard(
-                          transaction: transaction,
-                          onEdit: () => _edit(transaction),
-                          onToggle: () => widget.store.toggleRecurringTransaction(transaction),
-                          onDelete: () => widget.store.deleteRecurringTransaction(transaction),
-                        ))
+                    .map((transaction) {
+                      final category = CategoryColorResolver.findById(
+                        widget.store.expenseCategories,
+                        transaction.categoryId,
+                      );
+                      return _RecurringCard(
+                        transaction: transaction,
+                        category: category,
+                        onEdit: () => _edit(transaction),
+                        onToggle: () => widget.store.toggleRecurringTransaction(transaction),
+                        onDelete: () => widget.store.deleteRecurringTransaction(transaction),
+                      );
+                    })
                     .toList(),
         ),
         const SettingsSection(
@@ -161,7 +169,14 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
             items: categories.map((category) {
               return DropdownMenuItem<TransactionCategory>(
                 value: category,
-                child: Text(category.name),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _CategoryColorDot(color: category.slotColor),
+                    const SizedBox(width: 8),
+                    Flexible(child: Text(category.name)),
+                  ],
+                ),
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedCategory = value),
@@ -216,12 +231,14 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
 class _RecurringCard extends StatelessWidget {
   const _RecurringCard({
     required this.transaction,
+    required this.category,
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
   });
 
   final RecurringTransaction transaction;
+  final TransactionCategory? category;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
@@ -238,13 +255,13 @@ class _RecurringCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.fromHex(transaction.categoryColor),
-              shape: BoxShape.circle,
+          _CategoryColorDot(
+            key: ValueKey('recurring-category-color-${transaction.id}'),
+            color: CategoryColorResolver.color(
+              category: category,
+              snapshotHex: transaction.categoryColor,
             ),
+            size: 32,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -265,6 +282,30 @@ class _RecurringCard extends StatelessWidget {
     );
   }
 }
+
+class _CategoryColorDot extends StatelessWidget {
+  const _CategoryColorDot({
+    super.key,
+    required this.color,
+    this.size = 14,
+  });
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
 
 
 extension _FirstOrNull<T> on Iterable<T> {

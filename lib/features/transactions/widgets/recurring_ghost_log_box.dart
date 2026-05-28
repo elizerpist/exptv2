@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/recurring_ghost_record.dart';
 import '../models/transaction_category.dart';
+import '../slots/category_color_resolver.dart';
 import 'category_menu/category_icon_badge.dart';
 
 class RecurringGhostLogBox extends StatelessWidget {
@@ -41,7 +42,11 @@ class RecurringGhostLogBox extends StatelessWidget {
         children: [
           CategoryIconBadge(
             category: category,
-            backgroundColor: category?.slotColor ?? AppColors.gray500,
+            backgroundColor: CategoryColorResolver.color(
+              category: category,
+              snapshotHex: ghost.categoryColor,
+              fallback: AppColors.gray500,
+            ),
             size: 46,
             iconSize: 28,
           ),

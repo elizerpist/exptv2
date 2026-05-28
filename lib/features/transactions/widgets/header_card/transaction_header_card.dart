@@ -10,7 +10,6 @@ class TransactionHeaderCard extends StatelessWidget {
     super.key,
     required this.balanceText,
     required this.onCategoryPressed,
-    required this.onCalendarPressed,
     required this.onExpandPressed,
     this.onVerticalDragUpdate,
     this.onVerticalDragEnd,
@@ -25,7 +24,6 @@ class TransactionHeaderCard extends StatelessWidget {
 
   final String balanceText;
   final VoidCallback onCategoryPressed;
-  final VoidCallback onCalendarPressed;
   final VoidCallback onExpandPressed;
   final GestureDragUpdateCallback? onVerticalDragUpdate;
   final GestureDragEndCallback? onVerticalDragEnd;
@@ -93,25 +91,6 @@ class TransactionHeaderCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: AppColors.gray800,
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    top: TransactionHeaderMetrics.calendarTop,
-                    right: 27,
-                    child: IconButton(
-                      key: const ValueKey('header-calendar-button'),
-                      onPressed: onCalendarPressed,
-                      icon: const Icon(
-                        Icons.calendar_month_outlined,
-                        size: 20,
-                        color: AppColors.gray600,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 32,
-                        height: 32,
-                      ),
-                      splashRadius: 20,
                     ),
                   ),
                   Positioned(

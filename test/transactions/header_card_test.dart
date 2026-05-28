@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('header card copies stage0 layout and controls', (tester) async {
     var categoryPressed = false;
-    var calendarPressed = false;
     var expandPressed = false;
 
     await tester.pumpWidget(
@@ -15,7 +14,6 @@ void main() {
           body: TransactionHeaderCard(
             balanceText: '-7 080 Ft',
             onCategoryPressed: () => categoryPressed = true,
-            onCalendarPressed: () => calendarPressed = true,
             onExpandPressed: () => expandPressed = true,
           ),
         ),
@@ -32,12 +30,12 @@ void main() {
     expect(find.text('Egyenleg'), findsOneWidget);
     expect(find.text('-7 080 Ft'), findsOneWidget);
 
+    expect(find.byKey(const ValueKey('header-calendar-button')), findsNothing);
+
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
-    await tester.tap(find.byKey(const ValueKey('header-calendar-button')));
     await tester.tap(find.byKey(const ValueKey('header-expand-button')));
 
     expect(categoryPressed, isTrue);
-    expect(calendarPressed, isTrue);
     expect(expandPressed, isTrue);
   });
 
@@ -48,7 +46,6 @@ void main() {
           body: TransactionHeaderCard(
             balanceText: '-7 080 Ft',
             onCategoryPressed: () {},
-            onCalendarPressed: () {},
             onExpandPressed: () {},
           ),
         ),
