@@ -57,7 +57,9 @@ class TransactionHeaderCard extends StatelessWidget {
               curve: Curves.easeOutCubic,
               offset: Offset(
                 0,
-                expanded ? -TransactionHeaderMetrics.expandedSlideDistance / height : 0,
+                expanded
+                    ? -TransactionHeaderMetrics.expandedSlideDistance / height
+                    : 0,
               ),
               child: Stack(
                 clipBehavior: Clip.none,
@@ -136,13 +138,13 @@ class TransactionHeaderCard extends StatelessWidget {
                     left: 0,
                     right: 0,
                     child: SizedBox(
-                      height: 35,
+                      height: TransactionHeaderMetrics.magnetHeight,
                       child: MagnetStrip(
                         type: magnetType,
                         totalIncome: totalIncome,
                         totalExpense: totalExpense,
                         accent: accent,
-                        height: 35,
+                        height: TransactionHeaderMetrics.magnetHeight,
                       ),
                     ),
                   ),
@@ -197,7 +199,9 @@ class TransactionHeaderCard extends StatelessWidget {
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 180),
                       opacity: expanded ? 0 : 1,
-                      child: _HeaderCategoryButton(onPressed: onCategoryPressed),
+                      child: _HeaderCategoryButton(
+                        onPressed: onCategoryPressed,
+                      ),
                     ),
                   ),
                 ],
@@ -227,7 +231,9 @@ class TransactionHeaderCard extends StatelessWidget {
                         width: 30,
                         height: 30,
                         child: Icon(
-                          expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          expanded
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
                           color: AppColors.white,
                           size: 18,
                         ),
@@ -294,4 +300,3 @@ class _MenuBar extends StatelessWidget {
     );
   }
 }
-

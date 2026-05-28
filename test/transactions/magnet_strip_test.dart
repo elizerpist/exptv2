@@ -4,35 +4,63 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('magnetcard renders marker mode without gradient fill', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: MagnetStrip(
-          type: MagnetType.magnetcard,
-          totalIncome: 70,
-          totalExpense: 30,
-          height: 35,
+  testWidgets('default magnet strip height is doubled', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MagnetStrip(
+            type: MagnetType.fade,
+            totalIncome: 70,
+            totalExpense: 30,
+          ),
         ),
       ),
-    ));
+    );
 
-    expect(find.byKey(const ValueKey('magnet-strip-magnetcard')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('magnet-strip-fade'))).height,
+      70,
+    );
   });
 
-  testWidgets('adaptive magnet exposes dynamic pill width key', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: SizedBox(
-          width: 200,
-          child: MagnetStrip(
-            type: MagnetType.adaptive,
-            totalIncome: 80,
-            totalExpense: 20,
+  testWidgets('magnetcard renders marker mode without gradient fill', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MagnetStrip(
+            type: MagnetType.magnetcard,
+            totalIncome: 70,
+            totalExpense: 30,
             height: 35,
           ),
         ),
       ),
-    ));
+    );
+
+    expect(
+      find.byKey(const ValueKey('magnet-strip-magnetcard')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('adaptive magnet exposes dynamic pill width key', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: MagnetStrip(
+              type: MagnetType.adaptive,
+              totalIncome: 80,
+              totalExpense: 20,
+              height: 35,
+            ),
+          ),
+        ),
+      ),
+    );
 
     expect(find.byKey(const ValueKey('magnet-strip-adaptive')), findsOneWidget);
   });

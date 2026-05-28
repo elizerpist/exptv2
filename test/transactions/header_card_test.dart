@@ -40,4 +40,24 @@ void main() {
     expect(calendarPressed, isTrue);
     expect(expandPressed, isTrue);
   });
+
+  testWidgets('header renders doubled magnet strip height', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '-7 080 Ft',
+            onCategoryPressed: () {},
+            onCalendarPressed: () {},
+            onExpandPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('magnet-strip-fade'))).height,
+      70,
+    );
+  });
 }

@@ -6,12 +6,14 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 
 class MagnetStrip extends StatelessWidget {
+  static const defaultHeight = 70.0;
+
   const MagnetStrip({
     super.key,
     required this.type,
     required this.totalIncome,
     required this.totalExpense,
-    this.height = 35,
+    this.height = defaultHeight,
     this.accent = AppColors.primary,
   });
 
@@ -63,7 +65,13 @@ class MagnetStripPainter extends CustomPainter {
         ? 0.5
         : (totalIncome.abs() / total).clamp(0.05, 0.95).toDouble();
     final centerY = size.height / 2;
-    final rect = Rect.fromLTWH(0, centerY - 3, size.width, 6);
+    final trackHeight = math.max(2.0, size.height * 6 / 35);
+    final rect = Rect.fromLTWH(
+      0,
+      centerY - trackHeight / 2,
+      size.width,
+      trackHeight,
+    );
 
     if (type == MagnetType.magnetcard) {
       _paintMagnetCard(canvas, size, ratio);
@@ -72,9 +80,15 @@ class MagnetStripPainter extends CustomPainter {
 
     if (type == MagnetType.adaptive) {
       final pillWidth = math.max(20.0, size.width * ratio);
-      final pillRect = Rect.fromLTWH(0, centerY - 8, pillWidth, 16);
+      final pillHeight = math.max(4.0, size.height * 16 / 35);
+      final pillRect = Rect.fromLTWH(
+        0,
+        centerY - pillHeight / 2,
+        pillWidth,
+        pillHeight,
+      );
       canvas.drawRRect(
-        RRect.fromRectAndRadius(pillRect, const Radius.circular(10)),
+        RRect.fromRectAndRadius(pillRect, Radius.circular(pillHeight / 2)),
         Paint()..color = accent.withValues(alpha: 0.85),
       );
       return;
@@ -82,7 +96,7 @@ class MagnetStripPainter extends CustomPainter {
 
     if (type == MagnetType.budget) {
       canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        RRect.fromRectAndRadius(rect, Radius.circular(trackHeight / 2)),
         Paint()
           ..shader = const LinearGradient(
             colors: [Color(0xFF16A34A), Color(0xFFDC2626)],
@@ -96,14 +110,14 @@ class MagnetStripPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTRB(rect.left, rect.top, split, rect.bottom),
-          const Radius.circular(3),
+          Radius.circular(trackHeight / 2),
         ),
         Paint()..color = const Color(0x4D2C2C2C),
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTRB(split, rect.top, rect.right, rect.bottom),
-          const Radius.circular(3),
+          Radius.circular(trackHeight / 2),
         ),
         Paint()..color = const Color(0x0D2C2C2C),
       );
@@ -111,7 +125,7 @@ class MagnetStripPainter extends CustomPainter {
     }
 
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+      RRect.fromRectAndRadius(rect, Radius.circular(trackHeight / 2)),
       Paint()
         ..shader = const LinearGradient(
           colors: [Color(0x4D2C2C2C), Color(0x0D2C2C2C)],
@@ -123,9 +137,10 @@ class MagnetStripPainter extends CustomPainter {
     final paint = Paint()
       ..color = AppColors.gray800.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    final top = size.height / 2 - 8;
-    final bottom = size.height / 2 + 8;
+      ..strokeWidth = math.max(1.0, size.height / 35);
+    final halfHeight = math.max(4.0, size.height * 8 / 35);
+    final top = size.height / 2 - halfHeight;
+    final bottom = size.height / 2 + halfHeight;
     canvas.drawLine(Offset(0, top), Offset(size.width, top), paint);
     canvas.drawLine(Offset(0, bottom), Offset(size.width, bottom), paint);
     final markerX = size.width * ratio;
