@@ -154,6 +154,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   cardColor: expenseTheme.headerCard,
                   totalIncome: _totalIncome(),
                   totalExpense: _totalExpense(),
+                  fastInfoVisible: _fastInfoExtent > 0,
                   onCategoryPressed: _openCategoryMenu,
                   onCalendarPressed: _openCalendarMenu,
                   onVerticalDragUpdate: _handleHeaderDragUpdate,
@@ -229,10 +230,7 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
 
   void _handleHeaderDragEnd(DragEndDetails details) {
     if (_headerExpanded) return;
-    final shouldOpen = _fastInfoExtent >= 80;
-    setState(() {
-      _fastInfoExtent = shouldOpen ? TransactionHeaderMetrics.fastInfoHeight : 0;
-    });
+    setState(() => _fastInfoExtent = 0);
   }
 
   void _setActiveType(TransactionType type) {

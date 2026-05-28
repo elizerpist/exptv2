@@ -20,6 +20,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.cardColor = AppColors.gray100,
     this.totalIncome = 0,
     this.totalExpense = 0,
+    this.fastInfoVisible = false,
   });
 
   final String balanceText;
@@ -34,6 +35,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final Color cardColor;
   final double totalIncome;
   final double totalExpense;
+  final bool fastInfoVisible;
 
   static const height = TransactionHeaderMetrics.cardHeight;
 
@@ -69,7 +71,9 @@ class TransactionHeaderCard extends StatelessWidget {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
+                            color: Colors.black.withValues(
+                              alpha: fastInfoVisible ? 0 : 0.15,
+                            ),
                             offset: const Offset(0, 4),
                             blurRadius: 8,
                           ),
@@ -201,26 +205,33 @@ class TransactionHeaderCard extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: TransactionHeaderMetrics.expandButtonTop,
+            top: TransactionHeaderMetrics.expandButtonTop - 13,
             left: 0,
             right: 0,
             child: Center(
-              child: Material(
-                color: AppColors.primary,
-                elevation: 6,
-                shadowColor: Colors.black.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(15),
-                child: InkWell(
-                  key: const ValueKey('header-expand-button'),
-                  onTap: onExpandPressed,
-                  borderRadius: BorderRadius.circular(15),
-                  child: SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: Icon(
-                      expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                      color: AppColors.white,
-                      size: 18,
+              child: SizedBox(
+                key: const ValueKey('header-expand-button-hit-area'),
+                width: 56,
+                height: 56,
+                child: Center(
+                  child: Material(
+                    color: AppColors.primary,
+                    elevation: 6,
+                    shadowColor: Colors.black.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(15),
+                    child: InkWell(
+                      key: const ValueKey('header-expand-button'),
+                      onTap: onExpandPressed,
+                      borderRadius: BorderRadius.circular(15),
+                      child: SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: Icon(
+                          expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          color: AppColors.white,
+                          size: 18,
+                        ),
+                      ),
                     ),
                   ),
                 ),

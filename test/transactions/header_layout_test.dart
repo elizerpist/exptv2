@@ -227,7 +227,7 @@ void main() {
     );
   });
 
-  testWidgets('pulling down the header reveals FastInfo panel', (
+  testWidgets('header pull reveals FastInfo during drag and springs closed', (
     tester,
   ) async {
     final store = TransactionStore(HeaderLayoutRepository());
@@ -246,11 +246,40 @@ void main() {
 
     final gesture = await tester.startGesture(const Offset(180, 80));
     await gesture.moveBy(const Offset(0, 160));
-    await gesture.up();
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('fast-info-panel')), findsOneWidget);
     expect(find.text('Megtakarítás'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle(const Duration(milliseconds: 600));
+
+    expect(find.byKey(const ValueKey('fast-info-panel')), findsNothing);
+  });
+
+  testWidgets('expand button still toggles after header drag', (tester) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const ValueKey('transaction-header-card'));
+    await tester.drag(header, const Offset(0, 80));
+    await tester.pumpAndSettle(const Duration(milliseconds: 600));
+
+    await tester.tap(find.byKey(const ValueKey('header-expand-button-hit-area')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-budget-stage')), findsOneWidget);
   });
 
 }
