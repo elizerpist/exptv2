@@ -16,7 +16,6 @@ import '../../slots/category_icon_manager.dart';
 import '../amount_field.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_limit_slider.dart';
-import 'limit_allocation_pie_chart.dart';
 
 class BudgetTargetEditorSheet extends StatefulWidget {
   const BudgetTargetEditorSheet({
@@ -110,7 +109,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
             onSetToMax: _setOverviewToMax,
             showSetToMax: _activeItem.overview != null,
             partitionBar: _buildPartitionBar(),
-            pieChart: _buildPieChart(),
           ),
         ),
       ),
@@ -239,21 +237,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     return CategoryLimitPartitionBar(
       height: 29.4,
       allocation: allocation,
-    );
-  }
-
-  Widget _buildPieChart() {
-    if (_activeItem.overview?.kind == BudgetGoalKind.savingGoal) {
-      return const SizedBox.shrink();
-    }
-    final allocation = LimitAllocationManager.build(
-      overviewLimit: _overviewLimitAmount ?? 0,
-      bars: _partitionBars,
-    );
-    return LimitAllocationPieChart(
-      allocation: allocation,
-      onSliceTap: _selectCategoryByTargetId,
-      onSliceAmountChanged: _saveCategoryAmountByTargetId,
+      onSegmentTap: _selectCategoryByTargetId,
     );
   }
 
@@ -266,22 +250,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     }
   }
 
-  void _saveCategoryAmountByTargetId(int targetId, double amount) {
-    CategoryBudgetBarData? match;
-    for (final bar in widget.categoryBars) {
-      if (bar.targetId == targetId) {
-        match = bar;
-        break;
-      }
-    }
-    if (match == null) return;
-    if (_activeItem.category?.targetId == targetId) {
-      _setControllerAmount(amount);
-    }
-    unawaited(
-      widget.onSaveCategory(match, limitAmount: amount, alertActive: false),
-    );
-  }
 
   void _selectItem(BackheaderBudgetItem item) {
     _saveDebounce?.cancel();
@@ -454,7 +422,6 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.onSetToMax,
     required this.showSetToMax,
     required this.partitionBar,
-    required this.pieChart,
   });
 
   final BackheaderBudgetItem item;
@@ -475,7 +442,6 @@ class _BudgetLimitCard extends StatelessWidget {
   final VoidCallback onSetToMax;
   final bool showSetToMax;
   final Widget partitionBar;
-  final Widget pieChart;
 
   @override
   Widget build(BuildContext context) {
@@ -559,8 +525,6 @@ class _BudgetLimitCard extends StatelessWidget {
           const SizedBox(height: 2),
         const SizedBox(height: 8),
         partitionBar,
-        const SizedBox(height: 14),
-        pieChart,
       ],
     );
   }

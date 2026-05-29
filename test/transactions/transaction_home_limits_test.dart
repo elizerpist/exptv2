@@ -127,7 +127,9 @@ void main() {
     expect(repository.savedLimits.single['limitAmount'], 1000);
   });
 
-  testWidgets('pie tap selects category and syncs backheader', (tester) async {
+  testWidgets('partition tap selects category and syncs backheader', (
+    tester,
+  ) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
     final store = TransactionStore(
       repository,
@@ -137,11 +139,29 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('limit-allocation-pie-chart')));
+
+    expect(
+      find.byKey(const ValueKey('limit-allocation-pie-chart')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('category-limit-partition-segment-0')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('limit-card-title')), findsOneWidget);
     expect(find.text('Food'), findsWidgets);
+    expect(
+      tester.widget<Text>(
+        find.byKey(const ValueKey('backheader-active-title')),
+      ).data,
+      'Food',
+    );
   });
 
   testWidgets('editor arrows sync active backheader bar', (tester) async {
@@ -186,7 +206,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('limit-allocation-pie-chart')),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
@@ -217,7 +237,7 @@ Future<void> pumpExpandedMonthlyHome(
 
   await tester.drag(
     find.byKey(const ValueKey('summary-pill')),
-    const Offset(90, 0),
+    const Offset(0, -90),
   );
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('header-expand-button')));

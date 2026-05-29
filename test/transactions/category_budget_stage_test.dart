@@ -397,6 +397,39 @@ void main() {
     );
   });
 
+  testWidgets('partition bar segment tap reports category target id', (
+    tester,
+  ) async {
+    int? tappedTargetId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            child: CategoryLimitPartitionBar(
+              height: 29.4,
+              allocation: LimitAllocationManager.build(
+                overviewLimit: 100,
+                bars: [
+                  barFixture(6, 'Food', 25, 50),
+                  barFixture(7, 'Travel', 0, 20),
+                ],
+              ),
+              onSegmentTap: (targetId) => tappedTargetId = targetId,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('category-limit-partition-segment-0')),
+    );
+    await tester.pump();
+
+    expect(tappedTargetId, 6);
+  });
+
 }
 
 CategoryBudgetBarData barFixture(

@@ -16,6 +16,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     this.activeLimitAmount,
     this.overviewLimitAmount,
     this.height = 42,
+    this.onSegmentTap,
   });
 
   final List<CategoryBudgetBarData> bars;
@@ -24,12 +25,17 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   final double? activeLimitAmount;
   final double? overviewLimitAmount;
   final double height;
+  final ValueChanged<int>? onSegmentTap;
 
   @override
   Widget build(BuildContext context) {
     final allocation = this.allocation;
     if (allocation != null) {
-      return _AllocationPartitionBar(allocation: allocation, height: height);
+      return _AllocationPartitionBar(
+        allocation: allocation,
+        height: height,
+        onSegmentTap: onSegmentTap,
+      );
     }
     final overviewLimit = overviewLimitAmount ?? 0;
     return Container(
@@ -225,10 +231,12 @@ class _AllocationPartitionBar extends StatelessWidget {
   const _AllocationPartitionBar({
     required this.allocation,
     required this.height,
+    this.onSegmentTap,
   });
 
   final LimitAllocationData allocation;
   final double height;
+  final ValueChanged<int>? onSegmentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -251,13 +259,21 @@ class _AllocationPartitionBar extends StatelessWidget {
                 () {
                   final segment = allocation.segments[i];
                   final width = constraints.maxWidth * segment.fraction;
+                  final targetId = segment.targetId;
+                  final onTap = onSegmentTap;
                   final child = Positioned(
                     key: ValueKey('category-limit-partition-segment-$i'),
                     left: left,
                     top: 0,
                     width: width,
                     bottom: 0,
-                    child: ColoredBox(color: segment.color),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: targetId == null || onTap == null
+                          ? null
+                          : () => onTap(targetId),
+                      child: ColoredBox(color: segment.color),
+                    ),
                   );
                   left += width;
                   return child;
