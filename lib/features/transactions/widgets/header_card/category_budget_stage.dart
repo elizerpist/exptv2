@@ -436,9 +436,12 @@ class _OverviewBudgetBar extends StatelessWidget {
       BudgetGoalKind.incomeGoal => Icons.trending_up,
       BudgetGoalKind.savingGoal => Icons.savings_outlined,
     };
-    final progress = overview.hasLimit && overview.limitAmount > 0
+    final spentRatio = overview.hasLimit && overview.limitAmount > 0
         ? (overview.amount / overview.limitAmount).clamp(0.0, 1.0).toDouble()
-        : 1.0;
+        : 0.0;
+    final widthFactor = overview.kind.warnsWhenHigh
+        ? (1.0 - spentRatio).clamp(0.0, 1.0).toDouble()
+        : spentRatio;
     return Material(
       key: const ValueKey('category-budget-bar'),
       color: Colors.transparent,
@@ -457,9 +460,15 @@ class _OverviewBudgetBar extends StatelessWidget {
               children: [
                 ColoredBox(color: color.withValues(alpha: 0.30)),
                 FractionallySizedBox(
-                  widthFactor: progress,
+                  key: const ValueKey('overview-budget-remaining-fill'),
+                  widthFactor: widthFactor,
                   alignment: Alignment.centerLeft,
-                  child: ColoredBox(color: color),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(height / 2),
+                    ),
+                  ),
                 ),
                 Align(
                   alignment: Alignment.centerLeft,

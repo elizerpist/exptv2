@@ -20,9 +20,9 @@ class CategoryBudgetBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = bar.hasLimit && bar.limitAmount > 0
+    final spentRatio = bar.hasLimit && bar.limitAmount > 0
         ? (bar.spent / bar.limitAmount).clamp(0.0, 1.0).toDouble()
-        : 1.0;
+        : 0.0;
     return Material(
       key: const ValueKey('category-budget-bar'),
       color: Colors.transparent,
@@ -39,13 +39,17 @@ class CategoryBudgetBar extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ColoredBox(color: bar.color.withValues(alpha: 0.30)),
-                FractionallySizedBox(
-                  key: const ValueKey('category-budget-used-fill'),
-                  widthFactor: progress,
-                  alignment: Alignment.centerLeft,
-                  child: ColoredBox(color: bar.color),
+                ColoredBox(
+                  key: const ValueKey('category-budget-remaining-fill'),
+                  color: bar.color,
                 ),
+                if (spentRatio > 0)
+                  FractionallySizedBox(
+                    key: const ValueKey('category-budget-spent-overlay'),
+                    widthFactor: spentRatio,
+                    alignment: Alignment.centerLeft,
+                    child: ColoredBox(color: bar.color.withValues(alpha: 0.30)),
+                  ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(

@@ -5,6 +5,7 @@ import 'package:exptv2/features/transactions/models/category_budget_bar_data.dar
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/overview_budget_data.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/category_budget_bar.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_budget_stage.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_partition_bar.dart';
@@ -146,6 +147,82 @@ void main() {
       find.byKey(const ValueKey('category-budget-bar-translation')),
     );
     expect(translatedAfterSnap.transform.getTranslation().x, 0);
+  });
+
+  testWidgets('category bar shows full strength when limit has no spending', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryBudgetBar(
+            bar: barFixture(6, 'Food', 0, 10000),
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('category-budget-remaining-fill')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-budget-spent-overlay')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('category bar fades spent part and keeps remaining part strong', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            child: CategoryBudgetBar(
+              bar: barFixture(6, 'Food', 1000, 10000),
+              onTap: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final spent = tester.widget<FractionallySizedBox>(
+      find.byKey(const ValueKey('category-budget-spent-overlay')),
+    );
+    expect(spent.widthFactor, moreOrLessEquals(0.1, epsilon: 0.001));
+  });
+
+  testWidgets('expense budget overview bar shrinks as budget is consumed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: [
+                BackheaderBudgetItem.overview(
+                  overviewFixture(BudgetGoalKind.expenseBudget, 25, 100),
+                ),
+              ],
+              categoryBars: const [],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final fill = tester.widget<FractionallySizedBox>(
+      find.byKey(const ValueKey('overview-budget-remaining-fill')),
+    );
+    expect(fill.widthFactor, moreOrLessEquals(0.75, epsilon: 0.001));
   });
 
   testWidgets('stage renders budget progress frame when overview limit exists', (
