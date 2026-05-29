@@ -22,6 +22,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
     final extent = visibleFastInfoExtent
         .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
         .toDouble();
+    final showFastInfo = extent > 1.0;
     return Positioned(
       top: -TransactionHeaderMetrics.fastInfoHeight + extent,
       left: 0,
@@ -47,7 +48,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              if (extent > 0)
+              if (showFastInfo)
                 Positioned(
                   top: 0,
                   left: 0,
