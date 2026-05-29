@@ -22,19 +22,23 @@ class BudgetTargetEditorSheet extends StatefulWidget {
   const BudgetTargetEditorSheet({
     super.key,
     required this.item,
+    required this.items,
     required this.categoryBars,
     required this.periodIncome,
     required this.onCancel,
+    required this.onActiveItemChanged,
     required this.onSaveOverview,
     required this.onSaveCategory,
     this.overviewItems = const [],
   });
 
   final BackheaderBudgetItem item;
+  final List<BackheaderBudgetItem> items;
   final List<CategoryBudgetBarData> categoryBars;
   final List<OverviewBudgetData> overviewItems;
   final double periodIncome;
   final VoidCallback onCancel;
+  final ValueChanged<BackheaderBudgetItem> onActiveItemChanged;
   final Future<void> Function(
     BudgetGoalKind kind, {
     required double limitAmount,
@@ -114,11 +118,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   List<BackheaderBudgetItem> get _items {
-    final items = <BackheaderBudgetItem>[
-      for (final overview in widget.overviewItems)
-        BackheaderBudgetItem.overview(overview),
-      for (final bar in widget.categoryBars) BackheaderBudgetItem.category(bar),
-    ];
+    final items = [...widget.items];
     if (!items.any((item) => item.key == widget.item.key)) {
       items.insert(0, widget.item);
     }
@@ -288,6 +288,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     _activeKey = item.key;
     _setControllerAmount(_limitAmountFor(item));
     setState(() {});
+    widget.onActiveItemChanged(item);
   }
 
   void _refreshFromController() {

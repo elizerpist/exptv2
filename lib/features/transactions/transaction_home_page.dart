@@ -402,34 +402,39 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
           ),
-          child: BudgetTargetEditorSheet(
-            item: item,
-            categoryBars: widget.store.categoryBudgetBars,
-            overviewItems: widget.store.overviewBudgetItems,
-            periodIncome: widget.store.activePeriodIncomeTotal,
-            onCancel: () => Navigator.of(sheetContext).pop(),
-            onSaveOverview: (
-              kind, {
-              required limitAmount,
-              required alertActive,
-            }) async {
-              await widget.store.saveOverviewLimit(
-                kind,
-                limitAmount: limitAmount,
-                alertActive: alertActive,
-              );
-            },
-            onSaveCategory: (
-              bar, {
-              required limitAmount,
-              required alertActive,
-            }) async {
-              await widget.store.saveCategoryLimitForBar(
-                bar,
-                limitAmount: limitAmount,
-                alertActive: alertActive,
-              );
-            },
+          child: ListenableBuilder(
+            listenable: widget.store,
+            builder: (context, _) => BudgetTargetEditorSheet(
+              item: item,
+              items: widget.store.backheaderBudgetItems,
+              categoryBars: widget.store.categoryBudgetBars,
+              overviewItems: widget.store.overviewBudgetItems,
+              periodIncome: widget.store.activePeriodIncomeTotal,
+              onCancel: () => Navigator.of(sheetContext).pop(),
+              onActiveItemChanged: _setBackheaderActiveItem,
+              onSaveOverview: (
+                kind, {
+                required limitAmount,
+                required alertActive,
+              }) async {
+                await widget.store.saveOverviewLimit(
+                  kind,
+                  limitAmount: limitAmount,
+                  alertActive: alertActive,
+                );
+              },
+              onSaveCategory: (
+                bar, {
+                required limitAmount,
+                required alertActive,
+              }) async {
+                await widget.store.saveCategoryLimitForBar(
+                  bar,
+                  limitAmount: limitAmount,
+                  alertActive: alertActive,
+                );
+              },
+            ),
           ),
         );
       },

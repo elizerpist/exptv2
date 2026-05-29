@@ -27,11 +27,15 @@ class CategoryLimitEditorSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bars = allBars.isEmpty ? [bar] : allBars;
+    final item = BackheaderBudgetItem.category(bar);
     return BudgetTargetEditorSheet(
-      item: BackheaderBudgetItem.category(bar),
-      categoryBars: allBars.isEmpty ? [bar] : allBars,
+      item: item,
+      items: bars.map(BackheaderBudgetItem.category).toList(),
+      categoryBars: bars,
       periodIncome: 0,
       onCancel: onCancel,
+      onActiveItemChanged: (_) {},
       onSaveOverview: (
         BudgetGoalKind kind, {
         required double limitAmount,

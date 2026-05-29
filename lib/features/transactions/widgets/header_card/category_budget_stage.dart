@@ -71,9 +71,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   @override
   void didUpdateWidget(covariant CategoryBudgetStage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final synced = _syncControlledIndex(resetDrag: true);
     if (_index >= _items.length) _index = 0;
-    _syncControlledIndex();
-    if (_items.length != _oldItems(oldWidget).length) _dragDx = 0;
+    if (!synced && _items.length != _oldItems(oldWidget).length) _dragDx = 0;
   }
 
   @override
@@ -230,11 +230,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     );
   }
 
-  void _syncControlledIndex() {
+  bool _syncControlledIndex({bool resetDrag = false}) {
     final activeKey = widget.activeKey;
-    if (activeKey == null) return;
+    if (activeKey == null) return false;
     final nextIndex = _items.indexWhere((item) => item.key == activeKey);
-    if (nextIndex >= 0) _index = nextIndex;
+    if (nextIndex < 0) return false;
+    _index = nextIndex;
+    if (resetDrag) _dragDx = 0;
+    return true;
   }
 
   List<BackheaderBudgetItem> get _items {

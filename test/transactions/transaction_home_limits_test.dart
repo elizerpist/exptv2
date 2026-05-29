@@ -143,6 +143,27 @@ void main() {
     expect(find.byKey(const ValueKey('limit-card-title')), findsOneWidget);
     expect(find.text('Food'), findsWidgets);
   });
+
+  testWidgets('editor arrows sync active backheader bar', (tester) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('limit-card-next')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('backheader-active-title')),
+      findsOneWidget,
+    );
+    expect(find.text('Food'), findsWidgets);
+  });
+
 }
 
 Future<void> pumpExpandedMonthlyHome(
