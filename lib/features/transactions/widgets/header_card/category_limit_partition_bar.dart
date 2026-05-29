@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/limit_partition_manager.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/limit_allocation_data.dart';
 
 class CategoryLimitPartitionBar extends StatelessWidget {
   const CategoryLimitPartitionBar({
     super.key,
-    required this.bars,
+    this.bars = const [],
+    this.allocation,
     this.activeBar,
     this.activeLimitAmount,
     this.overviewLimitAmount,
@@ -17,6 +19,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   });
 
   final List<CategoryBudgetBarData> bars;
+  final LimitAllocationData? allocation;
   final CategoryBudgetBarData? activeBar;
   final double? activeLimitAmount;
   final double? overviewLimitAmount;
@@ -24,6 +27,10 @@ class CategoryLimitPartitionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final allocation = this.allocation;
+    if (allocation != null) {
+      return _AllocationPartitionBar(allocation: allocation, height: height);
+    }
     final overviewLimit = overviewLimitAmount ?? 0;
     return Container(
       key: const ValueKey('category-limit-partition-bar'),
@@ -211,5 +218,54 @@ class CategoryLimitPartitionBar extends StatelessWidget {
           ),
         ),
     ];
+  }
+}
+
+class _AllocationPartitionBar extends StatelessWidget {
+  const _AllocationPartitionBar({
+    required this.allocation,
+    required this.height,
+  });
+
+  final LimitAllocationData allocation;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('category-limit-partition-bar'),
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.gray200,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.white),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          var left = 0.0;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (var i = 0; i < allocation.segments.length; i += 1)
+                () {
+                  final segment = allocation.segments[i];
+                  final width = constraints.maxWidth * segment.fraction;
+                  final child = Positioned(
+                    key: ValueKey('category-limit-partition-segment-$i'),
+                    left: left,
+                    top: 0,
+                    width: width,
+                    bottom: 0,
+                    child: ColoredBox(color: segment.color),
+                  );
+                  left += width;
+                  return child;
+                }(),
+            ],
+          );
+        },
+      ),
+    );
   }
 }

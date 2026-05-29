@@ -1,3 +1,4 @@
+import 'package:exptv2/features/transactions/data/limit_allocation_manager.dart';
 import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
 import 'package:exptv2/features/transactions/models/budget_goal_kind.dart';
 import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
@@ -6,6 +7,7 @@ import 'package:exptv2/features/transactions/models/overview_budget_data.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_budget_stage.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/category_limit_partition_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -350,6 +352,41 @@ void main() {
     expect(
       bar.top - frame.top,
       moreOrLessEquals(frame.bottom - bar.bottom, epsilon: 0.1),
+    );
+  });
+
+  testWidgets('partition bar renders compact rounded-square allocation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryLimitPartitionBar(
+            height: 29.4,
+            allocation: LimitAllocationManager.build(
+              overviewLimit: 100,
+              bars: [barFixture(6, 'Food', 25, 50)],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    expect(bar.height, moreOrLessEquals(29.4, epsilon: 0.1));
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-segment-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-segment-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-segment-2')),
+      findsOneWidget,
     );
   });
 

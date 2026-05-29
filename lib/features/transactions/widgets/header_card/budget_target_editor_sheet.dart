@@ -231,12 +231,13 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     if (overview?.kind == BudgetGoalKind.savingGoal) {
       return const SizedBox.shrink();
     }
-    final category = _activeItem.category;
-    return CategoryLimitPartitionBar(
+    final allocation = LimitAllocationManager.build(
+      overviewLimit: _overviewLimitAmount ?? 0,
       bars: _partitionBars,
-      activeBar: category,
-      activeLimitAmount: category == null ? null : _amount,
-      overviewLimitAmount: _overviewLimitAmount,
+    );
+    return CategoryLimitPartitionBar(
+      height: 29.4,
+      allocation: allocation,
     );
   }
 
