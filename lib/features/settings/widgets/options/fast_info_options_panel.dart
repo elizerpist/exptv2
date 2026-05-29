@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_dimensions.dart';
 import '../../../../features/transactions/widgets/header_card/fast_info_panel.dart';
 import '../../models/fast_info_card_catalog.dart';
 import '../../models/fast_info_config.dart';
@@ -36,8 +37,10 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
 
   Set<String> get _assignedIds {
     return <String>{
-      for (final slot in _draft.pills) if (slot != null) slot.id,
-      for (final slot in _draft.boxes) if (slot != null) slot.id,
+      for (final slot in _draft.pills)
+        if (slot != null) slot.id,
+      for (final slot in _draft.boxes)
+        if (slot != null) slot.id,
     };
   }
 
@@ -54,8 +57,12 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
           child: FastInfoPanel(
             config: _draft,
             backgroundColor: AppColors.gray100,
-            onDropPillCard: (index, cardId) => _assign(FastInfoSlotType.pill, index, cardId),
-            onDropBoxCard: (index, cardId) => _assign(FastInfoSlotType.box, index, cardId),
+            pillTop: 27,
+            boxTop: 175,
+            onDropPillCard: (index, cardId) =>
+                _assign(FastInfoSlotType.pill, index, cardId),
+            onDropBoxCard: (index, cardId) =>
+                _assign(FastInfoSlotType.box, index, cardId),
             onClearPillSlot: (index) => _clear(FastInfoSlotType.pill, index),
             onClearBoxSlot: (index) => _clear(FastInfoSlotType.box, index),
           ),
@@ -63,7 +70,12 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
         Expanded(
           child: GridView.builder(
             key: const ValueKey('fastinfo-card-pool'),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+            padding: const EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              AppDimensions.bottomNavHeight + 16,
+            ),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               mainAxisSpacing: 10,
@@ -123,9 +135,10 @@ class _PoolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Draggable<String>(
-      key: ValueKey('fastinfo-pool-card-${card.id}'),
+    return LongPressDraggable<String>(
       data: card.id,
+      delay: const Duration(milliseconds: 650),
+      hapticFeedbackOnStart: true,
       feedback: Material(
         color: Colors.transparent,
         child: ConstrainedBox(
@@ -137,7 +150,10 @@ class _PoolCard extends StatelessWidget {
         opacity: 0.35,
         child: _PoolCardSurface(card: card),
       ),
-      child: _PoolCardSurface(card: card),
+      child: KeyedSubtree(
+        key: ValueKey('fastinfo-pool-card-${card.id}'),
+        child: _PoolCardSurface(card: card),
+      ),
     );
   }
 }

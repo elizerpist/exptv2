@@ -49,10 +49,79 @@ void main() {
     );
   });
 
-  testWidgets('dropping onto occupied slot replaces old card and returns old card to pool', (
+  testWidgets(
+    'dropping onto occupied slot replaces old card and returns old card to pool',
+    (tester) async {
+      FastInfoConfig? changed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: FastInfoOptionsPanel(
+                config: FastInfoConfig(
+                  pills: const [null, null, null],
+                  boxes: const [null, null, null],
+                ),
+                onChanged: (config) => changed = config,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await _dragCardToPill(tester, 'mai_koltes', 0);
+      await _dragCardToPill(tester, 'havi_koltes', 0);
+
+      expect(changed?.pills[0]?.id, 'havi_koltes');
+      expect(
+        find.byKey(const ValueKey('fastinfo-pool-card-mai_koltes')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('fastinfo-pool-card-havi_koltes')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('preview halves title gap and keeps menu above bottom nav', (
     tester,
   ) async {
-    FastInfoConfig? changed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: FastInfoOptionsPanel(
+              config: FastInfoConfig.defaults(),
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final panelTop = tester
+        .getTopLeft(find.byKey(const ValueKey('fast-info-panel')))
+        .dy;
+    final firstPillTop = tester
+        .getTopLeft(find.byKey(const ValueKey('fastinfo-pill-slot-0')))
+        .dy;
+    expect(firstPillTop - panelTop, 27);
+
+    final pool = tester.widget<GridView>(
+      find.byKey(const ValueKey('fastinfo-card-pool')),
+    );
+    final padding = pool.padding! as EdgeInsets;
+    expect(padding.bottom, 96);
+  });
+
+  testWidgets('pool cards require a longer haptic long press before dragging', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -64,25 +133,22 @@ void main() {
                 pills: const [null, null, null],
                 boxes: const [null, null, null],
               ),
-              onChanged: (config) => changed = config,
+              onChanged: (_) {},
             ),
           ),
         ),
       ),
     );
 
-    await _dragCardToPill(tester, 'mai_koltes', 0);
-    await _dragCardToPill(tester, 'havi_koltes', 0);
+    final draggable = tester.widget<LongPressDraggable<String>>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('fastinfo-pool-card-mai_koltes')),
+        matching: find.byType(LongPressDraggable<String>),
+      ),
+    );
 
-    expect(changed?.pills[0]?.id, 'havi_koltes');
-    expect(
-      find.byKey(const ValueKey('fastinfo-pool-card-mai_koltes')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('fastinfo-pool-card-havi_koltes')),
-      findsNothing,
-    );
+    expect(draggable.delay, const Duration(milliseconds: 650));
+    expect(draggable.hapticFeedbackOnStart, isTrue);
   });
 }
 
@@ -98,6 +164,9 @@ Future<void> _dragCardToPill(
   final dropCenter = tester.getCenter(
     find.byKey(ValueKey('fastinfo-pill-drop-$slotIndex')),
   );
-  await tester.dragFrom(dragStart, dropCenter - dragStart);
+  final gesture = await tester.startGesture(dragStart);
+  await tester.pump(const Duration(milliseconds: 700));
+  await gesture.moveTo(dropCenter);
+  await gesture.up();
   await tester.pumpAndSettle();
 }

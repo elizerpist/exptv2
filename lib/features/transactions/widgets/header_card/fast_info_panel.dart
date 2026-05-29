@@ -11,6 +11,8 @@ class FastInfoPanel extends StatelessWidget {
     super.key,
     required this.config,
     this.backgroundColor = AppColors.gray100,
+    this.pillTop = 54,
+    this.boxTop = 202,
     this.onDropPillCard,
     this.onDropBoxCard,
     this.onClearPillSlot,
@@ -19,6 +21,8 @@ class FastInfoPanel extends StatelessWidget {
 
   final FastInfoConfig config;
   final Color backgroundColor;
+  final double pillTop;
+  final double boxTop;
   final FastInfoCardDropCallback? onDropPillCard;
   final FastInfoCardDropCallback? onDropBoxCard;
   final ValueChanged<int>? onClearPillSlot;
@@ -33,7 +37,7 @@ class FastInfoPanel extends StatelessWidget {
       child: Stack(
         children: [
           Positioned(
-            top: 54,
+            top: pillTop,
             left: 20,
             right: 20,
             child: Column(
@@ -51,7 +55,7 @@ class FastInfoPanel extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 202,
+            top: boxTop,
             left: 20,
             right: 20,
             child: Row(
@@ -72,6 +76,36 @@ class FastInfoPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DropReadyFrame extends StatelessWidget {
+  const _DropReadyFrame({
+    required this.frameKey,
+    required this.dropReady,
+    required this.radius,
+    required this.child,
+  });
+
+  final Key frameKey;
+  final bool dropReady;
+  final double radius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      key: frameKey,
+      duration: const Duration(milliseconds: 120),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: dropReady ? AppColors.primary : Colors.transparent,
+          width: 1,
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -97,6 +131,7 @@ class _FastInfoPill extends StatelessWidget {
         children: [
           Container(
             key: ValueKey('fastinfo-pill-slot-$index'),
+            width: double.infinity,
             height: 38,
             alignment: Alignment.center,
             padding: EdgeInsets.only(
@@ -107,7 +142,10 @@ class _FastInfoPill extends StatelessWidget {
               color: AppColors.white,
               borderRadius: BorderRadius.circular(19),
               border: slot == null
-                  ? Border.all(color: AppColors.gray300, style: BorderStyle.solid)
+                  ? Border.all(
+                      color: AppColors.gray300,
+                      style: BorderStyle.solid,
+                    )
                   : null,
               boxShadow: [
                 BoxShadow(
@@ -135,9 +173,16 @@ class _FastInfoPill extends StatelessWidget {
               child: IconButton(
                 key: ValueKey('fastinfo-clear-pill-$index'),
                 onPressed: () => onClear!(index),
-                icon: const Icon(Icons.close, size: 16, color: AppColors.gray500),
+                icon: const Icon(
+                  Icons.close,
+                  size: 16,
+                  color: AppColors.gray500,
+                ),
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
                 tooltip: 'Slot ürítése',
               ),
             ),
@@ -152,10 +197,16 @@ class _FastInfoPill extends StatelessWidget {
       key: ValueKey('fastinfo-pill-drop-$index'),
       onAcceptWithDetails: (details) => onDropCard!(index, details.data),
       builder: (context, candidateData, rejectedData) {
+        final dropReady = candidateData.isNotEmpty;
         return AnimatedScale(
-          scale: candidateData.isEmpty ? 1 : 1.03,
+          scale: dropReady ? 1.03 : 1,
           duration: const Duration(milliseconds: 120),
-          child: child,
+          child: _DropReadyFrame(
+            frameKey: ValueKey('fastinfo-pill-drop-frame-$index'),
+            dropReady: dropReady,
+            radius: 20,
+            child: child,
+          ),
         );
       },
     );
@@ -183,6 +234,7 @@ class _FastInfoBox extends StatelessWidget {
         children: [
           Container(
             key: ValueKey('fastinfo-box-slot-$index'),
+            width: double.infinity,
             height: 84,
             padding: EdgeInsets.fromLTRB(
               10,
@@ -193,7 +245,9 @@ class _FastInfoBox extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: slot == null ? Border.all(color: AppColors.gray300) : null,
+              border: slot == null
+                  ? Border.all(color: AppColors.gray300)
+                  : null,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
@@ -206,14 +260,21 @@ class _FastInfoBox extends StatelessWidget {
           ),
           if (onClear != null && slot != null)
             Positioned(
-              right: -4,
-              top: -4,
+              right: 0,
+              top: 0,
               child: IconButton(
                 key: ValueKey('fastinfo-clear-box-$index'),
                 onPressed: () => onClear!(index),
-                icon: const Icon(Icons.close, size: 15, color: AppColors.gray500),
+                icon: const Icon(
+                  Icons.close,
+                  size: 15,
+                  color: AppColors.gray500,
+                ),
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                constraints: const BoxConstraints.tightFor(
+                  width: 30,
+                  height: 30,
+                ),
                 tooltip: 'Slot ürítése',
               ),
             ),
@@ -295,10 +356,16 @@ class _FastInfoBox extends StatelessWidget {
       key: ValueKey('fastinfo-box-drop-$index'),
       onAcceptWithDetails: (details) => onDropCard!(index, details.data),
       builder: (context, candidateData, rejectedData) {
+        final dropReady = candidateData.isNotEmpty;
         return AnimatedScale(
-          scale: candidateData.isEmpty ? 1 : 1.03,
+          scale: dropReady ? 1.03 : 1,
           duration: const Duration(milliseconds: 120),
-          child: child,
+          child: _DropReadyFrame(
+            frameKey: ValueKey('fastinfo-box-drop-frame-$index'),
+            dropReady: dropReady,
+            radius: 13,
+            child: child,
+          ),
         );
       },
     );
