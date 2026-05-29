@@ -81,7 +81,7 @@ void main() {
     );
     await gesture.moveBy(const Offset(-24, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(-64, 0));
+    await gesture.moveBy(const Offset(-24, 0));
     await tester.pump();
 
     final translatedBar = tester.widget<Transform>(
@@ -290,11 +290,14 @@ void main() {
           body: SizedBox(
             width: 390,
             height: 260,
-            child: CategoryBudgetStage(
-              items: bars.map(BackheaderBudgetItem.category).toList(),
-              categoryBars: bars,
-              periodLabel: 'Május 2026',
-              onItemTap: (_) {},
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: CategoryBudgetStage(
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                periodLabel: 'Május 2026',
+                onItemTap: (_) {},
+              ),
             ),
           ),
         ),
