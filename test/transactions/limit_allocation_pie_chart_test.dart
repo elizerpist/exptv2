@@ -21,7 +21,7 @@ void main() {
               bars: bars,
             ),
             onSliceTap: (targetId) => tappedTarget = targetId,
-            onSliceAmountChanged: (_, __) {},
+            onSliceAmountChanged: (_, _) {},
           ),
         ),
       ),
