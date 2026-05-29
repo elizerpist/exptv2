@@ -164,6 +164,38 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
+  testWidgets('income side uses income goal and income category allocation', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withIncomeData();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.text('Bevétel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beveteli cel'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('limit-allocation-pie-chart')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimits.last['targetType'], 'overview');
+    expect(repository.savedLimits.last['transactionType'], 'income');
+  });
+
 }
 
 Future<void> pumpExpandedMonthlyHome(
@@ -194,6 +226,24 @@ Future<void> pumpExpandedMonthlyHome(
 
 class FakeHomeLimitRepository implements TransactionRepositoryContract {
   FakeHomeLimitRepository();
+
+  FakeHomeLimitRepository.withIncomeData() {
+    limits = [
+      CategoryLimit.fromMap({
+        'id': 20,
+        'targetType': 'overview',
+        'targetId': 0,
+        'transactionType': 'income',
+        'window': 'monthly',
+        'periodKey': '2026-05',
+        'hasLimit': true,
+        'limitAmount': 1000,
+        'alertActive': false,
+        'createdAt': 0,
+        'updatedAt': 1,
+      }),
+    ];
+  }
 
   FakeHomeLimitRepository.withBudgetAndCategoryLimits() {
     categories.add(
