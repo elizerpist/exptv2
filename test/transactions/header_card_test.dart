@@ -4,6 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('header balance label and value are shifted down', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '123 Ft',
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(TransactionHeaderMetrics.balanceLabelTop, 92);
+    expect(TransactionHeaderMetrics.balanceTop, 118);
+  });
+
   testWidgets('header card copies stage0 layout and controls', (tester) async {
     var categoryPressed = false;
     var expandPressed = false;

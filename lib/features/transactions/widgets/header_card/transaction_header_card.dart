@@ -47,7 +47,6 @@ class TransactionHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibleBalanceText = balanceHidden ? '••••••• Ft' : balanceText;
     return SizedBox(
-      key: const ValueKey('transaction-header-card'),
       height: height,
       width: double.infinity,
       child: Stack(
@@ -66,9 +65,13 @@ class TransactionHeaderCard extends StatelessWidget {
                     ? -TransactionHeaderMetrics.expandedSlideDistance / height
                     : 0,
               ),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
+              child: SizedBox(
+                key: const ValueKey('transaction-header-card'),
+                height: height,
+                width: double.infinity,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
                   if (drawSurface)
                     Positioned.fill(
                       child: DecoratedBox(
@@ -200,18 +203,19 @@ class TransactionHeaderCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Positioned(
-                    top: TransactionHeaderMetrics.categoryButtonTop,
-                    right: 25,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 180),
-                      opacity: expanded ? 0 : 1,
-                      child: _HeaderCategoryButton(
-                        onPressed: onCategoryPressed,
+                    Positioned(
+                      top: TransactionHeaderMetrics.categoryButtonTop,
+                      right: 25,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: expanded ? 0 : 1,
+                        child: _HeaderCategoryButton(
+                          onPressed: onCategoryPressed,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

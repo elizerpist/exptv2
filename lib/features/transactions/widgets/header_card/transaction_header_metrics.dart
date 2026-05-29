@@ -11,8 +11,8 @@ class TransactionHeaderMetrics {
   static const cameraTop = 62.0;
   static const magnetTop = 45.0;
   static const magnetHeight = 157.5;
-  static const balanceLabelTop = 82.0;
-  static const balanceTop = 108.0;
+  static const balanceLabelTop = 92.0;
+  static const balanceTop = 118.0;
   static const categoryButtonTop = 112.0;
   static const expandButtonTop = 158.0;
 }

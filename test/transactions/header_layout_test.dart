@@ -276,6 +276,40 @@ void main() {
     },
   );
 
+  testWidgets('header card animates upward when backheader opens', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final before = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pump(const Duration(milliseconds: 80));
+    final during = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+    await tester.pumpAndSettle();
+    final after = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+
+    expect(during, lessThan(before));
+    expect(during, greaterThan(after));
+  });
+
   testWidgets('header expand button stays fixed when header card slides up', (
     tester,
   ) async {
