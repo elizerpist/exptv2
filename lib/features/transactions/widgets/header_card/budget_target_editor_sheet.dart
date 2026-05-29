@@ -9,6 +9,7 @@ import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
+import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
 import '../amount_field.dart';
 import 'category_budget_bar.dart';

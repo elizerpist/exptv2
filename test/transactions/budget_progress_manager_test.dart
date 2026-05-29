@@ -3,7 +3,6 @@ import 'package:exptv2/features/transactions/models/budget_goal_kind.dart';
 import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
-import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
