@@ -79,9 +79,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
     );
-    await gesture.moveBy(const Offset(-24, 0));
+    await gesture.moveBy(const Offset(-30, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(-24, 0));
+    await gesture.moveBy(const Offset(-25, 0));
     await tester.pump();
 
     final translatedBar = tester.widget<Transform>(
