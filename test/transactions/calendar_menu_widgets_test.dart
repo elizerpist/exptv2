@@ -165,7 +165,7 @@ void main() {
     expect(find.text('1'), findsNothing);
   });
 
-  testWidgets('calendar menu overlay switches modes and controls', (
+  testWidgets('stats dropdown switches modes and exposes export placeholders', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -185,13 +185,36 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('calendar-mode-selector')), findsNothing);
+    expect(find.byKey(const ValueKey('stats-menu-trigger')), findsOneWidget);
     expect(find.text('Küszöbérték nézet'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('calendar-threshold-slider')),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('calendar-mode-heatmap')));
+    await tester.tap(find.byKey(const ValueKey('stats-menu-trigger')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('stats-menu-mode-normal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stats-menu-mode-summary')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stats-menu-mode-heatmap')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stats-menu-mode-category')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('stats-menu-export-csv')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-menu-export-pdf')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('stats-menu-mode-heatmap')));
     await tester.pumpAndSettle();
     expect(find.text('Hőtérkép'), findsOneWidget);
     expect(
@@ -199,18 +222,20 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('calendar-mode-category')));
+    await tester.tap(find.byKey(const ValueKey('stats-menu-trigger')));
     await tester.pumpAndSettle();
-    expect(find.text('Domináns kategória'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('calendar-category-donut-chart')),
-      findsNothing,
-    );
+    await tester.tap(find.byKey(const ValueKey('stats-menu-export-csv')));
+    await tester.pumpAndSettle();
+    expect(find.text('CSV export később érkezik'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('stats-menu-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stats-menu-export-pdf')));
+    await tester.pumpAndSettle();
+    expect(find.text('PDF export később érkezik'), findsOneWidget);
   });
 
-
-  testWidgets('calendar menu header orders title year then mode buttons', (
+  testWidgets('calendar menu header shows top-left stats menu trigger', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -231,17 +256,198 @@ void main() {
     );
 
     final currentYear = DateTime.now().year.toString();
+    final menuRect = tester.getRect(
+      find.byKey(const ValueKey('stats-menu-trigger')),
+    );
     final titleTop = tester.getTopLeft(find.text('Küszöbérték nézet')).dy;
     final yearTop = tester.getTopLeft(find.text(currentYear)).dy;
-    final selectorTop = tester
-        .getTopLeft(find.byKey(const ValueKey('calendar-mode-selector')))
-        .dy;
 
+    expect(menuRect.left, lessThan(24));
+    expect(menuRect.top, lessThanOrEqualTo(titleTop));
     expect(titleTop, lessThan(yearTop));
-    expect(yearTop, lessThan(selectorTop));
+    expect(find.byKey(const ValueKey('calendar-mode-selector')), findsNothing);
   });
 
-  testWidgets('stats page renders calendar as a full screen tab', (tester) async {
+  testWidgets(
+    'month card tap opens focused month view and back returns annual view',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: CalendarMenuOverlay(
+                transactions: const [],
+                categories: const [],
+                onClose: () {},
+                onMonthSelect: (_, _) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await _tapFirstMonthCard(tester);
+
+      expect(
+        find.byKey(const ValueKey('calendar-focus-month-view')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar-focus-month-canvas')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('calendar-focus-back')), findsOneWidget);
+      expect(find.textContaining('January'), findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-canvas')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('calendar-focus-back')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('calendar-focus-month-view')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('calendar-canvas')), findsOneWidget);
+    },
+  );
+
+  testWidgets('focused month keeps shared view modes from stats dropdown', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarMenuOverlay(
+              transactions: const [],
+              categories: const [],
+              onClose: () {},
+              onMonthSelect: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _tapFirstMonthCard(tester);
+    await tester.tap(find.byKey(const ValueKey('stats-menu-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stats-menu-mode-heatmap')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hőtérkép'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-focus-month-canvas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('focused month renders visual monthly stats charts', (
+    tester,
+  ) async {
+    final year = DateTime.now().year;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarMenuOverlay(
+              transactions: [
+                _record(
+                  id: 1,
+                  date: '$year-01-03',
+                  amount: -12000,
+                  categoryId: 1,
+                ),
+                _record(
+                  id: 2,
+                  date: '$year-01-08',
+                  amount: -7500,
+                  categoryId: 2,
+                ),
+                _record(
+                  id: 3,
+                  date: '$year-01-18',
+                  amount: -22000,
+                  categoryId: 1,
+                ),
+                _record(
+                  id: 4,
+                  date: '$year-01-20',
+                  amount: 180000,
+                  categoryId: 9,
+                ),
+              ],
+              categories: const [
+                TransactionCategory(
+                  transactionCategoryID: 1,
+                  name: 'Élelmiszer',
+                  type: 'kiadás',
+                  colorSlot: 1,
+                  iconSlot: null,
+                  backgroundColor: null,
+                  icon: null,
+                  notification: null,
+                  hasLimit: false,
+                  limitAmount: 0,
+                  alertActive: false,
+                  isCustomIcon: false,
+                  originalIcon: null,
+                ),
+                TransactionCategory(
+                  transactionCategoryID: 2,
+                  name: 'Közlekedés',
+                  type: 'kiadás',
+                  colorSlot: 2,
+                  iconSlot: null,
+                  backgroundColor: null,
+                  icon: null,
+                  notification: null,
+                  hasLimit: false,
+                  limitAmount: 0,
+                  alertActive: false,
+                  isCustomIcon: false,
+                  originalIcon: null,
+                ),
+              ],
+              onClose: () {},
+              onMonthSelect: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _tapFirstMonthCard(tester);
+
+    expect(find.byKey(const ValueKey('month-cashflow-chart')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-daily-sparkline')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('month-category-breakdown')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('month-weekly-bars')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-highlight-tiles')), findsOneWidget);
+    expect(find.text('Cashflow'), findsOneWidget);
+    expect(find.text('Napi ritmus'), findsOneWidget);
+    expect(find.text('Kategóriák'), findsOneWidget);
+    expect(find.text('Heti bontás'), findsOneWidget);
+    expect(find.text('Kiemelések'), findsOneWidget);
+    expect(find.text('Élelmiszer'), findsOneWidget);
+  });
+
+  testWidgets('stats page renders calendar as a full screen tab', (
+    tester,
+  ) async {
     final store = TransactionStore(CalendarHomeRepository());
     await store.start();
     await tester.pumpWidget(
@@ -261,6 +467,34 @@ void main() {
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
     expect(find.text('Küszöbérték nézet'), findsOneWidget);
   });
+}
+
+Future<void> _tapFirstMonthCard(WidgetTester tester) async {
+  final topLeft = tester.getTopLeft(
+    find.byKey(const ValueKey('calendar-canvas')),
+  );
+  await tester.tapAt(topLeft + const Offset(84, 100));
+  await tester.pumpAndSettle();
+}
+
+TransactionRecord _record({
+  required int id,
+  required String date,
+  required double amount,
+  required int categoryId,
+}) {
+  return TransactionRecord(
+    id: id,
+    date: date,
+    time: '10:00',
+    latitude: null,
+    longitude: null,
+    address: null,
+    merchant: 'Teszt',
+    amount: amount,
+    userAssignedName: null,
+    transactionCategoryID: categoryId,
+  );
 }
 
 class CalendarHomeRepository implements TransactionRepositoryContract {
