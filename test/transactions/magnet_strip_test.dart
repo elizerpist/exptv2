@@ -19,7 +19,7 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('magnet-strip-fade'))).height,
-      70,
+      105,
     );
   });
 

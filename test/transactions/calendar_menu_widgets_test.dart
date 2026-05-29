@@ -205,8 +205,40 @@ void main() {
     expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
     expect(
       find.byKey(const ValueKey('calendar-category-donut-chart')),
-      findsOneWidget,
+      findsNothing,
     );
+  });
+
+
+  testWidgets('calendar menu header orders title year then mode buttons', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarMenuOverlay(
+              transactions: const [],
+              categories: const [],
+              onClose: () {},
+              onMonthSelect: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final currentYear = DateTime.now().year.toString();
+    final titleTop = tester.getTopLeft(find.text('Küszöbérték nézet')).dy;
+    final yearTop = tester.getTopLeft(find.text(currentYear)).dy;
+    final selectorTop = tester
+        .getTopLeft(find.byKey(const ValueKey('calendar-mode-selector')))
+        .dy;
+
+    expect(titleTop, lessThan(yearTop));
+    expect(yearTop, lessThan(selectorTop));
   });
 
   testWidgets('stats page renders calendar as a full screen tab', (tester) async {

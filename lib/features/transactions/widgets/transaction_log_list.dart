@@ -26,7 +26,7 @@ class TransactionLogList extends StatelessWidget {
   final List<TransactionCategory> categories;
   final TransactionLogContextCallback onFastFilter;
   final ValueChanged<TransactionRecord> onRecordTap;
-  final ValueChanged<TransactionRecord> onDeleteRequested;
+  final TransactionDeleteRequest onDeleteRequested;
   final ValueChanged<TransactionCategory> onCategoryFilter;
   final TransactionRenameCallback? onRenameMerchant;
   final TransactionRecordAction? onResetMerchantName;

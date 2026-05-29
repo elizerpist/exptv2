@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
@@ -35,16 +38,19 @@ class TransactionHomePage extends StatefulWidget {
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
   final ValueChanged<TransactionRecord>? onEditTransaction;
-  final ValueChanged<TransactionRecord>? onDeleteTransactionRequested;
+  final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
 
   @override
   State<TransactionHomePage> createState() => _TransactionHomePageState();
 }
 
-class _TransactionHomePageState extends State<TransactionHomePage> {
+class _TransactionHomePageState extends State<TransactionHomePage>
+    with SingleTickerProviderStateMixin {
   var _headerExpanded = false;
   var _fastInfoExtent = 0.0;
+  var _balanceHidden = false;
+  late final AnimationController _headerPullController;
   CategoryOverlayMode? _categoryMode;
   var _categoryEditorOpen = false;
   var _blockingOverlayNotified = false;
@@ -53,7 +59,15 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   @override
   void initState() {
     super.initState();
+    _headerPullController = AnimationController.unbounded(vsync: this)
+      ..addListener(_syncHeaderPullFromController);
     widget.store.start();
+  }
+
+  @override
+  void dispose() {
+    _headerPullController.dispose();
+    super.dispose();
   }
 
   @override
@@ -92,9 +106,10 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
             );
           }
 
-          _notifyBlockingOverlay(
-            _categoryMode != null || _categoryEditorOpen,
-          );
+          final visibleFastInfoExtent = _fastInfoExtent
+              .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+              .toDouble();
+          _notifyBlockingOverlay(_categoryEditorOpen);
 
           return Stack(
             clipBehavior: Clip.none,
@@ -144,16 +159,16 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   ),
                 ],
               ),
-              if (_fastInfoExtent > 0)
+              if (visibleFastInfoExtent > 0)
                 Positioned(
                   top:
                       -TransactionHeaderMetrics.fastInfoHeight +
-                      _fastInfoExtent,
+                      visibleFastInfoExtent,
                   left: 0,
                   right: 0,
                   child: Opacity(
                     opacity:
-                        (_fastInfoExtent /
+                        (visibleFastInfoExtent /
                                 TransactionHeaderMetrics.fastInfoHeight)
                             .clamp(0.0, 1.0),
                     child: FastInfoPanel(config: FastInfoConfig.defaults()),
@@ -174,14 +189,22 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
                   cardColor: expenseTheme.headerCard,
                   totalIncome: _totalIncome(),
                   totalExpense: _totalExpense(),
-                  fastInfoVisible: _fastInfoExtent > 0,
+                  fastInfoVisible: visibleFastInfoExtent > 0,
+                  balanceHidden: _balanceHidden,
+                  onBalanceVisibilityPressed: () {
+                    setState(() => _balanceHidden = !_balanceHidden);
+                  },
                   onCategoryPressed: _openCategoryMenu,
                   onVerticalDragUpdate: _handleHeaderDragUpdate,
                   onVerticalDragEnd: _handleHeaderDragEnd,
-                  onExpandPressed: () => setState(() {
-                    _fastInfoExtent = 0;
-                    _headerExpanded = !_headerExpanded;
-                  }),
+                  onExpandPressed: () {
+                    _headerPullController.stop();
+                    _headerPullController.value = 0;
+                    setState(() {
+                      _fastInfoExtent = 0;
+                      _headerExpanded = !_headerExpanded;
+                    });
+                  },
                 ),
               ),
               if (_categoryMode != null)
@@ -216,6 +239,16 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     );
   }
 
+  void _syncHeaderPullFromController() {
+    if (!mounted) return;
+    final rawNext = _headerPullController.value
+        .clamp(-12.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    final next = rawNext.abs() < 0.5 ? 0.0 : rawNext;
+    if ((next - _fastInfoExtent).abs() < 0.01) return;
+    setState(() => _fastInfoExtent = next);
+  }
+
   void _notifyBlockingOverlay(bool active) {
     if (_blockingOverlayNotified == active) return;
     _blockingOverlayNotified = active;
@@ -238,30 +271,50 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   }
 
   void _handleHeaderDragUpdate(DragUpdateDetails details) {
-    if (_headerExpanded ||
-        _categoryMode != null ||
-        _categoryEditorOpen) {
+    if (_headerExpanded || _categoryMode != null || _categoryEditorOpen) {
       return;
     }
-    final next = (_fastInfoExtent + details.delta.dy)
+    _headerPullController.stop();
+    final resistedDelta = details.delta.dy > 0
+        ? details.delta.dy * 0.85
+        : details.delta.dy;
+    final next = (_fastInfoExtent + resistedDelta)
         .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
         .toDouble();
     if (next == _fastInfoExtent) return;
-    setState(() => _fastInfoExtent = next);
+    _headerPullController.value = next;
   }
 
   void _handleHeaderDragEnd(DragEndDetails details) {
     if (_headerExpanded) return;
-    setState(() => _fastInfoExtent = 0);
+    final start = _fastInfoExtent
+        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    if (start == 0) {
+      _headerPullController.value = 0;
+      return;
+    }
+    _headerPullController.value = start;
+    _headerPullController.animateWith(
+      SpringSimulation(
+        const SpringDescription(mass: 1, stiffness: 380, damping: 24),
+        start,
+        0,
+        details.velocity.pixelsPerSecond.dy,
+      ),
+    );
   }
 
   void _setActiveType(TransactionType type) {
+    _headerPullController.stop();
+    _headerPullController.value = 0;
     widget.store.setActiveType(type);
     setState(() {
       _fastInfoExtent = 0;
-      _categoryMode = null;
-      _categoryEditorOpen = false;
-      _editingCategory = null;
+      if (_categoryEditorOpen) {
+        _categoryEditorOpen = false;
+        _editingCategory = null;
+      }
     });
   }
 
@@ -300,8 +353,8 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
     widget.onEditTransaction?.call(record);
   }
 
-  void _requestDeleteTransaction(TransactionRecord record) {
-    widget.onDeleteTransactionRequested?.call(record);
+  FutureOr<bool> _requestDeleteTransaction(TransactionRecord record) {
+    return widget.onDeleteTransactionRequested?.call(record) ?? false;
   }
 
   void _openLimitEditor(CategoryBudgetBarData bar) {
@@ -334,6 +387,8 @@ class _TransactionHomePageState extends State<TransactionHomePage> {
   }
 
   void _openCategoryMenu() {
+    _headerPullController.stop();
+    _headerPullController.value = 0;
     setState(() {
       if (_categoryMode != null || _categoryEditorOpen) {
         _categoryMode = null;

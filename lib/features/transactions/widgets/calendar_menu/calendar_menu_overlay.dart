@@ -9,7 +9,6 @@ import '../transaction_menu_metrics.dart';
 import 'calendar_canvas.dart';
 import 'calendar_mode_selector.dart';
 import 'calendar_value_slider_panel.dart';
-import 'category_donut_chart.dart';
 
 class CalendarMenuOverlay extends StatefulWidget {
   const CalendarMenuOverlay({
@@ -98,30 +97,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
           children: [
             Column(
               children: [
-                SizedBox(
-                  height: (widget.fullScreen ? 58 : 50) + topInset,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: topInset),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 100),
-                        Expanded(
-                          child: _YearNavigator(
-                            year: _year,
-                            onPrevious: () => setState(() => _year -= 1),
-                            onNext: () => setState(() => _year += 1),
-                          ),
-                        ),
-                        CalendarModeSelector(
-                          activeMode: _mode,
-                          transitionLocked: _transitionLocked,
-                          onModeChanged: _setMode,
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                    ),
-                  ),
-                ),
+                SizedBox(height: topInset + 12),
                 Text(
                   _mode.title,
                   style: const TextStyle(
@@ -130,17 +106,21 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                     color: AppColors.gray800,
                   ),
                 ),
-                if (_mode == CalendarMenuMode.category)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: CategoryDonutChart(
-                      transactions: widget.transactions,
-                      categories: widget.categories,
-                      year: _year,
-                    ),
-                  )
-                else
-                  const SizedBox(height: 8),
+                const SizedBox(height: 2),
+                _YearNavigator(
+                  year: _year,
+                  onPrevious: () => setState(() => _year -= 1),
+                  onNext: () => setState(() => _year += 1),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: CalendarModeSelector(
+                    activeMode: _mode,
+                    transitionLocked: _transitionLocked,
+                    onModeChanged: _setMode,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
@@ -72,6 +74,43 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(periods, [1, -1]);
+  });
+
+  testWidgets('summary pill changes title and value immediately', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Kiadások',
+          value: '-66 Ft',
+          onSwipe: () {},
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('summary-pill')),
+        matching: find.byType(AnimatedSwitcher),
+      ),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Bevételek',
+          value: '+555 Ft',
+          onSwipe: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Bevételek'), findsOneWidget);
+    expect(find.text('+555 Ft'), findsOneWidget);
+    expect(find.text('Kiadások'), findsNothing);
   });
 
   testWidgets('search pill shows merchant filter capsule', (tester) async {
@@ -166,7 +205,7 @@ void main() {
             categories: [sampleCategory(), sampleExpenseCategory()],
             onFastFilter: (_, _) {},
             onRecordTap: (_) {},
-            onDeleteRequested: (_) {},
+            onDeleteRequested: (_) => true,
             onCategoryFilter: (_) {},
           ),
         ),
@@ -215,7 +254,10 @@ void main() {
           record: sampleRecord(),
           category: sampleCategory(),
           onTap: (record) => editedId = record.id,
-          onDeleteRequested: (record) => deletedId = record.id,
+          onDeleteRequested: (record) {
+            deletedId = record.id;
+            return true;
+          },
         ),
       ),
     );
@@ -241,7 +283,7 @@ void main() {
           record: sampleRecord(),
           category: sampleCategory(),
           onFastFilter: (_, _) {},
-          onDeleteRequested: (_) {},
+          onDeleteRequested: (_) => true,
         ),
       ),
     );
@@ -268,6 +310,73 @@ void main() {
     expect(filterBorder.opacity, 0);
 
     await gesture.up();
+  });
+
+  testWidgets('logbox right swipe freezes until delete is canceled', (
+    tester,
+  ) async {
+    final deleteDecision = Completer<bool>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          onDeleteRequested: (_) => deleteDecision.future,
+        ),
+      ),
+    );
+
+    final cardFinder = find.byKey(
+      const ValueKey('transaction-logbox-card-250905'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(cardFinder));
+    await gesture.moveBy(const Offset(120, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      tester.widget<Transform>(cardFinder).transform.getTranslation().x,
+      greaterThan(0),
+    );
+
+    deleteDecision.complete(false);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Transform>(cardFinder).transform.getTranslation().x,
+      0,
+    );
+  });
+
+  testWidgets('logbox swipe borders match the translated card bounds', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          onDeleteRequested: (_) => false,
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('transaction-logbox-250905')),
+      const Offset(40, 0),
+    );
+    await tester.pump();
+
+    final cardRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-logbox-content-250905')),
+    );
+    final borderRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-logbox-delete-border-250905')),
+    );
+
+    expect(borderRect.width, moreOrLessEquals(cardRect.width, epsilon: 0.1));
+    expect(borderRect.height, moreOrLessEquals(cardRect.height, epsilon: 0.1));
   });
 
   testWidgets('logbox avatar tap requests category filter', (tester) async {

@@ -98,47 +98,29 @@ class _SummaryPillState extends State<SummaryPill> {
             ),
           ],
         ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 140),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeOutCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: Row(
-            key: ValueKey('${widget.title}-${widget.value}'),
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: Text(
-                  widget.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.5,
-                    color: AppColors.gray500,
-                  ),
-                ),
-              ),
-              Text(
-                widget.value,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                widget.title,
                 style: const TextStyle(
                   fontSize: 16,
                   height: 1.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.gray800,
+                  color: AppColors.gray500,
                 ),
               ),
-            ],
-          ),
+            ),
+            Text(
+              widget.value,
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gray800,
+              ),
+            ),
+          ],
         ),
       ),
     );

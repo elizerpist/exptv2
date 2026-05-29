@@ -41,7 +41,7 @@ class CategoryMenuPanel extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               Positioned(
-                left: 12,
+                left: 2,
                 child: IconButton(
                   key: const ValueKey('category-menu-back-button'),
                   onPressed: onClose,
@@ -58,7 +58,7 @@ class CategoryMenuPanel extends StatelessWidget {
                 ),
               ),
               Positioned(
-                right: 12,
+                right: 2,
                 child: IconButton(
                   key: const ValueKey('category-add-button'),
                   onPressed: onAdd,

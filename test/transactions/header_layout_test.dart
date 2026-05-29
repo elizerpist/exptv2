@@ -1,3 +1,5 @@
+import 'package:exptv2/core/theme/app_dimensions.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -5,10 +7,80 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('header shadow remains visible while fast info is visible', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '-100 Ft',
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+            fastInfoVisible: true,
+            magnetType: MagnetType.fade,
+            totalIncome: 0,
+            totalExpense: 100,
+          ),
+        ),
+      ),
+    );
+
+    final decoratedBox = tester
+        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .firstWhere((box) {
+      final decoration = box.decoration;
+      return decoration is BoxDecoration &&
+          (decoration.boxShadow?.isNotEmpty ?? false);
+    });
+    final decoration = decoratedBox.decoration as BoxDecoration;
+
+    expect(
+      decoration.boxShadow!.single.color,
+      Colors.black.withValues(alpha: 0.15),
+    );
+  });
+
+  testWidgets('hide balance button toggles the visible balance text', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('-100 Ft'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('header-balance-visibility-button')),
+    );
+    await tester.pump();
+
+    expect(find.text('-100 Ft'), findsNothing);
+    expect(find.text('••••••• Ft'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('header-balance-visibility-button')),
+    );
+    await tester.pump();
+
+    expect(find.text('-100 Ft'), findsOneWidget);
+  });
   testWidgets('header leaves the same gap above and below type pills', (
     tester,
   ) async {
@@ -142,7 +214,10 @@ void main() {
       );
       expect(
         pickerRect.bottom,
-        moreOrLessEquals(_screenHeight(tester), epsilon: 0.1),
+        moreOrLessEquals(
+          _screenHeight(tester) - AppDimensions.bottomNavHeight,
+          epsilon: 0.1,
+        ),
       );
 
       await tester.tap(find.byKey(const ValueKey('header-category-button')));
@@ -274,6 +349,40 @@ void main() {
 
     expect(find.byKey(const ValueKey('category-budget-stage')), findsOneWidget);
   });
+
+  testWidgets(
+    'category picker stays open and refreshes when active type changes',
+    (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(find.text('Food'), findsOneWidget);
+    expect(find.text('Salary'), findsNothing);
+
+    await tester.tap(find.text('Bevétel'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(find.text('Salary'), findsOneWidget);
+    expect(find.text('Food'), findsNothing);
+  });
 }
 
 double _screenHeight(WidgetTester tester) =>
@@ -283,6 +392,18 @@ class HeaderLayoutRepository implements TransactionRepositoryContract {
   @override
   Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
     categories: [
+      TransactionCategory.fromMap({
+        'transactionCategoryID': 5,
+        'name': 'Salary',
+        'type': 'bevétel',
+        'colorSlot': 2,
+        'iconSlot': 0,
+        'backgroundColor': '#3b82f6',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      }),
       TransactionCategory.fromMap({
         'transactionCategoryID': 6,
         'name': 'Food',
@@ -362,7 +483,7 @@ class HeaderLayoutRepository implements TransactionRepositoryContract {
   }) async => const [];
 
   @override
-  Future<Map<int, int>> categoryCounts() async => const {6: 1};
+  Future<Map<int, int>> categoryCounts() async => const {5: 0, 6: 1};
 
   @override
   Future<List<CategoryLimit>> listCategoryLimits({

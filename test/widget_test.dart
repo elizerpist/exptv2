@@ -153,7 +153,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
-    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
 
     await tester.tap(find.text('Értesítések'));
     await tester.pumpAndSettle();
@@ -168,8 +168,13 @@ void main() {
     expect(find.text('Kiadás'), findsOneWidget);
   });
 
-  testWidgets('FAB opens add transaction sheet on home tab', (tester) async {
+  testWidgets('FAB opens add transaction sheet from any bottom tab', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Stats'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
@@ -179,9 +184,17 @@ void main() {
     expect(find.text('Tranzakció neve'), findsOneWidget);
     expect(find.text('Összeg'), findsOneWidget);
     expect(find.text('Kategória'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('transaction-date-picker-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('transaction-time-picker-button')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('category overlay hides shell navigation controls', (
+  testWidgets('category overlay keeps shell navigation controls visible', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -193,8 +206,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
-    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
-    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
   testWidgets('transaction editor is non modal and aligned to summary pill', (
@@ -305,6 +318,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(deletedTransactionIds, [250909]);
+  });
+
+
+  testWidgets('add transaction sheet opens date and time pickers', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-date-picker-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('OK').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-time-picker-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TimePickerDialog), findsOneWidget);
   });
 
   testWidgets('add transaction sheet saves through native bridge', (

@@ -112,7 +112,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabPressed() {
-    if (_activeTab != AppTab.home) return;
     setState(() {
       _transactionEditorOpen = true;
       _editingTransaction = null;
@@ -138,7 +137,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() => _homeBlockingOverlayOpen = open);
   }
 
-  Future<void> _confirmDeleteTransaction(TransactionRecord transaction) async {
+  Future<bool> _confirmDeleteTransaction(TransactionRecord transaction) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -164,13 +163,15 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         );
       },
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return false;
 
     final deleted = await _transactionStore.deleteTransaction(transaction);
-    if (!mounted || !deleted) return;
+    if (!deleted) return false;
+    if (!mounted) return true;
     if (_editingTransaction?.id == transaction.id) {
       _closeTransactionEditor();
     }
+    return true;
   }
 
   @override
@@ -214,14 +215,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 onTabSelected: _selectTab,
               ),
             ),
-          if (!hideShellNavigation && _activeTab == AppTab.home)
+          if (!hideShellNavigation)
             Positioned(
               left: 0,
               right: 0,
               bottom: AppDimensions.fabBottom,
               child: Center(child: ExptFab(onPressed: _handleFabPressed)),
             ),
-          if (_activeTab == AppTab.home && _transactionEditorOpen)
+          if (_transactionEditorOpen)
             Positioned(
               left: 0,
               right: 0,

@@ -20,6 +20,8 @@ class TransactionHeaderCard extends StatelessWidget {
     this.totalIncome = 0,
     this.totalExpense = 0,
     this.fastInfoVisible = false,
+    this.balanceHidden = false,
+    this.onBalanceVisibilityPressed,
   });
 
   final String balanceText;
@@ -34,11 +36,14 @@ class TransactionHeaderCard extends StatelessWidget {
   final double totalIncome;
   final double totalExpense;
   final bool fastInfoVisible;
+  final bool balanceHidden;
+  final VoidCallback? onBalanceVisibilityPressed;
 
   static const height = TransactionHeaderMetrics.cardHeight;
 
   @override
   Widget build(BuildContext context) {
+    final visibleBalanceText = balanceHidden ? '••••••• Ft' : balanceText;
     return SizedBox(
       key: const ValueKey('transaction-header-card'),
       height: height,
@@ -72,7 +77,7 @@ class TransactionHeaderCard extends StatelessWidget {
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(
-                              alpha: fastInfoVisible ? 0 : 0.15,
+                              alpha: 0.15,
                             ),
                             offset: const Offset(0, 4),
                             blurRadius: 8,
@@ -151,7 +156,7 @@ class TransactionHeaderCard extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  balanceText,
+                                  visibleBalanceText,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontSize: 24,
@@ -160,11 +165,28 @@ class TransactionHeaderCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.visibility_outlined,
-                                color: AppColors.gray800,
-                                size: 20,
+                              const SizedBox(width: 2),
+                              IconButton(
+                                key: const ValueKey(
+                                  'header-balance-visibility-button',
+                                ),
+                                onPressed: onBalanceVisibilityPressed,
+                                icon: Icon(
+                                  balanceHidden
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: AppColors.gray800,
+                                  size: 20,
+                                ),
+                                tooltip: balanceHidden
+                                    ? 'Egyenleg megjelenítése'
+                                    : 'Egyenleg elrejtése',
+                                splashRadius: 16,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 30,
+                                  height: 30,
+                                ),
                               ),
                             ],
                           ),

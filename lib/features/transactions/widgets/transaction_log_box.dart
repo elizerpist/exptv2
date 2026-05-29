@@ -13,6 +13,8 @@ typedef TransactionRenameCallback =
     FutureOr<void> Function(TransactionRecord record, String userAssignedName);
 typedef TransactionRecordAction =
     FutureOr<void> Function(TransactionRecord record);
+typedef TransactionDeleteRequest =
+    FutureOr<bool> Function(TransactionRecord record);
 
 class TransactionLogBox extends StatefulWidget {
   const TransactionLogBox({
@@ -31,7 +33,7 @@ class TransactionLogBox extends StatefulWidget {
   final TransactionCategory? category;
   final TransactionLogContextCallback? onFastFilter;
   final ValueChanged<TransactionRecord>? onTap;
-  final ValueChanged<TransactionRecord>? onDeleteRequested;
+  final TransactionDeleteRequest? onDeleteRequested;
   final ValueChanged<TransactionCategory>? onCategoryFilter;
   final TransactionRenameCallback? onRenameMerchant;
   final TransactionRecordAction? onResetMerchantName;
@@ -44,6 +46,8 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   double _dragDx = 0;
   double _visualDx = 0;
   bool _triggered = false;
+  bool _deletePending = false;
+  bool _deleteFrozen = false;
 
   bool get _hasCustomName =>
       widget.record.userAssignedName?.trim().isNotEmpty ?? false;
@@ -51,17 +55,20 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   void _resetDrag() {
     _dragDx = 0;
     _triggered = false;
+    _deletePending = false;
+    _deleteFrozen = false;
     if (!mounted) return;
     setState(() => _visualDx = 0);
   }
 
   void _startDrag() {
+    if (_deletePending || _deleteFrozen) return;
     _dragDx = 0;
     _triggered = false;
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (_triggered) return;
+    if (_triggered || _deletePending || _deleteFrozen) return;
     _dragDx += details.delta.dx;
     setState(() => _visualDx = _dragDx.clamp(-20.0, 20.0).toDouble());
     if (_dragDx < -80) {
@@ -69,10 +76,25 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       widget.onFastFilter?.call(widget.record, widget.category);
       return;
     }
-    if (_dragDx > 80) {
+    if (_dragDx > 80 && widget.onDeleteRequested != null) {
       _triggered = true;
-      widget.onDeleteRequested?.call(widget.record);
+      unawaited(_requestDelete());
     }
+  }
+
+  Future<void> _requestDelete() async {
+    setState(() {
+      _deletePending = true;
+      _deleteFrozen = true;
+      _visualDx = 20;
+    });
+    final confirmed = await widget.onDeleteRequested!(widget.record);
+    if (!mounted) return;
+    if (confirmed) {
+      setState(() => _deletePending = false);
+      return;
+    }
+    _resetDrag();
   }
 
   Future<void> _openNameEditor() async {
@@ -108,8 +130,11 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       onTap: () => widget.onTap?.call(widget.record),
       onHorizontalDragStart: (_) => _startDrag(),
       onHorizontalDragUpdate: _handleDragUpdate,
-      onHorizontalDragCancel: _resetDrag,
-      onHorizontalDragEnd: (_) => _resetDrag(),
+      onHorizontalDragCancel: _deleteFrozen ? null : _resetDrag,
+      onHorizontalDragEnd: (_) {
+        if (_deleteFrozen) return;
+        _resetDrag();
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         child: Transform.translate(
@@ -118,6 +143,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
           child: Stack(
             children: [
               Container(
+                key: ValueKey('transaction-logbox-content-${widget.record.id}'),
                 constraints: const BoxConstraints(minHeight: 70),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -313,15 +339,16 @@ class _SwipeBorder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Opacity(
-        key: borderKey,
-        opacity: opacity,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 70),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: color, width: 3),
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Opacity(
+          key: borderKey,
+          opacity: opacity,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(color: color, width: 3),
+            ),
           ),
         ),
       ),

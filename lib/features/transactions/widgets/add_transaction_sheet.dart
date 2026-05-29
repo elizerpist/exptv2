@@ -153,6 +153,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           DateTimeFields(
                             dateController: _date,
                             timeController: _time,
+                            onPickDate: _pickDate,
+                            onPickTime: _pickTime,
                           ),
                           if (_error != null) ...[
                             const SizedBox(height: 12),
@@ -239,12 +241,40 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     return categories.first;
   }
 
+  Future<void> _pickDate() async {
+    final initialDate = _parseDate(_date.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _date.text = _formatDate(picked));
+  }
+
+  Future<void> _pickTime() async {
+    final initialTime = _parseTime(_time.text) ?? TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _time.text = _formatTimeOfDay(picked));
+  }
+
   Future<void> _save() async {
     final merchant = _name.text.trim();
     final amount = double.tryParse(_amount.text.trim().replaceAll(' ', ''));
     final category = _category;
     final type = widget.initialTransaction?.type ?? widget.store.activeType;
-    if (merchant.isEmpty || amount == null || category == null) {
+    final date = _normalizeDate(_date.text);
+    final time = _normalizeTime(_time.text);
+    if (merchant.isEmpty ||
+        amount == null ||
+        category == null ||
+        date == null ||
+        time == null) {
       setState(() => _error = 'Hiányzó vagy hibás adat');
       return;
     }
@@ -261,8 +291,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           amount: amount,
           type: type,
           categoryId: category.transactionCategoryID,
-          date: _date.text.trim(),
-          time: _time.text.trim(),
+          date: date,
+          time: time,
         );
       } else {
         await widget.store.updateTransaction(
@@ -271,8 +301,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           amount: amount,
           type: type,
           categoryId: category.transactionCategoryID,
-          date: _date.text.trim(),
-          time: _time.text.trim(),
+          date: date,
+          time: time,
         );
       }
       if (mounted) _close();
@@ -294,8 +324,51 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
   }
 
+  String? _normalizeDate(String value) {
+    final parsed = _parseDate(value);
+    return parsed == null ? null : _formatDate(parsed);
+  }
+
+  String? _normalizeTime(String value) {
+    final parsed = _parseTime(value);
+    return parsed == null ? null : _formatTimeOfDay(parsed);
+  }
+
+  DateTime? _parseDate(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[./]'), '-');
+    final parts = normalized.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+
+  TimeOfDay? _parseTime(String value) {
+    final parts = value.trim().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatTimeOfDay(TimeOfDay value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   String _formatDate(DateTime value) {
-    return '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
   }
 
   String _formatTime(DateTime value) {

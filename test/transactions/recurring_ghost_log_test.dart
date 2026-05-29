@@ -79,7 +79,7 @@ void main() {
             categories: [categoryFixture()],
             onFastFilter: (_, _) {},
             onRecordTap: (_) {},
-            onDeleteRequested: (_) {},
+            onDeleteRequested: (_) => true,
             onCategoryFilter: (_) {},
           ),
         ),

@@ -76,7 +76,7 @@ class CalendarCanvasPainter extends CustomPainter {
   }
 
   void _drawWeekdays(Canvas canvas, Rect rect, CalendarMonthRenderData month) {
-    final top = rect.top + (mode == CalendarMenuMode.summary ? 44 : 26);
+    final top = rect.top + 44;
     final cellWidth = rect.width / 7;
     for (var i = 0; i < month.weekdayLabels.length; i += 1) {
       _drawCenteredText(
@@ -91,7 +91,7 @@ class CalendarCanvasPainter extends CustomPainter {
   }
 
   void _drawDays(Canvas canvas, Rect rect, CalendarMonthRenderData month) {
-    final gridTop = rect.top + (mode == CalendarMenuMode.summary ? 54 : 36);
+    final gridTop = rect.top + 54;
     final cellWidth = rect.width / 7;
     final cellHeight = (rect.bottom - gridTop - 8) / 6;
     for (final day in month.days) {
