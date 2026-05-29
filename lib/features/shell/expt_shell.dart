@@ -222,6 +222,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               bottom: AppDimensions.fabBottom,
               child: Center(child: ExptFab(onPressed: _handleFabPressed)),
             ),
+          DebugFloatingButton(
+            recurringAlarmService: _recurringAlarmService,
+            onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
+          ),
           if (_transactionEditorOpen)
             Positioned(
               left: 0,
@@ -234,10 +238,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 onClose: _closeTransactionEditor,
               ),
             ),
-          DebugFloatingButton(
-            recurringAlarmService: _recurringAlarmService,
-            onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
-          ),
         ],
       ),
     );

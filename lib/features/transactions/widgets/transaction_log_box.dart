@@ -76,7 +76,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       widget.onFastFilter?.call(widget.record, widget.category);
       return;
     }
-    if (_dragDx > 80 && widget.onDeleteRequested != null) {
+    if (_dragDx > 70 && widget.onDeleteRequested != null) {
       _triggered = true;
       setState(() {
         _deletePending = true;
