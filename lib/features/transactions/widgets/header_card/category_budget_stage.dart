@@ -1,20 +1,34 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../data/budget_progress_manager.dart';
+import '../../models/backheader_budget_item.dart';
+import '../../models/budget_goal_kind.dart';
+import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/overview_budget_data.dart';
+import '../../models/transaction_category.dart';
+import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
-import 'category_summary_outline_bar.dart';
 import 'transaction_header_metrics.dart';
 
 class CategoryBudgetStage extends StatefulWidget {
   const CategoryBudgetStage({
     super.key,
-    required this.bars,
-    required this.onBarTap,
+    this.items,
+    this.categoryBars,
+    this.onItemTap,
+    this.bars,
+    this.onBarTap,
   });
 
-  final List<CategoryBudgetBarData> bars;
-  final ValueChanged<CategoryBudgetBarData> onBarTap;
+  final List<BackheaderBudgetItem>? items;
+  final List<CategoryBudgetBarData>? categoryBars;
+  final ValueChanged<BackheaderBudgetItem>? onItemTap;
+
+  // Compatibility for call sites migrated in the next implementation task.
+  final List<CategoryBudgetBarData>? bars;
+  final ValueChanged<CategoryBudgetBarData>? onBarTap;
 
   @override
   State<CategoryBudgetStage> createState() => _CategoryBudgetStageState();
@@ -46,19 +60,24 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   @override
   void didUpdateWidget(covariant CategoryBudgetStage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_index >= widget.bars.length) _index = 0;
-    if (oldWidget.bars.length != widget.bars.length) _dragDx = 0;
+    if (_index >= _items.length) _index = 0;
+    if (_items.length != _oldItems(oldWidget).length) _dragDx = 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.bars.isEmpty) {
+    final items = _items;
+    if (items.isEmpty) {
       return const SizedBox(
         key: ValueKey('category-budget-stage-empty'),
         height: TransactionHeaderMetrics.cardHeight,
       );
     }
-    final current = widget.bars[_index];
+    final current = items[_index];
+    final frameOverview = _frameOverviewFor(current, items);
+    final frameProgress = frameOverview == null
+        ? null
+        : _progressFor(frameOverview, _categoryBars);
     return SizedBox(
       key: const ValueKey('category-budget-stage'),
       height: TransactionHeaderMetrics.cardHeight,
@@ -76,11 +95,47 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             ),
           ),
           Positioned(
-            top: 70,
-            left: 20,
-            right: 20,
-            child: CategorySummaryOutlineBar(bars: widget.bars),
+            top: 34,
+            left: 30,
+            right: 30,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    current.title,
+                    key: const ValueKey('backheader-active-title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.gray800,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  current.amountText,
+                  key: const ValueKey('backheader-active-amount'),
+                  style: const TextStyle(
+                    color: AppColors.gray800,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (frameProgress != null && frameOverview != null)
+            Positioned(
+              top: 70,
+              left: 20,
+              right: 20,
+              child: BudgetProgressFrame(
+                progress: frameProgress,
+                kind: frameOverview.kind,
+              ),
+            ),
           Positioned(
             top: 78,
             left: 40,
@@ -106,18 +161,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   child: Transform.translate(
                     key: const ValueKey('category-budget-bar-translation'),
                     offset: Offset(_dragDx, 0),
-                    child: CategoryBudgetBar(
-                      bar: current,
-                      height: 54,
-                      compactIcon: true,
-                      onTap: () => widget.onBarTap(current),
-                    ),
+                    child: _barFor(current),
                   ),
                 );
               },
             ),
           ),
-          if (widget.bars.length > 1)
+          if (items.length > 1)
             Positioned(
               top: 150,
               left: 0,
@@ -125,7 +175,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (var i = 0; i < widget.bars.length; i += 1)
+                  for (var i = 0; i < items.length; i += 1)
                     AnimatedContainer(
                       key: ValueKey('category-budget-dot-$i'),
                       duration: const Duration(milliseconds: 150),
@@ -134,9 +184,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: i == _index
-                            ? AppColors.white
-                            : AppColors.white.withValues(alpha: 0.4),
+                        color: i == _index ? AppColors.primary : AppColors.white,
                       ),
                     ),
                 ],
@@ -147,6 +195,115 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     );
   }
 
+  List<BackheaderBudgetItem> get _items {
+    final explicit = widget.items;
+    if (explicit != null) return explicit;
+    return [
+      for (final bar in widget.bars ?? const <CategoryBudgetBarData>[])
+        BackheaderBudgetItem.category(bar),
+    ];
+  }
+
+  List<CategoryBudgetBarData> get _categoryBars {
+    final explicit = widget.categoryBars;
+    if (explicit != null) return explicit;
+    final legacy = widget.bars;
+    if (legacy != null) return legacy;
+    return [
+      for (final item in widget.items ?? const <BackheaderBudgetItem>[])
+        if (item.category != null) item.category!,
+    ];
+  }
+
+  List<BackheaderBudgetItem> _oldItems(CategoryBudgetStage oldWidget) {
+    final explicit = oldWidget.items;
+    if (explicit != null) return explicit;
+    return [
+      for (final bar in oldWidget.bars ?? const <CategoryBudgetBarData>[])
+        BackheaderBudgetItem.category(bar),
+    ];
+  }
+
+  Widget _barFor(BackheaderBudgetItem item) {
+    final category = item.category;
+    if (category != null) {
+      return CategoryBudgetBar(
+        bar: category,
+        height: 54,
+        compactIcon: true,
+        onTap: () => _tap(item),
+      );
+    }
+    return _OverviewBudgetBar(
+      item: item,
+      height: 54,
+      onTap: () => _tap(item),
+    );
+  }
+
+  void _tap(BackheaderBudgetItem item) {
+    widget.onItemTap?.call(item);
+    final category = item.category;
+    if (category != null) widget.onBarTap?.call(category);
+  }
+
+  OverviewBudgetData? _frameOverviewFor(
+    BackheaderBudgetItem current,
+    List<BackheaderBudgetItem> items,
+  ) {
+    final currentOverview = current.overview;
+    if (currentOverview != null && currentOverview.hasLimit) {
+      return currentOverview;
+    }
+    for (final item in items) {
+      final overview = item.overview;
+      if (overview != null && overview.hasLimit) return overview;
+    }
+    return null;
+  }
+
+  BudgetProgressData _progressFor(
+    OverviewBudgetData overview,
+    List<CategoryBudgetBarData> bars,
+  ) {
+    if (overview.kind == BudgetGoalKind.savingGoal) {
+      return BudgetProgressManager.overviewProgress(
+        kind: overview.kind,
+        limitAmount: overview.limitAmount,
+        categoryBars: bars,
+        periodIncome: overview.amount,
+        periodExpense: 0,
+      );
+    }
+    return BudgetProgressManager.overviewProgress(
+      kind: overview.kind,
+      limitAmount: overview.limitAmount,
+      categoryBars: bars,
+      periodIncome: _periodIncome(bars),
+      periodExpense: _periodExpense(bars),
+    );
+  }
+
+  double _periodIncome(List<CategoryBudgetBarData> bars) {
+    for (final item in _items) {
+      final overview = item.overview;
+      if (overview?.kind == BudgetGoalKind.incomeGoal) return overview!.amount;
+    }
+    return bars
+        .where((bar) => bar.transactionType == TransactionType.income)
+        .fold<double>(0, (sum, bar) => sum + bar.spent);
+  }
+
+  double _periodExpense(List<CategoryBudgetBarData> bars) {
+    for (final item in _items) {
+      final overview = item.overview;
+      if (overview?.kind == BudgetGoalKind.expenseBudget) return overview!.amount;
+    }
+    return bars
+        .where((bar) => bar.transactionType == TransactionType.expense)
+        .fold<double>(0, (sum, bar) => sum + bar.spent);
+  }
+
   void _syncSlideAnimation() {
     final animation = _slideAnimation;
     if (animation == null || !mounted) return;
@@ -155,7 +312,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
   Future<void> _settleDrag(double settleDistance) async {
     if (_settling) return;
-    if (widget.bars.length < 2) {
+    final items = _items;
+    if (items.length < 2) {
       await _animateDragTo(0);
       return;
     }
@@ -174,9 +332,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
     setState(() {
       _index = swipedLeft
-          ? (_index + 1) % widget.bars.length
+          ? (_index + 1) % items.length
           : _index == 0
-          ? widget.bars.length - 1
+          ? items.length - 1
           : _index - 1;
       _dragDx = -exitOffset;
     });
@@ -190,5 +348,70 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
     );
     return _slideController.forward(from: 0);
+  }
+}
+
+class _OverviewBudgetBar extends StatelessWidget {
+  const _OverviewBudgetBar({
+    required this.item,
+    required this.onTap,
+    required this.height,
+  });
+
+  final BackheaderBudgetItem item;
+  final VoidCallback onTap;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final overview = item.overview!;
+    final color = switch (overview.kind) {
+      BudgetGoalKind.expenseBudget => AppColors.primary,
+      BudgetGoalKind.incomeGoal => AppColors.income,
+      BudgetGoalKind.savingGoal => BudgetProgressManager.savingColor,
+    };
+    final icon = switch (overview.kind) {
+      BudgetGoalKind.expenseBudget => Icons.account_balance_wallet_outlined,
+      BudgetGoalKind.incomeGoal => Icons.trending_up,
+      BudgetGoalKind.savingGoal => Icons.savings_outlined,
+    };
+    final progress = overview.hasLimit && overview.limitAmount > 0
+        ? (overview.amount / overview.limitAmount).clamp(0.0, 1.0).toDouble()
+        : 1.0;
+    return Material(
+      key: const ValueKey('category-budget-bar'),
+      color: Colors.transparent,
+      elevation: 8,
+      shadowColor: Colors.black.withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(25),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(25),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: SizedBox(
+            height: height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: color.withValues(alpha: 0.30)),
+                FractionallySizedBox(
+                  widthFactor: progress,
+                  alignment: Alignment.centerLeft,
+                  child: ColoredBox(color: color),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 15),
+                    child: Icon(icon, color: AppColors.white, size: 35),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

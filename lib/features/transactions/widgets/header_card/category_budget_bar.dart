@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../slots/category_icon_manager.dart';
-import 'category_progress_bar.dart';
 
 class CategoryBudgetBar extends StatelessWidget {
   const CategoryBudgetBar({
@@ -21,112 +20,51 @@ class CategoryBudgetBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amountText = bar.hasLimit
-        ? '${bar.formattedSpent} / ${bar.formattedLimit}'
-        : bar.formattedSpent;
+    final progress = bar.hasLimit && bar.limitAmount > 0
+        ? (bar.spent / bar.limitAmount).clamp(0.0, 1.0).toDouble()
+        : 1.0;
     return Material(
       key: const ValueKey('category-budget-bar'),
-      color: bar.color,
+      color: Colors.transparent,
       elevation: 8,
       shadowColor: Colors.black.withValues(alpha: 0.2),
       borderRadius: BorderRadius.circular(25),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(25),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: AppColors.white),
-          ),
-          padding: const EdgeInsets.only(left: 15, right: 8),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Row(
-                children: [
-                  Image(
-                    image: CategoryIconManager.assetImage(bar.iconSlot),
-                    width: compactIcon ? 35 : 45,
-                    height: compactIcon ? 35 : 45,
-                    color: AppColors.white,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.category_outlined,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: SizedBox(
+            height: height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: bar.color.withValues(alpha: 0.30)),
+                FractionallySizedBox(
+                  key: const ValueKey('category-budget-used-fill'),
+                  widthFactor: progress,
+                  alignment: Alignment.centerLeft,
+                  child: ColoredBox(color: bar.color),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 15),
+                    child: Image(
+                      image: CategoryIconManager.assetImage(bar.iconSlot),
+                      width: compactIcon ? 35 : 45,
+                      height: compactIcon ? 35 : 45,
                       color: AppColors.white,
-                      size: compactIcon ? 35 : 45,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: bar.hasLimit ? 41 : 8,
-                        top: bar.hasLimit ? 0 : 2,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              bar.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 15,
-                                height: 1,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              amountText,
-                              key: bar.hasLimit
-                                  ? const ValueKey(
-                                      'category-budget-progress-text',
-                                    )
-                                  : null,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 12,
-                                height: 1,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.category_outlined,
+                        color: AppColors.white,
+                        size: compactIcon ? 35 : 45,
                       ),
                     ),
                   ),
-                ],
-              ),
-              if (bar.hasLimit)
-                Positioned(
-                  left: compactIcon ? 60 : 45,
-                  right: compactIcon ? 47 : 43,
-                  bottom: 22,
-                  child: CategoryProgressBar(
-                    spent: bar.spent,
-                    limitAmount: bar.limitAmount,
-                  ),
                 ),
-              if (bar.hasLimit)
-                Positioned(
-                  right: -5,
-                  top: 14,
-                  child: Icon(
-                    bar.alertActive
-                        ? Icons.notifications
-                        : Icons.notifications_none_outlined,
-                    color: AppColors.white,
-                    size: compactIcon ? 25 : 30,
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

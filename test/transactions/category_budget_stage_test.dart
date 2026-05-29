@@ -1,6 +1,8 @@
-import 'package:exptv2/features/transactions/data/limit_manager.dart';
+import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
+import 'package:exptv2/features/transactions/models/budget_goal_kind.dart';
 import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/overview_budget_data.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_budget_stage.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
@@ -8,10 +10,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('category budget stage shows and swipes category bars', (
+  testWidgets('category budget stage shows labels and swipes category bars', (
     tester,
   ) async {
-    CategoryBudgetBarData? tapped;
+    BackheaderBudgetItem? tapped;
+    final bars = [
+      barFixture(6, 'Food', 100, 150),
+      barFixture(7, 'Travel', 40, 0),
+    ];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -19,11 +25,9 @@ void main() {
             width: 390,
             height: 260,
             child: CategoryBudgetStage(
-              bars: [
-                barFixture(6, 'Food', 100, 150),
-                barFixture(7, 'Travel', 40, 0),
-              ],
-              onBarTap: (bar) => tapped = bar,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (item) => tapped = item,
             ),
           ),
         ),
@@ -32,10 +36,7 @@ void main() {
 
     expect(find.text('Food'), findsOneWidget);
     expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('category-budget-progress-text')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('category-progress-fill')), findsNothing);
     expect(find.byKey(const ValueKey('category-budget-dot-0')), findsOneWidget);
 
     await tester.drag(
@@ -47,12 +48,16 @@ void main() {
     expect(find.text('40 Ft'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
-    expect(tapped?.title, 'Travel');
+    expect(tapped?.category?.title, 'Travel');
   });
 
   testWidgets('category budget bar follows horizontal drag before settling', (
     tester,
   ) async {
+    final bars = [
+      barFixture(6, 'Food', 100, 150),
+      barFixture(7, 'Travel', 40, 0),
+    ];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -60,11 +65,9 @@ void main() {
             width: 390,
             height: 260,
             child: CategoryBudgetStage(
-              bars: [
-                barFixture(6, 'Food', 100, 150),
-                barFixture(7, 'Travel', 40, 0),
-              ],
-              onBarTap: (_) {},
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
             ),
           ),
         ),
@@ -91,61 +94,70 @@ void main() {
     expect(find.text('Travel'), findsOneWidget);
   });
 
-  testWidgets(
-    'stage summary outline uses equal partition units before limits are set',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 390,
-              height: 260,
-              child: CategoryBudgetStage(
-                bars: [
-                  barFixture(6, 'Food', 100, 0),
-                  barFixture(7, 'Travel', 40, 0),
-                  barFixture(8, 'Bills', 20, 0),
-                ],
-                onBarTap: (_) {},
-              ),
+  testWidgets('stage renders budget progress frame when overview limit exists', (
+    tester,
+  ) async {
+    final bars = [
+      barFixture(6, 'Food', 50, 0),
+      barFixture(7, 'Travel', 25, 0),
+      barFixture(8, 'Unused', 0, 0),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: [
+                BackheaderBudgetItem.overview(
+                  overviewFixture(BudgetGoalKind.expenseBudget, 75, 100),
+                ),
+                ...bars.map(BackheaderBudgetItem.category),
+              ],
+              categoryBars: bars,
+              onItemTap: (_) {},
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      expect(
-        find.byKey(const ValueKey('category-summary-outline-bar')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('category-summary-segment-0')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('category-summary-segment-1')),
-        findsOneWidget,
-      );
+    expect(find.byKey(const ValueKey('budget-progress-frame')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('budget-progress-frame-segment-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('budget-progress-frame-segment-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Budget'), findsOneWidget);
+    expect(find.text('75 Ft / 100 Ft'), findsOneWidget);
+  });
 
-      final outlineWidth = tester
-          .getSize(find.byKey(const ValueKey('category-summary-outline-bar')))
-          .width;
-      final activeBarWidth = tester
-          .getSize(find.byKey(const ValueKey('category-budget-bar')))
-          .width;
-      final firstSegmentWidth = tester
-          .getSize(find.byKey(const ValueKey('category-summary-segment-0')))
-          .width;
-      final secondSegmentWidth = tester
-          .getSize(find.byKey(const ValueKey('category-summary-segment-1')))
-          .width;
+  testWidgets('stage hides background progress frame without overview limit', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 100, 0)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
 
-      expect(activeBarWidth, lessThan(outlineWidth));
-      expect(
-        firstSegmentWidth,
-        moreOrLessEquals(secondSegmentWidth, epsilon: 1),
-      );
-    },
-  );
+    expect(find.byKey(const ValueKey('budget-progress-frame')), findsNothing);
+  });
 
   testWidgets('category limit editor saves input and reset clears limit', (
     tester,
@@ -221,26 +233,6 @@ void main() {
     expect(savedAmount!, greaterThan(0));
   });
 
-  testWidgets('progress bar uses limit manager threshold color', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: CategoryBudgetStage(
-            bars: [barFixture(6, 'Food', 90, 100)],
-            onBarTap: (_) {},
-          ),
-        ),
-      ),
-    );
-
-    final fill = tester.widget<DecoratedBox>(
-      find.byKey(const ValueKey('category-progress-fill')),
-    );
-    final decoration = fill.decoration as BoxDecoration;
-    expect(decoration.color, LimitManager.warningColor);
-  });
 }
 
 CategoryBudgetBarData barFixture(
@@ -276,6 +268,24 @@ CategoryBudgetBarData barFixture(
     color: category.slotColor,
     iconSlot: category.iconSlot,
     category: category,
+    sourceLimit: null,
+  );
+}
+
+
+OverviewBudgetData overviewFixture(
+  BudgetGoalKind kind,
+  double amount,
+  double limit,
+) {
+  return OverviewBudgetData(
+    kind: kind,
+    window: LimitWindow.monthly,
+    periodKey: '2026-05',
+    amount: amount,
+    hasLimit: limit > 0,
+    limitAmount: limit,
+    alertActive: false,
     sourceLimit: null,
   );
 }
