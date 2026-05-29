@@ -329,10 +329,10 @@ void main() {
     final cardFinder = find.byKey(
       const ValueKey('transaction-logbox-card-250905'),
     );
-    final gesture = await tester.startGesture(tester.getCenter(cardFinder));
-    await gesture.moveBy(const Offset(600, 0));
-    await tester.pump();
-    await gesture.up();
+    await tester.drag(
+      find.byKey(const ValueKey('transaction-logbox-content-250905')),
+      const Offset(600, 0),
+    );
     await tester.pump();
 
     expect(
