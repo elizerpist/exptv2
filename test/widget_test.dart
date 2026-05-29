@@ -330,6 +330,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('transaction-date-picker-button')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('transaction-date-picker-button')),
     );
@@ -338,6 +342,10 @@ void main() {
     await tester.tap(find.text('OK').last);
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('transaction-time-picker-button')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('transaction-time-picker-button')),
     );

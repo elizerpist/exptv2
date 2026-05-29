@@ -78,16 +78,16 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     }
     if (_dragDx > 80 && widget.onDeleteRequested != null) {
       _triggered = true;
+      setState(() {
+        _deletePending = true;
+        _deleteFrozen = true;
+        _visualDx = 20;
+      });
       unawaited(_requestDelete());
     }
   }
 
   Future<void> _requestDelete() async {
-    setState(() {
-      _deletePending = true;
-      _deleteFrozen = true;
-      _visualDx = 20;
-    });
     final confirmed = await widget.onDeleteRequested!(widget.record);
     if (!mounted) return;
     if (confirmed) {
@@ -140,8 +140,11 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
         child: Transform.translate(
           key: ValueKey('transaction-logbox-card-${widget.record.id}'),
           offset: Offset(_visualDx, 0),
-          child: Stack(
-            children: [
+          child: SizedBox(
+            height: 72,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
               Container(
                 key: ValueKey('transaction-logbox-content-${widget.record.id}'),
                 constraints: const BoxConstraints(minHeight: 70),
@@ -210,21 +213,22 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                   ],
                 ),
               ),
-              _SwipeBorder(
-                borderKey: ValueKey(
-                  'transaction-logbox-delete-border-${widget.record.id}',
+                _SwipeBorder(
+                  borderKey: ValueKey(
+                    'transaction-logbox-delete-border-${widget.record.id}',
+                  ),
+                  opacity: deleteOpacity,
+                  color: AppColors.expense,
                 ),
-                opacity: deleteOpacity,
-                color: AppColors.expense,
-              ),
-              _SwipeBorder(
-                borderKey: ValueKey(
-                  'transaction-logbox-filter-border-${widget.record.id}',
+                _SwipeBorder(
+                  borderKey: ValueKey(
+                    'transaction-logbox-filter-border-${widget.record.id}',
+                  ),
+                  opacity: filterOpacity,
+                  color: AppColors.primary,
                 ),
-                opacity: filterOpacity,
-                color: AppColors.primary,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

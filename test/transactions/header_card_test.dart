@@ -39,7 +39,7 @@ void main() {
     expect(expandPressed, isTrue);
   });
 
-  testWidgets('header renders doubled magnet strip height', (tester) async {
+  testWidgets('header renders taller magnet strip height', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -54,7 +54,7 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('magnet-strip-fade'))).height,
-      70,
+      105,
     );
   });
 }

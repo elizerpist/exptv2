@@ -157,6 +157,7 @@ class TransactionHeaderCard extends StatelessWidget {
                               Flexible(
                                 child: Text(
                                   visibleBalanceText,
+                                  key: const ValueKey('header-balance-text'),
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontSize: 24,

@@ -63,22 +63,30 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('-100 Ft'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('header-balance-text'))).data,
+      '-100 Ft',
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('header-balance-visibility-button')),
     );
     await tester.pump();
 
-    expect(find.text('-100 Ft'), findsNothing);
-    expect(find.text('••••••• Ft'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('header-balance-text'))).data,
+      '••••••• Ft',
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('header-balance-visibility-button')),
     );
     await tester.pump();
 
-    expect(find.text('-100 Ft'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('header-balance-text'))).data,
+      '-100 Ft',
+    );
   });
   testWidgets('header leaves the same gap above and below type pills', (
     tester,
