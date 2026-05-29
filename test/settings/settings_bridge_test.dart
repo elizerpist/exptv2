@@ -1,4 +1,5 @@
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/models/recurring_transaction.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
@@ -114,12 +115,10 @@ void main() {
 
   test('updates FastInfo config through native bridge', () async {
     final config = FastInfoConfig(
-      pills: const [
-        FastInfoSlot(
-          id: 'megtakaritas',
-          label: 'Megtakarítás',
-          value: '156,780 Ft',
-          type: FastInfoSlotType.pill,
+      pills: [
+        FastInfoSlot.fromCard(
+          fastInfoCardById('havi_koltes')!,
+          FastInfoSlotType.pill,
         ),
         null,
         null,
@@ -129,10 +128,16 @@ void main() {
 
     final updated = await bridge.expenseUpdateFastInfoConfig(config);
 
-    expect(updated.pills.first?.id, 'megtakaritas');
+    expect(updated.pills.first?.id, 'havi_koltes');
+    expect(updated.pills.first?.pillValue, '184k');
+    expect(updated.pills.first?.visualType, FastInfoVisualType.progress);
     expect(calls.single.method, 'expenseUpdateFastInfoConfig');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['pills'], isA<List<Object?>>());
+    final firstPill = (payload['pills'] as List<Object?>).first as Map<dynamic, dynamic>;
+    expect(firstPill['pillValue'], '184k');
+    expect(firstPill['boxValue'], '184k / 250k');
+    expect(firstPill['visualType'], 'progress');
   });
 
   test('manages recurring transactions through native bridge', () async {

@@ -61,14 +61,14 @@ class ExpenseSettingsStore(context: Context) {
 
     private fun defaultFastInfoConfig(): Map<String, Any?> = mapOf(
         "pills" to listOf(
-            mapOf("id" to "megtakaritas", "label" to "Megtakarítás", "value" to "156,780 Ft", "type" to "pill"),
-            null,
-            null,
+            mapOf("id" to "havi_koltes", "label" to "Havi költés", "value" to "184k", "type" to "pill", "pillValue" to "184k", "boxValue" to "184k / 250k", "boxSubtitle" to "A havi keret 74%-a", "progress" to 0.74, "visualType" to "progress"),
+            mapOf("id" to "mai_maradek_keret", "label" to "Mai maradék keret", "value" to "8.5k", "type" to "pill", "pillValue" to "8.5k", "boxValue" to "8 500 Ft", "boxSubtitle" to "Mai ajánlott keretből", "progress" to 0.68, "visualType" to "progress"),
+            mapOf("id" to "koltesi_trend", "label" to "Költési trend", "value" to "+12%", "type" to "pill", "pillValue" to "+12%", "boxValue" to "+12%", "boxSubtitle" to "Az előző időszakhoz képest", "visualType" to "trend"),
         ),
         "boxes" to listOf(
-            mapOf("id" to "mai_nap", "label" to "Mai nap", "value" to "2 db", "extra" to "-4,500 Ft", "type" to "box"),
-            mapOf("id" to "havi_limit", "label" to "Havi limit", "value" to "180k / 200k", "progress" to 0.9, "type" to "box"),
-            mapOf("id" to "trend", "label" to "Trend", "value" to "+12%", "type" to "box"),
+            mapOf("id" to "mai_koltes", "label" to "Mai költés", "value" to "4 500 Ft", "type" to "box", "pillValue" to "4.5k", "boxValue" to "4 500 Ft", "boxSubtitle" to "2 tranzakció ma", "progress" to 0.22, "visualType" to "bar"),
+            mapOf("id" to "havi_limit_allapot", "label" to "Havi limit állapot", "value" to "184k / 250k", "type" to "box", "pillValue" to "74%", "boxValue" to "184k / 250k", "boxSubtitle" to "66k maradt", "progress" to 0.74, "visualType" to "progress"),
+            mapOf("id" to "kovetkezo_ismetlo_kiadas", "label" to "Következő ismétlődő kiadás", "value" to "Lakbér", "type" to "box", "pillValue" to "Lakbér", "boxValue" to "Lakbér", "boxSubtitle" to "3 nap múlva", "visualType" to "status"),
         ),
     )
 
