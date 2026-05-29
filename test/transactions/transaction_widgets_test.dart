@@ -262,13 +262,11 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('transaction-logbox-content-250905')),
-    );
+    await tester.tap(find.text('+5 555 Ft'));
     await tester.pump();
     await tester.drag(
       find.byKey(const ValueKey('transaction-logbox-content-250905')),
-      const Offset(180, 0),
+      const Offset(600, 0),
     );
     await tester.pumpAndSettle();
 
@@ -332,7 +330,7 @@ void main() {
       const ValueKey('transaction-logbox-card-250905'),
     );
     final gesture = await tester.startGesture(tester.getCenter(cardFinder));
-    await gesture.moveBy(const Offset(180, 0));
+    await gesture.moveBy(const Offset(600, 0));
     await tester.pump();
     await gesture.up();
     await tester.pump();
