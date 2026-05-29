@@ -1,3 +1,5 @@
+import 'fast_info_card_catalog.dart';
+
 enum FastInfoSlotType {
   pill('pill'),
   box('box');
@@ -18,16 +20,62 @@ class FastInfoSlot {
     required this.type,
     this.extra,
     this.progress,
+    this.pillValue,
+    this.boxValue,
+    this.boxSubtitle,
+    this.visualType = FastInfoVisualType.plain,
   });
 
-  factory FastInfoSlot.fromMap(Map<dynamic, dynamic> map) {
+  factory FastInfoSlot.fromCard(
+    FastInfoCardDefinition card,
+    FastInfoSlotType type,
+  ) {
     return FastInfoSlot(
-      id: map['id']?.toString() ?? '',
+      id: card.id,
+      label: card.title,
+      value: type == FastInfoSlotType.pill ? card.pillValue : card.boxValue,
+      type: type,
+      extra: card.boxSubtitle,
+      progress: card.progress,
+      pillValue: card.pillValue,
+      boxValue: card.boxValue,
+      boxSubtitle: card.boxSubtitle,
+      visualType: card.visualType,
+    );
+  }
+
+  factory FastInfoSlot.fromMap(Map<dynamic, dynamic> map) {
+    final id = map['id']?.toString() ?? '';
+    final catalogCard = fastInfoCardById(id);
+    final type = FastInfoSlotType.fromAny(map['type']);
+    if (catalogCard != null) {
+      final catalogSlot = FastInfoSlot.fromCard(catalogCard, type);
+      return FastInfoSlot(
+        id: id,
+        label: map['label']?.toString() ?? catalogSlot.label,
+        value: map['value']?.toString() ?? catalogSlot.value,
+        extra: map['extra']?.toString() ?? catalogSlot.extra,
+        progress: _double(map['progress']) ?? catalogSlot.progress,
+        type: type,
+        pillValue: map['pillValue']?.toString() ?? catalogSlot.pillValue,
+        boxValue: map['boxValue']?.toString() ?? catalogSlot.boxValue,
+        boxSubtitle: map['boxSubtitle']?.toString() ?? catalogSlot.boxSubtitle,
+        visualType: FastInfoVisualType.fromAny(
+          map['visualType'] ?? catalogSlot.visualType.nativeValue,
+        ),
+      );
+    }
+    return FastInfoSlot(
+      id: id,
       label: map['label']?.toString() ?? '',
       value: map['value']?.toString() ?? '',
       extra: map['extra']?.toString(),
       progress: _double(map['progress']),
-      type: FastInfoSlotType.fromAny(map['type']),
+      type: type,
+      pillValue: map['pillValue']?.toString(),
+      boxValue: map['boxValue']?.toString(),
+      boxSubtitle: map['boxSubtitle']?.toString(),
+      visualType: FastInfoVisualType.fromAny(map['visualType']),
     );
   }
 
@@ -37,6 +85,29 @@ class FastInfoSlot {
   final String? extra;
   final double? progress;
   final FastInfoSlotType type;
+  final String? pillValue;
+  final String? boxValue;
+  final String? boxSubtitle;
+  final FastInfoVisualType visualType;
+
+  FastInfoSlot asType(FastInfoSlotType nextType) {
+    final card = fastInfoCardById(id);
+    if (card != null) return FastInfoSlot.fromCard(card, nextType);
+    return FastInfoSlot(
+      id: id,
+      label: label,
+      value: nextType == FastInfoSlotType.pill
+          ? (pillValue ?? value)
+          : (boxValue ?? value),
+      extra: boxSubtitle ?? extra,
+      progress: progress,
+      type: nextType,
+      pillValue: pillValue,
+      boxValue: boxValue,
+      boxSubtitle: boxSubtitle,
+      visualType: visualType,
+    );
+  }
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -46,6 +117,10 @@ class FastInfoSlot {
       if (extra != null) 'extra': extra,
       if (progress != null) 'progress': progress,
       'type': type.nativeValue,
+      if (pillValue != null) 'pillValue': pillValue,
+      if (boxValue != null) 'boxValue': boxValue,
+      if (boxSubtitle != null) 'boxSubtitle': boxSubtitle,
+      'visualType': visualType.nativeValue,
     };
   }
 
@@ -63,38 +138,12 @@ class FastInfoConfig {
 
   factory FastInfoConfig.defaults() {
     return FastInfoConfig(
-      pills: const <FastInfoSlot?>[
-        FastInfoSlot(
-          id: 'megtakaritas',
-          label: 'Megtakarítás',
-          value: '156,780 Ft',
-          type: FastInfoSlotType.pill,
-        ),
-        null,
-        null,
-      ],
-      boxes: const <FastInfoSlot?>[
-        FastInfoSlot(
-          id: 'mai_nap',
-          label: 'Mai nap',
-          value: '2 db',
-          extra: '-4,500 Ft',
-          type: FastInfoSlotType.box,
-        ),
-        FastInfoSlot(
-          id: 'havi_limit',
-          label: 'Havi limit',
-          value: '180k / 200k',
-          progress: 0.9,
-          type: FastInfoSlotType.box,
-        ),
-        FastInfoSlot(
-          id: 'trend',
-          label: 'Trend',
-          value: '+12%',
-          type: FastInfoSlotType.box,
-        ),
-      ],
+      pills: defaultFastInfoPillCardIds
+          .map((id) => FastInfoSlot.fromCard(fastInfoCardById(id)!, FastInfoSlotType.pill))
+          .toList(),
+      boxes: defaultFastInfoBoxCardIds
+          .map((id) => FastInfoSlot.fromCard(fastInfoCardById(id)!, FastInfoSlotType.box))
+          .toList(),
     );
   }
 
