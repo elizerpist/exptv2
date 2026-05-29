@@ -127,7 +127,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
     );
-    await gesture.moveBy(const Offset(-180, 0));
+    await gesture.moveBy(const Offset(-24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-90, 0));
     await tester.pump();
 
     expect(find.text('Food'), findsOneWidget);
@@ -136,7 +138,9 @@ void main() {
     final held = tester.widget<Transform>(
       find.byKey(const ValueKey('category-budget-bar-translation')),
     );
-    expect(held.transform.getTranslation().x.abs(), lessThanOrEqualTo(72));
+    final heldDistance = held.transform.getTranslation().x.abs();
+    expect(heldDistance, greaterThanOrEqualTo(44));
+    expect(heldDistance, lessThanOrEqualTo(72));
 
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Food'), findsOneWidget);
