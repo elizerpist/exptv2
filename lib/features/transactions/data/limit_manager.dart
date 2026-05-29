@@ -122,6 +122,24 @@ class LimitManager {
     return Colors.white;
   }
 
+  static CategoryLimit? findLimit({
+    required List<CategoryLimit> limits,
+    required LimitTargetType targetType,
+    required int targetId,
+    required String transactionType,
+    required LimitWindow window,
+    required String periodKey,
+  }) {
+    return _findLimit(
+      limits: limits,
+      targetType: targetType,
+      targetId: targetId,
+      transactionType: transactionType,
+      window: window,
+      periodKey: periodKey,
+    );
+  }
+
   static CategoryLimit? _findLimit({
     required List<CategoryLimit> limits,
     required LimitTargetType targetType,

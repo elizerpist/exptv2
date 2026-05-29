@@ -4,7 +4,10 @@ import '../../../core/debug/debug_console.dart';
 import '../data/limit_manager.dart';
 import '../data/transaction_filter.dart';
 import '../data/transaction_repository.dart';
+import '../models/backheader_budget_item.dart';
+import '../models/budget_goal_kind.dart';
 import '../models/category_budget_bar_data.dart';
+import '../models/overview_budget_data.dart';
 import '../models/category_limit.dart';
 import '../models/recurring_ghost_record.dart';
 import '../models/summary_window.dart';
@@ -80,6 +83,66 @@ class TransactionStore extends ChangeNotifier {
       summaryWindow: _summaryWindow,
       referenceDate: _periodReferenceDate,
     );
+  }
+
+  List<OverviewBudgetData> get overviewBudgetItems {
+    final window = LimitManager.windowForSummary(_summaryWindow);
+    final periodKey = LimitManager.periodKeyFor(
+      _summaryWindow,
+      _periodReferenceDate,
+    );
+    final income = _periodTotal(TransactionType.income);
+    final expense = _periodTotal(TransactionType.expense);
+    final kinds = _filter.type == TransactionType.expense
+        ? const [BudgetGoalKind.expenseBudget]
+        : const [BudgetGoalKind.incomeGoal, BudgetGoalKind.savingGoal];
+
+    return kinds.map((kind) {
+      final sourceLimit = LimitManager.findLimit(
+        limits: _limits,
+        targetType: LimitTargetType.overview,
+        targetId: 0,
+        transactionType: kind.transactionType,
+        window: window,
+        periodKey: periodKey,
+      );
+      final amount = switch (kind) {
+        BudgetGoalKind.expenseBudget => expense,
+        BudgetGoalKind.incomeGoal => income,
+        BudgetGoalKind.savingGoal => (income - expense)
+            .clamp(0.0, double.infinity)
+            .toDouble(),
+      };
+      final hasLimit = sourceLimit?.hasLimit ?? false;
+      final limitAmount = hasLimit ? sourceLimit!.limitAmount : 0.0;
+      return OverviewBudgetData(
+        kind: kind,
+        window: window,
+        periodKey: periodKey,
+        amount: amount,
+        hasLimit: hasLimit,
+        limitAmount: limitAmount,
+        alertActive: sourceLimit?.alertActive ?? false,
+        sourceLimit: sourceLimit,
+      );
+    }).toList();
+  }
+
+  List<BackheaderBudgetItem> get backheaderBudgetItems {
+    return [
+      for (final overview in overviewBudgetItems)
+        BackheaderBudgetItem.overview(overview),
+      for (final bar in categoryBudgetBars) BackheaderBudgetItem.category(bar),
+    ];
+  }
+
+  double _periodTotal(TransactionType type) {
+    return LimitManager.recordsForWindow(
+      transactions: _transactions,
+      activeType: type,
+      summaryWindow: _summaryWindow,
+      referenceDate: _periodReferenceDate,
+    ).fold<double>(0, (sum, record) => sum + record.amount.abs());
   }
 
   List<TransactionRecord> get windowedTransactions {
@@ -399,6 +462,29 @@ class TransactionStore extends ChangeNotifier {
       'transactionType': bar.transactionType.nativeValue,
       'window': bar.window.nativeValue,
       'periodKey': bar.periodKey,
+      'hasLimit': hasLimit,
+      'limitAmount': hasLimit ? amount : 0.0,
+      'alertActive': hasLimit && alertActive,
+    });
+    await _reload();
+  }
+
+  Future<void> saveOverviewLimit(
+    BudgetGoalKind kind, {
+    required double limitAmount,
+    required bool alertActive,
+  }) async {
+    final amount = limitAmount < 0 ? 0.0 : limitAmount;
+    final hasLimit = amount > 0;
+    await _repository.upsertCategoryLimit({
+      'targetType': LimitTargetType.overview.nativeValue,
+      'targetId': 0,
+      'transactionType': kind.transactionType,
+      'window': LimitManager.windowForSummary(_summaryWindow).nativeValue,
+      'periodKey': LimitManager.periodKeyFor(
+        _summaryWindow,
+        _periodReferenceDate,
+      ),
       'hasLimit': hasLimit,
       'limitAmount': hasLimit ? amount : 0.0,
       'alertActive': hasLimit && alertActive,
