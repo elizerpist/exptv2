@@ -174,6 +174,81 @@ void main() {
     expect(reducedSlider.max, 250000);
   });
 
+  testWidgets('limit editor is inline slide-up panel reaching screen bottom', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHomePage(store: store),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('summary-pill')),
+      const Offset(0, -90),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+
+    final card = tester.getRect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+    );
+    expect(card.bottom, moreOrLessEquals(844, epsilon: 0.1));
+    expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+    expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
+  });
+
+  testWidgets(
+    'redesigned limit card exposes arrows avatar input slider and partition bar',
+    (tester) async {
+      final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 17),
+      );
+      await pumpExpandedMonthlyHome(tester, store);
+
+      await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('limit-card-previous-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('limit-card-next-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('limit-card-avatar')), findsOneWidget);
+      expect(find.byKey(const ValueKey('limit-amount-input')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('limit-reset-inline-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('category-limit-slider')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('partition tap selects category and syncs backheader', (
     tester,
   ) async {
@@ -221,7 +296,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('limit-card-next')));
+    await tester.tap(find.byKey(const ValueKey('limit-card-next-button')));
     await tester.pumpAndSettle();
 
     expect(

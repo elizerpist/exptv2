@@ -54,6 +54,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   String? _backheaderActiveKey;
   late final AnimationController _headerPullController;
   CategoryOverlayMode? _categoryMode;
+  BackheaderBudgetItem? _budgetEditorItem;
   var _categoryEditorOpen = false;
   var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
@@ -111,7 +112,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final visibleFastInfoExtent = _fastInfoExtent
               .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
               .toDouble();
-          _notifyBlockingOverlay(_categoryEditorOpen);
+          _notifyBlockingOverlay(
+            _categoryEditorOpen || _budgetEditorItem != null,
+          );
 
           return Stack(
             clipBehavior: Clip.none,
@@ -215,6 +218,44 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     onDelete: _editingCategory == null
                         ? null
                         : (category) => _deleteCategory(category),
+                  ),
+                ),
+              if (_budgetEditorItem != null)
+                Positioned(
+                  top: TransactionMenuMetrics.overlayTop,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: BudgetTargetEditorSheet(
+                    item: _budgetEditorItem!,
+                    items: widget.store.backheaderBudgetItems,
+                    categoryBars: widget.store.categoryBudgetBars,
+                    overviewItems: widget.store.overviewBudgetItems,
+                    periodIncome: widget.store.activePeriodIncomeTotal,
+                    onCancel: _closeBudgetTargetEditor,
+                    onActiveItemChanged: _setBackheaderActiveItem,
+                    onSaveOverview: (
+                      kind, {
+                      required limitAmount,
+                      required alertActive,
+                    }) async {
+                      await widget.store.saveOverviewLimit(
+                        kind,
+                        limitAmount: limitAmount,
+                        alertActive: alertActive,
+                      );
+                    },
+                    onSaveCategory: (
+                      bar, {
+                      required limitAmount,
+                      required alertActive,
+                    }) async {
+                      await widget.store.saveCategoryLimitForBar(
+                        bar,
+                        limitAmount: limitAmount,
+                        alertActive: alertActive,
+                      );
+                    },
                   ),
                 ),
             ],
@@ -345,6 +386,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         _categoryEditorOpen = false;
         _editingCategory = null;
       }
+      _budgetEditorItem = null;
     });
   }
 
@@ -393,64 +435,26 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
-    if (_backheaderActiveKey != item.key) {
-      setState(() => _backheaderActiveKey = item.key);
-    }
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: ListenableBuilder(
-            listenable: widget.store,
-            builder: (context, _) => BudgetTargetEditorSheet(
-              item: item,
-              items: widget.store.backheaderBudgetItems,
-              categoryBars: widget.store.categoryBudgetBars,
-              overviewItems: widget.store.overviewBudgetItems,
-              periodIncome: widget.store.activePeriodIncomeTotal,
-              onCancel: () => Navigator.of(sheetContext).pop(),
-              onActiveItemChanged: _setBackheaderActiveItem,
-              onSaveOverview: (
-                kind, {
-                required limitAmount,
-                required alertActive,
-              }) async {
-                await widget.store.saveOverviewLimit(
-                  kind,
-                  limitAmount: limitAmount,
-                  alertActive: alertActive,
-                );
-              },
-              onSaveCategory: (
-                bar, {
-                required limitAmount,
-                required alertActive,
-              }) async {
-                await widget.store.saveCategoryLimitForBar(
-                  bar,
-                  limitAmount: limitAmount,
-                  alertActive: alertActive,
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
+    setState(() {
+      _backheaderActiveKey = item.key;
+      _budgetEditorItem = item;
+    });
+  }
+
+  void _closeBudgetTargetEditor() {
+    setState(() => _budgetEditorItem = null);
   }
 
   void _openCategoryMenu() {
     _headerPullController.stop();
     _headerPullController.value = 0;
     setState(() {
-      if (_categoryMode != null || _categoryEditorOpen) {
+      if (_categoryMode != null ||
+          _categoryEditorOpen ||
+          _budgetEditorItem != null) {
         _categoryMode = null;
         _categoryEditorOpen = false;
+        _budgetEditorItem = null;
         _editingCategory = null;
         return;
       }

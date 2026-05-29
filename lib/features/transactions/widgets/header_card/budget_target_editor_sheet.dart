@@ -14,6 +14,7 @@ import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import '../../slots/category_icon_manager.dart';
 import '../amount_field.dart';
+import '../slide_up_menu_card.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_limit_slider.dart';
 
@@ -85,32 +86,52 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Material(
-        color: AppColors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-          child: _BudgetLimitCard(
-            item: _activeItem,
-            amountController: _controller,
-            inputLabel: _inputLabel,
-            activeColor: _activeColor,
-            sliderValue: _sliderRange.value,
-            sliderMax: _sliderRange.max,
-            sliderEnabled: _sliderRange.enabled,
-            sliderDivisions: _sliderRange.divisions,
-            saving: _saving,
-            onPrevious: _selectPrevious,
-            onNext: _selectNext,
-            onReset: _resetLimit,
-            onSliderChanged: _setAmountFromSlider,
-            onSliderChangeEnd: _saveSliderAmount,
-            onInputChanged: _scheduleInputSave,
-            onSetToMax: _setOverviewToMax,
-            showSetToMax: _activeItem.overview != null,
-            partitionBar: _buildPartitionBar(),
-          ),
+    return SlideUpMenuCard(
+      cardKey: const ValueKey('budget-target-editor-card'),
+      onDismissed: widget.onCancel,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+            final contentHeight = constraints.maxHeight - keyboardInset - 44;
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: keyboardInset + 24,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: contentHeight < 0 ? 0 : contentHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: _BudgetLimitCard(
+                    item: _activeItem,
+                    amountController: _controller,
+                    inputLabel: _inputLabel,
+                    activeColor: _activeColor,
+                    sliderValue: _sliderRange.value,
+                    sliderMax: _sliderRange.max,
+                    sliderEnabled: _sliderRange.enabled,
+                    sliderDivisions: _sliderRange.divisions,
+                    saving: _saving,
+                    onPrevious: _selectPrevious,
+                    onNext: _selectNext,
+                    onReset: _resetLimit,
+                    onSliderChanged: _setAmountFromSlider,
+                    onSliderChangeEnd: _saveSliderAmount,
+                    onInputChanged: _scheduleInputSave,
+                    onSetToMax: _setOverviewToMax,
+                    showSetToMax: _activeItem.overview != null,
+                    partitionBar: _buildPartitionBar(),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -462,38 +483,64 @@ class _BudgetLimitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Center(
+          child: Container(
+            width: 42,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.gray200,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
         Row(
           children: [
             IconButton(
-              key: const ValueKey('limit-card-previous'),
+              key: const ValueKey('limit-card-previous-button'),
               onPressed: onPrevious,
               icon: const Icon(Icons.chevron_left),
+              color: AppColors.gray700,
+              constraints: const BoxConstraints.tightFor(
+                width: 44,
+                height: 44,
+              ),
             ),
             Expanded(
-              child: Center(
-                child: _LimitAvatar(item: item, color: activeColor),
+              child: Column(
+                children: [
+                  _LimitAvatar(item: item, color: activeColor),
+                  const SizedBox(height: 10),
+                  Text(
+                    item.title,
+                    key: const ValueKey('limit-card-title'),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.gray800,
+                    ),
+                  ),
+                ],
               ),
             ),
             IconButton(
-              key: const ValueKey('limit-card-next'),
+              key: const ValueKey('limit-card-next-button'),
               onPressed: onNext,
               icon: const Icon(Icons.chevron_right),
+              color: AppColors.gray700,
+              constraints: const BoxConstraints.tightFor(
+                width: 44,
+                height: 44,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          item.title,
-          key: const ValueKey('limit-card-title'),
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: AppColors.gray800,
-          ),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
         TextField(
           key: const ValueKey('limit-amount-input'),
           controller: amountController,
@@ -501,36 +548,35 @@ class _BudgetLimitCard extends StatelessWidget {
           onChanged: onInputChanged,
           decoration: transactionFieldDecoration(inputLabel).copyWith(
             suffixText: 'Ft',
-            suffixIcon: IconButton(
-              key: const ValueKey('limit-reset-inline-button'),
-              onPressed: onReset,
-              icon: const Icon(Icons.refresh_outlined),
-              tooltip: 'Reset',
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showSetToMax)
+                  IconButton(
+                    key: const ValueKey('limit-slider-end-button'),
+                    onPressed: onSetToMax,
+                    icon: const Icon(Icons.last_page),
+                    tooltip: 'Max',
+                  ),
+                IconButton(
+                  key: const ValueKey('limit-reset-inline-button'),
+                  onPressed: onReset,
+                  icon: const Icon(Icons.refresh_outlined),
+                  tooltip: 'Reset',
+                ),
+              ],
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: CategoryLimitSlider(
-                value: sliderValue,
-                max: sliderMax,
-                divisions: sliderDivisions,
-                activeColor: activeColor,
-                enabled: sliderEnabled,
-                onChanged: onSliderChanged,
-                onChangeEnd: onSliderChangeEnd,
-              ),
-            ),
-            if (showSetToMax)
-              IconButton(
-                key: const ValueKey('limit-slider-end-button'),
-                onPressed: onSetToMax,
-                icon: const Icon(Icons.last_page),
-                tooltip: 'Max',
-              ),
-          ],
+        const SizedBox(height: 14),
+        CategoryLimitSlider(
+          value: sliderValue,
+          max: sliderMax,
+          divisions: sliderDivisions,
+          activeColor: activeColor,
+          enabled: sliderEnabled,
+          onChanged: onSliderChanged,
+          onChangeEnd: onSliderChangeEnd,
         ),
         if (saving)
           const SizedBox(
@@ -539,8 +585,9 @@ class _BudgetLimitCard extends StatelessWidget {
           )
         else
           const SizedBox(height: 2),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         partitionBar,
+        const Spacer(),
       ],
     );
   }
