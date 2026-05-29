@@ -28,12 +28,20 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
-      expect(find.text('Budget limit'), findsWidgets);
+      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+      expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
+      expect(find.byKey(const ValueKey('limit-alert-toggle')), findsNothing);
+      expect(find.byKey(const ValueKey('limit-card-avatar')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('limit-reset-inline-button')),
+        findsOneWidget,
+      );
+
       await tester.enterText(
         find.byKey(const ValueKey('limit-amount-input')),
         '300000',
       );
-      await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       expect(repository.savedLimits.single['targetType'], 'overview');
@@ -79,7 +87,8 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
-      expect(find.text('Food limit'), findsOneWidget);
+      expect(find.text('Food'), findsWidgets);
+      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
       expect(find.byKey(const ValueKey('category-limit-slider')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('category-limit-partition-bar')),
@@ -89,7 +98,7 @@ void main() {
         find.byKey(const ValueKey('limit-amount-input')),
         '250',
       );
-      await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       expect(repository.savedLimits.single['targetType'], 'category');
@@ -98,6 +107,26 @@ void main() {
       expect(repository.savedLimits.single['limitAmount'], 250);
     },
   );
+
+  testWidgets('budget end button saves period income as overview limit', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimits.single['targetType'], 'overview');
+    expect(repository.savedLimits.single['limitAmount'], 1000);
+  });
+
 }
 
 Future<void> pumpExpandedMonthlyHome(
@@ -132,6 +161,18 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
 
   final categories = <TransactionCategory>[
     TransactionCategory.fromMap({
+      'transactionCategoryID': 5,
+      'name': 'Salary',
+      'type': 'bevétel',
+      'colorSlot': 2,
+      'iconSlot': 0,
+      'backgroundColor': '#3b82f6',
+      'hasLimit': false,
+      'limitAmount': 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    }),
+    TransactionCategory.fromMap({
       'transactionCategoryID': 6,
       'name': 'Food',
       'type': 'kiadás',
@@ -154,6 +195,15 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
       'amount': -100,
       'userAssignedName': null,
       'transactionCategoryID': 6,
+    }),
+    TransactionRecord.fromMap({
+      'id': 2,
+      'date': '2026.05.01',
+      'time': '09:00',
+      'merchant': 'Salary',
+      'amount': 1000,
+      'userAssignedName': null,
+      'transactionCategoryID': 5,
     }),
   ];
 
@@ -234,5 +284,5 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
   }) async => const [];
 
   @override
-  Future<Map<int, int>> categoryCounts() async => const {6: 1};
+  Future<Map<int, int>> categoryCounts() async => const {5: 1, 6: 1};
 }

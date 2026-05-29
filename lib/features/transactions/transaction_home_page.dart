@@ -418,8 +418,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 limitAmount: limitAmount,
                 alertActive: alertActive,
               );
-              if (!sheetContext.mounted) return;
-              Navigator.of(sheetContext).pop();
             },
             onSaveCategory: (
               bar, {
@@ -431,8 +429,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 limitAmount: limitAmount,
                 alertActive: alertActive,
               );
-              if (!sheetContext.mounted) return;
-              Navigator.of(sheetContext).pop();
             },
           ),
         );

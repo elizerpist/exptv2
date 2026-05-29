@@ -10,6 +10,8 @@ class CategoryLimitSlider extends StatelessWidget {
     required this.divisions,
     required this.activeColor,
     required this.onChanged,
+    this.enabled = true,
+    this.onChangeEnd,
   });
 
   final double value;
@@ -17,19 +19,22 @@ class CategoryLimitSlider extends StatelessWidget {
   final int divisions;
   final Color activeColor;
   final ValueChanged<double> onChanged;
+  final bool enabled;
+  final ValueChanged<double>? onChangeEnd;
 
   @override
   Widget build(BuildContext context) {
     final safeMax = max <= 0 ? 1.0 : max;
     final safeValue = value.clamp(0.0, safeMax).toDouble();
+    final effectiveColor = enabled ? activeColor : AppColors.gray400;
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: 6,
-        activeTrackColor: activeColor,
+        activeTrackColor: effectiveColor,
         inactiveTrackColor: AppColors.gray200,
-        thumbColor: activeColor,
-        overlayColor: activeColor.withValues(alpha: 0.14),
-        valueIndicatorColor: activeColor,
+        thumbColor: effectiveColor,
+        overlayColor: effectiveColor.withValues(alpha: 0.14),
+        valueIndicatorColor: effectiveColor,
       ),
       child: Slider(
         key: const ValueKey('category-limit-slider'),
@@ -37,7 +42,8 @@ class CategoryLimitSlider extends StatelessWidget {
         max: safeMax,
         divisions: divisions < 1 ? 1 : divisions,
         value: safeValue,
-        onChanged: onChanged,
+        onChanged: enabled ? onChanged : null,
+        onChangeEnd: enabled ? onChangeEnd : null,
       ),
     );
   }

@@ -227,20 +227,19 @@ void main() {
       ),
     );
 
-    expect(find.text('Food limit'), findsOneWidget);
+    expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+    expect(find.byKey(const ValueKey('limit-alert-toggle')), findsNothing);
     await tester.enterText(
       find.byKey(const ValueKey('limit-amount-input')),
       '250',
     );
-    await tester.tap(find.byKey(const ValueKey('limit-alert-toggle')));
-    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     expect(savedAmount, 250);
     expect(savedAlert, isFalse);
 
-    await tester.tap(find.byKey(const ValueKey('limit-reset-button')));
-    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.tap(find.byKey(const ValueKey('limit-reset-inline-button')));
     await tester.pumpAndSettle();
     expect(savedAmount, 0);
   });
@@ -273,8 +272,6 @@ void main() {
       find.byKey(const ValueKey('category-limit-slider')),
       const Offset(220, 0),
     );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
 
     expect(savedAmount, isNotNull);

@@ -1,18 +1,19 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../data/budget_progress_manager.dart';
+import '../../data/limit_allocation_manager.dart';
 import '../../data/limit_partition_manager.dart';
 import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
-import '../../models/transaction_record.dart';
+import '../../slots/category_icon_manager.dart';
 import '../amount_field.dart';
-import 'category_budget_bar.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_limit_slider.dart';
 
@@ -53,166 +54,131 @@ class BudgetTargetEditorSheet extends StatefulWidget {
 
 class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   late final TextEditingController _controller;
-  late bool _alertActive;
+  late String _activeKey;
+  Timer? _saveDebounce;
   var _saving = false;
 
   @override
   void initState() {
     super.initState();
-    final amount = _initialLimitAmount;
+    _activeKey = widget.item.key;
+    final amount = _limitAmountFor(widget.item);
     _controller = TextEditingController(
       text: amount > 0 ? amount.round().toString() : '',
     );
-    _controller.addListener(() => setState(() {}));
-    _alertActive = _initialAlertActive;
+    _controller.addListener(_refreshFromController);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _saveDebounce?.cancel();
+    _controller
+      ..removeListener(_refreshFromController)
+      ..dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final previewCategory = _previewCategoryBar;
-    final overview = widget.item.overview;
-    final category = widget.item.category;
-    final hasLimit = _amount > 0;
-    final partitionBars = _partitionBars;
-    final sliderMax = _sliderMaxAmount(partitionBars);
     return SafeArea(
       child: Material(
         color: AppColors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${widget.item.title} limit',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.gray800,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (previewCategory != null)
-                CategoryBudgetBar(
-                  bar: previewCategory,
-                  compactIcon: true,
-                  onTap: () {},
-                )
-              else if (overview != null)
-                _OverviewTargetPreviewBar(
-                  overview: overview,
-                  amount: _amount,
-                ),
-              if (overview?.kind != BudgetGoalKind.savingGoal) ...[
-                const SizedBox(height: 16),
-                CategoryLimitPartitionBar(
-                  bars: partitionBars,
-                  activeBar: category,
-                  activeLimitAmount: category == null ? null : _amount,
-                  overviewLimitAmount: _overviewLimitAmount,
-                ),
-              ],
-              const SizedBox(height: 6),
-              CategoryLimitSlider(
-                value: _amount,
-                max: sliderMax,
-                divisions: _sliderDivisions(sliderMax),
-                activeColor: _activeColor,
-                onChanged: _setAmountFromSlider,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                key: const ValueKey('limit-amount-input'),
-                controller: _controller,
-                keyboardType: TextInputType.number,
-                decoration: transactionFieldDecoration(
-                  _inputLabel,
-                ).copyWith(suffixText: 'Ft'),
-              ),
-              if (hasLimit)
-                TextButton.icon(
-                  key: const ValueKey('limit-reset-button'),
-                  onPressed: () => _controller.clear(),
-                  icon: const Icon(
-                    Icons.refresh_outlined,
-                    size: 20,
-                    color: AppColors.gray500,
-                  ),
-                  label: const Text(
-                    'Limit törlése',
-                    style: TextStyle(color: AppColors.gray500),
-                  ),
-                ),
-              Row(
-                children: [
-                  IconButton(
-                    key: const ValueKey('limit-alert-toggle'),
-                    onPressed: hasLimit
-                        ? () => setState(() => _alertActive = !_alertActive)
-                        : null,
-                    icon: Icon(
-                      _alertActive && hasLimit
-                          ? Icons.notifications
-                          : Icons.notifications_none_outlined,
-                      color: hasLimit ? AppColors.primary : AppColors.gray400,
-                    ),
-                  ),
-                  const Spacer(),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _saving ? null : widget.onCancel,
-                      child: const Text('Mégse'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      key: const ValueKey('limit-save-button'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.white,
-                      ),
-                      onPressed: _saving ? null : _save,
-                      child: const Text('Mentés'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          child: _BudgetLimitCard(
+            item: _activeItem,
+            amountController: _controller,
+            inputLabel: _inputLabel,
+            activeColor: _activeColor,
+            sliderValue: _sliderValue,
+            sliderMax: _sliderMax,
+            sliderEnabled: _sliderEnabled,
+            sliderDivisions: LimitAllocationManager.sliderDivisions(_sliderMax),
+            saving: _saving,
+            onPrevious: _selectPrevious,
+            onNext: _selectNext,
+            onReset: _resetLimit,
+            onSliderChanged: _setAmountFromSlider,
+            onSliderChangeEnd: _saveSliderAmount,
+            onInputChanged: _scheduleInputSave,
+            onSetToMax: _setOverviewToMax,
+            showSetToMax: _activeItem.overview != null,
+            partitionBar: _buildPartitionBar(),
+            pieChart: _buildPieChart(),
           ),
         ),
       ),
     );
   }
 
-  double get _initialLimitAmount {
-    final overview = widget.item.overview;
-    if (overview != null && overview.hasLimit) return overview.limitAmount;
-    final category = widget.item.category;
-    if (category != null && category.hasLimit) return category.limitAmount;
-    return 0;
+  List<BackheaderBudgetItem> get _items {
+    final items = <BackheaderBudgetItem>[
+      for (final overview in widget.overviewItems)
+        BackheaderBudgetItem.overview(overview),
+      for (final bar in widget.categoryBars) BackheaderBudgetItem.category(bar),
+    ];
+    if (!items.any((item) => item.key == widget.item.key)) {
+      items.insert(0, widget.item);
+    }
+    return items;
   }
 
-  bool get _initialAlertActive {
-    final overview = widget.item.overview;
-    if (overview != null) return overview.alertActive;
-    return widget.item.category?.alertActive ?? false;
+  BackheaderBudgetItem get _activeItem {
+    for (final item in _items) {
+      if (item.key == _activeKey) return item;
+    }
+    return widget.item;
   }
 
   double get _amount {
     final value = _controller.text.trim().replaceAll(' ', '');
-    return double.tryParse(value) ?? 0;
+    return math.max(0, double.tryParse(value) ?? 0).toDouble();
   }
 
+  double get _sliderMax {
+    final overview = _activeItem.overview;
+    if (overview != null) {
+      if (widget.periodIncome > 0) return widget.periodIncome;
+      return math.max(_amount, 1.0).toDouble();
+    }
+
+    final category = _activeItem.category;
+    if (category == null) return 1;
+    final overviewLimit = _matchingOverviewLimitForCategory(category);
+    if (overviewLimit > 0) {
+      final max = LimitAllocationManager.categorySliderMax(
+        overviewLimit: overviewLimit,
+        bars: widget.categoryBars,
+        activeBar: category,
+      );
+      return math.max(max, 1.0).toDouble();
+    }
+    return LimitPartitionManager.sliderMaxAmount(
+      _partitionBars,
+      activeBar: category,
+      activeLimitAmount: _amount,
+    );
+  }
+
+  bool get _sliderEnabled {
+    final overview = _activeItem.overview;
+    if (overview != null) return _sliderMax > 0;
+    final category = _activeItem.category;
+    if (category == null) return false;
+    final overviewLimit = _matchingOverviewLimitForCategory(category);
+    if (overviewLimit <= 0) return true;
+    return LimitAllocationManager.categorySliderEnabled(
+      overviewLimit: overviewLimit,
+      bars: widget.categoryBars,
+      activeBar: category,
+    );
+  }
+
+  double get _sliderValue => _amount.clamp(0.0, _sliderMax).toDouble();
+
   String get _inputLabel {
-    final overview = widget.item.overview;
+    final overview = _activeItem.overview;
     if (overview == null) return 'Kategória limit';
     return switch (overview.kind) {
       BudgetGoalKind.expenseBudget => 'Budget limit',
@@ -222,9 +188,9 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   Color get _activeColor {
-    final category = widget.item.category;
+    final category = _activeItem.category;
     if (category != null) return category.color;
-    final overview = widget.item.overview;
+    final overview = _activeItem.overview;
     return switch (overview?.kind) {
       BudgetGoalKind.expenseBudget => AppColors.primary,
       BudgetGoalKind.incomeGoal => AppColors.income,
@@ -233,45 +199,13 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     };
   }
 
-  double? get _overviewLimitAmount {
-    final overview = widget.item.overview;
-    if (overview != null) return _amount > 0 ? _amount : null;
-    return _matchingOverviewLimitForCategory();
-  }
-
-  CategoryBudgetBarData? get _previewCategoryBar {
-    final category = widget.item.category;
-    if (category == null) return null;
-    final amount = _amount;
-    final hasLimit = amount > 0;
-    return CategoryBudgetBarData(
-      key: category.key,
-      targetType: category.targetType,
-      targetId: category.targetId,
-      transactionType: category.transactionType,
-      window: category.window,
-      periodKey: category.periodKey,
-      title: category.title,
-      spent: category.spent,
-      hasLimit: hasLimit,
-      limitAmount: hasLimit ? amount : 0,
-      alertActive: hasLimit && _alertActive,
-      color: category.color,
-      iconSlot: category.iconSlot,
-      category: category.category,
-      sourceLimit: category.sourceLimit,
-    );
-  }
-
   List<CategoryBudgetBarData> get _partitionBars {
-    final preview = _previewCategoryBar;
-    final bars = widget.categoryBars.isEmpty
-        ? <CategoryBudgetBarData>[]
-        : widget.categoryBars;
-    if (preview == null) return bars;
+    final category = _activeItem.category;
+    if (category == null) return widget.categoryBars;
+    final preview = _previewCategoryBar(category);
     final replaced = <CategoryBudgetBarData>[];
     var found = false;
-    for (final bar in bars) {
+    for (final bar in widget.categoryBars) {
       if (_sameTarget(bar, preview)) {
         replaced.add(preview);
         found = true;
@@ -283,42 +217,160 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     return replaced;
   }
 
-  double _sliderMaxAmount(List<CategoryBudgetBarData> partitionBars) {
-    final overview = widget.item.overview;
-    if (overview != null) {
-      final fallback = _amount <= 0 ? 10000.0 : _amount;
-      return math.max(math.max(widget.periodIncome, overview.amount), fallback)
-          .toDouble();
+  double? get _overviewLimitAmount {
+    final overview = _activeItem.overview;
+    if (overview != null) return _amount > 0 ? _amount : null;
+    final category = _activeItem.category;
+    if (category == null) return null;
+    final amount = _matchingOverviewLimitForCategory(category);
+    return amount > 0 ? amount : null;
+  }
+
+  Widget _buildPartitionBar() {
+    final overview = _activeItem.overview;
+    if (overview?.kind == BudgetGoalKind.savingGoal) {
+      return const SizedBox.shrink();
     }
-    final category = widget.item.category;
-    if (category != null) {
-      final overviewLimit = _matchingOverviewLimitForCategory();
-      if (overviewLimit > 0) {
-        final available = BudgetProgressManager.availableCategoryLimit(
-          overviewLimit: overviewLimit,
-          categoryBars: widget.categoryBars,
-          activeBar: category,
-        );
-        return math.max(available, _amount <= 0 ? 1.0 : _amount).toDouble();
-      }
-      return LimitPartitionManager.sliderMaxAmount(
-        partitionBars,
-        activeBar: category,
-        activeLimitAmount: _amount,
+    final category = _activeItem.category;
+    return CategoryLimitPartitionBar(
+      bars: _partitionBars,
+      activeBar: category,
+      activeLimitAmount: category == null ? null : _amount,
+      overviewLimitAmount: _overviewLimitAmount,
+    );
+  }
+
+  Widget _buildPieChart() {
+    return const SizedBox.shrink(key: ValueKey('limit-allocation-pie-chart'));
+  }
+
+  void _refreshFromController() {
+    if (mounted) setState(() {});
+  }
+
+  void _scheduleInputSave(String _) {
+    final key = _activeKey;
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 400), () {
+      _saveAmount(_amount, itemKey: key);
+    });
+  }
+
+  void _resetLimit() {
+    _saveDebounce?.cancel();
+    _setControllerAmount(0);
+    _saveAmount(0);
+  }
+
+  void _setAmountFromSlider(double amount) {
+    final snapped = LimitAllocationManager.snapSliderAmount(amount)
+        .clamp(0.0, _sliderMax)
+        .toDouble();
+    _setControllerAmount(snapped);
+  }
+
+  void _saveSliderAmount(double amount) {
+    _saveDebounce?.cancel();
+    final snapped = LimitAllocationManager.snapSliderAmount(amount)
+        .clamp(0.0, _sliderMax)
+        .toDouble();
+    _setControllerAmount(snapped);
+    _saveAmount(snapped);
+  }
+
+  void _setOverviewToMax() {
+    _saveDebounce?.cancel();
+    final max = math.max(0.0, widget.periodIncome).toDouble();
+    _setControllerAmount(max);
+    _saveAmount(max);
+  }
+
+  void _selectPrevious() => _selectAdjacent(-1);
+
+  void _selectNext() => _selectAdjacent(1);
+
+  void _selectAdjacent(int direction) {
+    final items = _items;
+    if (items.length < 2) return;
+    final index = items.indexWhere((item) => item.key == _activeKey);
+    final currentIndex = index < 0 ? 0 : index;
+    final nextIndex = (currentIndex + direction + items.length) % items.length;
+    final next = items[nextIndex];
+    _saveDebounce?.cancel();
+    _activeKey = next.key;
+    _setControllerAmount(_limitAmountFor(next));
+    setState(() {});
+  }
+
+  void _setControllerAmount(double amount) {
+    final roundedAmount = amount.round();
+    final text = roundedAmount <= 0 ? '' : roundedAmount.toString();
+    if (_controller.text == text) return;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  Future<void> _saveAmount(double rawAmount, {String? itemKey}) async {
+    final item = _itemForKey(itemKey ?? _activeKey);
+    final amount = math.max(0.0, rawAmount).toDouble();
+    if (mounted) setState(() => _saving = true);
+    final overview = item.overview;
+    final category = item.category;
+    if (overview != null) {
+      await widget.onSaveOverview(
+        overview.kind,
+        limitAmount: amount,
+        alertActive: false,
+      );
+    } else if (category != null) {
+      await widget.onSaveCategory(
+        category,
+        limitAmount: amount,
+        alertActive: false,
       );
     }
-    return 10000;
+    if (mounted) setState(() => _saving = false);
   }
 
-  int _sliderDivisions(double sliderMax) {
-    if (sliderMax <= 1) return 1;
-    final step = sliderMax >= 100000 ? 10000 : 1000;
-    return math.max(1, (sliderMax / step).round()).toInt();
+  BackheaderBudgetItem _itemForKey(String key) {
+    for (final item in _items) {
+      if (item.key == key) return item;
+    }
+    return _activeItem;
   }
 
-  double _matchingOverviewLimitForCategory() {
-    final category = widget.item.category;
-    if (category == null) return 0;
+  double _limitAmountFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    if (overview != null && overview.hasLimit) return overview.limitAmount;
+    final category = item.category;
+    if (category != null && category.hasLimit) return category.limitAmount;
+    return 0;
+  }
+
+  CategoryBudgetBarData _previewCategoryBar(CategoryBudgetBarData category) {
+    final hasLimit = _amount > 0;
+    return CategoryBudgetBarData(
+      key: category.key,
+      targetType: category.targetType,
+      targetId: category.targetId,
+      transactionType: category.transactionType,
+      window: category.window,
+      periodKey: category.periodKey,
+      title: category.title,
+      spent: category.spent,
+      hasLimit: hasLimit,
+      limitAmount: hasLimit ? _amount : 0,
+      alertActive: false,
+      color: category.color,
+      iconSlot: category.iconSlot,
+      category: category.category,
+      sourceLimit: category.sourceLimit,
+    );
+  }
+
+  double _matchingOverviewLimitForCategory(CategoryBudgetBarData category) {
     for (final overview in widget.overviewItems) {
       if (overview.kind == BudgetGoalKind.savingGoal) continue;
       if (overview.kind.transactionType != category.transactionType.nativeValue) {
@@ -329,15 +381,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     return 0;
   }
 
-  void _setAmountFromSlider(double amount) {
-    final roundedAmount = amount.round();
-    final text = roundedAmount <= 0 ? '' : roundedAmount.toString();
-    _controller.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-
   bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {
     return left.targetType == right.targetType &&
         left.targetId == right.targetId &&
@@ -345,108 +388,188 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
         left.window == right.window &&
         left.periodKey == right.periodKey;
   }
-
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    final amount = _amount < 0 ? 0.0 : _amount;
-    final overview = widget.item.overview;
-    final category = widget.item.category;
-    if (overview != null) {
-      await widget.onSaveOverview(
-        overview.kind,
-        limitAmount: amount,
-        alertActive: amount > 0 && _alertActive,
-      );
-    } else if (category != null) {
-      await widget.onSaveCategory(
-        category,
-        limitAmount: amount,
-        alertActive: amount > 0 && _alertActive,
-      );
-    }
-    if (mounted) setState(() => _saving = false);
-  }
 }
 
-class _OverviewTargetPreviewBar extends StatelessWidget {
-  const _OverviewTargetPreviewBar({
-    required this.overview,
-    required this.amount,
+class _BudgetLimitCard extends StatelessWidget {
+  const _BudgetLimitCard({
+    required this.item,
+    required this.amountController,
+    required this.inputLabel,
+    required this.activeColor,
+    required this.sliderValue,
+    required this.sliderMax,
+    required this.sliderEnabled,
+    required this.sliderDivisions,
+    required this.saving,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onReset,
+    required this.onSliderChanged,
+    required this.onSliderChangeEnd,
+    required this.onInputChanged,
+    required this.onSetToMax,
+    required this.showSetToMax,
+    required this.partitionBar,
+    required this.pieChart,
   });
 
-  final OverviewBudgetData overview;
-  final double amount;
+  final BackheaderBudgetItem item;
+  final TextEditingController amountController;
+  final String inputLabel;
+  final Color activeColor;
+  final double sliderValue;
+  final double sliderMax;
+  final bool sliderEnabled;
+  final int sliderDivisions;
+  final bool saving;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onReset;
+  final ValueChanged<double> onSliderChanged;
+  final ValueChanged<double> onSliderChangeEnd;
+  final ValueChanged<String> onInputChanged;
+  final VoidCallback onSetToMax;
+  final bool showSetToMax;
+  final Widget partitionBar;
+  final Widget pieChart;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (overview.kind) {
-      BudgetGoalKind.expenseBudget => AppColors.primary,
-      BudgetGoalKind.incomeGoal => AppColors.income,
-      BudgetGoalKind.savingGoal => BudgetProgressManager.savingColor,
-    };
-    final icon = switch (overview.kind) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              key: const ValueKey('limit-card-previous'),
+              onPressed: onPrevious,
+              icon: const Icon(Icons.chevron_left),
+            ),
+            Expanded(
+              child: Center(
+                child: _LimitAvatar(item: item, color: activeColor),
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('limit-card-next'),
+              onPressed: onNext,
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          item.title,
+          key: const ValueKey('limit-card-title'),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.gray800,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const ValueKey('limit-amount-input'),
+          controller: amountController,
+          keyboardType: TextInputType.number,
+          onChanged: onInputChanged,
+          decoration: transactionFieldDecoration(inputLabel).copyWith(
+            suffixText: 'Ft',
+            suffixIcon: IconButton(
+              key: const ValueKey('limit-reset-inline-button'),
+              onPressed: onReset,
+              icon: const Icon(Icons.refresh_outlined),
+              tooltip: 'Reset',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: CategoryLimitSlider(
+                value: sliderValue,
+                max: sliderMax,
+                divisions: sliderDivisions,
+                activeColor: activeColor,
+                enabled: sliderEnabled,
+                onChanged: onSliderChanged,
+                onChangeEnd: onSliderChangeEnd,
+              ),
+            ),
+            if (showSetToMax)
+              IconButton(
+                key: const ValueKey('limit-slider-end-button'),
+                onPressed: onSetToMax,
+                icon: const Icon(Icons.last_page),
+                tooltip: 'Max',
+              ),
+          ],
+        ),
+        if (saving)
+          const SizedBox(
+            height: 2,
+            child: LinearProgressIndicator(color: AppColors.primary),
+          )
+        else
+          const SizedBox(height: 2),
+        const SizedBox(height: 8),
+        partitionBar,
+        const SizedBox(height: 14),
+        pieChart,
+      ],
+    );
+  }
+}
+
+class _LimitAvatar extends StatelessWidget {
+  const _LimitAvatar({required this.item, required this.color});
+
+  final BackheaderBudgetItem item;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = item.category;
+    final icon = _overviewIcon(item.overview?.kind);
+    return Container(
+      key: const ValueKey('limit-card-avatar'),
+      width: 62,
+      height: 62,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            offset: const Offset(0, 2),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: category == null
+          ? Icon(icon, color: AppColors.white, size: 34)
+          : Image(
+              image: CategoryIconManager.assetImage(category.iconSlot),
+              width: 36,
+              height: 36,
+              color: AppColors.white,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.category_outlined,
+                color: AppColors.white,
+                size: 34,
+              ),
+            ),
+    );
+  }
+
+  IconData _overviewIcon(BudgetGoalKind? kind) {
+    return switch (kind) {
       BudgetGoalKind.expenseBudget => Icons.account_balance_wallet_outlined,
       BudgetGoalKind.incomeGoal => Icons.trending_up,
       BudgetGoalKind.savingGoal => Icons.savings_outlined,
+      null => Icons.account_balance_wallet_outlined,
     };
-    final limit = amount > 0 ? amount : overview.limitAmount;
-    final ratio = limit > 0 ? (overview.amount / limit).clamp(0.0, 1.0) : 1.0;
-    final amountText = limit > 0
-        ? '${formatHuf(overview.amount)} / ${formatHuf(limit)}'
-        : formatHuf(overview.amount);
-    return Material(
-      key: const ValueKey('category-budget-bar'),
-      color: Colors.transparent,
-      elevation: 8,
-      shadowColor: Colors.black.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(25),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(25),
-        child: SizedBox(
-          height: 70,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ColoredBox(color: color.withValues(alpha: 0.30)),
-              FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: ratio.toDouble(),
-                child: ColoredBox(color: color),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                child: Row(
-                  children: [
-                    Icon(icon, color: AppColors.white, size: 35),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        overview.kind.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      amountText,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
