@@ -305,12 +305,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       return;
     }
     _headerPullController.value = start;
+    final releaseVelocity = details.velocity.pixelsPerSecond.dy;
+    final closingVelocity = releaseVelocity < 0 ? releaseVelocity : 0.0;
     final spring = _headerPullController.animateWith(
       SpringSimulation(
         const SpringDescription(mass: 1, stiffness: 380, damping: 24),
         start,
         0,
-        details.velocity.pixelsPerSecond.dy,
+        closingVelocity,
       ),
     );
     unawaited(
