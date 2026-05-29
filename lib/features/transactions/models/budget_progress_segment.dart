@@ -19,6 +19,7 @@ class BudgetProgressData {
     required this.limitAmount,
     required this.ratio,
     required this.segments,
+    this.warnsWhenHigh = true,
   });
 
   final bool hasLimit;
@@ -26,10 +27,11 @@ class BudgetProgressData {
   final double limitAmount;
   final double ratio;
   final List<BudgetProgressSegment> segments;
+  final bool warnsWhenHigh;
 
   double get clampedRatio => ratio.clamp(0.0, 1.0).toDouble();
   double get remainingFraction => (1 - clampedRatio).clamp(0.0, 1.0).toDouble();
-  bool get isWarning => ratio >= 0.75 && ratio < 0.90;
-  bool get isDanger => ratio >= 0.90;
-  bool get isSuccess => hasLimit && ratio >= 1.0;
+  bool get isWarning => warnsWhenHigh && ratio >= 0.75 && ratio < 0.90;
+  bool get isDanger => warnsWhenHigh && ratio >= 0.90;
+  bool get isSuccess => hasLimit && !warnsWhenHigh && ratio >= 1.0;
 }

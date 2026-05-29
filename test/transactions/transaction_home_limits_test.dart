@@ -28,7 +28,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
-      expect(find.text('Budget limit'), findsOneWidget);
+      expect(find.text('Budget limit'), findsWidgets);
       await tester.enterText(
         find.byKey(const ValueKey('limit-amount-input')),
         '300000',

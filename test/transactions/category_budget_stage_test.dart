@@ -122,8 +122,6 @@ void main() {
     );
     await gesture.moveBy(const Offset(-90, 0));
     await tester.pump();
-    await gesture.up();
-    await tester.pump();
 
     expect(find.text('Travel'), findsOneWidget);
     final translatedDuringSnap = tester.widget<Transform>(
@@ -134,6 +132,7 @@ void main() {
       greaterThan(40),
     );
 
+    await gesture.up();
     await tester.pumpAndSettle();
     final translatedAfterSnap = tester.widget<Transform>(
       find.byKey(const ValueKey('category-budget-bar-translation')),

@@ -43,6 +43,7 @@ class BudgetProgressManager {
       limitAmount: limitAmount,
       ratio: amount / limitAmount,
       segments: segments,
+      warnsWhenHigh: kind.warnsWhenHigh,
     );
   }
 

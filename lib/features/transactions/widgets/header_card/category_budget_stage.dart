@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -41,6 +43,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _index = 0;
   var _dragDx = 0.0;
   var _settling = false;
+  var _swipeTriggered = false;
 
   @override
   void initState() {
@@ -147,14 +150,22 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   onHorizontalDragStart: (_) {
                     _slideController.stop();
                     _settling = false;
+                    _swipeTriggered = false;
                   },
                   onHorizontalDragUpdate: (details) {
-                    if (_settling) return;
-                    setState(() {
-                      _dragDx = (_dragDx + details.delta.dx)
-                          .clamp(-settleDistance, settleDistance)
-                          .toDouble();
-                    });
+                    if (_settling || _swipeTriggered) return;
+                    final nextDx = (_dragDx + details.delta.dx)
+                        .clamp(-settleDistance, settleDistance)
+                        .toDouble();
+                    setState(() => _dragDx = nextDx);
+                    if (nextDx.abs() < 80 || _items.length < 2) return;
+                    _swipeTriggered = true;
+                    unawaited(
+                      _snapToNext(
+                        settleDistance,
+                        swipedLeft: nextDx < 0,
+                      ),
+                    );
                   },
                   onHorizontalDragCancel: () => _animateDragTo(0),
                   onHorizontalDragEnd: (_) => _settleDrag(settleDistance),
@@ -311,7 +322,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   Future<void> _settleDrag(double settleDistance) async {
-    if (_settling) return;
+    if (_settling || _swipeTriggered) return;
     final items = _items;
     if (items.length < 2) {
       await _animateDragTo(0);
@@ -324,8 +335,17 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       return;
     }
 
+    await _snapToNext(settleDistance, swipedLeft: start < 0);
+  }
+
+  Future<void> _snapToNext(
+    double settleDistance, {
+    required bool swipedLeft,
+  }) async {
+    if (_settling) return;
+    final items = _items;
+    if (items.length < 2) return;
     _settling = true;
-    final swipedLeft = start < 0;
     setState(() {
       _index = swipedLeft
           ? (_index + 1) % items.length
@@ -340,6 +360,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       duration: const Duration(milliseconds: 420),
     );
     _settling = false;
+    _swipeTriggered = false;
   }
 
   Future<void> _animateDragTo(
