@@ -89,6 +89,26 @@ void main() {
     expect(limit.limitAmount, 600000);
     expect(calls.single.method, 'expenseUpsertCategoryLimit');
   });
+
+  test('upserts saving overview limit through native bridge', () async {
+    final limit = await bridge.expenseUpsertCategoryLimit({
+      'targetType': 'overview',
+      'targetId': 0,
+      'transactionType': 'saving',
+      'window': 'monthly',
+      'periodKey': '2026-05',
+      'hasLimit': true,
+      'limitAmount': 100000,
+      'alertActive': false,
+    });
+
+    expect(limit.targetType, LimitTargetType.overview);
+    expect(limit.targetId, 0);
+    expect(limit.transactionType, 'saving');
+    expect(limit.limitAmount, 100000);
+    expect(calls.single.method, 'expenseUpsertCategoryLimit');
+  });
+
 }
 
 Map<String, Object?> categoryLimitMap({

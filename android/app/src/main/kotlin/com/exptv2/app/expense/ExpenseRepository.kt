@@ -209,8 +209,16 @@ class ExpenseRepository(context: Context) {
         if (targetType == "category" && categories.byId(targetId) == null) {
             throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
         }
-        val transactionType = normalizeNativeTransactionType(args["transactionType"]?.toString())
-            ?: throw ExpenseValidationException("INVALID_LIMIT_TYPE", "Limit transaction type is required")
+        val rawTransactionType = args["transactionType"]?.toString()
+        val transactionType = if (targetType == "overview" && rawTransactionType == "saving") {
+            "saving"
+        } else {
+            normalizeNativeTransactionType(rawTransactionType)
+                ?: throw ExpenseValidationException("INVALID_LIMIT_TYPE", "Limit transaction type is required")
+        }
+        if (targetType == "category" && transactionType == "saving") {
+            throw ExpenseValidationException("INVALID_LIMIT_TYPE", "Saving limits are only valid for overview targets")
+        }
         val window = normalizeLimitWindow(args["window"]?.toString())
             ?: throw ExpenseValidationException("INVALID_LIMIT_WINDOW", "Limit window is required")
         val periodKey = args["periodKey"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
