@@ -127,7 +127,7 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
     );
-    await gesture.moveBy(const Offset(-90, 0));
+    await gesture.moveBy(const Offset(-180, 0));
     await tester.pump();
 
     expect(find.text('Food'), findsOneWidget);
@@ -138,10 +138,11 @@ void main() {
     );
     expect(held.transform.getTranslation().x.abs(), lessThanOrEqualTo(72));
 
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Food'), findsOneWidget);
 
     await gesture.up();
+    await tester.pump();
     await tester.pumpAndSettle();
 
     expect(find.text('Travel'), findsOneWidget);
@@ -332,6 +333,9 @@ void main() {
   testWidgets('category limit editor slider updates the limit amount', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     double? savedAmount;
     await tester.pumpWidget(
       MaterialApp(
@@ -346,6 +350,7 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('category-limit-partition-bar')),

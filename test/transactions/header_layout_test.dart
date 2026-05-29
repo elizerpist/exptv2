@@ -297,6 +297,7 @@ void main() {
         .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
         .dy;
     await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     final during = tester
         .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))

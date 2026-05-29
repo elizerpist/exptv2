@@ -177,25 +177,25 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   onItemTap: _openBudgetTargetEditor,
                   onOverviewJump: _jumpBackheaderToOverview,
                 ),
-              HeaderFastInfoSurface(
-                visibleFastInfoExtent: _headerExpanded
-                    ? 0
-                    : visibleFastInfoExtent,
-                cardColor: _headerExpanded
-                    ? Colors.transparent
-                    : expenseTheme.headerCard,
-                fastInfo: FastInfoPanel(
-                  config: FastInfoConfig.defaults(),
-                  backgroundColor: Colors.transparent,
-                ),
-                header: _buildHeaderCard(
+              if (_headerExpanded)
+                _buildHeaderCard(
                   expenseTheme: expenseTheme,
-                  visibleFastInfoExtent: _headerExpanded
-                      ? 0
-                      : visibleFastInfoExtent,
-                  drawSurface: _headerExpanded,
+                  visibleFastInfoExtent: 0,
+                )
+              else
+                HeaderFastInfoSurface(
+                  visibleFastInfoExtent: visibleFastInfoExtent,
+                  cardColor: expenseTheme.headerCard,
+                  fastInfo: FastInfoPanel(
+                    config: FastInfoConfig.defaults(),
+                    backgroundColor: Colors.transparent,
+                  ),
+                  header: _buildHeaderCard(
+                    expenseTheme: expenseTheme,
+                    visibleFastInfoExtent: visibleFastInfoExtent,
+                    drawSurface: false,
+                  ),
                 ),
-              ),
               if (_categoryMode != null)
                 CategoryMenuOverlay(
                   store: widget.store,

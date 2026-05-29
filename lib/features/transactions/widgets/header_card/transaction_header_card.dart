@@ -52,19 +52,23 @@ class TransactionHeaderCard extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onVerticalDragUpdate: onVerticalDragUpdate,
-            onVerticalDragEnd: onVerticalDragEnd,
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              offset: Offset(
-                0,
-                expanded
-                    ? -TransactionHeaderMetrics.expandedSlideDistance / height
-                    : 0,
-              ),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: expanded ? 1 : 0),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Transform.translate(
+                offset: Offset(
+                  0,
+                  -TransactionHeaderMetrics.expandedSlideDistance * value,
+                ),
+                child: child,
+              );
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onVerticalDragUpdate: onVerticalDragUpdate,
+              onVerticalDragEnd: onVerticalDragEnd,
               child: SizedBox(
                 key: const ValueKey('transaction-header-card'),
                 height: height,
