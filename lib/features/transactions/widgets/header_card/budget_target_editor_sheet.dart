@@ -16,6 +16,7 @@ import '../../slots/category_icon_manager.dart';
 import '../amount_field.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_limit_slider.dart';
+import 'limit_allocation_pie_chart.dart';
 
 class BudgetTargetEditorSheet extends StatefulWidget {
   const BudgetTargetEditorSheet({
@@ -242,7 +243,51 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   Widget _buildPieChart() {
-    return const SizedBox.shrink(key: ValueKey('limit-allocation-pie-chart'));
+    if (_activeItem.overview?.kind == BudgetGoalKind.savingGoal) {
+      return const SizedBox.shrink();
+    }
+    final allocation = LimitAllocationManager.build(
+      overviewLimit: _overviewLimitAmount ?? 0,
+      bars: _partitionBars,
+    );
+    return LimitAllocationPieChart(
+      allocation: allocation,
+      onSliceTap: _selectCategoryByTargetId,
+      onSliceAmountChanged: _saveCategoryAmountByTargetId,
+    );
+  }
+
+  void _selectCategoryByTargetId(int targetId) {
+    for (final item in _items) {
+      if (item.category?.targetId == targetId) {
+        _selectItem(item);
+        return;
+      }
+    }
+  }
+
+  void _saveCategoryAmountByTargetId(int targetId, double amount) {
+    CategoryBudgetBarData? match;
+    for (final bar in widget.categoryBars) {
+      if (bar.targetId == targetId) {
+        match = bar;
+        break;
+      }
+    }
+    if (match == null) return;
+    if (_activeItem.category?.targetId == targetId) {
+      _setControllerAmount(amount);
+    }
+    unawaited(
+      widget.onSaveCategory(match, limitAmount: amount, alertActive: false),
+    );
+  }
+
+  void _selectItem(BackheaderBudgetItem item) {
+    _saveDebounce?.cancel();
+    _activeKey = item.key;
+    _setControllerAmount(_limitAmountFor(item));
+    setState(() {});
   }
 
   void _refreshFromController() {
@@ -260,7 +305,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   void _resetLimit() {
     _saveDebounce?.cancel();
     _setControllerAmount(0);
-    _saveAmount(0);
+    unawaited(_saveAmount(0));
   }
 
   void _setAmountFromSlider(double amount) {
@@ -276,14 +321,14 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
         .clamp(0.0, _sliderMax)
         .toDouble();
     _setControllerAmount(snapped);
-    _saveAmount(snapped);
+    unawaited(_saveAmount(snapped));
   }
 
   void _setOverviewToMax() {
     _saveDebounce?.cancel();
     final max = math.max(0.0, widget.periodIncome).toDouble();
     _setControllerAmount(max);
-    _saveAmount(max);
+    unawaited(_saveAmount(max));
   }
 
   void _selectPrevious() => _selectAdjacent(-1);
@@ -297,10 +342,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     final currentIndex = index < 0 ? 0 : index;
     final nextIndex = (currentIndex + direction + items.length) % items.length;
     final next = items[nextIndex];
-    _saveDebounce?.cancel();
-    _activeKey = next.key;
-    _setControllerAmount(_limitAmountFor(next));
-    setState(() {});
+    _selectItem(next);
   }
 
   void _setControllerAmount(double amount) {

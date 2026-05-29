@@ -127,6 +127,22 @@ void main() {
     expect(repository.savedLimits.single['limitAmount'], 1000);
   });
 
+  testWidgets('pie tap selects category and syncs backheader', (tester) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('limit-allocation-pie-chart')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('limit-card-title')), findsOneWidget);
+    expect(find.text('Food'), findsWidgets);
+  });
 }
 
 Future<void> pumpExpandedMonthlyHome(
@@ -156,6 +172,53 @@ Future<void> pumpExpandedMonthlyHome(
 }
 
 class FakeHomeLimitRepository implements TransactionRepositoryContract {
+  FakeHomeLimitRepository();
+
+  FakeHomeLimitRepository.withBudgetAndCategoryLimits() {
+    categories.add(
+      TransactionCategory.fromMap({
+        'transactionCategoryID': 7,
+        'name': 'Travel',
+        'type': 'kiadás',
+        'colorSlot': 8,
+        'iconSlot': 3,
+        'backgroundColor': '#38bdf8',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      }),
+    );
+    limits = [
+      CategoryLimit.fromMap({
+        'id': 10,
+        'targetType': 'overview',
+        'targetId': 0,
+        'transactionType': 'expense',
+        'window': 'monthly',
+        'periodKey': '2026-05',
+        'hasLimit': true,
+        'limitAmount': 1000,
+        'alertActive': false,
+        'createdAt': 0,
+        'updatedAt': 1,
+      }),
+      CategoryLimit.fromMap({
+        'id': 11,
+        'targetType': 'category',
+        'targetId': 6,
+        'transactionType': 'expense',
+        'window': 'monthly',
+        'periodKey': '2026-05',
+        'hasLimit': true,
+        'limitAmount': 250,
+        'alertActive': false,
+        'createdAt': 0,
+        'updatedAt': 1,
+      }),
+    ];
+  }
+
   final savedLimits = <Map<String, Object?>>[];
   var limits = <CategoryLimit>[];
 
