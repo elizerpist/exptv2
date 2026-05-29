@@ -77,14 +77,18 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       return;
     }
     if (_dragDx > 70 && widget.onDeleteRequested != null) {
-      _triggered = true;
-      setState(() {
-        _deletePending = true;
-        _deleteFrozen = true;
-        _visualDx = 20;
-      });
-      unawaited(_requestDelete());
+      _triggerDeleteRequest();
     }
+  }
+
+  void _triggerDeleteRequest() {
+    _triggered = true;
+    setState(() {
+      _deletePending = true;
+      _deleteFrozen = true;
+      _visualDx = 20;
+    });
+    unawaited(_requestDelete());
   }
 
   Future<void> _requestDelete() async {
@@ -133,6 +137,12 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       onHorizontalDragCancel: _deleteFrozen ? null : _resetDrag,
       onHorizontalDragEnd: (_) {
         if (_deleteFrozen) return;
+        if (!_triggered &&
+            _dragDx > 70 &&
+            widget.onDeleteRequested != null) {
+          _triggerDeleteRequest();
+          return;
+        }
         _resetDrag();
       },
       child: Container(

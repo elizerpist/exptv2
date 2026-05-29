@@ -262,10 +262,12 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('transaction-logbox-250905')));
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-logbox-content-250905')),
+    );
     await tester.pump();
     await tester.drag(
-      find.byKey(const ValueKey('transaction-logbox-250905')),
+      find.byKey(const ValueKey('transaction-logbox-content-250905')),
       const Offset(180, 0),
     );
     await tester.pumpAndSettle();
