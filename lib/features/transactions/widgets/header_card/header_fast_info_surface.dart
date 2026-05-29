@@ -48,6 +48,12 @@ class HeaderFastInfoSurface extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
+              Positioned(
+                top: TransactionHeaderMetrics.fastInfoHeight,
+                left: 0,
+                right: 0,
+                child: header,
+              ),
               if (showFastInfo)
                 Positioned(
                   top: 0,
@@ -60,12 +66,6 @@ class HeaderFastInfoSurface extends StatelessWidget {
                     child: fastInfo,
                   ),
                 ),
-              Positioned(
-                top: TransactionHeaderMetrics.fastInfoHeight,
-                left: 0,
-                right: 0,
-                child: header,
-              ),
             ],
           ),
         ),
