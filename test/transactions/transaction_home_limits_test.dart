@@ -127,6 +127,53 @@ void main() {
     expect(repository.savedLimits.single['limitAmount'], 1000);
   });
 
+  testWidgets('limit editor slider keeps adaptive max after manual high input', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withoutBudgetLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.drag(
+      find.byKey(const ValueKey('category-budget-bar')),
+      const Offset(-180, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+
+    final initialSlider = tester.widget<Slider>(
+      find.byKey(const ValueKey('category-limit-slider')),
+    );
+    expect(initialSlider.max, 100000);
+    expect(initialSlider.divisions, 100);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('limit-amount-input')),
+      '250000',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final highSlider = tester.widget<Slider>(
+      find.byKey(const ValueKey('category-limit-slider')),
+    );
+    expect(highSlider.max, 250000);
+
+    await tester.drag(
+      find.byKey(const ValueKey('category-limit-slider')),
+      const Offset(-120, 0),
+    );
+    await tester.pumpAndSettle();
+
+    final reducedSlider = tester.widget<Slider>(
+      find.byKey(const ValueKey('category-limit-slider')),
+    );
+    expect(reducedSlider.max, 250000);
+  });
+
   testWidgets('partition tap selects category and syncs backheader', (
     tester,
   ) async {
@@ -246,6 +293,8 @@ Future<void> pumpExpandedMonthlyHome(
 
 class FakeHomeLimitRepository implements TransactionRepositoryContract {
   FakeHomeLimitRepository();
+
+  FakeHomeLimitRepository.withoutBudgetLimits();
 
   FakeHomeLimitRepository.withIncomeData() {
     limits = [

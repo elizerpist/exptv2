@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/budget_progress_manager.dart';
 import '../../data/limit_allocation_manager.dart';
-import '../../data/limit_partition_manager.dart';
+import '../../data/limit_slider_range.dart';
 import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
@@ -60,6 +60,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   late final TextEditingController _controller;
   late String _activeKey;
   Timer? _saveDebounce;
+  final _rememberedSliderMaxByKey = <String, double>{};
   var _saving = false;
 
   @override
@@ -95,10 +96,10 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
             amountController: _controller,
             inputLabel: _inputLabel,
             activeColor: _activeColor,
-            sliderValue: _sliderValue,
-            sliderMax: _sliderMax,
-            sliderEnabled: _sliderEnabled,
-            sliderDivisions: LimitAllocationManager.sliderDivisions(_sliderMax),
+            sliderValue: _sliderRange.value,
+            sliderMax: _sliderRange.max,
+            sliderEnabled: _sliderRange.enabled,
+            sliderDivisions: _sliderRange.divisions,
             saving: _saving,
             onPrevious: _selectPrevious,
             onNext: _selectNext,
@@ -135,46 +136,52 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     return math.max(0, double.tryParse(value) ?? 0).toDouble();
   }
 
-  double get _sliderMax {
+  LimitSliderRange get _sliderRange {
+    final remembered = _rememberedSliderMaxByKey[_activeKey] ?? 0;
     final overview = _activeItem.overview;
     if (overview != null) {
-      if (widget.periodIncome > 0) return widget.periodIncome;
-      return math.max(_amount, 1.0).toDouble();
-    }
-
-    final category = _activeItem.category;
-    if (category == null) return 1;
-    final overviewLimit = _matchingOverviewLimitForCategory(category);
-    if (overviewLimit > 0) {
-      final max = LimitAllocationManager.categorySliderMax(
-        overviewLimit: overviewLimit,
-        bars: widget.categoryBars,
-        activeBar: category,
+      if (widget.periodIncome > 0) {
+        return LimitSliderRange.constrained(
+          amount: _amount,
+          rememberedMax: remembered,
+          maxAllowed: math.max(widget.periodIncome, _amount),
+          hasExistingLimit: _amount > 0,
+        );
+      }
+      return LimitSliderRange.unconstrained(
+        amount: _amount,
+        rememberedMax: remembered,
       );
-      return math.max(max, 1.0).toDouble();
     }
-    return LimitPartitionManager.sliderMaxAmount(
-      _partitionBars,
-      activeBar: category,
-      activeLimitAmount: _amount,
-    );
-  }
 
-  bool get _sliderEnabled {
-    final overview = _activeItem.overview;
-    if (overview != null) return _sliderMax > 0;
     final category = _activeItem.category;
-    if (category == null) return false;
+    if (category == null) {
+      return const LimitSliderRange(
+        value: 0,
+        max: 1,
+        divisions: 1,
+        enabled: false,
+      );
+    }
     final overviewLimit = _matchingOverviewLimitForCategory(category);
-    if (overviewLimit <= 0) return true;
-    return LimitAllocationManager.categorySliderEnabled(
+    if (overviewLimit <= 0) {
+      return LimitSliderRange.unconstrained(
+        amount: _amount,
+        rememberedMax: remembered,
+      );
+    }
+    final maxAllowed = LimitAllocationManager.categorySliderMax(
       overviewLimit: overviewLimit,
       bars: widget.categoryBars,
       activeBar: category,
     );
+    return LimitSliderRange.constrained(
+      amount: _amount,
+      rememberedMax: remembered,
+      maxAllowed: maxAllowed,
+      hasExistingLimit: category.limitAmount > 0 || _amount > 0,
+    );
   }
-
-  double get _sliderValue => _amount.clamp(0.0, _sliderMax).toDouble();
 
   String get _inputLabel {
     final overview = _activeItem.overview;
@@ -260,6 +267,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   void _refreshFromController() {
+    _rememberSliderMax(_amount);
     if (mounted) setState(() {});
   }
 
@@ -279,7 +287,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   void _setAmountFromSlider(double amount) {
     final snapped = LimitAllocationManager.snapSliderAmount(amount)
-        .clamp(0.0, _sliderMax)
+        .clamp(0.0, _sliderRange.max)
         .toDouble();
     _setControllerAmount(snapped);
   }
@@ -287,7 +295,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   void _saveSliderAmount(double amount) {
     _saveDebounce?.cancel();
     final snapped = LimitAllocationManager.snapSliderAmount(amount)
-        .clamp(0.0, _sliderMax)
+        .clamp(0.0, _sliderRange.max)
         .toDouble();
     _setControllerAmount(snapped);
     unawaited(_saveAmount(snapped));
@@ -315,6 +323,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   void _setControllerAmount(double amount) {
+    _rememberSliderMax(amount);
     final roundedAmount = amount.round();
     final text = roundedAmount <= 0 ? '' : roundedAmount.toString();
     if (_controller.text == text) return;
@@ -322,6 +331,13 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
+  }
+
+  void _rememberSliderMax(double amount) {
+    final current = _rememberedSliderMaxByKey[_activeKey] ?? 0;
+    if (amount > current) {
+      _rememberedSliderMaxByKey[_activeKey] = amount;
+    }
   }
 
   Future<void> _saveAmount(double rawAmount, {String? itemKey}) async {
