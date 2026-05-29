@@ -266,7 +266,7 @@ void main() {
     await tester.pump();
     await tester.drag(
       find.byKey(const ValueKey('transaction-logbox-250905')),
-      const Offset(120, 0),
+      const Offset(180, 0),
     );
     await tester.pumpAndSettle();
 
@@ -330,7 +330,7 @@ void main() {
       const ValueKey('transaction-logbox-card-250905'),
     );
     final gesture = await tester.startGesture(tester.getCenter(cardFinder));
-    await gesture.moveBy(const Offset(120, 0));
+    await gesture.moveBy(const Offset(180, 0));
     await tester.pump();
     await gesture.up();
     await tester.pump();
