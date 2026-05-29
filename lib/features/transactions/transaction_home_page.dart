@@ -305,13 +305,23 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       return;
     }
     _headerPullController.value = start;
-    _headerPullController.animateWith(
+    final spring = _headerPullController.animateWith(
       SpringSimulation(
         const SpringDescription(mass: 1, stiffness: 380, damping: 24),
         start,
         0,
         details.velocity.pixelsPerSecond.dy,
       ),
+    );
+    unawaited(
+      spring.orCancel
+          .then<void>((_) {
+            if (!mounted) return;
+            _headerPullController.value = 0;
+            if (_fastInfoExtent == 0) return;
+            setState(() => _fastInfoExtent = 0);
+          })
+          .catchError((_) {}),
     );
   }
 
