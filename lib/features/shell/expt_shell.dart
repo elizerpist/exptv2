@@ -19,6 +19,8 @@ import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
+import '../transactions/widgets/category_menu/category_editor_panel.dart';
+import '../transactions/widgets/category_menu/category_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
@@ -39,6 +41,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late final TransactionStore _transactionStore;
   late final RecurringAlarmService _recurringAlarmService;
   var _transactionEditorOpen = false;
+  var _categoryEditorOpen = false;
   var _homeBlockingOverlayOpen = false;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
@@ -106,6 +109,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _activeTab = tab;
       _transactionEditorOpen = false;
+      _categoryEditorOpen = false;
       _homeBlockingOverlayOpen = false;
       _editingTransaction = null;
     });
@@ -114,6 +118,15 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void _handleFabPressed() {
     setState(() {
       _transactionEditorOpen = true;
+      _categoryEditorOpen = false;
+      _editingTransaction = null;
+    });
+  }
+
+  void _handleFabLongPressed() {
+    setState(() {
+      _transactionEditorOpen = false;
+      _categoryEditorOpen = true;
       _editingTransaction = null;
     });
   }
@@ -121,6 +134,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void _openEditTransaction(TransactionRecord transaction) {
     setState(() {
       _transactionEditorOpen = true;
+      _categoryEditorOpen = false;
       _editingTransaction = transaction;
     });
   }
@@ -130,6 +144,21 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _transactionEditorOpen = false;
       _editingTransaction = null;
     });
+  }
+
+  void _closeCategoryEditor() {
+    setState(() => _categoryEditorOpen = false);
+  }
+
+  Future<void> _saveCategory(CategoryDraft draft) async {
+    await _transactionStore.addCategory(
+      name: draft.name,
+      type: draft.type,
+      colorSlot: draft.colorSlot,
+      iconSlot: draft.iconSlot,
+    );
+    if (!mounted) return;
+    setState(() => _categoryEditorOpen = false);
   }
 
   void _setHomeBlockingOverlay(bool open) {
@@ -220,7 +249,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               left: 0,
               right: 0,
               bottom: AppDimensions.fabBottom,
-              child: Center(child: ExptFab(onPressed: _handleFabPressed)),
+              child: Center(
+                child: ExptFab(
+                  onPressed: _handleFabPressed,
+                  onLongPress: _handleFabLongPressed,
+                ),
+              ),
             ),
           DebugFloatingButton(
             recurringAlarmService: _recurringAlarmService,
@@ -236,6 +270,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 store: _transactionStore,
                 initialTransaction: _editingTransaction,
                 onClose: _closeTransactionEditor,
+              ),
+            ),
+          if (_categoryEditorOpen)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: TransactionMenuMetrics.overlayTop,
+              bottom: 0,
+              child: CategoryEditorSheet(
+                activeType: _transactionStore.activeType,
+                onClose: _closeCategoryEditor,
+                onSave: _saveCategory,
               ),
             ),
         ],

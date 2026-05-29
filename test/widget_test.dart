@@ -194,6 +194,57 @@ void main() {
     );
   });
 
+  testWidgets('FAB long press opens the new category editor', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Új kiadási kategória'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-editor-slide-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('transaction category field opens category menu picker', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-category-selector')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+    expect(find.text('Q'), findsWidgets);
+  });
+
   testWidgets('category overlay keeps shell navigation controls visible', (
     tester,
   ) async {
@@ -208,6 +259,23 @@ void main() {
     expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+
+    final backButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey('category-menu-back-button')),
+    );
+    final addButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey('category-add-button')),
+    );
+    expect(backButton.padding, EdgeInsets.zero);
+    expect(addButton.padding, EdgeInsets.zero);
+    expect(
+      backButton.constraints,
+      const BoxConstraints.tightFor(width: 44, height: 54),
+    );
+    expect(
+      addButton.constraints,
+      const BoxConstraints.tightFor(width: 44, height: 54),
+    );
   });
 
   testWidgets('transaction editor is non modal and aligned to summary pill', (

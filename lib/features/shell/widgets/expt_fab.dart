@@ -4,9 +4,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 
 class ExptFab extends StatelessWidget {
-  const ExptFab({super.key, required this.onPressed});
+  const ExptFab({
+    super.key,
+    required this.onPressed,
+    this.onLongPress,
+  });
 
   final VoidCallback onPressed;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +28,7 @@ class ExptFab extends StatelessWidget {
           customBorder: const CircleBorder(),
           highlightColor: Colors.white30,
           onTap: onPressed,
+          onLongPress: onLongPress,
           child: Icon(
             Icons.add,
             color: AppColors.white,

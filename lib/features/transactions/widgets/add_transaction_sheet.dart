@@ -6,6 +6,9 @@ import '../models/transaction_record.dart';
 import '../state/transaction_store.dart';
 import 'amount_field.dart';
 import 'category_selector_field.dart';
+import 'category_menu/category_editor_panel.dart';
+import 'category_menu/category_editor_sheet.dart';
+import 'category_menu/category_menu_overlay.dart';
 import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
 
@@ -31,8 +34,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final _date = TextEditingController();
   final _time = TextEditingController();
   TransactionCategory? _category;
+  TransactionCategory? _editingCategory;
   String? _error;
   var _saving = false;
+  var _categoryPickerOpen = false;
+  var _categoryEditorOpen = false;
 
   bool get _editing => widget.initialTransaction != null;
 
@@ -70,18 +76,22 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             .toList();
         _category = _resolvedCategory(categories);
 
-        return SlideUpMenuCard(
-          cardKey: const ValueKey('transaction-editor-card'),
-          onDismissed: _close,
-          child: SafeArea(
-            top: false,
-            bottom: false,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-                final contentHeight =
-                    constraints.maxHeight - keyboardInset - 44;
-                return SingleChildScrollView(
+        return Stack(
+          children: [
+            SlideUpMenuCard(
+              cardKey: const ValueKey('transaction-editor-card'),
+              onDismissed: _close,
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final keyboardInset = MediaQuery.viewInsetsOf(
+                      context,
+                    ).bottom;
+                    final contentHeight =
+                        constraints.maxHeight - keyboardInset - 44;
+                    return SingleChildScrollView(
                   padding: EdgeInsets.only(
                     left: 20,
                     right: 20,
@@ -144,10 +154,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           AmountField(controller: _amount),
                           const SizedBox(height: 18),
                           CategorySelectorField(
-                            categories: categories,
                             selected: _category,
-                            onChanged: (value) =>
-                                setState(() => _category = value),
+                            onTap: _openCategoryPicker,
                           ),
                           const SizedBox(height: 18),
                           DateTimeFields(
@@ -178,10 +186,41 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
                     ),
                   ),
-                );
-              },
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
+            if (_categoryPickerOpen)
+              CategoryMenuOverlay(
+                store: widget.store,
+                top: 0,
+                bottom: 0,
+                activeType: type,
+                activeCategory: _category,
+                onClose: _closeCategoryPicker,
+                onAdd: _openAddCategory,
+                onModify: _openModifyCategory,
+                onSelect: _selectCategory,
+                onDelete: _deleteCategory,
+              ),
+            if (_categoryEditorOpen)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: CategoryEditorSheet(
+                  activeType: type,
+                  initialCategory: _editingCategory,
+                  onClose: _closeCategoryEditor,
+                  onSave: (draft) => _saveCategory(draft, _editingCategory),
+                  onDelete: _editingCategory == null
+                      ? null
+                      : (category) => _deleteCategory(category),
+                ),
+              ),
+          ],
         );
       },
     );
@@ -205,6 +244,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
     _error = null;
     _saving = false;
+    _categoryPickerOpen = false;
+    _categoryEditorOpen = false;
+    _editingCategory = null;
   }
 
   String _title(TransactionType type) {
@@ -239,6 +281,105 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       }
     }
     return categories.first;
+  }
+
+  void _openCategoryPicker() {
+    setState(() {
+      _categoryPickerOpen = true;
+      _categoryEditorOpen = false;
+      _editingCategory = null;
+    });
+  }
+
+  void _closeCategoryPicker() {
+    setState(() => _categoryPickerOpen = false);
+  }
+
+  void _selectCategory(TransactionCategory category) {
+    setState(() {
+      _category = category;
+      _categoryPickerOpen = false;
+    });
+  }
+
+  void _openAddCategory() {
+    setState(() {
+      _categoryPickerOpen = false;
+      _categoryEditorOpen = true;
+      _editingCategory = null;
+    });
+  }
+
+  void _openModifyCategory(TransactionCategory category) {
+    setState(() {
+      _categoryPickerOpen = false;
+      _categoryEditorOpen = true;
+      _editingCategory = category;
+    });
+  }
+
+  void _closeCategoryEditor() {
+    setState(() {
+      _categoryEditorOpen = false;
+      _categoryPickerOpen = true;
+      _editingCategory = null;
+    });
+  }
+
+  Future<void> _saveCategory(
+    CategoryDraft draft, [
+    TransactionCategory? editingCategory,
+  ]) async {
+    final editing = editingCategory;
+    TransactionCategory? addedCategory;
+    if (draft.id == null || editing == null) {
+      await widget.store.addCategory(
+        name: draft.name,
+        type: draft.type,
+        colorSlot: draft.colorSlot,
+        iconSlot: draft.iconSlot,
+      );
+      addedCategory = _findCategoryByDraft(draft);
+    } else {
+      await widget.store.updateCategory(
+        editing,
+        name: draft.name,
+        colorSlot: draft.colorSlot,
+        iconSlot: draft.iconSlot,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _category = addedCategory ?? _category;
+      _categoryEditorOpen = false;
+      _categoryPickerOpen = true;
+      _editingCategory = null;
+    });
+  }
+
+  Future<void> _deleteCategory(TransactionCategory category) async {
+    final deleted = await widget.store.deleteCategory(category);
+    if (!mounted || !deleted) return;
+    setState(() {
+      if (_category?.transactionCategoryID == category.transactionCategoryID) {
+        _category = null;
+      }
+      _categoryEditorOpen = false;
+      _categoryPickerOpen = true;
+      _editingCategory = null;
+    });
+  }
+
+  TransactionCategory? _findCategoryByDraft(CategoryDraft draft) {
+    for (final category in widget.store.categories) {
+      if (category.name == draft.name &&
+          category.normalizedType == draft.type &&
+          category.colorSlot == draft.colorSlot &&
+          category.iconSlot == draft.iconSlot) {
+        return category;
+      }
+    }
+    return null;
   }
 
   Future<void> _pickDate() async {

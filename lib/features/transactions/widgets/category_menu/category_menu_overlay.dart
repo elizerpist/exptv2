@@ -18,6 +18,10 @@ class CategoryMenuOverlay extends StatelessWidget {
     required this.onModify,
     required this.onSelect,
     required this.onDelete,
+    this.top = TransactionMenuMetrics.overlayTop,
+    this.bottom = AppDimensions.bottomNavHeight,
+    this.activeType,
+    this.activeCategory,
   });
 
   final TransactionStore store;
@@ -26,14 +30,18 @@ class CategoryMenuOverlay extends StatelessWidget {
   final ValueChanged<TransactionCategory> onModify;
   final ValueChanged<TransactionCategory> onSelect;
   final ValueChanged<TransactionCategory> onDelete;
+  final double top;
+  final double bottom;
+  final TransactionType? activeType;
+  final TransactionCategory? activeCategory;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: TransactionMenuMetrics.overlayTop,
+      top: top,
       left: 0,
       right: 0,
-      bottom: AppDimensions.bottomNavHeight,
+      bottom: bottom,
       child: Material(
         key: const ValueKey('category-menu-overlay'),
         color: AppColors.white,
@@ -46,10 +54,10 @@ class CategoryMenuOverlay extends StatelessWidget {
           ),
           child: CategoryMenuPanel(
             key: const ValueKey('category-picker-panel'),
-            activeType: store.activeType,
+            activeType: activeType ?? store.activeType,
             categories: store.categories,
             categoryTransactionCounts: store.categoryTransactionCounts,
-            activeCategory: store.activeCategory,
+            activeCategory: activeCategory ?? store.activeCategory,
             onSelect: onSelect,
             onModify: onModify,
             onDelete: onDelete,

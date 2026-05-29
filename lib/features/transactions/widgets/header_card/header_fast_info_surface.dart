@@ -1,0 +1,74 @@
+import 'package:flutter/material.dart';
+
+import '../../../../core/theme/app_colors.dart';
+import 'transaction_header_metrics.dart';
+
+class HeaderFastInfoSurface extends StatelessWidget {
+  const HeaderFastInfoSurface({
+    super.key,
+    required this.visibleFastInfoExtent,
+    required this.fastInfo,
+    required this.header,
+    this.cardColor = AppColors.gray100,
+  });
+
+  final double visibleFastInfoExtent;
+  final Widget fastInfo;
+  final Widget header;
+  final Color cardColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final extent = visibleFastInfoExtent
+        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    return Positioned(
+      top: -TransactionHeaderMetrics.fastInfoHeight + extent,
+      left: 0,
+      right: 0,
+      child: DecoratedBox(
+        key: const ValueKey('header-fast-info-surface'),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(24),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              offset: const Offset(0, 4),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: SizedBox(
+          height: TransactionHeaderMetrics.fastInfoHeight +
+              TransactionHeaderMetrics.cardHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (extent > 0)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Opacity(
+                    opacity:
+                        (extent / TransactionHeaderMetrics.fastInfoHeight)
+                            .clamp(0.0, 1.0),
+                    child: fastInfo,
+                  ),
+                ),
+              Positioned(
+                top: TransactionHeaderMetrics.fastInfoHeight,
+                left: 0,
+                right: 0,
+                child: header,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

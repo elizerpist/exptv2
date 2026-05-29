@@ -7,20 +7,22 @@ class FastInfoPanel extends StatelessWidget {
   const FastInfoPanel({
     super.key,
     required this.config,
+    this.backgroundColor = AppColors.gray100,
   });
 
   final FastInfoConfig config;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('fast-info-panel'),
       height: 300,
-      color: AppColors.gray100,
+      color: backgroundColor,
       child: Stack(
         children: [
           Positioned(
-            top: 33,
+            top: 54,
             left: 20,
             right: 20,
             child: Column(
@@ -33,7 +35,7 @@ class FastInfoPanel extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 179,
+            top: 202,
             left: 20,
             right: 20,
             child: Row(

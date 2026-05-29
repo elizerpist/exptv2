@@ -50,6 +50,45 @@ void main() {
     expect(tapped?.title, 'Travel');
   });
 
+  testWidgets('category budget bar follows horizontal drag before settling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              bars: [
+                barFixture(6, 'Food', 100, 150),
+                barFixture(7, 'Travel', 40, 0),
+              ],
+              onBarTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
+    );
+    await gesture.moveBy(const Offset(-64, 0));
+    await tester.pump();
+
+    final translatedBar = tester.widget<Transform>(
+      find.byKey(const ValueKey('category-budget-bar-translation')),
+    );
+    expect(translatedBar.transform.getTranslation().x, lessThan(0));
+    expect(find.text('Food'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Travel'), findsOneWidget);
+  });
+
   testWidgets(
     'stage summary outline uses equal partition units before limits are set',
     (tester) async {

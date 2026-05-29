@@ -17,6 +17,7 @@ import 'models/category_budget_bar_data.dart';
 import 'widgets/header_card/category_budget_stage.dart';
 import 'widgets/header_card/category_limit_editor_sheet.dart';
 import 'widgets/header_card/fast_info_panel.dart';
+import 'widgets/header_card/header_fast_info_surface.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
@@ -159,54 +160,30 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   ),
                 ],
               ),
-              if (visibleFastInfoExtent > 0)
-                Positioned(
-                  top:
-                      -TransactionHeaderMetrics.fastInfoHeight +
-                      visibleFastInfoExtent,
-                  left: 0,
-                  right: 0,
-                  child: Opacity(
-                    opacity:
-                        (visibleFastInfoExtent /
-                                TransactionHeaderMetrics.fastInfoHeight)
-                            .clamp(0.0, 1.0),
-                    child: FastInfoPanel(config: FastInfoConfig.defaults()),
-                  ),
-                ),
               if (_headerExpanded)
                 CategoryBudgetStage(
                   bars: widget.store.categoryBudgetBars,
                   onBarTap: _openLimitEditor,
                 ),
-              Transform.translate(
-                offset: Offset(0, _fastInfoExtent),
-                child: TransactionHeaderCard(
-                  balanceText: widget.store.totalBalanceText,
-                  expanded: _headerExpanded,
-                  magnetType: expenseTheme.settings.magnetType,
-                  accent: expenseTheme.accent,
+              if (_headerExpanded)
+                _buildHeaderCard(
+                  expenseTheme: expenseTheme,
+                  visibleFastInfoExtent: 0,
+                )
+              else
+                HeaderFastInfoSurface(
+                  visibleFastInfoExtent: visibleFastInfoExtent,
                   cardColor: expenseTheme.headerCard,
-                  totalIncome: _totalIncome(),
-                  totalExpense: _totalExpense(),
-                  fastInfoVisible: visibleFastInfoExtent > 0,
-                  balanceHidden: _balanceHidden,
-                  onBalanceVisibilityPressed: () {
-                    setState(() => _balanceHidden = !_balanceHidden);
-                  },
-                  onCategoryPressed: _openCategoryMenu,
-                  onVerticalDragUpdate: _handleHeaderDragUpdate,
-                  onVerticalDragEnd: _handleHeaderDragEnd,
-                  onExpandPressed: () {
-                    _headerPullController.stop();
-                    _headerPullController.value = 0;
-                    setState(() {
-                      _fastInfoExtent = 0;
-                      _headerExpanded = !_headerExpanded;
-                    });
-                  },
+                  fastInfo: FastInfoPanel(
+                    config: FastInfoConfig.defaults(),
+                    backgroundColor: Colors.transparent,
+                  ),
+                  header: _buildHeaderCard(
+                    expenseTheme: expenseTheme,
+                    visibleFastInfoExtent: visibleFastInfoExtent,
+                    drawSurface: false,
+                  ),
                 ),
-              ),
               if (_categoryMode != null)
                 CategoryMenuOverlay(
                   store: widget.store,
@@ -256,6 +233,39 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       if (!mounted) return;
       widget.onBlockingOverlayChanged?.call(active);
     });
+  }
+
+  TransactionHeaderCard _buildHeaderCard({
+    required ExpenseTheme expenseTheme,
+    required double visibleFastInfoExtent,
+    bool drawSurface = true,
+  }) {
+    return TransactionHeaderCard(
+      balanceText: widget.store.totalBalanceText,
+      expanded: _headerExpanded,
+      magnetType: expenseTheme.settings.magnetType,
+      accent: expenseTheme.accent,
+      cardColor: expenseTheme.headerCard,
+      totalIncome: _totalIncome(),
+      totalExpense: _totalExpense(),
+      fastInfoVisible: visibleFastInfoExtent > 0,
+      balanceHidden: _balanceHidden,
+      drawSurface: drawSurface,
+      onBalanceVisibilityPressed: () {
+        setState(() => _balanceHidden = !_balanceHidden);
+      },
+      onCategoryPressed: _openCategoryMenu,
+      onVerticalDragUpdate: _handleHeaderDragUpdate,
+      onVerticalDragEnd: _handleHeaderDragEnd,
+      onExpandPressed: () {
+        _headerPullController.stop();
+        _headerPullController.value = 0;
+        setState(() {
+          _fastInfoExtent = 0;
+          _headerExpanded = !_headerExpanded;
+        });
+      },
+    );
   }
 
   double _totalIncome() {

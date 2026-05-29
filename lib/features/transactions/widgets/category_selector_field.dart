@@ -6,25 +6,46 @@ import '../models/transaction_category.dart';
 class CategorySelectorField extends StatelessWidget {
   const CategorySelectorField({
     super.key,
-    required this.categories,
     required this.selected,
-    required this.onChanged,
+    required this.onTap,
   });
 
-  final List<TransactionCategory> categories;
   final TransactionCategory? selected;
-  final ValueChanged<TransactionCategory?> onChanged;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<TransactionCategory>(
-      initialValue: selected,
-      items: categories.map((category) {
-        return DropdownMenuItem<TransactionCategory>(
-          value: category,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+    final category = selected;
+    return InkWell(
+      key: const ValueKey('transaction-category-selector'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(25),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Kategória',
+          filled: true,
+          fillColor: AppColors.gray50,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 14,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: const BorderSide(color: AppColors.gray200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: const BorderSide(color: AppColors.gray200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
+        ),
+        isEmpty: category == null,
+        child: Row(
+          children: [
+            if (category != null) ...[
               Container(
                 width: 18,
                 height: 18,
@@ -34,31 +55,30 @@ class CategorySelectorField extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(category.name),
-            ],
-          ),
-        );
-      }).toList(),
-      onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: 'Kategória',
-        filled: true,
-        fillColor: AppColors.gray50,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25),
-          borderSide: const BorderSide(color: AppColors.gray200),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25),
-          borderSide: const BorderSide(color: AppColors.gray200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              Expanded(
+                child: Text(
+                  category.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray800,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ] else
+              const Expanded(
+                child: Text(
+                  'Válassz kategóriát',
+                  style: TextStyle(color: AppColors.gray500),
+                ),
+              ),
+            const Icon(
+              Icons.keyboard_arrow_right,
+              color: AppColors.gray500,
+              size: 22,
+            ),
+          ],
         ),
       ),
     );

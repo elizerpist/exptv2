@@ -21,6 +21,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.totalExpense = 0,
     this.fastInfoVisible = false,
     this.balanceHidden = false,
+    this.drawSurface = true,
     this.onBalanceVisibilityPressed,
   });
 
@@ -37,6 +38,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final double totalExpense;
   final bool fastInfoVisible;
   final bool balanceHidden;
+  final bool drawSurface;
   final VoidCallback? onBalanceVisibilityPressed;
 
   static const height = TransactionHeaderMetrics.cardHeight;
@@ -67,25 +69,26 @@ class TransactionHeaderCard extends StatelessWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: const BorderRadius.vertical(
-                          bottom: Radius.circular(24),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: 0.15,
-                            ),
-                            offset: const Offset(0, 4),
-                            blurRadius: 8,
+                  if (drawSurface)
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(24),
                           ),
-                        ],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: 0.15,
+                              ),
+                              offset: const Offset(0, 4),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                   const Positioned(
                     top: TransactionHeaderMetrics.titleTop,
                     left: 30,

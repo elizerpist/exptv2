@@ -20,14 +20,34 @@ class CategoryBudgetStage extends StatefulWidget {
   State<CategoryBudgetStage> createState() => _CategoryBudgetStageState();
 }
 
-class _CategoryBudgetStageState extends State<CategoryBudgetStage> {
+class _CategoryBudgetStageState extends State<CategoryBudgetStage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _slideController;
+  Animation<double>? _slideAnimation;
   var _index = 0;
   var _dragDx = 0.0;
+  var _settling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+    )..addListener(_syncSlideAnimation);
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant CategoryBudgetStage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_index >= widget.bars.length) _index = 0;
+    if (oldWidget.bars.length != widget.bars.length) _dragDx = 0;
   }
 
   @override
@@ -65,15 +85,36 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage> {
             top: 78,
             left: 40,
             right: 40,
-            child: GestureDetector(
-              onHorizontalDragUpdate: (details) => _dragDx += details.delta.dx,
-              onHorizontalDragEnd: (_) => _settleDrag(),
-              child: CategoryBudgetBar(
-                bar: current,
-                height: 54,
-                compactIcon: true,
-                onTap: () => widget.onBarTap(current),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final settleDistance = constraints.maxWidth + 40;
+                return GestureDetector(
+                  onHorizontalDragStart: (_) {
+                    _slideController.stop();
+                    _settling = false;
+                  },
+                  onHorizontalDragUpdate: (details) {
+                    if (_settling) return;
+                    setState(() {
+                      _dragDx = (_dragDx + details.delta.dx)
+                          .clamp(-settleDistance, settleDistance)
+                          .toDouble();
+                    });
+                  },
+                  onHorizontalDragCancel: () => _animateDragTo(0),
+                  onHorizontalDragEnd: (_) => _settleDrag(settleDistance),
+                  child: Transform.translate(
+                    key: const ValueKey('category-budget-bar-translation'),
+                    offset: Offset(_dragDx, 0),
+                    child: CategoryBudgetBar(
+                      bar: current,
+                      height: 54,
+                      compactIcon: true,
+                      onTap: () => widget.onBarTap(current),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           if (widget.bars.length > 1)
@@ -106,18 +147,48 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage> {
     );
   }
 
-  void _settleDrag() {
+  void _syncSlideAnimation() {
+    final animation = _slideAnimation;
+    if (animation == null || !mounted) return;
+    setState(() => _dragDx = animation.value);
+  }
+
+  Future<void> _settleDrag(double settleDistance) async {
+    if (_settling) return;
     if (widget.bars.length < 2) {
-      _dragDx = 0;
+      await _animateDragTo(0);
       return;
     }
-    if (_dragDx <= -40) {
-      setState(() => _index = (_index + 1) % widget.bars.length);
-    } else if (_dragDx >= 40) {
-      setState(
-        () => _index = _index == 0 ? widget.bars.length - 1 : _index - 1,
-      );
+
+    final start = _dragDx;
+    if (start.abs() < 40) {
+      await _animateDragTo(0);
+      return;
     }
-    _dragDx = 0;
+
+    _settling = true;
+    final swipedLeft = start < 0;
+    final exitOffset = swipedLeft ? -settleDistance : settleDistance;
+    await _animateDragTo(exitOffset);
+    if (!mounted) return;
+
+    setState(() {
+      _index = swipedLeft
+          ? (_index + 1) % widget.bars.length
+          : _index == 0
+          ? widget.bars.length - 1
+          : _index - 1;
+      _dragDx = -exitOffset;
+    });
+    await _animateDragTo(0);
+    _settling = false;
+  }
+
+  Future<void> _animateDragTo(double target) {
+    _slideController.stop();
+    _slideAnimation = Tween<double>(begin: _dragDx, end: target).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
+    return _slideController.forward(from: 0);
   }
 }

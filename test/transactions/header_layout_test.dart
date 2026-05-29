@@ -321,8 +321,16 @@ void main() {
     await gesture.moveBy(const Offset(0, 160));
     await tester.pump();
 
+    expect(find.byKey(const ValueKey('header-fast-info-surface')), findsOneWidget);
     expect(find.byKey(const ValueKey('fast-info-panel')), findsOneWidget);
     expect(find.text('Megtakarítás'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('header-fast-info-surface')),
+        matching: find.byKey(const ValueKey('transaction-header-card')),
+      ),
+      findsOneWidget,
+    );
 
     await gesture.up();
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
