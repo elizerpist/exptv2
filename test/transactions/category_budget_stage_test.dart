@@ -120,6 +120,8 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
     );
+    await gesture.moveBy(const Offset(-24, 0));
+    await tester.pump();
     await gesture.moveBy(const Offset(-90, 0));
     await tester.pump();
 
