@@ -106,8 +106,6 @@ Expected: fails because `fast_info_card_catalog.dart`, `FastInfoVisualType`, `Fa
 Create `lib/features/settings/models/fast_info_card_catalog.dart` with this structure and the full static pool:
 
 ```dart
-import 'fast_info_config.dart';
-
 enum FastInfoVisualType {
   progress('progress'),
   sparkline('sparkline'),
