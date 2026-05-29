@@ -332,6 +332,13 @@ class TransactionStore extends ChangeNotifier {
     await _projectRecurringGhostsForActiveWindow();
   }
 
+  Future<void> resetSummaryToCurrentMonth() async {
+    _summaryWindow = SummaryWindow.monthly;
+    _periodReferenceDate = _monthStart(_clock());
+    notifyListeners();
+    await _projectRecurringGhostsForActiveWindow();
+  }
+
   Future<void> addTransaction({
     required String merchant,
     required double amount,

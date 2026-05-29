@@ -27,37 +27,17 @@ void main() {
     expect(selected, TransactionType.income);
   });
 
-  testWidgets('summary pill cycles when dragged horizontally', (tester) async {
+  testWidgets('summary pill vertical swipe cycles interval', (tester) async {
     var cycles = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SummaryPill(
-          title: 'Kiadások',
-          value: '-66 Ft',
-          onSwipe: () => cycles += 1,
-        ),
-      ),
-    );
-
-    await tester.drag(
-      find.byKey(const ValueKey('summary-pill')),
-      const Offset(90, 0),
-    );
-    await tester.pumpAndSettle();
-    expect(cycles, 1);
-  });
-
-  testWidgets('summary pill vertical swipe requests period changes', (
-    tester,
-  ) async {
     final periods = <int>[];
     await tester.pumpWidget(
       MaterialApp(
         home: SummaryPill(
-          title: 'Március 2026',
+          title: 'Május 2026',
           value: '-66 Ft',
-          onSwipe: () {},
-          onVerticalSwipe: periods.add,
+          onIntervalSwipe: () => cycles += 1,
+          onPeriodSwipe: periods.add,
+          onResetToCurrentMonth: () {},
         ),
       ),
     );
@@ -67,13 +47,61 @@ void main() {
       const Offset(0, -90),
     );
     await tester.pumpAndSettle();
+
+    expect(cycles, 1);
+    expect(periods, isEmpty);
+  });
+
+  testWidgets('summary pill horizontal swipe shifts period', (tester) async {
+    var cycles = 0;
+    final periods = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Május 2026',
+          value: '-66 Ft',
+          onIntervalSwipe: () => cycles += 1,
+          onPeriodSwipe: periods.add,
+          onResetToCurrentMonth: () {},
+        ),
+      ),
+    );
+
     await tester.drag(
       find.byKey(const ValueKey('summary-pill')),
-      const Offset(0, 90),
+      const Offset(-90, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('summary-pill')),
+      const Offset(90, 0),
     );
     await tester.pumpAndSettle();
 
+    expect(cycles, 0);
     expect(periods, [1, -1]);
+  });
+
+  testWidgets('summary pill double tap resets to current month', (tester) async {
+    var resets = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Sum',
+          value: '-66 Ft',
+          onIntervalSwipe: () {},
+          onPeriodSwipe: (_) {},
+          onResetToCurrentMonth: () => resets += 1,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('summary-pill')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(const ValueKey('summary-pill')));
+    await tester.pumpAndSettle();
+
+    expect(resets, 1);
   });
 
   testWidgets('summary pill changes title and value immediately', (
@@ -84,7 +112,9 @@ void main() {
         home: SummaryPill(
           title: 'Kiadások',
           value: '-66 Ft',
-          onSwipe: () {},
+          onIntervalSwipe: () {},
+          onPeriodSwipe: (_) {},
+          onResetToCurrentMonth: () {},
         ),
       ),
     );
@@ -102,7 +132,9 @@ void main() {
         home: SummaryPill(
           title: 'Bevételek',
           value: '+555 Ft',
-          onSwipe: () {},
+          onIntervalSwipe: () {},
+          onPeriodSwipe: (_) {},
+          onResetToCurrentMonth: () {},
         ),
       ),
     );

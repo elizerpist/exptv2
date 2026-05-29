@@ -128,11 +128,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     value: widget.store.activeSummary.formattedFor(
                       widget.store.activeType,
                     ),
-                    onSwipe: () {
+                    onIntervalSwipe: () {
                       widget.store.cycleSummaryWindow();
                     },
-                    onVerticalSwipe: (direction) {
+                    onPeriodSwipe: (direction) {
                       widget.store.shiftSummaryPeriod(direction);
+                    },
+                    onResetToCurrentMonth: () {
+                      widget.store.resetSummaryToCurrentMonth();
                     },
                   ),
                   SearchPill(

@@ -7,14 +7,16 @@ class SummaryPill extends StatefulWidget {
     super.key,
     required this.title,
     required this.value,
-    required this.onSwipe,
-    this.onVerticalSwipe,
+    required this.onIntervalSwipe,
+    required this.onPeriodSwipe,
+    required this.onResetToCurrentMonth,
   });
 
   final String title;
   final String value;
-  final VoidCallback onSwipe;
-  final ValueChanged<int>? onVerticalSwipe;
+  final VoidCallback onIntervalSwipe;
+  final ValueChanged<int> onPeriodSwipe;
+  final VoidCallback onResetToCurrentMonth;
 
   @override
   State<SummaryPill> createState() => _SummaryPillState();
@@ -54,7 +56,7 @@ class _SummaryPillState extends State<SummaryPill> {
     if (_dragDx.abs() < 60) return;
 
     _triggered = true;
-    widget.onSwipe();
+    widget.onPeriodSwipe(_dragDx < 0 ? 1 : -1);
   }
 
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
@@ -64,13 +66,14 @@ class _SummaryPillState extends State<SummaryPill> {
     if (_dragDy.abs() < 60) return;
 
     _triggered = true;
-    widget.onVerticalSwipe?.call(_dragDy < 0 ? 1 : -1);
+    widget.onIntervalSwipe();
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       key: const ValueKey('summary-pill'),
+      onDoubleTap: widget.onResetToCurrentMonth,
       onHorizontalDragStart: (_) => _startDrag(),
       onHorizontalDragUpdate: _handleHorizontalDragUpdate,
       onHorizontalDragCancel: _resetDrag,

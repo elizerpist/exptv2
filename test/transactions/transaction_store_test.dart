@@ -213,6 +213,24 @@ void main() {
     },
   );
 
+  test('reset summary returns to current monthly window', () async {
+    final store = TransactionStore(
+      FakeTransactionRepository(),
+      clock: () => DateTime(2026, 5, 29),
+    );
+    await store.start();
+
+    await store.cycleSummaryWindow();
+    await store.cycleSummaryWindow();
+    await store.shiftSummaryPeriod(-2);
+    expect(store.summaryWindow, SummaryWindow.yearly);
+
+    await store.resetSummaryToCurrentMonth();
+
+    expect(store.summaryWindow, SummaryWindow.monthly);
+    expect(store.activePeriodLabel, 'Május 2026');
+  });
+
   test(
     'summary period can be shifted for monthly and yearly windows',
     () async {
