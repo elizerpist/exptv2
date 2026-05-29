@@ -1,5 +1,6 @@
 import 'package:exptv2/core/theme/app_dimensions.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -323,7 +324,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('header-fast-info-surface')), findsOneWidget);
     expect(find.byKey(const ValueKey('fast-info-panel')), findsOneWidget);
-    expect(find.text('Megtakarítás'), findsOneWidget);
+    expect(find.text('184k'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('header-fast-info-surface')),
@@ -397,6 +398,46 @@ void main() {
     expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
     expect(find.text('Salary'), findsOneWidget);
     expect(find.text('Food'), findsNothing);
+  });
+  testWidgets('header fastinfo uses injected config instead of defaults', (tester) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    final config = FastInfoConfig(
+      pills: const [
+        FastInfoSlot(
+          id: 'custom_pill',
+          label: 'Custom pill',
+          value: '42',
+          type: FastInfoSlotType.pill,
+          pillValue: '42',
+        ),
+        null,
+        null,
+      ],
+      boxes: const [null, null, null],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store, fastInfoConfig: config),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(const Offset(180, 80));
+    await gesture.moveBy(const Offset(0, 160));
+    await tester.pump();
+
+    expect(find.text('42'), findsOneWidget);
+    expect(find.text('184k'), findsNothing);
+
+    await gesture.up();
+    await tester.pumpAndSettle(const Duration(milliseconds: 600));
   });
 }
 

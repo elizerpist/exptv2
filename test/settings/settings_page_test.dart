@@ -1,3 +1,4 @@
+import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/state/event_store.dart';
@@ -46,6 +47,8 @@ void main() {
                   ],
                 },
               };
+            case 'expenseUpdateFastInfoConfig':
+              return call.arguments;
             case 'expenseListRecurringTransactions':
               return <Map<String, Object?>>[
                 recurringRow(),
@@ -88,7 +91,7 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Widget buildSubject() {
+  Widget buildSubject({ValueChanged<FastInfoConfig>? onFastInfoConfigChanged}) {
     final bridge = NativeBridge(
       methodChannel: channel,
       eventChannel: const EventChannel('test/settings_page_events'),
@@ -97,6 +100,7 @@ void main() {
       home: SettingsPage(
         store: EventStore(bridge, realtimeEnabled: false),
         nativeBridge: bridge,
+        onFastInfoConfigChanged: onFastInfoConfigChanged,
       ),
     );
   }
@@ -129,8 +133,8 @@ void main() {
     await tester.tap(find.text('FastInfo'));
     await tester.pumpAndSettle();
     expect(find.text('FastInfo'), findsOneWidget);
-    expect(find.text('Pill slot 1'), findsOneWidget);
-    expect(find.text('Box slot 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('fast-info-panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fastinfo-card-pool')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 
@@ -148,6 +152,22 @@ void main() {
     );
     final decoration = colorDot.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFF0EA5E9));
+  });
+
+  testWidgets('FastInfo submenu reports config changes immediately', (tester) async {
+    var callbackCount = 0;
+    await tester.pumpWidget(
+      buildSubject(onFastInfoConfigChanged: (_) => callbackCount += 1),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('FastInfo'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('fastinfo-clear-pill-0')));
+    await tester.pumpAndSettle();
+
+    expect(callbackCount, 1);
   });
 }
 

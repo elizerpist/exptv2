@@ -6,6 +6,7 @@ import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
 import 'data/settings_repository.dart';
 import 'models/app_theme_settings.dart';
+import 'models/fast_info_config.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/app_filter_control.dart';
@@ -39,12 +40,14 @@ class SettingsPage extends StatefulWidget {
     required this.nativeBridge,
     this.expenseTheme,
     this.onThemeSettingsChanged,
+    this.onFastInfoConfigChanged,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
   final ExpenseTheme? expenseTheme;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
+  final ValueChanged<FastInfoConfig>? onFastInfoConfigChanged;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -232,7 +235,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
-      _SettingsMenu.fastInfo => FastInfoOptionsPanel(config: _settingsStore.fastInfoConfig),
+      _SettingsMenu.fastInfo => FastInfoOptionsPanel(
+          config: _settingsStore.fastInfoConfig,
+          onChanged: _updateFastInfoConfig,
+        ),
       _SettingsMenu.theme => ThemeOptionsPanel(
           settings: _settingsStore.themeSettings,
           onChanged: _updateThemeSettings,
@@ -295,6 +301,12 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.contact => 'Kapcsolat',
       _SettingsMenu.root => 'Beállítások',
     };
+  }
+
+  Future<void> _updateFastInfoConfig(FastInfoConfig config) async {
+    await _settingsStore.updateFastInfoConfig(config);
+    if (!mounted) return;
+    widget.onFastInfoConfigChanged?.call(_settingsStore.fastInfoConfig);
   }
 
   void _updateThemeSettings(AppThemeSettings settings) {

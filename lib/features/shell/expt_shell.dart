@@ -11,6 +11,7 @@ import '../../services/recurring_alarm_service.dart';
 import '../../state/event_store.dart';
 import '../notifications/notifications_page.dart';
 import '../settings/models/app_theme_settings.dart';
+import '../settings/models/fast_info_config.dart';
 import '../settings/settings_page.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
@@ -45,6 +46,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   var _homeBlockingOverlayOpen = false;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
+  FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
 
   @override
   void initState() {
@@ -56,7 +58,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       TransactionRepository(widget.nativeBridge),
     );
     unawaited(_syncRecurringAlarms());
-    unawaited(_loadThemeSettings());
+    unawaited(_loadShellSettings());
   }
 
   @override
@@ -94,14 +96,21 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadThemeSettings() async {
+  Future<void> _loadShellSettings() async {
     final payload = await widget.nativeBridge.expenseLoadSettings();
     if (!mounted) return;
-    setState(() => _themeSettings = payload.themeSettings);
+    setState(() {
+      _themeSettings = payload.themeSettings;
+      _fastInfoConfig = payload.fastInfoConfig;
+    });
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
     setState(() => _themeSettings = settings);
+  }
+
+  void _applyFastInfoConfig(FastInfoConfig config) {
+    setState(() => _fastInfoConfig = config);
   }
 
   void _selectTab(AppTab tab) {
@@ -219,6 +228,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 TransactionHomePage(
                   store: _transactionStore,
                   expenseTheme: expenseTheme,
+                  fastInfoConfig: _fastInfoConfig,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
@@ -230,6 +240,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   nativeBridge: widget.nativeBridge,
                   expenseTheme: expenseTheme,
                   onThemeSettingsChanged: _applyThemeSettings,
+                  onFastInfoConfigChanged: _applyFastInfoConfig,
                 ),
               ],
             ),

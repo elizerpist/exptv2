@@ -31,6 +31,7 @@ class TransactionHomePage extends StatefulWidget {
     super.key,
     required this.store,
     this.expenseTheme,
+    this.fastInfoConfig,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
     this.onBlockingOverlayChanged,
@@ -38,6 +39,7 @@ class TransactionHomePage extends StatefulWidget {
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
+  final FastInfoConfig? fastInfoConfig;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
@@ -175,7 +177,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   visibleFastInfoExtent: visibleFastInfoExtent,
                   cardColor: expenseTheme.headerCard,
                   fastInfo: FastInfoPanel(
-                    config: FastInfoConfig.defaults(),
+                    config: widget.fastInfoConfig ?? FastInfoConfig.defaults(),
                     backgroundColor: Colors.transparent,
                   ),
                   header: _buildHeaderCard(
