@@ -280,6 +280,82 @@ void main() {
     expect(savedAmount, isNotNull);
     expect(savedAmount!, greaterThan(0));
   });
+
+  testWidgets('stage lowers labels and shows period label bottom-left', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 100, 150)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              periodLabel: 'Május 2026',
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final titleTop = tester
+        .getRect(find.byKey(const ValueKey('backheader-active-title')))
+        .top;
+    final periodRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-period-label')),
+    );
+    expect(titleTop, greaterThanOrEqualTo(42));
+    expect(periodRect.left, lessThan(40));
+    expect(periodRect.bottom, lessThanOrEqualTo(172));
+  });
+
+  testWidgets('progress frame overhang is equal around active bar', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 50, 0)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: [
+                BackheaderBudgetItem.overview(
+                  overviewFixture(BudgetGoalKind.expenseBudget, 50, 100),
+                ),
+                ...bars.map(BackheaderBudgetItem.category),
+              ],
+              categoryBars: bars,
+              periodLabel: 'Május 2026',
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final frame = tester.getRect(
+      find.byKey(const ValueKey('budget-progress-frame')),
+    );
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('category-budget-bar')),
+    );
+    expect(bar.center, frame.center);
+    expect(
+      bar.left - frame.left,
+      moreOrLessEquals(frame.right - bar.right, epsilon: 0.1),
+    );
+    expect(
+      bar.top - frame.top,
+      moreOrLessEquals(frame.bottom - bar.bottom, epsilon: 0.1),
+    );
+  });
+
 }
 
 CategoryBudgetBarData barFixture(

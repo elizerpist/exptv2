@@ -216,6 +216,16 @@ class TransactionStore extends ChangeNotifier {
   TransactionSummary get activeSummary =>
       TransactionSummary.fromRecords(visibleTransactions);
 
+  String get activePeriodLabel {
+    final reference = _periodReferenceDate;
+    return switch (_summaryWindow) {
+      SummaryWindow.allTime => 'Sum',
+      SummaryWindow.yearly => reference.year.toString(),
+      SummaryWindow.monthly =>
+        '${_hungarianMonth(reference.month)} ${reference.year}',
+    };
+  }
+
   String get activeSummaryTitle {
     final reference = _periodReferenceDate;
     final base = switch (_summaryWindow) {

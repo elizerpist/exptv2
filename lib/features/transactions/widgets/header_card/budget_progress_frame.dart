@@ -19,13 +19,17 @@ class BudgetProgressFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!progress.hasLimit) return const SizedBox.shrink();
+    const borderWidth = 2.0;
+    const segmentInset = 3.0;
+    final innerRadius = (height / 2) - borderWidth - segmentInset;
     return Container(
       key: const ValueKey('budget-progress-frame'),
       height: height,
+      padding: const EdgeInsets.all(borderWidth + segmentInset),
       decoration: BoxDecoration(
         color: AppColors.gray200,
         borderRadius: BorderRadius.circular(height / 2),
-        border: Border.all(color: _borderColor(), width: 2),
+        border: Border.all(color: _borderColor(), width: borderWidth),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.16),
@@ -34,28 +38,30 @@ class BudgetProgressFrame extends StatelessWidget {
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          var left = 0.0;
-          final children = <Widget>[];
-          for (var i = 0; i < progress.segments.length; i += 1) {
-            final segment = progress.segments[i];
-            final width = constraints.maxWidth * segment.fraction;
-            children.add(
-              Positioned(
-                key: ValueKey('budget-progress-frame-segment-$i'),
-                left: left,
-                top: 0,
-                width: width,
-                bottom: 0,
-                child: ColoredBox(color: segment.color),
-              ),
-            );
-            left += width;
-          }
-          return Stack(fit: StackFit.expand, children: children);
-        },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(innerRadius),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            var left = 0.0;
+            final children = <Widget>[];
+            for (var i = 0; i < progress.segments.length; i += 1) {
+              final segment = progress.segments[i];
+              final width = constraints.maxWidth * segment.fraction;
+              children.add(
+                Positioned(
+                  key: ValueKey('budget-progress-frame-segment-$i'),
+                  left: left,
+                  top: 0,
+                  width: width,
+                  bottom: 0,
+                  child: ColoredBox(color: segment.color),
+                ),
+              );
+              left += width;
+            }
+            return Stack(fit: StackFit.expand, children: children);
+          },
+        ),
       ),
     );
   }

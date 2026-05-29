@@ -403,6 +403,34 @@ void main() {
     expect(find.text('Salary'), findsOneWidget);
     expect(find.text('Food'), findsNothing);
   });
+
+  testWidgets('magnet strip moves up and balance label sits in magnet zone', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final magnet = tester.getRect(
+      find.byKey(const ValueKey('magnet-strip-fade')),
+    );
+    final balanceLabel = tester.getRect(find.text('Egyenleg'));
+
+    expect(magnet.top, moreOrLessEquals(45, epsilon: 0.1));
+    expect(balanceLabel.center.dy, greaterThanOrEqualTo(magnet.top));
+    expect(balanceLabel.center.dy, lessThanOrEqualTo(magnet.bottom));
+  });
+
 }
 
 double _screenHeight(WidgetTester tester) =>

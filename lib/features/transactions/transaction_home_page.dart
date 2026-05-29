@@ -51,6 +51,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   var _headerExpanded = false;
   var _fastInfoExtent = 0.0;
   var _balanceHidden = false;
+  String? _backheaderActiveKey;
   late final AnimationController _headerPullController;
   CategoryOverlayMode? _categoryMode;
   var _categoryEditorOpen = false;
@@ -164,6 +165,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 CategoryBudgetStage(
                   items: widget.store.backheaderBudgetItems,
                   categoryBars: widget.store.categoryBudgetBars,
+                  periodLabel: widget.store.activePeriodLabel,
+                  activeKey: _backheaderActiveKey,
+                  onActiveItemChanged: _setBackheaderActiveItem,
                   onItemTap: _openBudgetTargetEditor,
                 ),
               if (_headerExpanded)
@@ -380,7 +384,15 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     return widget.onDeleteTransactionRequested?.call(record) ?? false;
   }
 
+  void _setBackheaderActiveItem(BackheaderBudgetItem item) {
+    if (!mounted || _backheaderActiveKey == item.key) return;
+    setState(() => _backheaderActiveKey = item.key);
+  }
+
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
+    if (_backheaderActiveKey != item.key) {
+      setState(() => _backheaderActiveKey = item.key);
+    }
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

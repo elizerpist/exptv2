@@ -28,12 +28,12 @@ class CategoryBudgetBar extends StatelessWidget {
       color: Colors.transparent,
       elevation: 8,
       shadowColor: Colors.black.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(25),
+      borderRadius: BorderRadius.circular(height / 2),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(height / 2),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(height / 2),
           child: SizedBox(
             height: height,
             child: Stack(

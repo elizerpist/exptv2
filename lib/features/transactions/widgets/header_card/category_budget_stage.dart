@@ -10,6 +10,7 @@ import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
+import 'budget_bar_geometry.dart';
 import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
 import 'transaction_header_metrics.dart';
@@ -19,6 +20,9 @@ class CategoryBudgetStage extends StatefulWidget {
     super.key,
     this.items,
     this.categoryBars,
+    this.periodLabel,
+    this.activeKey,
+    this.onActiveItemChanged,
     this.onItemTap,
     this.bars,
     this.onBarTap,
@@ -26,6 +30,9 @@ class CategoryBudgetStage extends StatefulWidget {
 
   final List<BackheaderBudgetItem>? items;
   final List<CategoryBudgetBarData>? categoryBars;
+  final String? periodLabel;
+  final String? activeKey;
+  final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
 
   // Compatibility for call sites migrated in the next implementation task.
@@ -52,6 +59,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       vsync: this,
       duration: const Duration(milliseconds: 140),
     )..addListener(_syncSlideAnimation);
+    _syncControlledIndex();
   }
 
   @override
@@ -64,6 +72,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   void didUpdateWidget(covariant CategoryBudgetStage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_index >= _items.length) _index = 0;
+    _syncControlledIndex();
     if (_items.length != _oldItems(oldWidget).length) _dragDx = 0;
   }
 
@@ -98,7 +107,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             ),
           ),
           Positioned(
-            top: 34,
+            top: 44,
             left: 30,
             right: 30,
             child: Row(
@@ -131,18 +140,19 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
           ),
           if (frameProgress != null && frameOverview != null)
             Positioned(
-              top: 70,
-              left: 20,
-              right: 20,
+              top: BudgetBarGeometry.frameTop,
+              left: BudgetBarGeometry.frameHorizontalInset,
+              right: BudgetBarGeometry.frameHorizontalInset,
               child: BudgetProgressFrame(
                 progress: frameProgress,
                 kind: frameOverview.kind,
+                height: BudgetBarGeometry.frameHeight,
               ),
             ),
           Positioned(
-            top: 78,
-            left: 40,
-            right: 40,
+            top: BudgetBarGeometry.barTop,
+            left: BudgetBarGeometry.barHorizontalInset,
+            right: BudgetBarGeometry.barHorizontalInset,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final settleDistance = constraints.maxWidth + 40;
@@ -158,7 +168,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                         .clamp(-settleDistance, settleDistance)
                         .toDouble();
                     setState(() => _dragDx = nextDx);
-                    if (nextDx.abs() < 80 || _items.length < 2) return;
+                    if (nextDx.abs() < 56 || _items.length < 2) return;
                     _swipeTriggered = true;
                     unawaited(
                       _snapToNext(
@@ -201,9 +211,30 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 ],
               ),
             ),
+          if (widget.periodLabel != null)
+            Positioned(
+              left: 24,
+              bottom: 12,
+              child: Text(
+                widget.periodLabel!,
+                key: const ValueKey('backheader-period-label'),
+                style: const TextStyle(
+                  color: AppColors.gray600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  void _syncControlledIndex() {
+    final activeKey = widget.activeKey;
+    if (activeKey == null) return;
+    final nextIndex = _items.indexWhere((item) => item.key == activeKey);
+    if (nextIndex >= 0) _index = nextIndex;
   }
 
   List<BackheaderBudgetItem> get _items {
@@ -240,14 +271,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     if (category != null) {
       return CategoryBudgetBar(
         bar: category,
-        height: 54,
+        height: BudgetBarGeometry.barHeight,
         compactIcon: true,
         onTap: () => _tap(item),
       );
     }
     return _OverviewBudgetBar(
       item: item,
-      height: 54,
+      height: BudgetBarGeometry.barHeight,
       onTap: () => _tap(item),
     );
   }
@@ -352,12 +383,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
           : _index == 0
           ? items.length - 1
           : _index - 1;
-      _dragDx = swipedLeft ? settleDistance * 0.33 : -settleDistance * 0.33;
+      _dragDx = swipedLeft ? settleDistance * 0.18 : -settleDistance * 0.18;
     });
+    widget.onActiveItemChanged?.call(_items[_index]);
     await _animateDragTo(
       0,
-      curve: Curves.elasticOut,
-      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutBack,
+      duration: const Duration(milliseconds: 240),
     );
     _settling = false;
     _swipeTriggered = false;
@@ -409,12 +441,12 @@ class _OverviewBudgetBar extends StatelessWidget {
       color: Colors.transparent,
       elevation: 8,
       shadowColor: Colors.black.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(25),
+      borderRadius: BorderRadius.circular(height / 2),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(height / 2),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(height / 2),
           child: SizedBox(
             height: height,
             child: Stack(

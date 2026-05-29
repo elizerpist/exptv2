@@ -136,63 +136,65 @@ class TransactionHeaderCard extends StatelessWidget {
                     ),
                   ),
                   Positioned(
+                    top: TransactionHeaderMetrics.balanceLabelTop,
+                    left: 30,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: expanded ? 0 : 1,
+                      child: const Text(
+                        'Egyenleg',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.gray600,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
                     top: TransactionHeaderMetrics.balanceTop,
                     left: 30,
                     right: 90,
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 180),
                       opacity: expanded ? 0 : 1,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          const Text(
-                            'Egyenleg',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.gray600,
-                              letterSpacing: 1.5,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              visibleBalanceText,
+                              key: const ValueKey('header-balance-text'),
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.gray800,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  visibleBalanceText,
-                                  key: const ValueKey('header-balance-text'),
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.gray800,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              IconButton(
-                                key: const ValueKey(
-                                  'header-balance-visibility-button',
-                                ),
-                                onPressed: onBalanceVisibilityPressed,
-                                icon: Icon(
-                                  balanceHidden
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  color: AppColors.gray800,
-                                  size: 20,
-                                ),
-                                tooltip: balanceHidden
-                                    ? 'Egyenleg megjelenítése'
-                                    : 'Egyenleg elrejtése',
-                                splashRadius: 16,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 30,
-                                  height: 30,
-                                ),
-                              ),
-                            ],
+                          const SizedBox(width: 2),
+                          IconButton(
+                            key: const ValueKey(
+                              'header-balance-visibility-button',
+                            ),
+                            onPressed: onBalanceVisibilityPressed,
+                            icon: Icon(
+                              balanceHidden
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: AppColors.gray800,
+                              size: 20,
+                            ),
+                            tooltip: balanceHidden
+                                ? 'Egyenleg megjelenítése'
+                                : 'Egyenleg elrejtése',
+                            splashRadius: 16,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 30,
+                              height: 30,
+                            ),
                           ),
                         ],
                       ),
