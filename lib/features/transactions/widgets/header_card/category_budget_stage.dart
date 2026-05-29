@@ -24,6 +24,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.activeKey,
     this.onActiveItemChanged,
     this.onItemTap,
+    this.onOverviewJump,
     this.bars,
     this.onBarTap,
   });
@@ -34,6 +35,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
+  final VoidCallback? onOverviewJump;
 
   // Compatibility for call sites migrated in the next implementation task.
   final List<CategoryBudgetBarData>? bars;
@@ -45,12 +47,14 @@ class CategoryBudgetStage extends StatefulWidget {
 
 class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     with SingleTickerProviderStateMixin {
+  static const _maxVisualDrag = 72.0;
+  static const _switchThreshold = 44.0;
+
   late final AnimationController _slideController;
   Animation<double>? _slideAnimation;
   var _index = 0;
   var _dragDx = 0.0;
   var _settling = false;
-  var _swipeTriggered = false;
 
   @override
   void initState() {
@@ -155,30 +159,20 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             right: BudgetBarGeometry.barHorizontalInset,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final settleDistance = constraints.maxWidth + 40;
                 return GestureDetector(
                   onHorizontalDragStart: (_) {
                     _slideController.stop();
                     _settling = false;
-                    _swipeTriggered = false;
                   },
                   onHorizontalDragUpdate: (details) {
-                    if (_settling || _swipeTriggered) return;
+                    if (_settling) return;
                     final nextDx = (_dragDx + details.delta.dx)
-                        .clamp(-settleDistance, settleDistance)
+                        .clamp(-_maxVisualDrag, _maxVisualDrag)
                         .toDouble();
                     setState(() => _dragDx = nextDx);
-                    if (nextDx.abs() < 56 || _items.length < 2) return;
-                    _swipeTriggered = true;
-                    unawaited(
-                      _snapToNext(
-                        settleDistance,
-                        swipedLeft: nextDx < 0,
-                      ),
-                    );
                   },
                   onHorizontalDragCancel: () => _animateDragTo(0),
-                  onHorizontalDragEnd: (_) => _settleDrag(settleDistance),
+                  onHorizontalDragEnd: (_) => _settleDrag(),
                   child: Transform.translate(
                     key: const ValueKey('category-budget-bar-translation'),
                     offset: Offset(_dragDx, 0),
@@ -222,6 +216,30 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   color: AppColors.gray600,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          if (widget.onOverviewJump != null)
+            Positioned(
+              right: 18,
+              bottom: 10,
+              child: Material(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(12),
+                elevation: 4,
+                child: InkWell(
+                  key: const ValueKey('backheader-overview-jump-button'),
+                  onTap: widget.onOverviewJump,
+                  borderRadius: BorderRadius.circular(12),
+                  child: const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Icon(
+                      Icons.account_balance_wallet_outlined,
+                      color: AppColors.white,
+                      size: 18,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -355,27 +373,17 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     setState(() => _dragDx = animation.value);
   }
 
-  Future<void> _settleDrag(double settleDistance) async {
-    if (_settling || _swipeTriggered) return;
+  Future<void> _settleDrag() async {
+    if (_settling) return;
     final items = _items;
-    if (items.length < 2) {
+    if (items.length < 2 || _dragDx.abs() < _switchThreshold) {
       await _animateDragTo(0);
       return;
     }
-
-    final start = _dragDx;
-    if (start.abs() < 40) {
-      await _animateDragTo(0);
-      return;
-    }
-
-    await _snapToNext(settleDistance, swipedLeft: start < 0);
+    await _snapToNext(swipedLeft: _dragDx < 0);
   }
 
-  Future<void> _snapToNext(
-    double settleDistance, {
-    required bool swipedLeft,
-  }) async {
+  Future<void> _snapToNext({required bool swipedLeft}) async {
     if (_settling) return;
     final items = _items;
     if (items.length < 2) return;
@@ -386,16 +394,15 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
           : _index == 0
           ? items.length - 1
           : _index - 1;
-      _dragDx = swipedLeft ? settleDistance * 0.18 : -settleDistance * 0.18;
+      _dragDx = swipedLeft ? _maxVisualDrag : -_maxVisualDrag;
     });
     widget.onActiveItemChanged?.call(_items[_index]);
     await _animateDragTo(
       0,
       curve: Curves.easeOutBack,
-      duration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 220),
     );
     _settling = false;
-    _swipeTriggered = false;
   }
 
   Future<void> _animateDragTo(

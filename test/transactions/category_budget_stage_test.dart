@@ -80,9 +80,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
     );
-    await gesture.moveBy(const Offset(-30, 0));
+    await gesture.moveBy(const Offset(-20, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(-25, 0));
+    await gesture.moveBy(const Offset(-15, 0));
     await tester.pump();
 
     final translatedBar = tester.widget<Transform>(
@@ -101,7 +101,7 @@ void main() {
     expect(find.text('Food'), findsOneWidget);
   });
 
-  testWidgets('category budget stage switches immediately then snaps back', (
+  testWidgets('category budget stage switches only when drag is released', (
     tester,
   ) async {
     final bars = [
@@ -127,26 +127,28 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
     );
-    await gesture.moveBy(const Offset(-24, 0));
-    await tester.pump();
     await gesture.moveBy(const Offset(-90, 0));
     await tester.pump();
 
-    expect(find.text('Travel'), findsOneWidget);
-    final translatedDuringSnap = tester.widget<Transform>(
+    expect(find.text('Food'), findsOneWidget);
+    expect(find.text('Travel'), findsNothing);
+
+    final held = tester.widget<Transform>(
       find.byKey(const ValueKey('category-budget-bar-translation')),
     );
-    expect(
-      translatedDuringSnap.transform.getTranslation().x.abs(),
-      greaterThan(40),
-    );
+    expect(held.transform.getTranslation().x.abs(), lessThanOrEqualTo(72));
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Food'), findsOneWidget);
 
     await gesture.up();
     await tester.pumpAndSettle();
-    final translatedAfterSnap = tester.widget<Transform>(
+
+    expect(find.text('Travel'), findsOneWidget);
+    final settled = tester.widget<Transform>(
       find.byKey(const ValueKey('category-budget-bar-translation')),
     );
-    expect(translatedAfterSnap.transform.getTranslation().x, 0);
+    expect(settled.transform.getTranslation().x, 0);
   });
 
   testWidgets('category bar shows full strength when limit has no spending', (

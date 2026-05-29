@@ -175,6 +175,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   activeKey: _backheaderActiveKey,
                   onActiveItemChanged: _setBackheaderActiveItem,
                   onItemTap: _openBudgetTargetEditor,
+                  onOverviewJump: _jumpBackheaderToOverview,
                 ),
               if (_headerExpanded)
                 _buildHeaderCard(
@@ -432,6 +433,15 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   void _setBackheaderActiveItem(BackheaderBudgetItem item) {
     if (!mounted || _backheaderActiveKey == item.key) return;
     setState(() => _backheaderActiveKey = item.key);
+  }
+
+  void _jumpBackheaderToOverview() {
+    for (final item in widget.store.backheaderBudgetItems) {
+      if (item.overview != null) {
+        _setBackheaderActiveItem(item);
+        return;
+      }
+    }
   }
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {

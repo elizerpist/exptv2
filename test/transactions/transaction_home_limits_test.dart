@@ -306,6 +306,29 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
+  testWidgets('backheader overview jump button selects budget bar', (tester) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.drag(
+      find.byKey(const ValueKey('category-budget-bar')),
+      const Offset(-100, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Food'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-overview-jump-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Budget'), findsOneWidget);
+  });
+
   testWidgets('income side uses income goal and income category allocation', (
     tester,
   ) async {
