@@ -136,6 +136,8 @@ class TransactionStore extends ChangeNotifier {
     ];
   }
 
+  double get activePeriodIncomeTotal => _periodTotal(TransactionType.income);
+
   double _periodTotal(TransactionType type) {
     return LimitManager.recordsForWindow(
       transactions: _transactions,

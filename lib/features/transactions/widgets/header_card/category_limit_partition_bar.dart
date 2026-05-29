@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -10,21 +12,19 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     required this.bars,
     this.activeBar,
     this.activeLimitAmount,
+    this.overviewLimitAmount,
     this.height = 42,
   });
 
   final List<CategoryBudgetBarData> bars;
   final CategoryBudgetBarData? activeBar;
   final double? activeLimitAmount;
+  final double? overviewLimitAmount;
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    final partitions = LimitPartitionManager.partitions(
-      bars: bars,
-      activeBar: activeBar,
-      activeLimitAmount: activeLimitAmount,
-    );
+    final overviewLimit = overviewLimitAmount ?? 0;
     return Container(
       key: const ValueKey('category-limit-partition-bar'),
       height: height,
@@ -44,11 +44,25 @@ class CategoryLimitPartitionBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(height / 2 - 1),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            if (overviewLimit > 0) {
+              return Stack(
+                fit: StackFit.expand,
+                children: _budgetSegments(
+                  overviewLimit: overviewLimit,
+                  maxWidth: constraints.maxWidth,
+                ),
+              );
+            }
+            final partitions = LimitPartitionManager.partitions(
+              bars: bars,
+              activeBar: activeBar,
+              activeLimitAmount: activeLimitAmount,
+            );
             if (partitions.isEmpty) return const SizedBox.expand();
             return Stack(
               fit: StackFit.expand,
               children: [
-                ..._segments(partitions, constraints.maxWidth),
+                ..._legacySegments(partitions, constraints.maxWidth),
                 ..._unitMarks(partitions.length),
               ],
             );
@@ -58,7 +72,92 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     );
   }
 
-  List<Widget> _segments(
+  List<Widget> _budgetSegments({
+    required double overviewLimit,
+    required double maxWidth,
+  }) {
+    final visible = _budgetBars()
+        .where((bar) => _limitAmountFor(bar) > 0)
+        .toList();
+    if (visible.isEmpty) return const [];
+    var left = 0.0;
+    final children = <Widget>[];
+    for (var i = 0; i < visible.length; i += 1) {
+      final bar = visible[i];
+      final limitAmount = _limitAmountFor(bar);
+      final usedAmount = math.min(bar.spent, limitAmount).clamp(0.0, limitAmount);
+      final remainingAmount = (limitAmount - usedAmount).clamp(0.0, limitAmount);
+      final usedWidth = (maxWidth * usedAmount / overviewLimit)
+          .clamp(0.0, maxWidth - left)
+          .toDouble();
+      final remainingWidth = (maxWidth * remainingAmount / overviewLimit)
+          .clamp(0.0, maxWidth - left - usedWidth)
+          .toDouble();
+      if (usedWidth > 0) {
+        children.add(
+          Positioned(
+            key: ValueKey('category-limit-partition-segment-$i'),
+            left: left,
+            top: 0,
+            width: usedWidth,
+            height: height,
+            child: ColoredBox(color: bar.color),
+          ),
+        );
+        left += usedWidth;
+      }
+      if (remainingWidth > 0) {
+        children.add(
+          Positioned(
+            key: ValueKey('category-limit-partition-remaining-$i'),
+            left: left,
+            top: 0,
+            width: remainingWidth,
+            height: height,
+            child: ColoredBox(color: bar.color.withValues(alpha: 0.70)),
+          ),
+        );
+        left += remainingWidth;
+      }
+      if (left >= maxWidth) break;
+    }
+    return children;
+  }
+
+  List<CategoryBudgetBarData> _budgetBars() {
+    final active = activeBar;
+    if (active == null) return bars;
+    final result = <CategoryBudgetBarData>[];
+    var found = false;
+    for (final bar in bars) {
+      if (_sameTarget(bar, active)) {
+        result.add(active);
+        found = true;
+      } else {
+        result.add(bar);
+      }
+    }
+    if (!found) result.insert(0, active);
+    return result;
+  }
+
+  double _limitAmountFor(CategoryBudgetBarData bar) {
+    final active = activeBar;
+    if (active != null && _sameTarget(bar, active)) {
+      return activeLimitAmount ?? bar.limitAmount;
+    }
+    return bar.limitAmount;
+  }
+
+  bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {
+    return left.targetType == right.targetType &&
+        left.targetId == right.targetId &&
+        left.transactionType == right.transactionType &&
+        left.window == right.window &&
+        left.periodKey == right.periodKey;
+  }
+
+  List<Widget> _legacySegments(
     List<CategoryLimitPartition> partitions,
     double maxWidth,
   ) {

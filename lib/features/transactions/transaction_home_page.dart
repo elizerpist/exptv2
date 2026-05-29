@@ -13,9 +13,9 @@ import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
 import 'widgets/category_menu/category_menu_overlay.dart';
-import 'models/category_budget_bar_data.dart';
+import 'models/backheader_budget_item.dart';
 import 'widgets/header_card/category_budget_stage.dart';
-import 'widgets/header_card/category_limit_editor_sheet.dart';
+import 'widgets/header_card/budget_target_editor_sheet.dart';
 import 'widgets/header_card/fast_info_panel.dart';
 import 'widgets/header_card/header_fast_info_surface.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
@@ -162,8 +162,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
               ),
               if (_headerExpanded)
                 CategoryBudgetStage(
-                  bars: widget.store.categoryBudgetBars,
-                  onBarTap: _openLimitEditor,
+                  items: widget.store.backheaderBudgetItems,
+                  categoryBars: widget.store.categoryBudgetBars,
+                  onItemTap: _openBudgetTargetEditor,
                 ),
               if (_headerExpanded)
                 _buildHeaderCard(
@@ -379,7 +380,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     return widget.onDeleteTransactionRequested?.call(record) ?? false;
   }
 
-  void _openLimitEditor(CategoryBudgetBarData bar) {
+  void _openBudgetTargetEditor(BackheaderBudgetItem item) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -389,11 +390,30 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
           ),
-          child: CategoryLimitEditorSheet(
-            bar: bar,
-            allBars: widget.store.categoryBudgetBars,
+          child: BudgetTargetEditorSheet(
+            item: item,
+            categoryBars: widget.store.categoryBudgetBars,
+            overviewItems: widget.store.overviewBudgetItems,
+            periodIncome: widget.store.activePeriodIncomeTotal,
             onCancel: () => Navigator.of(sheetContext).pop(),
-            onSave: ({required limitAmount, required alertActive}) async {
+            onSaveOverview: (
+              kind, {
+              required limitAmount,
+              required alertActive,
+            }) async {
+              await widget.store.saveOverviewLimit(
+                kind,
+                limitAmount: limitAmount,
+                alertActive: alertActive,
+              );
+              if (!sheetContext.mounted) return;
+              Navigator.of(sheetContext).pop();
+            },
+            onSaveCategory: (
+              bar, {
+              required limitAmount,
+              required alertActive,
+            }) async {
               await widget.store.saveCategoryLimitForBar(
                 bar,
                 limitAmount: limitAmount,

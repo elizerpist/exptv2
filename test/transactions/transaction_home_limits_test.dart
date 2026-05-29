@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'expanded home stage opens limit editor and saves current window limit',
+    'expanded home stage saves first item as overview expense budget',
     (tester) async {
       final repository = FakeHomeLimitRepository();
       final store = TransactionStore(
@@ -18,35 +18,73 @@ void main() {
         clock: () => DateTime(2026, 5, 17),
       );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 390,
-              height: 780,
-              child: TransactionHomePage(store: store),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.drag(
-        find.byKey(const ValueKey('summary-pill')),
-        const Offset(90, 0),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('header-expand-button')));
-      await tester.pumpAndSettle();
+      await pumpExpandedMonthlyHome(tester, store);
 
       expect(
         find.byKey(const ValueKey('category-budget-stage')),
         findsOneWidget,
       );
+      expect(find.text('Budget'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+      await tester.pumpAndSettle();
+      expect(find.text('Budget limit'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('limit-amount-input')),
+        '300000',
+      );
+      await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+      await tester.pumpAndSettle();
+
+      expect(repository.savedLimits.single['targetType'], 'overview');
+      expect(repository.savedLimits.single['targetId'], 0);
+      expect(repository.savedLimits.single['transactionType'], 'expense');
+      expect(repository.savedLimits.single['window'], 'monthly');
+      expect(repository.savedLimits.single['periodKey'], '2026-05');
+      expect(repository.savedLimits.single['limitAmount'], 300000);
+    },
+  );
+
+  testWidgets(
+    'expanded home stage opens category limit after swiping past budget item',
+    (tester) async {
+      final repository = FakeHomeLimitRepository();
+      repository.limits = [
+        CategoryLimit.fromMap({
+          'id': 9,
+          'targetType': 'overview',
+          'targetId': 0,
+          'transactionType': 'expense',
+          'window': 'monthly',
+          'periodKey': '2026-05',
+          'hasLimit': true,
+          'limitAmount': 1000,
+          'alertActive': false,
+          'createdAt': 0,
+          'updatedAt': 1,
+        }),
+      ];
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 17),
+      );
+
+      await pumpExpandedMonthlyHome(tester, store);
+      await tester.drag(
+        find.byKey(const ValueKey('category-budget-bar')),
+        const Offset(-180, 0),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Food'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
+      expect(find.text('Food limit'), findsOneWidget);
+      expect(find.byKey(const ValueKey('category-limit-slider')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
+        findsOneWidget,
+      );
       await tester.enterText(
         find.byKey(const ValueKey('limit-amount-input')),
         '250',
@@ -54,11 +92,38 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('limit-save-button')));
       await tester.pumpAndSettle();
 
-      expect(repository.savedLimits.single['window'], 'monthly');
-      expect(repository.savedLimits.single['periodKey'], '2026-05');
+      expect(repository.savedLimits.single['targetType'], 'category');
+      expect(repository.savedLimits.single['targetId'], 6);
+      expect(repository.savedLimits.single['transactionType'], 'expense');
       expect(repository.savedLimits.single['limitAmount'], 250);
     },
   );
+}
+
+Future<void> pumpExpandedMonthlyHome(
+  WidgetTester tester,
+  TransactionStore store,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 390,
+          height: 780,
+          child: TransactionHomePage(store: store),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  await tester.drag(
+    find.byKey(const ValueKey('summary-pill')),
+    const Offset(90, 0),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+  await tester.pumpAndSettle();
 }
 
 class FakeHomeLimitRepository implements TransactionRepositoryContract {
