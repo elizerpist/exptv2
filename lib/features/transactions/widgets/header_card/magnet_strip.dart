@@ -6,7 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 
 class MagnetStrip extends StatelessWidget {
-  static const defaultHeight = 105.0;
+  static const defaultHeight = 157.5;
 
   const MagnetStrip({
     super.key,
@@ -88,7 +88,7 @@ class MagnetStripPainter extends CustomPainter {
         pillHeight,
       );
       canvas.drawRRect(
-        RRect.fromRectAndRadius(pillRect, const Radius.circular(3)),
+        RRect.fromRectAndRadius(pillRect, const Radius.circular(2)),
         Paint()..color = accent.withValues(alpha: 0.85),
       );
       return;
@@ -96,7 +96,7 @@ class MagnetStripPainter extends CustomPainter {
 
     if (type == MagnetType.budget) {
       canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        RRect.fromRectAndRadius(rect, const Radius.circular(2)),
         Paint()
           ..shader = const LinearGradient(
             colors: [Color(0xFF16A34A), Color(0xFFDC2626)],
@@ -110,14 +110,14 @@ class MagnetStripPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTRB(rect.left, rect.top, split, rect.bottom),
-          const Radius.circular(3),
+          const Radius.circular(2),
         ),
         Paint()..color = const Color(0x4D2C2C2C),
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTRB(split, rect.top, rect.right, rect.bottom),
-          const Radius.circular(3),
+          const Radius.circular(2),
         ),
         Paint()..color = const Color(0x0D2C2C2C),
       );
@@ -125,7 +125,7 @@ class MagnetStripPainter extends CustomPainter {
     }
 
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+      RRect.fromRectAndRadius(rect, const Radius.circular(2)),
       Paint()
         ..shader = const LinearGradient(
           colors: [Color(0x4D2C2C2C), Color(0x0D2C2C2C)],
@@ -145,7 +145,7 @@ class MagnetStripPainter extends CustomPainter {
       size.width,
       slabHeight,
     );
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(3));
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(2));
     canvas.drawRRect(rrect, paint);
     final markerX = size.width * ratio;
     canvas.drawLine(

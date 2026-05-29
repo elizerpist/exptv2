@@ -326,26 +326,31 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
     _settling = true;
     final swipedLeft = start < 0;
-    final exitOffset = swipedLeft ? -settleDistance : settleDistance;
-    await _animateDragTo(exitOffset);
-    if (!mounted) return;
-
     setState(() {
       _index = swipedLeft
           ? (_index + 1) % items.length
           : _index == 0
           ? items.length - 1
           : _index - 1;
-      _dragDx = -exitOffset;
+      _dragDx = swipedLeft ? settleDistance * 0.33 : -settleDistance * 0.33;
     });
-    await _animateDragTo(0);
+    await _animateDragTo(
+      0,
+      curve: Curves.elasticOut,
+      duration: const Duration(milliseconds: 420),
+    );
     _settling = false;
   }
 
-  Future<void> _animateDragTo(double target) {
+  Future<void> _animateDragTo(
+    double target, {
+    Curve curve = Curves.easeOutCubic,
+    Duration duration = const Duration(milliseconds: 160),
+  }) {
     _slideController.stop();
+    _slideController.duration = duration;
     _slideAnimation = Tween<double>(begin: _dragDx, end: target).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _slideController, curve: curve),
     );
     return _slideController.forward(from: 0);
   }

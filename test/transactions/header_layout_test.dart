@@ -8,10 +8,15 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('magnet strip metric is 50 percent taller than the prior strip', () {
+    expect(TransactionHeaderMetrics.magnetHeight, greaterThanOrEqualTo(157.5));
+  });
+
   testWidgets('header shadow remains visible while fast info is visible', (
     tester,
   ) async {

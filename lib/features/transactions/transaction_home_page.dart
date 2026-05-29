@@ -310,7 +310,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     final closingVelocity = releaseVelocity < 0 ? releaseVelocity : 0.0;
     final spring = _headerPullController.animateWith(
       SpringSimulation(
-        const SpringDescription(mass: 1, stiffness: 380, damping: 24),
+        const SpringDescription(mass: 0.75, stiffness: 620, damping: 16),
         start,
         0,
         closingVelocity,

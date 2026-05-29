@@ -94,6 +94,53 @@ void main() {
     expect(find.text('Travel'), findsOneWidget);
   });
 
+  testWidgets('category budget stage switches immediately then snaps back', (
+    tester,
+  ) async {
+    final bars = [
+      barFixture(6, 'Food', 100, 150),
+      barFixture(7, 'Travel', 40, 0),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('category-budget-bar'))),
+    );
+    await gesture.moveBy(const Offset(-90, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(find.text('Travel'), findsOneWidget);
+    final translatedDuringSnap = tester.widget<Transform>(
+      find.byKey(const ValueKey('category-budget-bar-translation')),
+    );
+    expect(
+      translatedDuringSnap.transform.getTranslation().x.abs(),
+      greaterThan(40),
+    );
+
+    await tester.pumpAndSettle();
+    final translatedAfterSnap = tester.widget<Transform>(
+      find.byKey(const ValueKey('category-budget-bar-translation')),
+    );
+    expect(translatedAfterSnap.transform.getTranslation().x, 0);
+  });
+
   testWidgets('stage renders budget progress frame when overview limit exists', (
     tester,
   ) async {
@@ -232,7 +279,6 @@ void main() {
     expect(savedAmount, isNotNull);
     expect(savedAmount!, greaterThan(0));
   });
-
 }
 
 CategoryBudgetBarData barFixture(
