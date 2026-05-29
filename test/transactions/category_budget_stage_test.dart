@@ -93,7 +93,11 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('Travel'), findsOneWidget);
+    final settledBar = tester.widget<Transform>(
+      find.byKey(const ValueKey('category-budget-bar-translation')),
+    );
+    expect(settledBar.transform.getTranslation().x, 0);
+    expect(find.text('Food'), findsOneWidget);
   });
 
   testWidgets('category budget stage switches immediately then snaps back', (
