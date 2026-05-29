@@ -7,7 +7,6 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
-import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
