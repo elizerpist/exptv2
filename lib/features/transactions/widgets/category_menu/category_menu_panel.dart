@@ -35,59 +35,17 @@ class CategoryMenuPanel extends StatelessWidget {
         .toList();
     return Column(
       children: [
-        SizedBox(
+        const SizedBox(
           height: 54,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                left: 0,
-                child: SizedBox(
-                  width: 44,
-                  height: 54,
-                  child: IconButton(
-                    key: const ValueKey('category-menu-back-button'),
-                    onPressed: onClose,
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.gray500,
-                    ),
-                    splashRadius: 22,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 44,
-                      height: 54,
-                    ),
-                  ),
-                ),
+          child: Center(
+            child: Text(
+              'Válassz kategóriát',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.gray800,
               ),
-              const Text(
-                'Válassz kategóriát',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.gray800,
-                ),
-              ),
-              Positioned(
-                right: 0,
-                child: SizedBox(
-                  width: 44,
-                  height: 54,
-                  child: IconButton(
-                    key: const ValueKey('category-add-button'),
-                    onPressed: onAdd,
-                    icon: const Icon(Icons.add, color: AppColors.gray500),
-                    splashRadius: 22,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 44,
-                      height: 54,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
         Expanded(

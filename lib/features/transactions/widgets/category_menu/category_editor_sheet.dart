@@ -24,6 +24,7 @@ class CategoryEditorSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return SlideUpMenuCard(
       cardKey: const ValueKey('category-editor-slide-card'),
+      debugLabel: initialCategory == null ? 'AddCategory' : 'EditCategory',
       onDismissed: onClose,
       child: SafeArea(
         top: false,

@@ -23,6 +23,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.balanceHidden = false,
     this.drawSurface = true,
     this.onBalanceVisibilityPressed,
+    this.slideProgress,
   });
 
   final String balanceText;
@@ -40,6 +41,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final bool balanceHidden;
   final bool drawSurface;
   final VoidCallback? onBalanceVisibilityPressed;
+  final double? slideProgress;
 
   static const height = TransactionHeaderMetrics.cardHeight;
 
@@ -53,8 +55,13 @@ class TransactionHeaderCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0, end: expanded ? 1 : 0),
-            duration: const Duration(milliseconds: 300),
+            tween: Tween<double>(
+              begin: 0,
+              end: slideProgress ?? (expanded ? 1 : 0),
+            ),
+            duration: slideProgress == null
+                ? const Duration(milliseconds: 300)
+                : Duration.zero,
             curve: Curves.easeOutCubic,
             builder: (context, value, child) {
               return Transform.translate(

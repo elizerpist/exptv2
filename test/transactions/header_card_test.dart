@@ -17,8 +17,8 @@ void main() {
       ),
     );
 
-    expect(TransactionHeaderMetrics.balanceLabelTop, 92);
-    expect(TransactionHeaderMetrics.balanceTop, 118);
+    expect(TransactionHeaderMetrics.balanceLabelTop, 112);
+    expect(TransactionHeaderMetrics.balanceTop, 142);
   });
 
   testWidgets('header card copies stage0 layout and controls', (tester) async {

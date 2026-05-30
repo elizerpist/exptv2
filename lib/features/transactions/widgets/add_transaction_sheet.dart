@@ -80,6 +80,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           children: [
             SlideUpMenuCard(
               cardKey: const ValueKey('transaction-editor-card'),
+              debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
               onDismissed: _close,
               child: SafeArea(
                 top: false,

@@ -92,15 +92,6 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Positioned(
-                left: 12,
-                child: IconButton(
-                  key: const ValueKey('category-editor-back-button'),
-                  onPressed: widget.onClose,
-                  icon: const Icon(Icons.arrow_back, color: AppColors.gray800),
-                  splashRadius: 22,
-                ),
-              ),
               Text(
                 title,
                 style: const TextStyle(

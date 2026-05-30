@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
+import '../../core/debug/debug_console.dart';
 import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
@@ -47,12 +48,13 @@ class TransactionHomePage extends StatefulWidget {
 }
 
 class _TransactionHomePageState extends State<TransactionHomePage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   var _headerExpanded = false;
   var _fastInfoExtent = 0.0;
   var _balanceHidden = false;
   String? _backheaderActiveKey;
   late final AnimationController _headerPullController;
+  late final AnimationController _headerSlideController;
   CategoryOverlayMode? _categoryMode;
   BackheaderBudgetItem? _budgetEditorItem;
   var _categoryEditorOpen = false;
@@ -64,12 +66,18 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     super.initState();
     _headerPullController = AnimationController.unbounded(vsync: this)
       ..addListener(_syncHeaderPullFromController);
+    _headerSlideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      reverseDuration: const Duration(milliseconds: 260),
+    )..addListener(_syncHeaderSlideFromController);
     widget.store.start();
   }
 
   @override
   void dispose() {
     _headerPullController.dispose();
+    _headerSlideController.dispose();
     super.dispose();
   }
 
@@ -115,6 +123,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           _notifyBlockingOverlay(
             _categoryEditorOpen || _budgetEditorItem != null,
           );
+
+          final headerSlideProgress = _headerSlideController.value;
+          final showBackheader =
+              _headerExpanded || headerSlideProgress > 0.001;
 
           return Stack(
             clipBehavior: Clip.none,
@@ -167,7 +179,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   ),
                 ],
               ),
-              if (_headerExpanded)
+              if (showBackheader)
                 CategoryBudgetStage(
                   items: widget.store.backheaderBudgetItems,
                   categoryBars: widget.store.categoryBudgetBars,
@@ -177,10 +189,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   onItemTap: _openBudgetTargetEditor,
                   onOverviewJump: _jumpBackheaderToOverview,
                 ),
-              if (_headerExpanded)
+              if (showBackheader)
                 _buildHeaderCard(
                   expenseTheme: expenseTheme,
                   visibleFastInfoExtent: 0,
+                  slideProgress: headerSlideProgress,
                 )
               else
                 HeaderFastInfoSurface(
@@ -276,6 +289,50 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     setState(() => _fastInfoExtent = next);
   }
 
+  void _syncHeaderSlideFromController() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _toggleHeaderExpanded() {
+    _headerPullController.stop();
+    _headerPullController.value = 0;
+    if (_headerExpanded) {
+      unawaited(_collapseHeader());
+      return;
+    }
+    unawaited(_expandHeader());
+  }
+
+  Future<void> _expandHeader() async {
+    _headerSlideController.stop();
+    setState(() {
+      _fastInfoExtent = 0;
+      _headerExpanded = true;
+    });
+    DebugConsole.log(
+      '[HeaderCard] expand start progress=${_headerSlideController.value.toStringAsFixed(2)}',
+    );
+    await _headerSlideController.forward();
+    if (!mounted) return;
+    DebugConsole.log('[HeaderCard] expand complete');
+  }
+
+  Future<void> _collapseHeader() async {
+    _headerSlideController.stop();
+    setState(() {
+      _fastInfoExtent = 0;
+      _headerExpanded = false;
+    });
+    DebugConsole.log(
+      '[HeaderCard] collapse start progress=${_headerSlideController.value.toStringAsFixed(2)}',
+    );
+    await _headerSlideController.reverse();
+    if (!mounted) return;
+    setState(() {});
+    DebugConsole.log('[HeaderCard] collapse complete');
+  }
+
   void _notifyBlockingOverlay(bool active) {
     if (_blockingOverlayNotified == active) return;
     _blockingOverlayNotified = active;
@@ -289,6 +346,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     required ExpenseTheme expenseTheme,
     required double visibleFastInfoExtent,
     bool drawSurface = true,
+    double? slideProgress,
   }) {
     return TransactionHeaderCard(
       balanceText: widget.store.totalBalanceText,
@@ -301,20 +359,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       fastInfoVisible: visibleFastInfoExtent > 0,
       balanceHidden: _balanceHidden,
       drawSurface: drawSurface,
+      slideProgress: slideProgress,
       onBalanceVisibilityPressed: () {
         setState(() => _balanceHidden = !_balanceHidden);
       },
       onCategoryPressed: _openCategoryMenu,
       onVerticalDragUpdate: _handleHeaderDragUpdate,
       onVerticalDragEnd: _handleHeaderDragEnd,
-      onExpandPressed: () {
-        _headerPullController.stop();
-        _headerPullController.value = 0;
-        setState(() {
-          _fastInfoExtent = 0;
-          _headerExpanded = !_headerExpanded;
-        });
-      },
+      onExpandPressed: _toggleHeaderExpanded,
     );
   }
 

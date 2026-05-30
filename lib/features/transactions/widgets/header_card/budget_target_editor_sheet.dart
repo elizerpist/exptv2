@@ -88,14 +88,15 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   Widget build(BuildContext context) {
     return SlideUpMenuCard(
       cardKey: const ValueKey('budget-target-editor-card'),
+      debugLabel: 'BudgetTargetEditor',
+      panelHeight: _panelHeightFor(context),
       onDismissed: widget.onCancel,
       child: SafeArea(
         top: false,
         bottom: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
+        child: Builder(
+          builder: (context) {
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-            final contentHeight = constraints.maxHeight - keyboardInset - 44;
             return SingleChildScrollView(
               padding: EdgeInsets.only(
                 left: 20,
@@ -103,38 +104,38 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                 top: 20,
                 bottom: keyboardInset + 24,
               ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: contentHeight < 0 ? 0 : contentHeight,
-                ),
-                child: IntrinsicHeight(
-                  child: _BudgetLimitCard(
-                    item: _activeItem,
-                    amountController: _controller,
-                    inputLabel: _inputLabel,
-                    activeColor: _activeColor,
-                    sliderValue: _sliderRange.value,
-                    sliderMax: _sliderRange.max,
-                    sliderEnabled: _sliderRange.enabled,
-                    sliderDivisions: _sliderRange.divisions,
-                    saving: _saving,
-                    onPrevious: _selectPrevious,
-                    onNext: _selectNext,
-                    onReset: _resetLimit,
-                    onSliderChanged: _setAmountFromSlider,
-                    onSliderChangeEnd: _saveSliderAmount,
-                    onInputChanged: _scheduleInputSave,
-                    onSetToMax: _setOverviewToMax,
-                    showSetToMax: _activeItem.overview != null,
-                    partitionBar: _buildPartitionBar(),
-                  ),
-                ),
+              child: _BudgetLimitCard(
+                item: _activeItem,
+                amountController: _controller,
+                inputLabel: _inputLabel,
+                activeColor: _activeColor,
+                sliderValue: _sliderRange.value,
+                sliderMax: _sliderRange.max,
+                sliderEnabled: _sliderRange.enabled,
+                sliderDivisions: _sliderRange.divisions,
+                saving: _saving,
+                onPrevious: _selectPrevious,
+                onNext: _selectNext,
+                onReset: _resetLimit,
+                onSliderChanged: _setAmountFromSlider,
+                onSliderChangeEnd: _saveSliderAmount,
+                onInputChanged: _scheduleInputSave,
+                onSetToMax: _setOverviewToMax,
+                showSetToMax: _activeItem.overview != null,
+                partitionBar: _buildPartitionBar(),
               ),
             );
           },
         ),
       ),
     );
+  }
+
+  double _panelHeightFor(BuildContext context) {
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final requested = 420 + math.min(keyboardInset, 180);
+    return math.min(screenHeight, requested).toDouble();
   }
 
   List<BackheaderBudgetItem> get _items {
@@ -587,7 +588,6 @@ class _BudgetLimitCard extends StatelessWidget {
           const SizedBox(height: 2),
         const SizedBox(height: 12),
         partitionBar,
-        const Spacer(),
       ],
     );
   }
