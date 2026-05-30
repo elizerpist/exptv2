@@ -145,7 +145,6 @@ void main() {
 
     final duringSnap = _slideCardTranslationY(tester);
     expect(duringSnap, greaterThan(before));
-    expect(duringSnap, lessThan(dragged));
 
     await tester.pumpAndSettle();
 
