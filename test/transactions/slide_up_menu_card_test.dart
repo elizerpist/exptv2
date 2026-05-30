@@ -31,6 +31,34 @@ void main() {
     );
   });
 
+
+  testWidgets('slide card renders a dark focus veil behind the popup', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              child: const SizedBox(height: 220),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final veil = tester.widget<ColoredBox>(
+      find.byKey(const ValueKey('slide-up-menu-veil')),
+    );
+
+    expect(veil.color, Colors.black.withValues(alpha: 0.28));
+  });
+
   testWidgets('slide card ignores drag gestures outside the handle zone', (
     tester,
   ) async {
@@ -78,4 +106,57 @@ void main() {
     expect(after, moreOrLessEquals(before, epsilon: 0.1));
     expect(dismissed, isFalse);
   });
+
+  testWidgets('slide card animates partial drag snap back instead of jumping', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              child: const SizedBox(height: 220),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final cardFinder = find.byKey(const ValueKey('test-slide-card'));
+    final before = tester.getTopLeft(cardFinder).dy;
+    final start = tester.getTopLeft(cardFinder) + const Offset(180, 24);
+    final gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(0, 70));
+    await tester.pump();
+
+    final dragged = tester.getTopLeft(cardFinder).dy;
+    expect(dragged, greaterThan(before + 60));
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final duringSnap = tester.getTopLeft(cardFinder).dy;
+    expect(duringSnap, greaterThan(before));
+    expect(duringSnap, lessThan(dragged));
+
+    await tester.pumpAndSettle();
+
+    final after = tester.getTopLeft(cardFinder).dy;
+    expect(after, moreOrLessEquals(before, epsilon: 0.1));
+    expect(
+      DebugConsole.allText,
+      contains('[SlideUpMenu] TestMenu snap start'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[SlideUpMenu] TestMenu snap complete'),
+    );
+  });
+
 }
