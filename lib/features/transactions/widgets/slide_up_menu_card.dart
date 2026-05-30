@@ -131,36 +131,54 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                       child: child,
                     );
                   },
-                  child: Listener(
+                  child: KeyedSubtree(
                     key: widget.cardKey,
-                    behavior: HitTestBehavior.translucent,
-                    onPointerDown: _handlePointerDown,
-                    onPointerMove: _handlePointerMove,
-                    onPointerUp: _handlePointerUp,
-                    onPointerCancel: (_) => _snapBack(reason: 'cancel'),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(30),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(30),
+                            ),
+                            border: Border.all(color: AppColors.gray200),
+                            boxShadow: widget.zIndexShadow
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.14,
+                                      ),
+                                      offset: const Offset(0, -2),
+                                      blurRadius: 12,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(30),
+                            ),
+                            child: widget.child,
+                          ),
                         ),
-                        border: Border.all(color: AppColors.gray200),
-                        boxShadow: widget.zIndexShadow
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.14),
-                                  offset: const Offset(0, -2),
-                                  blurRadius: 12,
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(30),
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: widget.dragHandleExtent,
+                          child: Listener(
+                            behavior: HitTestBehavior.translucent,
+                            onPointerDown: _handlePointerDown,
+                            onPointerMove: _handlePointerMove,
+                            onPointerUp: _handlePointerUp,
+                            onPointerCancel: (_) => _snapBack(
+                              reason: 'cancel',
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
                         ),
-                        child: widget.child,
-                      ),
+                      ],
                     ),
                   ),
                 ),
