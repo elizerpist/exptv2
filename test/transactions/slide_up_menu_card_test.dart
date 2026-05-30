@@ -120,6 +120,7 @@ void main() {
             child: SlideUpMenuCard(
               cardKey: const ValueKey('test-slide-card'),
               debugLabel: 'TestMenu',
+              panelHeight: 220,
               child: const SizedBox(height: 220),
             ),
           ),
