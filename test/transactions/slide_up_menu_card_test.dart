@@ -129,10 +129,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final cardFinder = find.byKey(const ValueKey('test-slide-card'));
     final before = _slideCardTranslationY(tester);
-    final start = tester.getTopLeft(cardFinder) + const Offset(180, 24);
-    final gesture = await tester.startGesture(start);
+    const panelTop = 600 - 220.0;
+    final gesture = await tester.startGesture(
+      const Offset(180, panelTop + 24),
+    );
     await gesture.moveBy(const Offset(0, 70));
     await tester.pump();
 
