@@ -138,14 +138,10 @@ void main() {
     await tester.pump();
 
     final dragged = _slideCardTranslationY(tester);
-    expect(
-      dragged,
-      greaterThan(before + 60),
-      reason: DebugConsole.allText,
-    );
+    expect(dragged, greaterThan(before + 60));
 
     await gesture.up();
-    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 64));
 
     final duringSnap = _slideCardTranslationY(tester);
     expect(duringSnap, greaterThan(before));
