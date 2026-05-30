@@ -181,22 +181,13 @@ void main() {
         find.byKey(const ValueKey('category-menu-close-button')),
         findsNothing,
       );
-
-      await tester.tap(find.byKey(const ValueKey('category-add-button')));
-      await tester.pumpAndSettle();
-
       expect(
-        find.byKey(const ValueKey('category-editor-slide-card')),
-        findsOneWidget,
+        find.byKey(const ValueKey('category-menu-back-button')),
+        findsNothing,
       );
-      expect(find.byType(BottomSheet), findsNothing);
-      final editorRect = tester.getRect(
-        find.byKey(const ValueKey('category-editor-slide-card')),
-      );
-      expect(editorRect.top, moreOrLessEquals(summaryTop, epsilon: 0.1));
       expect(
-        editorRect.bottom,
-        moreOrLessEquals(_screenHeight(tester), epsilon: 0.1),
+        find.byKey(const ValueKey('category-add-button')),
+        findsNothing,
       );
     },
   );
@@ -309,6 +300,44 @@ void main() {
 
     expect(during, lessThan(before));
     expect(during, greaterThan(after));
+  });
+
+  testWidgets('header card animates downward when backheader closes', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pumpAndSettle();
+    final expandedTop = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+
+    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    final duringClose = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+    await tester.pumpAndSettle();
+    final closedTop = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+
+    expect(duringClose, greaterThan(expandedTop));
+    expect(duringClose, lessThan(closedTop));
   });
 
   testWidgets('header expand button stays fixed when header card slides up', (
@@ -460,10 +489,20 @@ void main() {
       find.byKey(const ValueKey('magnet-strip-fade')),
     );
     final balanceLabel = tester.getRect(find.text('Egyenleg'));
+    final balanceText = tester.getRect(
+      find.byKey(const ValueKey('header-balance-text')),
+    );
+    final trackHeight = TransactionHeaderMetrics.magnetHeight * 6 / 35;
+    final trackTop =
+        TransactionHeaderMetrics.magnetTop +
+        TransactionHeaderMetrics.magnetHeight / 2 -
+        trackHeight / 2;
+    final trackBottom = trackTop + trackHeight;
 
     expect(magnet.top, moreOrLessEquals(45, epsilon: 0.1));
-    expect(balanceLabel.center.dy, greaterThanOrEqualTo(magnet.top));
-    expect(balanceLabel.center.dy, lessThanOrEqualTo(magnet.bottom));
+    expect(balanceLabel.center.dy, greaterThanOrEqualTo(trackTop));
+    expect(balanceLabel.center.dy, lessThanOrEqualTo(trackBottom));
+    expect(balanceText.top, greaterThanOrEqualTo(trackBottom + 4));
   });
 
 }

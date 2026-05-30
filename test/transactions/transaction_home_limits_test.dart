@@ -203,9 +203,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
 
+    final summaryTop = tester
+        .getRect(find.byKey(const ValueKey('summary-pill')))
+        .top;
     final card = tester.getRect(
       find.byKey(const ValueKey('budget-target-editor-card')),
     );
+    expect(card.top, greaterThan(summaryTop + 80));
     expect(card.bottom, moreOrLessEquals(844, epsilon: 0.1));
     expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
     expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);

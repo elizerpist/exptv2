@@ -260,21 +260,13 @@ void main() {
     expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
 
-    final backButton = tester.widget<IconButton>(
+    expect(
       find.byKey(const ValueKey('category-menu-back-button')),
+      findsNothing,
     );
-    final addButton = tester.widget<IconButton>(
+    expect(
       find.byKey(const ValueKey('category-add-button')),
-    );
-    expect(backButton.padding, EdgeInsets.zero);
-    expect(addButton.padding, EdgeInsets.zero);
-    expect(
-      backButton.constraints,
-      const BoxConstraints.tightFor(width: 44, height: 54),
-    );
-    expect(
-      addButton.constraints,
-      const BoxConstraints.tightFor(width: 44, height: 54),
+      findsNothing,
     );
   });
 

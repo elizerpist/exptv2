@@ -22,6 +22,10 @@ void main() {
       );
 
       expect(find.text('Új kiadási kategória'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('category-editor-back-button')),
+        findsNothing,
+      );
       await tester.enterText(
         find.byKey(const ValueKey('category-name-input')),
         'Travel',
@@ -75,6 +79,10 @@ void main() {
     );
 
     expect(find.text('Kategória módosítása'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-editor-back-button')),
+      findsNothing,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('category-name-input')),
       'Q Edit',

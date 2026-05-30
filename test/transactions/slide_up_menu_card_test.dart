@@ -1,0 +1,81 @@
+import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('slide card logs open lifecycle and layout', (tester) async {
+    DebugConsole.clear();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              child: const SizedBox(height: 220),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(DebugConsole.allText, contains('[SlideUpMenu] TestMenu layout'));
+    expect(
+      DebugConsole.allText,
+      contains('[SlideUpMenu] TestMenu open complete'),
+    );
+  });
+
+  testWidgets('slide card ignores drag gestures outside the handle zone', (
+    tester,
+  ) async {
+    var dismissed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              onDismissed: () => dismissed = true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 120),
+                  TextButton(
+                    key: const ValueKey('slide-card-content-button'),
+                    onPressed: () {},
+                    child: const Text('Content action'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final before = tester
+        .getTopLeft(find.byKey(const ValueKey('test-slide-card')))
+        .dy;
+    await tester.drag(
+      find.byKey(const ValueKey('slide-card-content-button')),
+      const Offset(0, 140),
+    );
+    await tester.pumpAndSettle();
+    final after = tester
+        .getTopLeft(find.byKey(const ValueKey('test-slide-card')))
+        .dy;
+
+    expect(after, moreOrLessEquals(before, epsilon: 0.1));
+    expect(dismissed, isFalse);
+  });
+}

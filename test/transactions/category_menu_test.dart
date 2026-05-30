@@ -37,6 +37,8 @@ void main() {
     );
 
     expect(find.text('Válassz kategóriát'), findsOneWidget);
+    expect(find.byKey(const ValueKey('category-menu-back-button')), findsNothing);
+    expect(find.byKey(const ValueKey('category-add-button')), findsNothing);
     expect(find.text('Q'), findsOneWidget);
     expect(find.text('Salary'), findsNothing);
 
@@ -49,8 +51,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-delete-6')));
     expect(deleted, isNull);
 
-    await tester.tap(find.byKey(const ValueKey('category-add-button')));
-    expect(addPressed, isTrue);
+    expect(addPressed, isFalse);
   });
 
   testWidgets('home header category button opens picker and filters logs', (
