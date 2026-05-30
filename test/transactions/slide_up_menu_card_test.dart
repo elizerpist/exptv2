@@ -138,7 +138,11 @@ void main() {
     await tester.pump();
 
     final dragged = _slideCardTranslationY(tester);
-    expect(dragged, greaterThan(before + 60));
+    expect(
+      dragged,
+      greaterThan(before + 60),
+      reason: DebugConsole.allText,
+    );
 
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 16));
