@@ -192,6 +192,7 @@ void main() {
       find.byKey(const ValueKey('transaction-time-picker-button')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
   testWidgets('FAB long press opens the new category editor', (
@@ -212,6 +213,7 @@ void main() {
       find.byKey(const ValueKey('transaction-editor-card')),
       findsNothing,
     );
+    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
   testWidgets('transaction category field opens category menu picker', (
@@ -270,7 +272,7 @@ void main() {
     );
   });
 
-  testWidgets('transaction editor is non modal and aligned to summary pill', (
+  testWidgets('transaction editor is focused and aligned to summary pill', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -287,11 +289,7 @@ void main() {
     );
     final editorTop = editorRect.top;
 
-    final visibleBarriers = tester
-        .widgetList<ModalBarrier>(find.byType(ModalBarrier))
-        .where((barrier) => barrier.color != null);
-
-    expect(visibleBarriers, isEmpty);
+    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
     expect(find.byType(BottomSheet), findsNothing);
     expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
     expect(
@@ -326,7 +324,7 @@ void main() {
     expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
   });
 
-  testWidgets('type pills remain tappable while transaction editor is open', (
+  testWidgets('type pills stay behind the focused transaction editor', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -334,10 +332,13 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bevétel'));
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+
+    await tester.tap(find.text('Bevétel'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    expect(find.text('Új bevételi tranzakció'), findsOneWidget);
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    expect(find.text('Új bevételi tranzakció'), findsNothing);
   });
 
   testWidgets('logbox tap opens transaction editor in edit mode', (
