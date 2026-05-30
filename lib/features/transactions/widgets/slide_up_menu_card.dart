@@ -126,6 +126,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                         (1 - Curves.easeOutCubic.transform(_entry.value)) *
                         panelHeight;
                     return Transform.translate(
+                      key: const ValueKey('slide-up-menu-transform'),
                       offset: Offset(0, entryOffset + _dragDy.value),
                       child: child,
                     );

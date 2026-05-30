@@ -11,6 +11,7 @@ import 'category_menu/category_editor_sheet.dart';
 import 'category_menu/category_menu_overlay.dart';
 import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
+import 'transaction_menu_metrics.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
@@ -81,6 +82,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             SlideUpMenuCard(
               cardKey: const ValueKey('transaction-editor-card'),
               debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
+              panelHeight: _panelHeightFor(context),
               onDismissed: _close,
               child: SafeArea(
                 top: false,
@@ -214,6 +216,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 child: CategoryEditorSheet(
                   activeType: type,
                   initialCategory: _editingCategory,
+                  panelHeight: _panelHeightFor(context),
                   onClose: _closeCategoryEditor,
                   onSave: (draft) => _saveCategory(draft, _editingCategory),
                   onDelete: _editingCategory == null
@@ -225,6 +228,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         );
       },
     );
+  }
+
+
+  double _panelHeightFor(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   void _resetFields() {

@@ -220,13 +220,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 ),
               if (_categoryEditorOpen)
                 Positioned(
-                  top: TransactionMenuMetrics.overlayTop,
+                  top: 0,
                   left: 0,
                   right: 0,
                   bottom: 0,
                   child: CategoryEditorSheet(
                     activeType: widget.store.activeType,
                     initialCategory: _editingCategory,
+                    panelHeight: _menuPanelHeight(context),
                     onClose: _closeCategoryEditor,
                     onSave: (draft) => _saveCategory(draft, _editingCategory),
                     onDelete: _editingCategory == null
@@ -236,7 +237,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 ),
               if (_budgetEditorItem != null)
                 Positioned(
-                  top: TransactionMenuMetrics.overlayTop,
+                  top: 0,
                   left: 0,
                   right: 0,
                   bottom: 0,
@@ -331,6 +332,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     if (!mounted) return;
     setState(() {});
     DebugConsole.log('[HeaderCard] collapse complete');
+  }
+
+
+  double _menuPanelHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   void _notifyBlockingOverlay(bool active) {

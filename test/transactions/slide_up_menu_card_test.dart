@@ -129,25 +129,25 @@ void main() {
     await tester.pumpAndSettle();
 
     final cardFinder = find.byKey(const ValueKey('test-slide-card'));
-    final before = tester.getTopLeft(cardFinder).dy;
+    final before = _slideCardTranslationY(tester);
     final start = tester.getTopLeft(cardFinder) + const Offset(180, 24);
     final gesture = await tester.startGesture(start);
     await gesture.moveBy(const Offset(0, 70));
     await tester.pump();
 
-    final dragged = tester.getTopLeft(cardFinder).dy;
+    final dragged = _slideCardTranslationY(tester);
     expect(dragged, greaterThan(before + 60));
 
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 16));
 
-    final duringSnap = tester.getTopLeft(cardFinder).dy;
+    final duringSnap = _slideCardTranslationY(tester);
     expect(duringSnap, greaterThan(before));
     expect(duringSnap, lessThan(dragged));
 
     await tester.pumpAndSettle();
 
-    final after = tester.getTopLeft(cardFinder).dy;
+    final after = _slideCardTranslationY(tester);
     expect(after, moreOrLessEquals(before, epsilon: 0.1));
     expect(
       DebugConsole.allText,
@@ -158,5 +158,11 @@ void main() {
       contains('[SlideUpMenu] TestMenu snap complete'),
     );
   });
+}
 
+double _slideCardTranslationY(WidgetTester tester) {
+  final transform = tester.widget<Transform>(
+    find.byKey(const ValueKey('slide-up-menu-transform')),
+  );
+  return transform.transform.getTranslation().y;
 }

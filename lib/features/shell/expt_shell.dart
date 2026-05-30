@@ -166,6 +166,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() => _homeBlockingOverlayOpen = open);
   }
 
+
+  double _menuPanelHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
+  }
+
   Future<bool> _confirmDeleteTransaction(TransactionRecord transaction) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -264,7 +272,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             Positioned(
               left: 0,
               right: 0,
-              top: TransactionMenuMetrics.overlayTop,
+              top: 0,
               bottom: 0,
               child: AddTransactionSheet(
                 store: _transactionStore,
@@ -276,10 +284,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             Positioned(
               left: 0,
               right: 0,
-              top: TransactionMenuMetrics.overlayTop,
+              top: 0,
               bottom: 0,
               child: CategoryEditorSheet(
                 activeType: _transactionStore.activeType,
+                panelHeight: _menuPanelHeight(context),
                 onClose: _closeCategoryEditor,
                 onSave: _saveCategory,
               ),
