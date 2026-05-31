@@ -111,7 +111,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             ),
           ),
           Positioned(
-            top: 44,
+            top: 48,
             left: 30,
             right: 30,
             child: Row(
@@ -205,44 +205,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 ],
               ),
             ),
-          if (widget.periodLabel != null)
-            Positioned(
-              left: 24,
-              bottom: 12,
-              child: Text(
-                widget.periodLabel!,
-                key: const ValueKey('backheader-period-label'),
-                style: const TextStyle(
-                  color: AppColors.gray600,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          if (widget.onOverviewJump != null)
-            Positioned(
-              right: 18,
-              bottom: 10,
-              child: Material(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
-                elevation: 4,
-                child: InkWell(
-                  key: const ValueKey('backheader-overview-jump-button'),
-                  onTap: widget.onOverviewJump,
-                  borderRadius: BorderRadius.circular(12),
-                  child: const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: AppColors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -295,12 +257,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         height: BudgetBarGeometry.barHeight,
         compactIcon: true,
         onTap: () => _tap(item),
+        onDoubleTap: widget.onOverviewJump,
       );
     }
     return _OverviewBudgetBar(
       item: item,
       height: BudgetBarGeometry.barHeight,
       onTap: () => _tap(item),
+      onDoubleTap: widget.onOverviewJump,
     );
   }
 
@@ -424,11 +388,13 @@ class _OverviewBudgetBar extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.height,
+    this.onDoubleTap,
   });
 
   final BackheaderBudgetItem item;
   final VoidCallback onTap;
   final double height;
+  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -457,6 +423,7 @@ class _OverviewBudgetBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(height / 2),
       child: InkWell(
         onTap: onTap,
+        onDoubleTap: onDoubleTap,
         borderRadius: BorderRadius.circular(height / 2),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(height / 2),

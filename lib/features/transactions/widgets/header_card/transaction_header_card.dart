@@ -119,18 +119,19 @@ class TransactionHeaderCard extends StatelessWidget {
                     top: TransactionHeaderMetrics.cameraTop,
                     left: 30,
                     child: Container(
-                      width: 45,
-                      height: 35,
+                      key: const ValueKey('header-camera-chip'),
+                      width: 36,
+                      height: 28,
                       decoration: BoxDecoration(
                         color: const Color(0xFFFBBF24),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(7),
                         border: Border.all(color: AppColors.white, width: 2),
                       ),
                       alignment: Alignment.center,
                       child: const Icon(
                         Icons.photo_camera_outlined,
                         color: AppColors.white,
-                        size: 26,
+                        size: 21,
                       ),
                     ),
                   ),

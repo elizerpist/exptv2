@@ -28,7 +28,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+      expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
       expect(find.byKey(const ValueKey('limit-alert-toggle')), findsNothing);
       expect(find.byKey(const ValueKey('limit-card-avatar')), findsOneWidget);
@@ -42,6 +42,10 @@ void main() {
         '300000',
       );
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(repository.savedLimits, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('limit-save-button')));
       await tester.pumpAndSettle();
 
       expect(repository.savedLimits.single['targetType'], 'overview');
@@ -88,7 +92,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
       expect(find.text('Food'), findsWidgets);
-      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+      expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('category-limit-slider')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('category-limit-partition-bar')),
@@ -99,6 +103,10 @@ void main() {
         '250',
       );
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(repository.savedLimits, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('limit-save-button')));
       await tester.pumpAndSettle();
 
       expect(repository.savedLimits.single['targetType'], 'category');
@@ -121,6 +129,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
+    await tester.pumpAndSettle();
+    expect(repository.savedLimits, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
 
     expect(repository.savedLimits.single['targetType'], 'overview');
@@ -212,7 +224,7 @@ void main() {
     expect(card.top, greaterThan(summaryTop + 80));
     expect(card.bottom, moreOrLessEquals(844, epsilon: 0.1));
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
-    expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+    expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
   });
 
@@ -311,7 +323,7 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
-  testWidgets('backheader overview jump button selects budget bar', (tester) async {
+  testWidgets('backheader double tap on a bar selects budget bar', (tester) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
     final store = TransactionStore(
       repository,
@@ -325,13 +337,92 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Food'), findsOneWidget);
-
-    await tester.tap(
+    expect(
       find.byKey(const ValueKey('backheader-overview-jump-button')),
+      findsNothing,
     );
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
 
     expect(find.text('Budget'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('limit editor discards pending changes when swiped closed', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('limit-amount-input')),
+      '350000',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    final cardTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+    );
+    final gesture = await tester.startGesture(cardTopLeft + const Offset(180, 90));
+    await gesture.moveBy(const Offset(0, 260));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimits, isEmpty);
+    expect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('limit editor save commits pending edits across items', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('limit-amount-input')),
+      '800',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('limit-card-next-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('limit-amount-input')),
+      '150',
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimits, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimits, hasLength(2));
+    expect(
+      repository.savedLimits.map((row) => row['targetType']),
+      containsAll(['overview', 'category']),
+    );
   });
 
   testWidgets('income side uses income goal and income category allocation', (
@@ -360,6 +451,10 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
+    await tester.pumpAndSettle();
+    expect(repository.savedLimits, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
 
     expect(repository.savedLimits.last['targetType'], 'overview');

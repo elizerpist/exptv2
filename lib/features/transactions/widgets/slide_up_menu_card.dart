@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
@@ -34,16 +37,22 @@ class SlideUpMenuCard extends StatefulWidget {
 class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     with TickerProviderStateMixin {
   static const _dismissThreshold = 90.0;
-  static const _minDragOffset = -42.0;
-  static const _maxDragOffset = 220.0;
+  static const _minDragOffset = 0.0;
   static const _snapBackDuration = Duration(milliseconds: 170);
+  static const _dismissDuration = Duration(milliseconds: 180);
 
   late final AnimationController _entry;
   late final AnimationController _snapBackController;
   late final ValueNotifier<double> _dragDy;
   bool _closing = false;
   bool _dragActive = false;
+  bool _dragMoved = false;
+  bool _dragLoggedStart = false;
+  bool _dismissAnimatingFromDrag = false;
   double _snapStartDy = 0;
+  double _snapEndDy = 0;
+  double _panelHeight = 0;
+  double _dragStartY = 0;
   double? _lastLoggedAvailableHeight;
   double? _lastLoggedPanelHeight;
   double? _lastLoggedDragOffset;
@@ -99,6 +108,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
         final panelHeight = (widget.panelHeight ?? availableHeight)
             .clamp(0.0, availableHeight)
             .toDouble();
+        _panelHeight = panelHeight;
         _logLayout(availableHeight, panelHeight);
         return Stack(
           children: [
@@ -131,54 +141,40 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                       child: child,
                     );
                   },
-                  child: KeyedSubtree(
-                    key: widget.cardKey,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(30),
-                            ),
-                            border: Border.all(color: AppColors.gray200),
-                            boxShadow: widget.zIndexShadow
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.14,
-                                      ),
-                                      offset: const Offset(0, -2),
-                                      blurRadius: 12,
+                  child: Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: _handlePointerDown,
+                    onPointerMove: _handlePointerMove,
+                    onPointerUp: _handlePointerUp,
+                    onPointerCancel: (_) => _snapBack(reason: 'cancel'),
+                    child: KeyedSubtree(
+                      key: widget.cardKey,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(30),
+                          ),
+                          border: Border.all(color: AppColors.gray200),
+                          boxShadow: widget.zIndexShadow
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(
+                                      alpha: 0.14,
                                     ),
-                                  ]
-                                : null,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(30),
-                            ),
-                            child: widget.child,
-                          ),
+                                    offset: const Offset(0, -2),
+                                    blurRadius: 12,
+                                  ),
+                                ]
+                              : null,
                         ),
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: widget.dragHandleExtent,
-                          child: Listener(
-                            behavior: HitTestBehavior.translucent,
-                            onPointerDown: _handlePointerDown,
-                            onPointerMove: _handlePointerMove,
-                            onPointerUp: _handlePointerUp,
-                            onPointerCancel: (_) => _snapBack(
-                              reason: 'cancel',
-                            ),
-                            child: const SizedBox.expand(),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(30),
                           ),
+                          child: widget.child,
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -218,18 +214,27 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   void _logSnapBackStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed) return;
+    if (_dismissAnimatingFromDrag) {
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel dismiss complete elapsed=${_elapsedMs(_dismissStartedAt)}ms',
+      );
+      _dismissStartedAt = null;
+      _dismissAnimatingFromDrag = false;
+      return;
+    }
     _dragDy.value = 0;
     DebugConsole.log(
       '[SlideUpMenu] $_debugLabel snap complete elapsed=${_elapsedMs(_snapStartedAt)}ms',
     );
     _snapStartedAt = null;
     _snapStartDy = 0;
+    _snapEndDy = 0;
   }
 
   void _syncSnapBackOffset() {
-    if (_snapStartDy.abs() < 0.01) return;
+    if ((_snapStartDy - _snapEndDy).abs() < 0.01) return;
     final progress = Curves.easeOutCubic.transform(_snapBackController.value);
-    _dragDy.value = _snapStartDy * (1 - progress);
+    _dragDy.value = lerpDouble(_snapStartDy, _snapEndDy, progress) ?? 0;
   }
 
   void _logLayout(double availableHeight, double panelHeight) {
@@ -249,22 +254,29 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   void _handlePointerDown(PointerDownEvent event) {
     if (_closing) return;
-    _dragActive = event.localPosition.dy <= widget.dragHandleExtent;
-    if (!_dragActive) return;
+    _dragActive = true;
+    _dragMoved = false;
+    _dragLoggedStart = false;
+    _dragStartY = event.localPosition.dy;
     _snapBackController.stop();
     _dragStartedAt = DateTime.now();
     _lastLoggedDragOffset = _dragDy.value;
-    DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel drag start y=${event.localPosition.dy.toStringAsFixed(1)} offset=${_dragDy.value.toStringAsFixed(1)} handle=${widget.dragHandleExtent.toStringAsFixed(1)}',
-    );
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (_closing || !_dragActive) return;
+    final maxDrag = _dragMaxOffset;
     final next = (_dragDy.value + event.delta.dy)
-        .clamp(_minDragOffset, _maxDragOffset)
+        .clamp(_minDragOffset, maxDrag)
         .toDouble();
     if ((next - _dragDy.value).abs() < 0.01) return;
+    if (!_dragLoggedStart) {
+      _dragLoggedStart = true;
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel drag start y=${_dragStartY.toStringAsFixed(1)} offset=${_dragDy.value.toStringAsFixed(1)} max=${maxDrag.toStringAsFixed(1)} handle=${widget.dragHandleExtent.toStringAsFixed(1)}',
+      );
+    }
+    _dragMoved = true;
     _dragDy.value = next;
     _logDragMove(next, event.delta.dy);
   }
@@ -273,9 +285,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     if (_closing || !_dragActive) return;
     final dragOffset = _dragDy.value;
     _dragActive = false;
+    if (!_dragMoved) {
+      _dragStartedAt = null;
+      _lastLoggedDragOffset = null;
+      return;
+    }
     final decision = dragOffset > _dismissThreshold ? 'dismiss' : 'snap';
     DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel drag end offset=${dragOffset.toStringAsFixed(1)} threshold=${_dismissThreshold.toStringAsFixed(1)} elapsed=${_elapsedMs(_dragStartedAt)}ms decision=$decision',
+      '[SlideUpMenu] $_debugLabel drag end offset=${dragOffset.toStringAsFixed(1)} threshold=${_dismissThreshold.toStringAsFixed(1)} max=${_dragMaxOffset.toStringAsFixed(1)} elapsed=${_elapsedMs(_dragStartedAt)}ms decision=$decision',
     );
     _dragStartedAt = null;
     _lastLoggedDragOffset = null;
@@ -298,7 +315,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     }
     _lastLoggedDragOffset = offset;
     DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel drag move offset=${offset.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)}',
+      '[SlideUpMenu] $_debugLabel drag move offset=${offset.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)} max=${_dragMaxOffset.toStringAsFixed(1)}',
     );
   }
 
@@ -308,7 +325,10 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     final offset = _dragDy.value;
     if (offset.abs() < 0.01) return;
     _snapBackController.stop();
+    _dismissAnimatingFromDrag = false;
     _snapStartDy = offset;
+    _snapEndDy = 0;
+    _snapBackController.duration = _snapBackDuration;
     _snapStartedAt = DateTime.now();
     DebugConsole.log(
       '[SlideUpMenu] $_debugLabel snap start reason=$reason from=${offset.toStringAsFixed(1)} to=0.0 duration=${_snapBackDuration.inMilliseconds}ms',
@@ -319,15 +339,23 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   Future<void> _dismiss() async {
     if (_closing) return;
     _closing = true;
+    _dragActive = false;
     _snapBackController.stop();
+    final from = _dragDy.value;
+    final to = math.max(_dragMaxOffset, from);
+    _snapStartDy = from;
+    _snapEndDy = to;
+    _dismissAnimatingFromDrag = true;
+    _snapBackController.duration = _dismissDuration;
     _dismissStartedAt = DateTime.now();
     DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel dismiss start dragOffset=${_dragDy.value.toStringAsFixed(1)}',
+      '[SlideUpMenu] $_debugLabel dismiss start from=${from.toStringAsFixed(1)} to=${to.toStringAsFixed(1)} duration=${_dismissDuration.inMilliseconds}ms',
     );
-    _dragDy.value = 0;
-    await _entry.reverse();
+    await _snapBackController.forward(from: 0);
     if (mounted) widget.onDismissed?.call();
   }
+
+  double get _dragMaxOffset => math.max(_panelHeight, 1);
 
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;

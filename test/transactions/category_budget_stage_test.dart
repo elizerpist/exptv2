@@ -203,6 +203,37 @@ void main() {
     expect(spent.widthFactor, moreOrLessEquals(0.1, epsilon: 0.001));
   });
 
+  testWidgets('double tap on a bar requests overview jump', (tester) async {
+    var jumped = false;
+    final bars = [
+      barFixture(6, 'Food', 100, 150),
+      barFixture(7, 'Travel', 40, 0),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+              onOverviewJump: () => jumped = true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+
+    expect(jumped, isTrue);
+  });
+
   testWidgets('expense budget overview bar shrinks as budget is consumed', (
     tester,
   ) async {
@@ -317,7 +348,7 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+    expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('limit-alert-toggle')), findsNothing);
     await tester.enterText(
       find.byKey(const ValueKey('limit-amount-input')),
@@ -326,10 +357,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
+    expect(savedAmount, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.pumpAndSettle();
+
     expect(savedAmount, 250);
     expect(savedAlert, isFalse);
 
     await tester.tap(find.byKey(const ValueKey('limit-reset-inline-button')));
+    await tester.pumpAndSettle();
+    expect(savedAmount, 250);
+
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
     expect(savedAmount, 0);
   });
@@ -368,14 +408,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(savedAmount, isNull);
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.pumpAndSettle();
+
     expect(savedAmount, isNotNull);
     expect(savedAmount!, greaterThan(0));
   });
 
-  testWidgets('stage lowers labels and shows period label bottom-left', (
+  testWidgets('stage lowers labels and hides bottom controls', (
     tester,
   ) async {
-    final bars = [barFixture(6, 'Food', 100, 150)];
+    final bars = [
+      barFixture(6, 'Food', 100, 150),
+      barFixture(7, 'Travel', 40, 0),
+    ];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -388,6 +435,7 @@ void main() {
                 items: bars.map(BackheaderBudgetItem.category).toList(),
                 categoryBars: bars,
                 periodLabel: 'Május 2026',
+                onOverviewJump: () {},
                 onItemTap: (_) {},
               ),
             ),
@@ -399,12 +447,21 @@ void main() {
     final titleTop = tester
         .getRect(find.byKey(const ValueKey('backheader-active-title')))
         .top;
-    final periodRect = tester.getRect(
-      find.byKey(const ValueKey('backheader-period-label')),
+    final barTop = tester
+        .getRect(find.byKey(const ValueKey('category-budget-bar')))
+        .top;
+    final dotTop = tester
+        .getRect(find.byKey(const ValueKey('category-budget-dot-0')))
+        .top;
+
+    expect(titleTop, greaterThanOrEqualTo(46));
+    expect(barTop, greaterThanOrEqualTo(80));
+    expect(dotTop, moreOrLessEquals(150, epsilon: 0.1));
+    expect(find.byKey(const ValueKey('backheader-period-label')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('backheader-overview-jump-button')),
+      findsNothing,
     );
-    expect(titleTop, greaterThanOrEqualTo(42));
-    expect(periodRect.left, lessThan(40));
-    expect(periodRect.bottom, lessThanOrEqualTo(172));
   });
 
   testWidgets('progress frame overhang is equal around active bar', (

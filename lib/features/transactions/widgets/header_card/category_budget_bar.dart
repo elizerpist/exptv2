@@ -9,12 +9,14 @@ class CategoryBudgetBar extends StatelessWidget {
     super.key,
     required this.bar,
     required this.onTap,
+    this.onDoubleTap,
     this.compactIcon = false,
     this.height = 70,
   });
 
   final CategoryBudgetBarData bar;
   final VoidCallback onTap;
+  final VoidCallback? onDoubleTap;
   final bool compactIcon;
   final double height;
 
@@ -31,6 +33,7 @@ class CategoryBudgetBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(height / 2),
       child: InkWell(
         onTap: onTap,
+        onDoubleTap: onDoubleTap,
         borderRadius: BorderRadius.circular(height / 2),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(height / 2),

@@ -9,10 +9,10 @@ class TransactionHeaderMetrics {
   static const titleTop = 35.0;
   static const calendarTop = 27.0;
   static const cameraTop = 62.0;
-  static const magnetTop = 45.0;
+  static const magnetTop = 41.0;
   static const magnetHeight = 157.5;
-  static const balanceLabelTop = 116.0;
-  static const balanceTop = 138.0;
+  static const balanceLabelTop = 112.0;
+  static const balanceTop = 134.0;
   static const categoryButtonTop = 112.0;
   static const expandButtonTop = 158.0;
 }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('header balance label and value are shifted down', (tester) async {
+  testWidgets('header balance label and value sit higher in the card', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -17,8 +17,8 @@ void main() {
       ),
     );
 
-    expect(TransactionHeaderMetrics.balanceLabelTop, 116);
-    expect(TransactionHeaderMetrics.balanceTop, 138);
+    expect(TransactionHeaderMetrics.balanceLabelTop, 112);
+    expect(TransactionHeaderMetrics.balanceTop, 134);
   });
 
   testWidgets('header card copies stage0 layout and controls', (tester) async {
@@ -54,6 +54,25 @@ void main() {
 
     expect(categoryPressed, isTrue);
     expect(expandPressed, isTrue);
+  });
+
+  testWidgets('header camera chip is smaller', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '123 Ft',
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('header-camera-chip'))),
+      const Size(36, 28),
+    );
   });
 
   testWidgets('header renders taller magnet strip height', (tester) async {

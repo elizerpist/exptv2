@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -60,8 +59,9 @@ class BudgetTargetEditorSheet extends StatefulWidget {
 class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   late final TextEditingController _controller;
   late String _activeKey;
-  Timer? _saveDebounce;
   final _rememberedSliderMaxByKey = <String, double>{};
+  final _pendingAmountsByKey = <String, double>{};
+  var _updatingController = false;
   var _saving = false;
 
   @override
@@ -77,7 +77,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   @override
   void dispose() {
-    _saveDebounce?.cancel();
     _controller
       ..removeListener(_refreshFromController)
       ..dispose();
@@ -118,9 +117,10 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                 onNext: _selectNext,
                 onReset: _resetLimit,
                 onSliderChanged: _setAmountFromSlider,
-                onSliderChangeEnd: _saveSliderAmount,
-                onInputChanged: _scheduleInputSave,
+                onSliderChangeEnd: _setAmountFromSlider,
+                onInputChanged: _captureInputAmount,
                 onSetToMax: _setOverviewToMax,
+                onSave: _savePendingChanges,
                 showSetToMax: _activeItem.overview != null,
                 partitionBar: _buildPartitionBar(),
               ),
@@ -192,16 +192,17 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
         rememberedMax: remembered,
       );
     }
+    final activePreview = _previewCategoryBar(category, _amount);
     final maxAllowed = LimitAllocationManager.categorySliderMax(
       overviewLimit: overviewLimit,
-      bars: widget.categoryBars,
-      activeBar: category,
+      bars: _partitionBars,
+      activeBar: activePreview,
     );
     return LimitSliderRange.constrained(
       amount: _amount,
       rememberedMax: remembered,
       maxAllowed: maxAllowed,
-      hasExistingLimit: category.limitAmount > 0 || _amount > 0,
+      hasExistingLimit: _effectiveAmountFor(_activeItem) > 0 || _amount > 0,
     );
   }
 
@@ -228,21 +229,18 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   List<CategoryBudgetBarData> get _partitionBars {
-    final category = _activeItem.category;
-    if (category == null) return widget.categoryBars;
-    final preview = _previewCategoryBar(category);
-    final replaced = <CategoryBudgetBarData>[];
-    var found = false;
+    final result = <CategoryBudgetBarData>[];
     for (final bar in widget.categoryBars) {
-      if (_sameTarget(bar, preview)) {
-        replaced.add(preview);
-        found = true;
-      } else {
-        replaced.add(bar);
-      }
+      final item = _itemForCategoryBar(bar);
+      final amount = item == null ? bar.limitAmount : _effectiveAmountFor(item);
+      result.add(_previewCategoryBar(bar, amount));
     }
-    if (!found) replaced.insert(0, preview);
-    return replaced;
+    final activeCategory = _activeItem.category;
+    if (activeCategory != null &&
+        !result.any((bar) => _sameTarget(bar, activeCategory))) {
+      result.insert(0, _previewCategoryBar(activeCategory, _amount));
+    }
+    return result;
   }
 
   double? get _overviewLimitAmount {
@@ -281,30 +279,24 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
 
   void _selectItem(BackheaderBudgetItem item) {
-    _saveDebounce?.cancel();
     _activeKey = item.key;
-    _setControllerAmount(_limitAmountFor(item));
+    _setControllerAmount(_effectiveAmountFor(item), recordPending: false);
     setState(() {});
     widget.onActiveItemChanged(item);
   }
 
   void _refreshFromController() {
-    _rememberSliderMax(_amount);
+    if (_updatingController) return;
+    _captureInputAmount(_controller.text);
+  }
+
+  void _captureInputAmount(String _) {
+    _storePendingAmount(_activeKey, _amount);
     if (mounted) setState(() {});
   }
 
-  void _scheduleInputSave(String _) {
-    final key = _activeKey;
-    _saveDebounce?.cancel();
-    _saveDebounce = Timer(const Duration(milliseconds: 400), () {
-      _saveAmount(_amount, itemKey: key);
-    });
-  }
-
   void _resetLimit() {
-    _saveDebounce?.cancel();
     _setControllerAmount(0);
-    unawaited(_saveAmount(0));
   }
 
   void _setAmountFromSlider(double amount) {
@@ -314,20 +306,9 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     _setControllerAmount(snapped);
   }
 
-  void _saveSliderAmount(double amount) {
-    _saveDebounce?.cancel();
-    final snapped = LimitAllocationManager.snapSliderAmount(amount)
-        .clamp(0.0, _sliderRange.max)
-        .toDouble();
-    _setControllerAmount(snapped);
-    unawaited(_saveAmount(snapped));
-  }
-
   void _setOverviewToMax() {
-    _saveDebounce?.cancel();
     final max = math.max(0.0, widget.periodIncome).toDouble();
     _setControllerAmount(max);
-    unawaited(_saveAmount(max));
   }
 
   void _selectPrevious() => _selectAdjacent(-1);
@@ -344,15 +325,30 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     _selectItem(next);
   }
 
-  void _setControllerAmount(double amount) {
-    _rememberSliderMax(amount);
-    final roundedAmount = amount.round();
+  void _setControllerAmount(
+    double amount, {
+    bool recordPending = true,
+  }) {
+    final normalized = math.max(0.0, amount).toDouble();
+    _rememberSliderMax(normalized);
+    if (recordPending) _storePendingAmount(_activeKey, normalized);
+    final roundedAmount = normalized.round();
     final text = roundedAmount <= 0 ? '' : roundedAmount.toString();
-    if (_controller.text == text) return;
-    _controller.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
+    if (_controller.text != text) {
+      _updatingController = true;
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      _updatingController = false;
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _storePendingAmount(String key, double amount) {
+    final normalized = math.max(0.0, amount).toDouble();
+    _pendingAmountsByKey[key] = normalized;
+    _rememberSliderMax(normalized);
   }
 
   void _rememberSliderMax(double amount) {
@@ -362,10 +358,31 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     }
   }
 
-  Future<void> _saveAmount(double rawAmount, {String? itemKey}) async {
-    final item = _itemForKey(itemKey ?? _activeKey);
-    final amount = math.max(0.0, rawAmount).toDouble();
+  Future<void> _savePendingChanges() async {
+    if (_saving) return;
+    final changes = _pendingAmountsByKey.entries.where((entry) {
+      final item = _itemForKey(entry.key);
+      return (_limitAmountFor(item) - entry.value).abs() > 0.01;
+    }).toList();
+    if (changes.isEmpty) {
+      widget.onCancel();
+      return;
+    }
+
     if (mounted) setState(() => _saving = true);
+    for (final change in changes) {
+      await _saveItemAmount(_itemForKey(change.key), change.value);
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    widget.onCancel();
+  }
+
+  Future<void> _saveItemAmount(
+    BackheaderBudgetItem item,
+    double rawAmount,
+  ) async {
+    final amount = math.max(0.0, rawAmount).toDouble();
     final overview = item.overview;
     final category = item.category;
     if (overview != null) {
@@ -381,7 +398,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
         alertActive: false,
       );
     }
-    if (mounted) setState(() => _saving = false);
   }
 
   BackheaderBudgetItem _itemForKey(String key) {
@@ -399,8 +415,11 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     return 0;
   }
 
-  CategoryBudgetBarData _previewCategoryBar(CategoryBudgetBarData category) {
-    final hasLimit = _amount > 0;
+  CategoryBudgetBarData _previewCategoryBar(
+    CategoryBudgetBarData category,
+    double amount,
+  ) {
+    final hasLimit = amount > 0;
     return CategoryBudgetBarData(
       key: category.key,
       targetType: category.targetType,
@@ -411,7 +430,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       title: category.title,
       spent: category.spent,
       hasLimit: hasLimit,
-      limitAmount: hasLimit ? _amount : 0,
+      limitAmount: hasLimit ? amount : 0,
       alertActive: false,
       color: category.color,
       iconSlot: category.iconSlot,
@@ -421,14 +440,37 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   double _matchingOverviewLimitForCategory(CategoryBudgetBarData category) {
+    for (final item in _items) {
+      final overview = item.overview;
+      if (overview == null || overview.kind == BudgetGoalKind.savingGoal) {
+        continue;
+      }
+      if (overview.kind.transactionType != category.transactionType.nativeValue) {
+        continue;
+      }
+      return _effectiveAmountFor(item);
+    }
     for (final overview in widget.overviewItems) {
       if (overview.kind == BudgetGoalKind.savingGoal) continue;
       if (overview.kind.transactionType != category.transactionType.nativeValue) {
         continue;
       }
-      return overview.hasLimit ? overview.limitAmount : 0;
+      final item = BackheaderBudgetItem.overview(overview);
+      return _effectiveAmountFor(item);
     }
     return 0;
+  }
+
+  double _effectiveAmountFor(BackheaderBudgetItem item) {
+    return _pendingAmountsByKey[item.key] ?? _limitAmountFor(item);
+  }
+
+  BackheaderBudgetItem? _itemForCategoryBar(CategoryBudgetBarData bar) {
+    for (final item in _items) {
+      final category = item.category;
+      if (category != null && _sameTarget(category, bar)) return item;
+    }
+    return null;
   }
 
   bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {
@@ -458,6 +500,7 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.onSliderChangeEnd,
     required this.onInputChanged,
     required this.onSetToMax,
+    required this.onSave,
     required this.showSetToMax,
     required this.partitionBar,
   });
@@ -478,6 +521,7 @@ class _BudgetLimitCard extends StatelessWidget {
   final ValueChanged<double> onSliderChangeEnd;
   final ValueChanged<String> onInputChanged;
   final VoidCallback onSetToMax;
+  final VoidCallback onSave;
   final bool showSetToMax;
   final Widget partitionBar;
 
@@ -588,6 +632,17 @@ class _BudgetLimitCard extends StatelessWidget {
           const SizedBox(height: 2),
         const SizedBox(height: 12),
         partitionBar,
+        const SizedBox(height: 16),
+        FilledButton(
+          key: const ValueKey('limit-save-button'),
+          onPressed: saving ? null : onSave,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.white,
+            minimumSize: const Size.fromHeight(48),
+          ),
+          child: Text(saving ? 'Mentés...' : 'Mentés'),
+        ),
       ],
     );
   }

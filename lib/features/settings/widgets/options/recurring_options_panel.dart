@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../models/recurring_transaction.dart';
 import '../../../transactions/models/transaction_category.dart';
 import '../../../transactions/slots/category_color_resolver.dart';
+import '../../../transactions/widgets/category_scroll_picker.dart';
 import '../../state/settings_store.dart';
 import 'settings_option_widgets.dart';
 
@@ -157,35 +158,28 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
 
   Widget _categoryPicker() {
     final categories = widget.store.expenseCategories;
+    final selected = categories.contains(_selectedCategory)
+        ? _selectedCategory
+        : categories.firstOrNull;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Kategória', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.gray800)),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<TransactionCategory>(
-            initialValue: categories.contains(_selectedCategory) ? _selectedCategory : categories.firstOrNull,
-            items: categories.map((category) {
-              return DropdownMenuItem<TransactionCategory>(
-                value: category,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _CategoryColorDot(color: category.slotColor),
-                    const SizedBox(width: 8),
-                    Flexible(child: Text(category.name)),
-                  ],
-                ),
-              );
-            }).toList(),
-            onChanged: (value) => setState(() => _selectedCategory = value),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: const Color(0xFFF8F9FA),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: const BorderSide(color: AppColors.gray200)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          const Text(
+            'Kategória',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.gray800,
             ),
+          ),
+          const SizedBox(height: 8),
+          CategoryScrollPicker(
+            keyPrefix: 'recurring-category',
+            categories: categories,
+            selected: selected,
+            maxHeight: 180,
+            onSelected: (value) => setState(() => _selectedCategory = value),
           ),
         ],
       ),

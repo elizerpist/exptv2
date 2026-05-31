@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -6,12 +8,9 @@ import '../models/transaction_record.dart';
 import '../state/transaction_store.dart';
 import 'amount_field.dart';
 import 'category_selector_field.dart';
-import 'category_menu/category_editor_panel.dart';
-import 'category_menu/category_editor_sheet.dart';
-import 'category_menu/category_menu_overlay.dart';
+import 'category_scroll_picker.dart';
 import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
-import 'transaction_menu_metrics.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
@@ -35,11 +34,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final _date = TextEditingController();
   final _time = TextEditingController();
   TransactionCategory? _category;
-  TransactionCategory? _editingCategory;
   String? _error;
   var _saving = false;
   var _categoryPickerOpen = false;
-  var _categoryEditorOpen = false;
 
   bool get _editing => widget.initialTransaction != null;
 
@@ -77,154 +74,100 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             .toList();
         _category = _resolvedCategory(categories);
 
-        return Stack(
-          children: [
-            SlideUpMenuCard(
-              cardKey: const ValueKey('transaction-editor-card'),
-              debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
-              panelHeight: _panelHeightFor(context),
-              onDismissed: _close,
-              child: SafeArea(
-                top: false,
-                bottom: false,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final keyboardInset = MediaQuery.viewInsetsOf(
-                      context,
-                    ).bottom;
-                    final contentHeight =
-                        constraints.maxHeight - keyboardInset - 44;
-                    return SingleChildScrollView(
+        return SlideUpMenuCard(
+          cardKey: const ValueKey('transaction-editor-card'),
+          debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
+          panelHeight: _panelHeightFor(context),
+          onDismissed: _close,
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Builder(
+              builder: (context) {
+                final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+                return SingleChildScrollView(
                   padding: EdgeInsets.only(
                     left: 20,
                     right: 20,
                     top: 20,
                     bottom: keyboardInset + 24,
                   ),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: contentHeight < 0 ? 0.0 : contentHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: 42,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: AppColors.gray200,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.gray200,
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              const SizedBox(width: 40),
-                              Expanded(
-                                child: Text(
-                                  _title(type),
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.gray800,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: _close,
-                                icon: const Icon(Icons.close, size: 20),
-                                color: AppColors.gray500,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 40,
-                                  height: 40,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          TextField(
-                            controller: _name,
-                            decoration: transactionFieldDecoration(
-                              'Tranzakció neve',
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          AmountField(controller: _amount),
-                          const SizedBox(height: 18),
-                          CategorySelectorField(
-                            selected: _category,
-                            onTap: _openCategoryPicker,
-                          ),
-                          const SizedBox(height: 18),
-                          DateTimeFields(
-                            dateController: _date,
-                            timeController: _time,
-                            onPickDate: _pickDate,
-                            onPickTime: _pickTime,
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _error!,
-                              style: const TextStyle(color: AppColors.expense),
-                            ),
-                          ],
-                          const Spacer(),
-                          const SizedBox(height: 22),
-                          FilledButton(
-                            onPressed: _saving ? null : _save,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: AppColors.white,
-                              minimumSize: const Size.fromHeight(50),
-                            ),
-                            child: Text(_saving ? 'Mentés...' : 'Mentés'),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _title(type),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.gray800,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _name,
+                        decoration: transactionFieldDecoration(
+                          'Tranzakció neve',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AmountField(controller: _amount),
+                      const SizedBox(height: 16),
+                      CategorySelectorField(
+                        selected: _category,
+                        onTap: _openCategoryPicker,
+                      ),
+                      if (_categoryPickerOpen) ...[
+                        const SizedBox(height: 8),
+                        CategoryScrollPicker(
+                          keyPrefix: 'transaction-category',
+                          categories: categories,
+                          selected: _category,
+                          onSelected: _selectCategory,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      DateTimeFields(
+                        dateController: _date,
+                        timeController: _time,
+                        onPickDate: _pickDate,
+                        onPickTime: _pickTime,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: AppColors.expense),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: _saving ? null : _save,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                        child: Text(_saving ? 'Mentés...' : 'Mentés'),
+                      ),
+                    ],
                   ),
-                    );
-                  },
-                ),
-              ),
+                );
+              },
             ),
-            if (_categoryPickerOpen)
-              CategoryMenuOverlay(
-                store: widget.store,
-                top: 0,
-                bottom: 0,
-                activeType: type,
-                activeCategory: _category,
-                onClose: _closeCategoryPicker,
-                onAdd: _openAddCategory,
-                onModify: _openModifyCategory,
-                onSelect: _selectCategory,
-                onDelete: _deleteCategory,
-              ),
-            if (_categoryEditorOpen)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: CategoryEditorSheet(
-                  activeType: type,
-                  initialCategory: _editingCategory,
-                  panelHeight: _panelHeightFor(context),
-                  onClose: _closeCategoryEditor,
-                  onSave: (draft) => _saveCategory(draft, _editingCategory),
-                  onDelete: _editingCategory == null
-                      ? null
-                      : (category) => _deleteCategory(category),
-                ),
-              ),
-          ],
+          ),
         );
       },
     );
@@ -233,9 +176,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   double _panelHeightFor(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
-    return (screenHeight - TransactionMenuMetrics.overlayTop)
-        .clamp(0.0, screenHeight)
-        .toDouble();
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final requested = 560.0 + math.min(keyboardInset, 180.0);
+    return requested.clamp(0.0, screenHeight).toDouble();
   }
 
   void _resetFields() {
@@ -257,8 +200,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _error = null;
     _saving = false;
     _categoryPickerOpen = false;
-    _categoryEditorOpen = false;
-    _editingCategory = null;
   }
 
   String _title(TransactionType type) {
@@ -296,15 +237,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   void _openCategoryPicker() {
-    setState(() {
-      _categoryPickerOpen = true;
-      _categoryEditorOpen = false;
-      _editingCategory = null;
-    });
-  }
-
-  void _closeCategoryPicker() {
-    setState(() => _categoryPickerOpen = false);
+    setState(() => _categoryPickerOpen = !_categoryPickerOpen);
   }
 
   void _selectCategory(TransactionCategory category) {
@@ -312,86 +245,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _category = category;
       _categoryPickerOpen = false;
     });
-  }
-
-  void _openAddCategory() {
-    setState(() {
-      _categoryPickerOpen = false;
-      _categoryEditorOpen = true;
-      _editingCategory = null;
-    });
-  }
-
-  void _openModifyCategory(TransactionCategory category) {
-    setState(() {
-      _categoryPickerOpen = false;
-      _categoryEditorOpen = true;
-      _editingCategory = category;
-    });
-  }
-
-  void _closeCategoryEditor() {
-    setState(() {
-      _categoryEditorOpen = false;
-      _categoryPickerOpen = true;
-      _editingCategory = null;
-    });
-  }
-
-  Future<void> _saveCategory(
-    CategoryDraft draft, [
-    TransactionCategory? editingCategory,
-  ]) async {
-    final editing = editingCategory;
-    TransactionCategory? addedCategory;
-    if (draft.id == null || editing == null) {
-      await widget.store.addCategory(
-        name: draft.name,
-        type: draft.type,
-        colorSlot: draft.colorSlot,
-        iconSlot: draft.iconSlot,
-      );
-      addedCategory = _findCategoryByDraft(draft);
-    } else {
-      await widget.store.updateCategory(
-        editing,
-        name: draft.name,
-        colorSlot: draft.colorSlot,
-        iconSlot: draft.iconSlot,
-      );
-    }
-    if (!mounted) return;
-    setState(() {
-      _category = addedCategory ?? _category;
-      _categoryEditorOpen = false;
-      _categoryPickerOpen = true;
-      _editingCategory = null;
-    });
-  }
-
-  Future<void> _deleteCategory(TransactionCategory category) async {
-    final deleted = await widget.store.deleteCategory(category);
-    if (!mounted || !deleted) return;
-    setState(() {
-      if (_category?.transactionCategoryID == category.transactionCategoryID) {
-        _category = null;
-      }
-      _categoryEditorOpen = false;
-      _categoryPickerOpen = true;
-      _editingCategory = null;
-    });
-  }
-
-  TransactionCategory? _findCategoryByDraft(CategoryDraft draft) {
-    for (final category in widget.store.categories) {
-      if (category.name == draft.name &&
-          category.normalizedType == draft.type &&
-          category.colorSlot == draft.colorSlot &&
-          category.iconSlot == draft.iconSlot) {
-        return category;
-      }
-    }
-    return null;
   }
 
   Future<void> _pickDate() async {

@@ -499,10 +499,10 @@ void main() {
         trackHeight / 2;
     final trackBottom = trackTop + trackHeight;
 
-    expect(magnet.top, moreOrLessEquals(45, epsilon: 0.1));
+    expect(magnet.top, moreOrLessEquals(41, epsilon: 0.1));
     expect(balanceLabel.center.dy, greaterThanOrEqualTo(trackTop));
     expect(balanceLabel.center.dy, lessThanOrEqualTo(trackBottom));
-    expect(balanceText.top, greaterThanOrEqualTo(trackBottom + 4));
+    expect(balanceText.top, greaterThanOrEqualTo(trackBottom));
   });
 
 }

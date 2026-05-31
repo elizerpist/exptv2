@@ -59,7 +59,7 @@ void main() {
     expect(veil.color, Colors.black.withValues(alpha: 0.28));
   });
 
-  testWidgets('slide card ignores drag gestures outside the handle zone', (
+  testWidgets('slide card can be dragged from the content area', (
     tester,
   ) async {
     var dismissed = false;
@@ -91,20 +91,101 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final before = tester
-        .getTopLeft(find.byKey(const ValueKey('test-slide-card')))
-        .dy;
-    await tester.drag(
-      find.byKey(const ValueKey('slide-card-content-button')),
-      const Offset(0, 140),
+    final before = _slideCardTranslationY(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('slide-card-content-button'))),
+    );
+    await gesture.moveBy(const Offset(0, 120));
+    await tester.pump();
+
+    final dragged = _slideCardTranslationY(tester);
+    expect(dragged, greaterThan(before + 100));
+
+    await gesture.moveBy(const Offset(0, -180));
+    await tester.pump();
+
+    final clampedBack = _slideCardTranslationY(tester);
+    expect(clampedBack, moreOrLessEquals(before, epsilon: 0.1));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('slide card can be manually dragged nearly off screen', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              panelHeight: 360,
+              child: const SizedBox(height: 360),
+            ),
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
-    final after = tester
-        .getTopLeft(find.byKey(const ValueKey('test-slide-card')))
-        .dy;
 
-    expect(after, moreOrLessEquals(before, epsilon: 0.1));
-    expect(dismissed, isFalse);
+    const panelTop = 600 - 360.0;
+    final gesture = await tester.startGesture(
+      const Offset(180, panelTop + 150),
+    );
+    await gesture.moveBy(const Offset(0, 320));
+    await tester.pump();
+
+    expect(_slideCardTranslationY(tester), greaterThan(300));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('slide card dismissal continues from the dragged offset', (
+    tester,
+  ) async {
+    var dismissed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              panelHeight: 320,
+              onDismissed: () => dismissed = true,
+              child: const SizedBox(height: 320),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const panelTop = 600 - 320.0;
+    final gesture = await tester.startGesture(
+      const Offset(180, panelTop + 140),
+    );
+    await gesture.moveBy(const Offset(0, 170));
+    await tester.pump();
+    final dragged = _slideCardTranslationY(tester);
+
+    await gesture.up();
+    await tester.pump();
+
+    final afterRelease = _slideCardTranslationY(tester);
+    expect(afterRelease, greaterThanOrEqualTo(dragged - 1));
+
+    await tester.pumpAndSettle();
+    expect(dismissed, isTrue);
+    expect(find.byKey(const ValueKey('test-slide-card')), findsNothing);
   });
 
   testWidgets('slide card animates partial drag snap back instead of jumping', (

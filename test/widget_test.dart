@@ -216,7 +216,7 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
-  testWidgets('transaction category field opens category menu picker', (
+  testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -230,16 +230,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-category-option-6')),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
       findsOneWidget,
@@ -291,13 +300,14 @@ void main() {
 
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
     expect(find.byType(BottomSheet), findsNothing);
-    expect(editorTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+    expect(editorTop, greaterThan(summaryTop + 20));
     expect(
       editorRect.bottom,
       moreOrLessEquals(
         tester.view.physicalSize.height / tester.view.devicePixelRatio,
       ),
     );
+    expect(editorRect.height, lessThan(600));
   });
 
   testWidgets('transaction editor drags down to close', (tester) async {

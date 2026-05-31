@@ -139,6 +139,11 @@ void main() {
     expect(find.text('Ismétlődő tranzakciók'), findsOneWidget);
     expect(find.text('Új ismétlődő kiadás hozzáadása'), findsOneWidget);
     expect(find.text('Lakbér'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-category-scroll-list')),
+      findsOneWidget,
+    );
+    expect(find.byType(DropdownButtonFormField), findsNothing);
 
     final colorDot = tester.widget<Container>(
       find.descendant(
