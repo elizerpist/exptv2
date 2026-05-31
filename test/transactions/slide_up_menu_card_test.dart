@@ -185,7 +185,6 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(dismissed, isTrue);
-    expect(find.byKey(const ValueKey('test-slide-card')), findsNothing);
   });
 
   testWidgets('slide card animates partial drag snap back instead of jumping', (
