@@ -149,30 +149,32 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                     onPointerCancel: (_) => _snapBack(reason: 'cancel'),
                     child: KeyedSubtree(
                       key: widget.cardKey,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(30),
-                          ),
-                          border: Border.all(color: AppColors.gray200),
-                          boxShadow: widget.zIndexShadow
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: 0.14,
+                      child: SizedBox.expand(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(30),
+                            ),
+                            border: Border.all(color: AppColors.gray200),
+                            boxShadow: widget.zIndexShadow
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.14,
+                                      ),
+                                      offset: const Offset(0, -2),
+                                      blurRadius: 12,
                                     ),
-                                    offset: const Offset(0, -2),
-                                    blurRadius: 12,
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(30),
+                                  ]
+                                : null,
                           ),
-                          child: widget.child,
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(30),
+                            ),
+                            child: widget.child,
+                          ),
                         ),
                       ),
                     ),

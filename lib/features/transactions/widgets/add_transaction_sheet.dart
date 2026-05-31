@@ -177,7 +177,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   double _panelHeightFor(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final requested = 560.0 + math.min(keyboardInset, 180.0);
+    final baseHeight = math.min(480.0, screenHeight * 0.52);
+    final requested = baseHeight + math.min(keyboardInset, 180.0);
     return requested.clamp(0.0, screenHeight).toDouble();
   }
 

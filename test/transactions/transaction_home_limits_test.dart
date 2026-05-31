@@ -454,6 +454,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.savedLimits, isEmpty);
 
+    await tester.enterText(
+      find.byKey(const ValueKey('limit-amount-input')),
+      '700',
+    );
+    await tester.pumpAndSettle();
+    expect(repository.savedLimits, isEmpty);
+
     await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
 
