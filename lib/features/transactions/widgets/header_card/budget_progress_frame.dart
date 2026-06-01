@@ -20,11 +20,11 @@ class BudgetProgressFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!progress.hasLimit) return const SizedBox.shrink();
     const borderWidth = 2.0;
-    final innerRadius = (height / 2) - borderWidth;
+    final innerRadius = height / 2;
     return Container(
       key: const ValueKey('budget-progress-frame'),
       height: height,
-      padding: const EdgeInsets.all(borderWidth),
+      padding: EdgeInsets.zero,
       decoration: BoxDecoration(
         color: AppColors.gray200,
         borderRadius: BorderRadius.circular(height / 2),

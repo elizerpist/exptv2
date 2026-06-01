@@ -307,7 +307,7 @@ void main() {
     final segmentRect = tester.getRect(
       find.byKey(const ValueKey('budget-progress-frame-segment-0')),
     );
-    expect(segmentRect.height, greaterThan(frameRect.height - 8));
+    expect(segmentRect.height, moreOrLessEquals(frameRect.height));
     final segmentColor = tester.widget<ColoredBox>(
       find.descendant(
         of: find.byKey(const ValueKey('budget-progress-frame-segment-0')),

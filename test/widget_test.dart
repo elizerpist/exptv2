@@ -381,7 +381,7 @@ void main() {
     expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
   });
 
-  testWidgets('type pills stay behind the focused transaction editor', (
+  testWidgets('outside tap on type pills dismisses the focused transaction editor', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -393,6 +393,11 @@ void main() {
     await tester.tap(find.text('Bevétel'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsNothing,
+    );
+    await _tapFab(tester);
     expect(find.text('Új kiadási tranzakció'), findsOneWidget);
     expect(find.text('Új bevételi tranzakció'), findsNothing);
   });
