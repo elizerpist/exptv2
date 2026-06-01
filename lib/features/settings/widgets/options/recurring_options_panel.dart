@@ -5,6 +5,7 @@ import '../../models/recurring_transaction.dart';
 import '../../../transactions/models/transaction_category.dart';
 import '../../../transactions/slots/category_color_resolver.dart';
 import '../../../transactions/widgets/category_scroll_picker.dart';
+import '../../../transactions/widgets/category_selector_field.dart';
 import '../../state/settings_store.dart';
 import 'settings_option_widgets.dart';
 
@@ -23,6 +24,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
   final _dayController = TextEditingController(text: '1');
   TransactionCategory? _selectedCategory;
   RecurringTransaction? _editing;
+  var _categoryPickerOpen = false;
 
   @override
   void initState() {
@@ -174,13 +176,26 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
             ),
           ),
           const SizedBox(height: 8),
-          CategoryScrollPicker(
-            keyPrefix: 'recurring-category',
-            categories: categories,
+          CategorySelectorField(
+            selectorKey: const ValueKey('recurring-category-selector'),
             selected: selected,
-            maxHeight: 180,
-            onSelected: (value) => setState(() => _selectedCategory = value),
+            onTap: () => setState(
+              () => _categoryPickerOpen = !_categoryPickerOpen,
+            ),
           ),
+          if (_categoryPickerOpen) ...[
+            const SizedBox(height: 8),
+            CategoryScrollPicker(
+              keyPrefix: 'recurring-category',
+              categories: categories,
+              selected: selected,
+              maxHeight: 180,
+              onSelected: (value) => setState(() {
+                _selectedCategory = value;
+                _categoryPickerOpen = false;
+              }),
+            ),
+          ],
         ],
       ),
     );
@@ -202,6 +217,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
     if (!mounted) return;
     setState(() {
       _editing = null;
+      _categoryPickerOpen = false;
       _nameController.clear();
       _amountController.clear();
       _dayController.text = '1';
@@ -211,6 +227,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
   void _edit(RecurringTransaction transaction) {
     setState(() {
       _editing = transaction;
+      _categoryPickerOpen = false;
       _nameController.text = transaction.name;
       _amountController.text = transaction.amount.toStringAsFixed(0);
       _dayController.text = transaction.dayOfMonth.toString();

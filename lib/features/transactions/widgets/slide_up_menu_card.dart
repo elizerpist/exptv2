@@ -16,6 +16,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.debugLabel,
     this.panelHeight,
     this.dragHandleExtent = 56,
+    this.entryDuration = const Duration(milliseconds: 192),
     this.showFocusVeil = true,
     this.focusVeilOpacity = 0.28,
     this.dragExclusionKeys = const <GlobalKey>[],
@@ -28,6 +29,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final String? debugLabel;
   final double? panelHeight;
   final double dragHandleExtent;
+  final Duration entryDuration;
   final bool showFocusVeil;
   final double focusVeilOpacity;
   final List<GlobalKey> dragExclusionKeys;
@@ -71,7 +73,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     _dragDy = ValueNotifier<double>(0);
     _entry = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 192),
+      duration: widget.entryDuration,
       reverseDuration: const Duration(milliseconds: 160),
     )..addStatusListener(_logEntryStatus);
     _snapBackController = AnimationController(

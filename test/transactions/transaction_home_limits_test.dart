@@ -221,7 +221,8 @@ void main() {
     final card = tester.getRect(
       find.byKey(const ValueKey('budget-target-editor-card')),
     );
-    expect(card.top, greaterThan(summaryTop + 80));
+    expect(card.top, greaterThan(summaryTop + 70));
+    expect(card.height, greaterThan(400));
     expect(card.bottom, moreOrLessEquals(844, epsilon: 0.1));
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
     final veil = tester.widget<ColoredBox>(
@@ -242,8 +243,8 @@ void main() {
         matching: find.byType(AnimatedOpacity),
       ),
     );
-    expect(balanceOpacity.opacity, 1);
-    expect(categoryOpacity.opacity, 1);
+    expect(balanceOpacity.opacity, 0);
+    expect(categoryOpacity.opacity, 0);
     expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
   });

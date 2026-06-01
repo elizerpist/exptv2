@@ -1,5 +1,6 @@
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -245,6 +246,17 @@ void main() {
 
     await _tapFab(tester);
 
+    final slideCard = tester.widget<SlideUpMenuCard>(
+      find.byType(SlideUpMenuCard),
+    );
+    expect(slideCard.entryDuration, const Duration(milliseconds: 120));
+    final cardBefore = tester.getRect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+    );
+    final saveBefore = tester.getRect(
+      find.byKey(const ValueKey('transaction-save-button')),
+    );
+
     await tester.tap(
       find.byKey(const ValueKey('transaction-category-selector')),
     );
@@ -263,11 +275,17 @@ void main() {
     final editorRect = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );
+    final saveAfter = tester.getRect(
+      find.byKey(const ValueKey('transaction-save-button')),
+    );
     final pickerRect = tester.getRect(
       find.byKey(const ValueKey('transaction-category-scroll-list')),
     );
+    expect(editorRect.top, lessThan(cardBefore.top));
+    expect(saveAfter.top, moreOrLessEquals(saveBefore.top, epsilon: 1));
+    expect(saveAfter.bottom, moreOrLessEquals(saveBefore.bottom, epsilon: 1));
     expect(pickerRect.height, greaterThanOrEqualTo(204));
-    expect(pickerRect.bottom, lessThanOrEqualTo(editorRect.bottom - 8));
+    expect(pickerRect.bottom, lessThanOrEqualTo(saveAfter.top - 12));
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('transaction-category-scroll-list')),

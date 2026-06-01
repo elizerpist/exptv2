@@ -8,16 +8,18 @@ class CategorySelectorField extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onTap,
+    this.selectorKey = const ValueKey('transaction-category-selector'),
   });
 
   final TransactionCategory? selected;
   final VoidCallback onTap;
+  final Key selectorKey;
 
   @override
   Widget build(BuildContext context) {
     final category = selected;
     return InkWell(
-      key: const ValueKey('transaction-category-selector'),
+      key: selectorKey,
       onTap: onTap,
       borderRadius: BorderRadius.circular(25),
       child: InputDecorator(

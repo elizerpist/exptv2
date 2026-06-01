@@ -140,10 +140,28 @@ void main() {
     expect(find.text('Új ismétlődő kiadás hozzáadása'), findsOneWidget);
     expect(find.text('Lakbér'), findsOneWidget);
     expect(
+      find.byKey(const ValueKey('recurring-category-selector')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('recurring-category-scroll-list')),
+      findsNothing,
+    );
+    expect(find.byType(DropdownButtonFormField), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('recurring-category-selector')));
+    await tester.pumpAndSettle();
+    expect(
       find.byKey(const ValueKey('recurring-category-scroll-list')),
       findsOneWidget,
     );
-    expect(find.byType(DropdownButtonFormField), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('recurring-category-option-6')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('recurring-category-scroll-list')),
+      findsNothing,
+    );
 
     final colorDot = tester.widget<Container>(
       find.descendant(

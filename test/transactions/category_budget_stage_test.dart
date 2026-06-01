@@ -5,6 +5,7 @@ import 'package:exptv2/features/transactions/models/category_budget_bar_data.dar
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/overview_budget_data.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/budget_bar_geometry.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_budget_bar.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_budget_stage.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
@@ -307,7 +308,22 @@ void main() {
     final segmentRect = tester.getRect(
       find.byKey(const ValueKey('budget-progress-frame-segment-0')),
     );
+    final maskRect = tester.getRect(
+      find.byKey(const ValueKey('budget-progress-frame-mask')),
+    );
+    final barRect = tester.getRect(
+      find.byKey(const ValueKey('category-budget-bar')),
+    );
+    expect(
+      frameRect.height,
+      moreOrLessEquals(BudgetBarGeometry.barHeight * 1.10, epsilon: 0.1),
+    );
     expect(segmentRect.height, moreOrLessEquals(frameRect.height));
+    expect(maskRect, equals(barRect));
+    expect(
+      find.byKey(const ValueKey('budget-progress-frame-border')),
+      findsNothing,
+    );
     final segmentColor = tester.widget<ColoredBox>(
       find.descendant(
         of: find.byKey(const ValueKey('budget-progress-frame-segment-0')),
@@ -317,6 +333,37 @@ void main() {
     expect(segmentColor.color, segmentColor.color.withValues(alpha: 1));
     expect(find.text('Budget'), findsOneWidget);
     expect(find.text('75 Ft / 100 Ft'), findsOneWidget);
+  });
+
+  testWidgets('stage renders warning border only when overview is high', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: [
+                BackheaderBudgetItem.overview(
+                  overviewFixture(BudgetGoalKind.expenseBudget, 80, 100),
+                ),
+                BackheaderBudgetItem.category(barFixture(6, 'Food', 80, 0)),
+              ],
+              categoryBars: [barFixture(6, 'Food', 80, 0)],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final border = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('budget-progress-frame-border')),
+    );
+    final decoration = border.decoration as BoxDecoration;
+    expect(decoration.border!.top.color, const Color(0xffff9800));
   });
 
   testWidgets('stage hides background progress frame without overview limit', (

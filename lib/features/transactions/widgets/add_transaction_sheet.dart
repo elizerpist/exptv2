@@ -79,6 +79,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           cardKey: const ValueKey('transaction-editor-card'),
           debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
           panelHeight: _panelHeightFor(context),
+          entryDuration: const Duration(milliseconds: 120),
           dragExclusionKeys: _categoryPickerOpen
               ? [_categoryPickerBoundaryKey]
               : const <GlobalKey>[],
@@ -89,86 +90,107 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             child: Builder(
               builder: (context) {
                 final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-                return SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: keyboardInset + 24,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 42,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: AppColors.gray200,
-                            borderRadius: BorderRadius.circular(2),
+                return Column(
+                  children: [
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            reverse: true,
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Center(
+                                    child: Container(
+                                      width: 42,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.gray200,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _title(type),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.gray800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  TextField(
+                                    controller: _name,
+                                    decoration: transactionFieldDecoration(
+                                      'Tranzakció neve',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  AmountField(controller: _amount),
+                                  const SizedBox(height: 16),
+                                  CategorySelectorField(
+                                    selected: _category,
+                                    onTap: _openCategoryPicker,
+                                  ),
+                                  if (_categoryPickerOpen) ...[
+                                    const SizedBox(height: 8),
+                                    CategoryScrollPicker(
+                                      key: _categoryPickerBoundaryKey,
+                                      keyPrefix: 'transaction-category',
+                                      categories: categories,
+                                      selected: _category,
+                                      onSelected: _selectCategory,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(20, 16, 20, keyboardInset + 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          DateTimeFields(
+                            dateController: _date,
+                            timeController: _time,
+                            onPickDate: _pickDate,
+                            onPickTime: _pickTime,
                           ),
-                        ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: AppColors.expense),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            key: const ValueKey('transaction-save-button'),
+                            onPressed: _saving ? null : _save,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.white,
+                              minimumSize: const Size.fromHeight(50),
+                            ),
+                            child: Text(_saving ? 'Mentés...' : 'Mentés'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _title(type),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gray800,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      TextField(
-                        controller: _name,
-                        decoration: transactionFieldDecoration(
-                          'Tranzakció neve',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      AmountField(controller: _amount),
-                      const SizedBox(height: 16),
-                      CategorySelectorField(
-                        selected: _category,
-                        onTap: _openCategoryPicker,
-                      ),
-                      if (_categoryPickerOpen) ...[
-                        const SizedBox(height: 8),
-                        CategoryScrollPicker(
-                          key: _categoryPickerBoundaryKey,
-                          keyPrefix: 'transaction-category',
-                          categories: categories,
-                          selected: _category,
-                          onSelected: _selectCategory,
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      DateTimeFields(
-                        dateController: _date,
-                        timeController: _time,
-                        onPickDate: _pickDate,
-                        onPickTime: _pickTime,
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _error!,
-                          style: const TextStyle(color: AppColors.expense),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: _saving ? null : _save,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.white,
-                          minimumSize: const Size.fromHeight(50),
-                        ),
-                        child: Text(_saving ? 'Mentés...' : 'Mentés'),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               },
             ),

@@ -370,7 +370,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     bool drawSurface = true,
     double? slideProgress,
   }) {
-    final hideHeaderContent = _headerExpanded && _budgetEditorItem == null;
+    final hideHeaderContent = _headerExpanded;
     return TransactionHeaderCard(
       balanceText: widget.store.totalBalanceText,
       expanded: hideHeaderContent,

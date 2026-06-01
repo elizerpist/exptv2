@@ -20,6 +20,7 @@ class BudgetProgressFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!progress.hasLimit) return const SizedBox.shrink();
     const borderWidth = 2.0;
+    final borderColor = _borderColor();
     final radius = BorderRadius.circular(height / 2);
     return SizedBox(
       key: const ValueKey('budget-progress-frame'),
@@ -69,27 +70,26 @@ class BudgetProgressFrame extends StatelessWidget {
               },
             ),
           ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: radius,
-              border: Border.all(color: _borderColor(), width: borderWidth),
+          if (borderColor != null)
+            DecoratedBox(
+              key: const ValueKey('budget-progress-frame-border'),
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: borderColor, width: borderWidth),
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Color _borderColor() {
+  Color? _borderColor() {
     if (kind.warnsWhenHigh && progress.isDanger) {
       return const Color(0xffff4444);
     }
     if (kind.warnsWhenHigh && progress.isWarning) {
       return const Color(0xffff9800);
     }
-    if (!kind.warnsWhenHigh && progress.isSuccess) {
-      return const Color(0xff10b981);
-    }
-    return AppColors.white;
+    return null;
   }
 }

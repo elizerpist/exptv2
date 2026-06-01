@@ -134,7 +134,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   double _panelHeightFor(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final requested = 400 + math.min(keyboardInset, 180);
+    final requested = 420 + math.min(keyboardInset, 180);
     return math.min(screenHeight, requested).toDouble();
   }
 

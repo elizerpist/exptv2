@@ -142,7 +142,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               ],
             ),
           ),
-          if (frameProgress != null && frameOverview != null)
+          if (frameProgress != null && frameOverview != null) ...[
             Positioned(
               top: BudgetBarGeometry.frameTop,
               left: BudgetBarGeometry.frameHorizontalInset,
@@ -153,6 +153,22 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 height: BudgetBarGeometry.frameHeight,
               ),
             ),
+            Positioned(
+              top: BudgetBarGeometry.barTop,
+              left: BudgetBarGeometry.barHorizontalInset,
+              right: BudgetBarGeometry.barHorizontalInset,
+              child: SizedBox(
+                key: const ValueKey('budget-progress-frame-mask'),
+                height: BudgetBarGeometry.barHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.gray100,
+                    borderRadius: BorderRadius.circular(BudgetBarGeometry.radius),
+                  ),
+                ),
+              ),
+            ),
+          ],
           Positioned(
             top: BudgetBarGeometry.barTop,
             left: BudgetBarGeometry.barHorizontalInset,
