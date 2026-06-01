@@ -44,6 +44,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   var _categoryEditorOpen = false;
   var _homeBlockingOverlayOpen = false;
   var _budgetEditorOpenRequest = 0;
+  var _fabDoubleTapCaptureActive = false;
+  Timer? _fabDoubleTapCaptureTimer;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
@@ -62,6 +64,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _fabDoubleTapCaptureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _transactionStore.dispose();
     super.dispose();
@@ -107,43 +110,72 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _selectTab(AppTab tab) {
     if (_activeTab == tab) return;
+    _fabDoubleTapCaptureTimer?.cancel();
+    _fabDoubleTapCaptureTimer = null;
     setState(() {
       _activeTab = tab;
       _transactionEditorOpen = false;
       _categoryEditorOpen = false;
       _homeBlockingOverlayOpen = false;
+      _fabDoubleTapCaptureActive = false;
       _editingTransaction = null;
     });
   }
 
   void _handleFabPressed() {
     DebugConsole.log('[SlideUpMenu] AddTransaction shell open requested source=fab');
+    _armFabDoubleTapCapture();
     setState(() {
       _transactionEditorOpen = true;
       _categoryEditorOpen = false;
       _editingTransaction = null;
+      _fabDoubleTapCaptureActive = true;
     });
   }
 
   void _handleFabLongPressed() {
     DebugConsole.log('[SlideUpMenu] AddCategory shell open requested source=fabLongPress');
+    _fabDoubleTapCaptureTimer?.cancel();
+    _fabDoubleTapCaptureTimer = null;
     setState(() {
       _transactionEditorOpen = false;
       _categoryEditorOpen = true;
       _editingTransaction = null;
+      _fabDoubleTapCaptureActive = false;
     });
   }
 
   void _handleFabDoubleTapped() {
     DebugConsole.log('[SlideUpMenu] BudgetTargetEditor shell open requested source=fabDoubleTap');
+    _fabDoubleTapCaptureTimer?.cancel();
+    _fabDoubleTapCaptureTimer = null;
     setState(() {
       _activeTab = AppTab.home;
       _transactionEditorOpen = false;
       _categoryEditorOpen = false;
       _editingTransaction = null;
       _homeBlockingOverlayOpen = true;
+      _fabDoubleTapCaptureActive = false;
       _budgetEditorOpenRequest += 1;
     });
+  }
+
+  void _armFabDoubleTapCapture() {
+    _fabDoubleTapCaptureTimer?.cancel();
+    DebugConsole.log(
+      '[FAB] shell double tap catcher armed window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
+    );
+    _fabDoubleTapCaptureTimer = Timer(ExptFab.doubleTapWindow, () {
+      if (!mounted || !_fabDoubleTapCaptureActive) return;
+      DebugConsole.log('[FAB] shell double tap catcher expired');
+      setState(() => _fabDoubleTapCaptureActive = false);
+    });
+  }
+
+  void _handleFabDoubleTapCaptureTap() {
+    if (!_fabDoubleTapCaptureActive) return;
+    DebugConsole.log('[FAB] shell double tap catcher dispatch');
+    _handleFabDoubleTapped();
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
@@ -161,12 +193,16 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void _closeTransactionEditor() {
     setState(() {
       _transactionEditorOpen = false;
+      _fabDoubleTapCaptureActive = false;
       _editingTransaction = null;
     });
   }
 
   void _closeCategoryEditor() {
-    setState(() => _categoryEditorOpen = false);
+    setState(() {
+      _categoryEditorOpen = false;
+      _fabDoubleTapCaptureActive = false;
+    });
   }
 
   Future<void> _saveCategory(CategoryDraft draft) async {
@@ -312,6 +348,22 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 panelHeight: _menuPanelHeight(context),
                 onClose: _closeCategoryEditor,
                 onSave: _saveCategory,
+              ),
+            ),
+          if (_fabDoubleTapCaptureActive && !hideShellNavigation)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: AppDimensions.fabBottom,
+              child: Center(
+                child: SizedBox.square(
+                  key: const ValueKey('expt-fab-double-tap-catcher'),
+                  dimension: AppDimensions.fabSize + 24,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _handleFabDoubleTapCaptureTap,
+                  ),
+                ),
               ),
             ),
         ],

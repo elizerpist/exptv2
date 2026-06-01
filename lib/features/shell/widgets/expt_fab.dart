@@ -67,21 +67,19 @@ class _ExptFabState extends State<ExptFab> {
       final elapsed = _elapsedMs(_pendingTapStartedAt);
       _pendingTapStartedAt = null;
       DebugConsole.log('[FAB] double tap dispatch elapsed=${elapsed}ms');
-      (widget.onDoubleTap ?? widget.onPressed).call();
+      widget.onDoubleTap?.call();
       return;
     }
 
     _pendingTapStartedAt = DateTime.now();
-    DebugConsole.log(
-      '[FAB] tap received single pending window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
-    );
+    DebugConsole.log('[FAB] single tap immediate dispatch');
+    widget.onPressed();
     _singleTapTimer?.cancel();
     _singleTapTimer = Timer(ExptFab.doubleTapWindow, () {
       if (!mounted) return;
       final elapsed = _elapsedMs(_pendingTapStartedAt);
       _pendingTapStartedAt = null;
-      DebugConsole.log('[FAB] single tap dispatch delay=${elapsed}ms');
-      widget.onPressed();
+      DebugConsole.log('[FAB] double tap window expired elapsed=${elapsed}ms');
     });
   }
 
