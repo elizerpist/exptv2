@@ -27,12 +27,19 @@ class DebugConsole {
 
   static void _scheduleNotify() {
     if (_notifyScheduled) return;
+    late final WidgetsBinding binding;
+    try {
+      binding = WidgetsBinding.instance;
+    } on FlutterError {
+      _version.value += 1;
+      return;
+    }
     _notifyScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    binding.addPostFrameCallback((_) {
       _notifyScheduled = false;
       _version.value += 1;
     });
-    WidgetsBinding.instance.scheduleFrame();
+    binding.scheduleFrame();
   }
 
   static List<String> get entries => List.unmodifiable(_entries);
