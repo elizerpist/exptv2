@@ -311,8 +311,6 @@ void main() {
   testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -354,10 +352,12 @@ void main() {
       find.byKey(const ValueKey('transaction-category-scroll-list')),
     );
     expect(editorRect.top, lessThan(cardBefore.top));
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
     expect(
       editorRect.height,
       moreOrLessEquals(
-        SlideUpPanelMetrics.fullHeightForScreen(844),
+        SlideUpPanelMetrics.fullHeightForScreen(screenHeight),
         epsilon: 0.1,
       ),
     );
@@ -365,7 +365,10 @@ void main() {
     expect(saveAfter.bottom, moreOrLessEquals(saveBefore.bottom, epsilon: 1));
     expect(
       saveAfter.bottom,
-      moreOrLessEquals(844 - SlideUpPanelMetrics.actionBottomInset, epsilon: 1),
+      moreOrLessEquals(
+        screenHeight - SlideUpPanelMetrics.actionBottomInset,
+        epsilon: 1,
+      ),
     );
     expect(pickerRect.height, greaterThanOrEqualTo(204));
     expect(pickerRect.bottom, lessThanOrEqualTo(saveAfter.top - 12));
