@@ -439,6 +439,9 @@ void main() {
     final pickerRect = tester.getRect(
       find.byKey(const ValueKey('transaction-category-scroll-list')),
     );
+    final selectorRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-category-selector')),
+    );
     final screenHeight =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
     expect(editorRect.top, lessThan(cardBefore.top));
@@ -460,7 +463,11 @@ void main() {
         epsilon: 1,
       ),
     );
-    expect(pickerRect.height, greaterThanOrEqualTo(204));
+    expect(
+      pickerRect.top,
+      moreOrLessEquals(selectorRect.bottom + 8, epsilon: 1),
+    );
+    expect(pickerRect.height, moreOrLessEquals(211, epsilon: 0.1));
     expect(pickerRect.bottom, lessThanOrEqualTo(saveAfter.top - 12));
 
     await tester.ensureVisible(
@@ -497,6 +504,24 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Q'), findsWidgets);
+  });
+
+  testWidgets('transaction editor keeps date row close to category selector', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await _tapFab(tester);
+
+    final selectorRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-category-selector')),
+    );
+    final dateRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-date-picker-button')),
+    );
+
+    expect(dateRect.top - selectorRect.bottom, lessThanOrEqualTo(24));
   });
 
   testWidgets('category overlay keeps shell navigation controls visible', (

@@ -181,17 +181,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           ),
                           if (_categoryPickerOpen) ...[
                             const SizedBox(height: 8),
-                            Expanded(
-                              child: CategoryScrollPicker(
-                                key: _categoryPickerBoundaryKey,
-                                keyPrefix: 'transaction-category',
-                                categories: categories,
-                                selected: _category,
-                                onSelected: _selectCategory,
-                              ),
+                            CategoryScrollPicker(
+                              key: _categoryPickerBoundaryKey,
+                              keyPrefix: 'transaction-category',
+                              categories: categories,
+                              selected: _category,
+                              onSelected: _selectCategory,
                             ),
-                          ] else
-                            const Spacer(),
+                          ],
                           const SizedBox(height: 14),
                           DateTimeFields(
                             dateController: _date,
@@ -206,6 +203,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               style: const TextStyle(color: AppColors.expense),
                             ),
                           ],
+                          const Spacer(),
                           const SizedBox(height: 18),
                           FilledButton(
                             key: const ValueKey('transaction-save-button'),

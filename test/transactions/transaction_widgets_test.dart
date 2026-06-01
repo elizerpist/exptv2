@@ -354,6 +354,62 @@ void main() {
     expect(filteredCategory, 'Rr');
   });
 
+  testWidgets('log list throttles load more while threshold remains crossed', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+    var loadMoreCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 220,
+          child: TransactionLogList(
+            entries: [
+              TransactionLogEntry.header(record.date),
+              TransactionLogEntry.record(record),
+            ],
+            categoriesById: {category.transactionCategoryID: category},
+            hasMore: true,
+            onLoadMore: () => loadMoreCount += 1,
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(ListView));
+    final metrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 1200,
+      pixels: 900,
+      viewportDimension: 220,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: tester.view.devicePixelRatio,
+    );
+
+    for (var i = 0; i < 3; i += 1) {
+      ScrollUpdateNotification(
+        metrics: metrics,
+        context: context,
+      ).dispatch(context);
+    }
+    await tester.pump();
+
+    expect(loadMoreCount, 1);
+
+    final listView = tester.widget<ListView>(find.byType(ListView));
+    final childDelegate =
+        listView.childrenDelegate as SliverChildBuilderDelegate;
+    expect(listView.cacheExtent, greaterThanOrEqualTo(1000));
+    expect(childDelegate.addAutomaticKeepAlives, isFalse);
+    expect(childDelegate.addSemanticIndexes, isFalse);
+  });
+
   testWidgets('logbox left swipe triggers fast filter with category', (
     tester,
   ) async {

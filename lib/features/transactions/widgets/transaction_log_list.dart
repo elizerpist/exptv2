@@ -8,7 +8,7 @@ import '../models/transaction_record.dart';
 import 'recurring_ghost_log_box.dart';
 import 'transaction_log_box.dart';
 
-class TransactionLogList extends StatelessWidget {
+class TransactionLogList extends StatefulWidget {
   const TransactionLogList({
     super.key,
     this.records = const [],
@@ -41,8 +41,29 @@ class TransactionLogList extends StatelessWidget {
   final bool hasMore;
 
   @override
+  State<TransactionLogList> createState() => _TransactionLogListState();
+}
+
+class _TransactionLogListState extends State<TransactionLogList> {
+  static const _loadMoreThreshold = 720.0;
+  static const _cacheExtent = 1200.0;
+
+  bool _loadMoreScheduled = false;
+  int? _lastRequestedEntryCount;
+
+  @override
+  void didUpdateWidget(covariant TransactionLogList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_sourceEntryCount(oldWidget) != _sourceEntryCount(widget) ||
+        oldWidget.hasMore != widget.hasMore) {
+      _loadMoreScheduled = false;
+      _lastRequestedEntryCount = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final logEntries = entries ?? _entries();
+    final logEntries = widget.entries ?? _entries();
     if (logEntries.isEmpty) {
       return const Center(
         child: Text(
@@ -52,15 +73,12 @@ class TransactionLogList extends StatelessWidget {
       );
     }
     return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (hasMore &&
-            onLoadMore != null &&
-            notification.metrics.extentAfter < 720) {
-          onLoadMore!();
-        }
-        return false;
-      },
+      onNotification: (notification) =>
+          _handleScrollNotification(notification, logEntries.length),
       child: ListView.builder(
+        cacheExtent: _cacheExtent,
+        addAutomaticKeepAlives: false,
+        addSemanticIndexes: false,
         padding: const EdgeInsets.only(bottom: 96),
         itemCount: logEntries.length,
         itemBuilder: (context, index) {
@@ -70,6 +88,7 @@ class TransactionLogList extends StatelessWidget {
           final ghost = entry.ghost;
           if (ghost != null) {
             return RecurringGhostLogBox(
+              key: ValueKey('recurring-ghost-log-row-${ghost.id}'),
               ghost: ghost,
               category: _categoryForId(ghost.categoryId),
             );
@@ -77,26 +96,52 @@ class TransactionLogList extends StatelessWidget {
           final record = entry.record!;
           final category = _categoryForId(record.transactionCategoryID);
           return TransactionLogBox(
+            key: ValueKey('transaction-log-row-${record.id}'),
             record: record,
             category: category,
-            onFastFilter: onFastFilter,
-            onTap: onRecordTap,
-            onDeleteRequested: onDeleteRequested,
-            onCategoryFilter: onCategoryFilter,
-            onRenameMerchant: onRenameMerchant,
-            onResetMerchantName: onResetMerchantName,
+            onFastFilter: widget.onFastFilter,
+            onTap: widget.onRecordTap,
+            onDeleteRequested: widget.onDeleteRequested,
+            onCategoryFilter: widget.onCategoryFilter,
+            onRenameMerchant: widget.onRenameMerchant,
+            onResetMerchantName: widget.onResetMerchantName,
           );
         },
       ),
     );
   }
 
+  bool _handleScrollNotification(
+    ScrollNotification notification,
+    int entryCount,
+  ) {
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical ||
+        !widget.hasMore ||
+        widget.onLoadMore == null ||
+        notification.metrics.extentAfter >= _loadMoreThreshold ||
+        _loadMoreScheduled ||
+        _lastRequestedEntryCount == entryCount) {
+      return false;
+    }
+
+    _loadMoreScheduled = true;
+    _lastRequestedEntryCount = entryCount;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadMoreScheduled = false;
+      if (!widget.hasMore) return;
+      widget.onLoadMore?.call();
+    });
+    return false;
+  }
+
   List<TransactionLogEntry> _entries() {
     final entries = <TransactionLogEntry>[];
     String? previousDate;
     final rows = <TransactionLogEntry>[
-      for (final record in records) TransactionLogEntry.record(record),
-      for (final ghost in ghostRecords) TransactionLogEntry.ghost(ghost),
+      for (final record in widget.records) TransactionLogEntry.record(record),
+      for (final ghost in widget.ghostRecords) TransactionLogEntry.ghost(ghost),
     ];
     rows.sort(_compareEntries);
     for (final row in rows) {
@@ -110,13 +155,16 @@ class TransactionLogList extends StatelessWidget {
   }
 
   TransactionCategory? _categoryForId(int id) {
-    final indexed = categoriesById[id];
+    final indexed = widget.categoriesById[id];
     if (indexed != null) return indexed;
-    for (final category in categories) {
+    for (final category in widget.categories) {
       if (category.transactionCategoryID == id) return category;
     }
     return null;
   }
+
+  int _sourceEntryCount(TransactionLogList list) =>
+      list.entries?.length ?? list.records.length + list.ghostRecords.length;
 }
 
 class _DateHeader extends StatelessWidget {

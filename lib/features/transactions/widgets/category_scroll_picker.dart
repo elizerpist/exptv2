@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -10,8 +12,17 @@ class CategoryScrollPicker extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     required this.keyPrefix,
-    this.maxHeight = 212,
+    this.maxHeight = fourRowHeight,
   });
+
+  static const visibleRowCount = 4;
+  static const itemExtent = 48.0;
+  static const verticalPadding = 8.0;
+  static const separatorExtent = 1.0;
+  static const fourRowHeight =
+      verticalPadding * 2 +
+      itemExtent * visibleRowCount +
+      separatorExtent * (visibleRowCount - 1);
 
   final List<TransactionCategory> categories;
   final TransactionCategory? selected;
@@ -21,8 +32,10 @@ class CategoryScrollPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pickerHeight = categories.isEmpty ? null : _pickerHeight();
     return Container(
       key: ValueKey('$keyPrefix-scroll-list'),
+      height: pickerHeight,
       constraints: BoxConstraints(maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: AppColors.gray50,
@@ -47,32 +60,43 @@ class CategoryScrollPicker extends StatelessWidget {
             )
           : ListView.separated(
               primary: false,
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: verticalPadding),
               itemBuilder: (context, index) {
                 final category = categories[index];
                 final selectedId = selected?.transactionCategoryID;
-                final isSelected =
-                    selectedId == category.transactionCategoryID;
-                return _CategoryScrollPickerItem(
-                  key: ValueKey(
-                    '$keyPrefix-option-${category.transactionCategoryID}',
+                final isSelected = selectedId == category.transactionCategoryID;
+                return SizedBox(
+                  height: itemExtent,
+                  child: _CategoryScrollPickerItem(
+                    key: ValueKey(
+                      '$keyPrefix-option-${category.transactionCategoryID}',
+                    ),
+                    category: category,
+                    selected: isSelected,
+                    onTap: () => onSelected(category),
                   ),
-                  category: category,
-                  selected: isSelected,
-                  onTap: () => onSelected(category),
                 );
               },
               separatorBuilder: (context, index) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Divider(
-                  height: 1,
+                  height: separatorExtent,
                   color: AppColors.gray200.withValues(alpha: 0.65),
                 ),
               ),
               itemCount: categories.length,
             ),
     );
+  }
+
+  double _pickerHeight() {
+    final visibleRows = math.min(categories.length, visibleRowCount);
+    final separatorCount = math.max(visibleRows - 1, 0);
+    final contentHeight =
+        verticalPadding * 2 +
+        itemExtent * visibleRows +
+        separatorExtent * separatorCount;
+    return math.min(maxHeight, contentHeight);
   }
 }
 
@@ -91,7 +115,7 @@ class _CategoryScrollPickerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Material(
         color: selected
             ? category.slotColor.withValues(alpha: 0.12)
@@ -101,7 +125,7 @@ class _CategoryScrollPickerItem extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
                 Container(
