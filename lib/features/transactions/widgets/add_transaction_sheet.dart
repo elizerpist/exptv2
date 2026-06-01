@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
@@ -11,6 +10,7 @@ import 'category_selector_field.dart';
 import 'category_scroll_picker.dart';
 import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
+import 'slide_up_panel_metrics.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
@@ -38,6 +38,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   String? _error;
   var _saving = false;
   var _categoryPickerOpen = false;
+  bool? _lastLoggedPickerOpen;
+  int? _lastLoggedCategoryCount;
+  double? _lastLoggedPanelHeight;
 
   bool get _editing => widget.initialTransaction != null;
 
@@ -74,12 +77,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             .where((category) => category.normalizedType == type)
             .toList();
         _category = _resolvedCategory(categories);
+        final panelHeight = _panelHeightFor(context);
+        _logBuildMetrics(panelHeight, categories.length);
 
         return SlideUpMenuCard(
           cardKey: const ValueKey('transaction-editor-card'),
           debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
-          panelHeight: _panelHeightFor(context),
-          entryDuration: const Duration(milliseconds: 120),
+          panelHeight: panelHeight,
+          entryDuration: const Duration(milliseconds: 90),
           dragExclusionKeys: _categoryPickerOpen
               ? [_categoryPickerBoundaryKey]
               : const <GlobalKey>[],
@@ -97,7 +102,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         builder: (context, constraints) {
                           return SingleChildScrollView(
                             reverse: true,
-                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                            padding: const EdgeInsets.fromLTRB(
+                              SlideUpPanelMetrics.horizontalInset,
+                              20,
+                              SlideUpPanelMetrics.horizontalInset,
+                              0,
+                            ),
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
                                 minHeight: constraints.maxHeight,
@@ -158,7 +168,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.fromLTRB(20, 16, 20, keyboardInset + 24),
+                      padding: EdgeInsets.fromLTRB(
+                        SlideUpPanelMetrics.horizontalInset,
+                        16,
+                        SlideUpPanelMetrics.horizontalInset,
+                        keyboardInset + SlideUpPanelMetrics.actionBottomInset,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -202,13 +217,31 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
 
   double _panelHeightFor(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final compactHeight = math.min(448.0, screenHeight * 0.50);
-    final pickerHeight = math.min(560.0, math.max(500.0, screenHeight * 0.62));
-    final baseHeight = _categoryPickerOpen ? pickerHeight : compactHeight;
-    final requested = baseHeight + math.min(keyboardInset, 180.0);
-    return requested.clamp(0.0, screenHeight).toDouble();
+    return SlideUpPanelMetrics.transactionHeight(
+      context,
+      pickerOpen: _categoryPickerOpen,
+    );
+  }
+
+  void _logBuildMetrics(double panelHeight, int categoryCount) {
+    if (_lastLoggedPickerOpen == _categoryPickerOpen &&
+        _lastLoggedCategoryCount == categoryCount &&
+        _lastLoggedPanelHeight == panelHeight) {
+      return;
+    }
+    _lastLoggedPickerOpen = _categoryPickerOpen;
+    _lastLoggedCategoryCount = categoryCount;
+    _lastLoggedPanelHeight = panelHeight;
+    final editing = _editing;
+    final pickerOpen = _categoryPickerOpen;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[SlideUpMenu] ${editing ? 'EditTransaction' : 'AddTransaction'} sheet build '
+        'editing=$editing picker=$pickerOpen categories=$categoryCount '
+        'requestedPanel=${panelHeight.toStringAsFixed(1)}',
+      );
+    });
   }
 
   void _resetFields() {
@@ -267,10 +300,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   void _openCategoryPicker() {
-    setState(() => _categoryPickerOpen = !_categoryPickerOpen);
+    final next = !_categoryPickerOpen;
+    DebugConsole.log(
+      '[SlideUpMenu] ${_editing ? 'EditTransaction' : 'AddTransaction'} '
+      'category picker ${next ? 'open' : 'close'} requested',
+    );
+    setState(() => _categoryPickerOpen = next);
   }
 
   void _selectCategory(TransactionCategory category) {
+    DebugConsole.log(
+      '[SlideUpMenu] ${_editing ? 'EditTransaction' : 'AddTransaction'} '
+      'category selected id=${category.transactionCategoryID}',
+    );
     setState(() {
       _category = category;
       _categoryPickerOpen = false;

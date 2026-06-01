@@ -1,6 +1,8 @@
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
+import 'package:exptv2/features/shell/widgets/expt_fab.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -236,11 +238,81 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+    final balanceOpacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-balance-text')),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    final categoryOpacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-category-button')),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(balanceOpacity.opacity, 1);
+    expect(categoryOpacity.opacity, 1);
+  });
+
+  testWidgets('FAB single tap dispatches before the old double tap delay', (
+    tester,
+  ) async {
+    var singleTaps = 0;
+    var doubleTaps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(
+              onPressed: () => singleTaps += 1,
+              onDoubleTap: () => doubleTaps += 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 140));
+
+    expect(singleTaps, 1);
+    expect(doubleTaps, 0);
+  });
+
+  testWidgets('FAB quick second tap dispatches only the double tap action', (
+    tester,
+  ) async {
+    var singleTaps = 0;
+    var doubleTaps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(
+              onPressed: () => singleTaps += 1,
+              onDoubleTap: () => doubleTaps += 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 1));
+
+    expect(singleTaps, 0);
+    expect(doubleTaps, 1);
   });
 
   testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -249,7 +321,7 @@ void main() {
     final slideCard = tester.widget<SlideUpMenuCard>(
       find.byType(SlideUpMenuCard),
     );
-    expect(slideCard.entryDuration, const Duration(milliseconds: 120));
+    expect(slideCard.entryDuration, const Duration(milliseconds: 90));
     final cardBefore = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );
@@ -282,8 +354,19 @@ void main() {
       find.byKey(const ValueKey('transaction-category-scroll-list')),
     );
     expect(editorRect.top, lessThan(cardBefore.top));
+    expect(
+      editorRect.height,
+      moreOrLessEquals(
+        SlideUpPanelMetrics.fullHeightForScreen(844),
+        epsilon: 0.1,
+      ),
+    );
     expect(saveAfter.top, moreOrLessEquals(saveBefore.top, epsilon: 1));
     expect(saveAfter.bottom, moreOrLessEquals(saveBefore.bottom, epsilon: 1));
+    expect(
+      saveAfter.bottom,
+      moreOrLessEquals(844 - SlideUpPanelMetrics.actionBottomInset, epsilon: 1),
+    );
     expect(pickerRect.height, greaterThanOrEqualTo(204));
     expect(pickerRect.bottom, lessThanOrEqualTo(saveAfter.top - 12));
 

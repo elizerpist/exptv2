@@ -117,6 +117,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabPressed() {
+    DebugConsole.log('[SlideUpMenu] AddTransaction shell open requested source=fab');
     setState(() {
       _transactionEditorOpen = true;
       _categoryEditorOpen = false;
@@ -125,6 +126,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabLongPressed() {
+    DebugConsole.log('[SlideUpMenu] AddCategory shell open requested source=fabLongPress');
     setState(() {
       _transactionEditorOpen = false;
       _categoryEditorOpen = true;
@@ -133,6 +135,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabDoubleTapped() {
+    DebugConsole.log('[SlideUpMenu] BudgetTargetEditor shell open requested source=fabDoubleTap');
     setState(() {
       _activeTab = AppTab.home;
       _transactionEditorOpen = false;
@@ -144,6 +147,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
+    DebugConsole.log(
+      '[SlideUpMenu] EditTransaction shell open requested source=logbox '
+      'id=${transaction.id}',
+    );
     setState(() {
       _transactionEditorOpen = true;
       _categoryEditorOpen = false;

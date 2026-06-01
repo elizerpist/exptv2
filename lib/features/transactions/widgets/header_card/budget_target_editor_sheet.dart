@@ -14,6 +14,7 @@ import '../../models/transaction_category.dart';
 import '../../slots/category_icon_manager.dart';
 import '../amount_field.dart';
 import '../slide_up_menu_card.dart';
+import '../slide_up_panel_metrics.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_limit_slider.dart';
 
@@ -98,10 +99,10 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             return SingleChildScrollView(
               padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
+                left: SlideUpPanelMetrics.horizontalInset,
+                right: SlideUpPanelMetrics.horizontalInset,
                 top: 20,
-                bottom: keyboardInset + 24,
+                bottom: keyboardInset + SlideUpPanelMetrics.actionBottomInset,
               ),
               child: _BudgetLimitCard(
                 item: _activeItem,
@@ -132,10 +133,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   double _panelHeightFor(BuildContext context) {
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final requested = 420 + math.min(keyboardInset, 180);
-    return math.min(screenHeight, requested).toDouble();
+    return SlideUpPanelMetrics.budgetHeight(context);
   }
 
   List<BackheaderBudgetItem> get _items {

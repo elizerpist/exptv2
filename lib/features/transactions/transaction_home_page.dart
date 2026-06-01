@@ -22,9 +22,9 @@ import 'widgets/header_card/header_fast_info_surface.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
+import 'widgets/slide_up_panel_metrics.dart';
 import 'widgets/summary_pill.dart';
 import 'widgets/transaction_log_list.dart';
-import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_type_pills.dart';
 
 class TransactionHomePage extends StatefulWidget {
@@ -349,10 +349,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
 
   double _menuPanelHeight(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    return (screenHeight - TransactionMenuMetrics.overlayTop)
-        .clamp(0.0, screenHeight)
-        .toDouble();
+    return SlideUpPanelMetrics.fullHeight(context);
   }
 
   void _notifyBlockingOverlay(bool active) {
@@ -520,6 +517,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
+    DebugConsole.log(
+      '[BudgetTargetEditor] open from backheader key=${item.key} '
+      'headerExpanded=$_headerExpanded',
+    );
     setState(() {
       _backheaderActiveKey = item.key;
       _budgetEditorItem = item;
@@ -533,8 +534,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       (candidate) => candidate.overview != null,
       orElse: () => items.first,
     );
+    DebugConsole.log(
+      '[BudgetTargetEditor] open from shell key=${item.key} '
+      'headerExpanded=$_headerExpanded',
+    );
     setState(() {
-      _headerExpanded = true;
       _fastInfoExtent = 0;
       _categoryMode = null;
       _categoryEditorOpen = false;

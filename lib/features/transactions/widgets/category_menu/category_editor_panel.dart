@@ -159,13 +159,44 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 28),
-                Text(
-                  _page == 0 ? 'Válassz színt' : 'Válassz ikont',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.gray500,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      _page == 0 ? 'Válassz színt' : 'Válassz ikont',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.gray500,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    SizedBox.square(
+                      dimension: 32,
+                      child: IconButton(
+                        key: const ValueKey('category-slot-toggle-button'),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 32,
+                          height: 32,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.gray100,
+                          foregroundColor: AppColors.gray700,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: const BorderSide(color: AppColors.gray200),
+                          ),
+                        ),
+                        onPressed: _toggleSlotPage,
+                        icon: Icon(
+                          _page == 0
+                              ? Icons.grid_view_rounded
+                              : Icons.palette_outlined,
+                          size: 17,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 GestureDetector(
@@ -243,6 +274,10 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
         ),
       ],
     );
+  }
+
+  void _toggleSlotPage() {
+    setState(() => _page = _page == 0 ? 1 : 0);
   }
 
   void _save() {
