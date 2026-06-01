@@ -281,7 +281,7 @@ void main() {
             child: CategoryBudgetStage(
               items: [
                 BackheaderBudgetItem.overview(
-                  overviewFixture(BudgetGoalKind.expenseBudget, 75, 100),
+                  overviewFixture(BudgetGoalKind.expenseBudget, 70, 100),
                 ),
                 ...bars.map(BackheaderBudgetItem.category),
               ],
@@ -332,7 +332,7 @@ void main() {
     );
     expect(segmentColor.color, segmentColor.color.withValues(alpha: 1));
     expect(find.text('Budget'), findsOneWidget);
-    expect(find.text('75 Ft / 100 Ft'), findsOneWidget);
+    expect(find.text('70 Ft / 100 Ft'), findsOneWidget);
   });
 
   testWidgets('stage renders warning border only when overview is high', (
