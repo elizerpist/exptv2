@@ -348,35 +348,40 @@ class _NotificationParserRuleEditorState
             const SizedBox(height: 12),
             _ParserPreviewBox(preview: preview),
             const SizedBox(height: 10),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text('Haladó beállítások'),
-              childrenPadding: EdgeInsets.zero,
-              children: [
-                TextFormField(
-                  key: const ValueKey('notification-parser-include-keyword'),
-                  controller: _keywordController,
-                  decoration: const InputDecoration(labelText: 'Kulcsszó'),
-                  onChanged: (value) =>
-                      _emit(widget.profile.copyWith(includeKeyword: value)),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  key: const ValueKey('notification-parser-amount-pattern'),
-                  controller: _amountController,
-                  decoration: const InputDecoration(labelText: 'Összeg regex'),
-                  onChanged: (value) =>
-                      _emit(widget.profile.copyWith(amountPattern: value)),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  key: const ValueKey('notification-parser-merchant-pattern'),
-                  controller: _merchantController,
-                  decoration: const InputDecoration(labelText: 'Bolt regex'),
-                  onChanged: (value) =>
-                      _emit(widget.profile.copyWith(merchantPattern: value)),
-                ),
-              ],
+            Material(
+              color: Colors.transparent,
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Haladó beállítások'),
+                childrenPadding: EdgeInsets.zero,
+                children: [
+                  TextFormField(
+                    key: const ValueKey('notification-parser-include-keyword'),
+                    controller: _keywordController,
+                    decoration: const InputDecoration(labelText: 'Kulcsszó'),
+                    onChanged: (value) =>
+                        _emit(widget.profile.copyWith(includeKeyword: value)),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    key: const ValueKey('notification-parser-amount-pattern'),
+                    controller: _amountController,
+                    decoration: const InputDecoration(
+                      labelText: 'Összeg regex',
+                    ),
+                    onChanged: (value) =>
+                        _emit(widget.profile.copyWith(amountPattern: value)),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    key: const ValueKey('notification-parser-merchant-pattern'),
+                    controller: _merchantController,
+                    decoration: const InputDecoration(labelText: 'Bolt regex'),
+                    onChanged: (value) =>
+                        _emit(widget.profile.copyWith(merchantPattern: value)),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
             FilledButton.icon(
