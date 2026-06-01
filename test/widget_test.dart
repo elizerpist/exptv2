@@ -643,8 +643,11 @@ void main() {
     await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TextFormField), findsOneWidget);
+    expect(find.byType(TextFormField), findsWidgets);
     expect(find.text('App regex'), findsOneWidget);
+    expect(find.text('Teszt értesítés'), findsOneWidget);
+    expect(find.text('Összeg regex'), findsOneWidget);
+    expect(find.text('Bolt regex'), findsOneWidget);
     expect(find.byTooltip('Pick installed app'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Pick installed app'));

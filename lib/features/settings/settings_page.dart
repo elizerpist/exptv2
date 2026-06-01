@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -10,6 +12,7 @@ import 'models/fast_info_config.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/app_filter_control.dart';
+import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/fast_info_options_panel.dart';
 import 'widgets/options/recurring_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
@@ -63,6 +66,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     widget.store.addListener(_onStoreChanged);
+    unawaited(widget.store.loadNotificationParserRule());
     _settingsStore = SettingsStore(SettingsRepository(widget.nativeBridge));
     _settingsStore.addListener(_onStoreChanged);
     _settingsStore.start();
@@ -74,6 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (oldWidget.store != widget.store) {
       oldWidget.store.removeListener(_onStoreChanged);
       widget.store.addListener(_onStoreChanged);
+      unawaited(widget.store.loadNotificationParserRule());
     }
     if (oldWidget.nativeBridge != widget.nativeBridge) {
       _settingsStore.removeListener(_onStoreChanged);
@@ -285,6 +290,14 @@ class _SettingsPageState extends State<SettingsPage> {
             onTextChanged: widget.store.setFilterText,
             onLoadInstalledApps: widget.store.listInstalledApps,
             onAppSelected: widget.store.selectInstalledApp,
+          ),
+          const SizedBox(height: 18),
+          NotificationParserRuleEditor(
+            rule: widget.store.notificationParserRule,
+            preview: widget.store.notificationParserPreview,
+            onChanged: (rule) {
+              unawaited(widget.store.setNotificationParserRule(rule));
+            },
           ),
         ],
       ),

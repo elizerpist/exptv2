@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../features/settings/models/notification_parser_rule.dart';
 import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
@@ -20,7 +21,12 @@ class EventStore extends ChangeNotifier {
   String? filterError;
   RegExp? _lastValidRegex;
   ServiceStatus? status;
+  NotificationParserRule notificationParserRule =
+      NotificationParserRule.defaults();
   bool loading = false;
+
+  NotificationParserPreview get notificationParserPreview =>
+      notificationParserRule.preview;
 
   List<NotificationEvent> get events {
     final regex = filterEnabled ? _lastValidRegex : null;
@@ -36,6 +42,7 @@ class EventStore extends ChangeNotifier {
     _events
       ..clear()
       ..addAll(await _bridge.loadEvents());
+    notificationParserRule = await _bridge.loadNotificationParserRule();
     status = await _bridge.getStatus();
     loading = false;
     notifyListeners();
@@ -58,6 +65,19 @@ class EventStore extends ChangeNotifier {
   }
 
   Future<List<InstalledApp>> listInstalledApps() => _bridge.listInstalledApps();
+
+  Future<void> loadNotificationParserRule() async {
+    notificationParserRule = await _bridge.loadNotificationParserRule();
+    notifyListeners();
+  }
+
+  Future<void> setNotificationParserRule(NotificationParserRule rule) async {
+    notificationParserRule = rule;
+    notifyListeners();
+    if (!rule.preview.isReady) return;
+    notificationParserRule = await _bridge.saveNotificationParserRule(rule);
+    notifyListeners();
+  }
 
   void selectInstalledApp(InstalledApp app) {
     final appName = app.displayName;

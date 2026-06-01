@@ -34,6 +34,7 @@ class MainActivity : FlutterActivity() {
 
         val repository = NotificationEventRepository(this)
         val modeStore = CaptureModeStore(this)
+        val parserRuleStore = NotificationParserRuleStore(this)
         val statusReader = PermissionStatusReader(this)
         val expenseChannel = ExpenseMethodChannel(this, scope)
         val recurringAlarmScheduler = RecurringAlarmScheduler(this)
@@ -54,6 +55,13 @@ class MainActivity : FlutterActivity() {
                     "listInstalledApps" -> scope.launch {
                         val apps = withContext(Dispatchers.IO) { installedApps() }
                         result.success(apps)
+                    }
+                    "loadNotificationParserRule" -> {
+                        result.success(parserRuleStore.load())
+                    }
+                    "saveNotificationParserRule" -> {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        result.success(parserRuleStore.save(args))
                     }
                     "getStatus" -> scope.launch {
                         val status = withContext(Dispatchers.IO) {

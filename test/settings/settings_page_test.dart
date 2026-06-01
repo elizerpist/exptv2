@@ -8,8 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/settings_page_methods');
+  final savedParserRules = <Map<dynamic, dynamic>>[];
 
   setUp(() {
+    savedParserRules.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           switch (call.method) {
@@ -46,6 +48,21 @@ void main() {
                   ],
                 },
               };
+            case 'loadNotificationParserRule':
+              return <String, Object?>{
+                'enabled': true,
+                'sampleText': 'Paid 999 Ft at Corner Shop',
+                'includeKeyword': 'Paid',
+                'amountPattern': r'(?<amount>\d+)\s*Ft',
+                'merchantPattern': r'at\s+(?<merchant>.+)',
+              };
+            case 'saveNotificationParserRule':
+              savedParserRules.add(
+                Map<dynamic, dynamic>.from(
+                  call.arguments as Map<dynamic, dynamic>,
+                ),
+              );
+              return call.arguments;
             case 'expenseListRecurringTransactions':
               return <Map<String, Object?>>[recurringRow()];
             case 'expenseListCategories':
@@ -169,6 +186,47 @@ void main() {
     );
     final decoration = colorDot.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFF0EA5E9));
+  });
+
+  testWidgets('observed app settings contains editable parser rule preview', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('App regex'), findsOneWidget);
+    expect(find.text('Teszt értesítés'), findsOneWidget);
+    expect(find.text('Kulcsszó'), findsOneWidget);
+    expect(find.text('Összeg regex'), findsOneWidget);
+    expect(find.text('Bolt regex'), findsOneWidget);
+    expect(find.text('999 Ft'), findsOneWidget);
+    expect(find.text('Corner Shop'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('notification-parser-include-keyword')),
+      '',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('notification-parser-sample')),
+      'Kártyás vásárlás: Tesco - 12 345 HUF',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('notification-parser-amount-pattern')),
+      r'(?<amount>\d[\d\s]*)\s*HUF',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('notification-parser-merchant-pattern')),
+      r'vásárlás:\s*(?<merchant>[^-]+)\s*-',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('12 345 HUF'), findsOneWidget);
+    expect(find.text('Tesco'), findsOneWidget);
+    expect(savedParserRules, isNotEmpty);
+    expect(savedParserRules.last['includeKeyword'], '');
   });
 }
 
