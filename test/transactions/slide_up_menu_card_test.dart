@@ -59,6 +59,35 @@ void main() {
     expect(veil.color, Colors.black.withValues(alpha: 0.28));
   });
 
+  testWidgets('slide card dismisses when the focus veil is tapped', (
+    tester,
+  ) async {
+    var dismissed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              panelHeight: 260,
+              onDismissed: () => dismissed = true,
+              child: const SizedBox(height: 260),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(24, 24));
+    await tester.pumpAndSettle();
+
+    expect(dismissed, isTrue);
+  });
+
   testWidgets('slide card fades the focus veil while dragged down', (
     tester,
   ) async {

@@ -21,6 +21,7 @@ import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
 import '../transactions/widgets/category_menu/category_editor_panel.dart';
 import '../transactions/widgets/category_menu/category_editor_sheet.dart';
+import '../transactions/widgets/transaction_menu_metrics.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
@@ -180,9 +181,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   double _menuPanelHeight(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final requested = screenHeight * 0.52;
-    final compactHeight = requested < 500.0 ? requested : 500.0;
-    return compactHeight.clamp(0.0, screenHeight).toDouble();
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   Future<bool> _confirmDeleteTransaction(TransactionRecord transaction) async {

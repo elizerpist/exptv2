@@ -182,7 +182,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   double _panelHeightFor(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final baseHeight = math.min(448.0, screenHeight * 0.50);
+    final compactHeight = math.min(448.0, screenHeight * 0.50);
+    final pickerHeight = math.min(560.0, math.max(500.0, screenHeight * 0.62));
+    final baseHeight = _categoryPickerOpen ? pickerHeight : compactHeight;
     final requested = baseHeight + math.min(keyboardInset, 180.0);
     return requested.clamp(0.0, screenHeight).toDouble();
   }

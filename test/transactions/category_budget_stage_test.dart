@@ -301,6 +301,20 @@ void main() {
       find.byKey(const ValueKey('budget-progress-frame-segment-1')),
       findsOneWidget,
     );
+    final frameRect = tester.getRect(
+      find.byKey(const ValueKey('budget-progress-frame')),
+    );
+    final segmentRect = tester.getRect(
+      find.byKey(const ValueKey('budget-progress-frame-segment-0')),
+    );
+    expect(segmentRect.height, greaterThan(frameRect.height - 8));
+    final segmentColor = tester.widget<ColoredBox>(
+      find.descendant(
+        of: find.byKey(const ValueKey('budget-progress-frame-segment-0')),
+        matching: find.byType(ColoredBox),
+      ),
+    );
+    expect(segmentColor.color, segmentColor.color.withValues(alpha: 1));
     expect(find.text('Budget'), findsOneWidget);
     expect(find.text('75 Ft / 100 Ft'), findsOneWidget);
   });

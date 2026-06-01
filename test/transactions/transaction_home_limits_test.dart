@@ -224,6 +224,26 @@ void main() {
     expect(card.top, greaterThan(summaryTop + 80));
     expect(card.bottom, moreOrLessEquals(844, epsilon: 0.1));
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+    final veil = tester.widget<ColoredBox>(
+      find.byKey(const ValueKey('slide-up-menu-veil')),
+    );
+    expect(veil.color, Colors.black.withValues(alpha: 0.28));
+    expect(find.byKey(const ValueKey('header-balance-text')), findsOneWidget);
+    expect(find.byKey(const ValueKey('header-category-button')), findsOneWidget);
+    final balanceOpacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-balance-text')),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    final categoryOpacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-category-button')),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(balanceOpacity.opacity, 1);
+    expect(categoryOpacity.opacity, 1);
     expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
   });

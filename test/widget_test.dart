@@ -260,6 +260,15 @@ void main() {
       findsOneWidget,
     );
 
+    final editorRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+    );
+    final pickerRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
+    );
+    expect(pickerRect.height, greaterThanOrEqualTo(204));
+    expect(pickerRect.bottom, lessThanOrEqualTo(editorRect.bottom - 8));
+
     await tester.ensureVisible(
       find.byKey(const ValueKey('transaction-category-scroll-list')),
     );
@@ -559,6 +568,42 @@ Map<String, Object?> expenseBootstrapPayload() {
         'colorSlot': 7,
         'iconSlot': 2,
         'backgroundColor': '#dc2626',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 7,
+        'name': 'Food',
+        'type': 'kiadás',
+        'colorSlot': 1,
+        'iconSlot': 3,
+        'backgroundColor': '#10b981',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 8,
+        'name': 'Travel',
+        'type': 'kiadás',
+        'colorSlot': 4,
+        'iconSlot': 4,
+        'backgroundColor': '#f59e0b',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 9,
+        'name': 'Bills',
+        'type': 'kiadás',
+        'colorSlot': 5,
+        'iconSlot': 5,
+        'backgroundColor': '#8b5cf6',
         'hasLimit': false,
         'limitAmount': 0,
         'alertActive': false,

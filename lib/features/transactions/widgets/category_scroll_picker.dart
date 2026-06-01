@@ -10,7 +10,7 @@ class CategoryScrollPicker extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     required this.keyPrefix,
-    this.maxHeight = 188,
+    this.maxHeight = 212,
   });
 
   final List<TransactionCategory> categories;

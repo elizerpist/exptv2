@@ -24,6 +24,7 @@ import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/summary_pill.dart';
 import 'widgets/transaction_log_list.dart';
+import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_type_pills.dart';
 
 class TransactionHomePage extends StatefulWidget {
@@ -349,9 +350,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   double _menuPanelHeight(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final requested = screenHeight * 0.52;
-    final compactHeight = requested < 500.0 ? requested : 500.0;
-    return compactHeight.clamp(0.0, screenHeight).toDouble();
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   void _notifyBlockingOverlay(bool active) {
@@ -369,9 +370,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     bool drawSurface = true,
     double? slideProgress,
   }) {
+    final hideHeaderContent = _headerExpanded && _budgetEditorItem == null;
     return TransactionHeaderCard(
       balanceText: widget.store.totalBalanceText,
-      expanded: _headerExpanded,
+      expanded: hideHeaderContent,
       magnetType: expenseTheme.settings.magnetType,
       accent: expenseTheme.accent,
       cardColor: expenseTheme.headerCard,

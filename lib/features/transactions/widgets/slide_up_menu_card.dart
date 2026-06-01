@@ -118,7 +118,13 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () {},
+                  onTap: () {
+                    if (_closing) return;
+                    DebugConsole.log(
+                      '[SlideUpMenu] $_debugLabel veil tap dismiss',
+                    );
+                    _dismiss();
+                  },
                   child: AnimatedBuilder(
                     animation: Listenable.merge([_entry, _dragDy]),
                     builder: (context, child) {

@@ -231,7 +231,7 @@ void main() {
   );
 
   testWidgets(
-    'category modify editor card sits lower than the summary pill top edge',
+    'category modify editor card starts on the summary pill top edge',
     (tester) async {
       final store = TransactionStore(HeaderLayoutRepository());
       await tester.pumpWidget(
@@ -263,7 +263,7 @@ void main() {
       final editorRect = tester.getRect(
         find.byKey(const ValueKey('category-editor-slide-card')),
       );
-      expect(editorRect.top, greaterThan(summaryTop + 20));
+      expect(editorRect.top, moreOrLessEquals(summaryTop, epsilon: 0.1));
       expect(
         editorRect.bottom,
         moreOrLessEquals(_screenHeight(tester), epsilon: 0.1),
