@@ -224,8 +224,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    final fabCenter = tester.getCenter(find.byKey(const ValueKey('expt-fab')));
-    await tester.tapAt(fabCenter);
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(
@@ -233,7 +232,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tapAt(fabCenter);
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
 
     expect(
