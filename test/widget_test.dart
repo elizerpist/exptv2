@@ -261,6 +261,15 @@ void main() {
     );
     expect(balanceOpacity.opacity, 1);
     expect(categoryOpacity.opacity, 1);
+
+    await tester.tap(find.text('Stats'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('stats-page')), findsNothing);
   });
 
   testWidgets('FAB single tap waits through the double tap grace window', (

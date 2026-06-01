@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../models/transaction_category.dart';
@@ -48,6 +51,8 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
   var _page = 0;
   String? _error;
   double _dragDx = 0;
+  double _visualDx = 0;
+  var _slotPageDragging = false;
 
   bool get _editing => widget.initialCategory != null;
 
@@ -202,33 +207,35 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                 GestureDetector(
                   key: const ValueKey('category-slot-page-view'),
                   behavior: HitTestBehavior.opaque,
-                  onHorizontalDragStart: (_) => _dragDx = 0,
-                  onHorizontalDragUpdate: (details) {
-                    _dragDx += details.delta.dx;
-                  },
-                  onHorizontalDragEnd: (_) {
-                    if (_dragDx.abs() > 80) {
-                      setState(() => _page = _page == 0 ? 1 : 0);
-                    }
-                    _dragDx = 0;
-                  },
+                  onHorizontalDragStart: _startSlotPageDrag,
+                  onHorizontalDragUpdate: _updateSlotPageDrag,
+                  onHorizontalDragCancel: _resetSlotPageDrag,
+                  onHorizontalDragEnd: _endSlotPageDrag,
                   child: SizedBox(
                     height: 170,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 120),
-                      child: _page == 0
-                          ? CategorySlotGrid.colors(
-                              key: const ValueKey('color-slot-grid'),
-                              selectedSlot: _colorSlot,
-                              onSelected: (slot) =>
-                                  setState(() => _colorSlot = slot),
-                            )
-                          : CategorySlotGrid.icons(
-                              key: const ValueKey('icon-slot-grid'),
-                              selectedSlot: _iconSlot,
-                              onSelected: (slot) =>
-                                  setState(() => _iconSlot = slot),
-                            ),
+                    child: AnimatedContainer(
+                      key: const ValueKey('category-slot-page-transform'),
+                      duration: _slotPageDragging
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160),
+                      curve: Curves.easeOutCubic,
+                      transform: Matrix4.translationValues(_visualDx, 0, 0),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 120),
+                        child: _page == 0
+                            ? CategorySlotGrid.colors(
+                                key: const ValueKey('color-slot-grid'),
+                                selectedSlot: _colorSlot,
+                                onSelected: (slot) =>
+                                    setState(() => _colorSlot = slot),
+                              )
+                            : CategorySlotGrid.icons(
+                                key: const ValueKey('icon-slot-grid'),
+                                selectedSlot: _iconSlot,
+                                onSelected: (slot) =>
+                                    setState(() => _iconSlot = slot),
+                              ),
+                      ),
                     ),
                   ),
                 ),
@@ -278,6 +285,40 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
 
   void _toggleSlotPage() {
     setState(() => _page = _page == 0 ? 1 : 0);
+  }
+
+  void _startSlotPageDrag(DragStartDetails details) {
+    setState(() {
+      _dragDx = 0;
+      _visualDx = 0;
+      _slotPageDragging = true;
+    });
+  }
+
+  void _updateSlotPageDrag(DragUpdateDetails details) {
+    _dragDx += details.delta.dx;
+    setState(() {
+      _visualDx = (_dragDx * 0.1).clamp(-18.0, 18.0).toDouble();
+    });
+  }
+
+  void _endSlotPageDrag(DragEndDetails details) {
+    final shouldSwitch = _dragDx.abs() > 80;
+    setState(() {
+      if (shouldSwitch) _page = _page == 0 ? 1 : 0;
+      _dragDx = 0;
+      _visualDx = 0;
+      _slotPageDragging = false;
+    });
+    if (shouldSwitch) unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _resetSlotPageDrag() {
+    setState(() {
+      _dragDx = 0;
+      _visualDx = 0;
+      _slotPageDragging = false;
+    });
   }
 
   void _save() {

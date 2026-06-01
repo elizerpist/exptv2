@@ -1,6 +1,7 @@
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_editor_panel.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -51,6 +52,55 @@ void main() {
       expect(saved?.iconSlot, 4);
     },
   );
+
+  testWidgets('category slot swipe slides briefly and triggers haptic', (
+    tester,
+  ) async {
+    final hapticCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'HapticFeedback.vibrate') {
+            hapticCalls.add(call);
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryEditorPanel(
+            activeType: TransactionType.expense,
+            onSave: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('category-slot-page-view'))),
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+
+    final feedback = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('category-slot-page-transform')),
+    );
+    expect(feedback.transform!.getTranslation().x, lessThan(0));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('icon-slot-grid')), findsOneWidget);
+    expect(
+      hapticCalls.map((call) => call.arguments),
+      contains('HapticFeedbackType.selectionClick'),
+    );
+  });
 
   testWidgets('category editor modifies and deletes existing category', (
     tester,

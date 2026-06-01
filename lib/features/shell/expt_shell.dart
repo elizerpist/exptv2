@@ -302,13 +302,43 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     return true;
   }
 
+  List<Widget> _buildShellNavigation() {
+    return [
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: ExptBottomNav(
+          activeTab: _activeTab,
+          onTabSelected: _selectTab,
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: AppDimensions.fabBottom,
+        child: Center(
+          child: ExptFab(
+            onPressed: _handleFabPressed,
+            onLongPress: _handleFabLongPressed,
+            onDoubleTap: _handleFabDoubleTapped,
+          ),
+        ),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+    final homeOverlayCoversShellNavigation =
+        _activeTab == AppTab.home && _homeBlockingOverlayOpen;
+    final shellNavigation = _buildShellNavigation();
     return Scaffold(
       backgroundColor: expenseTheme.appBackground,
       body: Stack(
         children: [
+          if (homeOverlayCoversShellNavigation) ...shellNavigation,
           Positioned.fill(
             child: IndexedStack(
               index: appTabs.indexOf(_activeTab),
@@ -333,27 +363,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               ],
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ExptBottomNav(
-              activeTab: _activeTab,
-              onTabSelected: _selectTab,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: AppDimensions.fabBottom,
-            child: Center(
-              child: ExptFab(
-                onPressed: _handleFabPressed,
-                onLongPress: _handleFabLongPressed,
-                onDoubleTap: _handleFabDoubleTapped,
-              ),
-            ),
-          ),
+          if (!homeOverlayCoversShellNavigation) ...shellNavigation,
           DebugFloatingButton(
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
