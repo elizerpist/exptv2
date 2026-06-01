@@ -9,6 +9,7 @@ class DebugConsole {
   static const _maxEntries = 500;
   static final List<String> _entries = <String>[];
   static final ValueNotifier<int> _version = ValueNotifier<int>(0);
+  static var _notifyScheduled = false;
 
   static void log(String message) {
     final now = DateTime.now();
@@ -16,12 +17,22 @@ class DebugConsole {
         '[${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${(now.millisecond ~/ 10).toString().padLeft(2, '0')}]';
     if (_entries.length >= _maxEntries) _entries.removeAt(0);
     _entries.add('$stamp $message');
-    _version.value += 1;
+    _scheduleNotify();
   }
 
   static void clear() {
     _entries.clear();
-    _version.value += 1;
+    _scheduleNotify();
+  }
+
+  static void _scheduleNotify() {
+    if (_notifyScheduled) return;
+    _notifyScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notifyScheduled = false;
+      _version.value += 1;
+    });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   static List<String> get entries => List.unmodifiable(_entries);

@@ -46,6 +46,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   var _budgetEditorOpenRequest = 0;
   var _fabDoubleTapCaptureActive = false;
   Timer? _fabDoubleTapCaptureTimer;
+  DateTime? _transactionEditorOpenRequestedAt;
+  DateTime? _budgetEditorOpenRequestedAt;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
@@ -123,13 +125,26 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabPressed() {
+    final requestedAt = DateTime.now();
+    _transactionEditorOpenRequestedAt = requestedAt;
     DebugConsole.log('[SlideUpMenu] AddTransaction shell open requested source=fab');
-    _armFabDoubleTapCapture();
+    _armFabDoubleTapCapture(requestedAt);
     setState(() {
       _transactionEditorOpen = true;
       _categoryEditorOpen = false;
       _editingTransaction = null;
       _fabDoubleTapCaptureActive = true;
+    });
+    DebugConsole.log(
+      '[SlideUpMenu] AddTransaction shell state queued '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _transactionEditorOpenRequestedAt != requestedAt) return;
+      DebugConsole.log(
+        '[SlideUpMenu] AddTransaction shell first frame '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
     });
   }
 
@@ -146,6 +161,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabDoubleTapped() {
+    final requestedAt = DateTime.now();
+    _budgetEditorOpenRequestedAt = requestedAt;
     DebugConsole.log('[SlideUpMenu] BudgetTargetEditor shell open requested source=fabDoubleTap');
     _fabDoubleTapCaptureTimer?.cancel();
     _fabDoubleTapCaptureTimer = null;
@@ -158,27 +175,40 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _fabDoubleTapCaptureActive = false;
       _budgetEditorOpenRequest += 1;
     });
+    DebugConsole.log(
+      '[SlideUpMenu] BudgetTargetEditor shell state queued '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
   }
 
-  void _armFabDoubleTapCapture() {
+  void _armFabDoubleTapCapture(DateTime requestedAt) {
     _fabDoubleTapCaptureTimer?.cancel();
     DebugConsole.log(
-      '[FAB] shell double tap catcher armed window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
+      '[FAB] shell double tap catcher armed '
+      'window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
     );
     _fabDoubleTapCaptureTimer = Timer(ExptFab.doubleTapWindow, () {
       if (!mounted || !_fabDoubleTapCaptureActive) return;
-      DebugConsole.log('[FAB] shell double tap catcher expired');
+      DebugConsole.log(
+        '[FAB] shell double tap catcher expired '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
       setState(() => _fabDoubleTapCaptureActive = false);
     });
   }
 
   void _handleFabDoubleTapCaptureTap() {
     if (!_fabDoubleTapCaptureActive) return;
-    DebugConsole.log('[FAB] shell double tap catcher dispatch');
+    DebugConsole.log(
+      '[FAB] shell double tap catcher dispatch '
+      'transactionElapsed=${_elapsedMs(_transactionEditorOpenRequestedAt)}ms',
+    );
     _handleFabDoubleTapped();
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
+    final requestedAt = DateTime.now();
+    _transactionEditorOpenRequestedAt = requestedAt;
     DebugConsole.log(
       '[SlideUpMenu] EditTransaction shell open requested source=logbox '
       'id=${transaction.id}',
@@ -194,6 +224,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _transactionEditorOpen = false;
       _fabDoubleTapCaptureActive = false;
+      _transactionEditorOpenRequestedAt = null;
       _editingTransaction = null;
     });
   }
@@ -227,6 +258,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     return (screenHeight - TransactionMenuMetrics.overlayTop)
         .clamp(0.0, screenHeight)
         .toDouble();
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
   Future<bool> _confirmDeleteTransaction(TransactionRecord transaction) async {
@@ -283,6 +319,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   store: _transactionStore,
                   expenseTheme: expenseTheme,
                   budgetEditorOpenRequest: _budgetEditorOpenRequest,
+                  budgetEditorOpenRequestedAt: _budgetEditorOpenRequestedAt,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
@@ -334,6 +371,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               child: AddTransactionSheet(
                 store: _transactionStore,
                 initialTransaction: _editingTransaction,
+                openRequestedAt: _transactionEditorOpenRequestedAt,
                 onClose: _closeTransactionEditor,
               ),
             ),

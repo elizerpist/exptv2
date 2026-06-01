@@ -2,6 +2,7 @@ import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -225,7 +226,7 @@ void main() {
 
     final fabCenter = tester.getCenter(find.byKey(const ValueKey('expt-fab')));
     await tester.tapAt(fabCenter);
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 220));
 
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
@@ -310,7 +311,7 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 220));
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
@@ -318,7 +319,7 @@ void main() {
     expect(doubleTaps, 1);
   });
 
-  testWidgets('transaction category field opens centered popup picker', (
+  testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -329,7 +330,7 @@ void main() {
     final slideCard = tester.widget<SlideUpMenuCard>(
       find.byType(SlideUpMenuCard),
     );
-    expect(slideCard.entryDuration, const Duration(milliseconds: 90));
+    expect(slideCard.entryDuration, const Duration(milliseconds: 192));
     final cardBefore = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );
@@ -345,7 +346,7 @@ void main() {
     expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
     expect(
       find.byKey(const ValueKey('transaction-category-popup')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('transaction-category-scroll-list')),
@@ -363,25 +364,28 @@ void main() {
       find.byKey(const ValueKey('transaction-save-button')),
     );
     final pickerRect = tester.getRect(
-      find.byKey(const ValueKey('transaction-category-popup')),
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
     );
     final screenHeight =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
-    final screenWidth =
-        tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    expect(editorRect.top, moreOrLessEquals(cardBefore.top, epsilon: 1));
-    expect(editorRect.height, moreOrLessEquals(cardBefore.height, epsilon: 1));
-    expect(saveAfter.top, moreOrLessEquals(saveBefore.top, epsilon: 1));
-    expect(saveAfter.bottom, moreOrLessEquals(saveBefore.bottom, epsilon: 1));
+    expect(editorRect.top, lessThan(cardBefore.top));
     expect(
-      pickerRect.center.dy,
-      moreOrLessEquals(screenHeight / 2, epsilon: 1),
+      editorRect.height,
+      moreOrLessEquals(
+        SlideUpPanelMetrics.fullHeightForScreen(screenHeight),
+        epsilon: 0.1,
+      ),
     );
+    expect(saveAfter.top, moreOrLessEquals(saveBefore.top, epsilon: 1));
     expect(
-      pickerRect.center.dx,
-      moreOrLessEquals(screenWidth / 2, epsilon: 1),
+      saveAfter.bottom,
+      moreOrLessEquals(
+        screenHeight - SlideUpPanelMetrics.actionBottomInset,
+        epsilon: 1,
+      ),
     );
     expect(pickerRect.height, greaterThanOrEqualTo(204));
+    expect(pickerRect.bottom, lessThanOrEqualTo(saveAfter.top - 12));
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('transaction-category-scroll-list')),

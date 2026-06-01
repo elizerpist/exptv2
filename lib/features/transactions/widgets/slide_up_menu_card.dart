@@ -20,6 +20,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.showFocusVeil = true,
     this.focusVeilOpacity = 0.28,
     this.dragExclusionKeys = const <GlobalKey>[],
+    this.openRequestedAt,
   });
 
   final Key cardKey;
@@ -33,6 +34,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final bool showFocusVeil;
   final double focusVeilOpacity;
   final List<GlobalKey> dragExclusionKeys;
+  final DateTime? openRequestedAt;
 
   @override
   State<SlideUpMenuCard> createState() => _SlideUpMenuCardState();
@@ -84,7 +86,9 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       ..addStatusListener(_logSnapBackStatus);
     _openStartedAt = DateTime.now();
     DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel open start duration=${_entry.duration!.inMilliseconds}ms',
+      '[SlideUpMenu] $_debugLabel open start '
+      'duration=${_entry.duration!.inMilliseconds}ms '
+      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
     );
     _entry.forward();
   }

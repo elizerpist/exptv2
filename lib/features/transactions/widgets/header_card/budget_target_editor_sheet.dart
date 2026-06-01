@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/budget_progress_manager.dart';
 import '../../data/limit_allocation_manager.dart';
@@ -23,6 +24,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
     super.key,
     required this.item,
     required this.items,
+    this.openRequestedAt,
     required this.categoryBars,
     required this.periodIncome,
     required this.onCancel,
@@ -34,6 +36,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
 
   final BackheaderBudgetItem item;
   final List<BackheaderBudgetItem> items;
+  final DateTime? openRequestedAt;
   final List<CategoryBudgetBarData> categoryBars;
   final List<OverviewBudgetData> overviewItems;
   final double periodIncome;
@@ -68,6 +71,17 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   @override
   void initState() {
     super.initState();
+    DebugConsole.log(
+      '[BudgetTargetEditor] sheet init '
+      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[BudgetTargetEditor] first frame '
+        'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
+      );
+    });
     _activeKey = widget.item.key;
     final amount = _limitAmountFor(widget.item);
     _controller = TextEditingController(
@@ -90,6 +104,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       cardKey: const ValueKey('budget-target-editor-card'),
       debugLabel: 'BudgetTargetEditor',
       panelHeight: _panelHeightFor(context),
+      openRequestedAt: widget.openRequestedAt,
       onDismissed: widget.onCancel,
       child: SafeArea(
         top: false,
@@ -134,6 +149,11 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   double _panelHeightFor(BuildContext context) {
     return SlideUpPanelMetrics.budgetHeight(context);
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
   List<BackheaderBudgetItem> get _items {
@@ -637,7 +657,10 @@ class _BudgetLimitCard extends StatelessWidget {
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.white,
-            minimumSize: const Size.fromHeight(48),
+            minimumSize: const Size.fromHeight(50),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
+            ),
           ),
           child: Text(saving ? 'Mentés...' : 'Mentés'),
         ),

@@ -18,11 +18,13 @@ class AddTransactionSheet extends StatefulWidget {
     required this.store,
     this.initialTransaction,
     this.onClose,
+    this.openRequestedAt,
   });
 
   final TransactionStore store;
   final TransactionRecord? initialTransaction;
   final VoidCallback? onClose;
+  final DateTime? openRequestedAt;
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -41,6 +43,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool? _lastLoggedPickerOpen;
   int? _lastLoggedCategoryCount;
   double? _lastLoggedPanelHeight;
+  var _firstBuildLogged = false;
 
   bool get _editing => widget.initialTransaction != null;
 
@@ -48,6 +51,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   void initState() {
     super.initState();
     _resetFields();
+    final label = _editing ? 'EditTransaction' : 'AddTransaction';
+    DebugConsole.log(
+      '[SlideUpMenu] $label sheet init '
+      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
+    );
   }
 
   @override
@@ -78,15 +86,17 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             .toList();
         _category = _resolvedCategory(categories);
         final panelHeight = _panelHeightFor(context);
+        _logFirstBuild(panelHeight, categories.length);
         _logBuildMetrics(panelHeight, categories.length);
 
-        return Stack(
-          children: [
-            SlideUpMenuCard(
-              cardKey: const ValueKey('transaction-editor-card'),
+        return SlideUpMenuCard(
+          cardKey: const ValueKey('transaction-editor-card'),
           debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
           panelHeight: panelHeight,
-          entryDuration: const Duration(milliseconds: 90),
+          openRequestedAt: widget.openRequestedAt,
+          dragExclusionKeys: _categoryPickerOpen
+              ? [_categoryPickerBoundaryKey]
+              : const <GlobalKey>[],
           onDismissed: _close,
           child: SafeArea(
             top: false,
@@ -149,6 +159,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                     selected: _category,
                                     onTap: _openCategoryPicker,
                                   ),
+                                  if (_categoryPickerOpen) ...[
+                                    const SizedBox(height: 8),
+                                    CategoryScrollPicker(
+                                      key: _categoryPickerBoundaryKey,
+                                      keyPrefix: 'transaction-category',
+                                      categories: categories,
+                                      selected: _category,
+                                      onSelected: _selectCategory,
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -198,10 +218,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 );
               },
             ),
-            ),
-            ),
-            if (_categoryPickerOpen) _buildCategoryPopup(categories),
-          ],
+          ),
         );
       },
     );
@@ -209,7 +226,29 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
 
   double _panelHeightFor(BuildContext context) {
-    return SlideUpPanelMetrics.transactionHeight(context, pickerOpen: false);
+    return SlideUpPanelMetrics.transactionHeight(
+      context,
+      pickerOpen: _categoryPickerOpen,
+    );
+  }
+
+  void _logFirstBuild(double panelHeight, int categoryCount) {
+    if (_firstBuildLogged) return;
+    _firstBuildLogged = true;
+    final label = _editing ? 'EditTransaction' : 'AddTransaction';
+    final requestElapsed = _elapsedMs(widget.openRequestedAt);
+    DebugConsole.log(
+      '[SlideUpMenu] $label first build '
+      'requestElapsed=${requestElapsed}ms picker=$_categoryPickerOpen '
+      'categories=$categoryCount panel=${panelHeight.toStringAsFixed(1)}',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[SlideUpMenu] $label first frame '
+        'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
+      );
+    });
   }
 
   void _logBuildMetrics(double panelHeight, int categoryCount) {
@@ -231,37 +270,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         'requestedPanel=${panelHeight.toStringAsFixed(1)}',
       );
     });
-  }
-
-  Widget _buildCategoryPopup(List<TransactionCategory> categories) {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              key: const ValueKey('transaction-category-popup-dismiss'),
-              behavior: HitTestBehavior.opaque,
-              onTap: _closeCategoryPicker,
-              child: const SizedBox.expand(),
-            ),
-          ),
-          Center(
-            child: ConstrainedBox(
-              key: const ValueKey('transaction-category-popup'),
-              constraints: const BoxConstraints(maxWidth: 340),
-              child: CategoryScrollPicker(
-                key: _categoryPickerBoundaryKey,
-                keyPrefix: 'transaction-category',
-                maxHeight: 340,
-                categories: categories,
-                selected: _category,
-                onSelected: _selectCategory,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _resetFields() {
@@ -323,18 +331,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final next = !_categoryPickerOpen;
     DebugConsole.log(
       '[SlideUpMenu] ${_editing ? 'EditTransaction' : 'AddTransaction'} '
-      'category popup ${next ? 'open' : 'close'} requested',
+      'category inline ${next ? 'open' : 'close'} requested',
     );
     setState(() => _categoryPickerOpen = next);
-  }
-
-  void _closeCategoryPicker() {
-    if (!_categoryPickerOpen) return;
-    DebugConsole.log(
-      '[SlideUpMenu] ${_editing ? 'EditTransaction' : 'AddTransaction'} '
-      'category popup dismissed',
-    );
-    setState(() => _categoryPickerOpen = false);
   }
 
   void _selectCategory(TransactionCategory category) {
@@ -480,5 +479,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   String _formatTime(DateTime value) {
     return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 }

@@ -14,7 +14,7 @@ class ExptFab extends StatefulWidget {
     this.onDoubleTap,
   });
 
-  static const doubleTapWindow = Duration(milliseconds: 120);
+  static const doubleTapWindow = Duration(milliseconds: 360);
 
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;

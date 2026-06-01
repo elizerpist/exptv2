@@ -29,6 +29,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('limit-save-button'))).height,
+        50,
+      );
       expect(find.byKey(const ValueKey('limit-cancel-button')), findsNothing);
       expect(find.byKey(const ValueKey('limit-alert-toggle')), findsNothing);
       expect(find.byKey(const ValueKey('limit-card-avatar')), findsOneWidget);

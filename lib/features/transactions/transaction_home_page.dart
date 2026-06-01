@@ -33,6 +33,7 @@ class TransactionHomePage extends StatefulWidget {
     required this.store,
     this.expenseTheme,
     this.budgetEditorOpenRequest = 0,
+    this.budgetEditorOpenRequestedAt,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
     this.onBlockingOverlayChanged,
@@ -41,6 +42,7 @@ class TransactionHomePage extends StatefulWidget {
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
   final int budgetEditorOpenRequest;
+  final DateTime? budgetEditorOpenRequestedAt;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
@@ -59,6 +61,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   late final AnimationController _headerSlideController;
   CategoryOverlayMode? _categoryMode;
   BackheaderBudgetItem? _budgetEditorItem;
+  DateTime? _budgetEditorOpenRequestedAt;
   var _categoryEditorOpen = false;
   var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
@@ -81,9 +84,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.budgetEditorOpenRequest != widget.budgetEditorOpenRequest &&
         widget.budgetEditorOpenRequest > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openBudgetEditorFromShellSignal();
-      });
+      _openBudgetEditorFromShellSignal(fromDidUpdateWidget: true);
     }
   }
 
@@ -256,6 +257,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   bottom: 0,
                   child: BudgetTargetEditorSheet(
                     item: _budgetEditorItem!,
+                    openRequestedAt: _budgetEditorOpenRequestedAt,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
                     overviewItems: widget.store.overviewBudgetItems,
@@ -516,40 +518,63 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     }
   }
 
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
+    final requestedAt = DateTime.now();
     DebugConsole.log(
       '[BudgetTargetEditor] open from backheader key=${item.key} '
       'headerExpanded=$_headerExpanded',
     );
     setState(() {
       _backheaderActiveKey = item.key;
+      _budgetEditorOpenRequestedAt = requestedAt;
       _budgetEditorItem = item;
     });
+    DebugConsole.log(
+      '[BudgetTargetEditor] backheader state queued '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
   }
 
-  void _openBudgetEditorFromShellSignal() {
+  void _openBudgetEditorFromShellSignal({bool fromDidUpdateWidget = false}) {
     final items = widget.store.backheaderBudgetItems;
     if (items.isEmpty) return;
+    final requestedAt = widget.budgetEditorOpenRequestedAt ?? DateTime.now();
     final item = items.firstWhere(
       (candidate) => candidate.overview != null,
       orElse: () => items.first,
     );
     DebugConsole.log(
       '[BudgetTargetEditor] open from shell key=${item.key} '
-      'headerExpanded=$_headerExpanded',
+      'headerExpanded=$_headerExpanded '
+      'signalElapsed=${_elapsedMs(requestedAt)}ms',
     );
-    setState(() {
+    void apply() {
       _fastInfoExtent = 0;
       _categoryMode = null;
       _categoryEditorOpen = false;
       _editingCategory = null;
       _backheaderActiveKey = item.key;
+      _budgetEditorOpenRequestedAt = requestedAt;
       _budgetEditorItem = item;
-    });
+    }
+
+    if (fromDidUpdateWidget) {
+      apply();
+      return;
+    }
+    setState(apply);
   }
 
   void _closeBudgetTargetEditor() {
-    setState(() => _budgetEditorItem = null);
+    setState(() {
+      _budgetEditorItem = null;
+      _budgetEditorOpenRequestedAt = null;
+    });
   }
 
   void _openCategoryMenu() {
