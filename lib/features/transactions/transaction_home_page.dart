@@ -349,8 +349,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   double _menuPanelHeight(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final requested = screenHeight * 0.61;
-    final compactHeight = requested < 560.0 ? requested : 560.0;
+    final requested = screenHeight * 0.55;
+    final compactHeight = requested < 520.0 ? requested : 520.0;
     return compactHeight.clamp(0.0, screenHeight).toDouble();
   }
 

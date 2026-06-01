@@ -177,8 +177,7 @@ void main() {
     await tester.tap(find.text('Stats'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
 
     expect(find.text('Új kiadási tranzakció'), findsOneWidget);
     expect(find.text('Tranzakció neve'), findsOneWidget);
@@ -244,8 +243,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
 
     await tester.tap(
       find.byKey(const ValueKey('transaction-category-selector')),
@@ -320,8 +318,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
 
     final summaryTop = tester
         .getRect(find.byKey(const ValueKey('summary-pill')))
@@ -347,8 +344,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
       findsOneWidget,
@@ -373,8 +369,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
     expect(find.text('Új kiadási tranzakció'), findsOneWidget);
 
     await tester.tap(find.text('Bevétel'), warnIfMissed: false);
@@ -431,8 +426,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('transaction-date-picker-button')),
@@ -463,8 +457,7 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
+    await _tapFab(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Tranzakció neve'),
       'New Shop',
@@ -565,6 +558,12 @@ Map<String, Object?> expenseBootstrapPayload() {
     ],
     'transactions': transactions,
   };
+}
+
+Future<void> _tapFab(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('expt-fab')));
+  await tester.pump(const Duration(milliseconds: 350));
+  await tester.pumpAndSettle();
 }
 
 double _slideCardTranslationY(WidgetTester tester) {
