@@ -27,6 +27,12 @@ import 'widgets/summary_pill.dart';
 import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
+typedef BudgetTargetEditorRequest = void Function(
+  BackheaderBudgetItem item, {
+  required DateTime requestedAt,
+  required bool headerExpanded,
+});
+
 class TransactionHomePage extends StatefulWidget {
   const TransactionHomePage({
     super.key,
@@ -35,6 +41,9 @@ class TransactionHomePage extends StatefulWidget {
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
     this.onBlockingOverlayChanged,
+    this.onBudgetTargetEditorRequested,
+    this.onBudgetTargetEditorClosed,
+    this.budgetEditorActiveKey,
   });
 
   final TransactionStore store;
@@ -42,6 +51,9 @@ class TransactionHomePage extends StatefulWidget {
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
+  final BudgetTargetEditorRequest? onBudgetTargetEditorRequested;
+  final VoidCallback? onBudgetTargetEditorClosed;
+  final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
   State<TransactionHomePage> createState() => _TransactionHomePageState();
@@ -72,11 +84,25 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       duration: const Duration(milliseconds: 300),
       reverseDuration: const Duration(milliseconds: 260),
     )..addListener(_syncHeaderSlideFromController);
+    widget.budgetEditorActiveKey?.addListener(_syncBudgetEditorActiveKey);
     widget.store.start();
   }
 
   @override
+  void didUpdateWidget(covariant TransactionHomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.budgetEditorActiveKey != widget.budgetEditorActiveKey) {
+      oldWidget.budgetEditorActiveKey?.removeListener(
+        _syncBudgetEditorActiveKey,
+      );
+      widget.budgetEditorActiveKey?.addListener(_syncBudgetEditorActiveKey);
+      _syncBudgetEditorActiveKey();
+    }
+  }
+
+  @override
   void dispose() {
+    widget.budgetEditorActiveKey?.removeListener(_syncBudgetEditorActiveKey);
     _headerPullController.dispose();
     _headerSlideController.dispose();
     super.dispose();
@@ -118,18 +144,24 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             );
           }
 
+          final visibleTransactions = widget.store.visibleTransactions;
+          final visibleGhostTransactions = widget.store.visibleGhostTransactions;
+          final visibleLogEntries = widget.store.visibleDisplayLogEntries;
           final visibleFastInfoExtent = _fastInfoExtent
               .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
               .toDouble();
           _notifyBlockingOverlay(
-            _categoryEditorOpen || _budgetEditorItem != null,
+            _categoryEditorOpen ||
+                (_budgetEditorItem != null &&
+                    widget.onBudgetTargetEditorRequested == null),
           );
 
           final headerSlideProgress = _headerSlideController.value;
           final showBackheader =
               _headerExpanded || headerSlideProgress > 0.001;
-          final budgetHostItem =
-              _budgetEditorItem ?? _defaultBudgetEditorItem();
+          final budgetHostItem = widget.onBudgetTargetEditorRequested == null
+              ? _budgetEditorItem ?? _defaultBudgetEditorItem()
+              : null;
 
           return Stack(
             clipBehavior: Clip.none,
@@ -163,15 +195,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     merchantFilterColor: _merchantFilterColor(),
                     categoryFilter: widget.store.activeCategory?.name,
                     categoryFilterColor: widget.store.activeCategory?.slotColor,
-                    filteredCount: widget.store.visibleTransactions.length,
+                    filteredCount: visibleTransactions.length,
                     onClearMerchant: widget.store.clearMerchantFilter,
                     onClearCategory: widget.store.clearCategoryFilter,
                   ),
                   Expanded(
                     child: TransactionLogList(
-                      records: widget.store.visibleTransactions,
-                      ghostRecords: widget.store.visibleGhostTransactions,
+                      entries: visibleLogEntries,
+                      records: visibleTransactions,
+                      ghostRecords: visibleGhostTransactions,
                       categories: widget.store.categories,
+                      categoriesById: widget.store.categoriesById,
                       onFastFilter: _setMerchantFastFilter,
                       onRecordTap: _editTransaction,
                       onDeleteRequested: _requestDeleteTransaction,
@@ -283,6 +317,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         },
       ),
     );
+  }
+
+  void _syncBudgetEditorActiveKey() {
+    if (!mounted) return;
+    final nextKey = widget.budgetEditorActiveKey?.value;
+    if (_backheaderActiveKey == nextKey) return;
+    setState(() => _backheaderActiveKey = nextKey);
   }
 
   void _syncHeaderPullFromController() {
@@ -445,6 +486,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     _headerPullController.stop();
     _headerPullController.value = 0;
     widget.store.setActiveType(type);
+    widget.onBudgetTargetEditorClosed?.call();
     setState(() {
       _fastInfoExtent = 0;
       if (_categoryEditorOpen) {
@@ -495,6 +537,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _setBackheaderActiveItem(BackheaderBudgetItem item) {
+    widget.budgetEditorActiveKey?.value = item.key;
     if (!mounted || _backheaderActiveKey == item.key) return;
     setState(() => _backheaderActiveKey = item.key);
   }
@@ -520,6 +563,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       '[BudgetTargetEditor] open from backheader key=${item.key} '
       'headerExpanded=$_headerExpanded',
     );
+    if (widget.onBudgetTargetEditorRequested != null) {
+      widget.onBudgetTargetEditorRequested!(
+        item,
+        requestedAt: requestedAt,
+        headerExpanded: _headerExpanded,
+      );
+      return;
+    }
     setState(() {
       _backheaderActiveKey = item.key;
       _budgetEditorOpenRequestedAt = requestedAt;
@@ -541,6 +592,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   void _openCategoryMenu() {
     _headerPullController.stop();
     _headerPullController.value = 0;
+    widget.onBudgetTargetEditorClosed?.call();
     setState(() {
       if (_categoryMode != null ||
           _categoryEditorOpen ||

@@ -453,6 +453,47 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
+  testWidgets(
+    'external limit editor request does not mark home overlay as blocking',
+    (tester) async {
+      final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 17),
+      );
+      final activeKey = ValueNotifier<String?>(null);
+      final blockingStates = <bool>[];
+      String? requestedTitle;
+      addTearDown(activeKey.dispose);
+
+      await pumpExpandedMonthlyHome(
+        tester,
+        store,
+        onBlockingOverlayChanged: blockingStates.add,
+        budgetEditorActiveKey: activeKey,
+        onBudgetTargetEditorRequested: (
+          item, {
+          required requestedAt,
+          required headerExpanded,
+        }) {
+          requestedTitle = item.title;
+          activeKey.value = item.key;
+        },
+      );
+      blockingStates.clear();
+
+      await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(requestedTitle, 'Budget');
+      expect(blockingStates, isNot(contains(true)));
+      expect(
+        find.byKey(const ValueKey('budget-target-editor-card')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('limit editor discards pending changes when swiped closed', (
     tester,
   ) async {
@@ -571,15 +612,23 @@ void main() {
 
 Future<void> pumpExpandedMonthlyHome(
   WidgetTester tester,
-  TransactionStore store,
-) async {
+  TransactionStore store, {
+  ValueChanged<bool>? onBlockingOverlayChanged,
+  BudgetTargetEditorRequest? onBudgetTargetEditorRequested,
+  ValueNotifier<String?>? budgetEditorActiveKey,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: SizedBox(
           width: 390,
           height: 780,
-          child: TransactionHomePage(store: store),
+          child: TransactionHomePage(
+            store: store,
+            onBlockingOverlayChanged: onBlockingOverlayChanged,
+            onBudgetTargetEditorRequested: onBudgetTargetEditorRequested,
+            budgetEditorActiveKey: budgetEditorActiveKey,
+          ),
         ),
       ),
     ),

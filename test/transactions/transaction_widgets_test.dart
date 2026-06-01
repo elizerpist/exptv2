@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
@@ -246,6 +247,41 @@ void main() {
 
     expect(find.text('2025.09.24'), findsOneWidget);
     expect(find.text('2025.09.25'), findsOneWidget);
+  });
+
+  testWidgets('log list uses prebuilt entries and category index', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+    String? filteredCategory;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 400,
+          child: TransactionLogList(
+            entries: [
+              TransactionLogEntry.header(record.date),
+              TransactionLogEntry.record(record),
+            ],
+            categoriesById: {category.transactionCategoryID: category},
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (value) => filteredCategory = value.name,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('2025.09.24'), findsOneWidget);
+    expect(find.text('Gguu'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-logbox-avatar-250905')),
+    );
+
+    expect(filteredCategory, 'Rr');
   });
 
   testWidgets('logbox left swipe triggers fast filter with category', (

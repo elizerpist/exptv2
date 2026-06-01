@@ -15,12 +15,14 @@ import '../settings/settings_page.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
+import '../transactions/models/backheader_budget_item.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
 import '../transactions/widgets/category_menu/category_editor_panel.dart';
 import '../transactions/widgets/category_menu/category_editor_sheet.dart';
+import '../transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
@@ -40,11 +42,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   AppTab _activeTab = AppTab.home;
   late final TransactionStore _transactionStore;
   late final RecurringAlarmService _recurringAlarmService;
-  var _transactionEditorOpen = false;
-  var _categoryEditorOpen = false;
+  final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
+  final _budgetEditorActiveKey = ValueNotifier<String?>(null);
   var _homeBlockingOverlayOpen = false;
-  DateTime? _transactionEditorOpenRequestedAt;
-  TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
   @override
@@ -63,6 +63,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     super.dispose();
   }
@@ -107,101 +108,45 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _selectTab(AppTab tab) {
     if (_activeTab == tab) return;
+    _sheetHostKey.currentState?.closeAll();
     setState(() {
       _activeTab = tab;
-      _transactionEditorOpen = false;
-      _categoryEditorOpen = false;
       _homeBlockingOverlayOpen = false;
-      _editingTransaction = null;
     });
   }
 
   void _handleFabPressed() {
     final requestedAt = DateTime.now();
-    _transactionEditorOpenRequestedAt = requestedAt;
     DebugConsole.log('[SlideUpMenu] AddTransaction shell open requested source=fab');
-    setState(() {
-      _transactionEditorOpen = true;
-      _categoryEditorOpen = false;
-      _editingTransaction = null;
-    });
-    DebugConsole.log(
-      '[SlideUpMenu] AddTransaction shell state queued '
-      'elapsed=${_elapsedMs(requestedAt)}ms',
+    _sheetHostKey.currentState?.openTransaction(
+      requestedAt: requestedAt,
+      source: 'fab',
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _transactionEditorOpenRequestedAt != requestedAt) return;
-      DebugConsole.log(
-        '[SlideUpMenu] AddTransaction shell first frame '
-        'elapsed=${_elapsedMs(requestedAt)}ms',
-      );
-    });
   }
 
   void _handleFabLongPressed() {
-    DebugConsole.log('[SlideUpMenu] AddCategory shell open requested source=fabLongPress');
-    setState(() {
-      _transactionEditorOpen = false;
-      _categoryEditorOpen = true;
-      _editingTransaction = null;
-    });
+    DebugConsole.log(
+      '[SlideUpMenu] AddCategory shell open requested source=fabLongPress',
+    );
+    _sheetHostKey.currentState?.openCategory();
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
     final requestedAt = DateTime.now();
-    _transactionEditorOpenRequestedAt = requestedAt;
     DebugConsole.log(
       '[SlideUpMenu] EditTransaction shell open requested source=logbox '
       'id=${transaction.id}',
     );
-    setState(() {
-      _transactionEditorOpen = true;
-      _categoryEditorOpen = false;
-      _editingTransaction = transaction;
-    });
-  }
-
-  void _closeTransactionEditor() {
-    setState(() {
-      _transactionEditorOpen = false;
-      _transactionEditorOpenRequestedAt = null;
-      _editingTransaction = null;
-    });
-  }
-
-  void _closeCategoryEditor() {
-    setState(() {
-      _categoryEditorOpen = false;
-    });
-  }
-
-  Future<void> _saveCategory(CategoryDraft draft) async {
-    await _transactionStore.addCategory(
-      name: draft.name,
-      type: draft.type,
-      colorSlot: draft.colorSlot,
-      iconSlot: draft.iconSlot,
+    _sheetHostKey.currentState?.openTransaction(
+      requestedAt: requestedAt,
+      source: 'logbox',
+      transaction: transaction,
     );
-    if (!mounted) return;
-    setState(() => _categoryEditorOpen = false);
   }
 
   void _setHomeBlockingOverlay(bool open) {
     if (_homeBlockingOverlayOpen == open) return;
     setState(() => _homeBlockingOverlayOpen = open);
-  }
-
-
-  double _menuPanelHeight(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    return (screenHeight - TransactionMenuMetrics.overlayTop)
-        .clamp(0.0, screenHeight)
-        .toDouble();
-  }
-
-  int _elapsedMs(DateTime? startedAt) {
-    if (startedAt == null) return 0;
-    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
   Future<bool> _confirmDeleteTransaction(TransactionRecord transaction) async {
@@ -235,9 +180,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final deleted = await _transactionStore.deleteTransaction(transaction);
     if (!deleted) return false;
     if (!mounted) return true;
-    if (_editingTransaction?.id == transaction.id) {
-      _closeTransactionEditor();
-    }
+    _sheetHostKey.currentState?.closeTransactionIfEditing(transaction.id);
     return true;
   }
 
@@ -288,6 +231,21 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
+                  onBudgetTargetEditorRequested: (
+                    item, {
+                    required requestedAt,
+                    required headerExpanded,
+                  }) {
+                    _sheetHostKey.currentState?.openBudgetTargetEditor(
+                      item,
+                      requestedAt: requestedAt,
+                      headerExpanded: headerExpanded,
+                    );
+                  },
+                  onBudgetTargetEditorClosed: () {
+                    _sheetHostKey.currentState?.closeBudgetTargetEditor();
+                  },
+                  budgetEditorActiveKey: _budgetEditorActiveKey,
                 ),
                 StatsPage(store: _transactionStore),
                 NotificationsPage(nativeBridge: widget.nativeBridge),
@@ -305,34 +263,350 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: AddTransactionSheet(
+          Positioned.fill(
+            child: _ShellSheetHost(
+              key: _sheetHostKey,
               store: _transactionStore,
-              initialTransaction: _editingTransaction,
-              openRequestedAt: _transactionEditorOpenRequestedAt,
-              visible: _transactionEditorOpen,
-              onClose: _closeTransactionEditor,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: CategoryEditorSheet(
-              activeType: _transactionStore.activeType,
-              panelHeight: _menuPanelHeight(context),
-              visible: _categoryEditorOpen,
-              onClose: _closeCategoryEditor,
-              onSave: _saveCategory,
+              budgetEditorActiveKey: _budgetEditorActiveKey,
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _ShellSheetHost extends StatefulWidget {
+  const _ShellSheetHost({
+    super.key,
+    required this.store,
+    required this.budgetEditorActiveKey,
+  });
+
+  final TransactionStore store;
+  final ValueNotifier<String?> budgetEditorActiveKey;
+
+  @override
+  State<_ShellSheetHost> createState() => _ShellSheetHostState();
+}
+
+class _ShellSheetHostState extends State<_ShellSheetHost> {
+  final _transactionSlotKey = GlobalKey<_TransactionSheetSlotState>();
+  final _categorySlotKey = GlobalKey<_CategorySheetSlotState>();
+  final _budgetSlotKey = GlobalKey<_BudgetTargetSheetSlotState>();
+
+  void openTransaction({
+    required DateTime requestedAt,
+    required String source,
+    TransactionRecord? transaction,
+  }) {
+    _categorySlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _transactionSlotKey.currentState?.open(
+      requestedAt: requestedAt,
+      source: source,
+      transaction: transaction,
+    );
+  }
+
+  void openCategory() {
+    _transactionSlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.open();
+  }
+
+  void openBudgetTargetEditor(
+    BackheaderBudgetItem item, {
+    required DateTime requestedAt,
+    required bool headerExpanded,
+  }) {
+    _transactionSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.open(
+      item,
+      requestedAt: requestedAt,
+      headerExpanded: headerExpanded,
+    );
+  }
+
+  void closeTransactionIfEditing(int transactionId) {
+    _transactionSlotKey.currentState?.closeIfEditing(transactionId);
+  }
+
+  void closeBudgetTargetEditor() {
+    _budgetSlotKey.currentState?.close();
+  }
+
+  void closeAll() {
+    _transactionSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: _TransactionSheetSlot(
+            key: _transactionSlotKey,
+            store: widget.store,
+          ),
+        ),
+        Positioned.fill(
+          child: _CategorySheetSlot(
+            key: _categorySlotKey,
+            store: widget.store,
+          ),
+        ),
+        Positioned.fill(
+          child: _BudgetTargetSheetSlot(
+            key: _budgetSlotKey,
+            store: widget.store,
+            activeKey: widget.budgetEditorActiveKey,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TransactionSheetSlot extends StatefulWidget {
+  const _TransactionSheetSlot({super.key, required this.store});
+
+  final TransactionStore store;
+
+  @override
+  State<_TransactionSheetSlot> createState() => _TransactionSheetSlotState();
+}
+
+class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
+  var _open = false;
+  DateTime? _openRequestedAt;
+  TransactionRecord? _editingTransaction;
+
+  void open({
+    required DateTime requestedAt,
+    required String source,
+    TransactionRecord? transaction,
+  }) {
+    final label = transaction == null ? 'AddTransaction' : 'EditTransaction';
+    setState(() {
+      _open = true;
+      _openRequestedAt = requestedAt;
+      _editingTransaction = transaction;
+    });
+    DebugConsole.log(
+      '[SlideUpMenu] $label shell state queued source=$source '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _openRequestedAt != requestedAt) return;
+      DebugConsole.log(
+        '[SlideUpMenu] $label shell first frame '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+    });
+  }
+
+  void close() {
+    if (!_open && _editingTransaction == null && _openRequestedAt == null) {
+      return;
+    }
+    setState(() {
+      _open = false;
+      _openRequestedAt = null;
+      _editingTransaction = null;
+    });
+  }
+
+  void closeIfEditing(int transactionId) {
+    if (_editingTransaction?.id != transactionId) return;
+    close();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AddTransactionSheet(
+      store: widget.store,
+      initialTransaction: _editingTransaction,
+      openRequestedAt: _openRequestedAt,
+      visible: _open,
+      onClose: close,
+    );
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+}
+
+class _CategorySheetSlot extends StatefulWidget {
+  const _CategorySheetSlot({super.key, required this.store});
+
+  final TransactionStore store;
+
+  @override
+  State<_CategorySheetSlot> createState() => _CategorySheetSlotState();
+}
+
+class _CategorySheetSlotState extends State<_CategorySheetSlot> {
+  var _open = false;
+
+  void open() {
+    if (_open) return;
+    setState(() => _open = true);
+  }
+
+  void close() {
+    if (!_open) return;
+    setState(() => _open = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.store,
+      builder: (context, _) {
+        return CategoryEditorSheet(
+          activeType: widget.store.activeType,
+          panelHeight: _menuPanelHeight(context),
+          visible: _open,
+          onClose: close,
+          onSave: (draft) => unawaited(_saveCategory(draft)),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveCategory(CategoryDraft draft) async {
+    await widget.store.addCategory(
+      name: draft.name,
+      type: draft.type,
+      colorSlot: draft.colorSlot,
+      iconSlot: draft.iconSlot,
+    );
+    if (!mounted) return;
+    setState(() => _open = false);
+  }
+
+  double _menuPanelHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
+  }
+}
+
+class _BudgetTargetSheetSlot extends StatefulWidget {
+  const _BudgetTargetSheetSlot({
+    super.key,
+    required this.store,
+    required this.activeKey,
+  });
+
+  final TransactionStore store;
+  final ValueNotifier<String?> activeKey;
+
+  @override
+  State<_BudgetTargetSheetSlot> createState() => _BudgetTargetSheetSlotState();
+}
+
+class _BudgetTargetSheetSlotState extends State<_BudgetTargetSheetSlot> {
+  var _open = false;
+  DateTime? _openRequestedAt;
+  BackheaderBudgetItem? _item;
+
+  void open(
+    BackheaderBudgetItem item, {
+    required DateTime requestedAt,
+    required bool headerExpanded,
+  }) {
+    setState(() {
+      _open = true;
+      _item = item;
+      _openRequestedAt = requestedAt;
+    });
+    DebugConsole.log(
+      '[BudgetTargetEditor] backheader state queued '
+      'headerExpanded=$headerExpanded elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _openRequestedAt != requestedAt) return;
+      widget.activeKey.value = item.key;
+    });
+  }
+
+  void close() {
+    if (!_open && _item == null && _openRequestedAt == null) return;
+    setState(() {
+      _open = false;
+      _item = null;
+      _openRequestedAt = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.store,
+      builder: (context, _) {
+        final hostItem = _item ?? _defaultBudgetEditorItem();
+        if (hostItem == null) return const SizedBox.shrink();
+        return BudgetTargetEditorSheet(
+          item: hostItem,
+          openRequestedAt: _openRequestedAt,
+          visible: _open,
+          periodLabel: widget.store.activePeriodLabel,
+          items: widget.store.backheaderBudgetItems,
+          categoryBars: widget.store.categoryBudgetBars,
+          overviewItems: widget.store.overviewBudgetItems,
+          periodIncome: widget.store.activePeriodIncomeTotal,
+          onCancel: close,
+          onActiveItemChanged: _setActiveItem,
+          onSaveOverview: (
+            kind, {
+            required limitAmount,
+            required alertActive,
+          }) async {
+            await widget.store.saveOverviewLimit(
+              kind,
+              limitAmount: limitAmount,
+              alertActive: alertActive,
+            );
+          },
+          onSaveCategory: (
+            bar, {
+            required limitAmount,
+            required alertActive,
+          }) async {
+            await widget.store.saveCategoryLimitForBar(
+              bar,
+              limitAmount: limitAmount,
+              alertActive: alertActive,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _setActiveItem(BackheaderBudgetItem item) {
+    widget.activeKey.value = item.key;
+  }
+
+  BackheaderBudgetItem? _defaultBudgetEditorItem() {
+    final items = widget.store.backheaderBudgetItems;
+    if (items.isEmpty) return null;
+    for (final item in items) {
+      if (item.overview != null) return item;
+    }
+    return items.first;
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 }

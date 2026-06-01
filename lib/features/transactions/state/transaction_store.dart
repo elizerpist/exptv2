@@ -33,6 +33,8 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionRecord> _transactions = [];
   List<RecurringGhostRecord> _recurringGhostTransactions = [];
   List<CategoryLimit> _limits = [];
+  Map<int, TransactionCategory> _categoriesById = const {};
+  Map<int, int> _categoryTransactionCounts = const {};
 
   bool get loading => _loading;
   String? get error => _error;
@@ -44,23 +46,11 @@ class TransactionStore extends ChangeNotifier {
   TransactionCategory? get activeCategory {
     final id = _filter.categoryId;
     if (id == null) return null;
-    for (final category in _categories) {
-      if (category.transactionCategoryID == id) return category;
-    }
-    return null;
+    return _categoriesById[id];
   }
 
-  Map<int, int> get categoryTransactionCounts {
-    final counts = <int, int>{};
-    for (final transaction in _transactions) {
-      counts.update(
-        transaction.transactionCategoryID,
-        (value) => value + 1,
-        ifAbsent: () => 1,
-      );
-    }
-    return counts;
-  }
+  Map<int, int> get categoryTransactionCounts => _categoryTransactionCounts;
+  Map<int, TransactionCategory> get categoriesById => _categoriesById;
 
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionRecord> get transactions => List.unmodifiable(_transactions);
@@ -200,13 +190,20 @@ class TransactionStore extends ChangeNotifier {
       for (final ghost in visibleGhostTransactions)
         TransactionLogEntry.ghost(ghost),
     ];
-    entries.sort((left, right) {
-      final date = right.date.compareTo(left.date);
-      if (date != 0) return date;
-      final time = right.time.compareTo(left.time);
-      if (time != 0) return time;
-      return right.sortId.compareTo(left.sortId);
-    });
+    entries.sort(_compareLogEntries);
+    return entries;
+  }
+
+  List<TransactionLogEntry> get visibleDisplayLogEntries {
+    final entries = <TransactionLogEntry>[];
+    String? previousDate;
+    for (final row in visibleLogEntries) {
+      if (row.date != previousDate) {
+        entries.add(TransactionLogEntry.header(row.date));
+        previousDate = row.date;
+      }
+      entries.add(row);
+    }
     return entries;
   }
 
@@ -257,6 +254,7 @@ class TransactionStore extends ChangeNotifier {
         '[Recurring] loaded ${_recurringGhostTransactions.length} pending ghosts',
       );
       _limits = payload.limits;
+      _rebuildDerivedIndexes();
     } catch (error) {
       _error = error.toString();
     } finally {
@@ -538,7 +536,24 @@ class TransactionStore extends ChangeNotifier {
       payload.recurringGhostTransactions,
     );
     _limits = payload.limits;
+    _rebuildDerivedIndexes();
     notifyListeners();
+  }
+
+  void _rebuildDerivedIndexes() {
+    _categoriesById = Map.unmodifiable({
+      for (final category in _categories)
+        category.transactionCategoryID: category,
+    });
+    final counts = <int, int>{};
+    for (final transaction in _transactions) {
+      counts.update(
+        transaction.transactionCategoryID,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    _categoryTransactionCounts = Map.unmodifiable(counts);
   }
 
   bool _ghostIsBeforeCurrentMonth(RecurringGhostRecord ghost) {
@@ -578,6 +593,15 @@ class TransactionStore extends ChangeNotifier {
     rows.sort((left, right) => right.id.compareTo(left.id));
     return rows;
   }
+}
+
+
+int _compareLogEntries(TransactionLogEntry left, TransactionLogEntry right) {
+  final date = right.date.compareTo(left.date);
+  if (date != 0) return date;
+  final time = right.time.compareTo(left.time);
+  if (time != 0) return time;
+  return right.sortId.compareTo(left.sortId);
 }
 
 DateTime _monthStart(DateTime value) => DateTime(value.year, value.month);

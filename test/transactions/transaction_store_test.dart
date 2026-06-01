@@ -21,6 +21,19 @@ void main() {
     );
   });
 
+  test('store exposes cached category index and display log entries', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+
+    expect(store.categoriesById[6]?.name, 'Q');
+    expect(store.categoryTransactionCounts[6], 3);
+
+    final entries = store.visibleDisplayLogEntries;
+    expect(entries.first.isHeader, isTrue);
+    expect(entries.any((entry) => entry.record != null), isTrue);
+    expect(entries.where((entry) => entry.header != null).length, greaterThan(0));
+  });
+
   test('store applies merchant fast filter and search query', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();
