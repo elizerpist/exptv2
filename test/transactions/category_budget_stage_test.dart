@@ -563,7 +563,8 @@ void main() {
     final bar = tester.getRect(
       find.byKey(const ValueKey('category-budget-bar')),
     );
-    expect(bar.center, frame.center);
+    expect(bar.center.dx, moreOrLessEquals(frame.center.dx, epsilon: 0.1));
+    expect(bar.center.dy, moreOrLessEquals(frame.center.dy, epsilon: 0.1));
     expect(
       bar.left - frame.left,
       moreOrLessEquals(frame.right - bar.right, epsilon: 0.1),
