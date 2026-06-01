@@ -340,6 +340,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         children: [
           if (homeOverlayCoversShellNavigation) ...shellNavigation,
           Positioned.fill(
+            key: const ValueKey('shell-page-stack'),
             child: IndexedStack(
               index: appTabs.indexOf(_activeTab),
               children: [
