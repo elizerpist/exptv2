@@ -260,6 +260,11 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
+    );
+    await tester.pumpAndSettle();
+
     final beforeDrag = _slideCardTranslationY(tester);
     await tester.drag(
       find.byKey(const ValueKey('transaction-category-scroll-list')),
@@ -271,6 +276,10 @@ void main() {
       moreOrLessEquals(beforeDrag, epsilon: 0.1),
     );
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('transaction-category-option-6')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('transaction-category-option-6')),
     );
