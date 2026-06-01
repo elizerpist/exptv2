@@ -288,6 +288,34 @@ void main() {
     expect(singleTaps, 2);
   });
 
+  testWidgets('transaction editor closed height fits primary controls', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await _tapFab(tester);
+
+    final cardRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+    );
+    expect(cardRect.height, greaterThanOrEqualTo(520));
+
+    for (final key in const [
+      ValueKey('transaction-category-selector'),
+      ValueKey('transaction-date-picker-button'),
+      ValueKey('transaction-time-picker-button'),
+      ValueKey('transaction-save-button'),
+    ]) {
+      final rect = tester.getRect(find.byKey(key));
+      expect(rect.top, greaterThanOrEqualTo(cardRect.top));
+      expect(rect.bottom, lessThanOrEqualTo(cardRect.bottom));
+    }
+  });
+
   testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {

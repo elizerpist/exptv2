@@ -102,6 +102,43 @@ void main() {
     expect(find.text('Food'), findsOneWidget);
   });
 
+  testWidgets('long press on category bar jumps back to the overview budget bar', (
+    tester,
+  ) async {
+    BackheaderBudgetItem? activeItem;
+    final food = barFixture(6, 'Food', 100, 150);
+    final overview = BackheaderBudgetItem.overview(
+      overviewFixture(BudgetGoalKind.expenseBudget, 100, 300),
+    );
+    final category = BackheaderBudgetItem.category(food);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: [overview, category],
+              categoryBars: [food],
+              activeKey: category.key,
+              onActiveItemChanged: (item) => activeItem = item,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Food'), findsOneWidget);
+
+    await tester.longPress(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+
+    expect(activeItem?.overview?.kind, BudgetGoalKind.expenseBudget);
+    expect(find.text('Budget'), findsOneWidget);
+  });
+
   testWidgets('category budget stage switches only when drag is released', (
     tester,
   ) async {

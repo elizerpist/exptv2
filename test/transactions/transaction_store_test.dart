@@ -34,6 +34,28 @@ void main() {
     expect(entries.where((entry) => entry.header != null).length, greaterThan(0));
   });
 
+  test('store reuses expensive visible and budget lists until filters change', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+
+    final visibleEntries = store.visibleDisplayLogEntries;
+    final visibleEntriesAgain = store.visibleDisplayLogEntries;
+    final bars = store.categoryBudgetBars;
+    final barsAgain = store.categoryBudgetBars;
+    final backheaderItems = store.backheaderBudgetItems;
+    final backheaderItemsAgain = store.backheaderBudgetItems;
+
+    expect(identical(visibleEntries, visibleEntriesAgain), isTrue);
+    expect(identical(bars, barsAgain), isTrue);
+    expect(identical(backheaderItems, backheaderItemsAgain), isTrue);
+
+    store.setActiveType(TransactionType.income);
+
+    expect(identical(store.visibleDisplayLogEntries, visibleEntries), isFalse);
+    expect(identical(store.categoryBudgetBars, bars), isFalse);
+    expect(identical(store.backheaderBudgetItems, backheaderItems), isFalse);
+  });
+
   test('store applies merchant fast filter and search query', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();
