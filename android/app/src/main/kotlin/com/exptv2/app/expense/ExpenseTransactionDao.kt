@@ -45,4 +45,7 @@ interface ExpenseTransactionDao {
 
     @Query("SELECT transactionCategoryID, COUNT(*) AS count FROM transactions GROUP BY transactionCategoryID")
     suspend fun categoryCounts(): List<CategoryCountRow>
+
+    @Query("DELETE FROM transactions")
+    suspend fun clearAll()
 }

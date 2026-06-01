@@ -1,6 +1,8 @@
 package com.exptv2.app.expense
 
 import android.content.Context
+import android.util.Log
+import androidx.room.withTransaction
 import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
 import com.exptv2.app.expense.recurring.RecurringDebugClockStore
 import java.util.Calendar
@@ -17,6 +19,7 @@ class ExpenseRepository(context: Context) {
     private val settingsStore = ExpenseSettingsStore(appContext)
     private val notificationHelper = RecurringNotificationHelper(appContext)
     private val debugClockStore = RecurringDebugClockStore(appContext)
+    private val seedPrefs = appContext.getSharedPreferences("expense_seed", Context.MODE_PRIVATE)
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
@@ -632,8 +635,37 @@ class ExpenseRepository(context: Context) {
     }
 
     private suspend fun seedIfEmpty() {
-        if (categories.count() == 0) categories.insertAll(ExpenseSeedData.categories)
-        if (transactions.count() == 0) transactions.insertAll(ExpenseSeedData.transactions)
+        val currentVersion = seedPrefs.getInt("demo_seed_version", 0)
+        if (currentVersion < ExpenseSeedData.version) {
+            resetDemoData()
+            seedPrefs.edit().putInt("demo_seed_version", ExpenseSeedData.version).apply()
+            return
+        }
+        db.withTransaction {
+            if (categories.count() == 0) categories.insertAll(ExpenseSeedData.categories)
+            if (transactions.count() == 0) transactions.insertAll(ExpenseSeedData.transactions)
+            if (categoryLimits.list(null, null, null).isEmpty()) {
+                categoryLimits.insertAll(ExpenseSeedData.limits)
+            }
+        }
+    }
+
+    private suspend fun resetDemoData() {
+        db.withTransaction {
+            notificationCards.clearAllHard()
+            recurringGhosts.clearAll()
+            recurringTransactions.clearAll()
+            transactions.clearAll()
+            categoryLimits.clearAll()
+            categories.clearAll()
+            categories.insertAll(ExpenseSeedData.categories)
+            transactions.insertAll(ExpenseSeedData.transactions)
+            categoryLimits.insertAll(ExpenseSeedData.limits)
+        }
+        Log.d(
+            "ExpenseRepository",
+            "Reset demo data version=${ExpenseSeedData.version} categories=${ExpenseSeedData.categories.size} transactions=${ExpenseSeedData.transactions.size} limits=${ExpenseSeedData.limits.size}",
+        )
     }
 
     private suspend fun nextId(date: String): Int {

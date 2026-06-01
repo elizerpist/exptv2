@@ -52,16 +52,19 @@ class LimitManager {
     required TransactionType activeType,
     required SummaryWindow summaryWindow,
     required DateTime referenceDate,
+    Iterable<TransactionRecord>? windowedTransactions,
   }) {
     final window = windowForSummary(summaryWindow);
     final periodKey = periodKeyFor(summaryWindow, referenceDate);
     final transactionType = activeType.nativeValue;
-    final records = recordsForWindow(
-      transactions: transactions,
-      activeType: activeType,
-      summaryWindow: summaryWindow,
-      referenceDate: referenceDate,
-    ).toList();
+    final records = (windowedTransactions ??
+            recordsForWindow(
+              transactions: transactions,
+              activeType: activeType,
+              summaryWindow: summaryWindow,
+              referenceDate: referenceDate,
+            ))
+        .toList();
 
     final spentByCategory = <int, double>{};
     for (final record in records) {

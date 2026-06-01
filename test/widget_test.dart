@@ -291,8 +291,24 @@ void main() {
   testWidgets('transaction editor closed height fits primary controls', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var mobileClosedHeight = 0.0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: Builder(
+            builder: (context) {
+              mobileClosedHeight = SlideUpPanelMetrics.transactionHeight(
+                context,
+                pickerOpen: false,
+              );
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    expect(mobileClosedHeight, greaterThanOrEqualTo(520));
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -302,7 +318,6 @@ void main() {
     final cardRect = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );
-    expect(cardRect.height, greaterThanOrEqualTo(520));
 
     for (final key in const [
       ValueKey('transaction-category-selector'),

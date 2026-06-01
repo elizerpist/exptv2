@@ -24,4 +24,7 @@ interface NotificationCardDao {
 
     @Query("UPDATE notification_cards SET isActive = 0, updatedAt = :updatedAt")
     suspend fun clearAll(updatedAt: Long): Int
+
+    @Query("DELETE FROM notification_cards")
+    suspend fun clearAllHard()
 }

@@ -497,9 +497,9 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     );
     await _snapBackController.forward(from: 0);
     if (!mounted) return;
+    _closing = false;
     _entry.value = 0;
     _dragDy.value = 0;
-    _closing = false;
     widget.onDismissed?.call();
   }
 

@@ -43,4 +43,10 @@ interface CategoryLimitDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(limit: CategoryLimitEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(limits: List<CategoryLimitEntity>)
+
+    @Query("DELETE FROM category_limits")
+    suspend fun clearAll()
 }

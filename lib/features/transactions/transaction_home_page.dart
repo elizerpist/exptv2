@@ -43,6 +43,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onBlockingOverlayChanged,
     this.onBudgetTargetEditorRequested,
     this.onBudgetTargetEditorClosed,
+    this.onFocusedSheetDismissRequested,
     this.budgetEditorActiveKey,
   });
 
@@ -53,6 +54,7 @@ class TransactionHomePage extends StatefulWidget {
   final ValueChanged<bool>? onBlockingOverlayChanged;
   final BudgetTargetEditorRequest? onBudgetTargetEditorRequested;
   final VoidCallback? onBudgetTargetEditorClosed;
+  final VoidCallback? onFocusedSheetDismissRequested;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -215,7 +217,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
               ),
               AnimatedBuilder(
                 animation: _headerSlideController,
-                builder: (context, _) {
+                child: RepaintBoundary(
+                  child: CategoryBudgetStage(
+                    items: widget.store.backheaderBudgetItems,
+                    categoryBars: widget.store.categoryBudgetBars,
+                    periodLabel: widget.store.activePeriodLabel,
+                    activeKey: _backheaderActiveKey,
+                    onActiveItemChanged: _setBackheaderActiveItem,
+                    onItemTap: _openBudgetTargetEditor,
+                  ),
+                ),
+                builder: (context, budgetStage) {
                   final rawHeaderSlideProgress = _headerSlideController.value;
                   final headerSlideProgress = _headerSlideVisualProgress();
                   final showBackheader =
@@ -224,14 +236,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        CategoryBudgetStage(
-                          items: widget.store.backheaderBudgetItems,
-                          categoryBars: widget.store.categoryBudgetBars,
-                          periodLabel: widget.store.activePeriodLabel,
-                          activeKey: _backheaderActiveKey,
-                          onActiveItemChanged: _setBackheaderActiveItem,
-                          onItemTap: _openBudgetTargetEditor,
-                        ),
+                        budgetStage!,
                         _buildHeaderCard(
                           expenseTheme: expenseTheme,
                           visibleFastInfoExtent: 0,
@@ -365,12 +370,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _fastInfoExtent = 0;
       _headerExpanded = true;
     });
+    final startedAt = DateTime.now();
     DebugConsole.log(
       '[HeaderCard] expand start progress=${_headerSlideController.value.toStringAsFixed(2)}',
     );
     await _headerSlideController.forward();
     if (!mounted) return;
-    DebugConsole.log('[HeaderCard] expand complete');
+    DebugConsole.log('[HeaderCard] expand complete elapsed=${_elapsedMs(startedAt)}ms');
   }
 
   Future<void> _collapseHeader() async {
@@ -379,12 +385,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _fastInfoExtent = 0;
       _headerExpanded = false;
     });
+    final startedAt = DateTime.now();
     DebugConsole.log(
       '[HeaderCard] collapse start progress=${_headerSlideController.value.toStringAsFixed(2)}',
     );
     await _headerSlideController.reverse();
     if (!mounted) return;
-    DebugConsole.log('[HeaderCard] collapse complete');
+    DebugConsole.log('[HeaderCard] collapse complete elapsed=${_elapsedMs(startedAt)}ms');
   }
 
 
@@ -414,8 +421,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       magnetType: expenseTheme.settings.magnetType,
       accent: expenseTheme.accent,
       cardColor: expenseTheme.headerCard,
-      totalIncome: _totalIncome(),
-      totalExpense: _totalExpense(),
+      totalIncome: widget.store.totalIncomeAmount,
+      totalExpense: widget.store.totalExpenseAmount,
       fastInfoVisible: visibleFastInfoExtent > 0,
       balanceHidden: _balanceHidden,
       drawSurface: drawSurface,
@@ -446,18 +453,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       return 1 - Curves.easeOutCubic.transform(1 - raw);
     }
     return Curves.easeOutCubic.transform(raw);
-  }
-
-  double _totalIncome() {
-    return widget.store.transactions
-        .where((record) => record.amount > 0)
-        .fold<double>(0, (sum, record) => sum + record.amount.abs());
-  }
-
-  double _totalExpense() {
-    return widget.store.transactions
-        .where((record) => record.amount < 0)
-        .fold<double>(0, (sum, record) => sum + record.amount.abs());
   }
 
   void _handleHeaderDragUpdate(DragUpdateDetails details) {
@@ -512,6 +507,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     _headerPullController.value = 0;
     widget.store.setActiveType(type);
     widget.onBudgetTargetEditorClosed?.call();
+    widget.onFocusedSheetDismissRequested?.call();
     setState(() {
       _fastInfoExtent = 0;
       if (_categoryEditorOpen) {

@@ -35,4 +35,7 @@ interface TransactionCategoryDao {
 
     @Delete
     suspend fun delete(category: TransactionCategoryEntity)
+
+    @Query("DELETE FROM transaction_categories")
+    suspend fun clearAll()
 }

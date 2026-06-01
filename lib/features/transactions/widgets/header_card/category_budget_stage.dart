@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/budget_progress_manager.dart';
 import '../../models/backheader_budget_item.dart';
@@ -187,6 +189,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   },
                   onHorizontalDragCancel: () => _animateDragTo(0),
                   onHorizontalDragEnd: (_) => _settleDrag(),
+                  onLongPress: _jumpToOverviewForCurrent,
                   child: Transform.translate(
                     key: const ValueKey('category-budget-bar-translation'),
                     offset: Offset(_dragDx, 0),
@@ -347,6 +350,32 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final animation = _slideAnimation;
     if (animation == null || !mounted) return;
     setState(() => _dragDx = animation.value);
+  }
+
+  void _jumpToOverviewForCurrent() {
+    if (_settling) return;
+    final items = _items;
+    if (items.length < 2 || _index >= items.length) return;
+    final current = items[_index];
+    final category = current.category;
+    if (category == null) return;
+    final targetIndex = items.indexWhere((item) {
+      final overview = item.overview;
+      return overview != null &&
+          overview.kind.transactionType == category.transactionType.nativeValue;
+    });
+    if (targetIndex < 0 || targetIndex == _index) return;
+    HapticFeedback.selectionClick();
+    DebugConsole.log(
+      '[BackheaderBudget] long press jump from=${current.key} to=${items[targetIndex].key}',
+    );
+    _slideController.stop();
+    setState(() {
+      _index = targetIndex;
+      _dragDx = 0;
+      _settling = false;
+    });
+    widget.onActiveItemChanged?.call(items[targetIndex]);
   }
 
   Future<void> _settleDrag() async {

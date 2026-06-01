@@ -36,4 +36,7 @@ interface RecurringGhostTransactionDao {
 
     @Query("DELETE FROM recurring_ghost_transactions WHERE recurringTransactionId = :recurringId")
     suspend fun deleteForRecurring(recurringId: Int)
+
+    @Query("DELETE FROM recurring_ghost_transactions")
+    suspend fun clearAll()
 }

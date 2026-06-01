@@ -35,6 +35,20 @@ class TransactionStore extends ChangeNotifier {
   List<CategoryLimit> _limits = [];
   Map<int, TransactionCategory> _categoriesById = const {};
   Map<int, int> _categoryTransactionCounts = const {};
+  final _activeCategoriesCache = <TransactionType, List<TransactionCategory>>{};
+  final _windowedTransactionsCache = <String, List<TransactionRecord>>{};
+  final _visibleTransactionsCache = <String, List<TransactionRecord>>{};
+  final _visibleGhostTransactionsCache = <String, List<RecurringGhostRecord>>{};
+  final _visibleLogEntriesCache = <String, List<TransactionLogEntry>>{};
+  final _visibleDisplayLogEntriesCache = <String, List<TransactionLogEntry>>{};
+  final _activeSummaryCache = <String, TransactionSummary>{};
+  final _periodTotalsCache = <String, double>{};
+  final _categoryBudgetBarsCache = <String, List<CategoryBudgetBarData>>{};
+  final _overviewBudgetItemsCache = <String, List<OverviewBudgetData>>{};
+  final _backheaderBudgetItemsCache = <String, List<BackheaderBudgetItem>>{};
+  TransactionSummary? _totalSummaryCache;
+  double? _totalIncomeCache;
+  double? _totalExpenseCache;
 
   bool get loading => _loading;
   String? get error => _error;
@@ -58,160 +72,56 @@ class TransactionStore extends ChangeNotifier {
       List.unmodifiable(_recurringGhostTransactions);
   List<CategoryLimit> get limits => List.unmodifiable(_limits);
 
-  List<TransactionCategory> get activeCategories {
-    return _categories
-        .where((category) => category.normalizedType == _filter.type)
-        .toList();
-  }
+  List<TransactionCategory> get activeCategories => _activeCategoriesFor(_filter.type);
 
-  List<CategoryBudgetBarData> get categoryBudgetBars {
-    return LimitManager.buildBars(
-      categories: _categories,
-      transactions: _transactions,
-      limits: _limits,
-      activeType: _filter.type,
-      summaryWindow: _summaryWindow,
-      referenceDate: _periodReferenceDate,
-    );
-  }
+  List<CategoryBudgetBarData> get categoryBudgetBars =>
+      _categoryBudgetBarsFor(_filter.type);
 
-  List<OverviewBudgetData> get overviewBudgetItems {
-    final window = LimitManager.windowForSummary(_summaryWindow);
-    final periodKey = LimitManager.periodKeyFor(
-      _summaryWindow,
-      _periodReferenceDate,
-    );
-    final income = _periodTotal(TransactionType.income);
-    final expense = _periodTotal(TransactionType.expense);
-    final kinds = _filter.type == TransactionType.expense
-        ? const [BudgetGoalKind.expenseBudget]
-        : const [BudgetGoalKind.incomeGoal, BudgetGoalKind.savingGoal];
+  List<OverviewBudgetData> get overviewBudgetItems =>
+      _overviewBudgetItemsFor(_filter.type);
 
-    return kinds.map((kind) {
-      final sourceLimit = LimitManager.findLimit(
-        limits: _limits,
-        targetType: LimitTargetType.overview,
-        targetId: 0,
-        transactionType: kind.transactionType,
-        window: window,
-        periodKey: periodKey,
-      );
-      final amount = switch (kind) {
-        BudgetGoalKind.expenseBudget => expense,
-        BudgetGoalKind.incomeGoal => income,
-        BudgetGoalKind.savingGoal => (income - expense)
-            .clamp(0.0, double.infinity)
-            .toDouble(),
-      };
-      final hasLimit = sourceLimit?.hasLimit ?? false;
-      final limitAmount = hasLimit ? sourceLimit!.limitAmount : 0.0;
-      return OverviewBudgetData(
-        kind: kind,
-        window: window,
-        periodKey: periodKey,
-        amount: amount,
-        hasLimit: hasLimit,
-        limitAmount: limitAmount,
-        alertActive: sourceLimit?.alertActive ?? false,
-        sourceLimit: sourceLimit,
-      );
-    }).toList();
-  }
-
-  List<BackheaderBudgetItem> get backheaderBudgetItems {
-    return [
-      for (final overview in overviewBudgetItems)
-        BackheaderBudgetItem.overview(overview),
-      for (final bar in categoryBudgetBars) BackheaderBudgetItem.category(bar),
-    ];
-  }
+  List<BackheaderBudgetItem> get backheaderBudgetItems =>
+      _backheaderBudgetItemsFor(_filter.type);
 
   double get activePeriodIncomeTotal => _periodTotal(TransactionType.income);
 
-  double _periodTotal(TransactionType type) {
-    return LimitManager.recordsForWindow(
-      transactions: _transactions,
-      activeType: type,
-      summaryWindow: _summaryWindow,
-      referenceDate: _periodReferenceDate,
-    ).fold<double>(0, (sum, record) => sum + record.amount.abs());
+  double get totalIncomeAmount {
+    final cached = _totalIncomeCache;
+    if (cached != null) return cached;
+    final value = _transactions
+        .where((record) => record.amount > 0)
+        .fold<double>(0, (sum, record) => sum + record.amount.abs());
+    _totalIncomeCache = value;
+    return value;
   }
 
-  List<TransactionRecord> get windowedTransactions {
-    return LimitManager.recordsForWindow(
-      transactions: _transactions,
-      activeType: _filter.type,
-      summaryWindow: _summaryWindow,
-      referenceDate: _periodReferenceDate,
-    ).toList();
+  double get totalExpenseAmount {
+    final cached = _totalExpenseCache;
+    if (cached != null) return cached;
+    final value = _transactions
+        .where((record) => record.amount < 0)
+        .fold<double>(0, (sum, record) => sum + record.amount.abs());
+    _totalExpenseCache = value;
+    return value;
   }
 
-  List<TransactionRecord> get visibleTransactions {
-    final query = _filter.searchQuery.trim().toLowerCase();
-    final merchant = _filter.merchant?.trim();
-    return windowedTransactions.where((record) {
-      if (_filter.categoryId != null &&
-          record.transactionCategoryID != _filter.categoryId) {
-        return false;
-      }
-      if (merchant != null && record.displayMerchant != merchant) return false;
-      if (query.isNotEmpty &&
-          !record.displayMerchant.toLowerCase().contains(query)) {
-        return false;
-      }
-      return true;
-    }).toList();
-  }
+  List<TransactionRecord> get windowedTransactions =>
+      _windowedTransactionsFor(_filter.type);
 
-  List<RecurringGhostRecord> get visibleGhostTransactions {
-    final query = _filter.searchQuery.trim().toLowerCase();
-    final merchant = _filter.merchant?.trim();
-    return _recurringGhostTransactions.where((ghost) {
-      if (ghost.isActivated) return false;
-      if (_ghostIsBeforeCurrentMonth(ghost)) return false;
-      if (ghost.type != _filter.type) return false;
-      if (!_ghostInActiveWindow(ghost)) return false;
-      if (_filter.categoryId != null &&
-          ghost.categoryId != _filter.categoryId) {
-        return false;
-      }
-      if (merchant != null && ghost.name != merchant) return false;
-      if (query.isNotEmpty && !ghost.name.toLowerCase().contains(query)) {
-        return false;
-      }
-      return true;
-    }).toList();
-  }
+  List<TransactionRecord> get visibleTransactions =>
+      _visibleTransactionsFor(_filter);
 
-  List<TransactionLogEntry> get visibleLogEntries {
-    final entries = <TransactionLogEntry>[
-      for (final record in visibleTransactions)
-        TransactionLogEntry.record(record),
-      for (final ghost in visibleGhostTransactions)
-        TransactionLogEntry.ghost(ghost),
-    ];
-    entries.sort(_compareLogEntries);
-    return entries;
-  }
+  List<RecurringGhostRecord> get visibleGhostTransactions =>
+      _visibleGhostTransactionsFor(_filter);
 
-  List<TransactionLogEntry> get visibleDisplayLogEntries {
-    final entries = <TransactionLogEntry>[];
-    String? previousDate;
-    for (final row in visibleLogEntries) {
-      if (row.date != previousDate) {
-        entries.add(TransactionLogEntry.header(row.date));
-        previousDate = row.date;
-      }
-      entries.add(row);
-    }
-    return entries;
-  }
+  List<TransactionLogEntry> get visibleLogEntries => _visibleLogEntriesFor(_filter);
 
-  String get totalBalanceText =>
-      TransactionSummary.fromRecords(_transactions).formattedBalance;
+  List<TransactionLogEntry> get visibleDisplayLogEntries =>
+      _visibleDisplayLogEntriesFor(_filter);
 
-  TransactionSummary get activeSummary =>
-      TransactionSummary.fromRecords(visibleTransactions);
+  String get totalBalanceText => _totalSummary.formattedBalance;
+
+  TransactionSummary get activeSummary => _activeSummaryFor(_filter);
 
   String get activePeriodLabel {
     final reference = _periodReferenceDate;
@@ -239,6 +149,306 @@ class TransactionStore extends ChangeNotifier {
     return parts.join(' · ');
   }
 
+  String get _activePeriodKey => LimitManager.periodKeyFor(
+    _summaryWindow,
+    _periodReferenceDate,
+  );
+
+  String _windowCacheKey(TransactionType type) =>
+      '${type.name}|${_summaryWindow.name}|$_activePeriodKey';
+
+  String _filterCacheKey(TransactionFilter filter) {
+    final query = filter.searchQuery.trim().toLowerCase();
+    final merchant = filter.merchant?.trim() ?? '';
+    return '${_windowCacheKey(filter.type)}|c=${filter.categoryId ?? 0}|m=$merchant|q=$query';
+  }
+
+  List<TransactionCategory> _activeCategoriesFor(TransactionType type) {
+    final cached = _activeCategoriesCache[type];
+    if (cached != null) return cached;
+    final rows = List<TransactionCategory>.unmodifiable(
+      _categories.where((category) => category.normalizedType == type),
+    );
+    _activeCategoriesCache[type] = rows;
+    return rows;
+  }
+
+  List<TransactionRecord> _windowedTransactionsFor(TransactionType type) {
+    final key = _windowCacheKey(type);
+    final cached = _windowedTransactionsCache[key];
+    if (cached != null) return cached;
+    final stopwatch = Stopwatch()..start();
+    final rows = List<TransactionRecord>.unmodifiable(
+      LimitManager.recordsForWindow(
+        transactions: _transactions,
+        activeType: type,
+        summaryWindow: _summaryWindow,
+        referenceDate: _periodReferenceDate,
+      ),
+    );
+    _windowedTransactionsCache[key] = rows;
+    _logCacheBuild('windowed-${type.name}', key, stopwatch, rows.length);
+    return rows;
+  }
+
+  List<TransactionRecord> _visibleTransactionsFor(TransactionFilter filter) {
+    final key = _filterCacheKey(filter);
+    final cached = _visibleTransactionsCache[key];
+    if (cached != null) return cached;
+    final query = filter.searchQuery.trim().toLowerCase();
+    final merchant = filter.merchant?.trim();
+    final rows = List<TransactionRecord>.unmodifiable(
+      _windowedTransactionsFor(filter.type).where((record) {
+        if (filter.categoryId != null &&
+            record.transactionCategoryID != filter.categoryId) {
+          return false;
+        }
+        if (merchant != null && record.displayMerchant != merchant) return false;
+        if (query.isNotEmpty &&
+            !record.displayMerchant.toLowerCase().contains(query)) {
+          return false;
+        }
+        return true;
+      }),
+    );
+    _visibleTransactionsCache[key] = rows;
+    return rows;
+  }
+
+  List<RecurringGhostRecord> _visibleGhostTransactionsFor(
+    TransactionFilter filter,
+  ) {
+    final key = _filterCacheKey(filter);
+    final cached = _visibleGhostTransactionsCache[key];
+    if (cached != null) return cached;
+    final query = filter.searchQuery.trim().toLowerCase();
+    final merchant = filter.merchant?.trim();
+    final rows = List<RecurringGhostRecord>.unmodifiable(
+      _recurringGhostTransactions.where((ghost) {
+        if (ghost.isActivated) return false;
+        if (_ghostIsBeforeCurrentMonth(ghost)) return false;
+        if (ghost.type != filter.type) return false;
+        if (!_ghostInActiveWindow(ghost)) return false;
+        if (filter.categoryId != null && ghost.categoryId != filter.categoryId) {
+          return false;
+        }
+        if (merchant != null && ghost.name != merchant) return false;
+        if (query.isNotEmpty && !ghost.name.toLowerCase().contains(query)) {
+          return false;
+        }
+        return true;
+      }),
+    );
+    _visibleGhostTransactionsCache[key] = rows;
+    return rows;
+  }
+
+  List<TransactionLogEntry> _visibleLogEntriesFor(TransactionFilter filter) {
+    final key = _filterCacheKey(filter);
+    final cached = _visibleLogEntriesCache[key];
+    if (cached != null) return cached;
+    final entries = <TransactionLogEntry>[
+      for (final record in _visibleTransactionsFor(filter))
+        TransactionLogEntry.record(record),
+      for (final ghost in _visibleGhostTransactionsFor(filter))
+        TransactionLogEntry.ghost(ghost),
+    ];
+    entries.sort(_compareLogEntries);
+    final rows = List<TransactionLogEntry>.unmodifiable(entries);
+    _visibleLogEntriesCache[key] = rows;
+    return rows;
+  }
+
+  List<TransactionLogEntry> _visibleDisplayLogEntriesFor(
+    TransactionFilter filter,
+  ) {
+    final key = _filterCacheKey(filter);
+    final cached = _visibleDisplayLogEntriesCache[key];
+    if (cached != null) return cached;
+    final stopwatch = Stopwatch()..start();
+    final entries = <TransactionLogEntry>[];
+    String? previousDate;
+    for (final row in _visibleLogEntriesFor(filter)) {
+      if (row.date != previousDate) {
+        entries.add(TransactionLogEntry.header(row.date));
+        previousDate = row.date;
+      }
+      entries.add(row);
+    }
+    final rows = List<TransactionLogEntry>.unmodifiable(entries);
+    _visibleDisplayLogEntriesCache[key] = rows;
+    _logCacheBuild('display-${filter.type.name}', key, stopwatch, rows.length);
+    return rows;
+  }
+
+  List<CategoryBudgetBarData> _categoryBudgetBarsFor(TransactionType type) {
+    final key = _windowCacheKey(type);
+    final cached = _categoryBudgetBarsCache[key];
+    if (cached != null) return cached;
+    final stopwatch = Stopwatch()..start();
+    final rows = List<CategoryBudgetBarData>.unmodifiable(
+      LimitManager.buildBars(
+        categories: _categories,
+        transactions: _transactions,
+        limits: _limits,
+        activeType: type,
+        summaryWindow: _summaryWindow,
+        referenceDate: _periodReferenceDate,
+        windowedTransactions: _windowedTransactionsFor(type),
+      ),
+    );
+    _categoryBudgetBarsCache[key] = rows;
+    _logCacheBuild('budget-bars-${type.name}', key, stopwatch, rows.length);
+    return rows;
+  }
+
+  List<OverviewBudgetData> _overviewBudgetItemsFor(TransactionType type) {
+    final key = _windowCacheKey(type);
+    final cached = _overviewBudgetItemsCache[key];
+    if (cached != null) return cached;
+    final window = LimitManager.windowForSummary(_summaryWindow);
+    final periodKey = _activePeriodKey;
+    final income = _periodTotal(TransactionType.income);
+    final expense = _periodTotal(TransactionType.expense);
+    final kinds = type == TransactionType.expense
+        ? const [BudgetGoalKind.expenseBudget]
+        : const [BudgetGoalKind.incomeGoal, BudgetGoalKind.savingGoal];
+
+    final rows = List<OverviewBudgetData>.unmodifiable(
+      kinds.map((kind) {
+        final sourceLimit = LimitManager.findLimit(
+          limits: _limits,
+          targetType: LimitTargetType.overview,
+          targetId: 0,
+          transactionType: kind.transactionType,
+          window: window,
+          periodKey: periodKey,
+        );
+        final amount = switch (kind) {
+          BudgetGoalKind.expenseBudget => expense,
+          BudgetGoalKind.incomeGoal => income,
+          BudgetGoalKind.savingGoal => (income - expense)
+              .clamp(0.0, double.infinity)
+              .toDouble(),
+        };
+        final hasLimit = sourceLimit?.hasLimit ?? false;
+        final limitAmount = hasLimit ? sourceLimit!.limitAmount : 0.0;
+        return OverviewBudgetData(
+          kind: kind,
+          window: window,
+          periodKey: periodKey,
+          amount: amount,
+          hasLimit: hasLimit,
+          limitAmount: limitAmount,
+          alertActive: sourceLimit?.alertActive ?? false,
+          sourceLimit: sourceLimit,
+        );
+      }),
+    );
+    _overviewBudgetItemsCache[key] = rows;
+    return rows;
+  }
+
+  List<BackheaderBudgetItem> _backheaderBudgetItemsFor(TransactionType type) {
+    final key = _windowCacheKey(type);
+    final cached = _backheaderBudgetItemsCache[key];
+    if (cached != null) return cached;
+    final rows = List<BackheaderBudgetItem>.unmodifiable([
+      for (final overview in _overviewBudgetItemsFor(type))
+        BackheaderBudgetItem.overview(overview),
+      for (final bar in _categoryBudgetBarsFor(type))
+        BackheaderBudgetItem.category(bar),
+    ]);
+    _backheaderBudgetItemsCache[key] = rows;
+    return rows;
+  }
+
+  TransactionSummary get _totalSummary {
+    final cached = _totalSummaryCache;
+    if (cached != null) return cached;
+    final value = TransactionSummary.fromRecords(_transactions);
+    _totalSummaryCache = value;
+    return value;
+  }
+
+  TransactionSummary _activeSummaryFor(TransactionFilter filter) {
+    final key = _filterCacheKey(filter);
+    final cached = _activeSummaryCache[key];
+    if (cached != null) return cached;
+    final value = TransactionSummary.fromRecords(_visibleTransactionsFor(filter));
+    _activeSummaryCache[key] = value;
+    return value;
+  }
+
+  double _periodTotal(TransactionType type) {
+    final key = _windowCacheKey(type);
+    final cached = _periodTotalsCache[key];
+    if (cached != null) return cached;
+    final value = _windowedTransactionsFor(type)
+        .fold<double>(0, (sum, record) => sum + record.amount.abs());
+    _periodTotalsCache[key] = value;
+    return value;
+  }
+
+  void _invalidateViewCaches() {
+    _activeCategoriesCache.clear();
+    _windowedTransactionsCache.clear();
+    _visibleTransactionsCache.clear();
+    _visibleGhostTransactionsCache.clear();
+    _visibleLogEntriesCache.clear();
+    _visibleDisplayLogEntriesCache.clear();
+    _activeSummaryCache.clear();
+    _periodTotalsCache.clear();
+    _categoryBudgetBarsCache.clear();
+    _overviewBudgetItemsCache.clear();
+    _backheaderBudgetItemsCache.clear();
+    _totalSummaryCache = null;
+    _totalIncomeCache = null;
+    _totalExpenseCache = null;
+  }
+
+  void _prewarmCriticalCaches(String reason) {
+    final stopwatch = Stopwatch()..start();
+    for (final type in TransactionType.values) {
+      final baseFilter = TransactionFilter(type: type);
+      _activeCategoriesFor(type);
+      _visibleDisplayLogEntriesFor(baseFilter);
+      _categoryBudgetBarsFor(type);
+      _overviewBudgetItemsFor(type);
+      _backheaderBudgetItemsFor(type);
+    }
+    totalBalanceText;
+    totalIncomeAmount;
+    totalExpenseAmount;
+    DebugConsole.log(
+      '[Perf] Store prewarm reason=$reason transactions=${_transactions.length} '
+      'categories=${_categories.length} elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+  }
+
+  void _prewarmActiveView(String reason) {
+    final stopwatch = Stopwatch()..start();
+    final entries = _visibleDisplayLogEntriesFor(_filter);
+    _activeSummaryFor(_filter);
+    DebugConsole.log(
+      '[Perf] Store active view reason=$reason type=${_filter.type.name} '
+      'entries=${entries.length} elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+  }
+
+  void _logCacheBuild(
+    String label,
+    String key,
+    Stopwatch stopwatch,
+    int rowCount,
+  ) {
+    final elapsed = stopwatch.elapsedMilliseconds;
+    if (rowCount < 1000 && elapsed < 4) return;
+    DebugConsole.log(
+      '[Perf] Store $label cache key=$key rows=$rowCount elapsed=${elapsed}ms',
+    );
+  }
+
   Future<void> start() async {
     _loading = true;
     _error = null;
@@ -255,6 +465,8 @@ class TransactionStore extends ChangeNotifier {
       );
       _limits = payload.limits;
       _rebuildDerivedIndexes();
+      _invalidateViewCaches();
+      _prewarmCriticalCaches('start');
     } catch (error) {
       _error = error.toString();
     } finally {
@@ -264,13 +476,23 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void setActiveType(TransactionType type) {
+    final unchanged = _filter.type == type &&
+        _filter.categoryId == null &&
+        _filter.merchant == null &&
+        _filter.searchQuery.isEmpty;
+    if (unchanged) return;
+    final stopwatch = Stopwatch()..start();
     _filter = _filter.copyWith(
       type: type,
       clearMerchant: true,
       clearCategory: true,
       searchQuery: '',
     );
+    _prewarmActiveView('type-switch');
     notifyListeners();
+    DebugConsole.log(
+      '[Perf] TypeSwitch type=${type.name} elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
   }
 
   void setCategoryFilter(TransactionCategory category) {
@@ -279,16 +501,19 @@ class TransactionStore extends ChangeNotifier {
       categoryId: category.transactionCategoryID,
       searchQuery: '',
     );
+    _prewarmActiveView('category-filter');
     notifyListeners();
   }
 
   void clearCategoryFilter() {
     _filter = _filter.copyWith(clearCategory: true);
+    _prewarmActiveView('category-clear');
     notifyListeners();
   }
 
   void setSearchQuery(String value) {
     _filter = _filter.copyWith(searchQuery: value);
+    _prewarmActiveView('search');
     notifyListeners();
   }
 
@@ -298,11 +523,13 @@ class TransactionStore extends ChangeNotifier {
       merchantColorHex: colorHex,
       searchQuery: '',
     );
+    _prewarmActiveView('merchant-filter');
     notifyListeners();
   }
 
   void clearMerchantFilter() {
     _filter = _filter.copyWith(clearMerchant: true);
+    _prewarmActiveView('merchant-clear');
     notifyListeners();
   }
 
@@ -312,6 +539,8 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.yearly => SummaryWindow.allTime,
       SummaryWindow.allTime => SummaryWindow.monthly,
     };
+    _invalidateViewCaches();
+    _prewarmCriticalCaches('summary-window');
     notifyListeners();
     await _projectRecurringGhostsForActiveWindow();
   }
@@ -326,6 +555,8 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.yearly => DateTime(_periodReferenceDate.year + direction),
       SummaryWindow.allTime => _periodReferenceDate,
     };
+    _invalidateViewCaches();
+    _prewarmCriticalCaches('summary-period');
     notifyListeners();
     await _projectRecurringGhostsForActiveWindow();
   }
@@ -333,6 +564,8 @@ class TransactionStore extends ChangeNotifier {
   Future<void> resetSummaryToCurrentMonth() async {
     _summaryWindow = SummaryWindow.monthly;
     _periodReferenceDate = _monthStart(_clock());
+    _invalidateViewCaches();
+    _prewarmCriticalCaches('summary-reset');
     notifyListeners();
     await _projectRecurringGhostsForActiveWindow();
   }
@@ -522,6 +755,8 @@ class TransactionStore extends ChangeNotifier {
       targetDate: targetDate,
     );
     _recurringGhostTransactions = _sortGhosts(ghosts);
+    _invalidateViewCaches();
+    _prewarmCriticalCaches('recurring-ghosts');
     DebugConsole.log(
       '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
     );
@@ -537,6 +772,8 @@ class TransactionStore extends ChangeNotifier {
     );
     _limits = payload.limits;
     _rebuildDerivedIndexes();
+    _invalidateViewCaches();
+    _prewarmCriticalCaches('reload');
     notifyListeners();
   }
 

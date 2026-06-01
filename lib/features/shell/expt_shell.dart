@@ -245,6 +245,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   onBudgetTargetEditorClosed: () {
                     _sheetHostKey.currentState?.closeBudgetTargetEditor();
                   },
+                  onFocusedSheetDismissRequested: () {
+                    _sheetHostKey.currentState?.closeAll();
+                  },
                   budgetEditorActiveKey: _budgetEditorActiveKey,
                 ),
                 StatsPage(store: _transactionStore),

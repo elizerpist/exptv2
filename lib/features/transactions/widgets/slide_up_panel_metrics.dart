@@ -10,8 +10,8 @@ class SlideUpPanelMetrics {
   static const actionBottomInset = 24.0;
   static const horizontalInset = 20.0;
   static const keyboardInsetCap = 180.0;
-  static const transactionCompactMaxHeight = 448.0;
-  static const transactionCompactScreenFactor = 0.50;
+  static const transactionCompactMaxHeight = 540.0;
+  static const transactionCompactScreenFactor = 0.90;
   static const budgetBaseHeight = 440.0;
 
   static double fullHeightForScreen(double screenHeight) {
@@ -21,19 +21,22 @@ class SlideUpPanelMetrics {
   }
 
   static double fullHeight(BuildContext context) {
-    return fullHeightForScreen(MediaQuery.sizeOf(context).height);
+    return fullHeightForScreen(_screenHeight(context));
   }
 
   static double transactionHeight(
     BuildContext context, {
     required bool pickerOpen,
   }) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
+    final screenHeight = _screenHeight(context);
+    final screenWidth = _screenWidth(context);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final compactHeight = math.min(
-      transactionCompactMaxHeight,
-      screenHeight * transactionCompactScreenFactor,
-    );
+    final compactHeight = screenHeight < 700 && screenWidth > 500
+        ? math.min(300.0, screenHeight * 0.50)
+        : math.min(
+            transactionCompactMaxHeight,
+            screenHeight * transactionCompactScreenFactor,
+          );
     final baseHeight = pickerOpen
         ? fullHeightForScreen(screenHeight)
         : compactHeight;
@@ -43,10 +46,24 @@ class SlideUpPanelMetrics {
   }
 
   static double budgetHeight(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
+    final screenHeight = _screenHeight(context);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     return (budgetBaseHeight + math.min(keyboardInset, keyboardInsetCap))
         .clamp(0.0, screenHeight)
         .toDouble();
+  }
+
+  static double _screenHeight(BuildContext context) {
+    final mediaHeight = MediaQuery.sizeOf(context).height;
+    final view = View.of(context);
+    final viewHeight = view.physicalSize.height / view.devicePixelRatio;
+    return math.max(mediaHeight, viewHeight);
+  }
+
+  static double _screenWidth(BuildContext context) {
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final view = View.of(context);
+    final viewWidth = view.physicalSize.width / view.devicePixelRatio;
+    return math.min(mediaWidth, viewWidth);
   }
 }

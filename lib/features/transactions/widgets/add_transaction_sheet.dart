@@ -45,6 +45,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool? _lastLoggedPickerOpen;
   int? _lastLoggedCategoryCount;
   double? _lastLoggedPanelHeight;
+  double? _lastLoggedContentHeight;
+  double? _lastLoggedKeyboardInset;
   var _firstBuildLogged = false;
 
   bool get _editing => widget.initialTransaction != null;
@@ -66,6 +68,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _lastLoggedPickerOpen = null;
       _lastLoggedCategoryCount = null;
       _lastLoggedPanelHeight = null;
+      _lastLoggedContentHeight = null;
+      _lastLoggedKeyboardInset = null;
     }
     if (!oldWidget.visible && widget.visible) {
       _logSheetInit();
@@ -127,6 +131,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
+                          if (widget.visible) {
+                            _logContentMetrics(
+                              availableHeight: constraints.maxHeight,
+                              panelHeight: panelHeight,
+                              keyboardInset: keyboardInset,
+                            );
+                          }
                           return SingleChildScrollView(
                             reverse: true,
                             padding: const EdgeInsets.fromLTRB(
@@ -286,6 +297,30 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         '[SlideUpMenu] ${editing ? 'EditTransaction' : 'AddTransaction'} sheet build '
         'editing=$editing picker=$pickerOpen categories=$categoryCount '
         'requestedPanel=${panelHeight.toStringAsFixed(1)}',
+      );
+    });
+  }
+
+  void _logContentMetrics({
+    required double availableHeight,
+    required double panelHeight,
+    required double keyboardInset,
+  }) {
+    if (_lastLoggedContentHeight == availableHeight &&
+        _lastLoggedKeyboardInset == keyboardInset) {
+      return;
+    }
+    _lastLoggedContentHeight = availableHeight;
+    _lastLoggedKeyboardInset = keyboardInset;
+    final editing = _editing;
+    final pickerOpen = _categoryPickerOpen;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[Perf] ${editing ? 'EditTransaction' : 'AddTransaction'} layout '
+        'panel=${panelHeight.toStringAsFixed(1)} '
+        'content=${availableHeight.toStringAsFixed(1)} '
+        'keyboard=${keyboardInset.toStringAsFixed(1)} picker=$pickerOpen',
       );
     });
   }
