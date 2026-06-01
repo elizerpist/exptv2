@@ -523,6 +523,9 @@ class _BudgetTargetSheetSlotState extends State<_BudgetTargetSheetSlot> {
     required DateTime requestedAt,
     required bool headerExpanded,
   }) {
+    if (widget.activeKey.value != item.key) {
+      widget.activeKey.value = item.key;
+    }
     setState(() {
       _open = true;
       _item = item;
@@ -532,10 +535,6 @@ class _BudgetTargetSheetSlotState extends State<_BudgetTargetSheetSlot> {
       '[BudgetTargetEditor] backheader state queued '
       'headerExpanded=$headerExpanded elapsed=${_elapsedMs(requestedAt)}ms',
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _openRequestedAt != requestedAt) return;
-      widget.activeKey.value = item.key;
-    });
   }
 
   void close() {

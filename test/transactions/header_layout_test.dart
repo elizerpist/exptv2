@@ -306,6 +306,45 @@ void main() {
     expect(during, greaterThan(after));
   });
 
+  testWidgets('header content stays visible until upward slide is almost complete', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+
+    var balanceOpacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-balance-text')),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(balanceOpacity.opacity, moreOrLessEquals(1, epsilon: 0.01));
+
+    await tester.pumpAndSettle();
+    balanceOpacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-balance-text')),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(balanceOpacity.opacity, moreOrLessEquals(0, epsilon: 0.01));
+  });
+
   testWidgets('header card animates downward when backheader closes', (
     tester,
   ) async {

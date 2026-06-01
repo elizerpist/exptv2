@@ -83,7 +83,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       vsync: this,
       duration: const Duration(milliseconds: 300),
       reverseDuration: const Duration(milliseconds: 260),
-    )..addListener(_syncHeaderSlideFromController);
+    );
     widget.budgetEditorActiveKey?.addListener(_syncBudgetEditorActiveKey);
     widget.store.start();
   }
@@ -156,9 +156,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     widget.onBudgetTargetEditorRequested == null),
           );
 
-          final headerSlideProgress = _headerSlideController.value;
-          final showBackheader =
-              _headerExpanded || headerSlideProgress > 0.001;
           final budgetHostItem = widget.onBudgetTargetEditorRequested == null
               ? _budgetEditorItem ?? _defaultBudgetEditorItem()
               : null;
@@ -216,35 +213,51 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   ),
                 ],
               ),
-              if (showBackheader)
-                CategoryBudgetStage(
-                  items: widget.store.backheaderBudgetItems,
-                  categoryBars: widget.store.categoryBudgetBars,
-                  periodLabel: widget.store.activePeriodLabel,
-                  activeKey: _backheaderActiveKey,
-                  onActiveItemChanged: _setBackheaderActiveItem,
-                  onItemTap: _openBudgetTargetEditor,
-                ),
-              if (showBackheader)
-                _buildHeaderCard(
-                  expenseTheme: expenseTheme,
-                  visibleFastInfoExtent: 0,
-                  slideProgress: headerSlideProgress,
-                )
-              else
-                HeaderFastInfoSurface(
-                  visibleFastInfoExtent: visibleFastInfoExtent,
-                  cardColor: expenseTheme.headerCard,
-                  fastInfo: FastInfoPanel(
-                    config: FastInfoConfig.defaults(),
-                    backgroundColor: Colors.transparent,
-                  ),
-                  header: _buildHeaderCard(
-                    expenseTheme: expenseTheme,
+              AnimatedBuilder(
+                animation: _headerSlideController,
+                builder: (context, _) {
+                  final rawHeaderSlideProgress = _headerSlideController.value;
+                  final headerSlideProgress = _headerSlideVisualProgress();
+                  final showBackheader =
+                      _headerExpanded || rawHeaderSlideProgress > 0.001;
+                  if (showBackheader) {
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CategoryBudgetStage(
+                          items: widget.store.backheaderBudgetItems,
+                          categoryBars: widget.store.categoryBudgetBars,
+                          periodLabel: widget.store.activePeriodLabel,
+                          activeKey: _backheaderActiveKey,
+                          onActiveItemChanged: _setBackheaderActiveItem,
+                          onItemTap: _openBudgetTargetEditor,
+                        ),
+                        _buildHeaderCard(
+                          expenseTheme: expenseTheme,
+                          visibleFastInfoExtent: 0,
+                          slideProgress: headerSlideProgress,
+                          contentOpacity: _headerContentOpacity(
+                            headerSlideProgress,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return HeaderFastInfoSurface(
                     visibleFastInfoExtent: visibleFastInfoExtent,
-                    drawSurface: false,
-                  ),
-                ),
+                    cardColor: expenseTheme.headerCard,
+                    fastInfo: FastInfoPanel(
+                      config: FastInfoConfig.defaults(),
+                      backgroundColor: Colors.transparent,
+                    ),
+                    header: _buildHeaderCard(
+                      expenseTheme: expenseTheme,
+                      visibleFastInfoExtent: visibleFastInfoExtent,
+                      drawSurface: false,
+                    ),
+                  );
+                },
+              ),
               if (_categoryMode != null)
                 CategoryMenuOverlay(
                   store: widget.store,
@@ -336,11 +349,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     setState(() => _fastInfoExtent = next);
   }
 
-  void _syncHeaderSlideFromController() {
-    if (!mounted) return;
-    setState(() {});
-  }
-
   void _toggleHeaderExpanded() {
     _headerPullController.stop();
     _headerPullController.value = 0;
@@ -376,7 +384,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     );
     await _headerSlideController.reverse();
     if (!mounted) return;
-    setState(() {});
     DebugConsole.log('[HeaderCard] collapse complete');
   }
 
@@ -399,11 +406,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     required double visibleFastInfoExtent,
     bool drawSurface = true,
     double? slideProgress,
+    double? contentOpacity,
   }) {
-    final hideHeaderContent = _headerExpanded;
     return TransactionHeaderCard(
       balanceText: widget.store.totalBalanceText,
-      expanded: hideHeaderContent,
+      expanded: _headerExpanded,
       magnetType: expenseTheme.settings.magnetType,
       accent: expenseTheme.accent,
       cardColor: expenseTheme.headerCard,
@@ -413,6 +420,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       balanceHidden: _balanceHidden,
       drawSurface: drawSurface,
       slideProgress: slideProgress,
+      contentOpacity: contentOpacity,
       onBalanceVisibilityPressed: () {
         setState(() => _balanceHidden = !_balanceHidden);
       },
@@ -421,6 +429,23 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       onVerticalDragEnd: _handleHeaderDragEnd,
       onExpandPressed: _toggleHeaderExpanded,
     );
+  }
+
+  double _headerContentOpacity(double slideProgress) {
+    const fadeStart = 0.86;
+    if (slideProgress <= fadeStart) return 1;
+    final fadeProgress = ((slideProgress - fadeStart) / (1 - fadeStart))
+        .clamp(0.0, 1.0)
+        .toDouble();
+    return 1 - fadeProgress;
+  }
+
+  double _headerSlideVisualProgress() {
+    final raw = _headerSlideController.value.clamp(0.0, 1.0).toDouble();
+    if (_headerSlideController.status == AnimationStatus.reverse) {
+      return 1 - Curves.easeOutCubic.transform(1 - raw);
+    }
+    return Curves.easeOutCubic.transform(raw);
   }
 
   double _totalIncome() {

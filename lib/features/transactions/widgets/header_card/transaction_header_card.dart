@@ -24,6 +24,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.drawSurface = true,
     this.onBalanceVisibilityPressed,
     this.slideProgress,
+    this.contentOpacity,
   });
 
   final String balanceText;
@@ -42,26 +43,179 @@ class TransactionHeaderCard extends StatelessWidget {
   final bool drawSurface;
   final VoidCallback? onBalanceVisibilityPressed;
   final double? slideProgress;
+  final double? contentOpacity;
 
   static const height = TransactionHeaderMetrics.cardHeight;
 
   @override
   Widget build(BuildContext context) {
     final visibleBalanceText = balanceHidden ? '••••••• Ft' : balanceText;
-    return SizedBox(
-      height: height,
-      width: double.infinity,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(
-              begin: 0,
-              end: slideProgress ?? (expanded ? 1 : 0),
+    final resolvedContentOpacity = contentOpacity ?? (expanded ? 0.0 : 1.0);
+
+    Widget headerContentOpacity(Widget child) {
+      return AnimatedOpacity(
+        duration: contentOpacity == null
+            ? const Duration(milliseconds: 180)
+            : Duration.zero,
+        opacity: resolvedContentOpacity,
+        child: child,
+      );
+    }
+
+    final headerBody = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragUpdate: onVerticalDragUpdate,
+      onVerticalDragEnd: onVerticalDragEnd,
+      child: SizedBox(
+        key: const ValueKey('transaction-header-card'),
+        height: height,
+        width: double.infinity,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (drawSurface)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(24),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        offset: const Offset(0, 4),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const Positioned(
+              top: TransactionHeaderMetrics.titleTop,
+              left: 30,
+              child: Text(
+                'ExpenseTracker',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.gray800,
+                ),
+              ),
             ),
-            duration: slideProgress == null
-                ? const Duration(milliseconds: 300)
-                : Duration.zero,
+            Positioned(
+              top: TransactionHeaderMetrics.cameraTop,
+              left: 30,
+              child: Container(
+                key: const ValueKey('header-camera-chip'),
+                width: 36,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBBF24),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: AppColors.white, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.photo_camera_outlined,
+                  color: AppColors.white,
+                  size: 21,
+                ),
+              ),
+            ),
+            Positioned(
+              top: TransactionHeaderMetrics.magnetTop,
+              left: 0,
+              right: 0,
+              child: SizedBox(
+                height: TransactionHeaderMetrics.magnetHeight,
+                child: MagnetStrip(
+                  type: magnetType,
+                  totalIncome: totalIncome,
+                  totalExpense: totalExpense,
+                  accent: accent,
+                  height: TransactionHeaderMetrics.magnetHeight,
+                ),
+              ),
+            ),
+            Positioned(
+              top: TransactionHeaderMetrics.balanceLabelTop,
+              left: 30,
+              child: headerContentOpacity(
+                const Text(
+                  'Egyenleg',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.gray600,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: TransactionHeaderMetrics.balanceTop,
+              left: 30,
+              right: 90,
+              child: headerContentOpacity(
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        visibleBalanceText,
+                        key: const ValueKey('header-balance-text'),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.gray800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    IconButton(
+                      key: const ValueKey(
+                        'header-balance-visibility-button',
+                      ),
+                      onPressed: onBalanceVisibilityPressed,
+                      icon: Icon(
+                        balanceHidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppColors.gray800,
+                        size: 20,
+                      ),
+                      tooltip: balanceHidden
+                          ? 'Egyenleg megjelenítése'
+                          : 'Egyenleg elrejtése',
+                      splashRadius: 16,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: TransactionHeaderMetrics.categoryButtonTop,
+              right: 25,
+              child: headerContentOpacity(
+                _HeaderCategoryButton(onPressed: onCategoryPressed),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final headerSlide = slideProgress;
+    final slidingHeader = headerSlide == null
+        ? TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: expanded ? 1 : 0),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
             builder: (context, value, child) {
               return Transform.translate(
@@ -72,165 +226,23 @@ class TransactionHeaderCard extends StatelessWidget {
                 child: child,
               );
             },
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onVerticalDragUpdate: onVerticalDragUpdate,
-              onVerticalDragEnd: onVerticalDragEnd,
-              child: SizedBox(
-                key: const ValueKey('transaction-header-card'),
-                height: height,
-                width: double.infinity,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                  if (drawSurface)
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: const BorderRadius.vertical(
-                            bottom: Radius.circular(24),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: 0.15,
-                              ),
-                              offset: const Offset(0, 4),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  const Positioned(
-                    top: TransactionHeaderMetrics.titleTop,
-                    left: 30,
-                    child: Text(
-                      'ExpenseTracker',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.gray800,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: TransactionHeaderMetrics.cameraTop,
-                    left: 30,
-                    child: Container(
-                      key: const ValueKey('header-camera-chip'),
-                      width: 36,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFBBF24),
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(color: AppColors.white, width: 2),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.photo_camera_outlined,
-                        color: AppColors.white,
-                        size: 21,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: TransactionHeaderMetrics.magnetTop,
-                    left: 0,
-                    right: 0,
-                    child: SizedBox(
-                      height: TransactionHeaderMetrics.magnetHeight,
-                      child: MagnetStrip(
-                        type: magnetType,
-                        totalIncome: totalIncome,
-                        totalExpense: totalExpense,
-                        accent: accent,
-                        height: TransactionHeaderMetrics.magnetHeight,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: TransactionHeaderMetrics.balanceLabelTop,
-                    left: 30,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 180),
-                      opacity: expanded ? 0 : 1,
-                      child: const Text(
-                        'Egyenleg',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.gray600,
-                          letterSpacing: 1.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: TransactionHeaderMetrics.balanceTop,
-                    left: 30,
-                    right: 90,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 180),
-                      opacity: expanded ? 0 : 1,
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              visibleBalanceText,
-                              key: const ValueKey('header-balance-text'),
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.gray800,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          IconButton(
-                            key: const ValueKey(
-                              'header-balance-visibility-button',
-                            ),
-                            onPressed: onBalanceVisibilityPressed,
-                            icon: Icon(
-                              balanceHidden
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: AppColors.gray800,
-                              size: 20,
-                            ),
-                            tooltip: balanceHidden
-                                ? 'Egyenleg megjelenítése'
-                                : 'Egyenleg elrejtése',
-                            splashRadius: 16,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 30,
-                              height: 30,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                    Positioned(
-                      top: TransactionHeaderMetrics.categoryButtonTop,
-                      right: 25,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: expanded ? 0 : 1,
-                        child: _HeaderCategoryButton(
-                          onPressed: onCategoryPressed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: headerBody,
+          )
+        : Transform.translate(
+            offset: Offset(
+              0,
+              -TransactionHeaderMetrics.expandedSlideDistance * headerSlide,
             ),
-          ),
+            child: headerBody,
+          );
+
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          slidingHeader,
           Positioned(
             top: TransactionHeaderMetrics.expandButtonTop - 13,
             left: 0,
