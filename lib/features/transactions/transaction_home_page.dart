@@ -68,7 +68,7 @@ class TransactionHomePage extends StatefulWidget {
 class _TransactionHomePageState extends State<TransactionHomePage>
     with TickerProviderStateMixin {
   var _headerExpanded = false;
-  var _fastInfoExtent = 0.0;
+  late final ValueNotifier<double> _fastInfoExtent;
   var _balanceHidden = false;
   String? _backheaderActiveKey;
   late final AnimationController _headerPullController;
@@ -83,6 +83,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   @override
   void initState() {
     super.initState();
+    _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
       ..addListener(_syncHeaderPullFromController);
     _headerSlideController = AnimationController(
@@ -109,6 +110,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   @override
   void dispose() {
     widget.budgetEditorActiveKey?.removeListener(_syncBudgetEditorActiveKey);
+    _fastInfoExtent.dispose();
     _headerPullController.dispose();
     _headerSlideController.dispose();
     super.dispose();
@@ -154,9 +156,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final visibleGhostTransactions =
               widget.store.visibleGhostTransactions;
           final visibleLogEntries = widget.store.visibleDisplayLogEntries;
-          final visibleFastInfoExtent = _fastInfoExtent
-              .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
-              .toDouble();
           _notifyBlockingOverlay(
             _categoryEditorOpen ||
                 (_budgetEditorItem != null &&
@@ -255,19 +254,29 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       ],
                     );
                   }
-                  return HeaderFastInfoSurface(
-                    visibleFastInfoExtent: visibleFastInfoExtent,
-                    cardColor: expenseTheme.headerCard,
-                    fastInfo: FastInfoPanel(
-                      config:
-                          widget.fastInfoConfig ?? FastInfoConfig.defaults(),
-                      backgroundColor: Colors.transparent,
-                    ),
-                    header: _buildHeaderCard(
-                      expenseTheme: expenseTheme,
-                      visibleFastInfoExtent: visibleFastInfoExtent,
-                      drawSurface: false,
-                    ),
+                  return ValueListenableBuilder<double>(
+                    key: const ValueKey('header-fast-info-extent-builder'),
+                    valueListenable: _fastInfoExtent,
+                    builder: (context, fastInfoExtent, _) {
+                      final visibleFastInfoExtent = fastInfoExtent
+                          .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+                          .toDouble();
+                      return HeaderFastInfoSurface(
+                        visibleFastInfoExtent: visibleFastInfoExtent,
+                        cardColor: expenseTheme.headerCard,
+                        fastInfo: FastInfoPanel(
+                          config:
+                              widget.fastInfoConfig ??
+                              FastInfoConfig.defaults(),
+                          backgroundColor: Colors.transparent,
+                        ),
+                        header: _buildHeaderCard(
+                          expenseTheme: expenseTheme,
+                          visibleFastInfoExtent: visibleFastInfoExtent,
+                          drawSurface: false,
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -355,13 +364,12 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _syncHeaderPullFromController() {
-    if (!mounted) return;
     final rawNext = _headerPullController.value
         .clamp(-12.0, TransactionHeaderMetrics.fastInfoHeight)
         .toDouble();
     final next = rawNext.abs() < 0.5 ? 0.0 : rawNext;
-    if ((next - _fastInfoExtent).abs() < 0.01) return;
-    setState(() => _fastInfoExtent = next);
+    if ((next - _fastInfoExtent.value).abs() < 0.01) return;
+    _fastInfoExtent.value = next;
   }
 
   void _toggleHeaderExpanded() {
@@ -376,8 +384,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   Future<void> _expandHeader() async {
     _headerSlideController.stop();
+    _fastInfoExtent.value = 0;
     setState(() {
-      _fastInfoExtent = 0;
       _headerExpanded = true;
     });
     final startedAt = DateTime.now();
@@ -393,8 +401,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   Future<void> _collapseHeader() async {
     _headerSlideController.stop();
+    _fastInfoExtent.value = 0;
     setState(() {
-      _fastInfoExtent = 0;
       _headerExpanded = false;
     });
     final startedAt = DateTime.now();
@@ -478,16 +486,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     final resistedDelta = details.delta.dy > 0
         ? details.delta.dy * 0.85
         : details.delta.dy;
-    final next = (_fastInfoExtent + resistedDelta)
+    final current = _fastInfoExtent.value;
+    final next = (current + resistedDelta)
         .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
         .toDouble();
-    if (next == _fastInfoExtent) return;
+    if (next == current) return;
     _headerPullController.value = next;
   }
 
   void _handleHeaderDragEnd(DragEndDetails details) {
     if (_headerExpanded) return;
-    final start = _fastInfoExtent
+    final start = _fastInfoExtent.value
         .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
         .toDouble();
     if (start == 0) {
@@ -510,8 +519,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           .then<void>((_) {
             if (!mounted) return;
             _headerPullController.value = 0;
-            if (_fastInfoExtent == 0) return;
-            setState(() => _fastInfoExtent = 0);
+            if (_fastInfoExtent.value == 0) return;
+            _fastInfoExtent.value = 0;
           })
           .catchError((_) {}),
     );
@@ -523,8 +532,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     widget.store.setActiveType(type);
     widget.onBudgetTargetEditorClosed?.call();
     widget.onFocusedSheetDismissRequested?.call();
+    _fastInfoExtent.value = 0;
     setState(() {
-      _fastInfoExtent = 0;
       if (_categoryEditorOpen) {
         _categoryEditorOpen = false;
         _editingCategory = null;
@@ -639,7 +648,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         return;
       }
       _headerExpanded = false;
-      _fastInfoExtent = 0;
+      _fastInfoExtent.value = 0;
       _categoryMode = CategoryOverlayMode.picker;
     });
   }

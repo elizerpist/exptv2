@@ -199,9 +199,7 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
-  testWidgets('FAB long press opens the new category editor', (
-    tester,
-  ) async {
+  testWidgets('FAB long press opens the new category editor', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -213,10 +211,7 @@ void main() {
       find.byKey(const ValueKey('category-editor-slide-card')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('transaction-editor-card')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
@@ -244,17 +239,13 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
-  testWidgets('FAB single tap dispatches immediately', (
-    tester,
-  ) async {
+  testWidgets('FAB single tap dispatches immediately', (tester) async {
     var singleTaps = 0;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Center(
-            child: ExptFab(onPressed: () => singleTaps += 1),
-          ),
+          body: Center(child: ExptFab(onPressed: () => singleTaps += 1)),
         ),
       ),
     );
@@ -273,9 +264,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Center(
-            child: ExptFab(onPressed: () => singleTaps += 1),
-          ),
+          body: Center(child: ExptFab(onPressed: () => singleTaps += 1)),
         ),
       ),
     );
@@ -329,6 +318,75 @@ void main() {
       expect(rect.top, greaterThanOrEqualTo(cardRect.top));
       expect(rect.bottom, lessThanOrEqualTo(cardRect.bottom));
     }
+  });
+
+  testWidgets('transaction editor closed layout is not full-sheet scrollable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await _tapFab(tester);
+
+    final nameField = find.widgetWithText(TextField, 'Tranzakció neve');
+    expect(nameField, findsOneWidget);
+    expect(
+      find.ancestor(
+        of: nameField,
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-category-selector')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('transaction-category-scroll-list')),
+        matching: find.byType(Scrollable),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('transaction editor save button aligns with category editor', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await _tapFab(tester);
+    final transactionSaveBottom = tester
+        .getRect(find.byKey(const ValueKey('transaction-save-button')))
+        .bottom;
+
+    final cardTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('transaction-editor-card')),
+    );
+    final gesture = await tester.startGesture(
+      cardTopLeft + const Offset(200, 24),
+    );
+    await gesture.moveBy(const Offset(0, 180));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+    final categorySaveBottom = tester
+        .getRect(find.byKey(const ValueKey('category-save-button')))
+        .bottom;
+
+    expect(
+      transactionSaveBottom,
+      moreOrLessEquals(categorySaveBottom, epsilon: 4),
+    );
   });
 
   testWidgets('transaction category field opens inline scroll picker', (
@@ -387,7 +445,10 @@ void main() {
     expect(
       editorRect.height,
       moreOrLessEquals(
-        SlideUpPanelMetrics.fullHeightForScreen(screenHeight),
+        SlideUpPanelMetrics.transactionHeight(
+          tester.element(find.byKey(const ValueKey('transaction-editor-card'))),
+          pickerOpen: true,
+        ),
         epsilon: 0.1,
       ),
     );
@@ -395,7 +456,7 @@ void main() {
     expect(
       saveAfter.bottom,
       moreOrLessEquals(
-        screenHeight - SlideUpPanelMetrics.actionBottomInset,
+        screenHeight - SlideUpPanelMetrics.transactionActionBottomInset,
         epsilon: 1,
       ),
     );
@@ -457,10 +518,7 @@ void main() {
       find.byKey(const ValueKey('category-menu-back-button')),
       findsNothing,
     );
-    expect(
-      find.byKey(const ValueKey('category-add-button')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('category-add-button')), findsNothing);
   });
 
   testWidgets('transaction editor is focused and aligned to summary pill', (
@@ -514,26 +572,27 @@ void main() {
     expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
   });
 
-  testWidgets('outside tap on type pills dismisses the focused transaction editor', (
-    tester,
-  ) async {
-    await tester.pumpWidget(buildApp());
-    await tester.pumpAndSettle();
+  testWidgets(
+    'outside tap on type pills dismisses the focused transaction editor',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
 
-    await _tapFab(tester);
-    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+      await _tapFab(tester);
+      expect(find.text('Új kiadási tranzakció'), findsOneWidget);
 
-    await tester.tap(find.text('Bevétel'), warnIfMissed: false);
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Bevétel'), warnIfMissed: false);
+      await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('transaction-editor-card')),
-      findsNothing,
-    );
-    await _tapFab(tester);
-    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
-    expect(find.text('Új bevételi tranzakció'), findsNothing);
-  });
+      expect(
+        find.byKey(const ValueKey('transaction-editor-card')),
+        findsNothing,
+      );
+      await _tapFab(tester);
+      expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+      expect(find.text('Új bevételi tranzakció'), findsNothing);
+    },
+  );
 
   testWidgets('logbox tap opens transaction editor in edit mode', (
     tester,
@@ -574,7 +633,6 @@ void main() {
 
     expect(deletedTransactionIds, [250909]);
   });
-
 
   testWidgets('add transaction sheet opens date and time pickers', (
     tester,
@@ -753,6 +811,13 @@ Map<String, Object?> expenseBootstrapPayload() {
 }
 
 Future<void> _tapFab(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(390, 919);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('expt-fab')));
   await tester.pump(const Duration(milliseconds: 350));
   await tester.pumpAndSettle();

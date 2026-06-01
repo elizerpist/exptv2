@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/debug/debug_console.dart';
@@ -26,6 +28,7 @@ class TransactionStore extends ChangeNotifier {
   final DateTime Function() _clock;
   var _filter = const TransactionFilter();
   var _summaryWindow = SummaryWindow.allTime;
+  var _summaryChangeGeneration = 0;
   late DateTime _periodReferenceDate;
   var _loading = false;
   String? _error;
@@ -597,9 +600,9 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.allTime => SummaryWindow.monthly,
     };
     _invalidateViewCaches();
-    _prewarmCriticalCaches('summary-window');
+    final generation = ++_summaryChangeGeneration;
     notifyListeners();
-    await _projectRecurringGhostsForActiveWindow();
+    await _finishSummaryChange('summary-window', generation);
   }
 
   Future<void> shiftSummaryPeriod(int direction) async {
@@ -613,18 +616,25 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.allTime => _periodReferenceDate,
     };
     _invalidateViewCaches();
-    _prewarmCriticalCaches('summary-period');
+    final generation = ++_summaryChangeGeneration;
     notifyListeners();
-    await _projectRecurringGhostsForActiveWindow();
+    await _finishSummaryChange('summary-period', generation);
   }
 
   Future<void> resetSummaryToCurrentMonth() async {
     _summaryWindow = SummaryWindow.monthly;
     _periodReferenceDate = _monthStart(_clock());
     _invalidateViewCaches();
-    _prewarmCriticalCaches('summary-reset');
+    final generation = ++_summaryChangeGeneration;
     notifyListeners();
-    await _projectRecurringGhostsForActiveWindow();
+    await _finishSummaryChange('summary-reset', generation);
+  }
+
+  Future<void> _finishSummaryChange(String reason, int generation) async {
+    await Future<void>.delayed(Duration.zero);
+    if (generation != _summaryChangeGeneration) return;
+    _prewarmCriticalCaches(reason);
+    await _projectRecurringGhostsForActiveWindow(generation: generation);
   }
 
   Future<void> addTransaction({
@@ -799,7 +809,7 @@ class TransactionStore extends ChangeNotifier {
     await _reload();
   }
 
-  Future<void> _projectRecurringGhostsForActiveWindow() async {
+  Future<void> _projectRecurringGhostsForActiveWindow({int? generation}) async {
     if (_summaryWindow == SummaryWindow.allTime) return;
     final targetDate = DateTime(
       _periodReferenceDate.year,
@@ -811,6 +821,7 @@ class TransactionStore extends ChangeNotifier {
     final ghosts = await _repository.ensureRecurringGhostTransactions(
       targetDate: targetDate,
     );
+    if (generation != null && generation != _summaryChangeGeneration) return;
     _recurringGhostTransactions = _sortGhosts(ghosts);
     _invalidateViewCaches();
     _prewarmCriticalCaches('recurring-ghosts');

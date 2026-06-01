@@ -436,6 +436,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('header-fast-info-extent-builder')),
+      findsOneWidget,
+    );
+
     final gesture = await tester.startGesture(const Offset(180, 80));
     await gesture.moveBy(const Offset(0, 160));
     await tester.pump();

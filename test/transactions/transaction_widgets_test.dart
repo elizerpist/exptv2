@@ -148,6 +148,32 @@ void main() {
     expect(find.text('Kiadások'), findsNothing);
   });
 
+  testWidgets('summary pill drag feedback is transform-only', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Május 2026',
+          value: '-66 Ft',
+          onIntervalSwipe: () {},
+          onPeriodSwipe: (_) {},
+          onResetToCurrentMonth: () {},
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('summary-pill')),
+        matching: find.byType(AnimatedContainer),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('summary-pill-transform')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('search pill shows merchant filter capsule', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

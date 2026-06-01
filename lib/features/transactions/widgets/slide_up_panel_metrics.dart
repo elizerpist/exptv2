@@ -8,6 +8,7 @@ class SlideUpPanelMetrics {
   const SlideUpPanelMetrics._();
 
   static const actionBottomInset = 24.0;
+  static const transactionActionBottomInset = 44.0;
   static const horizontalInset = 20.0;
   static const keyboardInsetCap = 180.0;
   static const transactionCompactMaxHeight = 540.0;
@@ -29,16 +30,13 @@ class SlideUpPanelMetrics {
     required bool pickerOpen,
   }) {
     final screenHeight = _screenHeight(context);
-    final screenWidth = _screenWidth(context);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final compactHeight = screenHeight < 700 && screenWidth > 500
-        ? math.min(300.0, screenHeight * 0.50)
-        : math.min(
-            transactionCompactMaxHeight,
-            screenHeight * transactionCompactScreenFactor,
-          );
+    final compactHeight = math.min(
+      transactionCompactMaxHeight,
+      screenHeight * transactionCompactScreenFactor,
+    );
     final baseHeight = pickerOpen
-        ? fullHeightForScreen(screenHeight)
+        ? math.max(fullHeightForScreen(screenHeight), compactHeight)
         : compactHeight;
     return (baseHeight + math.min(keyboardInset, keyboardInsetCap))
         .clamp(0.0, screenHeight)
@@ -58,12 +56,5 @@ class SlideUpPanelMetrics {
     final view = View.of(context);
     final viewHeight = view.physicalSize.height / view.devicePixelRatio;
     return math.max(mediaHeight, viewHeight);
-  }
-
-  static double _screenWidth(BuildContext context) {
-    final mediaWidth = MediaQuery.sizeOf(context).width;
-    final view = View.of(context);
-    final viewWidth = view.physicalSize.width / view.devicePixelRatio;
-    return math.min(mediaWidth, viewWidth);
   }
 }

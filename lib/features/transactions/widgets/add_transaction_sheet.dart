@@ -76,7 +76,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
   }
 
-
   void _logSheetInit() {
     final label = _editing ? 'EditTransaction' : 'AddTransaction';
     DebugConsole.log(
@@ -126,96 +125,74 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             child: Builder(
               builder: (context) {
                 final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-                return Column(
-                  children: [
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          if (widget.visible) {
-                            _logContentMetrics(
-                              availableHeight: constraints.maxHeight,
-                              panelHeight: panelHeight,
-                              keyboardInset: keyboardInset,
-                            );
-                          }
-                          return SingleChildScrollView(
-                            reverse: true,
-                            padding: const EdgeInsets.fromLTRB(
-                              SlideUpPanelMetrics.horizontalInset,
-                              20,
-                              SlideUpPanelMetrics.horizontalInset,
-                              0,
-                            ),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: constraints.maxHeight,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Center(
-                                    child: Container(
-                                      width: 42,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.gray200,
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    _title(type),
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.gray800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  TextField(
-                                    controller: _name,
-                                    decoration: transactionFieldDecoration(
-                                      'Tranzakció neve',
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  AmountField(controller: _amount),
-                                  const SizedBox(height: 16),
-                                  CategorySelectorField(
-                                    selected: _category,
-                                    onTap: _openCategoryPicker,
-                                  ),
-                                  if (_categoryPickerOpen) ...[
-                                    const SizedBox(height: 8),
-                                    CategoryScrollPicker(
-                                      key: _categoryPickerBoundaryKey,
-                                      keyPrefix: 'transaction-category',
-                                      categories: categories,
-                                      selected: _category,
-                                      onSelected: _selectCategory,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        SlideUpPanelMetrics.horizontalInset,
-                        16,
-                        SlideUpPanelMetrics.horizontalInset,
-                        keyboardInset + SlideUpPanelMetrics.actionBottomInset,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    SlideUpPanelMetrics.horizontalInset,
+                    14,
+                    SlideUpPanelMetrics.horizontalInset,
+                    keyboardInset +
+                        SlideUpPanelMetrics.transactionActionBottomInset,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (widget.visible) {
+                        _logContentMetrics(
+                          availableHeight: constraints.maxHeight,
+                          panelHeight: panelHeight,
+                          keyboardInset: keyboardInset,
+                        );
+                      }
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          Center(
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.gray200,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _title(type),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.gray800,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: _name,
+                            decoration: transactionFieldDecoration(
+                              'Tranzakció neve',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          AmountField(controller: _amount),
+                          const SizedBox(height: 12),
+                          CategorySelectorField(
+                            selected: _category,
+                            onTap: _openCategoryPicker,
+                          ),
+                          if (_categoryPickerOpen) ...[
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: CategoryScrollPicker(
+                                key: _categoryPickerBoundaryKey,
+                                keyPrefix: 'transaction-category',
+                                categories: categories,
+                                selected: _category,
+                                onSelected: _selectCategory,
+                              ),
+                            ),
+                          ] else
+                            const Spacer(),
+                          const SizedBox(height: 14),
                           DateTimeFields(
                             dateController: _date,
                             timeController: _time,
@@ -229,7 +206,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               style: const TextStyle(color: AppColors.expense),
                             ),
                           ],
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
                           FilledButton(
                             key: const ValueKey('transaction-save-button'),
                             onPressed: _saving ? null : _save,
@@ -241,9 +218,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             child: Text(_saving ? 'Mentés...' : 'Mentés'),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -252,7 +229,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       },
     );
   }
-
 
   double _panelHeightFor(BuildContext context) {
     return SlideUpPanelMetrics.transactionHeight(
