@@ -40,6 +40,10 @@ void main() {
         find.byKey(const ValueKey('limit-reset-inline-button')),
         findsOneWidget,
       );
+      final resetButton = tester.widget<IconButton>(
+        find.byKey(const ValueKey('limit-reset-inline-button')),
+      );
+      expect((resetButton.icon as Icon).icon, Icons.delete_outline);
 
       await tester.enterText(
         find.byKey(const ValueKey('limit-amount-input')),

@@ -26,6 +26,7 @@ class DebugConsole {
   }
 
   static void _scheduleNotify() {
+    if (!_version.hasListeners) return;
     if (_notifyScheduled) return;
     late final WidgetsBinding binding;
     try {

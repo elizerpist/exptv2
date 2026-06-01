@@ -15,7 +15,7 @@ class ExptFab extends StatefulWidget {
   });
 
   static const doubleTapWindow = Duration(milliseconds: 180);
-  static const singleTapDispatchDelay = Duration(milliseconds: 180);
+  static const singleTapDispatchDelay = Duration.zero;
 
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
@@ -80,22 +80,14 @@ class _ExptFabState extends State<ExptFab> {
     }
 
     _pendingTapStartedAt = DateTime.now();
-    _singleTapDispatched = false;
+    _singleTapDispatched = true;
     DebugConsole.log(
-      '[FAB] single tap queued '
-      'delay=${ExptFab.singleTapDispatchDelay.inMilliseconds}ms '
+      '[FAB] single tap immediate dispatch '
       'window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
     );
     _singleTapTimer?.cancel();
     _doubleTapTimer?.cancel();
-    _singleTapTimer = Timer(ExptFab.singleTapDispatchDelay, () {
-      if (!mounted || _pendingTapStartedAt == null) return;
-      final elapsed = _elapsedMs(_pendingTapStartedAt);
-      _singleTapTimer = null;
-      _singleTapDispatched = true;
-      DebugConsole.log('[FAB] single tap dispatch delay=${elapsed}ms');
-      widget.onPressed();
-    });
+    widget.onPressed();
     _doubleTapTimer = Timer(ExptFab.doubleTapWindow, () {
       if (!mounted || _pendingTapStartedAt == null) return;
       final elapsed = _elapsedMs(_pendingTapStartedAt);

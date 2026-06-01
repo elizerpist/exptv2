@@ -693,7 +693,7 @@ class _BudgetLimitCard extends StatelessWidget {
                 IconButton(
                   key: const ValueKey('limit-reset-inline-button'),
                   onPressed: onReset,
-                  icon: const Icon(Icons.refresh_outlined),
+                  icon: const Icon(Icons.delete_outline),
                   tooltip: 'Reset',
                 ),
               ],

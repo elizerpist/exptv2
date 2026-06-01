@@ -229,12 +229,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(
-      find.byKey(const ValueKey('transaction-editor-card')),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.tap(find.byKey(const ValueKey('expt-fab-double-tap-catcher')));
     await tester.pumpAndSettle();
 
     expect(
@@ -274,7 +269,7 @@ void main() {
     expect(find.byKey(const ValueKey('stats-page')), findsNothing);
   });
 
-  testWidgets('FAB single tap waits through the double tap grace window', (
+  testWidgets('FAB single tap dispatches immediately while arming double tap window', (
     tester,
   ) async {
     var singleTaps = 0;
@@ -296,16 +291,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 0);
+    expect(singleTaps, 1);
     expect(doubleTaps, 0);
 
-    await tester.pump(ExptFab.singleTapDispatchDelay);
+    await tester.pump(ExptFab.doubleTapWindow);
 
     expect(singleTaps, 1);
     expect(doubleTaps, 0);
   });
 
-  testWidgets('FAB quick second tap upgrades to double tap before single opens', (
+  testWidgets('FAB quick second tap dispatches double tap after immediate single', (
     tester,
   ) async {
     var singleTaps = 0;
@@ -329,7 +324,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 0);
+    expect(singleTaps, 1);
     expect(doubleTaps, 1);
   });
 
