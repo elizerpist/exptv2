@@ -4,7 +4,7 @@ class BudgetBarGeometry {
   static const barTop = 80.0;
   static const barHorizontalInset = 40.0;
   static const barHeight = 54.0;
-  static const frameHeight = barHeight * 1.10;
+  static const frameHeight = barHeight * 1.20;
   static const overhang = (frameHeight - barHeight) / 2;
   static const frameTop = barTop - overhang;
   static const frameHorizontalInset = barHorizontalInset - overhang;

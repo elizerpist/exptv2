@@ -15,6 +15,7 @@ class ExptFab extends StatefulWidget {
   });
 
   static const doubleTapWindow = Duration(milliseconds: 360);
+  static const singleTapDispatchDelay = Duration(milliseconds: 180);
 
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
@@ -26,11 +27,14 @@ class ExptFab extends StatefulWidget {
 
 class _ExptFabState extends State<ExptFab> {
   Timer? _singleTapTimer;
+  Timer? _doubleTapTimer;
   DateTime? _pendingTapStartedAt;
+  var _singleTapDispatched = false;
 
   @override
   void dispose() {
     _singleTapTimer?.cancel();
+    _doubleTapTimer?.cancel();
     super.dispose();
   }
 
@@ -61,33 +65,58 @@ class _ExptFabState extends State<ExptFab> {
   }
 
   void _handleTap() {
-    final pending = _singleTapTimer;
-    if (pending != null && pending.isActive) {
-      pending.cancel();
+    if (_pendingTapStartedAt != null) {
+      _singleTapTimer?.cancel();
+      _doubleTapTimer?.cancel();
       final elapsed = _elapsedMs(_pendingTapStartedAt);
-      _pendingTapStartedAt = null;
-      DebugConsole.log('[FAB] double tap dispatch elapsed=${elapsed}ms');
+      final singleDispatched = _singleTapDispatched;
+      _clearTapState();
+      DebugConsole.log(
+        '[FAB] double tap dispatch '
+        'elapsed=${elapsed}ms singleDispatched=$singleDispatched',
+      );
       widget.onDoubleTap?.call();
       return;
     }
 
     _pendingTapStartedAt = DateTime.now();
-    DebugConsole.log('[FAB] single tap immediate dispatch');
-    widget.onPressed();
+    _singleTapDispatched = false;
+    DebugConsole.log(
+      '[FAB] single tap queued '
+      'delay=${ExptFab.singleTapDispatchDelay.inMilliseconds}ms '
+      'window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
+    );
     _singleTapTimer?.cancel();
-    _singleTapTimer = Timer(ExptFab.doubleTapWindow, () {
-      if (!mounted) return;
+    _doubleTapTimer?.cancel();
+    _singleTapTimer = Timer(ExptFab.singleTapDispatchDelay, () {
+      if (!mounted || _pendingTapStartedAt == null) return;
       final elapsed = _elapsedMs(_pendingTapStartedAt);
-      _pendingTapStartedAt = null;
+      _singleTapTimer = null;
+      _singleTapDispatched = true;
+      DebugConsole.log('[FAB] single tap dispatch delay=${elapsed}ms');
+      widget.onPressed();
+    });
+    _doubleTapTimer = Timer(ExptFab.doubleTapWindow, () {
+      if (!mounted || _pendingTapStartedAt == null) return;
+      final elapsed = _elapsedMs(_pendingTapStartedAt);
+      _clearTapState();
       DebugConsole.log('[FAB] double tap window expired elapsed=${elapsed}ms');
     });
   }
 
   void _handleLongPress() {
     _singleTapTimer?.cancel();
-    _pendingTapStartedAt = null;
+    _doubleTapTimer?.cancel();
+    _clearTapState();
     DebugConsole.log('[FAB] long press dispatch');
     widget.onLongPress?.call();
+  }
+
+  void _clearTapState() {
+    _singleTapTimer = null;
+    _doubleTapTimer = null;
+    _pendingTapStartedAt = null;
+    _singleTapDispatched = false;
   }
 
   int _elapsedMs(DateTime? startedAt) {

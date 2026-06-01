@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/budget_progress_segment.dart';
 
@@ -29,16 +28,10 @@ class BudgetProgressFrame extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           DecoratedBox(
+            key: const ValueKey('budget-progress-frame-background'),
             decoration: BoxDecoration(
-              color: AppColors.gray200,
+              color: Colors.transparent,
               borderRadius: radius,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.16),
-                  offset: const Offset(0, 2),
-                  blurRadius: 4,
-                ),
-              ],
             ),
           ),
           ClipRRect(

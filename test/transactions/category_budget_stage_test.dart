@@ -316,9 +316,15 @@ void main() {
     );
     expect(
       frameRect.height,
-      moreOrLessEquals(BudgetBarGeometry.barHeight * 1.10, epsilon: 0.1),
+      moreOrLessEquals(BudgetBarGeometry.barHeight * 1.20, epsilon: 0.1),
     );
     expect(segmentRect.height, moreOrLessEquals(frameRect.height));
+    final frameBackground = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('budget-progress-frame-background')),
+    );
+    final frameDecoration = frameBackground.decoration as BoxDecoration;
+    expect(frameDecoration.color, Colors.transparent);
+    expect(frameDecoration.boxShadow, isNull);
     expect(maskRect, equals(barRect));
     expect(
       find.byKey(const ValueKey('budget-progress-frame-border')),
@@ -575,7 +581,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: CategoryLimitPartitionBar(
-            height: 29.4,
+            height: 23.5,
             allocation: LimitAllocationManager.build(
               overviewLimit: 100,
               bars: [barFixture(6, 'Food', 25, 50)],
@@ -588,7 +594,7 @@ void main() {
     final bar = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
-    expect(bar.height, moreOrLessEquals(29.4, epsilon: 0.1));
+    expect(bar.height, moreOrLessEquals(23.5, epsilon: 0.1));
     expect(
       find.byKey(const ValueKey('category-limit-partition-segment-0')),
       findsOneWidget,
@@ -613,7 +619,7 @@ void main() {
           body: SizedBox(
             width: 300,
             child: CategoryLimitPartitionBar(
-              height: 29.4,
+              height: 23.5,
               allocation: LimitAllocationManager.build(
                 overviewLimit: 100,
                 bars: [

@@ -218,7 +218,7 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
-  testWidgets('FAB double tap opens the budget limit editor', (
+  testWidgets('FAB double tap opens budget editor without transaction sheet', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -226,15 +226,11 @@ void main() {
 
     final fabCenter = tester.getCenter(find.byKey(const ValueKey('expt-fab')));
     await tester.tapAt(fabCenter);
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 120));
 
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('expt-fab-double-tap-catcher')),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.tapAt(fabCenter);
@@ -265,7 +261,7 @@ void main() {
     expect(categoryOpacity.opacity, 1);
   });
 
-  testWidgets('FAB single tap dispatches immediately without waiting for double tap', (
+  testWidgets('FAB single tap waits through the double tap grace window', (
     tester,
   ) async {
     var singleTaps = 0;
@@ -286,12 +282,17 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
+
+    expect(singleTaps, 0);
+    expect(doubleTaps, 0);
+
+    await tester.pump(ExptFab.singleTapDispatchDelay);
 
     expect(singleTaps, 1);
     expect(doubleTaps, 0);
   });
 
-  testWidgets('FAB quick second tap upgrades to double tap after immediate open', (
+  testWidgets('FAB quick second tap upgrades to double tap before single opens', (
     tester,
   ) async {
     var singleTaps = 0;
@@ -311,11 +312,11 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 90));
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 1);
+    expect(singleTaps, 0);
     expect(doubleTaps, 1);
   });
 

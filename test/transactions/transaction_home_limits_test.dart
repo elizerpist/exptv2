@@ -288,6 +288,32 @@ void main() {
         find.byKey(const ValueKey('category-limit-partition-bar')),
         findsOneWidget,
       );
+
+      final title = tester.getRect(
+        find.byKey(const ValueKey('limit-card-title')),
+      );
+      final avatar = tester.getRect(
+        find.byKey(const ValueKey('limit-card-avatar')),
+      );
+      final partition = tester.getRect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
+      );
+      final slider = tester.getRect(
+        find.byKey(const ValueKey('category-limit-slider')),
+      );
+      final amount = tester.getRect(
+        find.byKey(const ValueKey('limit-amount-input')),
+      );
+      final save = tester.getRect(
+        find.byKey(const ValueKey('limit-save-button')),
+      );
+
+      expect(title.bottom, lessThanOrEqualTo(avatar.top));
+      expect(partition.top, greaterThanOrEqualTo(avatar.bottom));
+      expect(partition.height, moreOrLessEquals(23.5, epsilon: 0.2));
+      expect(slider.top, greaterThan(partition.bottom));
+      expect(amount.top, greaterThan(slider.bottom));
+      expect(save.top, greaterThan(amount.bottom));
     },
   );
 

@@ -280,7 +280,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       bars: _partitionBars,
     );
     return CategoryLimitPartitionBar(
-      height: 29.4,
+      height: 23.5,
       allocation: allocation,
       onSegmentTap: _selectCategoryByTargetId,
     );
@@ -574,8 +574,6 @@ class _BudgetLimitCard extends StatelessWidget {
             Expanded(
               child: Column(
                 children: [
-                  _LimitAvatar(item: item, color: activeColor),
-                  const SizedBox(height: 10),
                   Text(
                     item.title,
                     key: const ValueKey('limit-card-title'),
@@ -588,6 +586,8 @@ class _BudgetLimitCard extends StatelessWidget {
                       color: AppColors.gray800,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  _LimitAvatar(item: item, color: activeColor),
                 ],
               ),
             ),
@@ -603,7 +603,26 @@ class _BudgetLimitCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 10),
+        partitionBar,
+        const SizedBox(height: 14),
+        CategoryLimitSlider(
+          value: sliderValue,
+          max: sliderMax,
+          divisions: sliderDivisions,
+          activeColor: activeColor,
+          enabled: sliderEnabled,
+          onChanged: onSliderChanged,
+          onChangeEnd: onSliderChangeEnd,
+        ),
+        if (saving)
+          const SizedBox(
+            height: 2,
+            child: LinearProgressIndicator(color: AppColors.primary),
+          )
+        else
+          const SizedBox(height: 2),
+        const SizedBox(height: 12),
         TextField(
           key: const ValueKey('limit-amount-input'),
           controller: amountController,
@@ -631,25 +650,6 @@ class _BudgetLimitCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 14),
-        CategoryLimitSlider(
-          value: sliderValue,
-          max: sliderMax,
-          divisions: sliderDivisions,
-          activeColor: activeColor,
-          enabled: sliderEnabled,
-          onChanged: onSliderChanged,
-          onChangeEnd: onSliderChangeEnd,
-        ),
-        if (saving)
-          const SizedBox(
-            height: 2,
-            child: LinearProgressIndicator(color: AppColors.primary),
-          )
-        else
-          const SizedBox(height: 2),
-        const SizedBox(height: 12),
-        partitionBar,
         const SizedBox(height: 16),
         FilledButton(
           key: const ValueKey('limit-save-button'),
