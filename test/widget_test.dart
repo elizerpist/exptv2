@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
@@ -16,6 +17,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    DebugConsole.clear();
     savedTransactions.clear();
     updatedTransactions.clear();
     deletedTransactionIds.clear();
@@ -238,6 +240,7 @@ void main() {
     expect(
       find.byKey(const ValueKey('budget-target-editor-card')),
       findsOneWidget,
+      reason: DebugConsole.allText,
     );
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
