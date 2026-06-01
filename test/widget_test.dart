@@ -245,6 +245,8 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
     final balanceOpacity = tester.widget<AnimatedOpacity>(
       find.ancestor(
         of: find.byKey(const ValueKey('header-balance-text')),

@@ -25,6 +25,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
     required this.item,
     required this.items,
     this.openRequestedAt,
+    required this.periodLabel,
     required this.categoryBars,
     required this.periodIncome,
     required this.onCancel,
@@ -37,6 +38,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
   final BackheaderBudgetItem item;
   final List<BackheaderBudgetItem> items;
   final DateTime? openRequestedAt;
+  final String periodLabel;
   final List<CategoryBudgetBarData> categoryBars;
   final List<OverviewBudgetData> overviewItems;
   final double periodIncome;
@@ -121,6 +123,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
               ),
               child: _BudgetLimitCard(
                 item: _activeItem,
+                periodLabel: widget.periodLabel,
                 amountController: _controller,
                 inputLabel: _inputLabel,
                 activeColor: _activeColor,
@@ -131,6 +134,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                 saving: _saving,
                 onPrevious: _selectPrevious,
                 onNext: _selectNext,
+                onAvatarDoubleTap: _selectOverviewItem,
                 onReset: _resetLimit,
                 onSliderChanged: _setAmountFromSlider,
                 onSliderChangeEnd: _setAmountFromSlider,
@@ -280,7 +284,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       bars: _partitionBars,
     );
     return CategoryLimitPartitionBar(
-      height: 23.5,
+      height: 18.8,
       allocation: allocation,
       onSegmentTap: _selectCategoryByTargetId,
     );
@@ -332,6 +336,21 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   void _selectPrevious() => _selectAdjacent(-1);
 
   void _selectNext() => _selectAdjacent(1);
+
+  void _selectOverviewItem() {
+    BackheaderBudgetItem? target;
+    for (final item in _items) {
+      if (item.overview != null) {
+        target = item;
+        break;
+      }
+    }
+    if (target == null || target.key == _activeKey) return;
+    DebugConsole.log(
+      '[BudgetTargetEditor] avatar double tap jump key=${target.key}',
+    );
+    _selectItem(target);
+  }
 
   void _selectAdjacent(int direction) {
     final items = _items;
@@ -503,6 +522,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 class _BudgetLimitCard extends StatelessWidget {
   const _BudgetLimitCard({
     required this.item,
+    required this.periodLabel,
     required this.amountController,
     required this.inputLabel,
     required this.activeColor,
@@ -513,6 +533,7 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.saving,
     required this.onPrevious,
     required this.onNext,
+    required this.onAvatarDoubleTap,
     required this.onReset,
     required this.onSliderChanged,
     required this.onSliderChangeEnd,
@@ -524,6 +545,7 @@ class _BudgetLimitCard extends StatelessWidget {
   });
 
   final BackheaderBudgetItem item;
+  final String periodLabel;
   final TextEditingController amountController;
   final String inputLabel;
   final Color activeColor;
@@ -534,6 +556,7 @@ class _BudgetLimitCard extends StatelessWidget {
   final bool saving;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
+  final VoidCallback onAvatarDoubleTap;
   final VoidCallback onReset;
   final ValueChanged<double> onSliderChanged;
   final ValueChanged<double> onSliderChangeEnd;
@@ -572,23 +595,12 @@ class _BudgetLimitCard extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    item.title,
-                    key: const ValueKey('limit-card-title'),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.gray800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _LimitAvatar(item: item, color: activeColor),
-                ],
+              child: Center(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onDoubleTap: onAvatarDoubleTap,
+                  child: _LimitAvatar(item: item, color: activeColor),
+                ),
               ),
             ),
             IconButton(
@@ -599,6 +611,44 @@ class _BudgetLimitCard extends StatelessWidget {
               constraints: const BoxConstraints.tightFor(
                 width: 44,
                 height: 44,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Text(
+              item.title,
+              key: const ValueKey('limit-card-title'),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gray800,
+              ),
+            ),
+            Container(
+              key: const ValueKey('limit-card-period-label'),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.gray100,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.gray200),
+              ),
+              child: Text(
+                periodLabel,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.gray600,
+                ),
               ),
             ),
           ],

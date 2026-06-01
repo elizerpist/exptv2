@@ -178,6 +178,55 @@ void main() {
     expect(dismissed, isFalse);
   });
 
+  testWidgets('slide card ignores vertical drift during horizontal gestures', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              panelHeight: 320,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 160),
+                  TextButton(
+                    key: const ValueKey('horizontal-drag-target'),
+                    onPressed: () {},
+                    child: const Text('Horizontal action'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final before = _slideCardTranslationY(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('horizontal-drag-target'))),
+    );
+    await gesture.moveBy(const Offset(140, 18));
+    await tester.pump();
+
+    expect(_slideCardTranslationY(tester), moreOrLessEquals(before));
+    expect(
+      DebugConsole.allText,
+      contains('[SlideUpMenu] TestMenu drag horizontal lock'),
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('slide card ignores drags started in exclusion zones', (
     tester,
   ) async {

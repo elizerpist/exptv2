@@ -254,7 +254,7 @@ void main() {
   });
 
   testWidgets(
-    'redesigned limit card exposes arrows avatar input slider and partition bar',
+    'redesigned limit card stacks avatar title period partition slider input and save',
     (tester) async {
       final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
       final store = TransactionStore(
@@ -275,6 +275,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('limit-card-avatar')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('limit-card-period-label')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('limit-amount-input')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('limit-reset-inline-button')),
@@ -292,6 +296,9 @@ void main() {
       final title = tester.getRect(
         find.byKey(const ValueKey('limit-card-title')),
       );
+      final period = tester.getRect(
+        find.byKey(const ValueKey('limit-card-period-label')),
+      );
       final avatar = tester.getRect(
         find.byKey(const ValueKey('limit-card-avatar')),
       );
@@ -308,14 +315,53 @@ void main() {
         find.byKey(const ValueKey('limit-save-button')),
       );
 
-      expect(title.bottom, lessThanOrEqualTo(avatar.top));
-      expect(partition.top, greaterThanOrEqualTo(avatar.bottom));
-      expect(partition.height, moreOrLessEquals(23.5, epsilon: 0.2));
+      expect(avatar.bottom, lessThanOrEqualTo(title.top));
+      expect(period.center.dy, moreOrLessEquals(title.center.dy, epsilon: 4));
+      expect(partition.top, greaterThanOrEqualTo(title.bottom));
+      expect(partition.height, moreOrLessEquals(18.8, epsilon: 0.2));
       expect(slider.top, greaterThan(partition.bottom));
       expect(amount.top, greaterThan(slider.bottom));
       expect(save.top, greaterThan(amount.bottom));
     },
   );
+
+  testWidgets('limit editor avatar double tap jumps back to budget item', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    await pumpExpandedMonthlyHome(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('limit-card-next-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(
+        find.byKey(const ValueKey('limit-card-title')),
+      ).data,
+      'Food',
+    );
+
+    final avatarCenter = tester.getCenter(
+      find.byKey(const ValueKey('limit-card-avatar')),
+    );
+    await tester.tapAt(avatarCenter);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(avatarCenter);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(
+        find.byKey(const ValueKey('limit-card-title')),
+      ).data,
+      'Budget',
+    );
+  });
 
   testWidgets('partition tap selects category and syncs backheader', (
     tester,

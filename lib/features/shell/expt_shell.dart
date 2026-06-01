@@ -305,8 +305,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
-    final hideShellNavigation =
-        _activeTab == AppTab.home && _homeBlockingOverlayOpen;
     return Scaffold(
       backgroundColor: expenseTheme.appBackground,
       body: Stack(
@@ -335,29 +333,27 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               ],
             ),
           ),
-          if (!hideShellNavigation)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: ExptBottomNav(
-                activeTab: _activeTab,
-                onTabSelected: _selectTab,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ExptBottomNav(
+              activeTab: _activeTab,
+              onTabSelected: _selectTab,
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: AppDimensions.fabBottom,
+            child: Center(
+              child: ExptFab(
+                onPressed: _handleFabPressed,
+                onLongPress: _handleFabLongPressed,
+                onDoubleTap: _handleFabDoubleTapped,
               ),
             ),
-          if (!hideShellNavigation)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: AppDimensions.fabBottom,
-              child: Center(
-                child: ExptFab(
-                  onPressed: _handleFabPressed,
-                  onLongPress: _handleFabLongPressed,
-                  onDoubleTap: _handleFabDoubleTapped,
-                ),
-              ),
-            ),
+          ),
           DebugFloatingButton(
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
@@ -388,7 +384,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 onSave: _saveCategory,
               ),
             ),
-          if (_fabDoubleTapCaptureActive && !hideShellNavigation)
+          if (_fabDoubleTapCaptureActive)
             Positioned(
               left: 0,
               right: 0,

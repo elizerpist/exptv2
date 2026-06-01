@@ -258,6 +258,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   child: BudgetTargetEditorSheet(
                     item: _budgetEditorItem!,
                     openRequestedAt: _budgetEditorOpenRequestedAt,
+                    periodLabel: widget.store.activePeriodLabel,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
                     overviewItems: widget.store.overviewBudgetItems,

@@ -44,6 +44,8 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     with TickerProviderStateMixin {
   static const _dismissThreshold = 90.0;
   static const _minDragOffset = 0.0;
+  static const _axisLockSlop = 8.0;
+  static const _horizontalAxisBias = 1.2;
   static const _snapBackDuration = Duration(milliseconds: 170);
   static const _dismissDuration = Duration(milliseconds: 180);
 
@@ -54,11 +56,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   bool _dragActive = false;
   bool _dragMoved = false;
   bool _dragLoggedStart = false;
+  bool _verticalDragAccepted = false;
   bool _dismissAnimatingFromDrag = false;
   double _snapStartDy = 0;
   double _snapEndDy = 0;
   double _panelHeight = 0;
   double _dragStartY = 0;
+  double _gestureDx = 0;
+  double _gestureDy = 0;
   double? _lastLoggedAvailableHeight;
   double? _lastLoggedPanelHeight;
   double? _lastLoggedDragOffset;
@@ -175,7 +180,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                     onPointerDown: _handlePointerDown,
                     onPointerMove: _handlePointerMove,
                     onPointerUp: _handlePointerUp,
-                    onPointerCancel: (_) => _snapBack(reason: 'cancel'),
+                    onPointerCancel: _handlePointerCancel,
                     child: KeyedSubtree(
                       key: widget.cardKey,
                       child: SizedBox.expand(
@@ -285,18 +290,15 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   void _handlePointerDown(PointerDownEvent event) {
     if (_closing) return;
+    _resetPointerGestureState();
     if (_isDragExcluded(event.position)) {
       _dragActive = false;
-      _dragMoved = false;
-      _dragLoggedStart = false;
       DebugConsole.log(
         '[SlideUpMenu] $_debugLabel drag ignored by exclusion y=${event.localPosition.dy.toStringAsFixed(1)}',
       );
       return;
     }
     _dragActive = true;
-    _dragMoved = false;
-    _dragLoggedStart = false;
     _dragStartY = event.localPosition.dy;
     _snapBackController.stop();
     _dragStartedAt = DateTime.now();
@@ -305,6 +307,23 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (_closing || !_dragActive) return;
+    _gestureDx += event.delta.dx;
+    _gestureDy += event.delta.dy;
+
+    if (!_verticalDragAccepted) {
+      final absDx = _gestureDx.abs();
+      final absDy = _gestureDy.abs();
+      if (absDx > _axisLockSlop && absDx > absDy * _horizontalAxisBias) {
+        _dragActive = false;
+        DebugConsole.log(
+          '[SlideUpMenu] $_debugLabel drag horizontal lock dx=${_gestureDx.toStringAsFixed(1)} dy=${_gestureDy.toStringAsFixed(1)}',
+        );
+        return;
+      }
+      if (absDy <= _axisLockSlop || absDy < absDx) return;
+      _verticalDragAccepted = true;
+    }
+
     final maxDrag = _dragMaxOffset;
     final next = (_dragDy.value + event.delta.dy)
         .clamp(_minDragOffset, maxDrag)
@@ -322,12 +341,17 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    if (_closing || !_dragActive) return;
+    if (_closing) return;
+    if (!_dragActive) {
+      _resetPointerGestureState();
+      return;
+    }
     final dragOffset = _dragDy.value;
     _dragActive = false;
     if (!_dragMoved) {
       _dragStartedAt = null;
       _lastLoggedDragOffset = null;
+      _resetPointerGestureState();
       return;
     }
     final decision = dragOffset > _dismissThreshold ? 'dismiss' : 'snap';
@@ -336,11 +360,31 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     );
     _dragStartedAt = null;
     _lastLoggedDragOffset = null;
+    _resetPointerGestureState();
     if (dragOffset > _dismissThreshold) {
       _dismiss();
       return;
     }
     _snapBack(reason: 'release');
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (_closing) return;
+    if (!_dragActive) {
+      _resetPointerGestureState();
+      return;
+    }
+    _resetPointerGestureState();
+    _snapBack(reason: 'cancel');
+  }
+
+  void _resetPointerGestureState() {
+    _dragActive = false;
+    _dragMoved = false;
+    _dragLoggedStart = false;
+    _verticalDragAccepted = false;
+    _gestureDx = 0;
+    _gestureDy = 0;
   }
 
   void _logDragMove(double offset, double delta) {

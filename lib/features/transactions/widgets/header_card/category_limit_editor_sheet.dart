@@ -18,10 +18,12 @@ class CategoryLimitEditorSheet extends StatelessWidget {
     required this.onCancel,
     required this.onSave,
     this.allBars = const [],
+    this.periodLabel,
   });
 
   final CategoryBudgetBarData bar;
   final List<CategoryBudgetBarData> allBars;
+  final String? periodLabel;
   final VoidCallback onCancel;
   final CategoryLimitSave onSave;
 
@@ -32,6 +34,7 @@ class CategoryLimitEditorSheet extends StatelessWidget {
     return BudgetTargetEditorSheet(
       item: item,
       items: bars.map(BackheaderBudgetItem.category).toList(),
+      periodLabel: periodLabel ?? _fallbackPeriodLabel(bar),
       categoryBars: bars,
       periodIncome: 0,
       onCancel: onCancel,
@@ -53,4 +56,9 @@ class CategoryLimitEditorSheet extends StatelessWidget {
       },
     );
   }
+}
+
+String _fallbackPeriodLabel(CategoryBudgetBarData bar) {
+  if (bar.periodKey == 'all') return 'Sum';
+  return bar.periodKey;
 }
