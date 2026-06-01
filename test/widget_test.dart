@@ -228,8 +228,13 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsNothing,
+      reason: 'The first tap must stay armed until the double-tap window closes.',
+    );
 
-    await tester.tap(find.byKey(const ValueKey('expt-fab-double-tap-catcher')));
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
 
     expect(
@@ -269,7 +274,7 @@ void main() {
     expect(find.byKey(const ValueKey('stats-page')), findsNothing);
   });
 
-  testWidgets('FAB single tap dispatches immediately while arming double tap window', (
+  testWidgets('FAB single tap dispatches after double tap window expires', (
     tester,
   ) async {
     var singleTaps = 0;
@@ -291,7 +296,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 1);
+    expect(singleTaps, 0);
     expect(doubleTaps, 0);
 
     await tester.pump(ExptFab.doubleTapWindow);
@@ -300,7 +305,7 @@ void main() {
     expect(doubleTaps, 0);
   });
 
-  testWidgets('FAB quick second tap dispatches double tap after immediate single', (
+  testWidgets('FAB quick second tap dispatches only double tap', (
     tester,
   ) async {
     var singleTaps = 0;
@@ -324,7 +329,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 1);
+    expect(singleTaps, 0);
     expect(doubleTaps, 1);
   });
 
@@ -337,7 +342,10 @@ void main() {
     await _tapFab(tester);
 
     final slideCard = tester.widget<SlideUpMenuCard>(
-      find.byType(SlideUpMenuCard),
+      find.ancestor(
+        of: find.byKey(const ValueKey('transaction-editor-card')),
+        matching: find.byType(SlideUpMenuCard),
+      ),
     );
     expect(slideCard.entryDuration, const Duration(milliseconds: 192));
     final cardBefore = tester.getRect(

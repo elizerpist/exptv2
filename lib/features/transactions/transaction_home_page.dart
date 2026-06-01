@@ -141,6 +141,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final headerSlideProgress = _headerSlideController.value;
           final showBackheader =
               _headerExpanded || headerSlideProgress > 0.001;
+          final budgetHostItem =
+              _budgetEditorItem ?? _defaultBudgetEditorItem();
 
           return Stack(
             clipBehavior: Clip.none,
@@ -249,15 +251,16 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         : (category) => _deleteCategory(category),
                   ),
                 ),
-              if (_budgetEditorItem != null)
+              if (budgetHostItem != null)
                 Positioned(
                   top: 0,
                   left: 0,
                   right: 0,
                   bottom: 0,
                   child: BudgetTargetEditorSheet(
-                    item: _budgetEditorItem!,
+                    item: budgetHostItem,
                     openRequestedAt: _budgetEditorOpenRequestedAt,
+                    visible: _budgetEditorItem != null,
                     periodLabel: widget.store.activePeriodLabel,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
@@ -522,6 +525,16 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
+
+  BackheaderBudgetItem? _defaultBudgetEditorItem() {
+    final items = widget.store.backheaderBudgetItems;
+    if (items.isEmpty) return null;
+    for (final item in items) {
+      if (item.overview != null) return item;
+    }
+    return items.first;
   }
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {

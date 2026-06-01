@@ -15,7 +15,7 @@ class ExptFab extends StatefulWidget {
   });
 
   static const doubleTapWindow = Duration(milliseconds: 180);
-  static const singleTapDispatchDelay = Duration.zero;
+  static const singleTapDispatchDelay = doubleTapWindow;
 
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
@@ -27,14 +27,12 @@ class ExptFab extends StatefulWidget {
 
 class _ExptFabState extends State<ExptFab> {
   Timer? _singleTapTimer;
-  Timer? _doubleTapTimer;
   DateTime? _pendingTapStartedAt;
   var _singleTapDispatched = false;
 
   @override
   void dispose() {
     _singleTapTimer?.cancel();
-    _doubleTapTimer?.cancel();
     super.dispose();
   }
 
@@ -67,7 +65,6 @@ class _ExptFabState extends State<ExptFab> {
   void _handleTap() {
     if (_pendingTapStartedAt != null) {
       _singleTapTimer?.cancel();
-      _doubleTapTimer?.cancel();
       final elapsed = _elapsedMs(_pendingTapStartedAt);
       final singleDispatched = _singleTapDispatched;
       _clearTapState();
@@ -80,25 +77,24 @@ class _ExptFabState extends State<ExptFab> {
     }
 
     _pendingTapStartedAt = DateTime.now();
-    _singleTapDispatched = true;
+    _singleTapDispatched = false;
     DebugConsole.log(
-      '[FAB] single tap immediate dispatch '
+      '[FAB] single tap armed '
       'window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
     );
     _singleTapTimer?.cancel();
-    _doubleTapTimer?.cancel();
-    widget.onPressed();
-    _doubleTapTimer = Timer(ExptFab.doubleTapWindow, () {
+    _singleTapTimer = Timer(ExptFab.singleTapDispatchDelay, () {
       if (!mounted || _pendingTapStartedAt == null) return;
       final elapsed = _elapsedMs(_pendingTapStartedAt);
+      _singleTapDispatched = true;
+      DebugConsole.log('[FAB] single tap dispatch delay=${elapsed}ms');
+      widget.onPressed();
       _clearTapState();
-      DebugConsole.log('[FAB] double tap window expired elapsed=${elapsed}ms');
     });
   }
 
   void _handleLongPress() {
     _singleTapTimer?.cancel();
-    _doubleTapTimer?.cancel();
     _clearTapState();
     DebugConsole.log('[FAB] long press dispatch');
     widget.onLongPress?.call();
@@ -106,7 +102,6 @@ class _ExptFabState extends State<ExptFab> {
 
   void _clearTapState() {
     _singleTapTimer = null;
-    _doubleTapTimer = null;
     _pendingTapStartedAt = null;
     _singleTapDispatched = false;
   }

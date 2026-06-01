@@ -17,6 +17,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.panelHeight,
     this.dragHandleExtent = 56,
     this.entryDuration = const Duration(milliseconds: 192),
+    this.visible = true,
     this.showFocusVeil = true,
     this.focusVeilOpacity = 0.28,
     this.dragExclusionKeys = const <GlobalKey>[],
@@ -31,6 +32,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final double? panelHeight;
   final double dragHandleExtent;
   final Duration entryDuration;
+  final bool visible;
   final bool showFocusVeil;
   final double focusVeilOpacity;
   final List<GlobalKey> dragExclusionKeys;
@@ -89,13 +91,23 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     )
       ..addListener(_syncSnapBackOffset)
       ..addStatusListener(_logSnapBackStatus);
-    _openStartedAt = DateTime.now();
-    DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel open start '
-      'duration=${_entry.duration!.inMilliseconds}ms '
-      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
-    );
-    _entry.forward();
+    if (widget.visible) {
+      _startOpenAnimation(fromInitialMount: true);
+    }
+  }
+
+
+  @override
+  void didUpdateWidget(covariant SlideUpMenuCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entryDuration != widget.entryDuration) {
+      _entry.duration = widget.entryDuration;
+    }
+    if (!oldWidget.visible && widget.visible) {
+      _startOpenAnimation();
+    } else if (oldWidget.visible && !widget.visible) {
+      _resetHiddenState();
+    }
   }
 
   @override
@@ -113,8 +125,18 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    final participates = widget.visible ||
+        _entry.isAnimating ||
+        _snapBackController.isAnimating ||
+        _dragDy.value > 0.01;
+    return TickerMode(
+      enabled: participates,
+      child: Visibility(
+        visible: participates,
+        maintainState: true,
+        maintainAnimation: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
         final availableHeight = constraints.maxHeight.isFinite
             ? constraints.maxHeight
             : MediaQuery.sizeOf(context).height;
@@ -218,8 +240,44 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
             ),
           ],
         );
-      },
+          },
+        ),
+      ),
     );
+  }
+
+
+  void _startOpenAnimation({bool fromInitialMount = false}) {
+    _closing = false;
+    _dismissAnimatingFromDrag = false;
+    _snapBackController.stop();
+    _dragDy.value = 0;
+    _entry.stop();
+    _entry.value = 0;
+    _openStartedAt = DateTime.now();
+    DebugConsole.log(
+      '[SlideUpMenu] $_debugLabel open start '
+      'duration=${_entry.duration!.inMilliseconds}ms '
+      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms '
+      'source=${fromInitialMount ? 'mount' : 'visible'}',
+    );
+    _entry.forward(from: 0);
+  }
+
+  void _resetHiddenState() {
+    _entry.stop();
+    _snapBackController.stop();
+    _entry.value = 0;
+    _dragDy.value = 0;
+    _closing = false;
+    _dragActive = false;
+    _dismissAnimatingFromDrag = false;
+    _snapStartDy = 0;
+    _snapEndDy = 0;
+    _openStartedAt = null;
+    _dragStartedAt = null;
+    _snapStartedAt = null;
+    _dismissStartedAt = null;
   }
 
   void _logEntryStatus(AnimationStatus status) {
@@ -436,7 +494,11 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       '[SlideUpMenu] $_debugLabel dismiss start from=${from.toStringAsFixed(1)} to=${to.toStringAsFixed(1)} duration=${_dismissDuration.inMilliseconds}ms',
     );
     await _snapBackController.forward(from: 0);
-    if (mounted) widget.onDismissed?.call();
+    if (!mounted) return;
+    _entry.value = 0;
+    _dragDy.value = 0;
+    _closing = false;
+    widget.onDismissed?.call();
   }
 
   double get _dragMaxOffset => math.max(_panelHeight, 1);

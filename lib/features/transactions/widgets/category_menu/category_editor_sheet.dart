@@ -13,11 +13,13 @@ class CategoryEditorSheet extends StatelessWidget {
     this.initialCategory,
     this.onDelete,
     this.panelHeight,
+    this.visible = true,
   });
 
   final TransactionType activeType;
   final TransactionCategory? initialCategory;
   final double? panelHeight;
+  final bool visible;
   final ValueChanged<CategoryDraft> onSave;
   final ValueChanged<TransactionCategory>? onDelete;
   final VoidCallback onClose;
@@ -28,6 +30,7 @@ class CategoryEditorSheet extends StatelessWidget {
       cardKey: const ValueKey('category-editor-slide-card'),
       debugLabel: initialCategory == null ? 'AddCategory' : 'EditCategory',
       panelHeight: panelHeight,
+      visible: visible,
       onDismissed: onClose,
       child: SafeArea(
         top: false,

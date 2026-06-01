@@ -25,6 +25,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
     required this.item,
     required this.items,
     this.openRequestedAt,
+    this.visible = true,
     required this.periodLabel,
     required this.categoryBars,
     required this.periodIncome,
@@ -38,6 +39,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
   final BackheaderBudgetItem item;
   final List<BackheaderBudgetItem> items;
   final DateTime? openRequestedAt;
+  final bool visible;
   final String periodLabel;
   final List<CategoryBudgetBarData> categoryBars;
   final List<OverviewBudgetData> overviewItems;
@@ -73,23 +75,42 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   @override
   void initState() {
     super.initState();
+    if (widget.visible) _logSheetActivation();
+    _activeKey = widget.item.key;
+    _controller = TextEditingController();
+    _syncControllerToItem(widget.item);
+    _controller.addListener(_refreshFromController);
+  }
+
+
+  @override
+  void didUpdateWidget(covariant BudgetTargetEditorSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.visible && widget.visible) {
+      _pendingAmountsByKey.clear();
+      _saving = false;
+      _syncControllerToItem(widget.item);
+      _logSheetActivation();
+      return;
+    }
+    if (oldWidget.item.key != widget.item.key && widget.visible) {
+      _syncControllerToItem(widget.item);
+    }
+  }
+
+
+  void _logSheetActivation() {
     DebugConsole.log(
       '[BudgetTargetEditor] sheet init '
       'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !widget.visible) return;
       DebugConsole.log(
         '[BudgetTargetEditor] first frame '
         'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
       );
     });
-    _activeKey = widget.item.key;
-    final amount = _limitAmountFor(widget.item);
-    _controller = TextEditingController(
-      text: amount > 0 ? amount.round().toString() : '',
-    );
-    _controller.addListener(_refreshFromController);
   }
 
   @override
@@ -106,6 +127,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       cardKey: const ValueKey('budget-target-editor-card'),
       debugLabel: 'BudgetTargetEditor',
       panelHeight: _panelHeightFor(context),
+      visible: widget.visible,
       openRequestedAt: widget.openRequestedAt,
       onDismissed: widget.onCancel,
       child: SafeArea(
@@ -158,6 +180,19 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
+
+  void _syncControllerToItem(BackheaderBudgetItem item) {
+    _activeKey = item.key;
+    final amount = _limitAmountFor(item);
+    final text = amount > 0 ? amount.round().toString() : '';
+    _updatingController = true;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _updatingController = false;
   }
 
   List<BackheaderBudgetItem> get _items {

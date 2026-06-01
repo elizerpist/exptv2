@@ -19,12 +19,14 @@ class AddTransactionSheet extends StatefulWidget {
     this.initialTransaction,
     this.onClose,
     this.openRequestedAt,
+    this.visible = true,
   });
 
   final TransactionStore store;
   final TransactionRecord? initialTransaction;
   final VoidCallback? onClose;
   final DateTime? openRequestedAt;
+  final bool visible;
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -51,19 +53,32 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   void initState() {
     super.initState();
     _resetFields();
-    final label = _editing ? 'EditTransaction' : 'AddTransaction';
-    DebugConsole.log(
-      '[SlideUpMenu] $label sheet init '
-      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
-    );
+    if (widget.visible) _logSheetInit();
   }
 
   @override
   void didUpdateWidget(AddTransactionSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialTransaction?.id != widget.initialTransaction?.id) {
+    if (oldWidget.initialTransaction?.id != widget.initialTransaction?.id ||
+        oldWidget.openRequestedAt != widget.openRequestedAt) {
       _resetFields();
+      _firstBuildLogged = false;
+      _lastLoggedPickerOpen = null;
+      _lastLoggedCategoryCount = null;
+      _lastLoggedPanelHeight = null;
     }
+    if (!oldWidget.visible && widget.visible) {
+      _logSheetInit();
+    }
+  }
+
+
+  void _logSheetInit() {
+    final label = _editing ? 'EditTransaction' : 'AddTransaction';
+    DebugConsole.log(
+      '[SlideUpMenu] $label sheet init '
+      'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
+    );
   }
 
   @override
@@ -86,13 +101,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             .toList();
         _category = _resolvedCategory(categories);
         final panelHeight = _panelHeightFor(context);
-        _logFirstBuild(panelHeight, categories.length);
-        _logBuildMetrics(panelHeight, categories.length);
+        if (widget.visible) {
+          _logFirstBuild(panelHeight, categories.length);
+          _logBuildMetrics(panelHeight, categories.length);
+        }
 
         return SlideUpMenuCard(
           cardKey: const ValueKey('transaction-editor-card'),
           debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
           panelHeight: panelHeight,
+          visible: widget.visible,
           openRequestedAt: widget.openRequestedAt,
           dragExclusionKeys: _categoryPickerOpen
               ? [_categoryPickerBoundaryKey]
