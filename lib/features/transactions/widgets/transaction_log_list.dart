@@ -46,7 +46,7 @@ class TransactionLogList extends StatefulWidget {
 
 class _TransactionLogListState extends State<TransactionLogList> {
   static const _loadMoreThreshold = 720.0;
-  static const _cacheExtent = 1200.0;
+  static const _logListPrefetchExtent = 1200.0;
 
   bool _loadMoreScheduled = false;
   int? _lastRequestedEntryCount;
@@ -76,7 +76,8 @@ class _TransactionLogListState extends State<TransactionLogList> {
       onNotification: (notification) =>
           _handleScrollNotification(notification, logEntries.length),
       child: ListView.builder(
-        cacheExtent: _cacheExtent,
+        // ignore: deprecated_member_use
+        cacheExtent: _logListPrefetchExtent,
         addAutomaticKeepAlives: false,
         addSemanticIndexes: false,
         padding: const EdgeInsets.only(bottom: 96),

@@ -405,6 +405,7 @@ void main() {
     final listView = tester.widget<ListView>(find.byType(ListView));
     final childDelegate =
         listView.childrenDelegate as SliverChildBuilderDelegate;
+    // ignore: deprecated_member_use
     expect(listView.cacheExtent, greaterThanOrEqualTo(1000));
     expect(childDelegate.addAutomaticKeepAlives, isFalse);
     expect(childDelegate.addSemanticIndexes, isFalse);
