@@ -463,6 +463,23 @@ class NativeBridge {
     return count ?? 0;
   }
 
+  Future<NotificationParserConfig> loadNotificationParserProfiles() async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'loadNotificationParserProfiles',
+    );
+    return NotificationParserConfig.fromMap(map ?? <dynamic, dynamic>{});
+  }
+
+  Future<NotificationParserConfig> saveNotificationParserProfiles(
+    NotificationParserConfig config,
+  ) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'saveNotificationParserProfiles',
+      config.toMap(),
+    );
+    return NotificationParserConfig.fromMap(map ?? config.toMap());
+  }
+
   Future<NotificationParserRule> loadNotificationParserRule() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'loadNotificationParserRule',

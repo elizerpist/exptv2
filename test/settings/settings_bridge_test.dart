@@ -60,6 +60,33 @@ void main() {
               return call.arguments;
             case 'expenseUpdateFastInfoConfig':
               return call.arguments;
+            case 'loadNotificationParserProfiles':
+              return <String, Object?>{
+                'profiles': <Object?>[
+                  <String, Object?>{
+                    'id': 'bank-a',
+                    'name': 'Bank A',
+                    'enabled': true,
+                    'appFilterText': r'^Bank A$',
+                    'sampleText': 'Paid 999 Ft at Corner Shop',
+                    'includeKeyword': 'Paid',
+                    'amountPattern': r'(?<amount>\d+)\s*Ft',
+                    'merchantPattern': r'at\s+(?<merchant>.+)',
+                  },
+                  <String, Object?>{
+                    'id': 'bank-b',
+                    'name': 'Bank B',
+                    'enabled': false,
+                    'appFilterText': r'^Bank B$',
+                    'sampleText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
+                    'includeKeyword': '',
+                    'amountPattern': r'(?<amount>\d[\d\s]*)\s*HUF',
+                    'merchantPattern': r'vásárlás:\s*(?<merchant>[^-]+)\s*-',
+                  },
+                ],
+              };
+            case 'saveNotificationParserProfiles':
+              return call.arguments;
             case 'loadNotificationParserRule':
               return <String, Object?>{
                 'enabled': true,
@@ -145,6 +172,26 @@ void main() {
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['pills'], isA<List<Object?>>());
   });
+
+  test(
+    'loads and saves notification parser profiles through native bridge',
+    () async {
+      final config = await bridge.loadNotificationParserProfiles();
+
+      expect(config.profiles, hasLength(2));
+      expect(config.activeProfiles.single.id, 'bank-a');
+      expect(config.profiles.last.preview.merchant, 'Tesco');
+
+      final saved = await bridge.saveNotificationParserProfiles(
+        config.upsert(config.profiles.last.copyWith(enabled: true)),
+      );
+
+      expect(saved.activeProfiles, hasLength(2));
+      expect(calls.last.method, 'saveNotificationParserProfiles');
+      final payload = calls.last.arguments as Map<dynamic, dynamic>;
+      expect(payload['profiles'], isA<List<Object?>>());
+    },
+  );
 
   test(
     'loads and saves notification parser rule through native bridge',

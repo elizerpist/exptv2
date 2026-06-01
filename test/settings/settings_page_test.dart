@@ -48,6 +48,28 @@ void main() {
                   ],
                 },
               };
+            case 'loadNotificationParserProfiles':
+              return <String, Object?>{
+                'profiles': <Object?>[
+                  <String, Object?>{
+                    'id': 'bank-a',
+                    'name': 'Bank A profil',
+                    'enabled': true,
+                    'appFilterText': r'^Bank A$',
+                    'sampleText': 'Paid 999 Ft at Corner Shop',
+                    'includeKeyword': 'Paid',
+                    'amountPattern': r'(?<amount>\d+)\s*Ft',
+                    'merchantPattern': r'at\s+(?<merchant>.+)',
+                  },
+                ],
+              };
+            case 'saveNotificationParserProfiles':
+              savedParserRules.add(
+                Map<dynamic, dynamic>.from(
+                  call.arguments as Map<dynamic, dynamic>,
+                ),
+              );
+              return call.arguments;
             case 'loadNotificationParserRule':
               return <String, Object?>{
                 'enabled': true,
@@ -188,46 +210,124 @@ void main() {
     expect(decoration.color, const Color(0xFF0EA5E9));
   });
 
-  testWidgets('observed app settings contains editable parser rule preview', (
-    tester,
-  ) async {
-    await tester.pumpWidget(buildSubject());
-    await tester.pumpAndSettle();
+  testWidgets(
+    'observed app settings manages parser profiles in teaching mode',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
 
-    expect(find.text('App regex'), findsOneWidget);
-    expect(find.text('Teszt értesítés'), findsOneWidget);
-    expect(find.text('Kulcsszó'), findsOneWidget);
-    expect(find.text('Összeg regex'), findsOneWidget);
-    expect(find.text('Bolt regex'), findsOneWidget);
-    expect(find.text('999 Ft'), findsOneWidget);
-    expect(find.text('Corner Shop'), findsOneWidget);
+      await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+      await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const ValueKey('notification-parser-include-keyword')),
-      '',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('notification-parser-sample')),
-      'Kártyás vásárlás: Tesco - 12 345 HUF',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('notification-parser-amount-pattern')),
-      r'(?<amount>\d[\d\s]*)\s*HUF',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('notification-parser-merchant-pattern')),
-      r'vásárlás:\s*(?<merchant>[^-]+)\s*-',
-    );
-    await tester.pumpAndSettle();
+      expect(find.text('Profilok'), findsOneWidget);
+      expect(find.text('Bank A profil'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('notification-parser-add-profile')),
+        findsOneWidget,
+      );
+      expect(find.text('Tanító mód'), findsOneWidget);
+      expect(find.text('Haladó beállítások'), findsOneWidget);
+      expect(find.text('Összeg regex'), findsNothing);
 
-    expect(find.text('12 345 HUF'), findsOneWidget);
-    expect(find.text('Tesco'), findsOneWidget);
-    expect(savedParserRules, isNotEmpty);
-    expect(savedParserRules.last['includeKeyword'], '');
-  });
+      await tester.enterText(
+        find.byKey(const ValueKey('notification-parser-sample')),
+        'Kártyás vásárlás: Tesco - 12 345 HUF',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find
+            .byKey(const ValueKey('notification-parser-token-12 345 HUF'))
+            .first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find
+            .byKey(const ValueKey('notification-parser-token-12 345 HUF'))
+            .first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-mode-merchant')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-mode-merchant')).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-token-Tesco')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-token-Tesco')).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('12 345 HUF').hitTestable(), findsWidgets);
+      expect(find.text('Tesco').hitTestable(), findsWidgets);
+
+      await tester.scrollUntilVisible(
+        find.text('Haladó beállítások'),
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.text('Haladó beállítások'));
+      await tester.pumpAndSettle();
+      expect(find.text('Összeg regex'), findsOneWidget);
+      expect(find.text('Bolt regex'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-save-profile')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-save-profile')).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(savedParserRules, isNotEmpty);
+      final profiles = savedParserRules.last['profiles'] as List<dynamic>;
+      final first = profiles.first as Map<dynamic, dynamic>;
+      expect(first['amountSelection'], '12 345 HUF');
+      expect(first['merchantSelection'], 'Tesco');
+    },
+  );
 }
 
 Map<String, Object?> recurringRow() {

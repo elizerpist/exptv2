@@ -56,6 +56,13 @@ class MainActivity : FlutterActivity() {
                         val apps = withContext(Dispatchers.IO) { installedApps() }
                         result.success(apps)
                     }
+                    "loadNotificationParserProfiles" -> {
+                        result.success(parserRuleStore.loadProfiles())
+                    }
+                    "saveNotificationParserProfiles" -> {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        result.success(parserRuleStore.saveProfiles(args))
+                    }
                     "loadNotificationParserRule" -> {
                         result.success(parserRuleStore.load())
                     }

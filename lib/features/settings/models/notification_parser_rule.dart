@@ -1,3 +1,258 @@
+class NotificationParserConfig {
+  const NotificationParserConfig({required this.profiles});
+
+  final List<NotificationParserProfile> profiles;
+
+  factory NotificationParserConfig.defaults() {
+    return NotificationParserConfig(
+      profiles: [NotificationParserProfile.defaults()],
+    );
+  }
+
+  factory NotificationParserConfig.fromMap(Map<dynamic, dynamic> map) {
+    final rows = map['profiles'];
+    if (rows is List && rows.isNotEmpty) {
+      return NotificationParserConfig(
+        profiles: rows
+            .whereType<Map<dynamic, dynamic>>()
+            .map(NotificationParserProfile.fromMap)
+            .toList(),
+      );
+    }
+    return NotificationParserConfig(
+      profiles: [NotificationParserProfile.fromFlatRuleMap(map)],
+    );
+  }
+
+  List<NotificationParserProfile> get activeProfiles =>
+      profiles.where((profile) => profile.enabled).toList(growable: false);
+
+  NotificationParserProfile selected(String? id) {
+    return profiles.firstWhere(
+      (profile) => profile.id == id,
+      orElse: () => profiles.isEmpty
+          ? NotificationParserProfile.defaults()
+          : profiles.first,
+    );
+  }
+
+  NotificationParserConfig upsert(NotificationParserProfile profile) {
+    var found = false;
+    final rows = profiles.map((row) {
+      if (row.id != profile.id) return row;
+      found = true;
+      return profile;
+    }).toList();
+    if (!found) rows.add(profile);
+    return NotificationParserConfig(profiles: rows);
+  }
+
+  NotificationParserConfig remove(String id) {
+    final rows = profiles.where((profile) => profile.id != id).toList();
+    if (rows.isEmpty) return NotificationParserConfig.defaults();
+    return NotificationParserConfig(profiles: rows);
+  }
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'profiles': profiles.map((profile) => profile.toMap()).toList(),
+    };
+  }
+}
+
+class NotificationParserProfile {
+  const NotificationParserProfile({
+    required this.id,
+    required this.name,
+    required this.enabled,
+    required this.appFilterText,
+    required this.packageName,
+    required this.appLabel,
+    required this.rule,
+  });
+
+  final String id;
+  final String name;
+  final bool enabled;
+  final String appFilterText;
+  final String packageName;
+  final String appLabel;
+  final NotificationParserRule rule;
+
+  String get sampleText => rule.sampleText;
+  String get includeKeyword => rule.includeKeyword;
+  String get amountPattern => rule.amountPattern;
+  String get merchantPattern => rule.merchantPattern;
+  String get amountSelection => rule.amountSelection;
+  String get merchantSelection => rule.merchantSelection;
+  NotificationParserPreview get preview => rule.preview;
+
+  factory NotificationParserProfile.defaults({int index = 1}) {
+    final suffix = index <= 1 ? '' : ' $index';
+    return NotificationParserProfile(
+      id: 'profile-$index',
+      name: 'Profil$suffix',
+      enabled: true,
+      appFilterText: '',
+      packageName: '',
+      appLabel: '',
+      rule: NotificationParserRule.defaults(),
+    );
+  }
+
+  factory NotificationParserProfile.fromFlatRuleMap(Map<dynamic, dynamic> map) {
+    final rule = NotificationParserRule.fromMap(map);
+    return NotificationParserProfile(
+      id: _stringValue(map['id'], 'profile-1'),
+      name: _stringValue(map['name'], 'Profil'),
+      enabled: map['enabled'] is bool ? map['enabled'] as bool : rule.enabled,
+      appFilterText: _stringValue(map['appFilterText'], ''),
+      packageName: _stringValue(map['packageName'], ''),
+      appLabel: _stringValue(map['appLabel'], ''),
+      rule: rule,
+    );
+  }
+
+  factory NotificationParserProfile.fromMap(Map<dynamic, dynamic> map) {
+    final nestedRule = map['rule'];
+    final rule = nestedRule is Map<dynamic, dynamic>
+        ? NotificationParserRule.fromMap(nestedRule)
+        : NotificationParserRule.fromMap(map);
+    return NotificationParserProfile(
+      id: _stringValue(map['id'], 'profile-1'),
+      name: _stringValue(map['name'], 'Profil'),
+      enabled: map['enabled'] is bool ? map['enabled'] as bool : rule.enabled,
+      appFilterText: _stringValue(map['appFilterText'], ''),
+      packageName: _stringValue(map['packageName'], ''),
+      appLabel: _stringValue(map['appLabel'], ''),
+      rule: rule.copyWith(
+        enabled: map['enabled'] is bool ? map['enabled'] as bool : rule.enabled,
+      ),
+    );
+  }
+
+  NotificationParserProfile copyWith({
+    String? id,
+    String? name,
+    bool? enabled,
+    String? appFilterText,
+    String? packageName,
+    String? appLabel,
+    String? sampleText,
+    String? includeKeyword,
+    String? amountPattern,
+    String? merchantPattern,
+    String? amountSelection,
+    String? merchantSelection,
+    NotificationParserRule? rule,
+  }) {
+    final nextEnabled = enabled ?? this.enabled;
+    return NotificationParserProfile(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      enabled: nextEnabled,
+      appFilterText: appFilterText ?? this.appFilterText,
+      packageName: packageName ?? this.packageName,
+      appLabel: appLabel ?? this.appLabel,
+      rule: (rule ?? this.rule).copyWith(
+        enabled: nextEnabled,
+        sampleText: sampleText,
+        includeKeyword: includeKeyword,
+        amountPattern: amountPattern,
+        merchantPattern: merchantPattern,
+        amountSelection: amountSelection,
+        merchantSelection: merchantSelection,
+      ),
+    );
+  }
+
+  NotificationParserProfile learnAmountFromSelection(String selection) {
+    final normalized = NotificationParserPreview.normalizeText(selection);
+    return copyWith(
+      amountSelection: normalized,
+      amountPattern: r'(?<amount>\d[\d\s.,]*)(?:\s*(?:Ft|HUF))',
+    );
+  }
+
+  NotificationParserProfile learnMerchantFromSelection(String selection) {
+    final normalized = NotificationParserPreview.normalizeText(selection);
+    final sample = NotificationParserPreview.normalizeText(sampleText);
+    final escaped = RegExp.escape(normalized);
+    var pattern = '(?<merchant>$escaped)';
+    if (RegExp('itt:\\s*$escaped', caseSensitive: false).hasMatch(sample)) {
+      pattern = r'itt:\s*(?<merchant>.+?)(?:\.|$)';
+    } else if (RegExp(
+      ':\\s*$escaped\\s*-',
+      caseSensitive: false,
+    ).hasMatch(sample)) {
+      pattern = r':\s*(?<merchant>[^-]+)\s*-';
+    } else if (RegExp(
+      'at\\s+$escaped',
+      caseSensitive: false,
+    ).hasMatch(sample)) {
+      pattern = r'at\s+(?<merchant>.+)';
+    }
+    return copyWith(merchantSelection: normalized, merchantPattern: pattern);
+  }
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'id': id,
+      'name': name,
+      'enabled': enabled,
+      'appFilterText': appFilterText,
+      'packageName': packageName,
+      'appLabel': appLabel,
+      ...rule.toMap(),
+    };
+  }
+
+  static String _stringValue(Object? value, String fallback) {
+    final text = value?.toString();
+    if (text == null) return fallback;
+    return text;
+  }
+}
+
+class NotificationTrainingToken {
+  const NotificationTrainingToken(this.text);
+
+  final String text;
+
+  static List<NotificationTrainingToken> fromSample(String sample) {
+    final normalized = NotificationParserPreview.normalizeText(sample);
+    if (normalized.isEmpty) return const [];
+    final values = <String>[];
+    void add(String value) {
+      final cleaned = value.trim().replaceAll(RegExp(r'[.]+$'), '');
+      if (cleaned.isNotEmpty && !values.contains(cleaned)) values.add(cleaned);
+    }
+
+    for (final match in RegExp(
+      r'\d[\d\s.,]*(?:\s*(?:Ft|HUF))',
+      caseSensitive: false,
+    ).allMatches(normalized)) {
+      add(match.group(0) ?? '');
+    }
+    for (final match in RegExp(
+      r'itt:\s*(.+?)(?:\.|$)',
+      caseSensitive: false,
+    ).allMatches(normalized)) {
+      add(match.group(1) ?? '');
+    }
+    for (final match in RegExp(
+      r':\s*([^-]+?)\s*-',
+      caseSensitive: false,
+    ).allMatches(normalized)) {
+      add(match.group(1) ?? '');
+    }
+    for (final part in normalized.split(RegExp(r'\s+'))) {
+      if (!part.contains(':') && !RegExp(r'^\d').hasMatch(part)) add(part);
+    }
+    return values.map(NotificationTrainingToken.new).toList(growable: false);
+  }
+}
+
 class NotificationParserRule {
   const NotificationParserRule({
     required this.enabled,
@@ -5,6 +260,8 @@ class NotificationParserRule {
     required this.includeKeyword,
     required this.amountPattern,
     required this.merchantPattern,
+    this.amountSelection = '',
+    this.merchantSelection = '',
   });
 
   final bool enabled;
@@ -12,6 +269,8 @@ class NotificationParserRule {
   final String includeKeyword;
   final String amountPattern;
   final String merchantPattern;
+  final String amountSelection;
+  final String merchantSelection;
 
   factory NotificationParserRule.defaults() {
     return const NotificationParserRule(
@@ -41,6 +300,8 @@ class NotificationParserRule {
         map['merchantPattern'],
         defaults.merchantPattern,
       ),
+      amountSelection: _stringValue(map['amountSelection'], ''),
+      merchantSelection: _stringValue(map['merchantSelection'], ''),
     );
   }
 
@@ -54,6 +315,8 @@ class NotificationParserRule {
       'includeKeyword': includeKeyword,
       'amountPattern': amountPattern,
       'merchantPattern': merchantPattern,
+      'amountSelection': amountSelection,
+      'merchantSelection': merchantSelection,
     };
   }
 
@@ -63,6 +326,8 @@ class NotificationParserRule {
     String? includeKeyword,
     String? amountPattern,
     String? merchantPattern,
+    String? amountSelection,
+    String? merchantSelection,
   }) {
     return NotificationParserRule(
       enabled: enabled ?? this.enabled,
@@ -70,6 +335,8 @@ class NotificationParserRule {
       includeKeyword: includeKeyword ?? this.includeKeyword,
       amountPattern: amountPattern ?? this.amountPattern,
       merchantPattern: merchantPattern ?? this.merchantPattern,
+      amountSelection: amountSelection ?? this.amountSelection,
+      merchantSelection: merchantSelection ?? this.merchantSelection,
     );
   }
 
@@ -97,7 +364,7 @@ class NotificationParserPreview {
       amountValue != null && merchant != null && errorText == null;
 
   factory NotificationParserPreview.fromRule(NotificationParserRule rule) {
-    final normalized = _normalizeText(rule.sampleText);
+    final normalized = normalizeText(rule.sampleText);
     try {
       if (normalized.isEmpty) {
         return const NotificationParserPreview(
@@ -111,7 +378,7 @@ class NotificationParserPreview {
       final keyword = rule.includeKeyword.trim();
       if (keyword.isNotEmpty &&
           !normalized.toLowerCase().contains(
-            _normalizeText(keyword).toLowerCase(),
+            normalizeText(keyword).toLowerCase(),
           )) {
         return const NotificationParserPreview(
           amountText: null,
@@ -130,7 +397,7 @@ class NotificationParserPreview {
       final amountValue = _parseAmount(amountCapture);
       final amountText = amountMatch == null
           ? null
-          : _normalizeText(amountMatch.group(0) ?? '');
+          : normalizeText(amountMatch.group(0) ?? '');
       final merchant = _capture(merchantMatch, 'merchant')?.trim();
 
       if (amountMatch == null || amountValue == null) {
@@ -196,7 +463,7 @@ class NotificationParserPreview {
 
   static double? _parseAmount(String? raw) {
     if (raw == null) return null;
-    var cleaned = _normalizeText(raw).replaceAll(RegExp(r'[^0-9,\.]'), '');
+    var cleaned = normalizeText(raw).replaceAll(RegExp(r'[^0-9,\.]'), '');
     if (cleaned.isEmpty) return null;
     final hasComma = cleaned.contains(',');
     final hasDot = cleaned.contains('.');
@@ -210,7 +477,7 @@ class NotificationParserPreview {
     return double.tryParse(cleaned);
   }
 
-  static String _normalizeText(String value) {
+  static String normalizeText(String value) {
     return value
         .replaceAll('\u00A0', ' ')
         .replaceAll('\u202F', ' ')

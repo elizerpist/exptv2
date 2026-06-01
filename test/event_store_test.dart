@@ -11,9 +11,11 @@ void main() {
   const eventChannel = EventChannel('test/events');
 
   final savedParserRules = <Map<dynamic, dynamic>>[];
+  final savedParserProfiles = <Map<dynamic, dynamic>>[];
 
   setUp(() {
     savedParserRules.clear();
+    savedParserProfiles.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(methodChannel, (call) async {
           if (call.method == 'loadEvents') {
@@ -25,6 +27,40 @@ void main() {
               ),
               sampleEvent(id: 2, appLabel: 'Signal', packageName: 'org.signal'),
             ];
+          }
+          if (call.method == 'loadNotificationParserProfiles') {
+            return <String, Object?>{
+              'profiles': <Object?>[
+                <String, Object?>{
+                  'id': 'bank-a',
+                  'name': 'Bank A',
+                  'enabled': true,
+                  'appFilterText': r'^Bank A$',
+                  'sampleText': 'Paid 999 Ft at Corner Shop',
+                  'includeKeyword': 'Paid',
+                  'amountPattern': r'(?<amount>\d+)\s*Ft',
+                  'merchantPattern': r'at\s+(?<merchant>.+)',
+                },
+                <String, Object?>{
+                  'id': 'bank-b',
+                  'name': 'Bank B',
+                  'enabled': false,
+                  'appFilterText': r'^Bank B$',
+                  'sampleText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
+                  'includeKeyword': '',
+                  'amountPattern': r'(?<amount>\d[\d\s]*)\s*HUF',
+                  'merchantPattern': r'vásárlás:\s*(?<merchant>[^-]+)\s*-',
+                },
+              ],
+            };
+          }
+          if (call.method == 'saveNotificationParserProfiles') {
+            savedParserProfiles.add(
+              Map<dynamic, dynamic>.from(
+                call.arguments as Map<dynamic, dynamic>,
+              ),
+            );
+            return call.arguments;
           }
           if (call.method == 'loadNotificationParserRule') {
             return <String, Object?>{
@@ -78,6 +114,42 @@ void main() {
     expect(store.events.single.packageName, 'org.telegram.messenger');
   });
 
+  test('loads, selects and toggles notification parser profiles', () async {
+    final store = EventStore(
+      NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+      realtimeEnabled: false,
+    );
+
+    await store.start();
+
+    expect(store.notificationParserProfiles, hasLength(2));
+    expect(store.selectedNotificationParserProfile.id, 'bank-a');
+    expect(store.notificationParserPreview.merchant, 'Corner Shop');
+
+    store.selectNotificationParserProfile('bank-b');
+    expect(store.selectedNotificationParserProfile.id, 'bank-b');
+    expect(store.notificationParserPreview.merchant, 'Tesco');
+
+    await store.setNotificationParserProfileEnabled('bank-b', true);
+
+    expect(store.notificationParserConfig.activeProfiles, hasLength(2));
+    expect(savedParserProfiles, hasLength(1));
+  });
+
+  test('adds a new notification parser profile', () async {
+    final store = EventStore(
+      NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+      realtimeEnabled: false,
+    );
+
+    await store.start();
+    await store.addNotificationParserProfile();
+
+    expect(store.notificationParserProfiles, hasLength(3));
+    expect(store.selectedNotificationParserProfile.name, 'Profil 3');
+    expect(savedParserProfiles, hasLength(1));
+  });
+
   test('loads and saves notification parser rules', () async {
     final store = EventStore(
       NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
@@ -100,11 +172,10 @@ void main() {
     );
 
     expect(store.notificationParserPreview.amountValue, 12345);
-    expect(savedParserRules, hasLength(1));
-    expect(
-      savedParserRules.single['merchantPattern'],
-      r'vásárlás:\s*(?<merchant>[^-]+)\s*-',
-    );
+    expect(savedParserProfiles, hasLength(1));
+    final profiles = savedParserProfiles.single['profiles'] as List<dynamic>;
+    final first = profiles.first as Map<dynamic, dynamic>;
+    expect(first['merchantPattern'], r'vásárlás:\s*(?<merchant>[^-]+)\s*-');
   });
 
   test('invalid regex keeps previous valid filter', () async {

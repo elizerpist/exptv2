@@ -11,7 +11,6 @@ import 'models/app_theme_settings.dart';
 import 'models/fast_info_config.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
-import 'widgets/app_filter_control.dart';
 import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/fast_info_options_panel.dart';
 import 'widgets/options/recurring_options_panel.dart';
@@ -277,6 +276,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _submenuBody(_SettingsMenu menu) {
     return switch (menu) {
       _SettingsMenu.parsedApp => ListView(
+        key: const ValueKey('settings-parsed-app-scroll'),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
         children: [
           const Text(
@@ -284,20 +284,28 @@ class _SettingsPageState extends State<SettingsPage> {
             style: TextStyle(color: AppColors.gray600),
           ),
           const SizedBox(height: 16),
-          AppFilterControl(
-            value: widget.store.filterText,
-            errorText: widget.store.filterError,
-            onTextChanged: widget.store.setFilterText,
-            onLoadInstalledApps: widget.store.listInstalledApps,
-            onAppSelected: widget.store.selectInstalledApp,
-          ),
-          const SizedBox(height: 18),
-          NotificationParserRuleEditor(
-            rule: widget.store.notificationParserRule,
+          NotificationParserProfilesPanel(
+            profiles: widget.store.notificationParserProfiles,
+            selectedProfile: widget.store.selectedNotificationParserProfile,
             preview: widget.store.notificationParserPreview,
-            onChanged: (rule) {
-              unawaited(widget.store.setNotificationParserRule(rule));
+            onProfileSelected: widget.store.selectNotificationParserProfile,
+            onAddProfile: () {
+              unawaited(widget.store.addNotificationParserProfile());
             },
+            onProfileEnabledChanged: (id, enabled) {
+              unawaited(
+                widget.store.setNotificationParserProfileEnabled(id, enabled),
+              );
+            },
+            onProfileChanged: (profile) {
+              unawaited(
+                widget.store.updateSelectedNotificationParserProfile(profile),
+              );
+            },
+            onSaveProfile: () {
+              unawaited(widget.store.saveSelectedNotificationParserProfile());
+            },
+            onLoadInstalledApps: widget.store.listInstalledApps,
           ),
         ],
       ),
