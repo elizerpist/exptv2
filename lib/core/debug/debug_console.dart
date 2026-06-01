@@ -3,12 +3,33 @@ import 'package:flutter/services.dart';
 
 import '../../services/recurring_alarm_service.dart';
 
+
+class _DebugConsoleNotifier extends ValueNotifier<int> {
+  _DebugConsoleNotifier(super.value);
+
+  var _listenerCount = 0;
+
+  bool get hasExternalListeners => _listenerCount > 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listenerCount += 1;
+    super.addListener(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    if (_listenerCount > 0) _listenerCount -= 1;
+    super.removeListener(listener);
+  }
+}
+
 class DebugConsole {
   DebugConsole._();
 
   static const _maxEntries = 500;
   static final List<String> _entries = <String>[];
-  static final ValueNotifier<int> _version = ValueNotifier<int>(0);
+  static final _DebugConsoleNotifier _version = _DebugConsoleNotifier(0);
   static var _notifyScheduled = false;
 
   static void log(String message) {
@@ -26,7 +47,7 @@ class DebugConsole {
   }
 
   static void _scheduleNotify() {
-    if (!_version.hasListeners) return;
+    if (!_version.hasExternalListeners) return;
     if (_notifyScheduled) return;
     late final WidgetsBinding binding;
     try {
