@@ -46,9 +46,12 @@ class TransactionStore extends ChangeNotifier {
   final _categoryBudgetBarsCache = <String, List<CategoryBudgetBarData>>{};
   final _overviewBudgetItemsCache = <String, List<OverviewBudgetData>>{};
   final _backheaderBudgetItemsCache = <String, List<BackheaderBudgetItem>>{};
+  static const _visibleDisplayLogPageSize = 96;
+
   TransactionSummary? _totalSummaryCache;
   double? _totalIncomeCache;
   double? _totalExpenseCache;
+  var _visibleDisplayLogLimit = _visibleDisplayLogPageSize;
 
   bool get loading => _loading;
   String? get error => _error;
@@ -72,7 +75,8 @@ class TransactionStore extends ChangeNotifier {
       List.unmodifiable(_recurringGhostTransactions);
   List<CategoryLimit> get limits => List.unmodifiable(_limits);
 
-  List<TransactionCategory> get activeCategories => _activeCategoriesFor(_filter.type);
+  List<TransactionCategory> get activeCategories =>
+      _activeCategoriesFor(_filter.type);
 
   List<CategoryBudgetBarData> get categoryBudgetBars =>
       _categoryBudgetBarsFor(_filter.type);
@@ -114,10 +118,17 @@ class TransactionStore extends ChangeNotifier {
   List<RecurringGhostRecord> get visibleGhostTransactions =>
       _visibleGhostTransactionsFor(_filter);
 
-  List<TransactionLogEntry> get visibleLogEntries => _visibleLogEntriesFor(_filter);
+  List<TransactionLogEntry> get visibleLogEntries =>
+      _visibleLogEntriesFor(_filter);
 
   List<TransactionLogEntry> get visibleDisplayLogEntries =>
       _visibleDisplayLogEntriesFor(_filter);
+
+  int get visibleDisplayLogEntryTotalCount =>
+      _visibleDisplayLogEntryTotalCountFor(_filter);
+
+  bool get hasMoreVisibleDisplayLogEntries =>
+      visibleDisplayLogEntries.length < visibleDisplayLogEntryTotalCount;
 
   String get totalBalanceText => _totalSummary.formattedBalance;
 
@@ -149,10 +160,8 @@ class TransactionStore extends ChangeNotifier {
     return parts.join(' · ');
   }
 
-  String get _activePeriodKey => LimitManager.periodKeyFor(
-    _summaryWindow,
-    _periodReferenceDate,
-  );
+  String get _activePeriodKey =>
+      LimitManager.periodKeyFor(_summaryWindow, _periodReferenceDate);
 
   String _windowCacheKey(TransactionType type) =>
       '${type.name}|${_summaryWindow.name}|$_activePeriodKey';
@@ -203,7 +212,9 @@ class TransactionStore extends ChangeNotifier {
             record.transactionCategoryID != filter.categoryId) {
           return false;
         }
-        if (merchant != null && record.displayMerchant != merchant) return false;
+        if (merchant != null && record.displayMerchant != merchant) {
+          return false;
+        }
         if (query.isNotEmpty &&
             !record.displayMerchant.toLowerCase().contains(query)) {
           return false;
@@ -229,7 +240,8 @@ class TransactionStore extends ChangeNotifier {
         if (_ghostIsBeforeCurrentMonth(ghost)) return false;
         if (ghost.type != filter.type) return false;
         if (!_ghostInActiveWindow(ghost)) return false;
-        if (filter.categoryId != null && ghost.categoryId != filter.categoryId) {
+        if (filter.categoryId != null &&
+            ghost.categoryId != filter.categoryId) {
           return false;
         }
         if (merchant != null && ghost.name != merchant) return false;
@@ -262,23 +274,39 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionLogEntry> _visibleDisplayLogEntriesFor(
     TransactionFilter filter,
   ) {
-    final key = _filterCacheKey(filter);
+    final key = '${_filterCacheKey(filter)}|limit=$_visibleDisplayLogLimit';
     final cached = _visibleDisplayLogEntriesCache[key];
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
     final entries = <TransactionLogEntry>[];
     String? previousDate;
+    var emittedRows = 0;
     for (final row in _visibleLogEntriesFor(filter)) {
+      if (emittedRows >= _visibleDisplayLogLimit) break;
       if (row.date != previousDate) {
         entries.add(TransactionLogEntry.header(row.date));
         previousDate = row.date;
       }
       entries.add(row);
+      emittedRows += 1;
     }
     final rows = List<TransactionLogEntry>.unmodifiable(entries);
     _visibleDisplayLogEntriesCache[key] = rows;
     _logCacheBuild('display-${filter.type.name}', key, stopwatch, rows.length);
     return rows;
+  }
+
+  int _visibleDisplayLogEntryTotalCountFor(TransactionFilter filter) {
+    var total = 0;
+    String? previousDate;
+    for (final row in _visibleLogEntriesFor(filter)) {
+      if (row.date != previousDate) {
+        total += 1;
+        previousDate = row.date;
+      }
+      total += 1;
+    }
+    return total;
   }
 
   List<CategoryBudgetBarData> _categoryBudgetBarsFor(TransactionType type) {
@@ -327,9 +355,8 @@ class TransactionStore extends ChangeNotifier {
         final amount = switch (kind) {
           BudgetGoalKind.expenseBudget => expense,
           BudgetGoalKind.incomeGoal => income,
-          BudgetGoalKind.savingGoal => (income - expense)
-              .clamp(0.0, double.infinity)
-              .toDouble(),
+          BudgetGoalKind.savingGoal =>
+            (income - expense).clamp(0.0, double.infinity).toDouble(),
         };
         final hasLimit = sourceLimit?.hasLimit ?? false;
         final limitAmount = hasLimit ? sourceLimit!.limitAmount : 0.0;
@@ -375,7 +402,9 @@ class TransactionStore extends ChangeNotifier {
     final key = _filterCacheKey(filter);
     final cached = _activeSummaryCache[key];
     if (cached != null) return cached;
-    final value = TransactionSummary.fromRecords(_visibleTransactionsFor(filter));
+    final value = TransactionSummary.fromRecords(
+      _visibleTransactionsFor(filter),
+    );
     _activeSummaryCache[key] = value;
     return value;
   }
@@ -384,13 +413,15 @@ class TransactionStore extends ChangeNotifier {
     final key = _windowCacheKey(type);
     final cached = _periodTotalsCache[key];
     if (cached != null) return cached;
-    final value = _windowedTransactionsFor(type)
-        .fold<double>(0, (sum, record) => sum + record.amount.abs());
+    final value = _windowedTransactionsFor(
+      type,
+    ).fold<double>(0, (sum, record) => sum + record.amount.abs());
     _periodTotalsCache[key] = value;
     return value;
   }
 
   void _invalidateViewCaches() {
+    _visibleDisplayLogLimit = _visibleDisplayLogPageSize;
     _activeCategoriesCache.clear();
     _windowedTransactionsCache.clear();
     _visibleTransactionsCache.clear();
@@ -436,6 +467,25 @@ class TransactionStore extends ChangeNotifier {
     );
   }
 
+  void loadMoreVisibleDisplayLogEntries() {
+    if (!hasMoreVisibleDisplayLogEntries) return;
+    final previousLimit = _visibleDisplayLogLimit;
+    _visibleDisplayLogLimit += _visibleDisplayLogPageSize;
+    _visibleDisplayLogEntriesCache.clear();
+    _prewarmActiveView('log-window-more');
+    notifyListeners();
+    DebugConsole.log(
+      '[Perf] LogWindow expand from=$previousLimit to=$_visibleDisplayLogLimit '
+      'visible=${visibleDisplayLogEntries.length} total=$visibleDisplayLogEntryTotalCount',
+    );
+  }
+
+  void _resetVisibleDisplayWindow() {
+    if (_visibleDisplayLogLimit == _visibleDisplayLogPageSize) return;
+    _visibleDisplayLogLimit = _visibleDisplayLogPageSize;
+    _visibleDisplayLogEntriesCache.clear();
+  }
+
   void _logCacheBuild(
     String label,
     String key,
@@ -476,12 +526,14 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void setActiveType(TransactionType type) {
-    final unchanged = _filter.type == type &&
+    final unchanged =
+        _filter.type == type &&
         _filter.categoryId == null &&
         _filter.merchant == null &&
         _filter.searchQuery.isEmpty;
     if (unchanged) return;
     final stopwatch = Stopwatch()..start();
+    _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(
       type: type,
       clearMerchant: true,
@@ -496,6 +548,7 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void setCategoryFilter(TransactionCategory category) {
+    _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(
       type: category.normalizedType,
       categoryId: category.transactionCategoryID,
@@ -506,18 +559,21 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void clearCategoryFilter() {
+    _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(clearCategory: true);
     _prewarmActiveView('category-clear');
     notifyListeners();
   }
 
   void setSearchQuery(String value) {
+    _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(searchQuery: value);
     _prewarmActiveView('search');
     notifyListeners();
   }
 
   void setMerchantFilter(String merchant, {String? colorHex}) {
+    _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(
       merchant: merchant,
       merchantColorHex: colorHex,
@@ -528,6 +584,7 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void clearMerchantFilter() {
+    _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(clearMerchant: true);
     _prewarmActiveView('merchant-clear');
     notifyListeners();
@@ -796,9 +853,10 @@ class TransactionStore extends ChangeNotifier {
   bool _ghostIsBeforeCurrentMonth(RecurringGhostRecord ghost) {
     final ghostDate = DateTime.tryParse(ghost.normalizedDate);
     if (ghostDate == null) return false;
-    return DateTime(ghostDate.year, ghostDate.month).isBefore(
-      _monthStart(_clock()),
-    );
+    return DateTime(
+      ghostDate.year,
+      ghostDate.month,
+    ).isBefore(_monthStart(_clock()));
   }
 
   bool _ghostInActiveWindow(RecurringGhostRecord ghost) {
@@ -831,7 +889,6 @@ class TransactionStore extends ChangeNotifier {
     return rows;
   }
 }
-
 
 int _compareLogEntries(TransactionLogEntry left, TransactionLogEntry right) {
   final date = right.date.compareTo(left.date);

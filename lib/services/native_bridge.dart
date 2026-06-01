@@ -38,6 +38,20 @@ class ExpenseBootstrapPayload {
   final List<RecurringGhostRecord> recurringGhostTransactions;
 }
 
+class ExpenseTransactionPagePayload {
+  const ExpenseTransactionPagePayload({
+    required this.transactions,
+    required this.totalCount,
+    required this.limit,
+    required this.offset,
+  });
+
+  final List<TransactionRecord> transactions;
+  final int totalCount;
+  final int limit;
+  final int offset;
+}
+
 class NativeBridge {
   NativeBridge({MethodChannel? methodChannel, EventChannel? eventChannel})
     : _methodChannel =
@@ -114,6 +128,33 @@ class NativeBridge {
         .cast<Map<dynamic, dynamic>>()
         .map(TransactionRecord.fromMap)
         .toList();
+  }
+
+  Future<ExpenseTransactionPagePayload> expenseListTransactionPage(
+    Map<String, Object?> filter,
+  ) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseListTransactionPage',
+      filter,
+    );
+    final payload = map ?? <dynamic, dynamic>{};
+    final rows = (payload['transactions'] as List<dynamic>? ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(TransactionRecord.fromMap)
+        .toList();
+    int readInt(String key) {
+      final value = payload[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return ExpenseTransactionPagePayload(
+      transactions: rows,
+      totalCount: readInt('totalCount'),
+      limit: readInt('limit'),
+      offset: readInt('offset'),
+    );
   }
 
   Future<List<TransactionCategory>> expenseListCategories({

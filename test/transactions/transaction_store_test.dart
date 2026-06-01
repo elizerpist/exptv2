@@ -31,30 +31,39 @@ void main() {
     final entries = store.visibleDisplayLogEntries;
     expect(entries.first.isHeader, isTrue);
     expect(entries.any((entry) => entry.record != null), isTrue);
-    expect(entries.where((entry) => entry.header != null).length, greaterThan(0));
+    expect(
+      entries.where((entry) => entry.header != null).length,
+      greaterThan(0),
+    );
   });
 
-  test('store reuses expensive visible and budget lists until filters change', () async {
-    final store = TransactionStore(FakeTransactionRepository());
-    await store.start();
+  test(
+    'store reuses expensive visible and budget lists until filters change',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      await store.start();
 
-    final visibleEntries = store.visibleDisplayLogEntries;
-    final visibleEntriesAgain = store.visibleDisplayLogEntries;
-    final bars = store.categoryBudgetBars;
-    final barsAgain = store.categoryBudgetBars;
-    final backheaderItems = store.backheaderBudgetItems;
-    final backheaderItemsAgain = store.backheaderBudgetItems;
+      final visibleEntries = store.visibleDisplayLogEntries;
+      final visibleEntriesAgain = store.visibleDisplayLogEntries;
+      final bars = store.categoryBudgetBars;
+      final barsAgain = store.categoryBudgetBars;
+      final backheaderItems = store.backheaderBudgetItems;
+      final backheaderItemsAgain = store.backheaderBudgetItems;
 
-    expect(identical(visibleEntries, visibleEntriesAgain), isTrue);
-    expect(identical(bars, barsAgain), isTrue);
-    expect(identical(backheaderItems, backheaderItemsAgain), isTrue);
+      expect(identical(visibleEntries, visibleEntriesAgain), isTrue);
+      expect(identical(bars, barsAgain), isTrue);
+      expect(identical(backheaderItems, backheaderItemsAgain), isTrue);
 
-    store.setActiveType(TransactionType.income);
+      store.setActiveType(TransactionType.income);
 
-    expect(identical(store.visibleDisplayLogEntries, visibleEntries), isFalse);
-    expect(identical(store.categoryBudgetBars, bars), isFalse);
-    expect(identical(store.backheaderBudgetItems, backheaderItems), isFalse);
-  });
+      expect(
+        identical(store.visibleDisplayLogEntries, visibleEntries),
+        isFalse,
+      );
+      expect(identical(store.categoryBudgetBars, bars), isFalse);
+      expect(identical(store.backheaderBudgetItems, backheaderItems), isFalse);
+    },
+  );
 
   test('store applies merchant fast filter and search query', () async {
     final store = TransactionStore(FakeTransactionRepository());
@@ -267,6 +276,44 @@ void main() {
   });
 
   test(
+    'display log entries are windowed and can be expanded for large datasets',
+    () async {
+      final repository = FakeTransactionRepository();
+      for (var index = 0; index < 260; index += 1) {
+        repository.transactions.add(
+          TransactionRecord.fromMap({
+            'id': 300000 + index,
+            'date': '2026.05.${(index % 28 + 1).toString().padLeft(2, '0')}',
+            'time': '${(index % 23).toString().padLeft(2, '0')}:10',
+            'merchant': 'Future Shop $index',
+            'amount': -1000 - index,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+        );
+      }
+      final store = TransactionStore(repository);
+      await store.start();
+
+      final initialEntries = store.visibleDisplayLogEntries;
+
+      expect(store.visibleDisplayLogEntryTotalCount, greaterThan(260));
+      expect(
+        initialEntries.length,
+        lessThan(store.visibleDisplayLogEntryTotalCount),
+      );
+      expect(store.hasMoreVisibleDisplayLogEntries, isTrue);
+
+      store.loadMoreVisibleDisplayLogEntries();
+
+      expect(
+        store.visibleDisplayLogEntries.length,
+        greaterThan(initialEntries.length),
+      );
+    },
+  );
+
+  test(
     'summary period can be shifted for monthly and yearly windows',
     () async {
       final store = TransactionStore(
@@ -372,6 +419,44 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
       categories: categories,
       transactions: transactions,
       limits: const [],
+    );
+  }
+
+  @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    final rows = transactions.where((transaction) {
+      final type = query.type;
+      if (type != null && transaction.type != type) return false;
+      if (query.categoryId != null &&
+          transaction.transactionCategoryID != query.categoryId) {
+        return false;
+      }
+      final merchant = query.merchant;
+      if (merchant != null &&
+          merchant.isNotEmpty &&
+          transaction.displayMerchant != merchant) {
+        return false;
+      }
+      final search = query.searchQuery.trim().toLowerCase();
+      if (search.isNotEmpty &&
+          !transaction.displayMerchant.toLowerCase().contains(search)) {
+        return false;
+      }
+      final yearMonth = query.yearMonth;
+      if (yearMonth != null &&
+          yearMonth.isNotEmpty &&
+          !transaction.date.replaceAll('.', '-').startsWith(yearMonth)) {
+        return false;
+      }
+      return true;
+    }).toList();
+    return TransactionPage(
+      transactions: rows.skip(query.offset).take(query.limit).toList(),
+      totalCount: rows.length,
+      limit: query.limit,
+      offset: query.offset,
     );
   }
 

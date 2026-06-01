@@ -101,7 +101,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Food'), findsWidgets);
       expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
-      expect(find.byKey(const ValueKey('category-limit-slider')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('category-limit-slider')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('category-limit-partition-bar')),
         findsOneWidget,
@@ -147,52 +150,53 @@ void main() {
     expect(repository.savedLimits.single['limitAmount'], 1000);
   });
 
-  testWidgets('limit editor slider keeps adaptive max after manual high input', (
-    tester,
-  ) async {
-    final repository = FakeHomeLimitRepository.withoutBudgetLimits();
-    final store = TransactionStore(
-      repository,
-      clock: () => DateTime(2026, 5, 17),
-    );
-    await pumpExpandedMonthlyHome(tester, store);
+  testWidgets(
+    'limit editor slider keeps adaptive max after manual high input',
+    (tester) async {
+      final repository = FakeHomeLimitRepository.withoutBudgetLimits();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 17),
+      );
+      await pumpExpandedMonthlyHome(tester, store);
 
-    await tester.drag(
-      find.byKey(const ValueKey('category-budget-bar')),
-      const Offset(-180, 0),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
-    await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('category-budget-bar')),
+        const Offset(-180, 0),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
+      await tester.pumpAndSettle();
 
-    final initialSlider = tester.widget<Slider>(
-      find.byKey(const ValueKey('category-limit-slider')),
-    );
-    expect(initialSlider.max, 100000);
-    expect(initialSlider.divisions, 100);
+      final initialSlider = tester.widget<Slider>(
+        find.byKey(const ValueKey('category-limit-slider')),
+      );
+      expect(initialSlider.max, 100000);
+      expect(initialSlider.divisions, 100);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('limit-amount-input')),
-      '250000',
-    );
-    await tester.pump(const Duration(milliseconds: 500));
+      await tester.enterText(
+        find.byKey(const ValueKey('limit-amount-input')),
+        '250000',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
 
-    final highSlider = tester.widget<Slider>(
-      find.byKey(const ValueKey('category-limit-slider')),
-    );
-    expect(highSlider.max, 250000);
+      final highSlider = tester.widget<Slider>(
+        find.byKey(const ValueKey('category-limit-slider')),
+      );
+      expect(highSlider.max, 250000);
 
-    await tester.drag(
-      find.byKey(const ValueKey('category-limit-slider')),
-      const Offset(-120, 0),
-    );
-    await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('category-limit-slider')),
+        const Offset(-120, 0),
+      );
+      await tester.pumpAndSettle();
 
-    final reducedSlider = tester.widget<Slider>(
-      find.byKey(const ValueKey('category-limit-slider')),
-    );
-    expect(reducedSlider.max, 250000);
-  });
+      final reducedSlider = tester.widget<Slider>(
+        find.byKey(const ValueKey('category-limit-slider')),
+      );
+      expect(reducedSlider.max, 250000);
+    },
+  );
 
   testWidgets('limit editor is inline slide-up panel reaching screen bottom', (
     tester,
@@ -206,9 +210,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: TransactionHomePage(store: store),
-        ),
+        home: Scaffold(body: TransactionHomePage(store: store)),
       ),
     );
     await tester.pumpAndSettle();
@@ -238,17 +240,20 @@ void main() {
     );
     expect(veil.color, Colors.black.withValues(alpha: 0.28));
     expect(find.byKey(const ValueKey('header-balance-text')), findsOneWidget);
-    expect(find.byKey(const ValueKey('header-category-button')), findsOneWidget);
-    final balanceOpacity = tester.widget<AnimatedOpacity>(
+    expect(
+      find.byKey(const ValueKey('header-category-button')),
+      findsOneWidget,
+    );
+    final balanceOpacity = tester.widget<Opacity>(
       find.ancestor(
         of: find.byKey(const ValueKey('header-balance-text')),
-        matching: find.byType(AnimatedOpacity),
+        matching: find.byType(Opacity),
       ),
     );
-    final categoryOpacity = tester.widget<AnimatedOpacity>(
+    final categoryOpacity = tester.widget<Opacity>(
       find.ancestor(
         of: find.byKey(const ValueKey('header-category-button')),
-        matching: find.byType(AnimatedOpacity),
+        matching: find.byType(Opacity),
       ),
     );
     expect(balanceOpacity.opacity, 0);
@@ -345,9 +350,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<Text>(
-        find.byKey(const ValueKey('limit-card-title')),
-      ).data,
+      tester.widget<Text>(find.byKey(const ValueKey('limit-card-title'))).data,
       'Food',
     );
 
@@ -360,9 +363,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<Text>(
-        find.byKey(const ValueKey('limit-card-title')),
-      ).data,
+      tester.widget<Text>(find.byKey(const ValueKey('limit-card-title'))).data,
       'Budget',
     );
   });
@@ -397,9 +398,9 @@ void main() {
     expect(find.byKey(const ValueKey('limit-card-title')), findsOneWidget);
     expect(find.text('Food'), findsWidgets);
     expect(
-      tester.widget<Text>(
-        find.byKey(const ValueKey('backheader-active-title')),
-      ).data,
+      tester
+          .widget<Text>(find.byKey(const ValueKey('backheader-active-title')))
+          .data,
       'Food',
     );
   });
@@ -424,7 +425,9 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
-  testWidgets('backheader bar single tap opens the limit editor immediately', (tester) async {
+  testWidgets('backheader bar single tap opens the limit editor immediately', (
+    tester,
+  ) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
     final store = TransactionStore(
       repository,
@@ -471,14 +474,11 @@ void main() {
         store,
         onBlockingOverlayChanged: blockingStates.add,
         budgetEditorActiveKey: activeKey,
-        onBudgetTargetEditorRequested: (
-          item, {
-          required requestedAt,
-          required headerExpanded,
-        }) {
-          requestedTitle = item.title;
-          activeKey.value = item.key;
-        },
+        onBudgetTargetEditorRequested:
+            (item, {required requestedAt, required headerExpanded}) {
+              requestedTitle = item.title;
+              activeKey.value = item.key;
+            },
       );
       blockingStates.clear();
 
@@ -516,7 +516,9 @@ void main() {
     final cardTopLeft = tester.getTopLeft(
       find.byKey(const ValueKey('budget-target-editor-card')),
     );
-    final gesture = await tester.startGesture(cardTopLeft + const Offset(180, 90));
+    final gesture = await tester.startGesture(
+      cardTopLeft + const Offset(180, 90),
+    );
     await gesture.moveBy(const Offset(0, 260));
     await gesture.up();
     await tester.pumpAndSettle();
@@ -607,7 +609,6 @@ void main() {
     expect(repository.savedLimits.last['targetType'], 'overview');
     expect(repository.savedLimits.last['transactionType'], 'income');
   });
-
 }
 
 Future<void> pumpExpandedMonthlyHome(
@@ -769,6 +770,18 @@ class FakeHomeLimitRepository implements TransactionRepositoryContract {
     transactions: transactions,
     limits: limits,
   );
+
+  @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    return TransactionPage(
+      transactions: const [],
+      totalCount: 0,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
 
   @override
   Future<CategoryLimit> upsertCategoryLimit(

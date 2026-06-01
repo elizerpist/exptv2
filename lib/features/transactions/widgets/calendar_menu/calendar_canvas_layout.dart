@@ -8,6 +8,12 @@ class CalendarCanvasLayout {
   final Size size;
   final List<Rect> monthRects;
 
+  static CalendarCanvasLayout focusedMonth({required double width}) {
+    final cardHeight = (width * 0.86).clamp(260.0, 360.0).toDouble();
+    final rect = Rect.fromLTWH(0, 0, width, cardHeight);
+    return CalendarCanvasLayout(size: rect.size, monthRects: [rect]);
+  }
+
   static CalendarCanvasLayout calculate({
     required double width,
     required CalendarMenuMode mode,

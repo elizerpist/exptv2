@@ -22,6 +22,8 @@ class TransactionLogList extends StatelessWidget {
     required this.onCategoryFilter,
     this.onRenameMerchant,
     this.onResetMerchantName,
+    this.onLoadMore,
+    this.hasMore = false,
   });
 
   final List<TransactionRecord> records;
@@ -35,6 +37,8 @@ class TransactionLogList extends StatelessWidget {
   final ValueChanged<TransactionCategory> onCategoryFilter;
   final TransactionRenameCallback? onRenameMerchant;
   final TransactionRecordAction? onResetMerchantName;
+  final VoidCallback? onLoadMore;
+  final bool hasMore;
 
   @override
   Widget build(BuildContext context) {
@@ -47,33 +51,43 @@ class TransactionLogList extends StatelessWidget {
         ),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 96),
-      itemCount: logEntries.length,
-      itemBuilder: (context, index) {
-        final entry = logEntries[index];
-        final header = entry.header;
-        if (header != null) return _DateHeader(date: header);
-        final ghost = entry.ghost;
-        if (ghost != null) {
-          return RecurringGhostLogBox(
-            ghost: ghost,
-            category: _categoryForId(ghost.categoryId),
-          );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (hasMore &&
+            onLoadMore != null &&
+            notification.metrics.extentAfter < 720) {
+          onLoadMore!();
         }
-        final record = entry.record!;
-        final category = _categoryForId(record.transactionCategoryID);
-        return TransactionLogBox(
-          record: record,
-          category: category,
-          onFastFilter: onFastFilter,
-          onTap: onRecordTap,
-          onDeleteRequested: onDeleteRequested,
-          onCategoryFilter: onCategoryFilter,
-          onRenameMerchant: onRenameMerchant,
-          onResetMerchantName: onResetMerchantName,
-        );
+        return false;
       },
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 96),
+        itemCount: logEntries.length,
+        itemBuilder: (context, index) {
+          final entry = logEntries[index];
+          final header = entry.header;
+          if (header != null) return _DateHeader(date: header);
+          final ghost = entry.ghost;
+          if (ghost != null) {
+            return RecurringGhostLogBox(
+              ghost: ghost,
+              category: _categoryForId(ghost.categoryId),
+            );
+          }
+          final record = entry.record!;
+          final category = _categoryForId(record.transactionCategoryID);
+          return TransactionLogBox(
+            record: record,
+            category: category,
+            onFastFilter: onFastFilter,
+            onTap: onRecordTap,
+            onDeleteRequested: onDeleteRequested,
+            onCategoryFilter: onCategoryFilter,
+            onRenameMerchant: onRenameMerchant,
+            onResetMerchantName: onResetMerchantName,
+          );
+        },
+      ),
     );
   }
 

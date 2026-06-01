@@ -340,20 +340,48 @@ class ExpenseRepository(context: Context) {
 
     suspend fun listTransactions(args: Map<*, *>): List<Map<String, Any?>> {
         seedIfEmpty()
-        val type = args["type"]?.toString()
-        val searchQuery = args["searchQuery"]?.toString()?.trim().orEmpty()
-        val merchant = args["merchant"]?.toString()?.trim().orEmpty()
-        val categoryId = (args["categoryId"] as? Number)?.toInt()
-        val yearMonth = args["yearMonth"]?.toString()?.trim().orEmpty()
-        return transactions.all()
-            .asSequence()
-            .filter { row -> type == null || typeFromAmount(row.amount) == type }
-            .filter { row -> categoryId == null || row.transactionCategoryID == categoryId }
-            .filter { row -> merchant.isEmpty() || displayMerchant(row) == merchant }
-            .filter { row -> searchQuery.isEmpty() || displayMerchant(row).contains(searchQuery, ignoreCase = true) }
-            .filter { row -> yearMonth.isEmpty() || row.date.replace('.', '-').startsWith(yearMonth) }
-            .map { it.toMap() }
-            .toList()
+        val query = transactionPageQuery(args, defaultLimit = Int.MAX_VALUE, maxLimit = Int.MAX_VALUE)
+        return transactions.page(
+            query.type,
+            query.categoryId,
+            query.merchant,
+            query.searchQuery,
+            query.yearMonth,
+            query.limit,
+            query.offset,
+        ).map { it.toMap() }
+    }
+
+    suspend fun listTransactionPage(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val query = transactionPageQuery(args, defaultLimit = 96, maxLimit = 500)
+        val startedAt = System.currentTimeMillis()
+        val rows = transactions.page(
+            query.type,
+            query.categoryId,
+            query.merchant,
+            query.searchQuery,
+            query.yearMonth,
+            query.limit,
+            query.offset,
+        )
+        val totalCount = transactions.pageCount(
+            query.type,
+            query.categoryId,
+            query.merchant,
+            query.searchQuery,
+            query.yearMonth,
+        )
+        Log.d(
+            "ExpenseRepository",
+            "[Perf] transaction page type=${query.type ?: "all"} offset=${query.offset} limit=${query.limit} rows=${rows.size} total=$totalCount elapsed=${System.currentTimeMillis() - startedAt}ms",
+        )
+        return mapOf(
+            "transactions" to rows.map { it.toMap() },
+            "totalCount" to totalCount,
+            "limit" to query.limit,
+            "offset" to query.offset,
+        )
     }
 
     suspend fun addTransaction(args: Map<*, *>): Map<String, Any?> {
@@ -678,6 +706,40 @@ class ExpenseRepository(context: Context) {
     private suspend fun nextCategoryId(): Int = (categories.maxId() ?: 0) + 1
 
     private fun typeFromAmount(amount: Double): String = if (amount > 0) "income" else "expense"
+
+    private data class TransactionPageQuery(
+        val type: String?,
+        val categoryId: Int?,
+        val merchant: String,
+        val searchQuery: String,
+        val yearMonth: String,
+        val limit: Int,
+        val offset: Int,
+    )
+
+    private fun transactionPageQuery(
+        args: Map<*, *>,
+        defaultLimit: Int,
+        maxLimit: Int,
+    ): TransactionPageQuery {
+        val type = normalizeNativeTransactionType(args["type"]?.toString())
+        val categoryId = optionalInt(args["categoryId"])
+        val merchant = args["merchant"]?.toString()?.trim().orEmpty()
+        val searchQuery = args["searchQuery"]?.toString()?.trim().orEmpty()
+        val yearMonth = args["yearMonth"]?.toString()?.trim().orEmpty()
+        val requestedLimit = optionalInt(args["limit"]) ?: defaultLimit
+        val limit = requestedLimit.coerceIn(1, maxLimit)
+        val offset = (optionalInt(args["offset"]) ?: 0).coerceAtLeast(0)
+        return TransactionPageQuery(
+            type = type,
+            categoryId = categoryId,
+            merchant = merchant,
+            searchQuery = searchQuery,
+            yearMonth = yearMonth,
+            limit = limit,
+            offset = offset,
+        )
+    }
 
     private fun displayMerchant(row: ExpenseTransactionEntity): String {
         return row.userAssignedName?.takeIf { it.isNotBlank() } ?: row.merchant

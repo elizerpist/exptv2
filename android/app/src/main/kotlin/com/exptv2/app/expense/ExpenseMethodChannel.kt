@@ -74,6 +74,9 @@ class ExpenseMethodChannel(
             "expenseListTransactions" -> scope.launchResult(result) {
                 repository.listTransactions(call.argumentsMap())
             }
+            "expenseListTransactionPage" -> scope.launchResult(result) {
+                repository.listTransactionPage(call.argumentsMap())
+            }
             "expenseListCategories" -> scope.launchResult(result) {
                 repository.listCategories(call.argumentsMap()["type"]?.toString())
             }

@@ -20,6 +20,9 @@ import androidx.room.PrimaryKey
         Index("date"),
         Index("merchant"),
         Index("amount"),
+        Index(value = ["date", "time", "id"]),
+        Index(value = ["amount", "date", "time", "id"]),
+        Index(value = ["transactionCategoryID", "date", "time", "id"]),
     ],
 )
 data class ExpenseTransactionEntity(

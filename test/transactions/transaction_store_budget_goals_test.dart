@@ -10,22 +10,28 @@ import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('expense backheader starts with budget then expense categories', () async {
-    final store = TransactionStore(
-      FakeBudgetGoalRepository(),
-      clock: () => DateTime(2026, 5, 17),
-    );
-    await store.start();
-    await store.cycleSummaryWindow();
+  test(
+    'expense backheader starts with budget then expense categories',
+    () async {
+      final store = TransactionStore(
+        FakeBudgetGoalRepository(),
+        clock: () => DateTime(2026, 5, 17),
+      );
+      await store.start();
+      await store.cycleSummaryWindow();
 
-    expect(store.summaryWindow, SummaryWindow.monthly);
-    expect(store.backheaderBudgetItems.first.kind, BackheaderBudgetItemKind.overview);
-    expect(
-      store.backheaderBudgetItems.first.overview?.kind,
-      BudgetGoalKind.expenseBudget,
-    );
-    expect(store.backheaderBudgetItems[1].category?.title, 'Food');
-  });
+      expect(store.summaryWindow, SummaryWindow.monthly);
+      expect(
+        store.backheaderBudgetItems.first.kind,
+        BackheaderBudgetItemKind.overview,
+      );
+      expect(
+        store.backheaderBudgetItems.first.overview?.kind,
+        BudgetGoalKind.expenseBudget,
+      );
+      expect(store.backheaderBudgetItems[1].category?.title, 'Food');
+    },
+  );
 
   test('income backheader starts with income goal and saving goal', () async {
     final store = TransactionStore(
@@ -36,8 +42,14 @@ void main() {
     await store.cycleSummaryWindow();
     store.setActiveType(TransactionType.income);
 
-    expect(store.backheaderBudgetItems[0].overview?.kind, BudgetGoalKind.incomeGoal);
-    expect(store.backheaderBudgetItems[1].overview?.kind, BudgetGoalKind.savingGoal);
+    expect(
+      store.backheaderBudgetItems[0].overview?.kind,
+      BudgetGoalKind.incomeGoal,
+    );
+    expect(
+      store.backheaderBudgetItems[1].overview?.kind,
+      BudgetGoalKind.savingGoal,
+    );
     expect(store.backheaderBudgetItems[2].category?.title, 'Salary');
   });
 
@@ -82,7 +94,21 @@ class FakeBudgetGoalRepository implements TransactionRepositoryContract {
   );
 
   @override
-  Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) async {
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    return TransactionPage(
+      transactions: const [],
+      totalCount: 0,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
+
+  @override
+  Future<CategoryLimit> upsertCategoryLimit(
+    Map<String, Object?> payload,
+  ) async {
     savedLimits.add(payload);
     final limit = CategoryLimit.fromMap({
       'id': savedLimits.length,
@@ -111,8 +137,9 @@ class FakeBudgetGoalRepository implements TransactionRepositoryContract {
   }) async => limits;
 
   @override
-  Future<TransactionRecord> addTransaction(Map<String, Object?> payload) async =>
-      throw UnimplementedError();
+  Future<TransactionRecord> addTransaction(
+    Map<String, Object?> payload,
+  ) async => throw UnimplementedError();
 
   @override
   Future<TransactionRecord> updateTransaction(

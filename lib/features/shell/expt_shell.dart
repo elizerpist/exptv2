@@ -11,6 +11,7 @@ import '../../services/recurring_alarm_service.dart';
 import '../../state/event_store.dart';
 import '../notifications/notifications_page.dart';
 import '../settings/models/app_theme_settings.dart';
+import '../settings/models/fast_info_config.dart';
 import '../settings/settings_page.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
@@ -46,6 +47,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
   var _homeBlockingOverlayOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
+  FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
 
   @override
   void initState() {
@@ -57,7 +59,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       TransactionRepository(widget.nativeBridge),
     );
     unawaited(_syncRecurringAlarms());
-    unawaited(_loadThemeSettings());
+    unawaited(_loadShellSettings());
   }
 
   @override
@@ -96,14 +98,21 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadThemeSettings() async {
+  Future<void> _loadShellSettings() async {
     final payload = await widget.nativeBridge.expenseLoadSettings();
     if (!mounted) return;
-    setState(() => _themeSettings = payload.themeSettings);
+    setState(() {
+      _themeSettings = payload.themeSettings;
+      _fastInfoConfig = payload.fastInfoConfig;
+    });
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
     setState(() => _themeSettings = settings);
+  }
+
+  void _applyFastInfoConfig(FastInfoConfig config) {
+    setState(() => _fastInfoConfig = config);
   }
 
   void _selectTab(AppTab tab) {
@@ -117,7 +126,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _handleFabPressed() {
     final requestedAt = DateTime.now();
-    DebugConsole.log('[SlideUpMenu] AddTransaction shell open requested source=fab');
+    DebugConsole.log(
+      '[SlideUpMenu] AddTransaction shell open requested source=fab',
+    );
     _sheetHostKey.currentState?.openTransaction(
       requestedAt: requestedAt,
       source: 'fab',
@@ -190,10 +201,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         left: 0,
         right: 0,
         bottom: 0,
-        child: ExptBottomNav(
-          activeTab: _activeTab,
-          onTabSelected: _selectTab,
-        ),
+        child: ExptBottomNav(activeTab: _activeTab, onTabSelected: _selectTab),
       ),
       Positioned(
         left: 0,
@@ -228,20 +236,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 TransactionHomePage(
                   store: _transactionStore,
                   expenseTheme: expenseTheme,
+                  fastInfoConfig: _fastInfoConfig,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
-                  onBudgetTargetEditorRequested: (
-                    item, {
-                    required requestedAt,
-                    required headerExpanded,
-                  }) {
-                    _sheetHostKey.currentState?.openBudgetTargetEditor(
-                      item,
-                      requestedAt: requestedAt,
-                      headerExpanded: headerExpanded,
-                    );
-                  },
+                  onBudgetTargetEditorRequested:
+                      (item, {required requestedAt, required headerExpanded}) {
+                        _sheetHostKey.currentState?.openBudgetTargetEditor(
+                          item,
+                          requestedAt: requestedAt,
+                          headerExpanded: headerExpanded,
+                        );
+                      },
                   onBudgetTargetEditorClosed: () {
                     _sheetHostKey.currentState?.closeBudgetTargetEditor();
                   },
@@ -257,6 +263,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   nativeBridge: widget.nativeBridge,
                   expenseTheme: expenseTheme,
                   onThemeSettingsChanged: _applyThemeSettings,
+                  onFastInfoConfigChanged: _applyFastInfoConfig,
                 ),
               ],
             ),
@@ -264,7 +271,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           if (!homeOverlayCoversShellNavigation) ...shellNavigation,
           DebugFloatingButton(
             recurringAlarmService: _recurringAlarmService,
-            onRecurringChanged: _transactionStore.refreshAfterRecurringProcessing,
+            onRecurringChanged:
+                _transactionStore.refreshAfterRecurringProcessing,
           ),
           Positioned.fill(
             child: _ShellSheetHost(
@@ -357,10 +365,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
           ),
         ),
         Positioned.fill(
-          child: _CategorySheetSlot(
-            key: _categorySlotKey,
-            store: widget.store,
-          ),
+          child: _CategorySheetSlot(key: _categorySlotKey, store: widget.store),
         ),
         Positioned.fill(
           child: _BudgetTargetSheetSlot(
@@ -567,28 +572,22 @@ class _BudgetTargetSheetSlotState extends State<_BudgetTargetSheetSlot> {
           periodIncome: widget.store.activePeriodIncomeTotal,
           onCancel: close,
           onActiveItemChanged: _setActiveItem,
-          onSaveOverview: (
-            kind, {
-            required limitAmount,
-            required alertActive,
-          }) async {
-            await widget.store.saveOverviewLimit(
-              kind,
-              limitAmount: limitAmount,
-              alertActive: alertActive,
-            );
-          },
-          onSaveCategory: (
-            bar, {
-            required limitAmount,
-            required alertActive,
-          }) async {
-            await widget.store.saveCategoryLimitForBar(
-              bar,
-              limitAmount: limitAmount,
-              alertActive: alertActive,
-            );
-          },
+          onSaveOverview:
+              (kind, {required limitAmount, required alertActive}) async {
+                await widget.store.saveOverviewLimit(
+                  kind,
+                  limitAmount: limitAmount,
+                  alertActive: alertActive,
+                );
+              },
+          onSaveCategory:
+              (bar, {required limitAmount, required alertActive}) async {
+                await widget.store.saveCategoryLimitForBar(
+                  bar,
+                  limitAmount: limitAmount,
+                  alertActive: alertActive,
+                );
+              },
         );
       },
     );

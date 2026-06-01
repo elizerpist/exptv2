@@ -39,10 +39,10 @@ void main() {
     final decoratedBox = tester
         .widgetList<DecoratedBox>(find.byType(DecoratedBox))
         .firstWhere((box) {
-      final decoration = box.decoration;
-      return decoration is BoxDecoration &&
-          (decoration.boxShadow?.isNotEmpty ?? false);
-    });
+          final decoration = box.decoration;
+          return decoration is BoxDecoration &&
+              (decoration.boxShadow?.isNotEmpty ?? false);
+        });
     final decoration = decoratedBox.decoration as BoxDecoration;
 
     expect(
@@ -69,7 +69,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<Text>(find.byKey(const ValueKey('header-balance-text'))).data,
+      tester
+          .widget<Text>(find.byKey(const ValueKey('header-balance-text')))
+          .data,
       '-100 Ft',
     );
 
@@ -79,7 +81,9 @@ void main() {
     await tester.pump();
 
     expect(
-      tester.widget<Text>(find.byKey(const ValueKey('header-balance-text'))).data,
+      tester
+          .widget<Text>(find.byKey(const ValueKey('header-balance-text')))
+          .data,
       '••••••• Ft',
     );
 
@@ -89,7 +93,9 @@ void main() {
     await tester.pump();
 
     expect(
-      tester.widget<Text>(find.byKey(const ValueKey('header-balance-text'))).data,
+      tester
+          .widget<Text>(find.byKey(const ValueKey('header-balance-text')))
+          .data,
       '-100 Ft',
     );
   });
@@ -146,7 +152,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('header-calendar-button')), findsNothing);
-    expect(find.byKey(const ValueKey('header-category-button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('header-category-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -185,10 +194,7 @@ void main() {
         find.byKey(const ValueKey('category-menu-back-button')),
         findsNothing,
       );
-      expect(
-        find.byKey(const ValueKey('category-add-button')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('category-add-button')), findsNothing);
     },
   );
 
@@ -306,44 +312,45 @@ void main() {
     expect(during, greaterThan(after));
   });
 
-  testWidgets('header content stays visible until upward slide is almost complete', (
-    tester,
-  ) async {
-    final store = TransactionStore(HeaderLayoutRepository());
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 780,
-            child: TransactionHomePage(store: store),
+  testWidgets(
+    'header content stays visible until upward slide is almost complete',
+    (tester) async {
+      final store = TransactionStore(HeaderLayoutRepository());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: TransactionHomePage(store: store),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 80));
+      await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
 
-    var balanceOpacity = tester.widget<AnimatedOpacity>(
-      find.ancestor(
-        of: find.byKey(const ValueKey('header-balance-text')),
-        matching: find.byType(AnimatedOpacity),
-      ),
-    );
-    expect(balanceOpacity.opacity, moreOrLessEquals(1, epsilon: 0.01));
+      var balanceOpacity = tester.widget<Opacity>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('header-balance-text')),
+          matching: find.byType(Opacity),
+        ),
+      );
+      expect(balanceOpacity.opacity, moreOrLessEquals(1, epsilon: 0.01));
 
-    await tester.pumpAndSettle();
-    balanceOpacity = tester.widget<AnimatedOpacity>(
-      find.ancestor(
-        of: find.byKey(const ValueKey('header-balance-text')),
-        matching: find.byType(AnimatedOpacity),
-      ),
-    );
-    expect(balanceOpacity.opacity, moreOrLessEquals(0, epsilon: 0.01));
-  });
+      await tester.pumpAndSettle();
+      balanceOpacity = tester.widget<Opacity>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('header-balance-text')),
+          matching: find.byType(Opacity),
+        ),
+      );
+      expect(balanceOpacity.opacity, moreOrLessEquals(0, epsilon: 0.01));
+    },
+  );
 
   testWidgets('header card animates downward when backheader closes', (
     tester,
@@ -433,9 +440,12 @@ void main() {
     await gesture.moveBy(const Offset(0, 160));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('header-fast-info-surface')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('header-fast-info-surface')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('fast-info-panel')), findsOneWidget);
-    expect(find.text('Megtakarítás'), findsOneWidget);
+    expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('header-fast-info-surface')),
@@ -479,37 +489,42 @@ void main() {
 
   testWidgets(
     'category picker stays open and refreshes when active type changes',
-    (
-    tester,
-  ) async {
-    final store = TransactionStore(HeaderLayoutRepository());
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 780,
-            child: TransactionHomePage(store: store),
+    (tester) async {
+      final store = TransactionStore(HeaderLayoutRepository());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: TransactionHomePage(store: store),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-category-button')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
-    expect(find.text('Food'), findsOneWidget);
-    expect(find.text('Salary'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('category-menu-overlay')),
+        findsOneWidget,
+      );
+      expect(find.text('Food'), findsOneWidget);
+      expect(find.text('Salary'), findsNothing);
 
-    await tester.tap(find.text('Bevétel'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Bevétel'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
-    expect(find.text('Salary'), findsOneWidget);
-    expect(find.text('Food'), findsNothing);
-  });
+      expect(
+        find.byKey(const ValueKey('category-menu-overlay')),
+        findsOneWidget,
+      );
+      expect(find.text('Salary'), findsOneWidget);
+      expect(find.text('Food'), findsNothing);
+    },
+  );
 
   testWidgets('magnet strip moves up and balance label sits in magnet zone', (
     tester,
@@ -547,7 +562,6 @@ void main() {
     expect(balanceLabel.center.dy, lessThanOrEqualTo(trackBottom));
     expect(balanceText.top, greaterThanOrEqualTo(trackBottom));
   });
-
 }
 
 double _screenHeight(WidgetTester tester) =>
@@ -595,6 +609,18 @@ class HeaderLayoutRepository implements TransactionRepositoryContract {
     ],
     limits: const [],
   );
+
+  @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    return TransactionPage(
+      transactions: const [],
+      totalCount: 0,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
 
   @override
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload) async {

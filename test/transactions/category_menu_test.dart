@@ -37,7 +37,10 @@ void main() {
     );
 
     expect(find.text('Válassz kategóriát'), findsOneWidget);
-    expect(find.byKey(const ValueKey('category-menu-back-button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('category-menu-back-button')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('category-add-button')), findsNothing);
     expect(find.text('Q'), findsOneWidget);
     expect(find.text('Salary'), findsNothing);
@@ -130,6 +133,18 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
     transactions: transactions,
     limits: const [],
   );
+
+  @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    return TransactionPage(
+      transactions: const [],
+      totalCount: 0,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
 
   @override
   Future<TransactionRecord> addTransaction(

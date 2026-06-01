@@ -83,7 +83,9 @@ void main() {
     expect(periods, [1, -1]);
   });
 
-  testWidgets('summary pill double tap resets to current month', (tester) async {
+  testWidgets('summary pill double tap resets to current month', (
+    tester,
+  ) async {
     var resets = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -226,6 +228,48 @@ void main() {
     expect(field.decoration?.border, InputBorder.none);
     expect(field.decoration?.enabledBorder, InputBorder.none);
     expect(field.decoration?.focusedBorder, InputBorder.none);
+  });
+
+  testWidgets('search pill focuses from the whole pill and unfocuses outside', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+              const SizedBox(
+                key: ValueKey('search-pill-outside-target'),
+                height: 120,
+                width: double.infinity,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.pump();
+
+    var container = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-container')),
+    );
+    var border = (container.decoration! as BoxDecoration).border! as Border;
+    expect(border.top.color, AppColors.primary);
+
+    final outsideTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('search-pill-outside-target')),
+    );
+    await tester.tapAt(outsideTopLeft + const Offset(12, 12));
+    await tester.pump();
+
+    container = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-container')),
+    );
+    border = (container.decoration! as BoxDecoration).border! as Border;
+    expect(border.top.color, AppColors.gray200);
   });
 
   testWidgets('log list groups records by date', (tester) async {

@@ -77,6 +77,18 @@ class FakeLimitRepository implements TransactionRepositoryContract {
   );
 
   @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    return TransactionPage(
+      transactions: const [],
+      totalCount: 0,
+      limit: query.limit,
+      offset: query.offset,
+    );
+  }
+
+  @override
   Future<CategoryLimit> upsertCategoryLimit(
     Map<String, Object?> payload,
   ) async {

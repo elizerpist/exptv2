@@ -18,8 +18,55 @@ class TransactionBootstrap {
   final List<RecurringGhostRecord> recurringGhostTransactions;
 }
 
+class TransactionPageQuery {
+  const TransactionPageQuery({
+    this.type,
+    this.categoryId,
+    this.merchant,
+    this.searchQuery = '',
+    this.yearMonth,
+    this.limit = 96,
+    this.offset = 0,
+  });
+
+  final TransactionType? type;
+  final int? categoryId;
+  final String? merchant;
+  final String searchQuery;
+  final String? yearMonth;
+  final int limit;
+  final int offset;
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'type': type?.nativeValue,
+      'categoryId': categoryId,
+      'merchant': merchant,
+      'searchQuery': searchQuery,
+      'yearMonth': yearMonth,
+      'limit': limit,
+      'offset': offset,
+    };
+  }
+}
+
+class TransactionPage {
+  const TransactionPage({
+    required this.transactions,
+    required this.totalCount,
+    required this.limit,
+    required this.offset,
+  });
+
+  final List<TransactionRecord> transactions;
+  final int totalCount;
+  final int limit;
+  final int offset;
+}
+
 abstract class TransactionRepositoryContract {
   Future<TransactionBootstrap> loadBootstrap();
+  Future<TransactionPage> listTransactionPage(TransactionPageQuery query);
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload);
   Future<TransactionRecord> updateTransaction(
     int id,
@@ -62,6 +109,19 @@ class TransactionRepository implements TransactionRepositoryContract {
       transactions: payload.transactions,
       limits: payload.limits,
       recurringGhostTransactions: payload.recurringGhostTransactions,
+    );
+  }
+
+  @override
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
+    final payload = await _bridge.expenseListTransactionPage(query.toMap());
+    return TransactionPage(
+      transactions: payload.transactions,
+      totalCount: payload.totalCount,
+      limit: payload.limit,
+      offset: payload.offset,
     );
   }
 

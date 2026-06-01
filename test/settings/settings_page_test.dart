@@ -47,9 +47,7 @@ void main() {
                 },
               };
             case 'expenseListRecurringTransactions':
-              return <Map<String, Object?>>[
-                recurringRow(),
-              ];
+              return <Map<String, Object?>>[recurringRow()];
             case 'expenseListCategories':
               return <Map<String, Object?>>[
                 <String, Object?>{
@@ -129,8 +127,8 @@ void main() {
     await tester.tap(find.text('FastInfo'));
     await tester.pumpAndSettle();
     expect(find.text('FastInfo'), findsOneWidget);
-    expect(find.text('Pill slot 1'), findsOneWidget);
-    expect(find.text('Box slot 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 

@@ -27,17 +27,19 @@ import 'widgets/summary_pill.dart';
 import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
-typedef BudgetTargetEditorRequest = void Function(
-  BackheaderBudgetItem item, {
-  required DateTime requestedAt,
-  required bool headerExpanded,
-});
+typedef BudgetTargetEditorRequest =
+    void Function(
+      BackheaderBudgetItem item, {
+      required DateTime requestedAt,
+      required bool headerExpanded,
+    });
 
 class TransactionHomePage extends StatefulWidget {
   const TransactionHomePage({
     super.key,
     required this.store,
     this.expenseTheme,
+    this.fastInfoConfig,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
     this.onBlockingOverlayChanged,
@@ -49,8 +51,10 @@ class TransactionHomePage extends StatefulWidget {
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
+  final FastInfoConfig? fastInfoConfig;
   final ValueChanged<TransactionRecord>? onEditTransaction;
-  final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
+  final FutureOr<bool> Function(TransactionRecord)?
+  onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
   final BudgetTargetEditorRequest? onBudgetTargetEditorRequested;
   final VoidCallback? onBudgetTargetEditorClosed;
@@ -147,7 +151,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           }
 
           final visibleTransactions = widget.store.visibleTransactions;
-          final visibleGhostTransactions = widget.store.visibleGhostTransactions;
+          final visibleGhostTransactions =
+              widget.store.visibleGhostTransactions;
           final visibleLogEntries = widget.store.visibleDisplayLogEntries;
           final visibleFastInfoExtent = _fastInfoExtent
               .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
@@ -211,6 +216,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       onCategoryFilter: widget.store.setCategoryFilter,
                       onRenameMerchant: _renameTransactionsByMerchant,
                       onResetMerchantName: _resetTransactionNamesByMerchant,
+                      hasMore: widget.store.hasMoreVisibleDisplayLogEntries,
+                      onLoadMore: widget.store.loadMoreVisibleDisplayLogEntries,
                     ),
                   ),
                 ],
@@ -252,7 +259,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     visibleFastInfoExtent: visibleFastInfoExtent,
                     cardColor: expenseTheme.headerCard,
                     fastInfo: FastInfoPanel(
-                      config: FastInfoConfig.defaults(),
+                      config:
+                          widget.fastInfoConfig ?? FastInfoConfig.defaults(),
                       backgroundColor: Colors.transparent,
                     ),
                     header: _buildHeaderCard(
@@ -306,28 +314,30 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     periodIncome: widget.store.activePeriodIncomeTotal,
                     onCancel: _closeBudgetTargetEditor,
                     onActiveItemChanged: _setBackheaderActiveItem,
-                    onSaveOverview: (
-                      kind, {
-                      required limitAmount,
-                      required alertActive,
-                    }) async {
-                      await widget.store.saveOverviewLimit(
-                        kind,
-                        limitAmount: limitAmount,
-                        alertActive: alertActive,
-                      );
-                    },
-                    onSaveCategory: (
-                      bar, {
-                      required limitAmount,
-                      required alertActive,
-                    }) async {
-                      await widget.store.saveCategoryLimitForBar(
-                        bar,
-                        limitAmount: limitAmount,
-                        alertActive: alertActive,
-                      );
-                    },
+                    onSaveOverview:
+                        (
+                          kind, {
+                          required limitAmount,
+                          required alertActive,
+                        }) async {
+                          await widget.store.saveOverviewLimit(
+                            kind,
+                            limitAmount: limitAmount,
+                            alertActive: alertActive,
+                          );
+                        },
+                    onSaveCategory:
+                        (
+                          bar, {
+                          required limitAmount,
+                          required alertActive,
+                        }) async {
+                          await widget.store.saveCategoryLimitForBar(
+                            bar,
+                            limitAmount: limitAmount,
+                            alertActive: alertActive,
+                          );
+                        },
                   ),
                 ),
             ],
@@ -376,7 +386,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     );
     await _headerSlideController.forward();
     if (!mounted) return;
-    DebugConsole.log('[HeaderCard] expand complete elapsed=${_elapsedMs(startedAt)}ms');
+    DebugConsole.log(
+      '[HeaderCard] expand complete elapsed=${_elapsedMs(startedAt)}ms',
+    );
   }
 
   Future<void> _collapseHeader() async {
@@ -391,9 +403,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     );
     await _headerSlideController.reverse();
     if (!mounted) return;
-    DebugConsole.log('[HeaderCard] collapse complete elapsed=${_elapsedMs(startedAt)}ms');
+    DebugConsole.log(
+      '[HeaderCard] collapse complete elapsed=${_elapsedMs(startedAt)}ms',
+    );
   }
-
 
   double _menuPanelHeight(BuildContext context) {
     return SlideUpPanelMetrics.fullHeight(context);
@@ -408,38 +421,40 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     });
   }
 
-  TransactionHeaderCard _buildHeaderCard({
+  Widget _buildHeaderCard({
     required ExpenseTheme expenseTheme,
     required double visibleFastInfoExtent,
     bool drawSurface = true,
     double? slideProgress,
     double? contentOpacity,
   }) {
-    return TransactionHeaderCard(
-      balanceText: widget.store.totalBalanceText,
-      expanded: _headerExpanded,
-      magnetType: expenseTheme.settings.magnetType,
-      accent: expenseTheme.accent,
-      cardColor: expenseTheme.headerCard,
-      totalIncome: widget.store.totalIncomeAmount,
-      totalExpense: widget.store.totalExpenseAmount,
-      fastInfoVisible: visibleFastInfoExtent > 0,
-      balanceHidden: _balanceHidden,
-      drawSurface: drawSurface,
-      slideProgress: slideProgress,
-      contentOpacity: contentOpacity,
-      onBalanceVisibilityPressed: () {
-        setState(() => _balanceHidden = !_balanceHidden);
-      },
-      onCategoryPressed: _openCategoryMenu,
-      onVerticalDragUpdate: _handleHeaderDragUpdate,
-      onVerticalDragEnd: _handleHeaderDragEnd,
-      onExpandPressed: _toggleHeaderExpanded,
+    return RepaintBoundary(
+      child: TransactionHeaderCard(
+        balanceText: widget.store.totalBalanceText,
+        expanded: _headerExpanded,
+        magnetType: expenseTheme.settings.magnetType,
+        accent: expenseTheme.accent,
+        cardColor: expenseTheme.headerCard,
+        totalIncome: widget.store.totalIncomeAmount,
+        totalExpense: widget.store.totalExpenseAmount,
+        fastInfoVisible: visibleFastInfoExtent > 0,
+        balanceHidden: _balanceHidden,
+        drawSurface: drawSurface,
+        slideProgress: slideProgress,
+        contentOpacity: contentOpacity,
+        onBalanceVisibilityPressed: () {
+          setState(() => _balanceHidden = !_balanceHidden);
+        },
+        onCategoryPressed: _openCategoryMenu,
+        onVerticalDragUpdate: _handleHeaderDragUpdate,
+        onVerticalDragEnd: _handleHeaderDragEnd,
+        onExpandPressed: _toggleHeaderExpanded,
+      ),
     );
   }
 
   double _headerContentOpacity(double slideProgress) {
-    const fadeStart = 0.86;
+    const fadeStart = 0.94;
     if (slideProgress <= fadeStart) return 1;
     final fadeProgress = ((slideProgress - fadeStart) / (1 - fadeStart))
         .clamp(0.0, 1.0)
@@ -567,7 +582,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
-
 
   BackheaderBudgetItem? _defaultBudgetEditorItem() {
     final items = widget.store.backheaderBudgetItems;

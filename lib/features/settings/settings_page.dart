@@ -6,6 +6,7 @@ import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
 import 'data/settings_repository.dart';
 import 'models/app_theme_settings.dart';
+import 'models/fast_info_config.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/app_filter_control.dart';
@@ -39,12 +40,14 @@ class SettingsPage extends StatefulWidget {
     required this.nativeBridge,
     this.expenseTheme,
     this.onThemeSettingsChanged,
+    this.onFastInfoConfigChanged,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
   final ExpenseTheme? expenseTheme;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
+  final ValueChanged<FastInfoConfig>? onFastInfoConfigChanged;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -93,17 +96,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final expenseTheme = widget.expenseTheme ??
+    final expenseTheme =
+        widget.expenseTheme ??
         ExpenseTheme.fromSettings(_settingsStore.themeSettings);
     return Material(
       color: expenseTheme.appBackground,
       child: ColoredBox(
         key: const ValueKey('settings-page'),
         color: expenseTheme.appBackground,
-        child: SafeArea(
-          bottom: false,
-          child: _buildActiveMenu(),
-        ),
+        child: SafeArea(bottom: false, child: _buildActiveMenu()),
       ),
     );
   }
@@ -129,84 +130,139 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-        const Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 8, bottom: 12),
-            child: Text(
-              'Beállítások',
-              style: TextStyle(
-                color: AppColors.gray800,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: 8, bottom: 12),
+                child: Text(
+                  'Beállítások',
+                  style: TextStyle(
+                    color: AppColors.gray800,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        SettingsSection(
-          title: 'Alkalmazás beállítások',
-          children: [
-            SettingsOptionItem(title: 'Megfigyelni kívánt alkalmazás', onTap: () => _open(_SettingsMenu.parsedApp)),
-            SettingsOptionItem(title: 'FastInfo', onTap: () => _open(_SettingsMenu.fastInfo)),
-            SettingsOptionItem(title: 'Statisztikák', onTap: () => _open(_SettingsMenu.statistics)),
-            SettingsOptionItem(title: 'Ismétlődő tranzakciók', onTap: () => _open(_SettingsMenu.recurring), isLast: true),
-          ],
-        ),
-        SettingsSection(
-          title: 'Megjelenítési beállítások',
-          children: [
-            SettingsOptionItem(title: 'Pénznem', onTap: () => _open(_SettingsMenu.currency)),
-            SettingsOptionItem(title: 'Nyelv', onTap: () => _open(_SettingsMenu.language)),
-            SettingsOptionItem(title: 'Téma', onTap: () => _open(_SettingsMenu.theme), isLast: true),
-          ],
-        ),
-        SettingsSection(
-          title: 'Adatkezelés',
-          children: [
-            SettingsOptionItem(title: 'Export adatok', onTap: () => _open(_SettingsMenu.exportData)),
-            SettingsOptionItem(title: 'Import adatok', onTap: () => _open(_SettingsMenu.importData)),
-            SettingsOptionItem(title: 'Biztonsági mentés', onTap: () => _open(_SettingsMenu.backup)),
-            const SettingsOptionItem(title: 'Adatok törlése', isLast: true),
-          ],
-        ),
-        const SettingsSection(
-          title: 'Értesítési beállítások',
-          children: [
-            SettingsOptionItem(title: 'Napi emlékeztetők'),
-            SettingsOptionItem(title: 'Költségvetési riasztások'),
-            SettingsOptionItem(title: 'Havi összefoglalók', isLast: true),
-          ],
-        ),
-        const SettingsSection(
-          title: 'Adatvédelem és biztonság',
-          children: [
-            SettingsOptionItem(title: 'PIN kód beállítása'),
-            SettingsOptionItem(title: 'Biometrikus azonosítás'),
-            SettingsOptionItem(title: 'Adatvédelmi szabályzat', isLast: true),
-          ],
-        ),
-        SettingsSection(
-          title: 'Visszajelzések',
-          children: [
-            SettingsOptionItem(
-              title: 'Haptikus visszajelzés',
-              trailing: Switch(value: _hapticFeedback, onChanged: (value) => setState(() => _hapticFeedback = value)),
+            SettingsSection(
+              title: 'Alkalmazás beállítások',
+              children: [
+                SettingsOptionItem(
+                  title: 'Megfigyelni kívánt alkalmazás',
+                  onTap: () => _open(_SettingsMenu.parsedApp),
+                ),
+                SettingsOptionItem(
+                  title: 'FastInfo',
+                  onTap: () => _open(_SettingsMenu.fastInfo),
+                ),
+                SettingsOptionItem(
+                  title: 'Statisztikák',
+                  onTap: () => _open(_SettingsMenu.statistics),
+                ),
+                SettingsOptionItem(
+                  title: 'Ismétlődő tranzakciók',
+                  onTap: () => _open(_SettingsMenu.recurring),
+                  isLast: true,
+                ),
+              ],
             ),
-            SettingsOptionItem(
-              title: 'Hang',
-              trailing: Switch(value: _soundEnabled, onChanged: (value) => setState(() => _soundEnabled = value)),
-              isLast: true,
+            SettingsSection(
+              title: 'Megjelenítési beállítások',
+              children: [
+                SettingsOptionItem(
+                  title: 'Pénznem',
+                  onTap: () => _open(_SettingsMenu.currency),
+                ),
+                SettingsOptionItem(
+                  title: 'Nyelv',
+                  onTap: () => _open(_SettingsMenu.language),
+                ),
+                SettingsOptionItem(
+                  title: 'Téma',
+                  onTap: () => _open(_SettingsMenu.theme),
+                  isLast: true,
+                ),
+              ],
             ),
-          ],
-        ),
-        SettingsSection(
-          title: 'Információ és támogatás',
-          children: [
-            SettingsOptionItem(title: 'Alkalmazásról', onTap: () => _open(_SettingsMenu.about)),
-            SettingsOptionItem(title: 'Súgó', onTap: () => _open(_SettingsMenu.help)),
-            SettingsOptionItem(title: 'Kapcsolat', onTap: () => _open(_SettingsMenu.contact)),
-            const SettingsOptionItem(title: 'Verzió: 1.0.0', trailing: SizedBox.shrink(), isLast: true),
-          ],
-        ),
+            SettingsSection(
+              title: 'Adatkezelés',
+              children: [
+                SettingsOptionItem(
+                  title: 'Export adatok',
+                  onTap: () => _open(_SettingsMenu.exportData),
+                ),
+                SettingsOptionItem(
+                  title: 'Import adatok',
+                  onTap: () => _open(_SettingsMenu.importData),
+                ),
+                SettingsOptionItem(
+                  title: 'Biztonsági mentés',
+                  onTap: () => _open(_SettingsMenu.backup),
+                ),
+                const SettingsOptionItem(title: 'Adatok törlése', isLast: true),
+              ],
+            ),
+            const SettingsSection(
+              title: 'Értesítési beállítások',
+              children: [
+                SettingsOptionItem(title: 'Napi emlékeztetők'),
+                SettingsOptionItem(title: 'Költségvetési riasztások'),
+                SettingsOptionItem(title: 'Havi összefoglalók', isLast: true),
+              ],
+            ),
+            const SettingsSection(
+              title: 'Adatvédelem és biztonság',
+              children: [
+                SettingsOptionItem(title: 'PIN kód beállítása'),
+                SettingsOptionItem(title: 'Biometrikus azonosítás'),
+                SettingsOptionItem(
+                  title: 'Adatvédelmi szabályzat',
+                  isLast: true,
+                ),
+              ],
+            ),
+            SettingsSection(
+              title: 'Visszajelzések',
+              children: [
+                SettingsOptionItem(
+                  title: 'Haptikus visszajelzés',
+                  trailing: Switch(
+                    value: _hapticFeedback,
+                    onChanged: (value) =>
+                        setState(() => _hapticFeedback = value),
+                  ),
+                ),
+                SettingsOptionItem(
+                  title: 'Hang',
+                  trailing: Switch(
+                    value: _soundEnabled,
+                    onChanged: (value) => setState(() => _soundEnabled = value),
+                  ),
+                  isLast: true,
+                ),
+              ],
+            ),
+            SettingsSection(
+              title: 'Információ és támogatás',
+              children: [
+                SettingsOptionItem(
+                  title: 'Alkalmazásról',
+                  onTap: () => _open(_SettingsMenu.about),
+                ),
+                SettingsOptionItem(
+                  title: 'Súgó',
+                  onTap: () => _open(_SettingsMenu.help),
+                ),
+                SettingsOptionItem(
+                  title: 'Kapcsolat',
+                  onTap: () => _open(_SettingsMenu.contact),
+                ),
+                const SettingsOptionItem(
+                  title: 'Verzió: 1.0.0',
+                  trailing: SizedBox.shrink(),
+                  isLast: true,
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -216,64 +272,67 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _submenuBody(_SettingsMenu menu) {
     return switch (menu) {
       _SettingsMenu.parsedApp => ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-          children: [
-            const Text(
-              'Válaszd ki azt az alkalmazást, amelynek push üzeneteit szeretnéd érzékelni és automatikusan rögzíteni a tranzakciókat:',
-              style: TextStyle(color: AppColors.gray600),
-            ),
-            const SizedBox(height: 16),
-            AppFilterControl(
-              value: widget.store.filterText,
-              errorText: widget.store.filterError,
-              onTextChanged: widget.store.setFilterText,
-              onLoadInstalledApps: widget.store.listInstalledApps,
-              onAppSelected: widget.store.selectInstalledApp,
-            ),
-          ],
-        ),
-      _SettingsMenu.fastInfo => FastInfoOptionsPanel(config: _settingsStore.fastInfoConfig),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+        children: [
+          const Text(
+            'Válaszd ki azt az alkalmazást, amelynek push üzeneteit szeretnéd érzékelni és automatikusan rögzíteni a tranzakciókat:',
+            style: TextStyle(color: AppColors.gray600),
+          ),
+          const SizedBox(height: 16),
+          AppFilterControl(
+            value: widget.store.filterText,
+            errorText: widget.store.filterError,
+            onTextChanged: widget.store.setFilterText,
+            onLoadInstalledApps: widget.store.listInstalledApps,
+            onAppSelected: widget.store.selectInstalledApp,
+          ),
+        ],
+      ),
+      _SettingsMenu.fastInfo => FastInfoOptionsPanel(
+        config: _settingsStore.fastInfoConfig,
+        onChanged: _updateFastInfoConfig,
+      ),
       _SettingsMenu.theme => ThemeOptionsPanel(
-          settings: _settingsStore.themeSettings,
-          onChanged: _updateThemeSettings,
-        ),
+        settings: _settingsStore.themeSettings,
+        onChanged: _updateThemeSettings,
+      ),
       _SettingsMenu.recurring => RecurringOptionsPanel(store: _settingsStore),
       _SettingsMenu.currency => const SimpleOptionsPanel(
-          title: 'Pénznem kiválasztása',
-          children: ['EUR - Euro', 'HUF - Magyar Forint', 'USD - US Dollar'],
-        ),
+        title: 'Pénznem kiválasztása',
+        children: ['EUR - Euro', 'HUF - Magyar Forint', 'USD - US Dollar'],
+      ),
       _SettingsMenu.language => const SimpleOptionsPanel(
-          title: 'Nyelv kiválasztása',
-          children: ['English', 'Magyar'],
-        ),
+        title: 'Nyelv kiválasztása',
+        children: ['English', 'Magyar'],
+      ),
       _SettingsMenu.exportData => const SimpleOptionsPanel(
-          title: 'Export formátum kiválasztása',
-          children: ['CSV', 'JSON', 'Excel'],
-        ),
+        title: 'Export formátum kiválasztása',
+        children: ['CSV', 'JSON', 'Excel'],
+      ),
       _SettingsMenu.importData => const SimpleOptionsPanel(
-          title: 'Import formátum kiválasztása',
-          children: ['CSV', 'JSON', 'Excel'],
-        ),
+        title: 'Import formátum kiválasztása',
+        children: ['CSV', 'JSON', 'Excel'],
+      ),
       _SettingsMenu.backup => const SimpleOptionsPanel(
-          title: 'Biztonsági mentés',
-          children: ['Új biztonsági mentés', 'Korábbi mentések'],
-        ),
+        title: 'Biztonsági mentés',
+        children: ['Új biztonsági mentés', 'Korábbi mentések'],
+      ),
       _SettingsMenu.statistics => const SimpleOptionsPanel(
-          title: 'Statisztikák',
-          children: ['Havi áttekintés', 'Kategória bontás', 'Trend'],
-        ),
+        title: 'Statisztikák',
+        children: ['Havi áttekintés', 'Kategória bontás', 'Trend'],
+      ),
       _SettingsMenu.about => const SimpleOptionsPanel(
-          title: 'Expense Tracker',
-          children: ['Verzió: 1.0.0', '© 2024 - Minden jog fenntartva'],
-        ),
+        title: 'Expense Tracker',
+        children: ['Verzió: 1.0.0', '© 2024 - Minden jog fenntartva'],
+      ),
       _SettingsMenu.help => const SimpleOptionsPanel(
-          title: 'Súgó',
-          children: ['Push feldolgozás', 'Tranzakciók', 'Beállítások'],
-        ),
+        title: 'Súgó',
+        children: ['Push feldolgozás', 'Tranzakciók', 'Beállítások'],
+      ),
       _SettingsMenu.contact => const SimpleOptionsPanel(
-          title: 'Kapcsolat',
-          children: ['Email támogatás', 'Visszajelzés', 'Hibajelentés'],
-        ),
+        title: 'Kapcsolat',
+        children: ['Email támogatás', 'Visszajelzés', 'Hibajelentés'],
+      ),
       _SettingsMenu.root => _buildRootMenu(),
     };
   }
@@ -295,6 +354,12 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.contact => 'Kapcsolat',
       _SettingsMenu.root => 'Beállítások',
     };
+  }
+
+  Future<void> _updateFastInfoConfig(FastInfoConfig config) async {
+    await _settingsStore.updateFastInfoConfig(config);
+    if (!mounted) return;
+    widget.onFastInfoConfigChanged?.call(_settingsStore.fastInfoConfig);
   }
 
   void _updateThemeSettings(AppThemeSettings settings) {

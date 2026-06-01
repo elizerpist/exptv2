@@ -53,10 +53,11 @@ class TransactionHeaderCard extends StatelessWidget {
     final resolvedContentOpacity = contentOpacity ?? (expanded ? 0.0 : 1.0);
 
     Widget headerContentOpacity(Widget child) {
+      if (contentOpacity != null) {
+        return Opacity(opacity: resolvedContentOpacity, child: child);
+      }
       return AnimatedOpacity(
-        duration: contentOpacity == null
-            ? const Duration(milliseconds: 180)
-            : Duration.zero,
+        duration: const Duration(milliseconds: 180),
         opacity: resolvedContentOpacity,
         child: child,
       );
@@ -174,9 +175,7 @@ class TransactionHeaderCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 2),
                     IconButton(
-                      key: const ValueKey(
-                        'header-balance-visibility-button',
-                      ),
+                      key: const ValueKey('header-balance-visibility-button'),
                       onPressed: onBalanceVisibilityPressed,
                       icon: Icon(
                         balanceHidden

@@ -63,6 +63,11 @@ class _SearchPillState extends State<SearchPill> {
     if (mounted) setState(() {});
   }
 
+  void _requestFocus() {
+    if (_focusNode.hasFocus) return;
+    _focusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasMerchant = widget.merchantFilter != null;
@@ -85,72 +90,85 @@ class _SearchPillState extends State<SearchPill> {
         ),
     ];
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        key: const ValueKey('search-pill-container'),
-        margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-        constraints: const BoxConstraints(minHeight: 46),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(
-            color: _focusNode.hasFocus ? AppColors.primary : AppColors.gray200,
-            width: _focusNode.hasFocus ? 1.5 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              offset: const Offset(0, 2),
-              blurRadius: 3,
+    return TextFieldTapRegion(
+      child: Material(
+        color: Colors.transparent,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _requestFocus,
+          child: Container(
+            key: const ValueKey('search-pill-container'),
+            margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+            constraints: const BoxConstraints(minHeight: 46),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(
+                color: _focusNode.hasFocus
+                    ? AppColors.primary
+                    : AppColors.gray200,
+                width: _focusNode.hasFocus ? 1.5 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  offset: const Offset(0, 2),
+                  blurRadius: 3,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.search, size: 16, color: AppColors.gray400),
-            if (capsules.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Flexible(
-                flex: 3,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (var index = 0; index < capsules.length; index++) ...[
-                        if (index > 0) const SizedBox(width: 6),
-                        capsules[index],
-                      ],
-                    ],
+            child: Row(
+              children: [
+                const Icon(Icons.search, size: 16, color: AppColors.gray400),
+                if (capsules.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    flex: 3,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (
+                            var index = 0;
+                            index < capsules.length;
+                            index++
+                          ) ...[
+                            if (index > 0) const SizedBox(width: 6),
+                            capsules[index],
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    focusNode: _focusNode,
+                    controller: _controller,
+                    onChanged: widget.onQueryChanged,
+                    onTapOutside: (_) => _focusNode.unfocus(),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: hasFilters
+                          ? '${widget.filteredCount} tranzakció találva'
+                          : 'Keresés tranzakciók között...',
+                      isDense: true,
+                    ),
                   ),
                 ),
-              ),
-            ],
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 1,
-              child: TextField(
-                focusNode: _focusNode,
-                controller: _controller,
-                onChanged: widget.onQueryChanged,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  errorBorder: InputBorder.none,
-                  focusedErrorBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  hintText: hasFilters
-                      ? '${widget.filteredCount} tranzakció találva'
-                      : 'Keresés tranzakciók között...',
-                  isDense: true,
-                ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

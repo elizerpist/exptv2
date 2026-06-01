@@ -19,6 +19,50 @@ interface ExpenseTransactionDao {
     @Query("SELECT * FROM transactions ORDER BY date DESC, time DESC, id DESC")
     suspend fun all(): List<ExpenseTransactionEntity>
 
+    @Query(
+        """
+        SELECT * FROM transactions
+        WHERE (:type IS NULL
+            OR (:type = 'income' AND amount > 0)
+            OR (:type = 'expense' AND amount < 0))
+          AND (:categoryId IS NULL OR transactionCategoryID = :categoryId)
+          AND (:merchant = '' OR COALESCE(userAssignedName, merchant) = :merchant)
+          AND (:searchQuery = '' OR COALESCE(userAssignedName, merchant) LIKE '%' || :searchQuery || '%')
+          AND (:yearMonth = '' OR date LIKE :yearMonth || '%' OR REPLACE(date, '.', '-') LIKE :yearMonth || '%')
+        ORDER BY date DESC, time DESC, id DESC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun page(
+        type: String?,
+        categoryId: Int?,
+        merchant: String,
+        searchQuery: String,
+        yearMonth: String,
+        limit: Int,
+        offset: Int,
+    ): List<ExpenseTransactionEntity>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM transactions
+        WHERE (:type IS NULL
+            OR (:type = 'income' AND amount > 0)
+            OR (:type = 'expense' AND amount < 0))
+          AND (:categoryId IS NULL OR transactionCategoryID = :categoryId)
+          AND (:merchant = '' OR COALESCE(userAssignedName, merchant) = :merchant)
+          AND (:searchQuery = '' OR COALESCE(userAssignedName, merchant) LIKE '%' || :searchQuery || '%')
+          AND (:yearMonth = '' OR date LIKE :yearMonth || '%' OR REPLACE(date, '.', '-') LIKE :yearMonth || '%')
+        """
+    )
+    suspend fun pageCount(
+        type: String?,
+        categoryId: Int?,
+        merchant: String,
+        searchQuery: String,
+        yearMonth: String,
+    ): Int
+
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun byId(id: Int): ExpenseTransactionEntity?
 

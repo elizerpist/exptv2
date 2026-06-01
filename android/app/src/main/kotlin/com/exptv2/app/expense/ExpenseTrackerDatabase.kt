@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecurringGhostTransactionEntity::class,
         NotificationCardEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
@@ -170,6 +170,14 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_date_time_id ON transactions(date, time, id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_amount_date_time_id ON transactions(amount, date, time, id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_transactionCategoryID_date_time_id ON transactions(transactionCategoryID, date, time, id)")
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -181,6 +189,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
                         MIGRATION_2_3,
                         MIGRATION_3_4,
                         MIGRATION_4_5,
+                        MIGRATION_5_6,
                     )
                     .build().also { instance = it }
             }
