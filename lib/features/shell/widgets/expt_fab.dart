@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
@@ -11,31 +9,16 @@ class ExptFab extends StatefulWidget {
     super.key,
     required this.onPressed,
     this.onLongPress,
-    this.onDoubleTap,
   });
-
-  static const doubleTapWindow = Duration(milliseconds: 180);
-  static const singleTapDispatchDelay = doubleTapWindow;
 
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
-  final VoidCallback? onDoubleTap;
 
   @override
   State<ExptFab> createState() => _ExptFabState();
 }
 
 class _ExptFabState extends State<ExptFab> {
-  Timer? _singleTapTimer;
-  DateTime? _pendingTapStartedAt;
-  var _singleTapDispatched = false;
-
-  @override
-  void dispose() {
-    _singleTapTimer?.cancel();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return SizedBox.square(
@@ -63,51 +46,12 @@ class _ExptFabState extends State<ExptFab> {
   }
 
   void _handleTap() {
-    if (_pendingTapStartedAt != null) {
-      _singleTapTimer?.cancel();
-      final elapsed = _elapsedMs(_pendingTapStartedAt);
-      final singleDispatched = _singleTapDispatched;
-      _clearTapState();
-      DebugConsole.log(
-        '[FAB] double tap dispatch '
-        'elapsed=${elapsed}ms singleDispatched=$singleDispatched',
-      );
-      widget.onDoubleTap?.call();
-      return;
-    }
-
-    _pendingTapStartedAt = DateTime.now();
-    _singleTapDispatched = false;
-    DebugConsole.log(
-      '[FAB] single tap armed '
-      'window=${ExptFab.doubleTapWindow.inMilliseconds}ms',
-    );
-    _singleTapTimer?.cancel();
-    _singleTapTimer = Timer(ExptFab.singleTapDispatchDelay, () {
-      if (!mounted || _pendingTapStartedAt == null) return;
-      final elapsed = _elapsedMs(_pendingTapStartedAt);
-      _singleTapDispatched = true;
-      DebugConsole.log('[FAB] single tap dispatch delay=${elapsed}ms');
-      widget.onPressed();
-      _clearTapState();
-    });
+    DebugConsole.log('[FAB] single tap immediate dispatch');
+    widget.onPressed();
   }
 
   void _handleLongPress() {
-    _singleTapTimer?.cancel();
-    _clearTapState();
     DebugConsole.log('[FAB] long press dispatch');
     widget.onLongPress?.call();
-  }
-
-  void _clearTapState() {
-    _singleTapTimer = null;
-    _pendingTapStartedAt = null;
-    _singleTapDispatched = false;
-  }
-
-  int _elapsedMs(DateTime? startedAt) {
-    if (startedAt == null) return 0;
-    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 }

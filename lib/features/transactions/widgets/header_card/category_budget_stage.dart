@@ -24,7 +24,6 @@ class CategoryBudgetStage extends StatefulWidget {
     this.activeKey,
     this.onActiveItemChanged,
     this.onItemTap,
-    this.onOverviewJump,
     this.bars,
     this.onBarTap,
   });
@@ -35,7 +34,6 @@ class CategoryBudgetStage extends StatefulWidget {
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
-  final VoidCallback? onOverviewJump;
 
   // Compatibility for call sites migrated in the next implementation task.
   final List<CategoryBudgetBarData>? bars;
@@ -273,14 +271,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         height: BudgetBarGeometry.barHeight,
         compactIcon: true,
         onTap: () => _tap(item),
-        onDoubleTap: widget.onOverviewJump,
       );
     }
     return _OverviewBudgetBar(
       item: item,
       height: BudgetBarGeometry.barHeight,
       onTap: () => _tap(item),
-      onDoubleTap: widget.onOverviewJump,
     );
   }
 
@@ -404,13 +400,11 @@ class _OverviewBudgetBar extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.height,
-    this.onDoubleTap,
   });
 
   final BackheaderBudgetItem item;
   final VoidCallback onTap;
   final double height;
-  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -439,7 +433,6 @@ class _OverviewBudgetBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(height / 2),
       child: InkWell(
         onTap: onTap,
-        onDoubleTap: onDoubleTap,
         borderRadius: BorderRadius.circular(height / 2),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(height / 2),

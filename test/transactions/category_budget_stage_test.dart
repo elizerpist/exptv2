@@ -204,8 +204,8 @@ void main() {
     expect(spent.widthFactor, moreOrLessEquals(0.1, epsilon: 0.001));
   });
 
-  testWidgets('double tap on a bar requests overview jump', (tester) async {
-    var jumped = false;
+  testWidgets('repeated taps on a bar stay single-tap only', (tester) async {
+    var taps = 0;
     final bars = [
       barFixture(6, 'Food', 100, 150),
       barFixture(7, 'Travel', 40, 0),
@@ -219,8 +219,7 @@ void main() {
             child: CategoryBudgetStage(
               items: bars.map(BackheaderBudgetItem.category).toList(),
               categoryBars: bars,
-              onItemTap: (_) {},
-              onOverviewJump: () => jumped = true,
+              onItemTap: (_) => taps += 1,
             ),
           ),
         ),
@@ -232,7 +231,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
 
-    expect(jumped, isTrue);
+    expect(taps, 2);
   });
 
   testWidgets('expense budget overview bar shrinks as budget is consumed', (
@@ -502,7 +501,6 @@ void main() {
                 items: bars.map(BackheaderBudgetItem.category).toList(),
                 categoryBars: bars,
                 periodLabel: 'Május 2026',
-                onOverviewJump: () {},
                 onItemTap: (_) {},
               ),
             ),

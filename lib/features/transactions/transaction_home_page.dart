@@ -32,8 +32,6 @@ class TransactionHomePage extends StatefulWidget {
     super.key,
     required this.store,
     this.expenseTheme,
-    this.budgetEditorOpenRequest = 0,
-    this.budgetEditorOpenRequestedAt,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
     this.onBlockingOverlayChanged,
@@ -41,8 +39,6 @@ class TransactionHomePage extends StatefulWidget {
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
-  final int budgetEditorOpenRequest;
-  final DateTime? budgetEditorOpenRequestedAt;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
@@ -77,15 +73,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       reverseDuration: const Duration(milliseconds: 260),
     )..addListener(_syncHeaderSlideFromController);
     widget.store.start();
-  }
-
-  @override
-  void didUpdateWidget(covariant TransactionHomePage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.budgetEditorOpenRequest != widget.budgetEditorOpenRequest &&
-        widget.budgetEditorOpenRequest > 0) {
-      _openBudgetEditorFromShellSignal(fromDidUpdateWidget: true);
-    }
   }
 
   @override
@@ -203,7 +190,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   activeKey: _backheaderActiveKey,
                   onActiveItemChanged: _setBackheaderActiveItem,
                   onItemTap: _openBudgetTargetEditor,
-                  onOverviewJump: _jumpBackheaderToOverview,
                 ),
               if (showBackheader)
                 _buildHeaderCard(
@@ -513,15 +499,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     setState(() => _backheaderActiveKey = item.key);
   }
 
-  void _jumpBackheaderToOverview() {
-    for (final item in widget.store.backheaderBudgetItems) {
-      if (item.overview != null) {
-        _setBackheaderActiveItem(item);
-        return;
-      }
-    }
-  }
-
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
@@ -552,36 +529,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       '[BudgetTargetEditor] backheader state queued '
       'elapsed=${_elapsedMs(requestedAt)}ms',
     );
-  }
-
-  void _openBudgetEditorFromShellSignal({bool fromDidUpdateWidget = false}) {
-    final items = widget.store.backheaderBudgetItems;
-    if (items.isEmpty) return;
-    final requestedAt = widget.budgetEditorOpenRequestedAt ?? DateTime.now();
-    final item = items.firstWhere(
-      (candidate) => candidate.overview != null,
-      orElse: () => items.first,
-    );
-    DebugConsole.log(
-      '[BudgetTargetEditor] open from shell key=${item.key} '
-      'headerExpanded=$_headerExpanded '
-      'signalElapsed=${_elapsedMs(requestedAt)}ms',
-    );
-    void apply() {
-      _fastInfoExtent = 0;
-      _categoryMode = null;
-      _categoryEditorOpen = false;
-      _editingCategory = null;
-      _backheaderActiveKey = item.key;
-      _budgetEditorOpenRequestedAt = requestedAt;
-      _budgetEditorItem = item;
-    }
-
-    if (fromDidUpdateWidget) {
-      apply();
-      return;
-    }
-    setState(apply);
   }
 
   void _closeBudgetTargetEditor() {

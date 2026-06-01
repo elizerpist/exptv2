@@ -220,74 +220,40 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
-  testWidgets('FAB double tap opens budget editor without transaction sheet', (
+  testWidgets('FAB repeated taps keep opening the transaction sheet', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
-    await tester.pump(const Duration(milliseconds: 120));
-    expect(
-      find.byKey(const ValueKey('transaction-editor-card')),
-      findsNothing,
-      reason: 'The first tap must stay armed until the double-tap window closes.',
-    );
-
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('budget-target-editor-card')),
+      find.byKey(const ValueKey('transaction-editor-card')),
       findsOneWidget,
       reason: DebugConsole.allText,
     );
     expect(
-      find.byKey(const ValueKey('transaction-editor-card')),
+      find.byKey(const ValueKey('budget-target-editor-card')),
       findsNothing,
     );
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
-    final balanceOpacity = tester.widget<AnimatedOpacity>(
-      find.ancestor(
-        of: find.byKey(const ValueKey('header-balance-text')),
-        matching: find.byType(AnimatedOpacity),
-      ),
-    );
-    final categoryOpacity = tester.widget<AnimatedOpacity>(
-      find.ancestor(
-        of: find.byKey(const ValueKey('header-category-button')),
-        matching: find.byType(AnimatedOpacity),
-      ),
-    );
-    expect(balanceOpacity.opacity, 1);
-    expect(categoryOpacity.opacity, 1);
-
-    await tester.tap(find.text('Stats'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('budget-target-editor-card')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('stats-page')), findsNothing);
   });
 
-  testWidgets('FAB single tap dispatches after double tap window expires', (
+  testWidgets('FAB single tap dispatches immediately', (
     tester,
   ) async {
     var singleTaps = 0;
-    var doubleTaps = 0;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Center(
-            child: ExptFab(
-              onPressed: () => singleTaps += 1,
-              onDoubleTap: () => doubleTaps += 1,
-            ),
+            child: ExptFab(onPressed: () => singleTaps += 1),
           ),
         ),
       ),
@@ -296,29 +262,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 0);
-    expect(doubleTaps, 0);
-
-    await tester.pump(ExptFab.doubleTapWindow);
-
     expect(singleTaps, 1);
-    expect(doubleTaps, 0);
   });
 
-  testWidgets('FAB quick second tap dispatches only double tap', (
+  testWidgets('FAB quick second tap dispatches another single tap', (
     tester,
   ) async {
     var singleTaps = 0;
-    var doubleTaps = 0;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Center(
-            child: ExptFab(
-              onPressed: () => singleTaps += 1,
-              onDoubleTap: () => doubleTaps += 1,
-            ),
+            child: ExptFab(onPressed: () => singleTaps += 1),
           ),
         ),
       ),
@@ -329,8 +285,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 1));
 
-    expect(singleTaps, 0);
-    expect(doubleTaps, 1);
+    expect(singleTaps, 2);
   });
 
   testWidgets('transaction category field opens inline scroll picker', (

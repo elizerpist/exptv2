@@ -424,7 +424,7 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
-  testWidgets('backheader double tap on a bar selects budget bar', (tester) async {
+  testWidgets('backheader bar single tap opens the limit editor immediately', (tester) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
     final store = TransactionStore(
       repository,
@@ -445,14 +445,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pump(const Duration(milliseconds: 50));
-    await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
-    await tester.pumpAndSettle();
 
-    expect(find.text('Budget'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('budget-target-editor-card')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.text('Food'), findsWidgets);
   });
 
   testWidgets('limit editor discards pending changes when swiped closed', (

@@ -43,9 +43,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   var _transactionEditorOpen = false;
   var _categoryEditorOpen = false;
   var _homeBlockingOverlayOpen = false;
-  var _budgetEditorOpenRequest = 0;
   DateTime? _transactionEditorOpenRequestedAt;
-  DateTime? _budgetEditorOpenRequestedAt;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
@@ -147,24 +145,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _categoryEditorOpen = true;
       _editingTransaction = null;
     });
-  }
-
-  void _handleFabDoubleTapped() {
-    final requestedAt = DateTime.now();
-    _budgetEditorOpenRequestedAt = requestedAt;
-    DebugConsole.log('[SlideUpMenu] BudgetTargetEditor shell open requested source=fabDoubleTap');
-    setState(() {
-      _activeTab = AppTab.home;
-      _transactionEditorOpen = false;
-      _categoryEditorOpen = false;
-      _editingTransaction = null;
-      _homeBlockingOverlayOpen = false;
-      _budgetEditorOpenRequest += 1;
-    });
-    DebugConsole.log(
-      '[SlideUpMenu] BudgetTargetEditor shell state queued '
-      'elapsed=${_elapsedMs(requestedAt)}ms',
-    );
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
@@ -280,7 +260,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           child: ExptFab(
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,
-            onDoubleTap: _handleFabDoubleTapped,
           ),
         ),
       ),
@@ -306,8 +285,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 TransactionHomePage(
                   store: _transactionStore,
                   expenseTheme: expenseTheme,
-                  budgetEditorOpenRequest: _budgetEditorOpenRequest,
-                  budgetEditorOpenRequestedAt: _budgetEditorOpenRequestedAt,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
