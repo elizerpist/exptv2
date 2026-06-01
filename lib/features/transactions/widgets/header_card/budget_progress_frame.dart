@@ -20,51 +20,62 @@ class BudgetProgressFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!progress.hasLimit) return const SizedBox.shrink();
     const borderWidth = 2.0;
-    final innerRadius = height / 2;
-    return Container(
+    final radius = BorderRadius.circular(height / 2);
+    return SizedBox(
       key: const ValueKey('budget-progress-frame'),
       height: height,
-      padding: EdgeInsets.zero,
-      decoration: BoxDecoration(
-        color: AppColors.gray200,
-        borderRadius: BorderRadius.circular(height / 2),
-        border: Border.all(color: _borderColor(), width: borderWidth),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.16),
-            offset: const Offset(0, 2),
-            blurRadius: 4,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.gray200,
+              borderRadius: radius,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  offset: const Offset(0, 2),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+          ),
+          ClipRRect(
+            borderRadius: radius,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                var left = 0.0;
+                final children = <Widget>[];
+                for (var i = 0; i < progress.segments.length; i += 1) {
+                  final segment = progress.segments[i];
+                  final width = constraints.maxWidth * segment.fraction;
+                  children.add(
+                    Positioned(
+                      left: left,
+                      top: 0,
+                      width: width,
+                      bottom: 0,
+                      child: SizedBox.expand(
+                        key: ValueKey('budget-progress-frame-segment-$i'),
+                        child: ColoredBox(
+                          color: segment.color.withValues(alpha: 1),
+                        ),
+                      ),
+                    ),
+                  );
+                  left += width;
+                }
+                return Stack(fit: StackFit.expand, children: children);
+              },
+            ),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: Border.all(color: _borderColor(), width: borderWidth),
+            ),
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(innerRadius),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            var left = 0.0;
-            final children = <Widget>[];
-            for (var i = 0; i < progress.segments.length; i += 1) {
-              final segment = progress.segments[i];
-              final width = constraints.maxWidth * segment.fraction;
-              children.add(
-                Positioned(
-                  left: left,
-                  top: 0,
-                  width: width,
-                  bottom: 0,
-                  child: SizedBox.expand(
-                    key: ValueKey('budget-progress-frame-segment-$i'),
-                    child: ColoredBox(
-                      color: segment.color.withValues(alpha: 1),
-                    ),
-                  ),
-                ),
-              );
-              left += width;
-            }
-            return Stack(fit: StackFit.expand, children: children);
-          },
-        ),
       ),
     );
   }
