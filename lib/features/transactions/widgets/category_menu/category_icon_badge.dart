@@ -14,6 +14,7 @@ class CategoryIconBadge extends StatelessWidget {
     this.size = 46,
     this.iconSize = 28,
     this.backgroundColor,
+    this.showShadow = true,
   });
 
   final TransactionCategory? category;
@@ -22,6 +23,7 @@ class CategoryIconBadge extends StatelessWidget {
   final double size;
   final double iconSize;
   final Color? backgroundColor;
+  final bool showShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -36,13 +38,15 @@ class CategoryIconBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: resolvedColor,
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.14),
-            offset: const Offset(0, 2),
-            blurRadius: 4,
-          ),
-        ],
+        boxShadow: showShadow
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.14),
+                  offset: const Offset(0, 2),
+                  blurRadius: 4,
+                ),
+              ]
+            : null,
       ),
       alignment: Alignment.center,
       child: ImageIcon(

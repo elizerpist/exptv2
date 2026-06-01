@@ -4,6 +4,7 @@ import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_box.dart';
@@ -352,6 +353,80 @@ void main() {
     );
 
     expect(filteredCategory, 'Rr');
+  });
+
+  testWidgets('transaction log rows avoid scroll-time shadows', (tester) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(record: record, category: category),
+      ),
+    );
+
+    final rowContainer = tester.widget<Container>(
+      find.byKey(ValueKey('transaction-logbox-content-${record.id}')),
+    );
+    final rowDecoration = rowContainer.decoration! as BoxDecoration;
+    expect(rowDecoration.boxShadow, isNull);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryIconBadge(category: category, showShadow: false),
+      ),
+    );
+
+    final badgeContainer = tester.widget<Container>(find.byType(Container));
+    final badgeDecoration = badgeContainer.decoration! as BoxDecoration;
+    expect(badgeDecoration.boxShadow, isNull);
+  });
+
+  testWidgets('log list waits until close to bottom before loading more', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+    var loadMoreCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 220,
+          child: TransactionLogList(
+            entries: [
+              TransactionLogEntry.header(record.date),
+              TransactionLogEntry.record(record),
+            ],
+            categoriesById: {category.transactionCategoryID: category},
+            hasMore: true,
+            onLoadMore: () => loadMoreCount += 1,
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(ListView));
+    final metrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 1200,
+      pixels: 500,
+      viewportDimension: 220,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: tester.view.devicePixelRatio,
+    );
+
+    ScrollUpdateNotification(
+      metrics: metrics,
+      context: context,
+    ).dispatch(context);
+    await tester.pump();
+
+    expect(loadMoreCount, 0);
   });
 
   testWidgets('log list throttles load more while threshold remains crossed', (

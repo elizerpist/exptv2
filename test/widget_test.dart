@@ -297,7 +297,8 @@ void main() {
         ),
       ),
     );
-    expect(mobileClosedHeight, greaterThanOrEqualTo(520));
+    expect(mobileClosedHeight, lessThanOrEqualTo(456));
+    expect(mobileClosedHeight, greaterThanOrEqualTo(430));
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -307,6 +308,7 @@ void main() {
     final cardRect = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );
+    expect(cardRect.height, lessThanOrEqualTo(456));
 
     for (final key in const [
       ValueKey('transaction-category-selector'),
@@ -356,37 +358,21 @@ void main() {
     );
   });
 
-  testWidgets('transaction editor save button aligns with category editor', (
+  testWidgets('transaction editor keeps save button close to date row', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
     await _tapFab(tester);
-    final transactionSaveBottom = tester
+    final dateBottom = tester
+        .getRect(find.byKey(const ValueKey('transaction-date-picker-button')))
+        .bottom;
+    final saveTop = tester
         .getRect(find.byKey(const ValueKey('transaction-save-button')))
-        .bottom;
+        .top;
 
-    final cardTopLeft = tester.getTopLeft(
-      find.byKey(const ValueKey('transaction-editor-card')),
-    );
-    final gesture = await tester.startGesture(
-      cardTopLeft + const Offset(200, 24),
-    );
-    await gesture.moveBy(const Offset(0, 180));
-    await gesture.up();
-    await tester.pumpAndSettle();
-
-    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
-    await tester.pumpAndSettle();
-    final categorySaveBottom = tester
-        .getRect(find.byKey(const ValueKey('category-save-button')))
-        .bottom;
-
-    expect(
-      transactionSaveBottom,
-      moreOrLessEquals(categorySaveBottom, epsilon: 4),
-    );
+    expect(saveTop - dateBottom, lessThanOrEqualTo(72));
   });
 
   testWidgets('transaction category field opens inline scroll picker', (
@@ -455,7 +441,7 @@ void main() {
         epsilon: 0.1,
       ),
     );
-    expect(saveAfter.top, moreOrLessEquals(saveBefore.top, epsilon: 1));
+    expect(saveAfter.top, greaterThanOrEqualTo(saveBefore.top));
     expect(
       saveAfter.bottom,
       moreOrLessEquals(

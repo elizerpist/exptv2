@@ -30,13 +30,6 @@ class RecurringGhostLogBox extends StatelessWidget {
         color: AppColors.gray100,
         borderRadius: BorderRadius.circular(25),
         border: Border.all(color: AppColors.gray300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            offset: const Offset(0, 2),
-            blurRadius: 3,
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -49,6 +42,7 @@ class RecurringGhostLogBox extends StatelessWidget {
             ),
             size: 46,
             iconSize: 28,
+            showShadow: false,
           ),
           const SizedBox(width: 12),
           Expanded(

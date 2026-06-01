@@ -49,7 +49,7 @@ class TransactionStore extends ChangeNotifier {
   final _categoryBudgetBarsCache = <String, List<CategoryBudgetBarData>>{};
   final _overviewBudgetItemsCache = <String, List<OverviewBudgetData>>{};
   final _backheaderBudgetItemsCache = <String, List<BackheaderBudgetItem>>{};
-  static const _visibleDisplayLogPageSize = 96;
+  static const _visibleDisplayLogPageSize = 48;
 
   TransactionSummary? _totalSummaryCache;
   double? _totalIncomeCache;
