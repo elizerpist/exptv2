@@ -171,7 +171,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _transactionEditorOpen = false;
       _categoryEditorOpen = false;
       _editingTransaction = null;
-      _homeBlockingOverlayOpen = true;
+      _homeBlockingOverlayOpen = false;
       _fabDoubleTapCaptureActive = false;
       _budgetEditorOpenRequest += 1;
     });

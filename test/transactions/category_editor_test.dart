@@ -84,7 +84,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('category-slot-page-view'))),
     );
-    await gesture.moveBy(const Offset(-120, 0));
+    await gesture.moveBy(const Offset(-30, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-90, 0));
     await tester.pump();
 
     final feedback = tester.widget<AnimatedContainer>(
