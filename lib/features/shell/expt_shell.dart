@@ -21,7 +21,6 @@ import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
 import '../transactions/widgets/category_menu/category_editor_panel.dart';
 import '../transactions/widgets/category_menu/category_editor_sheet.dart';
-import '../transactions/widgets/transaction_menu_metrics.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
@@ -43,6 +42,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   var _transactionEditorOpen = false;
   var _categoryEditorOpen = false;
   var _homeBlockingOverlayOpen = false;
+  var _budgetEditorOpenRequest = 0;
   TransactionRecord? _editingTransaction;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
 
@@ -131,6 +131,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     });
   }
 
+  void _handleFabDoubleTapped() {
+    setState(() {
+      _activeTab = AppTab.home;
+      _transactionEditorOpen = false;
+      _categoryEditorOpen = false;
+      _editingTransaction = null;
+      _homeBlockingOverlayOpen = true;
+      _budgetEditorOpenRequest += 1;
+    });
+  }
+
   void _openEditTransaction(TransactionRecord transaction) {
     setState(() {
       _transactionEditorOpen = true;
@@ -169,9 +180,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   double _menuPanelHeight(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
-    return (screenHeight - TransactionMenuMetrics.overlayTop)
-        .clamp(0.0, screenHeight)
-        .toDouble();
+    final requested = screenHeight * 0.61;
+    final compactHeight = requested < 560.0 ? requested : 560.0;
+    return compactHeight.clamp(0.0, screenHeight).toDouble();
   }
 
   Future<bool> _confirmDeleteTransaction(TransactionRecord transaction) async {
@@ -227,6 +238,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 TransactionHomePage(
                   store: _transactionStore,
                   expenseTheme: expenseTheme,
+                  budgetEditorOpenRequest: _budgetEditorOpenRequest,
                   onEditTransaction: _openEditTransaction,
                   onDeleteTransactionRequested: _confirmDeleteTransaction,
                   onBlockingOverlayChanged: _setHomeBlockingOverlay,
@@ -261,6 +273,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 child: ExptFab(
                   onPressed: _handleFabPressed,
                   onLongPress: _handleFabLongPressed,
+                  onDoubleTap: _handleFabDoubleTapped,
                 ),
               ),
             ),

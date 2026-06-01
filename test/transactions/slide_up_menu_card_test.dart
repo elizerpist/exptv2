@@ -59,6 +59,43 @@ void main() {
     expect(veil.color, Colors.black.withValues(alpha: 0.28));
   });
 
+  testWidgets('slide card fades the focus veil while dragged down', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              panelHeight: 320,
+              child: const SizedBox(height: 320),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_veilOpacity(tester), moreOrLessEquals(1));
+
+    const panelTop = 600 - 320.0;
+    final gesture = await tester.startGesture(
+      const Offset(180, panelTop + 140),
+    );
+    await gesture.moveBy(const Offset(0, 160));
+    await tester.pump();
+
+    expect(_veilOpacity(tester), lessThan(0.65));
+    expect(_veilOpacity(tester), greaterThan(0.35));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('slide card can be dragged from the content area', (
     tester,
   ) async {
@@ -110,6 +147,65 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(dismissed, isFalse);
+  });
+
+  testWidgets('slide card ignores drags started in exclusion zones', (
+    tester,
+  ) async {
+    final excludedKey = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: SlideUpMenuCard(
+              cardKey: const ValueKey('test-slide-card'),
+              debugLabel: 'TestMenu',
+              panelHeight: 360,
+              dragExclusionKeys: [excludedKey],
+              child: Column(
+                children: [
+                  const SizedBox(height: 32),
+                  Container(
+                    key: excludedKey,
+                    height: 150,
+                    color: Colors.red,
+                    child: const Center(child: Text('Nested scroller')),
+                  ),
+                  const SizedBox(height: 40),
+                  TextButton(
+                    key: const ValueKey('outside-drag-target'),
+                    onPressed: () {},
+                    child: const Text('Outside'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final before = _slideCardTranslationY(tester);
+    final excludedGesture = await tester.startGesture(
+      tester.getCenter(find.text('Nested scroller')),
+    );
+    await excludedGesture.moveBy(const Offset(0, 140));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), moreOrLessEquals(before));
+    await excludedGesture.up();
+    await tester.pumpAndSettle();
+
+    final outsideGesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('outside-drag-target'))),
+    );
+    await outsideGesture.moveBy(const Offset(0, 120));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), greaterThan(before + 100));
+    await outsideGesture.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('slide card can be manually dragged nearly off screen', (
@@ -246,4 +342,11 @@ double _slideCardTranslationY(WidgetTester tester) {
     find.byKey(const ValueKey('slide-up-menu-transform')),
   );
   return transform.transform.getTranslation().y;
+}
+
+double _veilOpacity(WidgetTester tester) {
+  final opacity = tester.widget<Opacity>(
+    find.byKey(const ValueKey('slide-up-menu-veil-opacity')),
+  );
+  return opacity.opacity;
 }

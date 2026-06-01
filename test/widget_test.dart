@@ -216,6 +216,28 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
+  testWidgets('FAB double tap opens the budget limit editor', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+  });
+
   testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
@@ -238,6 +260,17 @@ void main() {
     expect(
       find.byKey(const ValueKey('transaction-editor-card')),
       findsOneWidget,
+    );
+
+    final beforeDrag = _slideCardTranslationY(tester);
+    await tester.drag(
+      find.byKey(const ValueKey('transaction-category-scroll-list')),
+      const Offset(0, 120),
+    );
+    await tester.pump();
+    expect(
+      _slideCardTranslationY(tester),
+      moreOrLessEquals(beforeDrag, epsilon: 0.1),
     );
 
     await tester.tap(
@@ -532,4 +565,11 @@ Map<String, Object?> expenseBootstrapPayload() {
     ],
     'transactions': transactions,
   };
+}
+
+double _slideCardTranslationY(WidgetTester tester) {
+  final transform = tester.widget<Transform>(
+    find.byKey(const ValueKey('slide-up-menu-transform')),
+  );
+  return transform.transform.getTranslation().y;
 }

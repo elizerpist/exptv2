@@ -33,6 +33,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final _amount = TextEditingController();
   final _date = TextEditingController();
   final _time = TextEditingController();
+  final _categoryPickerBoundaryKey = GlobalKey();
   TransactionCategory? _category;
   String? _error;
   var _saving = false;
@@ -78,6 +79,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           cardKey: const ValueKey('transaction-editor-card'),
           debugLabel: _editing ? 'EditTransaction' : 'AddTransaction',
           panelHeight: _panelHeightFor(context),
+          dragExclusionKeys: _categoryPickerOpen
+              ? [_categoryPickerBoundaryKey]
+              : const <GlobalKey>[],
           onDismissed: _close,
           child: SafeArea(
             top: false,
@@ -132,6 +136,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       if (_categoryPickerOpen) ...[
                         const SizedBox(height: 8),
                         CategoryScrollPicker(
+                          key: _categoryPickerBoundaryKey,
                           keyPrefix: 'transaction-category',
                           categories: categories,
                           selected: _category,
@@ -177,7 +182,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   double _panelHeightFor(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final baseHeight = math.min(480.0, screenHeight * 0.52);
+    final baseHeight = math.min(448.0, screenHeight * 0.50);
     final requested = baseHeight + math.min(keyboardInset, 180.0);
     return requested.clamp(0.0, screenHeight).toDouble();
   }

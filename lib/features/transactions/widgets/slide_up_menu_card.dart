@@ -18,6 +18,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.dragHandleExtent = 56,
     this.showFocusVeil = true,
     this.focusVeilOpacity = 0.28,
+    this.dragExclusionKeys = const <GlobalKey>[],
   });
 
   final Key cardKey;
@@ -29,6 +30,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final double dragHandleExtent;
   final bool showFocusVeil;
   final double focusVeilOpacity;
+  final List<GlobalKey> dragExclusionKeys;
 
   @override
   State<SlideUpMenuCard> createState() => _SlideUpMenuCardState();
@@ -117,10 +119,25 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {},
-                  child: ColoredBox(
-                    key: const ValueKey('slide-up-menu-veil'),
-                    color: Colors.black.withValues(
-                      alpha: widget.focusVeilOpacity,
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([_entry, _dragDy]),
+                    builder: (context, child) {
+                      final dragFade = (1 - (_dragDy.value / _dragMaxOffset))
+                          .clamp(0.0, 1.0)
+                          .toDouble();
+                      return Opacity(
+                        key: const ValueKey('slide-up-menu-veil-opacity'),
+                        opacity: (_entry.value * dragFade)
+                            .clamp(0.0, 1.0)
+                            .toDouble(),
+                        child: child,
+                      );
+                    },
+                    child: ColoredBox(
+                      key: const ValueKey('slide-up-menu-veil'),
+                      color: Colors.black.withValues(
+                        alpha: widget.focusVeilOpacity,
+                      ),
                     ),
                   ),
                 ),
@@ -256,6 +273,15 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   void _handlePointerDown(PointerDownEvent event) {
     if (_closing) return;
+    if (_isDragExcluded(event.position)) {
+      _dragActive = false;
+      _dragMoved = false;
+      _dragLoggedStart = false;
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel drag ignored by exclusion y=${event.localPosition.dy.toStringAsFixed(1)}',
+      );
+      return;
+    }
     _dragActive = true;
     _dragMoved = false;
     _dragLoggedStart = false;
@@ -358,6 +384,22 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   }
 
   double get _dragMaxOffset => math.max(_panelHeight, 1);
+
+  bool _isDragExcluded(Offset globalPosition) {
+    for (final key in widget.dragExclusionKeys) {
+      final keyContext = key.currentContext;
+      final renderObject = keyContext?.findRenderObject();
+      if (renderObject is! RenderBox ||
+          !renderObject.attached ||
+          !renderObject.hasSize) {
+        continue;
+      }
+      final topLeft = renderObject.localToGlobal(Offset.zero);
+      final rect = topLeft & renderObject.size;
+      if (rect.contains(globalPosition)) return true;
+    }
+    return false;
+  }
 
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;

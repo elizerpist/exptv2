@@ -23,7 +23,6 @@ import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/summary_pill.dart';
-import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
@@ -32,6 +31,7 @@ class TransactionHomePage extends StatefulWidget {
     super.key,
     required this.store,
     this.expenseTheme,
+    this.budgetEditorOpenRequest = 0,
     this.onEditTransaction,
     this.onDeleteTransactionRequested,
     this.onBlockingOverlayChanged,
@@ -39,6 +39,7 @@ class TransactionHomePage extends StatefulWidget {
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
+  final int budgetEditorOpenRequest;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final FutureOr<bool> Function(TransactionRecord)? onDeleteTransactionRequested;
   final ValueChanged<bool>? onBlockingOverlayChanged;
@@ -72,6 +73,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       reverseDuration: const Duration(milliseconds: 260),
     )..addListener(_syncHeaderSlideFromController);
     widget.store.start();
+  }
+
+  @override
+  void didUpdateWidget(covariant TransactionHomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.budgetEditorOpenRequest != widget.budgetEditorOpenRequest &&
+        widget.budgetEditorOpenRequest > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openBudgetEditorFromShellSignal();
+      });
+    }
   }
 
   @override
@@ -337,9 +349,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   double _menuPanelHeight(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
-    return (screenHeight - TransactionMenuMetrics.overlayTop)
-        .clamp(0.0, screenHeight)
-        .toDouble();
+    final requested = screenHeight * 0.61;
+    final compactHeight = requested < 560.0 ? requested : 560.0;
+    return compactHeight.clamp(0.0, screenHeight).toDouble();
   }
 
   void _notifyBlockingOverlay(bool active) {
@@ -507,6 +519,24 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
     setState(() {
+      _backheaderActiveKey = item.key;
+      _budgetEditorItem = item;
+    });
+  }
+
+  void _openBudgetEditorFromShellSignal() {
+    final items = widget.store.backheaderBudgetItems;
+    if (items.isEmpty) return;
+    final item = items.firstWhere(
+      (candidate) => candidate.overview != null,
+      orElse: () => items.first,
+    );
+    setState(() {
+      _headerExpanded = true;
+      _fastInfoExtent = 0;
+      _categoryMode = null;
+      _categoryEditorOpen = false;
+      _editingCategory = null;
       _backheaderActiveKey = item.key;
       _budgetEditorItem = item;
     });

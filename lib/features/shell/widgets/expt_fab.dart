@@ -8,10 +8,12 @@ class ExptFab extends StatelessWidget {
     super.key,
     required this.onPressed,
     this.onLongPress,
+    this.onDoubleTap,
   });
 
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
+  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +31,7 @@ class ExptFab extends StatelessWidget {
           highlightColor: Colors.white30,
           onTap: onPressed,
           onLongPress: onLongPress,
+          onDoubleTap: onDoubleTap,
           child: Icon(
             Icons.add,
             color: AppColors.white,
