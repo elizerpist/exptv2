@@ -371,8 +371,14 @@ void main() {
     final saveTop = tester
         .getRect(find.byKey(const ValueKey('transaction-save-button')))
         .top;
+    final nameBottom = tester
+        .getRect(find.widgetWithText(TextField, 'Tranzakció neve'))
+        .bottom;
+    final amountTop = tester
+        .getRect(find.widgetWithText(TextField, 'Összeg'))
+        .top;
 
-    expect(saveTop - dateBottom, lessThanOrEqualTo(72));
+    expect(saveTop - dateBottom, lessThanOrEqualTo(amountTop - nameBottom + 2));
   });
 
   testWidgets('transaction category field opens inline scroll picker', (
@@ -396,6 +402,7 @@ void main() {
     final saveBefore = tester.getRect(
       find.byKey(const ValueKey('transaction-save-button')),
     );
+    final dateBefore = tester.getRect(find.widgetWithText(TextField, 'Dátum'));
 
     await tester.tap(
       find.byKey(const ValueKey('transaction-category-selector')),
@@ -428,6 +435,7 @@ void main() {
     final selectorRect = tester.getRect(
       find.byKey(const ValueKey('transaction-category-selector')),
     );
+    final dateAfter = tester.getRect(find.widgetWithText(TextField, 'Dátum'));
     final screenHeight =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
     expect(editorRect.top, lessThan(cardBefore.top));
@@ -442,13 +450,9 @@ void main() {
       ),
     );
     expect(saveAfter.top, greaterThanOrEqualTo(saveBefore.top));
-    expect(
-      saveAfter.bottom,
-      moreOrLessEquals(
-        screenHeight - SlideUpPanelMetrics.transactionActionBottomInset,
-        epsilon: 1,
-      ),
-    );
+    expect(dateAfter.top, lessThanOrEqualTo(dateBefore.top + 1));
+    expect(saveAfter.top, lessThanOrEqualTo(saveBefore.top + 1));
+    expect(saveAfter.bottom, lessThanOrEqualTo(screenHeight));
     expect(
       pickerRect.top,
       moreOrLessEquals(selectorRect.bottom + 8, epsilon: 1),

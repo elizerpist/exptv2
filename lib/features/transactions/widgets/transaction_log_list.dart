@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/recurring_ghost_record.dart';
 import '../models/transaction_category.dart';
@@ -50,6 +51,15 @@ class _TransactionLogListState extends State<TransactionLogList> {
 
   bool _loadMoreScheduled = false;
   int? _lastRequestedEntryCount;
+  int? _lastLoggedBuildEntryCount;
+  bool? _lastLoggedBuildHasMore;
+  DateTime? _lastScrollStartedAt;
+  DateTime? _lastScrollEventAt;
+  DateTime? _lastScrollUpdateLogAt;
+  double? _lastScrollPixels;
+  var _scrollUpdateCount = 0;
+  var _scrollMinExtentAfter = double.infinity;
+  var _scrollMaxSpeed = 0.0;
 
   @override
   void didUpdateWidget(covariant TransactionLogList oldWidget) {
@@ -64,6 +74,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
   @override
   Widget build(BuildContext context) {
     final logEntries = widget.entries ?? _entries();
+    _logBuildMetrics(logEntries.length);
     if (logEntries.isEmpty) {
       return const Center(
         child: Text(
@@ -116,9 +127,13 @@ class _TransactionLogListState extends State<TransactionLogList> {
     ScrollNotification notification,
     int entryCount,
   ) {
-    if (notification.depth != 0 ||
-        notification.metrics.axis != Axis.vertical ||
-        !widget.hasMore ||
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+
+    _logScrollNotification(notification, entryCount);
+
+    if (!widget.hasMore ||
         widget.onLoadMore == null ||
         notification.metrics.extentAfter >= _loadMoreThreshold ||
         _loadMoreScheduled ||
@@ -126,16 +141,135 @@ class _TransactionLogListState extends State<TransactionLogList> {
       return false;
     }
 
+    final scheduledAt = DateTime.now();
+    final metrics = notification.metrics;
+    DebugConsole.log(
+      '[Perf] LogScroll load-more schedule '
+      'entries=$entryCount pixels=${_fmt(metrics.pixels)} '
+      'extentAfter=${_fmt(metrics.extentAfter)} '
+      'threshold=${_fmt(_loadMoreThreshold)} '
+      'lastRequested=${_lastRequestedEntryCount ?? -1}',
+    );
     _loadMoreScheduled = true;
     _lastRequestedEntryCount = entryCount;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _loadMoreScheduled = false;
+      final frameElapsed = DateTime.now()
+          .difference(scheduledAt)
+          .inMilliseconds;
+      DebugConsole.log(
+        '[Perf] LogScroll load-more fire '
+        'entries=$entryCount frameElapsed=${frameElapsed}ms '
+        'hasMore=${widget.hasMore}',
+      );
       if (!widget.hasMore) return;
+      final stopwatch = Stopwatch()..start();
       widget.onLoadMore?.call();
+      DebugConsole.log(
+        '[Perf] LogScroll load-more callback '
+        'elapsed=${stopwatch.elapsedMilliseconds}ms',
+      );
     });
     return false;
   }
+
+  void _logBuildMetrics(int entryCount) {
+    if (_lastLoggedBuildEntryCount == entryCount &&
+        _lastLoggedBuildHasMore == widget.hasMore) {
+      return;
+    }
+    _lastLoggedBuildEntryCount = entryCount;
+    _lastLoggedBuildHasMore = widget.hasMore;
+    final startedAt = DateTime.now();
+    DebugConsole.log(
+      '[Perf] LogList build entries=$entryCount hasMore=${widget.hasMore} '
+      'cache=${_fmt(_logListPrefetchExtent)} threshold=${_fmt(_loadMoreThreshold)}',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+      DebugConsole.log(
+        '[Perf] LogList frame entries=$entryCount elapsed=${elapsed}ms',
+      );
+    });
+  }
+
+  void _logScrollNotification(ScrollNotification notification, int entryCount) {
+    final metrics = notification.metrics;
+    if (notification is ScrollStartNotification) {
+      final now = DateTime.now();
+      _lastScrollStartedAt = now;
+      _lastScrollEventAt = now;
+      _lastScrollUpdateLogAt = null;
+      _lastScrollPixels = metrics.pixels;
+      _scrollUpdateCount = 0;
+      _scrollMinExtentAfter = metrics.extentAfter;
+      _scrollMaxSpeed = 0;
+      DebugConsole.log(
+        '[Perf] LogScroll start entries=$entryCount pixels=${_fmt(metrics.pixels)} '
+        'extentAfter=${_fmt(metrics.extentAfter)} viewport=${_fmt(metrics.viewportDimension)} '
+        'max=${_fmt(metrics.maxScrollExtent)} hasMore=${widget.hasMore}',
+      );
+      return;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final now = DateTime.now();
+      final previousAt = _lastScrollEventAt ?? now;
+      final previousPixels = _lastScrollPixels ?? metrics.pixels;
+      final dt = now.difference(previousAt).inMilliseconds;
+      final dp = metrics.pixels - previousPixels;
+      final speed = dt <= 0 ? 0.0 : (dp.abs() / dt);
+      _lastScrollEventAt = now;
+      _lastScrollPixels = metrics.pixels;
+      _scrollUpdateCount += 1;
+      _scrollMinExtentAfter = mathMin(
+        _scrollMinExtentAfter,
+        metrics.extentAfter,
+      );
+      _scrollMaxSpeed = mathMax(_scrollMaxSpeed, speed);
+
+      final lastLogAt = _lastScrollUpdateLogAt;
+      final elapsedSinceLog = lastLogAt == null
+          ? 999999
+          : now.difference(lastLogAt).inMilliseconds;
+      final nearLoadMore = metrics.extentAfter <= _loadMoreThreshold * 1.5;
+      if (_scrollUpdateCount == 1 || nearLoadMore || elapsedSinceLog >= 120) {
+        _lastScrollUpdateLogAt = now;
+        DebugConsole.log(
+          '[Perf] LogScroll update entries=$entryCount updates=$_scrollUpdateCount '
+          'pixels=${_fmt(metrics.pixels)} dp=${_fmt(dp)} dt=${dt}ms '
+          'speed=${speed.toStringAsFixed(2)} extentAfter=${_fmt(metrics.extentAfter)} '
+          'scheduled=$_loadMoreScheduled hasMore=${widget.hasMore}',
+        );
+      }
+      return;
+    }
+
+    if (notification is ScrollEndNotification) {
+      final now = DateTime.now();
+      final startedAt = _lastScrollStartedAt ?? now;
+      final elapsed = now.difference(startedAt).inMilliseconds;
+      _scrollMinExtentAfter = mathMin(
+        _scrollMinExtentAfter,
+        metrics.extentAfter,
+      );
+      DebugConsole.log(
+        '[Perf] LogScroll end entries=$entryCount updates=$_scrollUpdateCount '
+        'elapsed=${elapsed}ms pixels=${_fmt(metrics.pixels)} '
+        'minExtentAfter=${_fmt(_scrollMinExtentAfter)} '
+        'maxSpeed=${_scrollMaxSpeed.toStringAsFixed(2)} '
+        'scheduled=$_loadMoreScheduled hasMore=${widget.hasMore}',
+      );
+    }
+  }
+
+  double mathMin(double left, double right) => left < right ? left : right;
+
+  double mathMax(double left, double right) => left > right ? left : right;
+
+  String _fmt(double value) => value.toStringAsFixed(1);
 
   List<TransactionLogEntry> _entries() {
     final entries = <TransactionLogEntry>[];

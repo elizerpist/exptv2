@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
@@ -427,6 +428,65 @@ void main() {
     await tester.pump();
 
     expect(loadMoreCount, 0);
+  });
+
+  testWidgets('log list writes scroll telemetry around load more', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 220,
+          child: TransactionLogList(
+            entries: [
+              TransactionLogEntry.header(record.date),
+              TransactionLogEntry.record(record),
+            ],
+            categoriesById: {category.transactionCategoryID: category},
+            hasMore: true,
+            onLoadMore: () {},
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(ListView));
+    final metrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 1200,
+      pixels: 900,
+      viewportDimension: 220,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: tester.view.devicePixelRatio,
+    );
+
+    ScrollStartNotification(
+      metrics: metrics,
+      context: context,
+    ).dispatch(context);
+    ScrollUpdateNotification(
+      metrics: metrics,
+      context: context,
+    ).dispatch(context);
+    ScrollEndNotification(metrics: metrics, context: context).dispatch(context);
+    await tester.pump();
+    await tester.pump();
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] LogList build'));
+    expect(logs, contains('[Perf] LogScroll start'));
+    expect(logs, contains('[Perf] LogScroll update'));
+    expect(logs, contains('[Perf] LogScroll load-more schedule'));
+    expect(logs, contains('[Perf] LogScroll load-more fire'));
+    expect(logs, contains('[Perf] LogScroll end'));
   });
 
   testWidgets('log list throttles load more while threshold remains crossed', (

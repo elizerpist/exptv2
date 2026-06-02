@@ -11,7 +11,7 @@ class SlideUpPanelMetrics {
   static const transactionActionBottomInset = 44.0;
   static const horizontalInset = 20.0;
   static const keyboardInsetCap = 180.0;
-  static const transactionClosedMaxHeight = 448.0;
+  static const transactionClosedMaxHeight = 436.0;
   static const transactionCompactMaxHeight = 540.0;
   static const transactionCompactScreenFactor = 0.90;
   static const budgetBaseHeight = 440.0;

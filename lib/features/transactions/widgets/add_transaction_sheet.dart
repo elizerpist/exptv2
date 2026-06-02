@@ -203,8 +203,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               style: const TextStyle(color: AppColors.expense),
                             ),
                           ],
-                          const Spacer(),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 12),
                           FilledButton(
                             key: const ValueKey('transaction-save-button'),
                             onPressed: _saving ? null : _save,
