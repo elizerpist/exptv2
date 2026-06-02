@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/installed_app.dart';
+import '../../transactions/models/transaction_category.dart';
 import '../models/notification_parser_rule.dart';
 import 'app_filter_control.dart';
 
 enum _TrainingMode { amount, merchant }
+
+const _merchantSelectionColor = Color(0xFFF97316);
 
 class NotificationParserProfilesPanel extends StatelessWidget {
   const NotificationParserProfilesPanel({
@@ -290,6 +293,46 @@ class _NotificationParserRuleEditorState
             ),
             const SizedBox(height: 14),
             const Text(
+              'Tranzakció típusa',
+              style: TextStyle(
+                color: AppColors.gray800,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  key: const ValueKey('notification-parser-type-expense'),
+                  label: Text(TransactionType.expense.label),
+                  selected:
+                      widget.profile.transactionType == TransactionType.expense,
+                  selectedColor: AppColors.expense.withValues(alpha: 0.12),
+                  onSelected: (_) => _emit(
+                    widget.profile.copyWith(
+                      transactionType: TransactionType.expense,
+                    ),
+                  ),
+                ),
+                ChoiceChip(
+                  key: const ValueKey('notification-parser-type-income'),
+                  label: Text(TransactionType.income.label),
+                  selected:
+                      widget.profile.transactionType == TransactionType.income,
+                  selectedColor: AppColors.income.withValues(alpha: 0.12),
+                  onSelected: (_) => _emit(
+                    widget.profile.copyWith(
+                      transactionType: TransactionType.income,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
               'Tanító mód',
               style: TextStyle(
                 color: AppColors.gray800,
@@ -338,9 +381,15 @@ class _NotificationParserRuleEditorState
               runSpacing: 8,
               children: [
                 for (final token in tokens)
-                  ActionChip(
-                    key: ValueKey('notification-parser-token-${token.text}'),
-                    label: Text(token.text),
+                  _TrainingTokenChip(
+                    token: token,
+                    selectedAsAmount:
+                        NotificationParserPreview.normalizeText(token.text) ==
+                        widget.profile.amountSelection,
+                    selectedAsMerchant:
+                        NotificationParserPreview.normalizeText(token.text) ==
+                        widget.profile.merchantSelection,
+                    activeMode: _trainingMode,
                     onPressed: () => _selectToken(token),
                   ),
               ],
@@ -397,6 +446,64 @@ class _NotificationParserRuleEditorState
   }
 }
 
+class _TrainingTokenChip extends StatelessWidget {
+  const _TrainingTokenChip({
+    required this.token,
+    required this.selectedAsAmount,
+    required this.selectedAsMerchant,
+    required this.activeMode,
+    required this.onPressed,
+  });
+
+  final NotificationTrainingToken token;
+  final bool selectedAsAmount;
+  final bool selectedAsMerchant;
+  final _TrainingMode activeMode;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = selectedAsAmount || selectedAsMerchant;
+    final selectedForActiveMode = switch (activeMode) {
+      _TrainingMode.amount => selectedAsAmount,
+      _TrainingMode.merchant => selectedAsMerchant,
+    };
+    final borderColor = selectedAsAmount
+        ? AppColors.expense
+        : selectedAsMerchant
+        ? _merchantSelectionColor
+        : AppColors.gray200;
+    final backgroundColor = selected
+        ? borderColor.withValues(alpha: 0.08)
+        : AppColors.gray50;
+    return InkWell(
+      key: ValueKey('notification-parser-token-${token.text}'),
+      borderRadius: BorderRadius.circular(999),
+      onTap: onPressed,
+      child: Container(
+        key: ValueKey('notification-parser-token-frame-${token.text}'),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: borderColor,
+            width: selectedForActiveMode ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          token.text,
+          style: TextStyle(
+            color: selected ? AppColors.gray800 : AppColors.gray700,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ParserPreviewBox extends StatelessWidget {
   const _ParserPreviewBox({required this.preview});
 
@@ -440,6 +547,12 @@ class _ParserPreviewBox extends StatelessWidget {
               label: 'Bolt',
               value: preview.merchant ?? 'Nincs találat',
               valueKey: const ValueKey('notification-parser-preview-merchant'),
+            ),
+            const SizedBox(height: 6),
+            _PreviewRow(
+              label: 'Típus',
+              value: preview.transactionType.label,
+              valueKey: const ValueKey('notification-parser-preview-type'),
             ),
             if (error != null) ...[
               const SizedBox(height: 8),

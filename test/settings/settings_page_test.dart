@@ -1,3 +1,5 @@
+import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/core/theme/app_dimensions.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/state/event_store.dart';
@@ -60,6 +62,7 @@ void main() {
                     'includeKeyword': 'Paid',
                     'amountPattern': r'(?<amount>\d+)\s*Ft',
                     'merchantPattern': r'at\s+(?<merchant>.+)',
+                    'transactionType': 'expense',
                   },
                 ],
               };
@@ -234,6 +237,21 @@ void main() {
       expect(find.text('Haladó beállítások'), findsOneWidget);
       expect(find.text('Összeg regex'), findsNothing);
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-type-income')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-type-income')).first,
+      );
+      await tester.pumpAndSettle();
+
       await tester.enterText(
         find.byKey(const ValueKey('notification-parser-sample')),
         'Kártyás vásárlás: Tesco - 12 345 HUF',
@@ -259,6 +277,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final amountFrame = tester.widget<Container>(
+        find
+            .byKey(const ValueKey('notification-parser-token-frame-12 345 HUF'))
+            .first,
+      );
+      final amountDecoration = amountFrame.decoration! as BoxDecoration;
+      expect((amountDecoration.border! as Border).top.color, AppColors.expense);
+
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('notification-parser-mode-merchant')).first,
         120,
@@ -287,6 +313,17 @@ void main() {
         find.byKey(const ValueKey('notification-parser-token-Tesco')).first,
       );
       await tester.pumpAndSettle();
+
+      final merchantFrame = tester.widget<Container>(
+        find
+            .byKey(const ValueKey('notification-parser-token-frame-Tesco'))
+            .first,
+      );
+      final merchantDecoration = merchantFrame.decoration! as BoxDecoration;
+      expect(
+        (merchantDecoration.border! as Border).top.color,
+        const Color(0xFFF97316),
+      );
 
       expect(find.text('12 345 HUF').hitTestable(), findsWidgets);
       expect(find.text('Tesco').hitTestable(), findsWidgets);
@@ -306,19 +343,22 @@ void main() {
       expect(find.text('Összeg regex'), findsOneWidget);
       expect(find.text('Bolt regex'), findsOneWidget);
 
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('notification-parser-save-profile')).first,
-        120,
-        scrollable: find
-            .descendant(
-              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
-              matching: find.byType(Scrollable),
-            )
-            .first,
+      final parsedAppScrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final saveButton = find.byKey(
+        const ValueKey('notification-parser-save-profile'),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('notification-parser-save-profile')).first,
-      );
+      for (var attempt = 0; attempt < 6; attempt += 1) {
+        if (saveButton.hitTestable().evaluate().isNotEmpty) break;
+        await tester.drag(parsedAppScrollable, const Offset(0, -280));
+        await tester.pumpAndSettle();
+      }
+      expect(saveButton.hitTestable(), findsOneWidget);
+      await tester.tap(saveButton.hitTestable().first);
       await tester.pumpAndSettle();
 
       expect(savedParserRules, isNotEmpty);
@@ -326,8 +366,31 @@ void main() {
       final first = profiles.first as Map<dynamic, dynamic>;
       expect(first['amountSelection'], '12 345 HUF');
       expect(first['merchantSelection'], 'Tesco');
+      expect(first['transactionType'], 'income');
     },
   );
+
+  testWidgets('settings submenus stop above the bottom navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('FastInfo'));
+    await tester.pumpAndSettle();
+
+    final frame = tester.renderObject<RenderBox>(
+      find.byKey(const ValueKey('settings-submenu-content-frame')),
+    );
+    final bottom = frame.localToGlobal(Offset.zero).dy + frame.size.height;
+
+    expect(bottom, 1200 - AppDimensions.bottomNavHeight);
+  });
 }
 
 Map<String, Object?> recurringRow() {

@@ -1,3 +1,5 @@
+import '../../transactions/models/transaction_category.dart';
+
 class NotificationParserConfig {
   const NotificationParserConfig({required this.profiles});
 
@@ -85,6 +87,7 @@ class NotificationParserProfile {
   String get merchantPattern => rule.merchantPattern;
   String get amountSelection => rule.amountSelection;
   String get merchantSelection => rule.merchantSelection;
+  TransactionType get transactionType => rule.transactionType;
   NotificationParserPreview get preview => rule.preview;
 
   factory NotificationParserProfile.defaults({int index = 1}) {
@@ -144,6 +147,7 @@ class NotificationParserProfile {
     String? merchantPattern,
     String? amountSelection,
     String? merchantSelection,
+    TransactionType? transactionType,
     NotificationParserRule? rule,
   }) {
     final nextEnabled = enabled ?? this.enabled;
@@ -162,6 +166,7 @@ class NotificationParserProfile {
         merchantPattern: merchantPattern,
         amountSelection: amountSelection,
         merchantSelection: merchantSelection,
+        transactionType: transactionType,
       ),
     );
   }
@@ -262,6 +267,7 @@ class NotificationParserRule {
     required this.merchantPattern,
     this.amountSelection = '',
     this.merchantSelection = '',
+    this.transactionType = TransactionType.expense,
   });
 
   final bool enabled;
@@ -271,6 +277,7 @@ class NotificationParserRule {
   final String merchantPattern;
   final String amountSelection;
   final String merchantSelection;
+  final TransactionType transactionType;
 
   factory NotificationParserRule.defaults() {
     return const NotificationParserRule(
@@ -302,6 +309,7 @@ class NotificationParserRule {
       ),
       amountSelection: _stringValue(map['amountSelection'], ''),
       merchantSelection: _stringValue(map['merchantSelection'], ''),
+      transactionType: TransactionTypeX.fromAny(map['transactionType']),
     );
   }
 
@@ -317,6 +325,7 @@ class NotificationParserRule {
       'merchantPattern': merchantPattern,
       'amountSelection': amountSelection,
       'merchantSelection': merchantSelection,
+      'transactionType': transactionType.nativeValue,
     };
   }
 
@@ -328,6 +337,7 @@ class NotificationParserRule {
     String? merchantPattern,
     String? amountSelection,
     String? merchantSelection,
+    TransactionType? transactionType,
   }) {
     return NotificationParserRule(
       enabled: enabled ?? this.enabled,
@@ -337,6 +347,7 @@ class NotificationParserRule {
       merchantPattern: merchantPattern ?? this.merchantPattern,
       amountSelection: amountSelection ?? this.amountSelection,
       merchantSelection: merchantSelection ?? this.merchantSelection,
+      transactionType: transactionType ?? this.transactionType,
     );
   }
 
@@ -352,12 +363,14 @@ class NotificationParserPreview {
     required this.amountText,
     required this.amountValue,
     required this.merchant,
+    required this.transactionType,
     required this.errorText,
   });
 
   final String? amountText;
   final double? amountValue;
   final String? merchant;
+  final TransactionType transactionType;
   final String? errorText;
 
   bool get isReady =>
@@ -367,10 +380,11 @@ class NotificationParserPreview {
     final normalized = normalizeText(rule.sampleText);
     try {
       if (normalized.isEmpty) {
-        return const NotificationParserPreview(
+        return NotificationParserPreview(
           amountText: null,
           amountValue: null,
           merchant: null,
+          transactionType: rule.transactionType,
           errorText: 'Adj meg egy teszt értesítést.',
         );
       }
@@ -380,10 +394,11 @@ class NotificationParserPreview {
           !normalized.toLowerCase().contains(
             normalizeText(keyword).toLowerCase(),
           )) {
-        return const NotificationParserPreview(
+        return NotificationParserPreview(
           amountText: null,
           amountValue: null,
           merchant: null,
+          transactionType: rule.transactionType,
           errorText: 'A minta nem tartalmazza a megadott kulcsszót.',
         );
       }
@@ -405,6 +420,7 @@ class NotificationParserPreview {
           amountText: amountText,
           amountValue: amountValue,
           merchant: merchant?.isEmpty ?? true ? null : merchant,
+          transactionType: rule.transactionType,
           errorText: 'Összeg regex nem talált értéket.',
         );
       }
@@ -413,6 +429,7 @@ class NotificationParserPreview {
           amountText: amountText,
           amountValue: amountValue,
           merchant: null,
+          transactionType: rule.transactionType,
           errorText: 'Bolt regex nem talált értéket.',
         );
       }
@@ -421,6 +438,7 @@ class NotificationParserPreview {
         amountText: amountText,
         amountValue: amountValue,
         merchant: merchant,
+        transactionType: rule.transactionType,
         errorText: null,
       );
     } on _ParserRuleException catch (error) {
@@ -428,6 +446,7 @@ class NotificationParserPreview {
         amountText: null,
         amountValue: null,
         merchant: null,
+        transactionType: rule.transactionType,
         errorText: error.message,
       );
     }

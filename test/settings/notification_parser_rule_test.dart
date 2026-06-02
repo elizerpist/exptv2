@@ -1,4 +1,5 @@
 import 'package:exptv2/features/settings/models/notification_parser_rule.dart';
+import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -63,6 +64,7 @@ void main() {
           'includeKeyword': '',
           'amountPattern': r'(?<amount>\d[\d\s]*)\s*HUF',
           'merchantPattern': r'vásárlás:\s*(?<merchant>[^-]+)\s*-',
+          'transactionType': 'income',
         },
       ],
     });
@@ -70,7 +72,25 @@ void main() {
     expect(config.profiles, hasLength(2));
     expect(config.activeProfiles.map((profile) => profile.id), ['bank-a']);
     expect(config.profiles.last.preview.merchant, 'Tesco');
+    expect(config.profiles.last.transactionType, TransactionType.income);
     expect(config.toMap()['profiles'], isA<List<Object?>>());
+  });
+
+  test('income parser profiles keep positive transaction direction', () {
+    final rule = NotificationParserRule.defaults().copyWith(
+      sampleText: 'Jóváírás: Munkabér + 250 000 HUF',
+      includeKeyword: '',
+      merchantPattern: r'Jóváírás:\s*(?<merchant>[^+]+)\s*\+',
+      transactionType: TransactionType.income,
+    );
+
+    final preview = rule.preview;
+
+    expect(rule.transactionType, TransactionType.income);
+    expect(rule.toMap()['transactionType'], 'income');
+    expect(preview.transactionType, TransactionType.income);
+    expect(preview.amountValue, 250000);
+    expect(preview.merchant, 'Munkabér');
   });
 
   test(

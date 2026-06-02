@@ -32,6 +32,7 @@ class NotificationParserRuleStore(context: Context) {
             "amountPattern" to row["amountPattern"].orEmptyString(),
             "merchantPattern" to row["merchantPattern"].orEmptyString(),
             "amountSelection" to row["amountSelection"].orEmptyString(),
+            "transactionType" to row["transactionType"].orExpenseType(),
             "merchantSelection" to row["merchantSelection"].orEmptyString(),
         )
     } ?: defaultProfile()
@@ -45,6 +46,7 @@ class NotificationParserRuleStore(context: Context) {
             put("amountPattern", args["amountPattern"]?.toString() ?: current["amountPattern"].orEmptyString())
             put("merchantPattern", args["merchantPattern"]?.toString() ?: current["merchantPattern"].orEmptyString())
             put("amountSelection", args["amountSelection"]?.toString() ?: current["amountSelection"].orEmptyString())
+            put("transactionType", args["transactionType"]?.toString()?.toExpenseType() ?: current["transactionType"].orExpenseType())
             put("merchantSelection", args["merchantSelection"]?.toString() ?: current["merchantSelection"].orEmptyString())
         }
         saveProfiles(mapOf("profiles" to listOf(row)))
@@ -75,6 +77,7 @@ class NotificationParserRuleStore(context: Context) {
         "amountPattern" to prefs.getString(KEY_AMOUNT_PATTERN, DEFAULT_AMOUNT_PATTERN).orEmpty(),
         "merchantPattern" to prefs.getString(KEY_MERCHANT_PATTERN, DEFAULT_MERCHANT_PATTERN).orEmpty(),
         "amountSelection" to prefs.getString(KEY_AMOUNT_SELECTION, "").orEmpty(),
+        "transactionType" to prefs.getString(KEY_TRANSACTION_TYPE, DEFAULT_TRANSACTION_TYPE).orExpenseType(),
         "merchantSelection" to prefs.getString(KEY_MERCHANT_SELECTION, "").orEmpty(),
     )
 
@@ -95,6 +98,13 @@ class NotificationParserRuleStore(context: Context) {
 
     private fun Any?.orEmptyString(): String = this?.toString().orEmpty()
 
+    private fun Any?.orExpenseType(): String = this?.toString().toExpenseType()
+
+    private fun String?.toExpenseType(): String = when (this?.trim()?.lowercase()) {
+        "income", "bevétel" -> "income"
+        else -> "expense"
+    }
+
     companion object {
         private const val KEY_PROFILES_JSON = "parser_profiles_json"
         private const val KEY_ENABLED = "parser_enabled"
@@ -104,11 +114,13 @@ class NotificationParserRuleStore(context: Context) {
         private const val KEY_MERCHANT_PATTERN = "parser_merchant_pattern"
         private const val KEY_AMOUNT_SELECTION = "parser_amount_selection"
         private const val KEY_MERCHANT_SELECTION = "parser_merchant_selection"
+        private const val KEY_TRANSACTION_TYPE = "parser_transaction_type"
 
         private const val DEFAULT_SAMPLE_TEXT = "🍽️ 1\u00A0085\u00A0Ft összeget fizettél itt: Csepp Bu:fe'.\n" +
             "A(z) HUF Zseb egyenlege: 71\u00A0795,87\u00A0Ft."
         private const val DEFAULT_INCLUDE_KEYWORD = "fizettél"
         private const val DEFAULT_AMOUNT_PATTERN = "(?<amount>\\d[\\d\\s.,]*)(?:\\s*(?:Ft|HUF))"
         private const val DEFAULT_MERCHANT_PATTERN = "itt:\\s*(?<merchant>.+?)(?:\\.|$)"
+        private const val DEFAULT_TRANSACTION_TYPE = "expense"
     }
 }
