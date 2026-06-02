@@ -389,6 +389,7 @@ class _NotificationParserRuleEditorState
                     selectedAsMerchant:
                         NotificationParserPreview.normalizeText(token.text) ==
                         widget.profile.merchantSelection,
+                    transactionType: widget.profile.transactionType,
                     activeMode: _trainingMode,
                     onPressed: () => _selectToken(token),
                   ),
@@ -451,6 +452,7 @@ class _TrainingTokenChip extends StatelessWidget {
     required this.token,
     required this.selectedAsAmount,
     required this.selectedAsMerchant,
+    required this.transactionType,
     required this.activeMode,
     required this.onPressed,
   });
@@ -458,6 +460,7 @@ class _TrainingTokenChip extends StatelessWidget {
   final NotificationTrainingToken token;
   final bool selectedAsAmount;
   final bool selectedAsMerchant;
+  final TransactionType transactionType;
   final _TrainingMode activeMode;
   final VoidCallback onPressed;
 
@@ -468,8 +471,11 @@ class _TrainingTokenChip extends StatelessWidget {
       _TrainingMode.amount => selectedAsAmount,
       _TrainingMode.merchant => selectedAsMerchant,
     };
+    final amountSelectionColor = transactionType == TransactionType.income
+        ? AppColors.income
+        : AppColors.expense;
     final borderColor = selectedAsAmount
-        ? AppColors.expense
+        ? amountSelectionColor
         : selectedAsMerchant
         ? _merchantSelectionColor
         : AppColors.gray200;

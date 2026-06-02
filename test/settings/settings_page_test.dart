@@ -283,7 +283,7 @@ void main() {
             .first,
       );
       final amountDecoration = amountFrame.decoration! as BoxDecoration;
-      expect((amountDecoration.border! as Border).top.color, AppColors.expense);
+      expect((amountDecoration.border! as Border).top.color, AppColors.income);
 
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('notification-parser-mode-merchant')).first,
