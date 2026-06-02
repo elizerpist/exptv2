@@ -14,7 +14,7 @@ class SlideUpPanelMetrics {
   static const transactionClosedMaxHeight = 417.0;
   static const transactionCompactMaxHeight = 540.0;
   static const transactionCompactScreenFactor = 0.90;
-  static const budgetBaseHeight = 440.0;
+  static const budgetBaseHeight = 432.0;
 
   static double fullHeightForScreen(double screenHeight) {
     return (screenHeight - TransactionMenuMetrics.overlayTop)

@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
         val repository = NotificationEventRepository(this)
         val modeStore = CaptureModeStore(this)
         val statusReader = PermissionStatusReader(this)
+        val parserRuleStore = NotificationParserRuleStore(this)
         val expenseChannel = ExpenseMethodChannel(this, scope)
         val recurringAlarmScheduler = RecurringAlarmScheduler(this)
         RecurringAlarmMethodChannel(this, scope).attach(
@@ -98,6 +99,28 @@ class MainActivity : FlutterActivity() {
                     "clearDatabase" -> scope.launch {
                         withContext(Dispatchers.IO) { repository.clear() }
                         result.success(null)
+                    }
+                    "loadNotificationParserProfiles" -> scope.launch {
+                        val profiles = withContext(Dispatchers.IO) {
+                            parserRuleStore.loadProfiles()
+                        }
+                        result.success(profiles)
+                    }
+                    "saveNotificationParserProfiles" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val profiles = withContext(Dispatchers.IO) {
+                            parserRuleStore.saveProfiles(args)
+                        }
+                        result.success(profiles)
+                    }
+                    "loadNotificationParserRule" -> scope.launch {
+                        val rule = withContext(Dispatchers.IO) { parserRuleStore.load() }
+                        result.success(rule)
+                    }
+                    "saveNotificationParserRule" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val rule = withContext(Dispatchers.IO) { parserRuleStore.save(args) }
+                        result.success(rule)
                     }
                     else -> {
                         if (!expenseChannel.handle(call, result)) {

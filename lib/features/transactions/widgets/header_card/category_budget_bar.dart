@@ -23,6 +23,8 @@ class CategoryBudgetBar extends StatelessWidget {
     final spentRatio = bar.hasLimit && bar.limitAmount > 0
         ? (bar.spent / bar.limitAmount).clamp(0.0, 1.0).toDouble()
         : 0.0;
+    final iconSize = height * 0.65;
+    final iconLeftPadding = height * 0.28;
     return Material(
       key: const ValueKey('category-budget-bar'),
       color: Colors.transparent,
@@ -53,16 +55,16 @@ class CategoryBudgetBar extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 15),
+                    padding: EdgeInsets.only(left: iconLeftPadding),
                     child: Image(
                       image: CategoryIconManager.assetImage(bar.iconSlot),
-                      width: compactIcon ? 35 : 45,
-                      height: compactIcon ? 35 : 45,
+                      width: compactIcon ? iconSize : height * 0.64,
+                      height: compactIcon ? iconSize : height * 0.64,
                       color: AppColors.white,
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.category_outlined,
                         color: AppColors.white,
-                        size: compactIcon ? 35 : 45,
+                        size: compactIcon ? iconSize : height * 0.64,
                       ),
                     ),
                   ),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../features/settings/models/notification_parser_rule.dart';
 import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
@@ -20,7 +21,22 @@ class EventStore extends ChangeNotifier {
   String? filterError;
   RegExp? _lastValidRegex;
   ServiceStatus? status;
+  NotificationParserConfig notificationParserConfig =
+      NotificationParserConfig.defaults();
+  String? selectedNotificationParserProfileId;
   bool loading = false;
+
+  List<NotificationParserProfile> get notificationParserProfiles =>
+      notificationParserConfig.profiles;
+
+  NotificationParserProfile get selectedNotificationParserProfile =>
+      notificationParserConfig.selected(selectedNotificationParserProfileId);
+
+  NotificationParserRule get notificationParserRule =>
+      selectedNotificationParserProfile.rule;
+
+  NotificationParserPreview get notificationParserPreview =>
+      selectedNotificationParserProfile.preview;
 
   List<NotificationEvent> get events {
     final regex = filterEnabled ? _lastValidRegex : null;
@@ -36,6 +52,8 @@ class EventStore extends ChangeNotifier {
     _events
       ..clear()
       ..addAll(await _bridge.loadEvents());
+    notificationParserConfig = await _bridge.loadNotificationParserProfiles();
+    selectedNotificationParserProfileId = _firstProfileId();
     status = await _bridge.getStatus();
     loading = false;
     notifyListeners();
@@ -58,6 +76,86 @@ class EventStore extends ChangeNotifier {
   }
 
   Future<List<InstalledApp>> listInstalledApps() => _bridge.listInstalledApps();
+
+  Future<void> loadNotificationParserRule() => loadNotificationParserProfiles();
+
+  Future<void> loadNotificationParserProfiles() async {
+    notificationParserConfig = await _bridge.loadNotificationParserProfiles();
+    selectedNotificationParserProfileId = _firstProfileId();
+    notifyListeners();
+  }
+
+  Future<void> setNotificationParserRule(NotificationParserRule rule) async {
+    await updateSelectedNotificationParserProfile(
+      selectedNotificationParserProfile.copyWith(rule: rule),
+      saveIfReady: true,
+    );
+  }
+
+  void selectNotificationParserProfile(String id) {
+    selectedNotificationParserProfileId = id;
+    notifyListeners();
+  }
+
+  Future<void> addNotificationParserProfile() async {
+    final nextIndex = notificationParserProfiles.length + 1;
+    final profile = NotificationParserProfile.defaults(index: nextIndex)
+        .copyWith(
+          id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
+          name: 'Profil $nextIndex',
+        );
+    notificationParserConfig = notificationParserConfig.upsert(profile);
+    selectedNotificationParserProfileId = profile.id;
+    notifyListeners();
+    await _saveNotificationParserProfiles();
+  }
+
+  Future<void> setNotificationParserProfileEnabled(
+    String id,
+    bool enabled,
+  ) async {
+    final profile = notificationParserConfig
+        .selected(id)
+        .copyWith(enabled: enabled);
+    notificationParserConfig = notificationParserConfig.upsert(profile);
+    notifyListeners();
+    await _saveNotificationParserProfiles();
+  }
+
+  Future<void> updateSelectedNotificationParserProfile(
+    NotificationParserProfile profile, {
+    bool saveIfReady = false,
+  }) async {
+    notificationParserConfig = notificationParserConfig.upsert(profile);
+    selectedNotificationParserProfileId = profile.id;
+    notifyListeners();
+    if (!saveIfReady || !profile.preview.isReady) return;
+    await _saveNotificationParserProfiles();
+  }
+
+  Future<void> saveSelectedNotificationParserProfile() async {
+    if (!selectedNotificationParserProfile.preview.isReady) return;
+    await _saveNotificationParserProfiles();
+  }
+
+  Future<void> _saveNotificationParserProfiles() async {
+    notificationParserConfig = await _bridge.saveNotificationParserProfiles(
+      notificationParserConfig,
+    );
+    final selectedExists = notificationParserProfiles.any(
+      (profile) => profile.id == selectedNotificationParserProfileId,
+    );
+    selectedNotificationParserProfileId = selectedExists
+        ? selectedNotificationParserProfileId
+        : _firstProfileId();
+    notifyListeners();
+  }
+
+  String? _firstProfileId() {
+    return notificationParserProfiles.isEmpty
+        ? null
+        : notificationParserProfiles.first.id;
+  }
 
   void selectInstalledApp(InstalledApp app) {
     final appName = app.displayName;

@@ -48,6 +48,8 @@ class TransactionLogList extends StatefulWidget {
 class _TransactionLogListState extends State<TransactionLogList> {
   static const _loadMoreThreshold = 320.0;
   static const _logListPrefetchExtent = 360.0;
+  static const _dateHeaderExtent = 34.0;
+  static const _logRowExtent = 80.0;
 
   bool _loadMoreScheduled = false;
   bool _loadMorePending = false;
@@ -94,6 +96,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
       child: ListView.builder(
         // ignore: deprecated_member_use
         cacheExtent: _logListPrefetchExtent,
+        itemExtentBuilder: (index, _) => _extentFor(logEntries[index]),
         addAutomaticKeepAlives: false,
         addSemanticIndexes: false,
         padding: const EdgeInsets.only(bottom: 96),
@@ -235,7 +238,8 @@ class _TransactionLogListState extends State<TransactionLogList> {
     final startedAt = DateTime.now();
     DebugConsole.log(
       '[Perf] LogList build entries=$entryCount hasMore=${widget.hasMore} '
-      'cache=${_fmt(_logListPrefetchExtent)} threshold=${_fmt(_loadMoreThreshold)}',
+      'cache=${_fmt(_logListPrefetchExtent)} threshold=${_fmt(_loadMoreThreshold)} '
+      'extentMode=builder header=${_fmt(_dateHeaderExtent)} row=${_fmt(_logRowExtent)}',
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -255,7 +259,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
         : DateTime.now().difference(startedAt).inMilliseconds;
     DebugConsole.log(
       '[Perf] LogList item-build id=$buildPassId index=$index '
-      'entries=$entryCount kind=$kind elapsed=${elapsed}ms',
+      'entries=$entryCount kind=$kind passElapsed=${elapsed}ms',
     );
   }
 
@@ -335,6 +339,11 @@ class _TransactionLogListState extends State<TransactionLogList> {
 
   String _fmt(double value) => value.toStringAsFixed(1);
 
+  double _extentFor(TransactionLogEntry entry) {
+    if (entry.header != null) return _dateHeaderExtent;
+    return _logRowExtent;
+  }
+
   List<TransactionLogEntry> _entries() {
     final entries = <TransactionLogEntry>[];
     String? previousDate;
@@ -373,15 +382,18 @@ class _DateHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SizedBox(
       key: ValueKey('transaction-date-group-$date'),
-      padding: const EdgeInsets.fromLTRB(24, 14, 24, 6),
-      child: Text(
-        date,
-        style: const TextStyle(
-          color: AppColors.gray500,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
+      height: _TransactionLogListState._dateHeaderExtent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+        child: Text(
+          date,
+          style: const TextStyle(
+            color: AppColors.gray500,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

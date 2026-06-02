@@ -102,6 +102,24 @@ void main() {
               },
             ];
           }
+          if (call.method == 'loadNotificationParserProfiles') {
+            return <String, Object?>{
+              'profiles': <Object?>[notificationParserProfilePayload()],
+            };
+          }
+          if (call.method == 'saveNotificationParserProfiles') {
+            return Map<dynamic, dynamic>.from(
+              call.arguments as Map<dynamic, dynamic>,
+            );
+          }
+          if (call.method == 'loadNotificationParserRule') {
+            return notificationParserProfilePayload();
+          }
+          if (call.method == 'saveNotificationParserRule') {
+            return Map<dynamic, dynamic>.from(
+              call.arguments as Map<dynamic, dynamic>,
+            );
+          }
           if (call.method == 'getStatus') {
             return <String, Object?>{
               'captureMode': 'both',
@@ -743,7 +761,7 @@ void main() {
     expect(savedTransactions.single['transactionCategoryID'], 6);
   });
 
-  testWidgets('settings contains push parser app filter input and app picker', (
+  testWidgets('settings contains push parser profiles and app picker', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -756,7 +774,15 @@ void main() {
     await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TextFormField), findsOneWidget);
+    expect(find.text('Profilok'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('notification-parser-profile-profile-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-parser-sample')),
+      findsOneWidget,
+    );
     expect(find.text('App regex'), findsOneWidget);
     expect(find.byTooltip('Pick installed app'), findsOneWidget);
 
@@ -769,6 +795,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Notification Test'), findsOneWidget);
   });
+}
+
+Map<String, Object?> notificationParserProfilePayload() {
+  return <String, Object?>{
+    'id': 'profile-1',
+    'name': 'Profil',
+    'enabled': true,
+    'appFilterText': '',
+    'packageName': '',
+    'appLabel': '',
+    'sampleText': 'Paid 999 Ft at Corner Shop',
+    'includeKeyword': '',
+    'amountPattern': r'(?<amount>\d+)\s*Ft',
+    'merchantPattern': r'at\s+(?<merchant>.+)',
+    'transactionType': 'expense',
+  };
 }
 
 Map<String, Object?> expenseBootstrapPayload() {

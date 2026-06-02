@@ -14,6 +14,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('budget bar geometry is 20 percent smaller with centered frame', () {
+    expect(BudgetBarGeometry.barHeight, moreOrLessEquals(43.2));
+    expect(BudgetBarGeometry.frameHeight, moreOrLessEquals(51.84));
+    expect(BudgetBarGeometry.frameHeight, lessThan(54));
+    expect(BudgetBarGeometry.barTop + BudgetBarGeometry.barHeight / 2, 107);
+    expect(BudgetBarGeometry.frameTop + BudgetBarGeometry.frameHeight / 2, 107);
+  });
+
   testWidgets('category budget stage shows labels and swipes category bars', (
     tester,
   ) async {
@@ -102,42 +110,43 @@ void main() {
     expect(find.text('Food'), findsOneWidget);
   });
 
-  testWidgets('long press on category bar jumps back to the overview budget bar', (
-    tester,
-  ) async {
-    BackheaderBudgetItem? activeItem;
-    final food = barFixture(6, 'Food', 100, 150);
-    final overview = BackheaderBudgetItem.overview(
-      overviewFixture(BudgetGoalKind.expenseBudget, 100, 300),
-    );
-    final category = BackheaderBudgetItem.category(food);
+  testWidgets(
+    'long press on category bar jumps back to the overview budget bar',
+    (tester) async {
+      BackheaderBudgetItem? activeItem;
+      final food = barFixture(6, 'Food', 100, 150);
+      final overview = BackheaderBudgetItem.overview(
+        overviewFixture(BudgetGoalKind.expenseBudget, 100, 300),
+      );
+      final category = BackheaderBudgetItem.category(food);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 260,
-            child: CategoryBudgetStage(
-              items: [overview, category],
-              categoryBars: [food],
-              activeKey: category.key,
-              onActiveItemChanged: (item) => activeItem = item,
-              onItemTap: (_) {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 260,
+              child: CategoryBudgetStage(
+                items: [overview, category],
+                categoryBars: [food],
+                activeKey: category.key,
+                onActiveItemChanged: (item) => activeItem = item,
+                onItemTap: (_) {},
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.text('Food'), findsOneWidget);
+      expect(find.text('Food'), findsOneWidget);
 
-    await tester.longPress(find.byKey(const ValueKey('category-budget-bar')));
-    await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const ValueKey('category-budget-bar')));
+      await tester.pumpAndSettle();
 
-    expect(activeItem?.overview?.kind, BudgetGoalKind.expenseBudget);
-    expect(find.text('Budget'), findsOneWidget);
-  });
+      expect(activeItem?.overview?.kind, BudgetGoalKind.expenseBudget);
+      expect(find.text('Budget'), findsOneWidget);
+    },
+  );
 
   testWidgets('category budget stage switches only when drag is released', (
     tester,
@@ -300,82 +309,86 @@ void main() {
     expect(fill.widthFactor, moreOrLessEquals(0.75, epsilon: 0.001));
   });
 
-  testWidgets('stage renders budget progress frame when overview limit exists', (
-    tester,
-  ) async {
-    final bars = [
-      barFixture(6, 'Food', 50, 0),
-      barFixture(7, 'Travel', 25, 0),
-      barFixture(8, 'Unused', 0, 0),
-    ];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 260,
-            child: CategoryBudgetStage(
-              items: [
-                BackheaderBudgetItem.overview(
-                  overviewFixture(BudgetGoalKind.expenseBudget, 70, 100),
-                ),
-                ...bars.map(BackheaderBudgetItem.category),
-              ],
-              categoryBars: bars,
-              onItemTap: (_) {},
+  testWidgets(
+    'stage renders budget progress frame when overview limit exists',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 50, 0),
+        barFixture(7, 'Travel', 25, 0),
+        barFixture(8, 'Unused', 0, 0),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 260,
+              child: CategoryBudgetStage(
+                items: [
+                  BackheaderBudgetItem.overview(
+                    overviewFixture(BudgetGoalKind.expenseBudget, 70, 100),
+                  ),
+                  ...bars.map(BackheaderBudgetItem.category),
+                ],
+                categoryBars: bars,
+                onItemTap: (_) {},
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byKey(const ValueKey('budget-progress-frame')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('budget-progress-frame-segment-0')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('budget-progress-frame-segment-1')),
-      findsOneWidget,
-    );
-    final frameRect = tester.getRect(
-      find.byKey(const ValueKey('budget-progress-frame')),
-    );
-    final segmentRect = tester.getRect(
-      find.byKey(const ValueKey('budget-progress-frame-segment-0')),
-    );
-    final maskRect = tester.getRect(
-      find.byKey(const ValueKey('budget-progress-frame-mask')),
-    );
-    final barRect = tester.getRect(
-      find.byKey(const ValueKey('category-budget-bar')),
-    );
-    expect(
-      frameRect.height,
-      moreOrLessEquals(BudgetBarGeometry.barHeight * 1.20, epsilon: 0.1),
-    );
-    expect(segmentRect.height, moreOrLessEquals(frameRect.height));
-    final frameBackground = tester.widget<DecoratedBox>(
-      find.byKey(const ValueKey('budget-progress-frame-background')),
-    );
-    final frameDecoration = frameBackground.decoration as BoxDecoration;
-    expect(frameDecoration.color, Colors.transparent);
-    expect(frameDecoration.boxShadow, isNull);
-    expect(maskRect, equals(barRect));
-    expect(
-      find.byKey(const ValueKey('budget-progress-frame-border')),
-      findsNothing,
-    );
-    final segmentColor = tester.widget<ColoredBox>(
-      find.descendant(
-        of: find.byKey(const ValueKey('budget-progress-frame-segment-0')),
-        matching: find.byType(ColoredBox),
-      ),
-    );
-    expect(segmentColor.color, segmentColor.color.withValues(alpha: 1));
-    expect(find.text('Budget'), findsOneWidget);
-    expect(find.text('70 Ft / 100 Ft'), findsOneWidget);
-  });
+      expect(
+        find.byKey(const ValueKey('budget-progress-frame')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-progress-frame-segment-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-progress-frame-segment-1')),
+        findsOneWidget,
+      );
+      final frameRect = tester.getRect(
+        find.byKey(const ValueKey('budget-progress-frame')),
+      );
+      final segmentRect = tester.getRect(
+        find.byKey(const ValueKey('budget-progress-frame-segment-0')),
+      );
+      final maskRect = tester.getRect(
+        find.byKey(const ValueKey('budget-progress-frame-mask')),
+      );
+      final barRect = tester.getRect(
+        find.byKey(const ValueKey('category-budget-bar')),
+      );
+      expect(
+        frameRect.height,
+        moreOrLessEquals(BudgetBarGeometry.barHeight * 1.20, epsilon: 0.1),
+      );
+      expect(segmentRect.height, moreOrLessEquals(frameRect.height));
+      final frameBackground = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('budget-progress-frame-background')),
+      );
+      final frameDecoration = frameBackground.decoration as BoxDecoration;
+      expect(frameDecoration.color, Colors.transparent);
+      expect(frameDecoration.boxShadow, isNull);
+      expect(maskRect, equals(barRect));
+      expect(
+        find.byKey(const ValueKey('budget-progress-frame-border')),
+        findsNothing,
+      );
+      final segmentColor = tester.widget<ColoredBox>(
+        find.descendant(
+          of: find.byKey(const ValueKey('budget-progress-frame-segment-0')),
+          matching: find.byType(ColoredBox),
+        ),
+      );
+      expect(segmentColor.color, segmentColor.color.withValues(alpha: 1));
+      expect(find.text('Budget'), findsOneWidget);
+      expect(find.text('70 Ft / 100 Ft'), findsOneWidget);
+    },
+  );
 
   testWidgets('stage renders warning border only when overview is high', (
     tester,
@@ -519,9 +532,7 @@ void main() {
     expect(savedAmount!, greaterThan(0));
   });
 
-  testWidgets('stage lowers labels and hides bottom controls', (
-    tester,
-  ) async {
+  testWidgets('stage lowers labels and hides bottom controls', (tester) async {
     final bars = [
       barFixture(6, 'Food', 100, 150),
       barFixture(7, 'Travel', 40, 0),
@@ -677,7 +688,6 @@ void main() {
 
     expect(tappedTargetId, 6);
   });
-
 }
 
 CategoryBudgetBarData barFixture(
@@ -716,7 +726,6 @@ CategoryBudgetBarData barFixture(
     sourceLimit: null,
   );
 }
-
 
 OverviewBudgetData overviewFixture(
   BudgetGoalKind kind,

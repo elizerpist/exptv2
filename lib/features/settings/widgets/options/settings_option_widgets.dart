@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_dimensions.dart';
 
 class SettingsSubmenuShell extends StatelessWidget {
   const SettingsSubmenuShell({
@@ -44,7 +45,17 @@ class SettingsSubmenuShell extends StatelessWidget {
             ],
           ),
         ),
-        Expanded(child: child),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(
+              bottom: AppDimensions.bottomNavHeight,
+            ),
+            child: SizedBox.expand(
+              key: const ValueKey('settings-submenu-content-frame'),
+              child: child,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -131,13 +142,11 @@ class SettingsOptionItem extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                  color: Color(0xFF374151),
-                  fontSize: 16,
-                ),
+                style: const TextStyle(color: Color(0xFF374151), fontSize: 16),
               ),
             ),
-            trailing ?? const Icon(Icons.chevron_right, color: AppColors.gray400),
+            trailing ??
+                const Icon(Icons.chevron_right, color: AppColors.gray400),
           ],
         ),
       ),
@@ -226,10 +235,7 @@ class SettingsRadioOption extends StatelessWidget {
                   ],
                 ),
               ),
-              if (preview != null) ...[
-                const SizedBox(width: 12),
-                preview!,
-              ],
+              if (preview != null) ...[const SizedBox(width: 12), preview!],
             ],
           ),
         ),

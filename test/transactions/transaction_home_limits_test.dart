@@ -1,14 +1,66 @@
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
+import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
+import 'package:exptv2/features/transactions/models/budget_goal_kind.dart';
+import 'package:exptv2/features/transactions/models/category_budget_bar_data.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/overview_budget_data.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/budget_target_editor_sheet.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('limit editor panel is trimmed to lower the save button', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final overview = OverviewBudgetData(
+      kind: BudgetGoalKind.expenseBudget,
+      window: LimitWindow.monthly,
+      periodKey: '2026-05',
+      amount: 100,
+      hasLimit: true,
+      limitAmount: 1000,
+      alertActive: false,
+      sourceLimit: null,
+    );
+    final item = BackheaderBudgetItem.overview(overview);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BudgetTargetEditorSheet(
+            item: item,
+            items: [item],
+            periodLabel: '2026 május',
+            categoryBars: const <CategoryBudgetBarData>[],
+            periodIncome: 1000,
+            onCancel: () {},
+            onActiveItemChanged: (_) {},
+            onSaveOverview:
+                (_, {required limitAmount, required alertActive}) async {},
+            onSaveCategory:
+                (_, {required limitAmount, required alertActive}) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final limitCard = tester.getRect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+    );
+    expect(SlideUpPanelMetrics.budgetBaseHeight, 432);
+    expect(limitCard.height, moreOrLessEquals(432, epsilon: 0.1));
+  });
+
   testWidgets(
     'expanded home stage saves first item as overview expense budget',
     (tester) async {

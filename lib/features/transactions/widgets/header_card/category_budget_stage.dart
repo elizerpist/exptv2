@@ -163,7 +163,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: AppColors.gray100,
-                    borderRadius: BorderRadius.circular(BudgetBarGeometry.radius),
+                    borderRadius: BorderRadius.circular(
+                      BudgetBarGeometry.radius,
+                    ),
                   ),
                 ),
               ),
@@ -216,7 +218,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: i == _index ? AppColors.primary : AppColors.white,
+                        color: i == _index
+                            ? AppColors.primary
+                            : AppColors.white,
                       ),
                     ),
                 ],
@@ -329,7 +333,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   double _periodIncome(List<CategoryBudgetBarData> bars) {
     for (final item in _items) {
       final overview = item.overview;
-      if (overview?.kind == BudgetGoalKind.incomeGoal) return overview!.amount;
+      if (overview?.kind == BudgetGoalKind.incomeGoal) {
+        return overview!.amount;
+      }
     }
     return bars
         .where((bar) => bar.transactionType == TransactionType.income)
@@ -339,7 +345,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   double _periodExpense(List<CategoryBudgetBarData> bars) {
     for (final item in _items) {
       final overview = item.overview;
-      if (overview?.kind == BudgetGoalKind.expenseBudget) return overview!.amount;
+      if (overview?.kind == BudgetGoalKind.expenseBudget) {
+        return overview!.amount;
+      }
     }
     return bars
         .where((bar) => bar.transactionType == TransactionType.expense)
@@ -417,9 +425,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }) {
     _slideController.stop();
     _slideController.duration = duration;
-    _slideAnimation = Tween<double>(begin: _dragDx, end: target).animate(
-      CurvedAnimation(parent: _slideController, curve: curve),
-    );
+    _slideAnimation = Tween<double>(
+      begin: _dragDx,
+      end: target,
+    ).animate(CurvedAnimation(parent: _slideController, curve: curve));
     return _slideController.forward(from: 0);
   }
 }
@@ -485,8 +494,12 @@ class _OverviewBudgetBar extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 15),
-                    child: Icon(icon, color: AppColors.white, size: 35),
+                    padding: EdgeInsets.only(left: height * 0.28),
+                    child: Icon(
+                      icon,
+                      color: AppColors.white,
+                      size: height * 0.65,
+                    ),
                   ),
                 ),
               ],

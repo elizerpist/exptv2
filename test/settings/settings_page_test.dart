@@ -1,3 +1,5 @@
+import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/core/theme/app_dimensions.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/state/event_store.dart';
@@ -8,8 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/settings_page_methods');
+  final savedParserRules = <Map<dynamic, dynamic>>[];
 
   setUp(() {
+    savedParserRules.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           switch (call.method) {
@@ -46,6 +50,44 @@ void main() {
                   ],
                 },
               };
+            case 'loadNotificationParserProfiles':
+              return <String, Object?>{
+                'profiles': <Object?>[
+                  <String, Object?>{
+                    'id': 'bank-a',
+                    'name': 'Bank A profil',
+                    'enabled': true,
+                    'appFilterText': r'^Bank A$',
+                    'sampleText': 'Paid 999 Ft at Corner Shop',
+                    'includeKeyword': 'Paid',
+                    'amountPattern': r'(?<amount>\d+)\s*Ft',
+                    'merchantPattern': r'at\s+(?<merchant>.+)',
+                    'transactionType': 'expense',
+                  },
+                ],
+              };
+            case 'saveNotificationParserProfiles':
+              savedParserRules.add(
+                Map<dynamic, dynamic>.from(
+                  call.arguments as Map<dynamic, dynamic>,
+                ),
+              );
+              return call.arguments;
+            case 'loadNotificationParserRule':
+              return <String, Object?>{
+                'enabled': true,
+                'sampleText': 'Paid 999 Ft at Corner Shop',
+                'includeKeyword': 'Paid',
+                'amountPattern': r'(?<amount>\d+)\s*Ft',
+                'merchantPattern': r'at\s+(?<merchant>.+)',
+              };
+            case 'saveNotificationParserRule':
+              savedParserRules.add(
+                Map<dynamic, dynamic>.from(
+                  call.arguments as Map<dynamic, dynamic>,
+                ),
+              );
+              return call.arguments;
             case 'expenseListRecurringTransactions':
               return <Map<String, Object?>>[recurringRow()];
             case 'expenseListCategories':
@@ -169,6 +211,185 @@ void main() {
     );
     final decoration = colorDot.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFF0EA5E9));
+  });
+
+  testWidgets(
+    'observed app settings manages parser profiles in teaching mode',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Profilok'), findsOneWidget);
+      expect(find.text('Bank A profil'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('notification-parser-add-profile')),
+        findsOneWidget,
+      );
+      expect(find.text('Tanító mód'), findsOneWidget);
+      expect(find.text('Haladó beállítások'), findsOneWidget);
+      expect(find.text('Összeg regex'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-type-income')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-type-income')).first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('notification-parser-sample')),
+        'Kártyás vásárlás: Tesco - 12 345 HUF',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find
+            .byKey(const ValueKey('notification-parser-token-12 345 HUF'))
+            .first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find
+            .byKey(const ValueKey('notification-parser-token-12 345 HUF'))
+            .first,
+      );
+      await tester.pumpAndSettle();
+
+      final amountFrame = tester.widget<Container>(
+        find
+            .byKey(const ValueKey('notification-parser-token-frame-12 345 HUF'))
+            .first,
+      );
+      final amountDecoration = amountFrame.decoration! as BoxDecoration;
+      expect((amountDecoration.border! as Border).top.color, AppColors.income);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-mode-merchant')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-mode-merchant')).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('notification-parser-token-Tesco')).first,
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('notification-parser-token-Tesco')).first,
+      );
+      await tester.pumpAndSettle();
+
+      final merchantFrame = tester.widget<Container>(
+        find
+            .byKey(const ValueKey('notification-parser-token-frame-Tesco'))
+            .first,
+      );
+      final merchantDecoration = merchantFrame.decoration! as BoxDecoration;
+      expect(
+        (merchantDecoration.border! as Border).top.color,
+        const Color(0xFFF97316),
+      );
+
+      expect(find.text('12 345 HUF').hitTestable(), findsWidgets);
+      expect(find.text('Tesco').hitTestable(), findsWidgets);
+
+      await tester.scrollUntilVisible(
+        find.text('Haladó beállítások'),
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.text('Haladó beállítások'));
+      await tester.pumpAndSettle();
+      expect(find.text('Összeg regex'), findsOneWidget);
+      expect(find.text('Bolt regex'), findsOneWidget);
+
+      final parsedAppScrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final saveButton = find.byKey(
+        const ValueKey('notification-parser-save-profile'),
+      );
+      for (var attempt = 0; attempt < 6; attempt += 1) {
+        if (saveButton.hitTestable().evaluate().isNotEmpty) break;
+        await tester.drag(parsedAppScrollable, const Offset(0, -280));
+        await tester.pumpAndSettle();
+      }
+      expect(saveButton.hitTestable(), findsOneWidget);
+      await tester.tap(saveButton.hitTestable().first);
+      await tester.pumpAndSettle();
+
+      expect(savedParserRules, isNotEmpty);
+      final profiles = savedParserRules.last['profiles'] as List<dynamic>;
+      final first = profiles.first as Map<dynamic, dynamic>;
+      expect(first['amountSelection'], '12 345 HUF');
+      expect(first['merchantSelection'], 'Tesco');
+      expect(first['transactionType'], 'income');
+    },
+  );
+
+  testWidgets('settings submenus stop above the bottom navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('FastInfo'));
+    await tester.pumpAndSettle();
+
+    final frame = tester.renderObject<RenderBox>(
+      find.byKey(const ValueKey('settings-submenu-content-frame')),
+    );
+    final bottom = frame.localToGlobal(Offset.zero).dy + frame.size.height;
+
+    expect(bottom, 1200 - AppDimensions.bottomNavHeight);
   });
 }
 

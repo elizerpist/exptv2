@@ -12,6 +12,7 @@ import 'package:exptv2/features/transactions/widgets/transaction_log_box.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_list.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_type_pills.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -609,6 +610,46 @@ void main() {
     expect(listView.cacheExtent, greaterThanOrEqualTo(300));
     expect(childDelegate.addAutomaticKeepAlives, isFalse);
     expect(childDelegate.addSemanticIndexes, isFalse);
+  });
+
+  testWidgets('log list declares stable extents for scroll performance', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 260,
+          child: TransactionLogList(
+            entries: [
+              TransactionLogEntry.header(record.date),
+              TransactionLogEntry.record(record),
+            ],
+            categoriesById: {category.transactionCategoryID: category},
+            hasMore: true,
+            onLoadMore: () {},
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final listView = tester.widget<ListView>(find.byType(ListView));
+    final dimensions = SliverLayoutDimensions(
+      scrollOffset: 0,
+      precedingScrollExtent: 0,
+      viewportMainAxisExtent: 260,
+      crossAxisExtent: tester.view.physicalSize.width,
+    );
+
+    expect(listView.itemExtentBuilder, isNotNull);
+    expect(listView.itemExtentBuilder!(0, dimensions), 34);
+    expect(listView.itemExtentBuilder!(1, dimensions), 80);
   });
 
   testWidgets('logbox left swipe triggers fast filter with category', (

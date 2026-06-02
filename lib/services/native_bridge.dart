@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../features/notifications/models/expense_notification_card.dart';
 import '../features/settings/models/app_theme_settings.dart';
 import '../features/settings/models/fast_info_config.dart';
+import '../features/settings/models/notification_parser_rule.dart';
 import '../features/settings/models/recurring_transaction.dart';
 import '../features/transactions/models/category_limit.dart';
 import '../features/transactions/models/recurring_ghost_record.dart';
@@ -460,6 +461,40 @@ class NativeBridge {
       {'monthKey': monthKey},
     );
     return count ?? 0;
+  }
+
+  Future<NotificationParserConfig> loadNotificationParserProfiles() async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'loadNotificationParserProfiles',
+    );
+    return NotificationParserConfig.fromMap(map ?? <dynamic, dynamic>{});
+  }
+
+  Future<NotificationParserConfig> saveNotificationParserProfiles(
+    NotificationParserConfig config,
+  ) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'saveNotificationParserProfiles',
+      config.toMap(),
+    );
+    return NotificationParserConfig.fromMap(map ?? config.toMap());
+  }
+
+  Future<NotificationParserRule> loadNotificationParserRule() async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'loadNotificationParserRule',
+    );
+    return NotificationParserRule.fromMap(map ?? <dynamic, dynamic>{});
+  }
+
+  Future<NotificationParserRule> saveNotificationParserRule(
+    NotificationParserRule rule,
+  ) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'saveNotificationParserRule',
+      rule.toMap(),
+    );
+    return NotificationParserRule.fromMap(map ?? rule.toMap());
   }
 
   Future<void> setCaptureMode(CaptureMode mode) async {
