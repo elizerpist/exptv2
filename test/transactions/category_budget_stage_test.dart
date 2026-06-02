@@ -228,32 +228,38 @@ void main() {
     );
   });
 
-  testWidgets('category bar width shrinks as spending consumes limit', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 300,
-            child: CategoryBudgetBar(
-              bar: barFixture(6, 'Food', 1000, 10000),
-              onTap: () {},
+  testWidgets(
+    'category bar foreground shrinks over full-width gray background',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 300,
+              child: CategoryBudgetBar(
+                bar: barFixture(6, 'Food', 5000, 10000),
+                onTap: () {},
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final bar = tester.getRect(
-      find.byKey(const ValueKey('category-budget-bar')),
-    );
-    expect(bar.width, moreOrLessEquals(270, epsilon: 0.5));
-    expect(
-      find.byKey(const ValueKey('category-budget-spent-overlay')),
-      findsNothing,
-    );
-  });
+      final background = tester.getRect(
+        find.byKey(const ValueKey('category-budget-background')),
+      );
+      final bar = tester.getRect(
+        find.byKey(const ValueKey('category-budget-bar')),
+      );
+      expect(background.width, moreOrLessEquals(300, epsilon: 0.5));
+      expect(bar.width, moreOrLessEquals(150, epsilon: 0.5));
+      expect(bar.left, moreOrLessEquals(background.left, epsilon: 0.1));
+      expect(
+        find.byKey(const ValueKey('category-budget-spent-overlay')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('category bar keeps minimum icon width at full spending', (
     tester,
@@ -272,9 +278,13 @@ void main() {
       ),
     );
 
+    final background = tester.getRect(
+      find.byKey(const ValueKey('category-budget-background')),
+    );
     final bar = tester.getRect(
       find.byKey(const ValueKey('category-budget-bar')),
     );
+    expect(background.width, moreOrLessEquals(300, epsilon: 0.5));
     expect(bar.width, moreOrLessEquals(84, epsilon: 0.5));
   });
 
@@ -331,6 +341,9 @@ void main() {
       ),
     );
 
+    final mask = tester.getRect(
+      find.byKey(const ValueKey('budget-progress-frame-mask')),
+    );
     final bar = tester.getRect(
       find.byKey(const ValueKey('category-budget-bar')),
     );
@@ -339,7 +352,8 @@ void main() {
     );
     expect(fillFinder, findsNothing);
     // Stage width 390 minus 40 px insets on each side gives a 310 px slot.
-    // Remaining ratio is 0.75, so the visible bar is 232.5 px wide.
+    // The gray mask remains full width; the visible bar uses the 0.75 ratio.
+    expect(mask.width, moreOrLessEquals(310, epsilon: 0.5));
     expect(bar.width, moreOrLessEquals(232.5, epsilon: 0.5));
   });
 
@@ -407,8 +421,9 @@ void main() {
       final frameDecoration = frameBackground.decoration as BoxDecoration;
       expect(frameDecoration.color, Colors.transparent);
       expect(frameDecoration.boxShadow, isNull);
-      expect(maskRect, equals(barRect));
-      expect(maskRect.width, moreOrLessEquals(barRect.width, epsilon: 0.1));
+      expect(maskRect.width, greaterThan(barRect.width));
+      expect(maskRect.height, moreOrLessEquals(barRect.height, epsilon: 0.1));
+      expect(maskRect.left, moreOrLessEquals(barRect.left, epsilon: 0.1));
       expect(
         find.byKey(const ValueKey('budget-progress-frame-border')),
         findsNothing,
@@ -612,36 +627,37 @@ void main() {
     );
   });
 
-  testWidgets('stage title and amount use matching enlarged font size', (
-    tester,
-  ) async {
-    final bars = [barFixture(6, 'Food', 100, 150)];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 260,
-            child: CategoryBudgetStage(
-              items: bars.map(BackheaderBudgetItem.category).toList(),
-              categoryBars: bars,
-              onItemTap: (_) {},
+  testWidgets(
+    'stage title stays enlarged while amount returns to compact size',
+    (tester) async {
+      final bars = [barFixture(6, 'Food', 100, 150)];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 260,
+              child: CategoryBudgetStage(
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onItemTap: (_) {},
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final title = tester.widget<Text>(
-      find.byKey(const ValueKey('backheader-active-title')),
-    );
-    final amount = tester.widget<Text>(
-      find.byKey(const ValueKey('backheader-active-amount')),
-    );
+      final title = tester.widget<Text>(
+        find.byKey(const ValueKey('backheader-active-title')),
+      );
+      final amount = tester.widget<Text>(
+        find.byKey(const ValueKey('backheader-active-amount')),
+      );
 
-    expect(title.style!.fontSize, moreOrLessEquals(16.5, epsilon: 0.01));
-    expect(amount.style!.fontSize, moreOrLessEquals(16.5, epsilon: 0.01));
-  });
+      expect(title.style!.fontSize, moreOrLessEquals(16.5, epsilon: 0.01));
+      expect(amount.style!.fontSize, moreOrLessEquals(13, epsilon: 0.01));
+    },
+  );
 
   testWidgets('progress frame keeps vertical overhang around active bar', (
     tester,

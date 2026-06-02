@@ -36,39 +36,60 @@ class CategoryBudgetBar extends StatelessWidget {
           height: height,
           ratio: remainingRatio,
         );
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: width,
-            child: Material(
-              key: const ValueKey('category-budget-bar'),
-              color: Colors.transparent,
-              elevation: 8,
-              shadowColor: Colors.black.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(height / 2),
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(height / 2),
-                child: ClipRRect(
+        return SizedBox(
+          height: height,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              SizedBox(
+                key: const ValueKey('category-budget-background'),
+                width: constraints.maxWidth,
+                height: height,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.gray100,
+                    borderRadius: BorderRadius.circular(height / 2),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: width,
+                child: Material(
+                  key: const ValueKey('category-budget-bar'),
+                  color: Colors.transparent,
+                  elevation: 8,
+                  shadowColor: Colors.black.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(height / 2),
-                  child: SizedBox(
-                    height: height,
-                    child: ColoredBox(
-                      key: const ValueKey('category-budget-remaining-fill'),
-                      color: bar.color,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(left: iconLeftPadding),
-                          child: Image(
-                            image: CategoryIconManager.assetImage(bar.iconSlot),
-                            width: compactIcon ? iconSize : height * 0.64,
-                            height: compactIcon ? iconSize : height * 0.64,
-                            color: AppColors.white,
-                            errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.category_outlined,
-                              color: AppColors.white,
-                              size: compactIcon ? iconSize : height * 0.64,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(height / 2),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(height / 2),
+                      child: SizedBox(
+                        height: height,
+                        child: ColoredBox(
+                          key: const ValueKey('category-budget-remaining-fill'),
+                          color: bar.color,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: EdgeInsets.only(left: iconLeftPadding),
+                              child: Image(
+                                image: CategoryIconManager.assetImage(
+                                  bar.iconSlot,
+                                ),
+                                width: compactIcon ? iconSize : height * 0.64,
+                                height: compactIcon ? iconSize : height * 0.64,
+                                color: AppColors.white,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(
+                                      Icons.category_outlined,
+                                      color: AppColors.white,
+                                      size: compactIcon
+                                          ? iconSize
+                                          : height * 0.64,
+                                    ),
+                              ),
                             ),
                           ),
                         ),
@@ -77,7 +98,7 @@ class CategoryBudgetBar extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         );
       },

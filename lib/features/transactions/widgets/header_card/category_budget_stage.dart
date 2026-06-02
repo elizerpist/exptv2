@@ -140,7 +140,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                     style: const TextStyle(
                       color: AppColors.gray800,
                       fontWeight: FontWeight.w700,
-                      fontSize: 16.5,
+                      fontSize: 13,
                     ),
                   ),
                 ),
@@ -162,30 +162,17 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               top: BudgetBarGeometry.barTop,
               left: BudgetBarGeometry.barHorizontalInset,
               right: BudgetBarGeometry.barHorizontalInset,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = BudgetBarGeometry.visibleWidth(
-                    availableWidth: constraints.maxWidth,
-                    height: BudgetBarGeometry.barHeight,
-                    ratio: _visibleRatioFor(current),
-                  );
-                  return Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      key: const ValueKey('budget-progress-frame-mask'),
-                      width: width,
-                      height: BudgetBarGeometry.barHeight,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: AppColors.gray100,
-                          borderRadius: BorderRadius.circular(
-                            BudgetBarGeometry.radius,
-                          ),
-                        ),
-                      ),
+              child: SizedBox(
+                key: const ValueKey('budget-progress-frame-mask'),
+                height: BudgetBarGeometry.barHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.gray100,
+                    borderRadius: BorderRadius.circular(
+                      BudgetBarGeometry.radius,
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ],
@@ -324,28 +311,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       if (overview != null && overview.hasLimit) return overview;
     }
     return null;
-  }
-
-  double _visibleRatioFor(BackheaderBudgetItem item) {
-    final category = item.category;
-    if (category != null) {
-      if (!category.hasLimit || category.limitAmount <= 0) return 1.0;
-      final spentRatio = (category.spent / category.limitAmount)
-          .clamp(0.0, 1.0)
-          .toDouble();
-      return (1.0 - spentRatio).clamp(0.0, 1.0).toDouble();
-    }
-    final overview = item.overview;
-    if (overview == null || !overview.hasLimit || overview.limitAmount <= 0) {
-      return 1.0;
-    }
-    final progressRatio = (overview.amount / overview.limitAmount)
-        .clamp(0.0, 1.0)
-        .toDouble();
-    if (overview.kind.warnsWhenHigh) {
-      return (1.0 - progressRatio).clamp(0.0, 1.0).toDouble();
-    }
-    return progressRatio;
   }
 
   BudgetProgressData _progressFor(
@@ -510,36 +475,52 @@ class _OverviewBudgetBar extends StatelessWidget {
           height: height,
           ratio: visibleRatio,
         );
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: width,
-            child: Material(
-              key: const ValueKey('category-budget-bar'),
-              color: Colors.transparent,
-              elevation: 8,
-              shadowColor: Colors.black.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(height / 2),
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(height / 2),
-                child: ClipRRect(
+        return SizedBox(
+          height: height,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              SizedBox(
+                key: const ValueKey('category-budget-background'),
+                width: constraints.maxWidth,
+                height: height,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.gray100,
+                    borderRadius: BorderRadius.circular(height / 2),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: width,
+                child: Material(
+                  key: const ValueKey('category-budget-bar'),
+                  color: Colors.transparent,
+                  elevation: 8,
+                  shadowColor: Colors.black.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(height / 2),
-                  child: SizedBox(
-                    height: height,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(height / 2),
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(left: height * 0.28),
-                          child: Icon(
-                            icon,
-                            color: AppColors.white,
-                            size: height * 0.65,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(height / 2),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(height / 2),
+                      child: SizedBox(
+                        height: height,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(height / 2),
+                          ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: EdgeInsets.only(left: height * 0.28),
+                              child: Icon(
+                                icon,
+                                color: AppColors.white,
+                                size: height * 0.65,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -547,7 +528,7 @@ class _OverviewBudgetBar extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         );
       },

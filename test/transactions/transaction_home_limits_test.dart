@@ -76,75 +76,122 @@ void main() {
     },
   );
 
-  testWidgets(
-    'limit editor lays out period avatar title progress slider input save in order',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('limit editor handle starts near the sheet top', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final overview = OverviewBudgetData(
-        kind: BudgetGoalKind.expenseBudget,
-        window: LimitWindow.monthly,
-        periodKey: '2026-05',
-        amount: 100,
-        hasLimit: true,
-        limitAmount: 1000,
-        alertActive: false,
-        sourceLimit: null,
-      );
-      final item = BackheaderBudgetItem.overview(overview);
+    final overview = OverviewBudgetData(
+      kind: BudgetGoalKind.expenseBudget,
+      window: LimitWindow.monthly,
+      periodKey: '2026-05',
+      amount: 100,
+      hasLimit: true,
+      limitAmount: 1000,
+      alertActive: false,
+      sourceLimit: null,
+    );
+    final item = BackheaderBudgetItem.overview(overview);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: BudgetTargetEditorSheet(
-              item: item,
-              items: [item],
-              periodLabel: '2026 május',
-              categoryBars: const <CategoryBudgetBarData>[],
-              periodIncome: 1000,
-              onCancel: () {},
-              onActiveItemChanged: (_) {},
-              onSaveOverview:
-                  (_, {required limitAmount, required alertActive}) async {},
-              onSaveCategory:
-                  (_, {required limitAmount, required alertActive}) async {},
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BudgetTargetEditorSheet(
+            item: item,
+            items: [item],
+            periodLabel: '2026 május',
+            categoryBars: const <CategoryBudgetBarData>[],
+            periodIncome: 1000,
+            onCancel: () {},
+            onActiveItemChanged: (_) {},
+            onSaveOverview:
+                (_, {required limitAmount, required alertActive}) async {},
+            onSaveCategory:
+                (_, {required limitAmount, required alertActive}) async {},
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      final period = tester.getRect(
-        find.byKey(const ValueKey('limit-card-period-label')),
-      );
-      final avatar = tester.getRect(
-        find.byKey(const ValueKey('limit-card-avatar')),
-      );
-      final title = tester.getRect(
-        find.byKey(const ValueKey('limit-card-title')),
-      );
-      final progress = tester.getRect(
-        find.byKey(const ValueKey('category-limit-partition-bar')),
-      );
-      final slider = tester.getRect(
-        find.byKey(const ValueKey('category-limit-slider')),
-      );
-      final input = tester.getRect(
-        find.byKey(const ValueKey('limit-amount-input')),
-      );
-      final save = tester.getRect(
-        find.byKey(const ValueKey('limit-save-button')),
-      );
+    final limitCard = tester.getRect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+    );
+    final handle = tester.getRect(
+      find.byKey(const ValueKey('limit-card-drag-handle')),
+    );
 
-      expect(period.top, lessThan(avatar.top));
-      expect(avatar.bottom, lessThan(title.top));
-      expect(title.bottom, lessThan(progress.top));
-      expect(progress.bottom, lessThan(slider.top));
-      expect(slider.bottom, lessThan(input.top));
-      expect(input.bottom, lessThan(save.top));
-    },
-  );
+    expect(handle.top - limitCard.top, lessThanOrEqualTo(16));
+  });
+
+  testWidgets('limit editor keeps avatar above combined title and period row', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final overview = OverviewBudgetData(
+      kind: BudgetGoalKind.expenseBudget,
+      window: LimitWindow.monthly,
+      periodKey: '2026-05',
+      amount: 100,
+      hasLimit: true,
+      limitAmount: 1000,
+      alertActive: false,
+      sourceLimit: null,
+    );
+    final item = BackheaderBudgetItem.overview(overview);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BudgetTargetEditorSheet(
+            item: item,
+            items: [item],
+            periodLabel: '2026 május',
+            categoryBars: const <CategoryBudgetBarData>[],
+            periodIncome: 1000,
+            onCancel: () {},
+            onActiveItemChanged: (_) {},
+            onSaveOverview:
+                (_, {required limitAmount, required alertActive}) async {},
+            onSaveCategory:
+                (_, {required limitAmount, required alertActive}) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final period = tester.getRect(
+      find.byKey(const ValueKey('limit-card-period-label')),
+    );
+    final avatar = tester.getRect(
+      find.byKey(const ValueKey('limit-card-avatar')),
+    );
+    final title = tester.getRect(
+      find.byKey(const ValueKey('limit-card-title')),
+    );
+    final progress = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    final slider = tester.getRect(
+      find.byKey(const ValueKey('category-limit-slider')),
+    );
+    final input = tester.getRect(
+      find.byKey(const ValueKey('limit-amount-input')),
+    );
+    final save = tester.getRect(
+      find.byKey(const ValueKey('limit-save-button')),
+    );
+
+    expect(avatar.bottom, lessThanOrEqualTo(title.top));
+    expect(avatar.bottom, lessThanOrEqualTo(period.top));
+    expect(period.center.dy, moreOrLessEquals(title.center.dy, epsilon: 1.0));
+    expect(title.bottom, lessThan(progress.top));
+    expect(progress.bottom, lessThan(slider.top));
+    expect(slider.bottom, lessThan(input.top));
+    expect(input.bottom, lessThan(save.top));
+  });
 
   testWidgets('limit editor avatar is 20 percent smaller', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -504,8 +551,9 @@ void main() {
         find.byKey(const ValueKey('limit-save-button')),
       );
 
-      expect(period.top, lessThan(avatar.top));
       expect(avatar.bottom, lessThanOrEqualTo(title.top));
+      expect(avatar.bottom, lessThanOrEqualTo(period.top));
+      expect(period.center.dy, moreOrLessEquals(title.center.dy, epsilon: 1.0));
       expect(partition.top, greaterThanOrEqualTo(title.bottom));
       expect(partition.height, moreOrLessEquals(18.8, epsilon: 0.2));
       expect(slider.top, greaterThan(partition.bottom));
