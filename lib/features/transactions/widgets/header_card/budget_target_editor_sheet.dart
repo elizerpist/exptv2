@@ -144,36 +144,51 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
             return Column(
               children: [
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.only(
-                      left: horizontalInset,
-                      right: horizontalInset,
-                      top: 20,
-                      bottom: 16,
-                    ),
-                    child: _BudgetLimitCard(
-                      item: _activeItem,
-                      periodLabel: widget.periodLabel,
-                      amountController: _controller,
-                      amountFocusNode: _amountFocus,
-                      inputLabel: _inputLabel,
-                      activeColor: _activeColor,
-                      sliderValue: _sliderRange.value,
-                      sliderMax: _sliderRange.max,
-                      sliderEnabled: _sliderRange.enabled,
-                      sliderDivisions: _sliderRange.divisions,
-                      saving: _saving,
-                      onPrevious: _selectPrevious,
-                      onNext: _selectNext,
-                      onAvatarDoubleTap: _selectOverviewItem,
-                      onReset: _resetLimit,
-                      onSliderChanged: _setAmountFromSlider,
-                      onSliderChangeEnd: _setAmountFromSlider,
-                      onInputChanged: _captureInputAmount,
-                      onSetToMax: _setOverviewToMax,
-                      showSetToMax: _activeItem.overview != null,
-                      partitionBar: _buildPartitionBar(),
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.only(
+                          left: horizontalInset,
+                          right: horizontalInset,
+                          top: 20,
+                          bottom: 8,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: math.max(
+                              0.0,
+                              constraints.maxHeight - 28,
+                            ),
+                          ),
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: _BudgetLimitCard(
+                              item: _activeItem,
+                              periodLabel: widget.periodLabel,
+                              amountController: _controller,
+                              amountFocusNode: _amountFocus,
+                              inputLabel: _inputLabel,
+                              activeColor: _activeColor,
+                              sliderValue: _sliderRange.value,
+                              sliderMax: _sliderRange.max,
+                              sliderEnabled: _sliderRange.enabled,
+                              sliderDivisions: _sliderRange.divisions,
+                              saving: _saving,
+                              onPrevious: _selectPrevious,
+                              onNext: _selectNext,
+                              onAvatarDoubleTap: _selectOverviewItem,
+                              onReset: _resetLimit,
+                              onSliderChanged: _setAmountFromSlider,
+                              onSliderChangeEnd: _setAmountFromSlider,
+                              onInputChanged: _captureInputAmount,
+                              onSetToMax: _setOverviewToMax,
+                              showSetToMax: _activeItem.overview != null,
+                              partitionBar: _buildPartitionBar(),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Padding(
@@ -657,7 +672,27 @@ class _BudgetLimitCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 10),
+        Center(
+          child: Container(
+            key: const ValueKey('limit-card-period-label'),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.gray100,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.gray200),
+            ),
+            child: Text(
+              periodLabel,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gray600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             IconButton(
@@ -685,47 +720,22 @@ class _BudgetLimitCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            Text(
-              item.title,
-              key: const ValueKey('limit-card-title'),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gray800,
-              ),
-            ),
-            Container(
-              key: const ValueKey('limit-card-period-label'),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.gray100,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.gray200),
-              ),
-              child: Text(
-                periodLabel,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.gray600,
-                ),
-              ),
-            ),
-          ],
+        const SizedBox(height: 6),
+        Text(
+          item.title,
+          key: const ValueKey('limit-card-title'),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.gray800,
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         partitionBar,
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         CategoryLimitSlider(
           value: sliderValue,
           max: sliderMax,
@@ -810,8 +820,8 @@ class _LimitAvatar extends StatelessWidget {
     final icon = _overviewIcon(item.overview?.kind);
     return Container(
       key: const ValueKey('limit-card-avatar'),
-      width: 62,
-      height: 62,
+      width: 50,
+      height: 50,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
@@ -825,16 +835,16 @@ class _LimitAvatar extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: category == null
-          ? Icon(icon, color: AppColors.white, size: 34)
+          ? Icon(icon, color: AppColors.white, size: 27)
           : Image(
               image: CategoryIconManager.assetImage(category.iconSlot),
-              width: 36,
-              height: 36,
+              width: 29,
+              height: 29,
               color: AppColors.white,
               errorBuilder: (context, error, stackTrace) => const Icon(
                 Icons.category_outlined,
                 color: AppColors.white,
-                size: 34,
+                size: 27,
               ),
             ),
     );
