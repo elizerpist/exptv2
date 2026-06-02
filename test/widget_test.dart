@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
+final updatedThemeSettings = <Map<dynamic, dynamic>>[];
 final deletedTransactionIds = <int>[];
 
 void main() {
@@ -20,6 +21,7 @@ void main() {
     DebugConsole.clear();
     savedTransactions.clear();
     updatedTransactions.clear();
+    updatedThemeSettings.clear();
     deletedTransactionIds.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
@@ -37,12 +39,20 @@ void main() {
                 'theme': 'Türkiz',
                 'backgroundColor': 'gray',
                 'boxColor': 'gray',
+                'backheaderStyle': 'classic',
               },
               'fastInfoConfig': <String, Object?>{
                 'pills': <Object?>[null, null, null],
                 'boxes': <Object?>[null, null, null],
               },
             };
+          }
+          if (call.method == 'expenseUpdateThemeSettings') {
+            final payload = Map<dynamic, dynamic>.from(
+              call.arguments as Map<dynamic, dynamic>,
+            );
+            updatedThemeSettings.add(payload);
+            return payload;
           }
           if (call.method == 'expenseListRecurringTransactions') {
             return <Map<String, Object?>>[];
@@ -760,6 +770,35 @@ void main() {
     expect(savedTransactions.single['amount'], 42.0);
     expect(savedTransactions.single['type'], 'expense');
     expect(savedTransactions.single['transactionCategoryID'], 6);
+  });
+
+  testWidgets('settings contains Backheader style selector', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    final backheaderOption = find.ancestor(
+      of: find.text('Backheader'),
+      matching: find.byType(InkWell),
+    );
+    expect(backheaderOption, findsOneWidget);
+    await tester.ensureVisible(backheaderOption);
+    await tester.pumpAndSettle();
+    await tester.tap(backheaderOption);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jelenlegi bar rendszer (jelenlegi)'), findsOneWidget);
+    expect(find.text('A - Color Field Partition'), findsOneWidget);
+    expect(find.text('F - Ledger Strip'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('E - Mosaic Budget'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('E - Mosaic Budget'));
+    await tester.pumpAndSettle();
+
+    expect(updatedThemeSettings.single['backheaderStyle'], 'mosaicBudget');
   });
 
   testWidgets('settings contains push parser profiles and app picker', (

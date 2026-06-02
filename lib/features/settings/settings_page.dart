@@ -12,6 +12,7 @@ import 'models/fast_info_config.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
+import 'widgets/options/backheader_style_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
 import 'widgets/options/recurring_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
@@ -26,6 +27,7 @@ enum _SettingsMenu {
   recurring,
   currency,
   language,
+  backheader,
   theme,
   exportData,
   importData,
@@ -181,6 +183,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () => _open(_SettingsMenu.language),
                 ),
                 SettingsOptionItem(
+                  title: 'Backheader',
+                  onTap: () => _open(_SettingsMenu.backheader),
+                ),
+                SettingsOptionItem(
                   title: 'Téma',
                   onTap: () => _open(_SettingsMenu.theme),
                   isLast: true,
@@ -317,6 +323,10 @@ class _SettingsPageState extends State<SettingsPage> {
         settings: _settingsStore.themeSettings,
         onChanged: _updateThemeSettings,
       ),
+      _SettingsMenu.backheader => BackheaderStyleOptionsPanel(
+        settings: _settingsStore.themeSettings,
+        onChanged: _updateThemeSettings,
+      ),
       _SettingsMenu.recurring => RecurringOptionsPanel(store: _settingsStore),
       _SettingsMenu.currency => const SimpleOptionsPanel(
         title: 'Pénznem kiválasztása',
@@ -366,6 +376,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.recurring => 'Ismétlődő tranzakciók',
       _SettingsMenu.currency => 'Pénznem Beállítások',
       _SettingsMenu.language => 'Nyelv Beállítások',
+      _SettingsMenu.backheader => 'Backheader',
       _SettingsMenu.theme => 'Téma Beállítások',
       _SettingsMenu.exportData => 'Adatok Exportálása',
       _SettingsMenu.importData => 'Adatok Importálása',
