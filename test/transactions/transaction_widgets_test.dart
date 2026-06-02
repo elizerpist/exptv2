@@ -85,6 +85,37 @@ void main() {
     expect(periods, [1, -1]);
   });
 
+  testWidgets('summary pill waits for drag release before changing period', (
+    tester,
+  ) async {
+    final periods = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Május 2026',
+          value: '-66 Ft',
+          onIntervalSwipe: () {},
+          onPeriodSwipe: periods.add,
+          onResetToCurrentMonth: () {},
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byKey(const ValueKey('summary-pill')));
+    final gesture = await tester.startGesture(center);
+    await gesture.moveBy(const Offset(-40, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-70, 0));
+    await tester.pump();
+
+    expect(periods, isEmpty);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(periods, [1]);
+  });
+
   testWidgets('summary pill double tap resets to current month', (
     tester,
   ) async {
@@ -541,7 +572,9 @@ void main() {
     final childDelegate =
         listView.childrenDelegate as SliverChildBuilderDelegate;
     // ignore: deprecated_member_use
-    expect(listView.cacheExtent, greaterThanOrEqualTo(1000));
+    expect(listView.cacheExtent, lessThanOrEqualTo(500));
+    // ignore: deprecated_member_use
+    expect(listView.cacheExtent, greaterThanOrEqualTo(300));
     expect(childDelegate.addAutomaticKeepAlives, isFalse);
     expect(childDelegate.addSemanticIndexes, isFalse);
   });

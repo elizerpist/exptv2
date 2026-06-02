@@ -47,7 +47,7 @@ class TransactionLogList extends StatefulWidget {
 
 class _TransactionLogListState extends State<TransactionLogList> {
   static const _loadMoreThreshold = 320.0;
-  static const _logListPrefetchExtent = 1200.0;
+  static const _logListPrefetchExtent = 360.0;
 
   bool _loadMoreScheduled = false;
   int? _lastRequestedEntryCount;

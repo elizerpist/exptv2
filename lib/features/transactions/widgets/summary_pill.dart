@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -30,6 +32,8 @@ class _SummaryPillState extends State<SummaryPill>
   double _dragDx = 0;
   double _dragDy = 0;
   bool _triggered = false;
+  int? _pendingPeriodDirection;
+  var _pendingInterval = false;
 
   @override
   void initState() {
@@ -56,29 +60,64 @@ class _SummaryPillState extends State<SummaryPill>
     _visualOffset.value = animation.value;
   }
 
-  void _resetDrag() {
-    _dragDx = 0;
-    _dragDy = 0;
-    _triggered = false;
+  void _settleVisual({VoidCallback? onSettled}) {
     final start = _visualOffset.value;
     _settleController.stop();
     if (start == Offset.zero) {
       _settleAnimation = null;
+      onSettled?.call();
       return;
     }
     _settleAnimation = Tween<Offset>(begin: start, end: Offset.zero).animate(
       CurvedAnimation(parent: _settleController, curve: Curves.easeOutCubic),
     );
-    _settleController.forward(from: 0);
+    unawaited(
+      _settleController.forward(from: 0).whenComplete(() {
+        if (!mounted) return;
+        _settleAnimation = null;
+        onSettled?.call();
+      }),
+    );
+  }
+
+  void _clearDragState() {
+    _dragDx = 0;
+    _dragDy = 0;
+    _triggered = false;
   }
 
   void _startDrag() {
     _settleController.stop();
     _settleAnimation = null;
-    _dragDx = 0;
-    _dragDy = 0;
-    _triggered = false;
+    _pendingPeriodDirection = null;
+    _pendingInterval = false;
+    _clearDragState();
     _visualOffset.value = Offset.zero;
+  }
+
+  void _cancelDrag() {
+    _pendingPeriodDirection = null;
+    _pendingInterval = false;
+    _clearDragState();
+    _settleVisual();
+  }
+
+  void _endDrag() {
+    final shouldFire = _pendingInterval || _pendingPeriodDirection != null;
+    _clearDragState();
+    _settleVisual(onSettled: shouldFire ? _firePendingAction : null);
+  }
+
+  void _firePendingAction() {
+    final periodDirection = _pendingPeriodDirection;
+    final interval = _pendingInterval;
+    _pendingPeriodDirection = null;
+    _pendingInterval = false;
+    if (interval) {
+      widget.onIntervalSwipe();
+      return;
+    }
+    if (periodDirection != null) widget.onPeriodSwipe(periodDirection);
   }
 
   void _handleHorizontalDragUpdate(DragUpdateDetails details) {
@@ -91,7 +130,7 @@ class _SummaryPillState extends State<SummaryPill>
     if (_dragDx.abs() < 60) return;
 
     _triggered = true;
-    widget.onPeriodSwipe(_dragDx < 0 ? 1 : -1);
+    _pendingPeriodDirection = _dragDx < 0 ? 1 : -1;
   }
 
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
@@ -104,7 +143,7 @@ class _SummaryPillState extends State<SummaryPill>
     if (_dragDy.abs() < 60) return;
 
     _triggered = true;
-    widget.onIntervalSwipe();
+    _pendingInterval = true;
   }
 
   @override
@@ -114,12 +153,12 @@ class _SummaryPillState extends State<SummaryPill>
       onDoubleTap: widget.onResetToCurrentMonth,
       onHorizontalDragStart: (_) => _startDrag(),
       onHorizontalDragUpdate: _handleHorizontalDragUpdate,
-      onHorizontalDragCancel: _resetDrag,
-      onHorizontalDragEnd: (_) => _resetDrag(),
+      onHorizontalDragCancel: _cancelDrag,
+      onHorizontalDragEnd: (_) => _endDrag(),
       onVerticalDragStart: (_) => _startDrag(),
       onVerticalDragUpdate: _handleVerticalDragUpdate,
-      onVerticalDragCancel: _resetDrag,
-      onVerticalDragEnd: (_) => _resetDrag(),
+      onVerticalDragCancel: _cancelDrag,
+      onVerticalDragEnd: (_) => _endDrag(),
       child: ValueListenableBuilder<Offset>(
         key: const ValueKey('summary-pill-transform'),
         valueListenable: _visualOffset,

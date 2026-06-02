@@ -308,7 +308,7 @@ void main() {
 
       final nextEntries = store.visibleDisplayLogEntries;
       expect(nextEntries.length, greaterThan(initialEntries.length));
-      expect(nextEntries.length - initialEntries.length, lessThanOrEqualTo(70));
+      expect(nextEntries.length - initialEntries.length, lessThanOrEqualTo(40));
     },
   );
 

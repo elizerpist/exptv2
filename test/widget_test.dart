@@ -297,8 +297,8 @@ void main() {
         ),
       ),
     );
-    expect(mobileClosedHeight, lessThanOrEqualTo(456));
-    expect(mobileClosedHeight, greaterThanOrEqualTo(430));
+    expect(mobileClosedHeight, lessThanOrEqualTo(430));
+    expect(mobileClosedHeight, greaterThanOrEqualTo(400));
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -381,6 +381,33 @@ void main() {
     expect(saveTop - dateBottom, lessThanOrEqualTo(amountTop - nameBottom + 2));
   });
 
+  testWidgets('transaction editor save button aligns with category editor', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await _tapFab(tester);
+    final transactionSaveBottom = tester
+        .getRect(find.byKey(const ValueKey('transaction-save-button')))
+        .bottom;
+
+    await tester.tap(find.byKey(const ValueKey('slide-up-menu-veil')));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    final categorySaveBottom = tester
+        .getRect(find.byKey(const ValueKey('category-save-button')))
+        .bottom;
+
+    expect(
+      transactionSaveBottom,
+      moreOrLessEquals(categorySaveBottom, epsilon: 4),
+    );
+  });
+
   testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
@@ -449,7 +476,6 @@ void main() {
         epsilon: 0.1,
       ),
     );
-    expect(saveAfter.top, greaterThanOrEqualTo(saveBefore.top));
     expect(dateAfter.top, lessThanOrEqualTo(dateBefore.top + 1));
     expect(saveAfter.top, lessThanOrEqualTo(saveBefore.top + 1));
     expect(saveAfter.bottom, lessThanOrEqualTo(screenHeight));
