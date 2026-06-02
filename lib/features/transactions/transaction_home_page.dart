@@ -127,6 +127,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             theme: AppTheme.turquoise,
             backgroundColor: AppBackgroundColor.gray,
             boxColor: AppBoxColor.gray,
+            backheaderStyle: BackheaderStyle.classic,
           ),
         );
     return ColoredBox(

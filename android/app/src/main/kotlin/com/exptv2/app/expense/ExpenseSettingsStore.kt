@@ -19,6 +19,7 @@ class ExpenseSettingsStore(context: Context) {
             "theme" to prefs.getString(KEY_THEME, "Türkiz"),
             "backgroundColor" to prefs.getString(KEY_BACKGROUND_COLOR, "gray"),
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
+            "backheaderStyle" to prefs.getString(KEY_BACKHEADER_STYLE, "classic"),
         )
     }
 
@@ -29,6 +30,7 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_THEME, args["theme"]?.toString() ?: "Türkiz")
             .putString(KEY_BACKGROUND_COLOR, args["backgroundColor"]?.toString() ?: "gray")
             .putString(KEY_BOX_COLOR, args["boxColor"]?.toString() ?: "gray")
+            .putString(KEY_BACKHEADER_STYLE, args["backheaderStyle"]?.toString() ?: "classic")
             .apply()
         return loadThemeSettings()
     }
@@ -93,6 +95,7 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_THEME = "theme"
         private const val KEY_BACKGROUND_COLOR = "backgroundColor"
         private const val KEY_BOX_COLOR = "boxColor"
+        private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_FAST_INFO = "fastInfoConfig"
     }
 }

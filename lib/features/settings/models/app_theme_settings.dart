@@ -17,6 +17,49 @@ enum MagnetType {
   }
 }
 
+enum BackheaderStyle {
+  classic('classic'),
+  colorFieldPartition('colorFieldPartition'),
+  partitionDashboard('partitionDashboard'),
+  heroToken('heroToken'),
+  orbitBudget('orbitBudget'),
+  mosaicBudget('mosaicBudget'),
+  ledgerStrip('ledgerStrip');
+
+  const BackheaderStyle(this.nativeValue);
+  final String nativeValue;
+
+  static BackheaderStyle fromAny(Object? value) {
+    final raw = value?.toString();
+    return BackheaderStyle.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => BackheaderStyle.classic,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    BackheaderStyle.classic => 'Jelenlegi bar rendszer',
+    BackheaderStyle.colorFieldPartition => 'A - Color Field Partition',
+    BackheaderStyle.partitionDashboard => 'B - Partition Dashboard',
+    BackheaderStyle.heroToken => 'C - Hero Token',
+    BackheaderStyle.orbitBudget => 'D - Orbit Budget',
+    BackheaderStyle.mosaicBudget => 'E - Mosaic Budget',
+    BackheaderStyle.ledgerStrip => 'F - Ledger Strip',
+  };
+
+  String get description => switch (this) {
+    BackheaderStyle.classic => 'A mostani kategória/overview bar rendszer',
+    BackheaderStyle.colorFieldPartition =>
+      'Kategóriaszínű felület közös partition strippel',
+    BackheaderStyle.partitionDashboard =>
+      'Sötét budget map partition blokkokkal',
+    BackheaderStyle.heroToken => 'Nagy aktív kategória token mini partitionnel',
+    BackheaderStyle.orbitBudget => 'Kategóriaszínű orbit/ring budget nézet',
+    BackheaderStyle.mosaicBudget => 'Treemap jellegű budget mosaic',
+    BackheaderStyle.ledgerStrip => 'Pénzügyi segment strip aktív labellel',
+  };
+}
+
 enum AppCardColor {
   white('white'),
   lightgray('lightgray'),
@@ -90,6 +133,7 @@ class AppThemeSettings {
     required this.theme,
     required this.backgroundColor,
     required this.boxColor,
+    required this.backheaderStyle,
   });
 
   factory AppThemeSettings.defaults() {
@@ -99,6 +143,7 @@ class AppThemeSettings {
       theme: AppTheme.turquoise,
       backgroundColor: AppBackgroundColor.gray,
       boxColor: AppBoxColor.gray,
+      backheaderStyle: BackheaderStyle.classic,
     );
   }
 
@@ -109,6 +154,7 @@ class AppThemeSettings {
       theme: AppTheme.fromAny(map['theme']),
       backgroundColor: AppBackgroundColor.fromAny(map['backgroundColor']),
       boxColor: AppBoxColor.fromAny(map['boxColor']),
+      backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
     );
   }
 
@@ -117,6 +163,7 @@ class AppThemeSettings {
   final AppTheme theme;
   final AppBackgroundColor backgroundColor;
   final AppBoxColor boxColor;
+  final BackheaderStyle backheaderStyle;
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -125,6 +172,7 @@ class AppThemeSettings {
       'theme': theme.nativeValue,
       'backgroundColor': backgroundColor.nativeValue,
       'boxColor': boxColor.nativeValue,
+      'backheaderStyle': backheaderStyle.nativeValue,
     };
   }
 
@@ -134,6 +182,7 @@ class AppThemeSettings {
     AppTheme? theme,
     AppBackgroundColor? backgroundColor,
     AppBoxColor? boxColor,
+    BackheaderStyle? backheaderStyle,
   }) {
     return AppThemeSettings(
       magnetType: magnetType ?? this.magnetType,
@@ -141,6 +190,7 @@ class AppThemeSettings {
       theme: theme ?? this.theme,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       boxColor: boxColor ?? this.boxColor,
+      backheaderStyle: backheaderStyle ?? this.backheaderStyle,
     );
   }
 }
