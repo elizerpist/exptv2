@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
 import '../../data/budget_progress_manager.dart';
 import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
@@ -23,6 +24,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.items,
     this.categoryBars,
     this.periodLabel,
+    this.backheaderStyle = BackheaderStyle.classic,
     this.activeKey,
     this.onActiveItemChanged,
     this.onItemTap,
@@ -33,6 +35,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final List<BackheaderBudgetItem>? items;
   final List<CategoryBudgetBarData>? categoryBars;
   final String? periodLabel;
+  final BackheaderStyle backheaderStyle;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
@@ -94,6 +97,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final frameProgress = frameOverview == null
         ? null
         : _progressFor(frameOverview, _categoryBars);
+    if (widget.backheaderStyle != BackheaderStyle.classic) {
+      return _buildExperimentalStage(
+        current: current,
+        items: items,
+        frameProgress: frameProgress,
+        frameOverview: frameOverview,
+      );
+    }
     return SizedBox(
       key: const ValueKey('category-budget-stage'),
       height: TransactionHeaderMetrics.cardHeight,
@@ -204,6 +215,89 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   ),
                 );
               },
+            ),
+          ),
+          if (items.length > 1)
+            Positioned(
+              top: 150,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < items.length; i += 1)
+                    AnimatedContainer(
+                      key: ValueKey('category-budget-dot-$i'),
+                      duration: const Duration(milliseconds: 150),
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i == _index
+                            ? AppColors.primary
+                            : AppColors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExperimentalStage({
+    required BackheaderBudgetItem current,
+    required List<BackheaderBudgetItem> items,
+    required BudgetProgressData? frameProgress,
+    required OverviewBudgetData? frameOverview,
+  }) {
+    return SizedBox(
+      key: const ValueKey('category-budget-stage'),
+      height: TransactionHeaderMetrics.cardHeight,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              key: const ValueKey('backheader-experimental-surface'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _tap(current),
+              onHorizontalDragStart: (_) {
+                _slideController.stop();
+                _settling = false;
+              },
+              onHorizontalDragUpdate: (details) {
+                if (_settling) return;
+                final nextDx = (_dragDx + details.delta.dx)
+                    .clamp(-_maxVisualDrag, _maxVisualDrag)
+                    .toDouble();
+                setState(() => _dragDx = nextDx);
+              },
+              onHorizontalDragCancel: () => _animateDragTo(0),
+              onHorizontalDragEnd: (_) => _settleDrag(),
+              onLongPress: _jumpToOverviewForCurrent,
+              child: Transform.translate(
+                offset: Offset(_dragDx, 0),
+                child: DecoratedBox(
+                  key: ValueKey(
+                    'backheader-style-${widget.backheaderStyle.nativeValue}',
+                  ),
+                  decoration: const BoxDecoration(
+                    color: AppColors.gray100,
+                    borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(24),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      current.title,
+                      key: const ValueKey('backheader-active-title'),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
           if (items.length > 1)

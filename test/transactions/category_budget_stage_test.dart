@@ -1,3 +1,4 @@
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/data/limit_allocation_manager.dart';
 import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
 import 'package:exptv2/features/transactions/models/budget_goal_kind.dart';
@@ -62,6 +63,72 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     expect(tapped?.category?.title, 'Travel');
+  });
+
+  testWidgets('classic backheader style keeps current bar renderer', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 100, 150)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.classic,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('category-budget-bar')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('experimental backheader style uses experimental surface', (
+    tester,
+  ) async {
+    BackheaderBudgetItem? tapped;
+    final bars = [barFixture(6, 'Food', 100, 150)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.colorFieldPartition,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (item) => tapped = item,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-style-colorFieldPartition')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('category-budget-bar')), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    expect(tapped?.category?.title, 'Food');
   });
 
   testWidgets('category budget bar follows horizontal drag before settling', (

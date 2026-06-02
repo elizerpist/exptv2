@@ -226,6 +226,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 animation: _headerSlideController,
                 child: RepaintBoundary(
                   child: CategoryBudgetStage(
+                    backheaderStyle: expenseTheme.settings.backheaderStyle,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
                     periodLabel: widget.store.activePeriodLabel,
