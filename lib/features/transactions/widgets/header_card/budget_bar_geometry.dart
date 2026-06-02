@@ -1,7 +1,7 @@
 class BudgetBarGeometry {
   const BudgetBarGeometry._();
 
-  static const barCenterY = 107.0;
+  static const barCenterY = 112.0;
   static const barHorizontalInset = 40.0;
   static const barHeight = 54.0 * 0.80;
   static const frameHeight = barHeight * 1.20;

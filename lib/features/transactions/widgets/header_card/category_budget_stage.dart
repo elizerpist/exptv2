@@ -125,7 +125,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                     style: const TextStyle(
                       color: AppColors.gray800,
                       fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                      fontSize: 16.5,
                     ),
                   ),
                 ),
@@ -136,7 +136,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   style: const TextStyle(
                     color: AppColors.gray800,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    fontSize: 16.5,
                   ),
                 ),
               ],

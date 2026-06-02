@@ -18,8 +18,9 @@ void main() {
     expect(BudgetBarGeometry.barHeight, moreOrLessEquals(43.2));
     expect(BudgetBarGeometry.frameHeight, moreOrLessEquals(51.84));
     expect(BudgetBarGeometry.frameHeight, lessThan(54));
-    expect(BudgetBarGeometry.barTop + BudgetBarGeometry.barHeight / 2, 107);
-    expect(BudgetBarGeometry.frameTop + BudgetBarGeometry.frameHeight / 2, 107);
+    expect(BudgetBarGeometry.barCenterY, 112);
+    expect(BudgetBarGeometry.barTop + BudgetBarGeometry.barHeight / 2, 112);
+    expect(BudgetBarGeometry.frameTop + BudgetBarGeometry.frameHeight / 2, 112);
   });
 
   testWidgets('category budget stage shows labels and swipes category bars', (
@@ -575,6 +576,37 @@ void main() {
       find.byKey(const ValueKey('backheader-overview-jump-button')),
       findsNothing,
     );
+  });
+
+  testWidgets('stage title and amount use matching enlarged font size', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 100, 150)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final title = tester.widget<Text>(
+      find.byKey(const ValueKey('backheader-active-title')),
+    );
+    final amount = tester.widget<Text>(
+      find.byKey(const ValueKey('backheader-active-amount')),
+    );
+
+    expect(title.style!.fontSize, moreOrLessEquals(16.5, epsilon: 0.01));
+    expect(amount.style!.fontSize, moreOrLessEquals(16.5, epsilon: 0.01));
   });
 
   testWidgets('progress frame overhang is equal around active bar', (
