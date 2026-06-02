@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/fast_info_config.dart';
+import '../../state/fast_info_metrics_resolver.dart';
 import 'fast_info_visuals.dart';
 
 typedef FastInfoCardDropCallback = void Function(int index, String cardId);
@@ -13,6 +14,7 @@ class FastInfoPanel extends StatelessWidget {
     this.backgroundColor = AppColors.gray100,
     this.pillTop = 54,
     this.boxTop = 202,
+    this.metrics = const <String, FastInfoMetricResult>{},
     this.onDropPillCard,
     this.onDropBoxCard,
     this.onClearPillSlot,
@@ -21,6 +23,7 @@ class FastInfoPanel extends StatelessWidget {
 
   final FastInfoConfig config;
   final Color backgroundColor;
+  final Map<String, FastInfoMetricResult> metrics;
   final double pillTop;
   final double boxTop;
   final FastInfoCardDropCallback? onDropPillCard;
@@ -45,6 +48,7 @@ class FastInfoPanel extends StatelessWidget {
                 for (var i = 0; i < 3; i += 1) ...[
                   _FastInfoPill(
                     slot: config.pills[i],
+                    metric: _metricFor(config.pills[i]),
                     index: i,
                     onDropCard: onDropPillCard,
                     onClear: onClearPillSlot,
@@ -64,6 +68,7 @@ class FastInfoPanel extends StatelessWidget {
                   Expanded(
                     child: _FastInfoBox(
                       slot: config.boxes[i],
+                      metric: _metricFor(config.boxes[i]),
                       index: i,
                       onDropCard: onDropBoxCard,
                       onClear: onClearBoxSlot,
@@ -77,6 +82,11 @@ class FastInfoPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  FastInfoMetricResult? _metricFor(FastInfoSlot? slot) {
+    if (slot == null) return null;
+    return metrics[slot.id];
   }
 }
 
@@ -113,12 +123,14 @@ class _DropReadyFrame extends StatelessWidget {
 class _FastInfoPill extends StatelessWidget {
   const _FastInfoPill({
     required this.slot,
+    required this.metric,
     required this.index,
     this.onDropCard,
     this.onClear,
   });
 
   final FastInfoSlot? slot;
+  final FastInfoMetricResult? metric;
   final int index;
   final FastInfoCardDropCallback? onDropCard;
   final ValueChanged<int>? onClear;
@@ -156,7 +168,10 @@ class _FastInfoPill extends StatelessWidget {
               ],
             ),
             child: Text(
-              slot?.pillValue ?? slot?.value ?? 'Üres pill slot',
+              metric?.pillValue ??
+                  slot?.pillValue ??
+                  slot?.value ??
+                  'Üres pill slot',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -216,12 +231,14 @@ class _FastInfoPill extends StatelessWidget {
 class _FastInfoBox extends StatelessWidget {
   const _FastInfoBox({
     required this.slot,
+    required this.metric,
     required this.index,
     this.onDropCard,
     this.onClear,
   });
 
   final FastInfoSlot? slot;
+  final FastInfoMetricResult? metric;
   final int index;
   final FastInfoCardDropCallback? onDropCard;
   final ValueChanged<int>? onClear;
@@ -256,7 +273,9 @@ class _FastInfoBox extends StatelessWidget {
                 ),
               ],
             ),
-            child: slot == null ? _emptyBoxContent() : _filledBoxContent(slot!),
+            child: slot == null
+                ? _emptyBoxContent()
+                : _filledBoxContent(slot!, metric),
           ),
           if (onClear != null && slot != null)
             Positioned(
@@ -312,7 +331,7 @@ class _FastInfoBox extends StatelessWidget {
     );
   }
 
-  Widget _filledBoxContent(FastInfoSlot slot) {
+  Widget _filledBoxContent(FastInfoSlot slot, FastInfoMetricResult? metric) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -328,7 +347,7 @@ class _FastInfoBox extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          slot.boxValue ?? slot.value,
+          metric?.boxValue ?? slot.boxValue ?? slot.value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -337,15 +356,15 @@ class _FastInfoBox extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        if ((slot.boxSubtitle ?? slot.extra) != null)
+        if ((metric?.boxSubtitle ?? slot.boxSubtitle ?? slot.extra) != null)
           Text(
-            slot.boxSubtitle ?? slot.extra!,
+            metric?.boxSubtitle ?? slot.boxSubtitle ?? slot.extra!,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: AppColors.gray500, fontSize: 9),
           ),
         const SizedBox(height: 3),
-        FastInfoVisual(slot: slot),
+        FastInfoVisual(slot: slot, metric: metric),
       ],
     );
   }

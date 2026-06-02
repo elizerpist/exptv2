@@ -5,7 +5,11 @@ import java.util.GregorianCalendar
 import java.util.Random
 
 object ExpenseSeedData {
-    const val version = 2026060101
+    const val version = 2026060301
+
+    private const val seedStartYear = 2021
+    private const val seedStartMonth = 6
+    private const val seedMonthCount = 61
 
     private const val icon = "./assets/broccoli.png"
     private const val now = 1780272000000L
@@ -60,9 +64,9 @@ object ExpenseSeedData {
         val weighted = expenseTemplates.flatMap { template -> List(template.weight) { template } }
         val rows = mutableListOf<ExpenseTransactionEntity>()
         var monthOffset = 0
-        while (monthOffset <= 12) {
-            val absoluteMonth = 5 + monthOffset
-            val year = 2025 + (absoluteMonth - 1) / 12
+        while (monthOffset < seedMonthCount) {
+            val absoluteMonth = seedStartMonth + monthOffset
+            val year = seedStartYear + (absoluteMonth - 1) / 12
             val month = ((absoluteMonth - 1) % 12) + 1
             val days = daysInMonth(year, month)
             val idBase = ((year % 100) * 100000) + (month * 1000)
@@ -157,14 +161,14 @@ object ExpenseSeedData {
             )
         }
 
-        add("overview", 0, "expense", "all_time", "all", 12400000.0)
-        add("overview", 0, "income", "all_time", "all", 8500000.0)
-        add("overview", 0, "saving", "all_time", "all", 1200000.0)
+        add("overview", 0, "expense", "all_time", "all", 52000000.0)
+        add("overview", 0, "income", "all_time", "all", 41000000.0)
+        add("overview", 0, "saving", "all_time", "all", 6000000.0)
 
         var monthOffset = 0
-        while (monthOffset <= 12) {
-            val absoluteMonth = 5 + monthOffset
-            val year = 2025 + (absoluteMonth - 1) / 12
+        while (monthOffset < seedMonthCount) {
+            val absoluteMonth = seedStartMonth + monthOffset
+            val year = seedStartYear + (absoluteMonth - 1) / 12
             val month = ((absoluteMonth - 1) % 12) + 1
             val periodKey = "%04d-%02d".format(year, month)
             add("overview", 0, "expense", "monthly", periodKey, 840000.0)

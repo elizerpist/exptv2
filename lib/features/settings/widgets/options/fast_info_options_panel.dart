@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
+import '../../../../features/transactions/state/fast_info_metrics_resolver.dart';
 import '../../../../features/transactions/widgets/header_card/fast_info_panel.dart';
 import '../../models/fast_info_card_catalog.dart';
 import '../../models/fast_info_config.dart';
@@ -57,6 +58,7 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
           child: FastInfoPanel(
             config: _draft,
             backgroundColor: AppColors.gray100,
+            metrics: FastInfoMetricsResolver.preview(),
             pillTop: 27,
             boxTop: 175,
             onDropPillCard: (index, cardId) =>
@@ -83,7 +85,13 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
               childAspectRatio: 2.25,
             ),
             itemCount: freeCards.length,
-            itemBuilder: (context, index) => _PoolCard(card: freeCards[index]),
+            itemBuilder: (context, index) {
+              final card = freeCards[index];
+              return _PoolCard(
+                card: card,
+                metric: FastInfoMetricsResolver.preview()[card.id],
+              );
+            },
           ),
         ),
       ],
@@ -129,9 +137,10 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
 }
 
 class _PoolCard extends StatelessWidget {
-  const _PoolCard({required this.card});
+  const _PoolCard({required this.card, required this.metric});
 
   final FastInfoCardDefinition card;
+  final FastInfoMetricResult? metric;
 
   @override
   Widget build(BuildContext context) {
@@ -143,25 +152,30 @@ class _PoolCard extends StatelessWidget {
         color: Colors.transparent,
         child: ConstrainedBox(
           constraints: const BoxConstraints.tightFor(width: 160, height: 70),
-          child: _PoolCardSurface(card: card, elevated: true),
+          child: _PoolCardSurface(card: card, metric: metric, elevated: true),
         ),
       ),
       childWhenDragging: Opacity(
         opacity: 0.35,
-        child: _PoolCardSurface(card: card),
+        child: _PoolCardSurface(card: card, metric: metric),
       ),
       child: KeyedSubtree(
         key: ValueKey('fastinfo-pool-card-${card.id}'),
-        child: _PoolCardSurface(card: card),
+        child: _PoolCardSurface(card: card, metric: metric),
       ),
     );
   }
 }
 
 class _PoolCardSurface extends StatelessWidget {
-  const _PoolCardSurface({required this.card, this.elevated = false});
+  const _PoolCardSurface({
+    required this.card,
+    required this.metric,
+    this.elevated = false,
+  });
 
   final FastInfoCardDefinition card;
+  final FastInfoMetricResult? metric;
   final bool elevated;
 
   @override
@@ -197,7 +211,7 @@ class _PoolCardSurface extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              card.pillValue,
+              metric?.pillValue ?? card.pillValue,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

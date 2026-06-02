@@ -56,6 +56,7 @@ class TransactionStore extends ChangeNotifier {
   String? get error => _error;
   TransactionType get activeType => _filter.type;
   SummaryWindow get summaryWindow => _summaryWindow;
+  DateTime get currentDate => _clock();
   String get searchQuery => _filter.searchQuery;
   String? get merchantFilter => _filter.merchant;
   String? get merchantFilterColorHex => _filter.merchantColorHex;

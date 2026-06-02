@@ -10,6 +10,7 @@ import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
+import 'state/fast_info_metrics_resolver.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
@@ -153,6 +154,12 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             );
           }
 
+          final fastInfoMetrics = FastInfoMetricsResolver.resolve(
+            transactions: widget.store.transactions,
+            categories: widget.store.categories,
+            limits: widget.store.limits,
+            now: widget.store.currentDate,
+          );
           final visibleTransactions = widget.store.visibleTransactions;
           final visibleGhostTransactions =
               widget.store.visibleGhostTransactions;
@@ -271,6 +278,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                               widget.fastInfoConfig ??
                               FastInfoConfig.defaults(),
                           backgroundColor: Colors.transparent,
+                          metrics: fastInfoMetrics,
                         ),
                         header: _buildHeaderCard(
                           expenseTheme: expenseTheme,

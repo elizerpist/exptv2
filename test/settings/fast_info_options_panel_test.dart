@@ -119,6 +119,29 @@ void main() {
     expect(padding.bottom, 96);
   });
 
+  testWidgets(
+    'preview uses live-like metrics instead of catalog placeholders',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: FastInfoOptionsPanel(
+                config: FastInfoConfig.defaults(),
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('184k'), findsNothing);
+      expect(find.text('27k'), findsWidgets);
+    },
+  );
+
   testWidgets('pool cards require a longer haptic long press before dragging', (
     tester,
   ) async {

@@ -3,19 +3,27 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/fast_info_card_catalog.dart';
 import '../../../settings/models/fast_info_config.dart';
+import '../../state/fast_info_metrics_resolver.dart';
 
 class FastInfoVisual extends StatelessWidget {
-  const FastInfoVisual({super.key, required this.slot});
+  const FastInfoVisual({super.key, required this.slot, this.metric});
 
   final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
 
   @override
   Widget build(BuildContext context) {
     return switch (slot.visualType) {
-      FastInfoVisualType.progress => _ProgressVisual(slot: slot),
-      FastInfoVisualType.sparkline => _SparklineVisual(slot: slot),
-      FastInfoVisualType.bar => _BarVisual(slot: slot),
-      FastInfoVisualType.ring => _RingVisual(slot: slot),
+      FastInfoVisualType.progress => _ProgressVisual(
+        slot: slot,
+        metric: metric,
+      ),
+      FastInfoVisualType.sparkline => _SparklineVisual(
+        slot: slot,
+        metric: metric,
+      ),
+      FastInfoVisualType.bar => _BarVisual(slot: slot, metric: metric),
+      FastInfoVisualType.ring => _RingVisual(slot: slot, metric: metric),
       FastInfoVisualType.status => _StatusVisual(slot: slot),
       FastInfoVisualType.trend => _TrendVisual(slot: slot),
       FastInfoVisualType.plain => const SizedBox.shrink(),
@@ -24,9 +32,10 @@ class FastInfoVisual extends StatelessWidget {
 }
 
 class _ProgressVisual extends StatelessWidget {
-  const _ProgressVisual({required this.slot});
+  const _ProgressVisual({required this.slot, required this.metric});
 
   final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +44,7 @@ class _ProgressVisual extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: LinearProgressIndicator(
         minHeight: 4,
-        value: (slot.progress ?? 0.45).clamp(0.0, 1.0),
+        value: (metric?.progress ?? slot.progress ?? 0.45).clamp(0.0, 1.0),
         backgroundColor: AppColors.gray200,
         valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
       ),
@@ -44,9 +53,10 @@ class _ProgressVisual extends StatelessWidget {
 }
 
 class _SparklineVisual extends StatelessWidget {
-  const _SparklineVisual({required this.slot});
+  const _SparklineVisual({required this.slot, required this.metric});
 
   final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
 
   @override
   Widget build(BuildContext context) {
@@ -54,29 +64,41 @@ class _SparklineVisual extends StatelessWidget {
       key: ValueKey('fastinfo-visual-sparkline-${slot.id}'),
       height: 10,
       width: double.infinity,
-      child: CustomPaint(painter: _SparklinePainter()),
+      child: CustomPaint(painter: _SparklinePainter(metric?.series)),
     );
   }
 }
 
 class _BarVisual extends StatelessWidget {
-  const _BarVisual({required this.slot});
+  const _BarVisual({required this.slot, required this.metric});
 
   final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
 
   @override
   Widget build(BuildContext context) {
-    final value = (slot.progress ?? 0.5).clamp(0.0, 1.0);
+    final series = metric?.series;
+    final value = (metric?.progress ?? slot.progress ?? 0.5).clamp(0.0, 1.0);
+    final bars = series == null || series.isEmpty
+        ? List<double>.generate(5, (index) => (index + 1) / 5)
+        : series.length <= 5
+        ? series
+        : series.sublist(series.length - 5);
+    final maxValue = bars.fold<double>(
+      0,
+      (max, item) => item > max ? item : max,
+    );
     return Row(
       key: ValueKey('fastinfo-visual-bar-${slot.id}'),
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: List.generate(5, (index) {
+      children: List.generate(bars.length, (index) {
+        final normalized = maxValue <= 0 ? value : bars[index] / maxValue;
         return Expanded(
           child: Container(
-            height: (3 + index).toDouble(),
-            margin: EdgeInsets.only(right: index == 4 ? 0 : 2),
+            height: 3 + normalized.clamp(0.0, 1.0) * 6,
+            margin: EdgeInsets.only(right: index == bars.length - 1 ? 0 : 2),
             decoration: BoxDecoration(
-              color: index / 5 <= value ? AppColors.primary : AppColors.gray200,
+              color: normalized > 0 ? AppColors.primary : AppColors.gray200,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -87,9 +109,10 @@ class _BarVisual extends StatelessWidget {
 }
 
 class _RingVisual extends StatelessWidget {
-  const _RingVisual({required this.slot});
+  const _RingVisual({required this.slot, required this.metric});
 
   final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +124,7 @@ class _RingVisual extends StatelessWidget {
         height: 13,
         child: CircularProgressIndicator(
           strokeWidth: 2.5,
-          value: (slot.progress ?? 0.5).clamp(0.0, 1.0),
+          value: (metric?.progress ?? slot.progress ?? 0.5).clamp(0.0, 1.0),
           backgroundColor: AppColors.gray200,
           valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
         ),
@@ -149,21 +172,48 @@ class _TrendVisual extends StatelessWidget {
 }
 
 class _SparklinePainter extends CustomPainter {
+  const _SparklinePainter(this.series);
+
+  final List<double>? series;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = AppColors.primary
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
-    final path = Path()
-      ..moveTo(0, size.height * 0.75)
-      ..lineTo(size.width * 0.25, size.height * 0.45)
-      ..lineTo(size.width * 0.50, size.height * 0.62)
-      ..lineTo(size.width * 0.75, size.height * 0.25)
-      ..lineTo(size.width, size.height * 0.35);
+    final values = series == null || series!.isEmpty
+        ? const <double>[4, 7, 5, 9, 8]
+        : series!;
+    final maxValue = values.fold<double>(
+      0,
+      (max, item) => item > max ? item : max,
+    );
+    final minValue = values.fold<double>(
+      maxValue,
+      (min, item) => item < min ? item : min,
+    );
+    final spread = maxValue - minValue;
+    final path = Path();
+    for (var index = 0; index < values.length; index += 1) {
+      final x = values.length == 1
+          ? 0.0
+          : size.width * index / (values.length - 1);
+      final normalized = spread <= 0
+          ? 0.5
+          : (values[index] - minValue) / spread;
+      final y = size.height - normalized * size.height;
+      if (index == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
+    return oldDelegate.series != series;
+  }
 }

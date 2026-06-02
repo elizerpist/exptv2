@@ -1,6 +1,7 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
+import 'package:exptv2/features/transactions/state/fast_info_metrics_resolver.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/fast_info_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +30,40 @@ void main() {
         find.byKey(const ValueKey('fastinfo-visual-progress-havi_koltes')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'live metrics override stored catalog values in pills and boxes',
+    (tester) async {
+      final card = fastInfoCardById('havi_koltes')!;
+      final config = FastInfoConfig(
+        pills: [FastInfoSlot.fromCard(card, FastInfoSlotType.pill), null, null],
+        boxes: [FastInfoSlot.fromCard(card, FastInfoSlotType.box), null, null],
+      );
+      const metrics = <String, FastInfoMetricResult>{
+        'havi_koltes': FastInfoMetricResult(
+          pillValue: '27k',
+          boxValue: '27k / 100k',
+          boxSubtitle: 'A havi keret 27%-a',
+          progress: 0.27,
+          series: <double>[3000, 12000, 8000, 7000],
+        ),
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FastInfoPanel(config: config, metrics: metrics),
+          ),
+        ),
+      );
+
+      expect(find.text('184k'), findsNothing);
+      expect(find.text('27k'), findsOneWidget);
+      expect(find.text('184k / 250k'), findsNothing);
+      expect(find.text('27k / 100k'), findsOneWidget);
+      expect(find.text('A havi keret 27%-a'), findsOneWidget);
     },
   );
 
