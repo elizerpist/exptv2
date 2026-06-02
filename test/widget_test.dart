@@ -408,6 +408,20 @@ void main() {
     );
   });
 
+  testWidgets('transaction editor logs text focus performance', (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await _tapFab(tester);
+    await tester.tap(find.widgetWithText(TextField, 'Tranzakció neve'));
+    await tester.pump();
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] AddTransaction focus field=name'));
+    expect(logs, contains('[Perf] AddTransaction focus frame field=name'));
+  });
+
   testWidgets('transaction category field opens inline scroll picker', (
     tester,
   ) async {
@@ -476,8 +490,8 @@ void main() {
         epsilon: 0.1,
       ),
     );
-    expect(dateAfter.top, lessThanOrEqualTo(dateBefore.top + 1));
-    expect(saveAfter.top, lessThanOrEqualTo(saveBefore.top + 1));
+    expect(dateAfter.bottom, moreOrLessEquals(dateBefore.bottom, epsilon: 1));
+    expect(saveAfter.bottom, moreOrLessEquals(saveBefore.bottom, epsilon: 1));
     expect(saveAfter.bottom, lessThanOrEqualTo(screenHeight));
     expect(
       pickerRect.top,

@@ -66,6 +66,8 @@ class BudgetTargetEditorSheet extends StatefulWidget {
 
 class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   late final TextEditingController _controller;
+  late final FocusNode _amountFocus;
+  DateTime? _focusStartedAt;
   late String _activeKey;
   final _rememberedSliderMaxByKey = <String, double>{};
   final _pendingAmountsByKey = <String, double>{};
@@ -78,10 +80,10 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     if (widget.visible) _logSheetActivation();
     _activeKey = widget.item.key;
     _controller = TextEditingController();
+    _amountFocus = FocusNode()..addListener(_handleAmountFocusChanged);
     _syncControllerToItem(widget.item);
     _controller.addListener(_refreshFromController);
   }
-
 
   @override
   void didUpdateWidget(covariant BudgetTargetEditorSheet oldWidget) {
@@ -97,7 +99,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       _syncControllerToItem(widget.item);
     }
   }
-
 
   void _logSheetActivation() {
     DebugConsole.log(
@@ -115,6 +116,9 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   @override
   void dispose() {
+    _amountFocus
+      ..removeListener(_handleAmountFocusChanged)
+      ..dispose();
     _controller
       ..removeListener(_refreshFromController)
       ..dispose();
@@ -147,6 +151,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                 item: _activeItem,
                 periodLabel: widget.periodLabel,
                 amountController: _controller,
+                amountFocusNode: _amountFocus,
                 inputLabel: _inputLabel,
                 activeColor: _activeColor,
                 sliderValue: _sliderRange.value,
@@ -177,11 +182,30 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     return SlideUpPanelMetrics.budgetHeight(context);
   }
 
+  void _handleAmountFocusChanged() {
+    if (_amountFocus.hasFocus) {
+      _focusStartedAt = DateTime.now();
+      DebugConsole.log(
+        '[Perf] BudgetTargetEditor focus field=amount active=true',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_amountFocus.hasFocus) return;
+        DebugConsole.log(
+          '[Perf] BudgetTargetEditor focus frame field=amount elapsed=${_elapsedMs(_focusStartedAt)}ms',
+        );
+      });
+      return;
+    }
+    DebugConsole.log(
+      '[Perf] BudgetTargetEditor focus field=amount active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
+    );
+    _focusStartedAt = null;
+  }
+
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
-
 
   void _syncControllerToItem(BackheaderBudgetItem item) {
     _activeKey = item.key;
@@ -334,7 +358,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     }
   }
 
-
   void _selectItem(BackheaderBudgetItem item) {
     _activeKey = item.key;
     _setControllerAmount(_effectiveAmountFor(item), recordPending: false);
@@ -357,9 +380,9 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
   }
 
   void _setAmountFromSlider(double amount) {
-    final snapped = LimitAllocationManager.snapSliderAmount(amount)
-        .clamp(0.0, _sliderRange.max)
-        .toDouble();
+    final snapped = LimitAllocationManager.snapSliderAmount(
+      amount,
+    ).clamp(0.0, _sliderRange.max).toDouble();
     _setControllerAmount(snapped);
   }
 
@@ -397,10 +420,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     _selectItem(next);
   }
 
-  void _setControllerAmount(
-    double amount, {
-    bool recordPending = true,
-  }) {
+  void _setControllerAmount(double amount, {bool recordPending = true}) {
     final normalized = math.max(0.0, amount).toDouble();
     _rememberSliderMax(normalized);
     if (recordPending) _storePendingAmount(_activeKey, normalized);
@@ -517,14 +537,16 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       if (overview == null || overview.kind == BudgetGoalKind.savingGoal) {
         continue;
       }
-      if (overview.kind.transactionType != category.transactionType.nativeValue) {
+      if (overview.kind.transactionType !=
+          category.transactionType.nativeValue) {
         continue;
       }
       return _effectiveAmountFor(item);
     }
     for (final overview in widget.overviewItems) {
       if (overview.kind == BudgetGoalKind.savingGoal) continue;
-      if (overview.kind.transactionType != category.transactionType.nativeValue) {
+      if (overview.kind.transactionType !=
+          category.transactionType.nativeValue) {
         continue;
       }
       final item = BackheaderBudgetItem.overview(overview);
@@ -559,6 +581,7 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.item,
     required this.periodLabel,
     required this.amountController,
+    required this.amountFocusNode,
     required this.inputLabel,
     required this.activeColor,
     required this.sliderValue,
@@ -582,6 +605,7 @@ class _BudgetLimitCard extends StatelessWidget {
   final BackheaderBudgetItem item;
   final String periodLabel;
   final TextEditingController amountController;
+  final FocusNode amountFocusNode;
   final String inputLabel;
   final Color activeColor;
   final double sliderValue;
@@ -624,10 +648,7 @@ class _BudgetLimitCard extends StatelessWidget {
               onPressed: onPrevious,
               icon: const Icon(Icons.chevron_left),
               color: AppColors.gray700,
-              constraints: const BoxConstraints.tightFor(
-                width: 44,
-                height: 44,
-              ),
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
             ),
             Expanded(
               child: Center(
@@ -643,10 +664,7 @@ class _BudgetLimitCard extends StatelessWidget {
               onPressed: onNext,
               icon: const Icon(Icons.chevron_right),
               color: AppColors.gray700,
-              constraints: const BoxConstraints.tightFor(
-                width: 44,
-                height: 44,
-              ),
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
             ),
           ],
         ),
@@ -711,6 +729,7 @@ class _BudgetLimitCard extends StatelessWidget {
         TextField(
           key: const ValueKey('limit-amount-input'),
           controller: amountController,
+          focusNode: amountFocusNode,
           keyboardType: TextInputType.number,
           onChanged: onInputChanged,
           decoration: transactionFieldDecoration(inputLabel).copyWith(

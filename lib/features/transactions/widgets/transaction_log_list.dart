@@ -50,7 +50,10 @@ class _TransactionLogListState extends State<TransactionLogList> {
   static const _logListPrefetchExtent = 360.0;
 
   bool _loadMoreScheduled = false;
+  bool _loadMorePending = false;
   int? _lastRequestedEntryCount;
+  int _buildPassId = 0;
+  DateTime? _buildPassStartedAt;
   int? _lastLoggedBuildEntryCount;
   bool? _lastLoggedBuildHasMore;
   DateTime? _lastScrollStartedAt;
@@ -67,6 +70,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
     if (_sourceEntryCount(oldWidget) != _sourceEntryCount(widget) ||
         oldWidget.hasMore != widget.hasMore) {
       _loadMoreScheduled = false;
+      _loadMorePending = false;
       _lastRequestedEntryCount = null;
     }
   }
@@ -74,7 +78,8 @@ class _TransactionLogListState extends State<TransactionLogList> {
   @override
   Widget build(BuildContext context) {
     final logEntries = widget.entries ?? _entries();
-    _logBuildMetrics(logEntries.length);
+    final buildPassId = _beginBuildPass();
+    _logBuildMetrics(logEntries.length, buildPassId);
     if (logEntries.isEmpty) {
       return const Center(
         child: Text(
@@ -96,9 +101,13 @@ class _TransactionLogListState extends State<TransactionLogList> {
         itemBuilder: (context, index) {
           final entry = logEntries[index];
           final header = entry.header;
-          if (header != null) return _DateHeader(date: header);
+          if (header != null) {
+            _logItemBuild(buildPassId, index, logEntries.length, 'header');
+            return _DateHeader(date: header);
+          }
           final ghost = entry.ghost;
           if (ghost != null) {
+            _logItemBuild(buildPassId, index, logEntries.length, 'ghost');
             return RecurringGhostLogBox(
               key: ValueKey('recurring-ghost-log-row-${ghost.id}'),
               ghost: ghost,
@@ -106,6 +115,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
             );
           }
           final record = entry.record!;
+          _logItemBuild(buildPassId, index, logEntries.length, 'record');
           final category = _categoryForId(record.transactionCategoryID);
           return TransactionLogBox(
             key: ValueKey('transaction-log-row-${record.id}'),
@@ -133,34 +143,64 @@ class _TransactionLogListState extends State<TransactionLogList> {
 
     _logScrollNotification(notification, entryCount);
 
-    if (!widget.hasMore ||
-        widget.onLoadMore == null ||
-        notification.metrics.extentAfter >= _loadMoreThreshold ||
-        _loadMoreScheduled ||
-        _lastRequestedEntryCount == entryCount) {
+    if (notification is ScrollEndNotification && _loadMorePending) {
+      _scheduleLoadMore(entryCount, notification.metrics, reason: 'scroll-end');
       return false;
     }
 
-    final scheduledAt = DateTime.now();
+    if (!_canRequestLoadMore(entryCount, notification.metrics)) return false;
+
+    _loadMorePending = true;
+    _lastRequestedEntryCount = entryCount;
     final metrics = notification.metrics;
     DebugConsole.log(
-      '[Perf] LogScroll load-more schedule '
+      '[Perf] LogScroll load-more pending '
       'entries=$entryCount pixels=${_fmt(metrics.pixels)} '
       'extentAfter=${_fmt(metrics.extentAfter)} '
       'threshold=${_fmt(_loadMoreThreshold)} '
       'lastRequested=${_lastRequestedEntryCount ?? -1}',
     );
+    if (notification is ScrollEndNotification) {
+      _scheduleLoadMore(entryCount, metrics, reason: 'scroll-end');
+    }
+    return false;
+  }
+
+  bool _canRequestLoadMore(int entryCount, ScrollMetrics metrics) {
+    return widget.hasMore &&
+        widget.onLoadMore != null &&
+        metrics.extentAfter < _loadMoreThreshold &&
+        !_loadMoreScheduled &&
+        !_loadMorePending &&
+        _lastRequestedEntryCount != entryCount;
+  }
+
+  void _scheduleLoadMore(
+    int entryCount,
+    ScrollMetrics metrics, {
+    required String reason,
+  }) {
+    if (_loadMoreScheduled) return;
+    final scheduledAt = DateTime.now();
+    DebugConsole.log(
+      '[Perf] LogScroll load-more schedule '
+      'reason=$reason entries=$entryCount pixels=${_fmt(metrics.pixels)} '
+      'extentAfter=${_fmt(metrics.extentAfter)} '
+      'threshold=${_fmt(_loadMoreThreshold)} '
+      'lastRequested=${_lastRequestedEntryCount ?? -1}',
+    );
     _loadMoreScheduled = true;
-    _lastRequestedEntryCount = entryCount;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+    void fireLoadMore() {
       if (!mounted) return;
       _loadMoreScheduled = false;
+      _loadMorePending = false;
       final frameElapsed = DateTime.now()
           .difference(scheduledAt)
           .inMilliseconds;
       DebugConsole.log(
         '[Perf] LogScroll load-more fire '
-        'entries=$entryCount frameElapsed=${frameElapsed}ms '
+        'reason=$reason entries=$entryCount frameElapsed=${frameElapsed}ms '
         'hasMore=${widget.hasMore}',
       );
       if (!widget.hasMore) return;
@@ -170,11 +210,22 @@ class _TransactionLogListState extends State<TransactionLogList> {
         '[Perf] LogScroll load-more callback '
         'elapsed=${stopwatch.elapsedMilliseconds}ms',
       );
-    });
-    return false;
+    }
+
+    if (reason == 'scroll-end') {
+      fireLoadMore();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => fireLoadMore());
+    }
   }
 
-  void _logBuildMetrics(int entryCount) {
+  int _beginBuildPass() {
+    _buildPassId += 1;
+    _buildPassStartedAt = DateTime.now();
+    return _buildPassId;
+  }
+
+  void _logBuildMetrics(int entryCount, int buildPassId) {
     if (_lastLoggedBuildEntryCount == entryCount &&
         _lastLoggedBuildHasMore == widget.hasMore) {
       return;
@@ -190,9 +241,22 @@ class _TransactionLogListState extends State<TransactionLogList> {
       if (!mounted) return;
       final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
       DebugConsole.log(
-        '[Perf] LogList frame entries=$entryCount elapsed=${elapsed}ms',
+        '[Perf] LogList frame id=$buildPassId entries=$entryCount elapsed=${elapsed}ms '
+        'jank=${elapsed > 32}',
       );
     });
+  }
+
+  void _logItemBuild(int buildPassId, int index, int entryCount, String kind) {
+    if (index != 0 && index != entryCount - 1 && index % 32 != 0) return;
+    final startedAt = _buildPassStartedAt;
+    final elapsed = startedAt == null
+        ? 0
+        : DateTime.now().difference(startedAt).inMilliseconds;
+    DebugConsole.log(
+      '[Perf] LogList item-build id=$buildPassId index=$index '
+      'entries=$entryCount kind=$kind elapsed=${elapsed}ms',
+    );
   }
 
   void _logScrollNotification(ScrollNotification notification, int entryCount) {

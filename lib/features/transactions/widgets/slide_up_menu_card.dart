@@ -85,17 +85,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       duration: widget.entryDuration,
       reverseDuration: const Duration(milliseconds: 160),
     )..addStatusListener(_logEntryStatus);
-    _snapBackController = AnimationController(
-      vsync: this,
-      duration: _snapBackDuration,
-    )
-      ..addListener(_syncSnapBackOffset)
-      ..addStatusListener(_logSnapBackStatus);
+    _snapBackController =
+        AnimationController(vsync: this, duration: _snapBackDuration)
+          ..addListener(_syncSnapBackOffset)
+          ..addStatusListener(_logSnapBackStatus);
     if (widget.visible) {
       _startOpenAnimation(fromInitialMount: true);
     }
   }
-
 
   @override
   void didUpdateWidget(covariant SlideUpMenuCard oldWidget) {
@@ -125,112 +122,111 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   @override
   Widget build(BuildContext context) {
-    final participates = widget.visible ||
+    final participates =
+        widget.visible ||
         _entry.isAnimating ||
         _snapBackController.isAnimating ||
         _dragDy.value > 0.01;
+    if (!participates) return const SizedBox.shrink();
     return TickerMode(
-      enabled: participates,
-      child: Visibility(
-        visible: participates,
-        maintainState: true,
-        maintainAnimation: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-        final availableHeight = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : MediaQuery.sizeOf(context).height;
-        final panelHeight = (widget.panelHeight ?? availableHeight)
-            .clamp(0.0, availableHeight)
-            .toDouble();
-        _panelHeight = panelHeight;
-        _logLayout(availableHeight, panelHeight);
-        return Stack(
-          children: [
-            if (widget.showFocusVeil)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_closing) return;
-                    DebugConsole.log(
-                      '[SlideUpMenu] $_debugLabel veil tap dismiss',
-                    );
-                    _dismiss();
-                  },
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge([_entry, _dragDy]),
-                    builder: (context, child) {
-                      final dragFade = (1 - (_dragDy.value / _dragMaxOffset))
-                          .clamp(0.0, 1.0)
-                          .toDouble();
-                      return Opacity(
-                        key: const ValueKey('slide-up-menu-veil-opacity'),
-                        opacity: (_entry.value * dragFade)
-                            .clamp(0.0, 1.0)
-                            .toDouble(),
-                        child: child,
+      enabled: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : MediaQuery.sizeOf(context).height;
+          final panelHeight = (widget.panelHeight ?? availableHeight)
+              .clamp(0.0, availableHeight)
+              .toDouble();
+          _panelHeight = panelHeight;
+          _logLayout(availableHeight, panelHeight);
+          return Stack(
+            children: [
+              if (widget.showFocusVeil)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (_closing) return;
+                      DebugConsole.log(
+                        '[SlideUpMenu] $_debugLabel veil tap dismiss',
                       );
+                      _dismiss();
                     },
-                    child: ColoredBox(
-                      key: const ValueKey('slide-up-menu-veil'),
-                      color: Colors.black.withValues(
-                        alpha: widget.focusVeilOpacity,
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_entry, _dragDy]),
+                      builder: (context, child) {
+                        final dragFade = (1 - (_dragDy.value / _dragMaxOffset))
+                            .clamp(0.0, 1.0)
+                            .toDouble();
+                        return Opacity(
+                          key: const ValueKey('slide-up-menu-veil-opacity'),
+                          opacity: (_entry.value * dragFade)
+                              .clamp(0.0, 1.0)
+                              .toDouble(),
+                          child: child,
+                        );
+                      },
+                      child: ColoredBox(
+                        key: const ValueKey('slide-up-menu-veil'),
+                        color: Colors.black.withValues(
+                          alpha: widget.focusVeilOpacity,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                height: panelHeight,
-                child: AnimatedBuilder(
-                  animation: Listenable.merge([_entry, _dragDy]),
-                  builder: (context, child) {
-                    final entryOffset =
-                        (1 - Curves.easeOutCubic.transform(_entry.value)) *
-                        panelHeight;
-                    return Transform.translate(
-                      key: const ValueKey('slide-up-menu-transform'),
-                      offset: Offset(0, entryOffset + _dragDy.value),
-                      child: child,
-                    );
-                  },
-                  child: RepaintBoundary(
-                    child: Listener(
-                      behavior: HitTestBehavior.translucent,
-                      onPointerDown: _handlePointerDown,
-                      onPointerMove: _handlePointerMove,
-                      onPointerUp: _handlePointerUp,
-                      onPointerCancel: _handlePointerCancel,
-                      child: KeyedSubtree(
-                        key: widget.cardKey,
-                        child: SizedBox.expand(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: AppColors.white,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(30),
-                              ),
-                              border: Border.all(color: AppColors.gray200),
-                              boxShadow: widget.zIndexShadow
-                                  ? [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.14,
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  height: panelHeight,
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([_entry, _dragDy]),
+                    builder: (context, child) {
+                      final entryOffset =
+                          (1 - Curves.easeOutCubic.transform(_entry.value)) *
+                          panelHeight;
+                      return Transform.translate(
+                        key: const ValueKey('slide-up-menu-transform'),
+                        offset: Offset(0, entryOffset + _dragDy.value),
+                        child: child,
+                      );
+                    },
+                    child: RepaintBoundary(
+                      child: Listener(
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: _handlePointerDown,
+                        onPointerMove: _handlePointerMove,
+                        onPointerUp: _handlePointerUp,
+                        onPointerCancel: _handlePointerCancel,
+                        child: KeyedSubtree(
+                          key: widget.cardKey,
+                          child: SizedBox.expand(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(30),
+                                ),
+                                border: Border.all(color: AppColors.gray200),
+                                boxShadow: widget.zIndexShadow
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.14,
+                                          ),
+                                          offset: const Offset(0, -2),
+                                          blurRadius: 12,
                                         ),
-                                        offset: const Offset(0, -2),
-                                        blurRadius: 12,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(30),
+                                      ]
+                                    : null,
                               ),
-                              child: widget.child,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(30),
+                                ),
+                                child: widget.child,
+                              ),
                             ),
                           ),
                         ),
@@ -239,15 +235,12 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                   ),
                 ),
               ),
-            ),
-          ],
-        );
-          },
-        ),
+            ],
+          );
+        },
       ),
     );
   }
-
 
   void _startOpenAnimation({bool fromInitialMount = false}) {
     _closing = false;
@@ -449,12 +442,9 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
 
   void _logDragMove(double offset, double delta) {
     final last = _lastLoggedDragOffset;
-    final crossedThreshold = last != null &&
-        last <= _dismissThreshold &&
-        offset > _dismissThreshold;
-    if (last != null &&
-        (offset - last).abs() < 28 &&
-        !crossedThreshold) {
+    final crossedThreshold =
+        last != null && last <= _dismissThreshold && offset > _dismissThreshold;
+    if (last != null && (offset - last).abs() < 28 && !crossedThreshold) {
       return;
     }
     _lastLoggedDragOffset = offset;

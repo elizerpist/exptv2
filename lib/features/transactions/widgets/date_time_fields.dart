@@ -10,12 +10,16 @@ class DateTimeFields extends StatelessWidget {
     required this.timeController,
     this.onPickDate,
     this.onPickTime,
+    this.dateFocusNode,
+    this.timeFocusNode,
   });
 
   final TextEditingController dateController;
   final TextEditingController timeController;
   final VoidCallback? onPickDate;
   final VoidCallback? onPickTime;
+  final FocusNode? dateFocusNode;
+  final FocusNode? timeFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +28,7 @@ class DateTimeFields extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: dateController,
+            focusNode: dateFocusNode,
             keyboardType: TextInputType.datetime,
             decoration: transactionFieldDecoration('Dátum').copyWith(
               suffixIcon: IconButton(
@@ -40,6 +45,7 @@ class DateTimeFields extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: timeController,
+            focusNode: timeFocusNode,
             keyboardType: TextInputType.datetime,
             decoration: transactionFieldDecoration('Idő').copyWith(
               suffixIcon: IconButton(

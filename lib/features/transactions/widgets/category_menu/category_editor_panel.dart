@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/transaction_category.dart';
 import 'category_preview_pill.dart';
@@ -46,6 +47,8 @@ class CategoryEditorPanel extends StatefulWidget {
 
 class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
   late final TextEditingController _name;
+  late final FocusNode _nameFocus;
+  DateTime? _focusStartedAt;
   late int _colorSlot;
   late int _iconSlot;
   var _page = 0;
@@ -61,12 +64,16 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
     super.initState();
     final category = widget.initialCategory;
     _name = TextEditingController(text: category?.name ?? '');
+    _nameFocus = FocusNode()..addListener(_handleNameFocusChanged);
     _colorSlot = category?.colorSlot ?? 0;
     _iconSlot = category?.iconSlot ?? 0;
   }
 
   @override
   void dispose() {
+    _nameFocus
+      ..removeListener(_handleNameFocusChanged)
+      ..dispose();
     _name.dispose();
     super.dispose();
   }
@@ -139,6 +146,7 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                 TextField(
                   key: const ValueKey('category-name-input'),
                   controller: _name,
+                  focusNode: _nameFocus,
                   decoration: InputDecoration(
                     hintText: 'pl. Utazás, Hobbi...',
                     hintStyle: const TextStyle(color: AppColors.gray500),
@@ -281,6 +289,30 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
         ),
       ],
     );
+  }
+
+  void _handleNameFocusChanged() {
+    final label = _editing ? 'EditCategory' : 'AddCategory';
+    if (_nameFocus.hasFocus) {
+      _focusStartedAt = DateTime.now();
+      DebugConsole.log('[Perf] $label focus field=name active=true');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_nameFocus.hasFocus) return;
+        DebugConsole.log(
+          '[Perf] $label focus frame field=name elapsed=${_elapsedMs(_focusStartedAt)}ms',
+        );
+      });
+      return;
+    }
+    DebugConsole.log(
+      '[Perf] $label focus field=name active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
+    );
+    _focusStartedAt = null;
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
   void _toggleSlotPage() {

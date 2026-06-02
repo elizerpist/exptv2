@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 
 class SearchPill extends StatefulWidget {
@@ -33,6 +34,7 @@ class SearchPill extends StatefulWidget {
 class _SearchPillState extends State<SearchPill> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  DateTime? _focusStartedAt;
 
   @override
   void initState() {
@@ -60,12 +62,34 @@ class _SearchPillState extends State<SearchPill> {
   }
 
   void _handleFocusChanged() {
+    if (_focusNode.hasFocus) {
+      _focusStartedAt = DateTime.now();
+      DebugConsole.log('[Perf] SearchPill focus active=true');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_focusNode.hasFocus) return;
+        DebugConsole.log(
+          '[Perf] SearchPill focus frame elapsed=${_elapsedMs(_focusStartedAt)}ms',
+        );
+      });
+    } else {
+      DebugConsole.log(
+        '[Perf] SearchPill focus active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
+      );
+      _focusStartedAt = null;
+    }
     if (mounted) setState(() {});
   }
 
   void _requestFocus() {
-    if (_focusNode.hasFocus) return;
-    _focusNode.requestFocus();
+    DebugConsole.log(
+      '[Perf] SearchPill focus request active=${_focusNode.hasFocus}',
+    );
+    if (!_focusNode.hasFocus) _focusNode.requestFocus();
+  }
+
+  int _elapsedMs(DateTime? startedAt) {
+    if (startedAt == null) return 0;
+    return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
   @override
@@ -150,6 +174,7 @@ class _SearchPillState extends State<SearchPill> {
                     focusNode: _focusNode,
                     controller: _controller,
                     onChanged: widget.onQueryChanged,
+                    onTap: _requestFocus,
                     onTapOutside: (_) => _focusNode.unfocus(),
                     decoration: InputDecoration(
                       border: InputBorder.none,

@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
 class AmountField extends StatelessWidget {
-  const AmountField({super.key, required this.controller});
+  const AmountField({super.key, required this.controller, this.focusNode});
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: TextInputType.number,
       decoration: transactionFieldDecoration(
         'Összeg',

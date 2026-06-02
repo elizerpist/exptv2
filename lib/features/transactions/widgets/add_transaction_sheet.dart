@@ -38,6 +38,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final _date = TextEditingController();
   final _time = TextEditingController();
   final _categoryPickerBoundaryKey = GlobalKey();
+  final _nameFocus = FocusNode();
+  final _amountFocus = FocusNode();
+  final _dateFocus = FocusNode();
+  final _timeFocus = FocusNode();
   TransactionCategory? _category;
   String? _error;
   var _saving = false;
@@ -47,6 +51,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   double? _lastLoggedPanelHeight;
   double? _lastLoggedContentHeight;
   double? _lastLoggedKeyboardInset;
+  String? _focusedField;
+  DateTime? _focusStartedAt;
   var _firstBuildLogged = false;
 
   bool get _editing => widget.initialTransaction != null;
@@ -54,6 +60,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   @override
   void initState() {
     super.initState();
+    _nameFocus.addListener(() => _handleFocusChanged('name', _nameFocus));
+    _amountFocus.addListener(() => _handleFocusChanged('amount', _amountFocus));
+    _dateFocus.addListener(() => _handleFocusChanged('date', _dateFocus));
+    _timeFocus.addListener(() => _handleFocusChanged('time', _timeFocus));
     _resetFields();
     if (widget.visible) _logSheetInit();
   }
@@ -86,6 +96,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   @override
   void dispose() {
+    _nameFocus.dispose();
+    _amountFocus.dispose();
+    _dateFocus.dispose();
+    _timeFocus.dispose();
     _name.dispose();
     _amount.dispose();
     _date.dispose();
@@ -125,13 +139,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             child: Builder(
               builder: (context) {
                 final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+                final actionBottomInset =
+                    SlideUpPanelMetrics.transactionActionBottomInset +
+                    (_categoryPickerOpen ? 2 : 0);
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     SlideUpPanelMetrics.horizontalInset,
                     14,
                     SlideUpPanelMetrics.horizontalInset,
-                    keyboardInset +
-                        SlideUpPanelMetrics.transactionActionBottomInset,
+                    keyboardInset + actionBottomInset,
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -168,12 +184,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           const SizedBox(height: 14),
                           TextField(
                             controller: _name,
+                            focusNode: _nameFocus,
                             decoration: transactionFieldDecoration(
                               'Tranzakció neve',
                             ),
                           ),
                           const SizedBox(height: 12),
-                          AmountField(controller: _amount),
+                          AmountField(
+                            controller: _amount,
+                            focusNode: _amountFocus,
+                          ),
                           const SizedBox(height: 12),
                           CategorySelectorField(
                             selected: _category,
@@ -189,12 +209,17 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               onSelected: _selectCategory,
                             ),
                           ],
-                          const SizedBox(height: 14),
+                          if (_categoryPickerOpen)
+                            const Spacer()
+                          else
+                            const SizedBox(height: 14),
                           DateTimeFields(
                             dateController: _date,
                             timeController: _time,
                             onPickDate: _pickDate,
                             onPickTime: _pickTime,
+                            dateFocusNode: _dateFocus,
+                            timeFocusNode: _timeFocus,
                           ),
                           if (_error != null) ...[
                             const SizedBox(height: 12),
@@ -274,6 +299,29 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     });
   }
 
+  void _handleFocusChanged(String field, FocusNode node) {
+    final label = _editing ? 'EditTransaction' : 'AddTransaction';
+    if (node.hasFocus) {
+      _focusedField = field;
+      _focusStartedAt = DateTime.now();
+      DebugConsole.log('[Perf] $label focus field=$field active=true');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _focusedField != field) return;
+        DebugConsole.log(
+          '[Perf] $label focus frame field=$field elapsed=${_elapsedMs(_focusStartedAt)}ms',
+        );
+      });
+      return;
+    }
+    if (_focusedField == field) {
+      DebugConsole.log(
+        '[Perf] $label focus field=$field active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
+      );
+      _focusedField = null;
+      _focusStartedAt = null;
+    }
+  }
+
   void _logContentMetrics({
     required double availableHeight,
     required double panelHeight,
@@ -293,7 +341,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         '[Perf] ${editing ? 'EditTransaction' : 'AddTransaction'} layout '
         'panel=${panelHeight.toStringAsFixed(1)} '
         'content=${availableHeight.toStringAsFixed(1)} '
-        'keyboard=${keyboardInset.toStringAsFixed(1)} picker=$pickerOpen',
+        'keyboard=${keyboardInset.toStringAsFixed(1)} picker=$pickerOpen '
+        'focus=${_focusedField ?? 'none'} focusElapsed=${_elapsedMs(_focusStartedAt)}ms',
       );
     });
   }

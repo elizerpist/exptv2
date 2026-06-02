@@ -289,6 +289,24 @@ void main() {
     expect(field.decoration?.focusedBorder, InputBorder.none);
   });
 
+  testWidgets('search pill logs focus performance', (tester) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.pump();
+    await tester.pump();
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] SearchPill focus request'));
+    expect(logs, contains('[Perf] SearchPill focus active=true'));
+    expect(logs, contains('[Perf] SearchPill focus frame'));
+  });
+
   testWidgets('search pill focuses from the whole pill and unfocuses outside', (
     tester,
   ) async {
@@ -507,16 +525,23 @@ void main() {
       metrics: metrics,
       context: context,
     ).dispatch(context);
-    ScrollEndNotification(metrics: metrics, context: context).dispatch(context);
-    await tester.pump();
     await tester.pump();
 
-    final logs = DebugConsole.allText;
+    var logs = DebugConsole.allText;
     expect(logs, contains('[Perf] LogList build'));
     expect(logs, contains('[Perf] LogScroll start'));
     expect(logs, contains('[Perf] LogScroll update'));
-    expect(logs, contains('[Perf] LogScroll load-more schedule'));
+    expect(logs, contains('[Perf] LogScroll load-more pending'));
+    expect(logs, isNot(contains('[Perf] LogScroll load-more fire')));
+
+    ScrollEndNotification(metrics: metrics, context: context).dispatch(context);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    logs = DebugConsole.allText;
     expect(logs, contains('[Perf] LogScroll load-more fire'));
+    expect(logs, contains('reason=scroll-end'));
     expect(logs, contains('[Perf] LogScroll end'));
   });
 
@@ -564,6 +589,13 @@ void main() {
         context: context,
       ).dispatch(context);
     }
+    await tester.pump();
+
+    expect(loadMoreCount, 0);
+
+    ScrollEndNotification(metrics: metrics, context: context).dispatch(context);
+    await tester.pump();
+    await tester.pump();
     await tester.pump();
 
     expect(loadMoreCount, 1);
