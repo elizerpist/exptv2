@@ -217,20 +217,22 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                     ],
                   ),
                 ),
-                _SwipeBorder(
-                  borderKey: ValueKey(
-                    'transaction-logbox-delete-border-${widget.record.id}',
+                if (deleteOpacity > 0)
+                  _SwipeBorder(
+                    borderKey: ValueKey(
+                      'transaction-logbox-delete-border-${widget.record.id}',
+                    ),
+                    opacity: deleteOpacity,
+                    color: AppColors.expense,
                   ),
-                  opacity: deleteOpacity,
-                  color: AppColors.expense,
-                ),
-                _SwipeBorder(
-                  borderKey: ValueKey(
-                    'transaction-logbox-filter-border-${widget.record.id}',
+                if (filterOpacity > 0)
+                  _SwipeBorder(
+                    borderKey: ValueKey(
+                      'transaction-logbox-filter-border-${widget.record.id}',
+                    ),
+                    opacity: filterOpacity,
+                    color: AppColors.primary,
                   ),
-                  opacity: filterOpacity,
-                  color: AppColors.primary,
-                ),
               ],
             ),
           ),

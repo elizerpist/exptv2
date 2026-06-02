@@ -15,7 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('limit editor panel is trimmed to lower the save button', (
+  testWidgets('limit editor panel anchors the save button near the bottom', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -57,8 +57,15 @@ void main() {
     final limitCard = tester.getRect(
       find.byKey(const ValueKey('budget-target-editor-card')),
     );
+    final saveButton = tester.getRect(
+      find.byKey(const ValueKey('limit-save-button')),
+    );
     expect(SlideUpPanelMetrics.budgetBaseHeight, 432);
     expect(limitCard.height, moreOrLessEquals(432, epsilon: 0.1));
+    expect(
+      limitCard.bottom - saveButton.bottom,
+      moreOrLessEquals(SlideUpPanelMetrics.actionBottomInset, epsilon: 1),
+    );
   });
 
   testWidgets(

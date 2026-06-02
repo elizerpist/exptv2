@@ -433,6 +433,30 @@ void main() {
     expect(badgeDecoration.boxShadow, isNull);
   });
 
+  testWidgets('transaction log rows do not build swipe overlays while idle', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          onFastFilter: (_, _) {},
+          onDeleteRequested: (_) => false,
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('transaction-logbox-delete-border-250905')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('transaction-logbox-filter-border-250905')),
+      findsNothing,
+    );
+  });
+
   testWidgets('log list waits until close to bottom before loading more', (
     tester,
   ) async {
@@ -737,13 +761,12 @@ void main() {
     final deleteBorder = tester.widget<Opacity>(
       find.byKey(const ValueKey('transaction-logbox-delete-border-250905')),
     );
-    final filterBorder = tester.widget<Opacity>(
-      find.byKey(const ValueKey('transaction-logbox-filter-border-250905')),
-    );
-
     expect(cardTransform.transform.getTranslation().x, greaterThan(0));
     expect(deleteBorder.opacity, greaterThan(0));
-    expect(filterBorder.opacity, 0);
+    expect(
+      find.byKey(const ValueKey('transaction-logbox-filter-border-250905')),
+      findsNothing,
+    );
 
     await gesture.up();
   });
@@ -798,10 +821,11 @@ void main() {
       ),
     );
 
-    await tester.drag(
-      find.byKey(const ValueKey('transaction-logbox-250905')),
-      const Offset(40, 0),
-    );
+    final rowFinder = find.byKey(const ValueKey('transaction-logbox-250905'));
+    final gesture = await tester.startGesture(tester.getCenter(rowFinder));
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(42, 0));
     await tester.pump();
 
     final cardRect = tester.getRect(
@@ -813,6 +837,8 @@ void main() {
 
     expect(borderRect.width, moreOrLessEquals(cardRect.width, epsilon: 0.1));
     expect(borderRect.height, moreOrLessEquals(cardRect.height, epsilon: 0.1));
+
+    await gesture.up();
   });
 
   testWidgets('logbox avatar tap requests category filter', (tester) async {

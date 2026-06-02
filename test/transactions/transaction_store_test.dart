@@ -276,7 +276,7 @@ void main() {
   });
 
   test(
-    'display log entries are windowed and can be expanded for large datasets',
+    'display log entries expose the full virtualized list for large datasets',
     () async {
       final repository = FakeTransactionRepository();
       for (var index = 0; index < 260; index += 1) {
@@ -298,17 +298,13 @@ void main() {
       final initialEntries = store.visibleDisplayLogEntries;
 
       expect(store.visibleDisplayLogEntryTotalCount, greaterThan(260));
-      expect(
-        initialEntries.length,
-        lessThan(store.visibleDisplayLogEntryTotalCount),
-      );
-      expect(store.hasMoreVisibleDisplayLogEntries, isTrue);
+      expect(initialEntries.length, store.visibleDisplayLogEntryTotalCount);
+      expect(store.hasMoreVisibleDisplayLogEntries, isFalse);
 
       store.loadMoreVisibleDisplayLogEntries();
 
       final nextEntries = store.visibleDisplayLogEntries;
-      expect(nextEntries.length, greaterThan(initialEntries.length));
-      expect(nextEntries.length - initialEntries.length, lessThanOrEqualTo(40));
+      expect(identical(nextEntries, initialEntries), isTrue);
     },
   );
 

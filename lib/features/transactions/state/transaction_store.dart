@@ -49,13 +49,9 @@ class TransactionStore extends ChangeNotifier {
   final _categoryBudgetBarsCache = <String, List<CategoryBudgetBarData>>{};
   final _overviewBudgetItemsCache = <String, List<OverviewBudgetData>>{};
   final _backheaderBudgetItemsCache = <String, List<BackheaderBudgetItem>>{};
-  static const _visibleDisplayLogPageSize = 32;
-
   TransactionSummary? _totalSummaryCache;
   double? _totalIncomeCache;
   double? _totalExpenseCache;
-  var _visibleDisplayLogLimit = _visibleDisplayLogPageSize;
-
   bool get loading => _loading;
   String? get error => _error;
   TransactionType get activeType => _filter.type;
@@ -277,21 +273,18 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionLogEntry> _visibleDisplayLogEntriesFor(
     TransactionFilter filter,
   ) {
-    final key = '${_filterCacheKey(filter)}|limit=$_visibleDisplayLogLimit';
+    final key = _filterCacheKey(filter);
     final cached = _visibleDisplayLogEntriesCache[key];
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
     final entries = <TransactionLogEntry>[];
     String? previousDate;
-    var emittedRows = 0;
     for (final row in _visibleLogEntriesFor(filter)) {
-      if (emittedRows >= _visibleDisplayLogLimit) break;
       if (row.date != previousDate) {
         entries.add(TransactionLogEntry.header(row.date));
         previousDate = row.date;
       }
       entries.add(row);
-      emittedRows += 1;
     }
     final rows = List<TransactionLogEntry>.unmodifiable(entries);
     _visibleDisplayLogEntriesCache[key] = rows;
@@ -424,7 +417,6 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void _invalidateViewCaches() {
-    _visibleDisplayLogLimit = _visibleDisplayLogPageSize;
     _activeCategoriesCache.clear();
     _windowedTransactionsCache.clear();
     _visibleTransactionsCache.clear();
@@ -472,22 +464,15 @@ class TransactionStore extends ChangeNotifier {
 
   void loadMoreVisibleDisplayLogEntries() {
     if (!hasMoreVisibleDisplayLogEntries) return;
-    final previousLimit = _visibleDisplayLogLimit;
-    _visibleDisplayLogLimit += _visibleDisplayLogPageSize;
-    _visibleDisplayLogEntriesCache.clear();
     _prewarmActiveView('log-window-more');
     notifyListeners();
     DebugConsole.log(
-      '[Perf] LogWindow expand from=$previousLimit to=$_visibleDisplayLogLimit '
-      'visible=${visibleDisplayLogEntries.length} total=$visibleDisplayLogEntryTotalCount',
+      '[Perf] LogWindow expand visible=${visibleDisplayLogEntries.length} '
+      'total=$visibleDisplayLogEntryTotalCount',
     );
   }
 
-  void _resetVisibleDisplayWindow() {
-    if (_visibleDisplayLogLimit == _visibleDisplayLogPageSize) return;
-    _visibleDisplayLogLimit = _visibleDisplayLogPageSize;
-    _visibleDisplayLogEntriesCache.clear();
-  }
+  void _resetVisibleDisplayWindow() {}
 
   void _logCacheBuild(
     String label,

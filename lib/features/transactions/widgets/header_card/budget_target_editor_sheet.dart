@@ -140,37 +140,55 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
         child: Builder(
           builder: (context) {
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-            return SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: SlideUpPanelMetrics.horizontalInset,
-                right: SlideUpPanelMetrics.horizontalInset,
-                top: 20,
-                bottom: keyboardInset + SlideUpPanelMetrics.actionBottomInset,
-              ),
-              child: _BudgetLimitCard(
-                item: _activeItem,
-                periodLabel: widget.periodLabel,
-                amountController: _controller,
-                amountFocusNode: _amountFocus,
-                inputLabel: _inputLabel,
-                activeColor: _activeColor,
-                sliderValue: _sliderRange.value,
-                sliderMax: _sliderRange.max,
-                sliderEnabled: _sliderRange.enabled,
-                sliderDivisions: _sliderRange.divisions,
-                saving: _saving,
-                onPrevious: _selectPrevious,
-                onNext: _selectNext,
-                onAvatarDoubleTap: _selectOverviewItem,
-                onReset: _resetLimit,
-                onSliderChanged: _setAmountFromSlider,
-                onSliderChangeEnd: _setAmountFromSlider,
-                onInputChanged: _captureInputAmount,
-                onSetToMax: _setOverviewToMax,
-                onSave: _savePendingChanges,
-                showSetToMax: _activeItem.overview != null,
-                partitionBar: _buildPartitionBar(),
-              ),
+            const horizontalInset = SlideUpPanelMetrics.horizontalInset;
+            return Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(
+                      left: horizontalInset,
+                      right: horizontalInset,
+                      top: 20,
+                      bottom: 16,
+                    ),
+                    child: _BudgetLimitCard(
+                      item: _activeItem,
+                      periodLabel: widget.periodLabel,
+                      amountController: _controller,
+                      amountFocusNode: _amountFocus,
+                      inputLabel: _inputLabel,
+                      activeColor: _activeColor,
+                      sliderValue: _sliderRange.value,
+                      sliderMax: _sliderRange.max,
+                      sliderEnabled: _sliderRange.enabled,
+                      sliderDivisions: _sliderRange.divisions,
+                      saving: _saving,
+                      onPrevious: _selectPrevious,
+                      onNext: _selectNext,
+                      onAvatarDoubleTap: _selectOverviewItem,
+                      onReset: _resetLimit,
+                      onSliderChanged: _setAmountFromSlider,
+                      onSliderChangeEnd: _setAmountFromSlider,
+                      onInputChanged: _captureInputAmount,
+                      onSetToMax: _setOverviewToMax,
+                      showSetToMax: _activeItem.overview != null,
+                      partitionBar: _buildPartitionBar(),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: horizontalInset,
+                    right: horizontalInset,
+                    bottom:
+                        keyboardInset + SlideUpPanelMetrics.actionBottomInset,
+                  ),
+                  child: _BudgetLimitSaveButton(
+                    saving: _saving,
+                    onSave: _savePendingChanges,
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -597,7 +615,6 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.onSliderChangeEnd,
     required this.onInputChanged,
     required this.onSetToMax,
-    required this.onSave,
     required this.showSetToMax,
     required this.partitionBar,
   });
@@ -621,7 +638,6 @@ class _BudgetLimitCard extends StatelessWidget {
   final ValueChanged<double> onSliderChangeEnd;
   final ValueChanged<String> onInputChanged;
   final VoidCallback onSetToMax;
-  final VoidCallback onSave;
   final bool showSetToMax;
   final Widget partitionBar;
 
@@ -754,21 +770,29 @@ class _BudgetLimitCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        FilledButton(
-          key: const ValueKey('limit-save-button'),
-          onPressed: saving ? null : onSave,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.white,
-            minimumSize: const Size.fromHeight(50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(25),
-            ),
-          ),
-          child: Text(saving ? 'Mentés...' : 'Mentés'),
-        ),
       ],
+    );
+  }
+}
+
+class _BudgetLimitSaveButton extends StatelessWidget {
+  const _BudgetLimitSaveButton({required this.saving, required this.onSave});
+
+  final bool saving;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      key: const ValueKey('limit-save-button'),
+      onPressed: saving ? null : onSave,
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.white,
+        minimumSize: const Size.fromHeight(50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+      ),
+      child: Text(saving ? 'Mentés...' : 'Mentés'),
     );
   }
 }

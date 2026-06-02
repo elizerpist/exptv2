@@ -55,7 +55,6 @@ class _TransactionLogListState extends State<TransactionLogList> {
   bool _loadMorePending = false;
   int? _lastRequestedEntryCount;
   int _buildPassId = 0;
-  DateTime? _buildPassStartedAt;
   int? _lastLoggedBuildEntryCount;
   bool? _lastLoggedBuildHasMore;
   DateTime? _lastScrollStartedAt;
@@ -105,12 +104,10 @@ class _TransactionLogListState extends State<TransactionLogList> {
           final entry = logEntries[index];
           final header = entry.header;
           if (header != null) {
-            _logItemBuild(buildPassId, index, logEntries.length, 'header');
             return _DateHeader(date: header);
           }
           final ghost = entry.ghost;
           if (ghost != null) {
-            _logItemBuild(buildPassId, index, logEntries.length, 'ghost');
             return RecurringGhostLogBox(
               key: ValueKey('recurring-ghost-log-row-${ghost.id}'),
               ghost: ghost,
@@ -118,7 +115,6 @@ class _TransactionLogListState extends State<TransactionLogList> {
             );
           }
           final record = entry.record!;
-          _logItemBuild(buildPassId, index, logEntries.length, 'record');
           final category = _categoryForId(record.transactionCategoryID);
           return TransactionLogBox(
             key: ValueKey('transaction-log-row-${record.id}'),
@@ -224,7 +220,6 @@ class _TransactionLogListState extends State<TransactionLogList> {
 
   int _beginBuildPass() {
     _buildPassId += 1;
-    _buildPassStartedAt = DateTime.now();
     return _buildPassId;
   }
 
@@ -249,18 +244,6 @@ class _TransactionLogListState extends State<TransactionLogList> {
         'jank=${elapsed > 32}',
       );
     });
-  }
-
-  void _logItemBuild(int buildPassId, int index, int entryCount, String kind) {
-    if (index != 0 && index != entryCount - 1 && index % 32 != 0) return;
-    final startedAt = _buildPassStartedAt;
-    final elapsed = startedAt == null
-        ? 0
-        : DateTime.now().difference(startedAt).inMilliseconds;
-    DebugConsole.log(
-      '[Perf] LogList item-build id=$buildPassId index=$index '
-      'entries=$entryCount kind=$kind passElapsed=${elapsed}ms',
-    );
   }
 
   void _logScrollNotification(ScrollNotification notification, int entryCount) {
