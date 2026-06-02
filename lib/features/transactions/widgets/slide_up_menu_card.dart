@@ -22,6 +22,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.focusVeilOpacity = 0.28,
     this.dragExclusionKeys = const <GlobalKey>[],
     this.openRequestedAt,
+    this.deferEntryAnimation = false,
   });
 
   final Key cardKey;
@@ -37,6 +38,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final double focusVeilOpacity;
   final List<GlobalKey> dragExclusionKeys;
   final DateTime? openRequestedAt;
+  final bool deferEntryAnimation;
 
   @override
   State<SlideUpMenuCard> createState() => _SlideUpMenuCardState();
@@ -71,6 +73,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   double? _lastLoggedDragOffset;
   DateTime? _openStartedAt;
   DateTime? _dragStartedAt;
+  int _openGeneration = 0;
   DateTime? _snapStartedAt;
   DateTime? _dismissStartedAt;
 
@@ -250,6 +253,30 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     _entry.stop();
     _entry.value = 0;
     _openStartedAt = DateTime.now();
+    final generation = ++_openGeneration;
+    if (widget.deferEntryAnimation && !fromInitialMount) {
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel open staged '
+        'requestElapsed=${_elapsedMs(widget.openRequestedAt)}ms',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.visible || generation != _openGeneration) {
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !widget.visible || generation != _openGeneration) {
+            return;
+          }
+          _beginOpenAnimation(fromInitialMount: fromInitialMount);
+        });
+        WidgetsBinding.instance.scheduleFrame();
+      });
+      return;
+    }
+    _beginOpenAnimation(fromInitialMount: fromInitialMount);
+  }
+
+  void _beginOpenAnimation({required bool fromInitialMount}) {
     DebugConsole.log(
       '[SlideUpMenu] $_debugLabel open start '
       'duration=${_entry.duration!.inMilliseconds}ms '
@@ -273,6 +300,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     _dragStartedAt = null;
     _snapStartedAt = null;
     _dismissStartedAt = null;
+    _openGeneration++;
   }
 
   void _logEntryStatus(AnimationStatus status) {

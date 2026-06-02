@@ -31,6 +31,63 @@ void main() {
     );
   });
 
+  testWidgets('slide card can stage entry animation until after layout', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    var visible = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return Stack(
+                  children: [
+                    TextButton(
+                      key: const ValueKey('show-slide-card'),
+                      onPressed: () => setState(() => visible = true),
+                      child: const Text('Show'),
+                    ),
+                    SlideUpMenuCard(
+                      cardKey: const ValueKey('test-slide-card'),
+                      debugLabel: 'DeferredMenu',
+                      panelHeight: 260,
+                      visible: visible,
+                      deferEntryAnimation: true,
+                      child: const SizedBox(height: 260),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('show-slide-card')));
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      contains('[SlideUpMenu] DeferredMenu open staged'),
+    );
+    expect(
+      DebugConsole.allText,
+      isNot(contains('[SlideUpMenu] DeferredMenu open animating')),
+    );
+
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      contains('[SlideUpMenu] DeferredMenu open animating'),
+    );
+  });
 
   testWidgets('slide card renders a dark focus veil behind the popup', (
     tester,
@@ -385,9 +442,7 @@ void main() {
 
     final before = _slideCardTranslationY(tester);
     const panelTop = 600 - 220.0;
-    final gesture = await tester.startGesture(
-      const Offset(180, panelTop + 24),
-    );
+    final gesture = await tester.startGesture(const Offset(180, panelTop + 24));
     await gesture.moveBy(const Offset(0, 70));
     await tester.pump();
 
@@ -404,10 +459,7 @@ void main() {
 
     final after = _slideCardTranslationY(tester);
     expect(after, moreOrLessEquals(before, epsilon: 0.1));
-    expect(
-      DebugConsole.allText,
-      contains('[SlideUpMenu] TestMenu snap start'),
-    );
+    expect(DebugConsole.allText, contains('[SlideUpMenu] TestMenu snap start'));
     expect(
       DebugConsole.allText,
       contains('[SlideUpMenu] TestMenu snap complete'),

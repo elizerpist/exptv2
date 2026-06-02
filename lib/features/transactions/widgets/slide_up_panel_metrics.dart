@@ -8,6 +8,7 @@ class SlideUpPanelMetrics {
   const SlideUpPanelMetrics._();
 
   static const actionBottomInset = 24.0;
+  static const budgetActionBottomInset = 68.0;
   static const transactionActionBottomInset = 44.0;
   static const horizontalInset = 20.0;
   static const keyboardInsetCap = 180.0;

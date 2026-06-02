@@ -129,6 +129,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           panelHeight: panelHeight,
           visible: widget.visible,
           openRequestedAt: widget.openRequestedAt,
+          deferEntryAnimation: true,
           dragExclusionKeys: _categoryPickerOpen
               ? [_categoryPickerBoundaryKey]
               : const <GlobalKey>[],

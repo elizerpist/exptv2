@@ -455,6 +455,7 @@ void main() {
       ),
     );
     expect(slideCard.entryDuration, const Duration(milliseconds: 192));
+    expect(slideCard.deferEntryAnimation, isTrue);
     final cardBefore = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );

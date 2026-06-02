@@ -15,58 +15,60 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('limit editor panel anchors the save button near the bottom', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets(
+    'limit editor keeps save button close to the budget limit field',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final overview = OverviewBudgetData(
-      kind: BudgetGoalKind.expenseBudget,
-      window: LimitWindow.monthly,
-      periodKey: '2026-05',
-      amount: 100,
-      hasLimit: true,
-      limitAmount: 1000,
-      alertActive: false,
-      sourceLimit: null,
-    );
-    final item = BackheaderBudgetItem.overview(overview);
+      final overview = OverviewBudgetData(
+        kind: BudgetGoalKind.expenseBudget,
+        window: LimitWindow.monthly,
+        periodKey: '2026-05',
+        amount: 100,
+        hasLimit: true,
+        limitAmount: 1000,
+        alertActive: false,
+        sourceLimit: null,
+      );
+      final item = BackheaderBudgetItem.overview(overview);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: BudgetTargetEditorSheet(
-            item: item,
-            items: [item],
-            periodLabel: '2026 május',
-            categoryBars: const <CategoryBudgetBarData>[],
-            periodIncome: 1000,
-            onCancel: () {},
-            onActiveItemChanged: (_) {},
-            onSaveOverview:
-                (_, {required limitAmount, required alertActive}) async {},
-            onSaveCategory:
-                (_, {required limitAmount, required alertActive}) async {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BudgetTargetEditorSheet(
+              item: item,
+              items: [item],
+              periodLabel: '2026 május',
+              categoryBars: const <CategoryBudgetBarData>[],
+              periodIncome: 1000,
+              onCancel: () {},
+              onActiveItemChanged: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (_, {required limitAmount, required alertActive}) async {},
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final limitCard = tester.getRect(
-      find.byKey(const ValueKey('budget-target-editor-card')),
-    );
-    final saveButton = tester.getRect(
-      find.byKey(const ValueKey('limit-save-button')),
-    );
-    expect(SlideUpPanelMetrics.budgetBaseHeight, 432);
-    expect(limitCard.height, moreOrLessEquals(432, epsilon: 0.1));
-    expect(
-      limitCard.bottom - saveButton.bottom,
-      moreOrLessEquals(SlideUpPanelMetrics.actionBottomInset, epsilon: 1),
-    );
-  });
+      final limitCard = tester.getRect(
+        find.byKey(const ValueKey('budget-target-editor-card')),
+      );
+      final saveButton = tester.getRect(
+        find.byKey(const ValueKey('limit-save-button')),
+      );
+      final amountInput = tester.getRect(
+        find.byKey(const ValueKey('limit-amount-input')),
+      );
+      expect(SlideUpPanelMetrics.budgetBaseHeight, 432);
+      expect(limitCard.height, moreOrLessEquals(432, epsilon: 0.1));
+      expect(saveButton.top - amountInput.bottom, lessThanOrEqualTo(20));
+      expect(limitCard.bottom - saveButton.bottom, greaterThan(32));
+    },
+  );
 
   testWidgets(
     'expanded home stage saves first item as overview expense budget',

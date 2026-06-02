@@ -181,7 +181,8 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                     left: horizontalInset,
                     right: horizontalInset,
                     bottom:
-                        keyboardInset + SlideUpPanelMetrics.actionBottomInset,
+                        keyboardInset +
+                        SlideUpPanelMetrics.budgetActionBottomInset,
                   ),
                   child: _BudgetLimitSaveButton(
                     saving: _saving,
