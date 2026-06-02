@@ -44,17 +44,6 @@ class BackheaderStyleSurface extends StatelessWidget {
       child: Stack(
         children: [
           switch (style) {
-            BackheaderStyle.colorFieldPartition => _ColorField(
-              current: current,
-              amountText: amountText,
-              color: color,
-              segments: segments,
-            ),
-            BackheaderStyle.partitionDashboard => _PartitionDashboard(
-              current: current,
-              amountText: amountText,
-              segments: segments,
-            ),
             BackheaderStyle.heroToken => _HeroToken(
               current: current,
               amountText: amountText,
@@ -65,16 +54,6 @@ class BackheaderStyleSurface extends StatelessWidget {
               current: current,
               amountText: amountText,
               color: color,
-              segments: segments,
-            ),
-            BackheaderStyle.mosaicBudget => _MosaicBudget(
-              current: current,
-              amountText: amountText,
-              segments: segments,
-            ),
-            BackheaderStyle.ledgerStrip => _LedgerStrip(
-              current: current,
-              amountText: amountText,
               segments: segments,
             ),
             BackheaderStyle.classic => const SizedBox.shrink(),
@@ -101,142 +80,28 @@ class BackheaderStyleSurface extends StatelessWidget {
     _ => AppColors.primary,
   };
 
-  bool get _usesLightDots =>
-      style == BackheaderStyle.partitionDashboard ||
-      style == BackheaderStyle.colorFieldPartition ||
-      style == BackheaderStyle.orbitBudget ||
-      style == BackheaderStyle.ledgerStrip;
+  bool get _usesLightDots => style == BackheaderStyle.orbitBudget;
 
   Color _background(Color color) => switch (style) {
-    BackheaderStyle.colorFieldPartition || BackheaderStyle.orbitBudget => color,
-    BackheaderStyle.partitionDashboard => const Color(0xFF111827),
-    BackheaderStyle.ledgerStrip => const Color(0xFF0F766E),
+    BackheaderStyle.orbitBudget => color,
     _ => AppColors.gray100,
   };
 
   List<Color> get _segmentColors {
+    const fallback = [
+      AppColors.primary,
+      Color(0xFFF59E0B),
+      Color(0xFFEF4444),
+      Color(0xFF3B82F6),
+      Color(0xFFA855F7),
+      Color(0xFF14B8A6),
+    ];
     final colors = <Color>[for (final bar in categoryBars) bar.color];
-    if (colors.isEmpty) {
-      return const [
-        AppColors.primary,
-        Color(0xFFF59E0B),
-        Color(0xFFEF4444),
-        Color(0xFF3B82F6),
-      ];
+    for (final color in fallback) {
+      if (colors.length >= 6) break;
+      if (!colors.contains(color)) colors.add(color);
     }
     return colors.take(6).toList();
-  }
-}
-
-class _ColorField extends StatelessWidget {
-  const _ColorField({
-    required this.current,
-    required this.amountText,
-    required this.color,
-    required this.segments,
-  });
-
-  final BackheaderBudgetItem current;
-  final String amountText;
-  final Color color;
-  final List<Color> segments;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: const ValueKey('backheader-style-colorFieldPartition-content'),
-      padding: const EdgeInsets.fromLTRB(30, 34, 30, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              _Avatar(
-                color: AppColors.white.withValues(alpha: 0.18),
-                textColor: AppColors.white,
-                title: current.title,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _TitleBlock(
-                  title: current.title,
-                  subtitle: 'AKTÍV KATEGÓRIA',
-                  light: true,
-                ),
-              ),
-              _AmountBlock(amountText: amountText, light: true),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Közös budget partition',
-            style: TextStyle(
-              color: Color(0xCCFFFFFF),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _PartitionStrip(colors: segments, height: 28, activeColor: color),
-        ],
-      ),
-    );
-  }
-}
-
-class _PartitionDashboard extends StatelessWidget {
-  const _PartitionDashboard({
-    required this.current,
-    required this.amountText,
-    required this.segments,
-  });
-
-  final BackheaderBudgetItem current;
-  final String amountText;
-  final List<Color> segments;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: const ValueKey('backheader-style-partitionDashboard-content'),
-      padding: const EdgeInsets.fromLTRB(30, 34, 30, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _TitleBlock(
-                  title: current.title,
-                  subtitle: 'BUDGET MAP',
-                  light: true,
-                ),
-              ),
-              _AmountBlock(
-                amountText: amountText,
-                light: true,
-                secondary: 'maradék fókusz',
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F2937),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: _PartitionStrip(
-                colors: segments,
-                height: 44,
-                activeColor: AppColors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -257,24 +122,26 @@ class _HeroToken extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('backheader-style-heroToken-content'),
-      padding: const EdgeInsets.fromLTRB(30, 28, 30, 0),
+      padding: const EdgeInsets.fromLTRB(30, 44, 30, 0),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               _Token(color: color, title: current.title),
-              const SizedBox(width: 18),
+              const SizedBox(width: 16),
               Expanded(
                 child: _TitleBlock(
                   title: current.title,
                   subtitle: 'CATEGORY TOKEN',
                 ),
               ),
+              const SizedBox(width: 12),
               _AmountBlock(amountText: amountText),
             ],
           ),
-          const SizedBox(height: 16),
-          _PartitionStrip(colors: segments, height: 16, activeColor: color),
+          const SizedBox(height: 14),
+          _PartitionStrip(colors: segments, height: 14, activeColor: color),
         ],
       ),
     );
@@ -298,56 +165,7 @@ class _OrbitBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('backheader-style-orbitBudget-content'),
-      padding: const EdgeInsets.fromLTRB(30, 34, 30, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: _TitleBlock(
-              title: current.title,
-              subtitle: amountText,
-              light: true,
-            ),
-          ),
-          SizedBox(
-            width: 96,
-            height: 96,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CustomPaint(
-                  size: const Size.square(86),
-                  painter: _OrbitPainter(segments),
-                ),
-                _Avatar(
-                  color: AppColors.white.withValues(alpha: 0.18),
-                  textColor: AppColors.white,
-                  title: current.title,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MosaicBudget extends StatelessWidget {
-  const _MosaicBudget({
-    required this.current,
-    required this.amountText,
-    required this.segments,
-  });
-
-  final BackheaderBudgetItem current;
-  final String amountText;
-  final List<Color> segments;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: const ValueKey('backheader-style-mosaicBudget-content'),
-      padding: const EdgeInsets.fromLTRB(30, 28, 30, 0),
+      padding: const EdgeInsets.fromLTRB(30, 38, 30, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -356,83 +174,36 @@ class _MosaicBudget extends StatelessWidget {
               Expanded(
                 child: _TitleBlock(
                   title: current.title,
-                  subtitle: 'PARTITION MOSAIC',
-                ),
-              ),
-              _AmountBlock(amountText: amountText),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _MosaicTiles(colors: segments, title: current.title),
-        ],
-      ),
-    );
-  }
-}
-
-class _LedgerStrip extends StatelessWidget {
-  const _LedgerStrip({
-    required this.current,
-    required this.amountText,
-    required this.segments,
-  });
-
-  final BackheaderBudgetItem current;
-  final String amountText;
-  final List<Color> segments;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: const ValueKey('backheader-style-ledgerStrip-content'),
-      padding: const EdgeInsets.fromLTRB(30, 34, 30, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _TitleBlock(
-                  title: current.title,
-                  subtitle: 'LEDGER STRIP',
+                  subtitle: amountText,
                   light: true,
                 ),
               ),
-              _AmountBlock(amountText: amountText, light: true),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 74,
+                height: 74,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CustomPaint(
+                      size: const Size.square(66),
+                      painter: _OrbitPainter(segments),
+                    ),
+                    _Avatar(
+                      color: AppColors.white.withValues(alpha: 0.18),
+                      textColor: AppColors.white,
+                      title: current.title,
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 12),
           _PartitionStrip(
             colors: segments,
-            height: 22,
+            height: 14,
             activeColor: AppColors.white,
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.white.withValues(alpha: 0.44),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 5,
-                ),
-                child: Text(
-                  '${_initial(current.title)} active',
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -459,6 +230,7 @@ class _TitleBlock extends StatelessWidget {
         : AppColors.gray600;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           subtitle,
@@ -468,6 +240,7 @@ class _TitleBlock extends StatelessWidget {
             color: subColor,
             fontSize: 10,
             fontWeight: FontWeight.w800,
+            height: 1.2,
           ),
         ),
         const SizedBox(height: 4),
@@ -479,6 +252,7 @@ class _TitleBlock extends StatelessWidget {
             color: titleColor,
             fontSize: 21,
             fontWeight: FontWeight.w800,
+            height: 1.12,
           ),
         ),
       ],
@@ -487,47 +261,22 @@ class _TitleBlock extends StatelessWidget {
 }
 
 class _AmountBlock extends StatelessWidget {
-  const _AmountBlock({
-    required this.amountText,
-    this.light = false,
-    this.secondary,
-  });
+  const _AmountBlock({required this.amountText});
 
   final String amountText;
-  final bool light;
-  final String? secondary;
 
   @override
   Widget build(BuildContext context) {
-    final color = light ? AppColors.white : AppColors.gray800;
-    final subColor = light
-        ? AppColors.white.withValues(alpha: 0.70)
-        : AppColors.gray600;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          amountText,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.right,
-          style: TextStyle(
-            color: color,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        if (secondary != null) ...[
-          const SizedBox(height: 3),
-          Text(
-            secondary!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: TextStyle(color: subColor, fontSize: 10),
-          ),
-        ],
-      ],
+    return Text(
+      amountText,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
+      style: const TextStyle(
+        color: AppColors.gray800,
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+      ),
     );
   }
 }
@@ -546,7 +295,7 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CircleAvatar(
-      radius: 20,
+      radius: 16,
       backgroundColor: color,
       child: Text(
         _initial(title),
@@ -565,8 +314,8 @@ class _Token extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 70,
-      height: 70,
+      width: 58,
+      height: 58,
       child: DecoratedBox(
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         child: Center(
@@ -574,7 +323,7 @@ class _Token extends StatelessWidget {
             _initial(title),
             style: const TextStyle(
               color: AppColors.white,
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -598,6 +347,7 @@ class _PartitionStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
+      key: const ValueKey('backheader-partition-strip'),
       borderRadius: BorderRadius.circular(height / 2),
       child: SizedBox(
         height: height,
@@ -610,103 +360,6 @@ class _PartitionStrip extends StatelessWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MosaicTiles extends StatelessWidget {
-  const _MosaicTiles({required this.colors, required this.title});
-
-  final List<Color> colors;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 78,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          return Stack(
-            children: [
-              _tile(
-                0,
-                0,
-                width * 0.42,
-                48,
-                colors[0],
-                title: _initial(title),
-                active: true,
-              ),
-              _tile(
-                width * 0.45,
-                0,
-                width * 0.23,
-                48,
-                colors.length > 1 ? colors[1] : const Color(0xFFF59E0B),
-              ),
-              _tile(
-                width * 0.71,
-                0,
-                width * 0.29,
-                48,
-                colors.length > 2 ? colors[2] : const Color(0xFFEF4444),
-              ),
-              _tile(
-                0,
-                56,
-                width * 0.30,
-                22,
-                colors.length > 3 ? colors[3] : const Color(0xFF3B82F6),
-              ),
-              _tile(
-                width * 0.34,
-                56,
-                width * 0.24,
-                22,
-                colors.length > 4 ? colors[4] : const Color(0xFFA855F7),
-              ),
-              _tile(width * 0.62, 56, width * 0.38, 22, AppColors.gray300),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _tile(
-    double x,
-    double y,
-    double width,
-    double height,
-    Color color, {
-    String? title,
-    bool active = false,
-  }) {
-    return Positioned(
-      left: x,
-      top: y,
-      width: width,
-      height: height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(14),
-          border: active ? Border.all(color: AppColors.white, width: 3) : null,
-        ),
-        child: title == null
-            ? const SizedBox.shrink()
-            : Center(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
       ),
     );
   }
@@ -758,7 +411,7 @@ class _OrbitPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final base = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = 10
       ..strokeCap = StrokeCap.round
       ..color = AppColors.white.withValues(alpha: 0.22);
     canvas.drawArc(rect.deflate(8), 0, math.pi * 2, false, base);
@@ -768,7 +421,7 @@ class _OrbitPainter extends CustomPainter {
     for (final color in colors) {
       final paint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 12
+        ..strokeWidth = 10
         ..strokeCap = StrokeCap.round
         ..color = color == colors.first ? AppColors.white : color;
       canvas.drawArc(rect.deflate(8), start, sweep * 0.78, false, paint);

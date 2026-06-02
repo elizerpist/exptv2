@@ -20,18 +20,22 @@ void main() {
     );
 
     expect(find.text('Jelenlegi bar rendszer (jelenlegi)'), findsOneWidget);
-    expect(find.text('A - Color Field Partition'), findsOneWidget);
-    expect(find.text('B - Partition Dashboard'), findsOneWidget);
     expect(find.text('C - Hero Token'), findsOneWidget);
     expect(find.text('D - Orbit Budget'), findsOneWidget);
-    expect(find.text('E - Mosaic Budget'), findsOneWidget);
-    expect(find.text('F - Ledger Strip'), findsOneWidget);
+    expect(find.text('A - Color Field Partition'), findsNothing);
+    expect(find.text('B - Partition Dashboard'), findsNothing);
+    expect(find.text('E - Mosaic Budget'), findsNothing);
+    expect(find.text('F - Ledger Strip'), findsNothing);
     expect(
       find.byKey(const ValueKey('backheader-style-preview-classic')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('backheader-style-preview-ledgerStrip')),
+      find.byKey(const ValueKey('backheader-style-preview-heroToken')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-style-preview-orbitBudget')),
       findsOneWidget,
     );
   });

@@ -105,7 +105,7 @@ void main() {
             width: 390,
             height: 260,
             child: CategoryBudgetStage(
-              backheaderStyle: BackheaderStyle.colorFieldPartition,
+              backheaderStyle: BackheaderStyle.heroToken,
               items: bars.map(BackheaderBudgetItem.category).toList(),
               categoryBars: bars,
               onItemTap: (item) => tapped = item,
@@ -120,7 +120,11 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('backheader-style-colorFieldPartition')),
+      find.byKey(const ValueKey('backheader-style-heroToken')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-partition-strip')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('category-budget-bar')), findsNothing);
@@ -181,7 +185,7 @@ void main() {
               width: 390,
               height: 260,
               child: CategoryBudgetStage(
-                backheaderStyle: BackheaderStyle.mosaicBudget,
+                backheaderStyle: BackheaderStyle.orbitBudget,
                 items: [
                   overview,
                   BackheaderBudgetItem.category(food),

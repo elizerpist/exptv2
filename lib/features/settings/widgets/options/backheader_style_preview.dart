@@ -25,15 +25,10 @@ class BackheaderStylePreview extends StatelessWidget {
     );
   }
 
-  Color get _background {
-    return switch (style) {
-      BackheaderStyle.partitionDashboard => const Color(0xFF111827),
-      BackheaderStyle.colorFieldPartition ||
-      BackheaderStyle.orbitBudget => const Color(0xFF22C55E),
-      BackheaderStyle.ledgerStrip => const Color(0xFF0F766E),
-      _ => AppColors.gray100,
-    };
-  }
+  Color get _background => switch (style) {
+    BackheaderStyle.orbitBudget => const Color(0xFF22C55E),
+    _ => AppColors.gray100,
+  };
 
   Widget _content() {
     return switch (style) {
@@ -44,44 +39,31 @@ class BackheaderStylePreview extends StatelessWidget {
           Expanded(child: _miniStrip()),
         ],
       ),
-      BackheaderStyle.orbitBudget => Center(
-        child: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.white, width: 5),
-          ),
-        ),
-      ),
-      BackheaderStyle.mosaicBudget => Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: const [
-          _Tile(width: 30, color: Color(0xFF22C55E)),
-          _Tile(width: 18, color: Color(0xFFF59E0B)),
-          _Tile(width: 22, color: Color(0xFFEF4444)),
-          _Tile(width: 42, color: Color(0xFF3B82F6)),
-        ],
-      ),
-      BackheaderStyle.ledgerStrip => Column(
+      BackheaderStyle.orbitBudget => Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _miniStrip(),
-          const SizedBox(height: 5),
-          _line(AppColors.white),
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.white, width: 3),
+            ),
+          ),
+          const SizedBox(height: 3),
+          _miniStrip(light: true),
         ],
       ),
-      _ => Column(
+      BackheaderStyle.classic => Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [_line(_foreground), const SizedBox(height: 6), _miniStrip()],
+        children: [
+          _line(AppColors.gray800),
+          const SizedBox(height: 6),
+          _miniStrip(),
+        ],
       ),
     };
   }
-
-  Color get _foreground => style == BackheaderStyle.partitionDashboard
-      ? AppColors.white
-      : AppColors.gray800;
 
   Widget _line(Color color) => Container(
     width: 44,
@@ -92,38 +74,33 @@ class BackheaderStylePreview extends StatelessWidget {
     ),
   );
 
-  Widget _miniStrip() {
+  Widget _miniStrip({bool light = false}) {
     return SizedBox(
-      height: 10,
+      height: 7,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(7),
         child: Row(
-          children: const [
-            Expanded(flex: 3, child: ColoredBox(color: Color(0xFF22C55E))),
-            Expanded(flex: 2, child: ColoredBox(color: Color(0xFFF59E0B))),
-            Expanded(flex: 2, child: ColoredBox(color: Color(0xFFEF4444))),
-            Expanded(flex: 3, child: ColoredBox(color: Color(0xFF3B82F6))),
+          children: [
+            Expanded(
+              flex: 3,
+              child: ColoredBox(
+                color: light ? AppColors.white : const Color(0xFF22C55E),
+              ),
+            ),
+            const Expanded(
+              flex: 2,
+              child: ColoredBox(color: Color(0xFFF59E0B)),
+            ),
+            const Expanded(
+              flex: 2,
+              child: ColoredBox(color: Color(0xFFEF4444)),
+            ),
+            const Expanded(
+              flex: 3,
+              child: ColoredBox(color: Color(0xFF3B82F6)),
+            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Tile extends StatelessWidget {
-  const _Tile({required this.width, required this.color});
-
-  final double width;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: 11,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(4),
       ),
     );
   }

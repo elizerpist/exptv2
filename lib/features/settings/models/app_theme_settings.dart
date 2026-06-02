@@ -19,12 +19,8 @@ enum MagnetType {
 
 enum BackheaderStyle {
   classic('classic'),
-  colorFieldPartition('colorFieldPartition'),
-  partitionDashboard('partitionDashboard'),
   heroToken('heroToken'),
-  orbitBudget('orbitBudget'),
-  mosaicBudget('mosaicBudget'),
-  ledgerStrip('ledgerStrip');
+  orbitBudget('orbitBudget');
 
   const BackheaderStyle(this.nativeValue);
   final String nativeValue;
@@ -39,24 +35,14 @@ enum BackheaderStyle {
 
   String get displayTitle => switch (this) {
     BackheaderStyle.classic => 'Jelenlegi bar rendszer',
-    BackheaderStyle.colorFieldPartition => 'A - Color Field Partition',
-    BackheaderStyle.partitionDashboard => 'B - Partition Dashboard',
     BackheaderStyle.heroToken => 'C - Hero Token',
     BackheaderStyle.orbitBudget => 'D - Orbit Budget',
-    BackheaderStyle.mosaicBudget => 'E - Mosaic Budget',
-    BackheaderStyle.ledgerStrip => 'F - Ledger Strip',
   };
 
   String get description => switch (this) {
     BackheaderStyle.classic => 'A mostani kategória/overview bar rendszer',
-    BackheaderStyle.colorFieldPartition =>
-      'Kategóriaszínű felület közös partition strippel',
-    BackheaderStyle.partitionDashboard =>
-      'Sötét budget map partition blokkokkal',
     BackheaderStyle.heroToken => 'Nagy aktív kategória token mini partitionnel',
     BackheaderStyle.orbitBudget => 'Kategóriaszínű orbit/ring budget nézet',
-    BackheaderStyle.mosaicBudget => 'Treemap jellegű budget mosaic',
-    BackheaderStyle.ledgerStrip => 'Pénzügyi segment strip aktív labellel',
   };
 }
 

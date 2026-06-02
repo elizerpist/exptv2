@@ -31,7 +31,7 @@ void main() {
                   'theme': 'Türkiz',
                   'backgroundColor': 'gray',
                   'boxColor': 'white',
-                  'backheaderStyle': 'partitionDashboard',
+                  'backheaderStyle': 'heroToken',
                 },
                 'fastInfoConfig': <String, Object?>{
                   'pills': <Object?>[
@@ -129,10 +129,7 @@ void main() {
 
     expect(settings.themeSettings.magnetType, MagnetType.magnetcard);
     expect(settings.themeSettings.cardColor, AppCardColor.lightgray);
-    expect(
-      settings.themeSettings.backheaderStyle,
-      BackheaderStyle.partitionDashboard,
-    );
+    expect(settings.themeSettings.backheaderStyle, BackheaderStyle.heroToken);
     expect(settings.fastInfoConfig.pills.first?.label, 'Megtakarítás');
     expect(settings.fastInfoConfig.boxes.first?.extra, '-4,500 Ft');
   });
@@ -157,18 +154,27 @@ void main() {
     expect(payload['backheaderStyle'], 'orbitBudget');
   });
 
-  test('backheader style defaults to classic for missing or unknown values', () {
-    expect(
-      AppThemeSettings.fromMap(const <String, Object?>{}).backheaderStyle,
-      BackheaderStyle.classic,
-    );
-    expect(
-      AppThemeSettings.fromMap(const <String, Object?>{
-        'backheaderStyle': 'not-a-style',
-      }).backheaderStyle,
-      BackheaderStyle.classic,
-    );
-  });
+  test(
+    'backheader style defaults to classic for missing or unknown values',
+    () {
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{}).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{
+          'backheaderStyle': 'not-a-style',
+        }).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{
+          'backheaderStyle': 'mosaicBudget',
+        }).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+    },
+  );
 
   test('updates FastInfo config through native bridge', () async {
     final config = FastInfoConfig(
