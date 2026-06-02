@@ -228,7 +228,7 @@ void main() {
     );
   });
 
-  testWidgets('category bar fades spent part and keeps remaining part strong', (
+  testWidgets('category bar width shrinks as spending consumes limit', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -245,10 +245,37 @@ void main() {
       ),
     );
 
-    final spent = tester.widget<FractionallySizedBox>(
-      find.byKey(const ValueKey('category-budget-spent-overlay')),
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('category-budget-bar')),
     );
-    expect(spent.widthFactor, moreOrLessEquals(0.1, epsilon: 0.001));
+    expect(bar.width, moreOrLessEquals(270, epsilon: 0.5));
+    expect(
+      find.byKey(const ValueKey('category-budget-spent-overlay')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('category bar keeps minimum icon width at full spending', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 300,
+            child: CategoryBudgetBar(
+              bar: barFixture(6, 'Food', 12000, 10000),
+              onTap: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('category-budget-bar')),
+    );
+    expect(bar.width, moreOrLessEquals(84, epsilon: 0.5));
   });
 
   testWidgets('repeated taps on a bar stay single-tap only', (tester) async {
@@ -304,10 +331,16 @@ void main() {
       ),
     );
 
-    final fill = tester.widget<FractionallySizedBox>(
-      find.byKey(const ValueKey('overview-budget-remaining-fill')),
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('category-budget-bar')),
     );
-    expect(fill.widthFactor, moreOrLessEquals(0.75, epsilon: 0.001));
+    final fillFinder = find.byKey(
+      const ValueKey('overview-budget-remaining-fill'),
+    );
+    expect(fillFinder, findsNothing);
+    // Stage width 390 minus 40 px insets on each side gives a 310 px slot.
+    // Remaining ratio is 0.75, so the visible bar is 232.5 px wide.
+    expect(bar.width, moreOrLessEquals(232.5, epsilon: 0.5));
   });
 
   testWidgets(
@@ -375,6 +408,7 @@ void main() {
       expect(frameDecoration.color, Colors.transparent);
       expect(frameDecoration.boxShadow, isNull);
       expect(maskRect, equals(barRect));
+      expect(maskRect.width, moreOrLessEquals(barRect.width, epsilon: 0.1));
       expect(
         find.byKey(const ValueKey('budget-progress-frame-border')),
         findsNothing,
@@ -609,7 +643,7 @@ void main() {
     expect(amount.style!.fontSize, moreOrLessEquals(16.5, epsilon: 0.01));
   });
 
-  testWidgets('progress frame overhang is equal around active bar', (
+  testWidgets('progress frame keeps vertical overhang around active bar', (
     tester,
   ) async {
     final bars = [barFixture(6, 'Food', 50, 0)];
@@ -641,16 +675,13 @@ void main() {
     final bar = tester.getRect(
       find.byKey(const ValueKey('category-budget-bar')),
     );
-    expect(bar.center.dx, moreOrLessEquals(frame.center.dx, epsilon: 0.1));
+    expect(bar.left - frame.left, moreOrLessEquals(BudgetBarGeometry.overhang));
     expect(bar.center.dy, moreOrLessEquals(frame.center.dy, epsilon: 0.1));
-    expect(
-      bar.left - frame.left,
-      moreOrLessEquals(frame.right - bar.right, epsilon: 0.1),
-    );
     expect(
       bar.top - frame.top,
       moreOrLessEquals(frame.bottom - bar.bottom, epsilon: 0.1),
     );
+    expect(bar.width, lessThan(frame.width));
   });
 
   testWidgets('partition bar renders compact rounded-square allocation', (

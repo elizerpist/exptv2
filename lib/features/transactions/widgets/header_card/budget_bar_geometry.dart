@@ -11,4 +11,20 @@ class BudgetBarGeometry {
   static const frameHorizontalInset = barHorizontalInset - overhang;
   static const radius = barHeight / 2;
   static const frameRadius = frameHeight / 2;
+
+  static double minVisibleWidth(double height) => height * 1.20;
+
+  static double visibleWidth({
+    required double availableWidth,
+    required double height,
+    required double ratio,
+  }) {
+    final clampedRatio = ratio.clamp(0.0, 1.0).toDouble();
+    final minWidth = minVisibleWidth(
+      height,
+    ).clamp(0.0, availableWidth).toDouble();
+    return (availableWidth * clampedRatio)
+        .clamp(minWidth, availableWidth)
+        .toDouble();
+  }
 }
