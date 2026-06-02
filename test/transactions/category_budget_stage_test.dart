@@ -131,6 +131,87 @@ void main() {
     expect(tapped?.category?.title, 'Food');
   });
 
+  testWidgets('experimental backheader styles render distinct surfaces', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 100, 150)];
+    for (final style in BackheaderStyle.values.where(
+      (style) => style != BackheaderStyle.classic,
+    )) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 260,
+              child: CategoryBudgetStage(
+                backheaderStyle: style,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(ValueKey('backheader-style-${style.nativeValue}')),
+        findsOneWidget,
+      );
+      expect(find.text('Food'), findsOneWidget);
+      expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
+    }
+  });
+
+  testWidgets(
+    'experimental backheader preserves swipe and long press behavior',
+    (tester) async {
+      BackheaderBudgetItem? activeItem;
+      final food = barFixture(6, 'Food', 100, 150);
+      final travel = barFixture(7, 'Travel', 40, 0);
+      final overview = BackheaderBudgetItem.overview(
+        overviewFixture(BudgetGoalKind.expenseBudget, 100, 300),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 260,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.mosaicBudget,
+                items: [
+                  overview,
+                  BackheaderBudgetItem.category(food),
+                  BackheaderBudgetItem.category(travel),
+                ],
+                categoryBars: [food, travel],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onActiveItemChanged: (item) => activeItem = item,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+        const Offset(-180, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(activeItem?.category?.title, 'Travel');
+
+      await tester.longPress(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+      );
+      await tester.pumpAndSettle();
+      expect(activeItem?.overview?.kind, BudgetGoalKind.expenseBudget);
+    },
+  );
+
   testWidgets('category budget bar follows horizontal drag before settling', (
     tester,
   ) async {

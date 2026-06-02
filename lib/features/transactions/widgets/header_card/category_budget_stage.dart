@@ -14,6 +14,7 @@ import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import 'budget_bar_geometry.dart';
+import 'backheader_style_surface.dart';
 import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
 import 'transaction_header_metrics.dart';
@@ -280,22 +281,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               onLongPress: _jumpToOverviewForCurrent,
               child: Transform.translate(
                 offset: Offset(_dragDx, 0),
-                child: DecoratedBox(
-                  key: ValueKey(
-                    'backheader-style-${widget.backheaderStyle.nativeValue}',
-                  ),
-                  decoration: const BoxDecoration(
-                    color: AppColors.gray100,
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(24),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      current.title,
-                      key: const ValueKey('backheader-active-title'),
-                    ),
-                  ),
+                child: BackheaderStyleSurface(
+                  style: widget.backheaderStyle,
+                  current: current,
+                  items: items,
+                  categoryBars: _categoryBars,
+                  frameProgress: frameProgress,
+                  frameOverview: frameOverview,
+                  activeIndex: _index,
                 ),
               ),
             ),
