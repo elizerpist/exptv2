@@ -1,3 +1,5 @@
+import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/shell/app_tab.dart';
 import 'package:exptv2/features/shell/widgets/expt_bottom_nav.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +25,40 @@ void main() {
     );
     expect(find.text('3'), findsOneWidget);
   });
+
+  testWidgets(
+    'bottom nav highlights tapped tab immediately and logs tap path',
+    (tester) async {
+      DebugConsole.clear();
+      var selectedTab = AppTab.home;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: ExptBottomNav(
+              activeTab: AppTab.home,
+              onTabSelected: (tab) => selectedTab = tab,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+      await tester.pump();
+
+      expect(selectedTab, AppTab.settings);
+      final settingsLabel = tester.widget<Text>(find.text('Beállítások'));
+      expect(settingsLabel.style?.color, AppColors.primary);
+      expect(
+        DebugConsole.allText,
+        contains('[Perf] BottomNav item tap tab=settings'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[Perf] BottomNav optimistic frame tab=settings'),
+      );
+    },
+  );
 
   testWidgets('notifications tab hides unread badge when count is zero', (
     tester,

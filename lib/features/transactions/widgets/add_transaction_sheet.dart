@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
+import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
@@ -113,6 +114,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       listenable: widget.store,
       builder: (context, _) {
         final type = widget.initialTransaction?.type ?? widget.store.activeType;
+        final debugLabel = _editing ? 'EditTransaction' : 'AddTransaction';
         final categories = widget.store.categories
             .where((category) => category.normalizedType == type)
             .toList();
@@ -183,7 +185,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          TextField(
+                          DebugTextField(
+                            debugLabel: '$debugLabel.name',
                             controller: _name,
                             focusNode: _nameFocus,
                             decoration: transactionFieldDecoration(
@@ -194,6 +197,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           AmountField(
                             controller: _amount,
                             focusNode: _amountFocus,
+                            debugLabel: '$debugLabel.amount',
                           ),
                           const SizedBox(height: 12),
                           CategorySelectorField(
@@ -221,6 +225,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             onPickTime: _pickTime,
                             dateFocusNode: _dateFocus,
                             timeFocusNode: _timeFocus,
+                            debugLabelPrefix: debugLabel,
                           ),
                           if (_error != null) ...[
                             const SizedBox(height: 12),

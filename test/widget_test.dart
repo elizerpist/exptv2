@@ -186,6 +186,16 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
+  testWidgets('shell keeps the body stable while the keyboard opens', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+    expect(scaffold.resizeToAvoidBottomInset, isFalse);
+  });
+
   testWidgets('bottom nav taps switch secondary pages', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -207,6 +217,15 @@ void main() {
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
     expect(find.text('Kiadás'), findsOneWidget);
+  });
+
+  testWidgets('shell tab host avoids IndexedStack inactive page layout', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IndexedStack), findsNothing);
   });
 
   testWidgets('bottom nav tab switch does not rebuild transaction home', (
@@ -483,6 +502,8 @@ void main() {
     final logs = DebugConsole.allText;
     expect(logs, contains('[Perf] AddTransaction focus field=name'));
     expect(logs, contains('[Perf] AddTransaction focus frame field=name'));
+    expect(logs, contains('[Perf] TextInput focus label=AddTransaction.name'));
+    expect(logs, contains('keyboard='));
   });
 
   testWidgets('transaction category field opens inline scroll picker', (

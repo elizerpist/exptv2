@@ -48,16 +48,19 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late final RecurringAlarmService _recurringAlarmService;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
+  late final PageController _pageController;
   var _homeBlockingOverlayOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
+  double _lastKeyboardInset = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     DebugConsole.log('[Shell] start');
+    _pageController = PageController(initialPage: appTabs.indexOf(_activeTab));
     _recurringAlarmService = RecurringAlarmService();
     _notificationStore = NotificationStore(
       NotificationRepository(widget.nativeBridge),
@@ -68,6 +71,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onNotificationsMayHaveChanged:
           _refreshNotificationsAfterTransactionChange,
     );
+    unawaited(_transactionStore.start());
     _transactionHomePage = _buildTransactionHomePage();
     _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
@@ -78,6 +82,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pageController.dispose();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     _notificationStore.removeListener(_handleNotificationStoreChanged);
@@ -89,6 +94,38 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     unawaited(_processRecurringOnResume());
+  }
+
+  @override
+  void didChangeMetrics() {
+    final startedAt = DateTime.now();
+    final inset = _platformKeyboardInset();
+    final previous = _lastKeyboardInset;
+    _lastKeyboardInset = inset;
+    DebugConsole.log(
+      '[Perf] Keyboard metrics changed inset=${inset.toStringAsFixed(1)} '
+      'previous=${previous.toStringAsFixed(1)} '
+      'delta=${(inset - previous).toStringAsFixed(1)} '
+      'activeTab=${_activeTab.id} homeOverlay=$_homeBlockingOverlayOpen',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[Perf] Keyboard metrics frame inset=${_platformKeyboardInset().toStringAsFixed(1)} '
+        'elapsed=${_elapsedMs(startedAt)}ms activeTab=${_activeTab.id}',
+      );
+    });
+  }
+
+  double _platformKeyboardInset() {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isEmpty) return 0;
+    final view = views.first;
+    return view.viewInsets.bottom / view.devicePixelRatio;
+  }
+
+  double _contextKeyboardInset() {
+    return MediaQuery.maybeOf(context)?.viewInsets.bottom ?? _lastKeyboardInset;
   }
 
   int _elapsedMs(DateTime startedAt) {
@@ -201,25 +238,82 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _selectTab(AppTab tab) {
-    if (_activeTab == tab) return;
+    if (_activeTab == tab) {
+      DebugConsole.log(
+        '[Perf] BottomNav tap ignored tab=${tab.id} '
+        'keyboard=${_contextKeyboardInset().toStringAsFixed(1)}',
+      );
+      return;
+    }
     final requestedAt = DateTime.now();
     final previous = _activeTab;
     DebugConsole.log(
       '[Perf] BottomNav tap from=${previous.id} to=${tab.id} '
-      'homeOverlay=$_homeBlockingOverlayOpen',
+      'homeOverlay=$_homeBlockingOverlayOpen '
+      'keyboard=${_contextKeyboardInset().toStringAsFixed(1)}',
     );
     _sheetHostKey.currentState?.closeAll();
+    DebugConsole.log(
+      '[Perf] BottomNav close sheets issued from=${previous.id} to=${tab.id} '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
     setState(() {
       _activeTab = tab;
       _homeBlockingOverlayOpen = false;
     });
+    DebugConsole.log(
+      '[Perf] BottomNav shell state queued from=${previous.id} to=${tab.id} '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+    _jumpToTabPage(tab, requestedAt);
+    if (tab == AppTab.notifications) {
+      unawaited(_openNotificationsTab(requestedAt));
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _activeTab != tab) return;
       DebugConsole.log(
         '[Perf] BottomNav frame from=${previous.id} to=${tab.id} '
-        'elapsed=${_elapsedMs(requestedAt)}ms',
+        'elapsed=${_elapsedMs(requestedAt)}ms '
+        'keyboard=${_contextKeyboardInset().toStringAsFixed(1)}',
       );
     });
+  }
+
+  void _jumpToTabPage(AppTab tab, DateTime requestedAt) {
+    final pageIndex = appTabs.indexOf(tab);
+    if (!_pageController.hasClients) {
+      DebugConsole.log(
+        '[Perf] BottomNav page jump deferred tab=${tab.id} '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _activeTab != tab || !_pageController.hasClients) {
+          return;
+        }
+        _pageController.jumpToPage(pageIndex);
+        DebugConsole.log(
+          '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
+          'deferred=true elapsed=${_elapsedMs(requestedAt)}ms',
+        );
+      });
+      return;
+    }
+    _pageController.jumpToPage(pageIndex);
+    DebugConsole.log(
+      '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
+      'deferred=false elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+  }
+
+  Future<void> _openNotificationsTab(DateTime requestedAt) async {
+    DebugConsole.log(
+      '[Notification] tab open refresh requested elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+    await _notificationStore.refresh();
+    await _notificationStore.markAllUnreadRead();
+    DebugConsole.log(
+      '[Notification] tab open refresh complete elapsed=${_elapsedMs(requestedAt)}ms',
+    );
   }
 
   void _handleFabPressed() {
@@ -319,6 +413,29 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     ];
   }
 
+  Widget _buildShellPage(AppTab tab, ExpenseTheme expenseTheme) {
+    switch (tab) {
+      case AppTab.home:
+        return _transactionHomePage;
+      case AppTab.stats:
+        return StatsPage(store: _transactionStore);
+      case AppTab.notifications:
+        return NotificationsPage(
+          nativeBridge: widget.nativeBridge,
+          store: _notificationStore,
+          active: false,
+        );
+      case AppTab.settings:
+        return SettingsPage(
+          store: widget.store,
+          nativeBridge: widget.nativeBridge,
+          expenseTheme: expenseTheme,
+          onThemeSettingsChanged: _applyThemeSettings,
+          onFastInfoConfigChanged: _applyFastInfoConfig,
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
@@ -326,30 +443,19 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         _activeTab == AppTab.home && _homeBlockingOverlayOpen;
     final shellNavigation = _buildShellNavigation();
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
       body: Stack(
         children: [
           if (homeOverlayCoversShellNavigation) ...shellNavigation,
           Positioned.fill(
-            key: const ValueKey('shell-page-stack'),
-            child: IndexedStack(
-              index: appTabs.indexOf(_activeTab),
-              children: [
-                _transactionHomePage,
-                StatsPage(store: _transactionStore),
-                NotificationsPage(
-                  nativeBridge: widget.nativeBridge,
-                  store: _notificationStore,
-                  active: _activeTab == AppTab.notifications,
-                ),
-                SettingsPage(
-                  store: widget.store,
-                  nativeBridge: widget.nativeBridge,
-                  expenseTheme: expenseTheme,
-                  onThemeSettingsChanged: _applyThemeSettings,
-                  onFastInfoConfigChanged: _applyFastInfoConfig,
-                ),
-              ],
+            child: PageView.builder(
+              key: const ValueKey('shell-page-stack'),
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: appTabs.length,
+              itemBuilder: (context, index) =>
+                  _buildShellPage(appTabs[index], expenseTheme),
             ),
           ),
           if (!homeOverlayCoversShellNavigation) ...shellNavigation,

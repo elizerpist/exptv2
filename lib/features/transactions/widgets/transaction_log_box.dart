@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
@@ -309,8 +310,9 @@ class _TransactionNameDialogState extends State<_TransactionNameDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Tranzakció név'),
-      content: TextField(
-        key: const ValueKey('transaction-name-editor-field'),
+      content: DebugTextField(
+        fieldKey: const ValueKey('transaction-name-editor-field'),
+        debugLabel: 'TransactionNameDialog.name',
         controller: _controller,
         autofocus: true,
         decoration: const InputDecoration(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/debug/debug_console.dart';
+import '../../../../core/debug/debug_text_input.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/transaction_category.dart';
 import 'category_preview_pill.dart';
@@ -143,8 +144,9 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  key: const ValueKey('category-name-input'),
+                DebugTextField(
+                  fieldKey: const ValueKey('category-name-input'),
+                  debugLabel: 'CategoryEditor.name',
                   controller: _name,
                   focusNode: _nameFocus,
                   decoration: InputDecoration(

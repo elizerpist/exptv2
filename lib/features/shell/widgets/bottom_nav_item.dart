@@ -10,12 +10,14 @@ class BottomNavItem extends StatelessWidget {
     required this.tab,
     required this.active,
     required this.onTap,
+    this.onPointerDown,
     this.badgeCount = 0,
   });
 
   final AppTab tab;
   final bool active;
   final VoidCallback onTap;
+  final VoidCallback? onPointerDown;
   final int badgeCount;
 
   @override
@@ -32,57 +34,61 @@ class BottomNavItem extends StatelessWidget {
               ? AppColors.primaryActiveBackground
               : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.navItemRadius),
-          child: InkWell(
-            key: ValueKey('bottom-nav-${tab.id}'),
-            borderRadius: BorderRadius.circular(AppDimensions.navItemRadius),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: AppDimensions.navItemVerticalPadding,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 34,
-                    height: AppDimensions.navIconSize,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.center,
-                      children: [
-                        Icon(
-                          tab.icon,
-                          size: AppDimensions.navIconSize,
-                          color: color,
-                        ),
-                        if (badgeCount > 0)
-                          Positioned(
-                            top: -5,
-                            right: 0,
-                            child: _UnreadBadge(
-                              tabId: tab.id,
-                              count: badgeCount,
-                            ),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => onPointerDown?.call(),
+            child: InkWell(
+              key: ValueKey('bottom-nav-${tab.id}'),
+              borderRadius: BorderRadius.circular(AppDimensions.navItemRadius),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppDimensions.navItemVerticalPadding,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 34,
+                      height: AppDimensions.navIconSize,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            tab.icon,
+                            size: AppDimensions.navIconSize,
+                            color: color,
                           ),
-                      ],
+                          if (badgeCount > 0)
+                            Positioned(
+                              top: -5,
+                              right: 0,
+                              child: _UnreadBadge(
+                                tabId: tab.id,
+                                count: badgeCount,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppDimensions.navLabelTopMargin),
-                  Text(
-                    tab.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
-                      height: 1,
+                    const SizedBox(height: AppDimensions.navLabelTopMargin),
+                    Text(
+                      tab.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                        height: 1,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

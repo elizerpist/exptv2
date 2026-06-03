@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_text_input.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../models/installed_app.dart';
 import '../../transactions/models/transaction_category.dart';
@@ -276,8 +278,9 @@ class _NotificationParserRuleEditorState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextFormField(
-              key: const ValueKey('notification-parser-profile-name'),
+            DebugTextFormField(
+              fieldKey: const ValueKey('notification-parser-profile-name'),
+              debugLabel: 'NotificationParser.profileName',
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Profil neve'),
               onChanged: (value) => _emit(widget.profile.copyWith(name: value)),
@@ -341,8 +344,9 @@ class _NotificationParserRuleEditorState
               ),
             ),
             const SizedBox(height: 10),
-            TextFormField(
-              key: const ValueKey('notification-parser-sample'),
+            DebugTextFormField(
+              fieldKey: const ValueKey('notification-parser-sample'),
+              debugLabel: 'NotificationParser.sample',
               controller: _sampleController,
               minLines: 3,
               maxLines: 5,
@@ -405,16 +409,22 @@ class _NotificationParserRuleEditorState
                 title: const Text('Haladó beállítások'),
                 childrenPadding: EdgeInsets.zero,
                 children: [
-                  TextFormField(
-                    key: const ValueKey('notification-parser-include-keyword'),
+                  DebugTextFormField(
+                    fieldKey: const ValueKey(
+                      'notification-parser-include-keyword',
+                    ),
+                    debugLabel: 'NotificationParser.includeKeyword',
                     controller: _keywordController,
                     decoration: const InputDecoration(labelText: 'Kulcsszó'),
                     onChanged: (value) =>
                         _emit(widget.profile.copyWith(includeKeyword: value)),
                   ),
                   const SizedBox(height: 10),
-                  TextFormField(
-                    key: const ValueKey('notification-parser-amount-pattern'),
+                  DebugTextFormField(
+                    fieldKey: const ValueKey(
+                      'notification-parser-amount-pattern',
+                    ),
+                    debugLabel: 'NotificationParser.amountPattern',
                     controller: _amountController,
                     decoration: const InputDecoration(
                       labelText: 'Összeg regex',
@@ -423,8 +433,11 @@ class _NotificationParserRuleEditorState
                         _emit(widget.profile.copyWith(amountPattern: value)),
                   ),
                   const SizedBox(height: 10),
-                  TextFormField(
-                    key: const ValueKey('notification-parser-merchant-pattern'),
+                  DebugTextFormField(
+                    fieldKey: const ValueKey(
+                      'notification-parser-merchant-pattern',
+                    ),
+                    debugLabel: 'NotificationParser.merchantPattern',
                     controller: _merchantController,
                     decoration: const InputDecoration(labelText: 'Bolt regex'),
                     onChanged: (value) =>

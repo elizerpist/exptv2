@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/debug/debug_console.dart';
+import '../../../../core/debug/debug_text_input.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/budget_progress_manager.dart';
 import '../../data/limit_allocation_manager.dart';
@@ -753,8 +754,9 @@ class _BudgetLimitCard extends StatelessWidget {
           const SizedBox(height: 2),
         const Spacer(),
         const SizedBox(height: 12),
-        TextField(
-          key: const ValueKey('limit-amount-input'),
+        DebugTextField(
+          fieldKey: const ValueKey('limit-amount-input'),
+          debugLabel: 'BudgetTargetEditor.amount',
           controller: amountController,
           focusNode: amountFocusNode,
           keyboardType: TextInputType.number,

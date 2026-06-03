@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/debug/debug_text_input.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/transaction_record.dart';
 
@@ -101,7 +102,10 @@ class CalendarValueSliderPanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                    _EditableLimitText(value: effectiveMax, onSubmitted: onMaxChanged),
+                    _EditableLimitText(
+                      value: effectiveMax,
+                      onSubmitted: onMaxChanged,
+                    ),
                   ],
                 ),
               ],
@@ -150,7 +154,8 @@ class _EditableLimitTextState extends State<_EditableLimitText> {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 58,
-      child: TextField(
+      child: DebugTextField(
+        debugLabel: 'CalendarValueSlider.limit',
         controller: _controller,
         keyboardType: TextInputType.number,
         textAlign: TextAlign.center,

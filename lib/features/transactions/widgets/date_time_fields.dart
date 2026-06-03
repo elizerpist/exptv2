@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 import 'amount_field.dart';
 
@@ -12,6 +13,7 @@ class DateTimeFields extends StatelessWidget {
     this.onPickTime,
     this.dateFocusNode,
     this.timeFocusNode,
+    this.debugLabelPrefix = 'DateTimeFields',
   });
 
   final TextEditingController dateController;
@@ -20,13 +22,15 @@ class DateTimeFields extends StatelessWidget {
   final VoidCallback? onPickTime;
   final FocusNode? dateFocusNode;
   final FocusNode? timeFocusNode;
+  final String debugLabelPrefix;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: TextField(
+          child: DebugTextField(
+            debugLabel: '$debugLabelPrefix.date',
             controller: dateController,
             focusNode: dateFocusNode,
             keyboardType: TextInputType.datetime,
@@ -43,7 +47,8 @@ class DateTimeFields extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: TextField(
+          child: DebugTextField(
+            debugLabel: '$debugLabelPrefix.time',
             controller: timeController,
             focusNode: timeFocusNode,
             keyboardType: TextInputType.datetime,

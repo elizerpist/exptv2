@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 
 class AmountField extends StatelessWidget {
-  const AmountField({super.key, required this.controller, this.focusNode});
+  const AmountField({
+    super.key,
+    required this.controller,
+    this.focusNode,
+    this.debugLabel = 'AmountField.amount',
+  });
 
   final TextEditingController controller;
   final FocusNode? focusNode;
+  final String debugLabel;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return DebugTextField(
+      debugLabel: debugLabel,
       controller: controller,
       focusNode: focusNode,
       keyboardType: TextInputType.number,

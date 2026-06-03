@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
+import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 
 class SearchPill extends StatefulWidget {
@@ -72,16 +73,20 @@ class _SearchPillState extends State<SearchPill> {
         _logFocusRequest();
       }
       _focusStartedAt = DateTime.now();
-      DebugConsole.log('[Perf] SearchPill focus active=true');
+      DebugConsole.log(
+        '[Perf] SearchPill focus active=true keyboard=${_keyboardInsetText()}',
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_focusNode.hasFocus) return;
         DebugConsole.log(
-          '[Perf] SearchPill focus frame elapsed=${_elapsedMs(_focusStartedAt)}ms',
+          '[Perf] SearchPill focus frame elapsed=${_elapsedMs(_focusStartedAt)}ms '
+          'keyboard=${_keyboardInsetText()}',
         );
       });
     } else {
       DebugConsole.log(
-        '[Perf] SearchPill focus active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
+        '[Perf] SearchPill focus active=false elapsed=${_elapsedMs(_focusStartedAt)}ms '
+        'keyboard=${_keyboardInsetText()}',
       );
       _focusStartedAt = null;
       _focusRequestLoggedForCycle = false;
@@ -99,9 +104,15 @@ class _SearchPillState extends State<SearchPill> {
 
   void _logFocusRequest() {
     DebugConsole.log(
-      '[Perf] SearchPill focus request active=${_focusNode.hasFocus}',
+      '[Perf] SearchPill focus request active=${_focusNode.hasFocus} '
+      'keyboard=${_keyboardInsetText()}',
     );
     _focusRequestLoggedForCycle = true;
+  }
+
+  String _keyboardInsetText() {
+    return (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0)
+        .toStringAsFixed(1);
   }
 
   int _elapsedMs(DateTime? startedAt) {
@@ -155,7 +166,8 @@ class _SearchPillState extends State<SearchPill> {
         const SizedBox(width: 8),
         Expanded(
           flex: 1,
-          child: TextField(
+          child: DebugTextField(
+            debugLabel: 'SearchPill.query',
             focusNode: _focusNode,
             controller: _controller,
             onChanged: widget.onQueryChanged,

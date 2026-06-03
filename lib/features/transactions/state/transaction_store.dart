@@ -37,6 +37,8 @@ class TransactionStore extends ChangeNotifier {
   var _summaryChangeGeneration = 0;
   late DateTime _periodReferenceDate;
   var _loading = false;
+  var _startCompleted = false;
+  Future<void>? _startFuture;
   String? _error;
   List<TransactionCategory> _categories = [];
   List<TransactionRecord> _transactions = [];
@@ -529,7 +531,22 @@ class TransactionStore extends ChangeNotifier {
     );
   }
 
-  Future<void> start() async {
+  Future<void> start() {
+    if (_startCompleted) {
+      DebugConsole.log('[Perf] Store start skipped reason=completed');
+      return Future.value();
+    }
+    final existingStart = _startFuture;
+    if (existingStart != null) {
+      DebugConsole.log('[Perf] Store start skipped reason=in_flight');
+      return existingStart;
+    }
+    _startFuture = _loadInitialData();
+    return _startFuture!;
+  }
+
+  Future<void> _loadInitialData() async {
+    var success = false;
     _loading = true;
     _error = null;
     notifyListeners();
@@ -549,9 +566,12 @@ class TransactionStore extends ChangeNotifier {
       _invalidateViewCaches();
       _invalidateFastInfoMetrics();
       _prewarmCriticalCaches('start');
+      success = true;
     } catch (error) {
       _error = error.toString();
     } finally {
+      _startCompleted = success;
+      _startFuture = null;
       _loading = false;
       notifyListeners();
     }

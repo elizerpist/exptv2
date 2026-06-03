@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_text_input.dart';
+
 import '../../../models/installed_app.dart';
 import 'installed_app_picker_sheet.dart';
 
@@ -68,7 +70,8 @@ class _AppFilterControlState extends State<AppFilterControl> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: TextFormField(
+          child: DebugTextFormField(
+            debugLabel: 'AppFilterControl.appRegex',
             controller: _controller,
             decoration: InputDecoration(
               labelText: 'App regex',
