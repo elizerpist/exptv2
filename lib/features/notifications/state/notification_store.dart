@@ -24,6 +24,8 @@ class NotificationStore extends ChangeNotifier {
   String get selectedMonthKey =>
       '${_selectedMonth.year.toString().padLeft(4, '0')}-${_selectedMonth.month.toString().padLeft(2, '0')}';
   List<ExpenseNotificationCard> get cards => List.unmodifiable(_cards);
+  int get unreadCount =>
+      _cards.where((card) => card.isActive && !card.isRead).length;
 
   List<ExpenseNotificationCard> get visibleCards {
     return _cards
@@ -59,6 +61,19 @@ class NotificationStore extends ChangeNotifier {
     await _reload();
   }
 
+  Future<void> markAllUnreadRead() async {
+    final unreadIds = _cards
+        .where((card) => card.isActive && !card.isRead)
+        .map((card) => card.id)
+        .toList(growable: false);
+    if (unreadIds.isEmpty) return;
+
+    for (final id in unreadIds) {
+      await _repository.markRead(id);
+    }
+    await _reload();
+  }
+
   Future<void> deleteCard(int id) async {
     await _repository.deleteCard(id);
     await _reload();
@@ -82,7 +97,7 @@ class NotificationStore extends ChangeNotifier {
       _cards = rows;
       DebugConsole.log(
         '[Notification] cards reloaded count=${rows.length} '
-        'visible=${visibleCards.length} month=$selectedMonthKey',
+        'visible=${visibleCards.length} month=$selectedMonthKey unread=$unreadCount',
       );
     } catch (error) {
       _error = error.toString();

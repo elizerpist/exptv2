@@ -9,7 +9,9 @@ import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
 import '../../services/recurring_alarm_service.dart';
 import '../../state/event_store.dart';
+import '../notifications/data/notification_repository.dart';
 import '../notifications/notifications_page.dart';
+import '../notifications/state/notification_store.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/models/fast_info_config.dart';
 import '../settings/settings_page.dart';
@@ -42,6 +44,7 @@ class ExptShell extends StatefulWidget {
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   AppTab _activeTab = AppTab.home;
   late final TransactionStore _transactionStore;
+  late final NotificationStore _notificationStore;
   late final RecurringAlarmService _recurringAlarmService;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
@@ -55,9 +58,16 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     DebugConsole.log('[Shell] start');
     _recurringAlarmService = RecurringAlarmService();
+    _notificationStore = NotificationStore(
+      NotificationRepository(widget.nativeBridge),
+    );
+    _notificationStore.addListener(_handleNotificationStoreChanged);
     _transactionStore = TransactionStore(
       TransactionRepository(widget.nativeBridge),
+      onNotificationsMayHaveChanged:
+          _refreshNotificationsAfterTransactionChange,
     );
+    unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
     unawaited(_loadShellSettings());
   }
@@ -67,6 +77,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
+    _notificationStore.removeListener(_handleNotificationStoreChanged);
+    _notificationStore.dispose();
     super.dispose();
   }
 
@@ -109,6 +121,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
     });
+  }
+
+  void _handleNotificationStoreChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _refreshNotificationsAfterTransactionChange() async {
+    await _notificationStore.refresh();
+    if (_activeTab == AppTab.notifications) {
+      await _notificationStore.markAllUnreadRead();
+    }
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
@@ -218,7 +242,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         left: 0,
         right: 0,
         bottom: 0,
-        child: ExptBottomNav(activeTab: _activeTab, onTabSelected: _selectTab),
+        child: ExptBottomNav(
+          activeTab: _activeTab,
+          unreadNotificationCount: _notificationStore.unreadCount,
+          onTabSelected: _selectTab,
+        ),
       ),
       Positioned(
         left: 0,
@@ -276,6 +304,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                 StatsPage(store: _transactionStore),
                 NotificationsPage(
                   nativeBridge: widget.nativeBridge,
+                  store: _notificationStore,
                   active: _activeTab == AppTab.notifications,
                 ),
                 SettingsPage(

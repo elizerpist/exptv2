@@ -60,7 +60,56 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(listCalls, 2);
+    expect(listCalls, 3);
     expect(find.text('Limit elérve'), findsOneWidget);
+  });
+
+  testWidgets('marks unread cards read when notifications tab becomes active', (
+    tester,
+  ) async {
+    final readIds = <int>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'expenseListNotificationCards') {
+            return <Map<String, Object?>>[
+              <String, Object?>{
+                'id': 7,
+                'type': 'limit_75',
+                'title': 'Limit 75%',
+                'message': 'A limit 75%-át elérted.',
+                'timestamp': DateTime(2026, 6, 3, 17).millisecondsSinceEpoch,
+                'isRead': readIds.contains(7),
+                'isActive': true,
+                'priority': 'high',
+              },
+            ];
+          }
+          if (call.method == 'expenseMarkNotificationCardRead') {
+            final args = call.arguments as Map<dynamic, dynamic>;
+            readIds.add(args['id'] as int);
+            return true;
+          }
+          return null;
+        });
+
+    final bridge = NativeBridge(
+      methodChannel: channel,
+      eventChannel: const EventChannel('test/notifications_page_events'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: false)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(readIds, isEmpty);
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: true)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(readIds, [7]);
+    expect(find.text('Limit 75%'), findsOneWidget);
   });
 }

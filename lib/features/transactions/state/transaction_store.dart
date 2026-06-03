@@ -20,13 +20,18 @@ import '../models/transaction_summary.dart';
 import 'fast_info_metrics_resolver.dart';
 
 class TransactionStore extends ChangeNotifier {
-  TransactionStore(this._repository, {DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now {
+  TransactionStore(
+    this._repository, {
+    DateTime Function()? clock,
+    Future<void> Function()? onNotificationsMayHaveChanged,
+  }) : _clock = clock ?? DateTime.now,
+       _onNotificationsMayHaveChanged = onNotificationsMayHaveChanged {
     _periodReferenceDate = _monthStart(_clock());
   }
 
   final TransactionRepositoryContract _repository;
   final DateTime Function() _clock;
+  final Future<void> Function()? _onNotificationsMayHaveChanged;
   var _filter = const TransactionFilter();
   var _summaryWindow = SummaryWindow.allTime;
   var _summaryChangeGeneration = 0;
@@ -678,6 +683,7 @@ class TransactionStore extends ChangeNotifier {
       'time': time,
     });
     await _reload();
+    _scheduleNotificationRefresh();
   }
 
   Future<void> updateTransaction(
@@ -708,6 +714,7 @@ class TransactionStore extends ChangeNotifier {
       '[Notification] transaction update completed id=${transaction.id}',
     );
     await _reload();
+    _scheduleNotificationRefresh();
   }
 
   Future<bool> deleteTransaction(TransactionRecord transaction) async {
@@ -720,6 +727,7 @@ class TransactionStore extends ChangeNotifier {
 
   Future<void> refreshAfterRecurringProcessing() async {
     await _reload();
+    _scheduleNotificationRefresh();
     DebugConsole.log('[RecurringAlarm] store refreshed after processing');
   }
 
@@ -816,6 +824,7 @@ class TransactionStore extends ChangeNotifier {
       'alertActive': hasLimit && alertActive,
     });
     await _reload();
+    _scheduleNotificationRefresh();
   }
 
   Future<void> saveOverviewLimit(
@@ -839,6 +848,7 @@ class TransactionStore extends ChangeNotifier {
       'alertActive': hasLimit && alertActive,
     });
     await _reload();
+    _scheduleNotificationRefresh();
   }
 
   Future<void> _projectRecurringGhostsForActiveWindow({int? generation}) async {
@@ -862,6 +872,18 @@ class TransactionStore extends ChangeNotifier {
       '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
     );
     notifyListeners();
+  }
+
+  void _scheduleNotificationRefresh() {
+    final callback = _onNotificationsMayHaveChanged;
+    if (callback == null) return;
+    unawaited(
+      callback().catchError((Object error) {
+        DebugConsole.log(
+          '[Notification] cards refresh after transaction change failed: $error',
+        );
+      }),
+    );
   }
 
   Future<void> _reload() async {

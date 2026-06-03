@@ -207,7 +207,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     query: widget.store.searchQuery,
                     onQueryChanged: widget.store.setSearchQuery,
                     merchantFilter: widget.store.merchantFilter,
-                    merchantFilterColor: _merchantFilterColor(),
                     categoryFilter: widget.store.activeCategory?.name,
                     categoryFilterColor: widget.store.activeCategory?.slotColor,
                     filteredCount: visibleTransactions.length,
@@ -613,19 +612,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     });
   }
 
-  Color? _merchantFilterColor() {
-    final hex = widget.store.merchantFilterColorHex;
-    return hex == null ? null : AppColors.fromHex(hex);
-  }
-
   void _setMerchantFastFilter(
     TransactionRecord record,
     TransactionCategory? category,
   ) {
-    widget.store.setMerchantFilter(
-      record.displayMerchant,
-      colorHex: category?.slotColorHex,
-    );
+    widget.store.setMerchantFilter(record.displayMerchant);
   }
 
   Future<void> _renameTransactionsByMerchant(

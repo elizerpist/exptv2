@@ -257,7 +257,10 @@ void main() {
     expect(find.text('2 tranzakció találva'), findsOneWidget);
     expect(find.text('Rrr'), findsOneWidget);
     expect(find.text('Q'), findsOneWidget);
-    expect((merchantCapsule.decoration! as BoxDecoration).color, merchantColor);
+    expect(
+      (merchantCapsule.decoration! as BoxDecoration).color,
+      AppColors.primary,
+    );
     expect((categoryCapsule.decoration! as BoxDecoration).color, categoryColor);
 
     final categoryRight = tester
@@ -306,6 +309,28 @@ void main() {
     expect(logs, contains('[Perf] SearchPill focus request'));
     expect(logs, contains('[Perf] SearchPill focus active=true'));
     expect(logs, contains('[Perf] SearchPill focus frame'));
+  });
+
+  testWidgets('search pill skips duplicate focus requests while focused', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.search));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.search));
+    await tester.pump();
+
+    final requestLogs = DebugConsole.allText
+        .split('\n')
+        .where((line) => line.contains('[Perf] SearchPill focus request'))
+        .toList();
+    expect(requestLogs, hasLength(1));
   });
 
   testWidgets('search pill focuses from the whole pill and unfocuses outside', (

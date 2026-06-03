@@ -32,33 +32,78 @@ void main() {
     tester,
   ) async {
     int? readId;
-    int? deleteId;
+    final deletedIds = <int>[];
     await tester.pumpWidget(
       MaterialApp(
         home: NotificationLogBox(
           card: card(),
           onMarkRead: (id) => readId = id,
-          onDelete: (id) => deleteId = id,
+          onDelete: deletedIds.add,
         ),
       ),
     );
 
     expect(find.text('Ismétlődő tranzakció'), findsOneWidget);
     expect(find.text('Rent'), findsOneWidget);
+    expect(find.text('2026.05.15 08:00'), findsOneWidget);
 
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('notification-logbox-1'))),
+    );
+    await gesture.moveBy(const Offset(-60, 0));
+    await tester.pump();
+
+    final opacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('notification-logbox-opacity-1')),
+    );
+    expect(opacity.opacity, lessThan(1));
+
+    await gesture.moveBy(const Offset(-80, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationLogBox(
+          card: card(id: 2),
+          onMarkRead: (id) => readId = id,
+          onDelete: deletedIds.add,
+        ),
+      ),
+    );
     await tester.drag(
-      find.byKey(const ValueKey('notification-logbox-1')),
-      const Offset(-120, 0),
+      find.byKey(const ValueKey('notification-logbox-2')),
+      const Offset(120, 0),
     );
     await tester.pumpAndSettle();
+
+    expect(readId, isNull);
+    expect(deletedIds, [1, 2]);
+  });
+
+  testWidgets('notification logbox collapses after swipe delete', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationLogBox(
+          card: card(),
+          onMarkRead: (_) {},
+          onDelete: (_) {},
+        ),
+      ),
+    );
+
     await tester.drag(
       find.byKey(const ValueKey('notification-logbox-1')),
       const Offset(120, 0),
     );
     await tester.pumpAndSettle();
 
-    expect(readId, 1);
-    expect(deleteId, 1);
+    final slotSize = tester.getSize(
+      find.byKey(const ValueKey('notification-logbox-slot-1')),
+    );
+    expect(slotSize.height, 0);
   });
 
   testWidgets('notification logbox renders transaction and limit labels', (
@@ -94,8 +139,8 @@ void main() {
   });
 }
 
-ExpenseNotificationCard card() => ExpenseNotificationCard.fromMap({
-  'id': 1,
+ExpenseNotificationCard card({int id = 1}) => ExpenseNotificationCard.fromMap({
+  'id': id,
   'type': 'recurring_transaction_alert',
   'title': 'Ismétlődő tranzakció',
   'message': 'Rent',

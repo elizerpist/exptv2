@@ -81,10 +81,11 @@ class _SearchPillState extends State<SearchPill> {
   }
 
   void _requestFocus() {
+    if (_focusNode.hasFocus) return;
     DebugConsole.log(
       '[Perf] SearchPill focus request active=${_focusNode.hasFocus}',
     );
-    if (!_focusNode.hasFocus) _focusNode.requestFocus();
+    _focusNode.requestFocus();
   }
 
   int _elapsedMs(DateTime? startedAt) {
@@ -102,7 +103,7 @@ class _SearchPillState extends State<SearchPill> {
         _FilterCapsule(
           capsuleKey: const ValueKey('search-pill-capsule-merchant'),
           value: widget.merchantFilter!,
-          color: widget.merchantFilterColor ?? AppColors.primary,
+          color: AppColors.primary,
           onClear: widget.onClearMerchant,
         ),
       if (hasCategory)

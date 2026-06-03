@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -11,10 +13,12 @@ class NotificationsPage extends StatefulWidget {
   const NotificationsPage({
     super.key,
     required this.nativeBridge,
+    this.store,
     this.active = true,
   });
 
   final NativeBridge nativeBridge;
+  final NotificationStore? store;
   final bool active;
 
   @override
@@ -22,27 +26,63 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  late final NotificationStore _store;
+  late NotificationStore _store;
+  var _ownsStore = false;
+  var _openGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _store = NotificationStore(NotificationRepository(widget.nativeBridge));
-    if (widget.active) _store.start();
+    _attachStore();
+    if (widget.active) _scheduleOpenInbox();
   }
 
   @override
   void didUpdateWidget(covariant NotificationsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final storeChanged =
+        oldWidget.store != widget.store ||
+        (oldWidget.nativeBridge != widget.nativeBridge && widget.store == null);
+    if (storeChanged) {
+      if (_ownsStore) _store.dispose();
+      _attachStore();
+      if (widget.active) _scheduleOpenInbox();
+      return;
+    }
     if (!oldWidget.active && widget.active) {
-      _store.refresh();
+      _scheduleOpenInbox();
     }
   }
 
   @override
   void dispose() {
-    _store.dispose();
+    if (_ownsStore) _store.dispose();
     super.dispose();
+  }
+
+  void _attachStore() {
+    final providedStore = widget.store;
+    if (providedStore != null) {
+      _store = providedStore;
+      _ownsStore = false;
+      return;
+    }
+    _store = NotificationStore(NotificationRepository(widget.nativeBridge));
+    _ownsStore = true;
+  }
+
+  void _scheduleOpenInbox() {
+    final generation = ++_openGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _openGeneration || !widget.active) return;
+      unawaited(_openInbox(generation));
+    });
+  }
+
+  Future<void> _openInbox(int generation) async {
+    await _store.refresh();
+    if (!mounted || generation != _openGeneration || !widget.active) return;
+    await _store.markAllUnreadRead();
   }
 
   @override

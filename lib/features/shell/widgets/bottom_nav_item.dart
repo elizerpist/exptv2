@@ -10,11 +10,13 @@ class BottomNavItem extends StatelessWidget {
     required this.tab,
     required this.active,
     required this.onTap,
+    this.badgeCount = 0,
   });
 
   final AppTab tab;
   final bool active;
   final VoidCallback onTap;
+  final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +44,30 @@ class BottomNavItem extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(tab.icon, size: AppDimensions.navIconSize, color: color),
+                  SizedBox(
+                    width: 34,
+                    height: AppDimensions.navIconSize,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          tab.icon,
+                          size: AppDimensions.navIconSize,
+                          color: color,
+                        ),
+                        if (badgeCount > 0)
+                          Positioned(
+                            top: -5,
+                            right: 0,
+                            child: _UnreadBadge(
+                              tabId: tab.id,
+                              count: badgeCount,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: AppDimensions.navLabelTopMargin),
                   Text(
                     tab.label,
@@ -61,6 +86,39 @@ class BottomNavItem extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.tabId, required this.count});
+
+  final String tabId;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : count.toString();
+    return Container(
+      key: ValueKey('bottom-nav-$tabId-unread-badge'),
+      constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: const BoxDecoration(
+        color: AppColors.expense,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        maxLines: 1,
+        style: const TextStyle(
+          color: AppColors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          height: 1,
+          letterSpacing: 0,
         ),
       ),
     );

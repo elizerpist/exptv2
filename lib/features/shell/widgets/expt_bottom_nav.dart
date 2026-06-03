@@ -10,10 +10,12 @@ class ExptBottomNav extends StatelessWidget {
     super.key,
     required this.activeTab,
     required this.onTabSelected,
+    this.unreadNotificationCount = 0,
   });
 
   final AppTab activeTab;
   final ValueChanged<AppTab> onTabSelected;
+  final int unreadNotificationCount;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +53,7 @@ class ExptBottomNav extends StatelessWidget {
           BottomNavItem(
             tab: AppTab.notifications,
             active: activeTab == AppTab.notifications,
+            badgeCount: unreadNotificationCount,
             onTap: () => onTabSelected(AppTab.notifications),
           ),
           BottomNavItem(
