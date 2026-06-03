@@ -467,7 +467,7 @@ class ExpenseRepository(context: Context) {
         }
 
         val categoryId = optionalInt(args["transactionCategoryID"]) ?: existing.transactionCategoryID
-        categories.byId(categoryId)
+        val category = categories.byId(categoryId)
             ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
 
         val signedAmount = if (type == "income") kotlin.math.abs(rawAmount) else -kotlin.math.abs(rawAmount)
@@ -484,6 +484,18 @@ class ExpenseRepository(context: Context) {
             transactionCategoryID = categoryId,
         )
         transactions.insert(row)
+        Log.d(
+            "ExpenseNotification",
+            "[Notification] transaction update saved id=${row.id} oldAmount=${existing.amount} newAmount=${row.amount} oldCategory=${existing.transactionCategoryID} newCategory=${row.transactionCategoryID} oldDate=${existing.date} newDate=${row.date}",
+        )
+        if (row.amount < 0) {
+            emitLimitAlertsForTransaction(row, category)
+        } else {
+            Log.d(
+                "ExpenseNotification",
+                "[Notification] transaction update limit evaluation skipped id=${row.id} reason=non_expense",
+            )
+        }
         return row.toMap()
     }
 

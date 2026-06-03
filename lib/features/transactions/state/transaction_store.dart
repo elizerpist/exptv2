@@ -690,6 +690,11 @@ class TransactionStore extends ChangeNotifier {
     required String time,
     String? userAssignedName,
   }) async {
+    DebugConsole.log(
+      '[Notification] transaction update requested id=${transaction.id} '
+      'oldAmount=${transaction.amount} newAmount=$amount '
+      'oldCategory=${transaction.transactionCategoryID} newCategory=$categoryId',
+    );
     await _repository.updateTransaction(transaction.id, {
       'merchant': merchant,
       'amount': amount,
@@ -699,6 +704,9 @@ class TransactionStore extends ChangeNotifier {
       'time': time,
       'userAssignedName': userAssignedName,
     });
+    DebugConsole.log(
+      '[Notification] transaction update completed id=${transaction.id}',
+    );
     await _reload();
   }
 
