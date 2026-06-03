@@ -34,13 +34,16 @@ class SearchPill extends StatefulWidget {
 class _SearchPillState extends State<SearchPill> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  late final ValueNotifier<bool> _focused;
   DateTime? _focusStartedAt;
+  var _focusRequestLoggedForCycle = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.query);
     _focusNode = FocusNode()..addListener(_handleFocusChanged);
+    _focused = ValueNotifier(false);
   }
 
   @override
@@ -57,12 +60,17 @@ class _SearchPillState extends State<SearchPill> {
   void dispose() {
     _focusNode.removeListener(_handleFocusChanged);
     _focusNode.dispose();
+    _focused.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _handleFocusChanged() {
-    if (_focusNode.hasFocus) {
+    final hasFocus = _focusNode.hasFocus;
+    if (hasFocus) {
+      if (!_focusRequestLoggedForCycle) {
+        _logFocusRequest();
+      }
       _focusStartedAt = DateTime.now();
       DebugConsole.log('[Perf] SearchPill focus active=true');
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -76,16 +84,24 @@ class _SearchPillState extends State<SearchPill> {
         '[Perf] SearchPill focus active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
       );
       _focusStartedAt = null;
+      _focusRequestLoggedForCycle = false;
     }
-    if (mounted) setState(() {});
+    if (_focused.value != hasFocus) {
+      _focused.value = hasFocus;
+    }
   }
 
   void _requestFocus() {
     if (_focusNode.hasFocus) return;
+    _logFocusRequest();
+    _focusNode.requestFocus();
+  }
+
+  void _logFocusRequest() {
     DebugConsole.log(
       '[Perf] SearchPill focus request active=${_focusNode.hasFocus}',
     );
-    _focusNode.requestFocus();
+    _focusRequestLoggedForCycle = true;
   }
 
   int _elapsedMs(DateTime? startedAt) {
@@ -115,85 +131,89 @@ class _SearchPillState extends State<SearchPill> {
         ),
     ];
 
+    final content = Row(
+      children: [
+        const Icon(Icons.search, size: 16, color: AppColors.gray400),
+        if (capsules.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 3,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var index = 0; index < capsules.length; index++) ...[
+                    if (index > 0) const SizedBox(width: 6),
+                    capsules[index],
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 1,
+          child: TextField(
+            focusNode: _focusNode,
+            controller: _controller,
+            onChanged: widget.onQueryChanged,
+            onTapOutside: (_) => _focusNode.unfocus(),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              hintText: hasFilters
+                  ? '${widget.filteredCount} tranzakció találva'
+                  : 'Keresés tranzakciók között...',
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
+    );
+
     return TextFieldTapRegion(
       child: Material(
         color: Colors.transparent,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTap: _requestFocus,
-          child: Container(
-            key: const ValueKey('search-pill-container'),
-            margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-            constraints: const BoxConstraints(minHeight: 46),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(
-                color: _focusNode.hasFocus
-                    ? AppColors.primary
-                    : AppColors.gray200,
-                width: _focusNode.hasFocus ? 1.5 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  offset: const Offset(0, 2),
-                  blurRadius: 3,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _focused,
+            child: content,
+            builder: (context, focused, child) {
+              return Container(
+                key: const ValueKey('search-pill-container'),
+                margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                constraints: const BoxConstraints(minHeight: 46),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search, size: 16, color: AppColors.gray400),
-                if (capsules.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Flexible(
-                    flex: 3,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (
-                            var index = 0;
-                            index < capsules.length;
-                            index++
-                          ) ...[
-                            if (index > 0) const SizedBox(width: 6),
-                            capsules[index],
-                          ],
-                        ],
-                      ),
-                    ),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(25),
+                  border: Border.all(
+                    color: focused ? AppColors.primary : AppColors.gray200,
+                    width: focused ? 1.5 : 1,
                   ),
-                ],
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 1,
-                  child: TextField(
-                    focusNode: _focusNode,
-                    controller: _controller,
-                    onChanged: widget.onQueryChanged,
-                    onTap: _requestFocus,
-                    onTapOutside: (_) => _focusNode.unfocus(),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      hintText: hasFilters
-                          ? '${widget.filteredCount} tranzakció találva'
-                          : 'Keresés tranzakciók között...',
-                      isDense: true,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      offset: const Offset(0, 2),
+                      blurRadius: 3,
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+                child: child,
+              );
+            },
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 package com.exptv2.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -96,14 +97,11 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "requestPostNotifications" -> {
-                        if (Build.VERSION.SDK_INT >= 33) {
-                            ActivityCompat.requestPermissions(
-                                this,
-                                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                                REQUEST_POST_NOTIFICATIONS,
-                            )
-                        }
+                        requestPostNotificationsPermission()
                         result.success(null)
+                    }
+                    "requestPostNotificationsOnFirstLaunch" -> {
+                        result.success(requestPostNotificationsOnFirstLaunch())
                     }
                     "sendTestNotification" -> {
                         TestNotificationHelper(this).send()
@@ -153,6 +151,39 @@ class MainActivity : FlutterActivity() {
                     EventBroadcaster.detach()
                 }
             })
+    }
+
+    private fun requestPostNotificationsOnFirstLaunch(): Boolean {
+        val prefs = getSharedPreferences(
+            NOTIFICATION_PERMISSION_PREFS,
+            Context.MODE_PRIVATE,
+        )
+        if (prefs.getBoolean(POST_NOTIFICATIONS_ONBOARDING_REQUESTED, false)) {
+            return false
+        }
+        prefs.edit()
+            .putBoolean(POST_NOTIFICATIONS_ONBOARDING_REQUESTED, true)
+            .apply()
+        return requestPostNotificationsPermission()
+    }
+
+    private fun requestPostNotificationsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < 33) {
+            return false
+        }
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            REQUEST_POST_NOTIFICATIONS,
+        )
+        return true
     }
 
     private fun installedApps(): List<Map<String, String>> {
@@ -217,5 +248,9 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val REQUEST_POST_NOTIFICATIONS = 42
         private const val APP_ICON_SIZE = 96
+        private const val NOTIFICATION_PERMISSION_PREFS =
+            "notification_permission_onboarding"
+        private const val POST_NOTIFICATIONS_ONBOARDING_REQUESTED =
+            "post_notifications_onboarding_requested"
     }
 }

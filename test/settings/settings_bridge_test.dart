@@ -250,6 +250,16 @@ void main() {
     expect(calls.single.method, 'openAppNotificationSettings');
   });
 
+  test(
+    'requests post notifications once on first launch through native bridge',
+    () async {
+      final requested = await bridge.requestPostNotificationsOnFirstLaunch();
+
+      expect(requested, isFalse);
+      expect(calls.single.method, 'requestPostNotificationsOnFirstLaunch');
+    },
+  );
+
   test('manages recurring transactions through native bridge', () async {
     final rows = await bridge.expenseListRecurringTransactions();
     expect(rows.single.name, 'Lakbér');

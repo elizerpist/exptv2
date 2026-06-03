@@ -51,6 +51,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   var _homeBlockingOverlayOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
+  late TransactionHomePage _transactionHomePage;
 
   @override
   void initState() {
@@ -67,6 +68,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onNotificationsMayHaveChanged:
           _refreshNotificationsAfterTransactionChange,
     );
+    _transactionHomePage = _buildTransactionHomePage();
+    _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
     unawaited(_loadShellSettings());
@@ -90,6 +93,53 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   int _elapsedMs(DateTime startedAt) {
     return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
+  TransactionHomePage _buildTransactionHomePage() {
+    return TransactionHomePage(
+      store: _transactionStore,
+      expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
+      fastInfoConfig: _fastInfoConfig,
+      onEditTransaction: _openEditTransaction,
+      onDeleteTransactionRequested: _confirmDeleteTransaction,
+      onBlockingOverlayChanged: _setHomeBlockingOverlay,
+      onBudgetTargetEditorRequested:
+          (item, {required requestedAt, required headerExpanded}) {
+            _sheetHostKey.currentState?.openBudgetTargetEditor(
+              item,
+              requestedAt: requestedAt,
+              headerExpanded: headerExpanded,
+            );
+          },
+      onBudgetTargetEditorClosed: () {
+        _sheetHostKey.currentState?.closeBudgetTargetEditor();
+      },
+      onFocusedSheetDismissRequested: () {
+        _sheetHostKey.currentState?.closeAll();
+      },
+      budgetEditorActiveKey: _budgetEditorActiveKey,
+    );
+  }
+
+  void _requestPostNotificationsOnFirstLaunch() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_requestPostNotificationsOnFirstLaunchAfterFrame());
+    });
+  }
+
+  Future<void> _requestPostNotificationsOnFirstLaunchAfterFrame() async {
+    try {
+      final requested = await widget.nativeBridge
+          .requestPostNotificationsOnFirstLaunch();
+      DebugConsole.log(
+        '[Notification] first launch permission prompt requested=$requested',
+      );
+    } catch (error) {
+      DebugConsole.log(
+        '[Notification] first launch permission prompt failed: $error',
+      );
+    }
   }
 
   Future<void> _syncRecurringAlarms() async {
@@ -120,6 +170,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
+      _transactionHomePage = _buildTransactionHomePage();
     });
   }
 
@@ -136,11 +187,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
-    setState(() => _themeSettings = settings);
+    setState(() {
+      _themeSettings = settings;
+      _transactionHomePage = _buildTransactionHomePage();
+    });
   }
 
   void _applyFastInfoConfig(FastInfoConfig config) {
-    setState(() => _fastInfoConfig = config);
+    setState(() {
+      _fastInfoConfig = config;
+      _transactionHomePage = _buildTransactionHomePage();
+    });
   }
 
   void _selectTab(AppTab tab) {
@@ -278,29 +335,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             child: IndexedStack(
               index: appTabs.indexOf(_activeTab),
               children: [
-                TransactionHomePage(
-                  store: _transactionStore,
-                  expenseTheme: expenseTheme,
-                  fastInfoConfig: _fastInfoConfig,
-                  onEditTransaction: _openEditTransaction,
-                  onDeleteTransactionRequested: _confirmDeleteTransaction,
-                  onBlockingOverlayChanged: _setHomeBlockingOverlay,
-                  onBudgetTargetEditorRequested:
-                      (item, {required requestedAt, required headerExpanded}) {
-                        _sheetHostKey.currentState?.openBudgetTargetEditor(
-                          item,
-                          requestedAt: requestedAt,
-                          headerExpanded: headerExpanded,
-                        );
-                      },
-                  onBudgetTargetEditorClosed: () {
-                    _sheetHostKey.currentState?.closeBudgetTargetEditor();
-                  },
-                  onFocusedSheetDismissRequested: () {
-                    _sheetHostKey.currentState?.closeAll();
-                  },
-                  budgetEditorActiveKey: _budgetEditorActiveKey,
-                ),
+                _transactionHomePage,
                 StatsPage(store: _transactionStore),
                 NotificationsPage(
                   nativeBridge: widget.nativeBridge,

@@ -13,6 +13,8 @@ final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
 final updatedThemeSettings = <Map<dynamic, dynamic>>[];
 final deletedTransactionIds = <int>[];
+var firstLaunchNotificationPromptEnabled = false;
+var firstLaunchNotificationPromptCalls = 0;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,8 @@ void main() {
     updatedTransactions.clear();
     updatedThemeSettings.clear();
     deletedTransactionIds.clear();
+    firstLaunchNotificationPromptEnabled = false;
+    firstLaunchNotificationPromptCalls = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
           call,
@@ -142,6 +146,10 @@ void main() {
               'totalEvents': 0,
             };
           }
+          if (call.method == 'requestPostNotificationsOnFirstLaunch') {
+            firstLaunchNotificationPromptCalls += 1;
+            return firstLaunchNotificationPromptEnabled;
+          }
           return null;
         });
   });
@@ -199,6 +207,33 @@ void main() {
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
     expect(find.text('Kiadás'), findsOneWidget);
+  });
+
+  testWidgets('bottom nav tab switch does not rebuild transaction home', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] BottomNav tap from=home to=settings'));
+    expect(logs, contains('[Perf] BottomNav frame from=home to=settings'));
+    expect(logs, isNot(contains('[Perf] HomeBuild frame')));
+  });
+
+  testWidgets('first launch requests Android notification permission once', (
+    tester,
+  ) async {
+    firstLaunchNotificationPromptEnabled = true;
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(firstLaunchNotificationPromptCalls, 1);
   });
 
   testWidgets('FAB opens add transaction sheet from any bottom tab', (

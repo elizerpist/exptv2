@@ -293,6 +293,29 @@ void main() {
     expect(field.decoration?.focusedBorder, InputBorder.none);
   });
 
+  testWidgets('search pill focus does not rebuild the text field', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+      ),
+    );
+
+    final fieldBefore = tester.widget<TextField>(find.byType(TextField));
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.pump();
+
+    final fieldAfter = tester.widget<TextField>(find.byType(TextField));
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-container')),
+    );
+    final border = (container.decoration! as BoxDecoration).border! as Border;
+    expect(identical(fieldBefore, fieldAfter), isTrue);
+    expect(border.top.color, AppColors.primary);
+  });
+
   testWidgets('search pill logs focus performance', (tester) async {
     DebugConsole.clear();
     await tester.pumpWidget(

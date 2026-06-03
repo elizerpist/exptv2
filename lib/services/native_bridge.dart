@@ -521,6 +521,13 @@ class NativeBridge {
     await _methodChannel.invokeMethod<void>('requestPostNotifications');
   }
 
+  Future<bool> requestPostNotificationsOnFirstLaunch() async {
+    final requested = await _methodChannel.invokeMethod<bool>(
+      'requestPostNotificationsOnFirstLaunch',
+    );
+    return requested ?? false;
+  }
+
   Future<void> sendTestNotification() async {
     await _methodChannel.invokeMethod<void>('sendTestNotification');
   }
