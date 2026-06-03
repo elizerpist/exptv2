@@ -66,6 +66,21 @@ interface ExpenseTransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun byId(id: Int): ExpenseTransactionEntity?
 
+    @Query(
+        """
+        SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions
+        WHERE amount < 0
+          AND (:categoryId IS NULL OR transactionCategoryID = :categoryId)
+          AND (:startDate = '' OR date >= :startDate)
+          AND (:endDate = '' OR date <= :endDate)
+        """,
+    )
+    suspend fun expenseSpentTotal(
+        categoryId: Int?,
+        startDate: String,
+        endDate: String,
+    ): Double
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transaction: ExpenseTransactionEntity)
 

@@ -41,6 +41,31 @@ interface CategoryLimitDao {
         periodKey: String,
     ): CategoryLimitEntity?
 
+    @Query(
+        """
+        SELECT * FROM category_limits
+        WHERE transactionType = 'expense'
+          AND hasLimit = 1
+          AND alertActive = 1
+          AND limitAmount > 0
+          AND (
+            (targetType = 'overview' AND targetId = 0) OR
+            (targetType = 'category' AND targetId = :categoryId)
+          )
+          AND (
+            (window = 'monthly' AND periodKey = :monthKey) OR
+            (window = 'yearly' AND periodKey = :yearKey) OR
+            (window = 'all_time' AND periodKey = 'all')
+          )
+        ORDER BY targetType ASC, targetId ASC, window ASC
+        """,
+    )
+    suspend fun activeExpenseLimitsForTransaction(
+        categoryId: Int,
+        monthKey: String,
+        yearKey: String,
+    ): List<CategoryLimitEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(limit: CategoryLimitEntity): Long
 
