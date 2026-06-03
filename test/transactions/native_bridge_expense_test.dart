@@ -1,3 +1,4 @@
+import 'package:exptv2/features/notifications/models/expense_notification_card.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/services/native_bridge.dart';
@@ -166,6 +167,44 @@ void main() {
                   'createdAt': 1778803200000,
                   'updatedAt': 1778803200000,
                 },
+                {
+                  'id': 2,
+                  'type': 'transaction_created',
+                  'title': 'Új tranzakció',
+                  'message': 'Tesco: 4200 Ft kiadás rögzítve.',
+                  'timestamp': 1778803200000,
+                  'isRead': false,
+                  'isActive': true,
+                  'priority': 'normal',
+                  'categoryId': 6,
+                  'categoryName': 'Q',
+                  'categoryColor': '#dc2626',
+                  'categoryIconSlot': 2,
+                  'transactionId': 26051502,
+                  'amount': 4200,
+                  'triggerDate': '2026.05.15',
+                  'createdAt': 1778803200000,
+                  'updatedAt': 1778803200000,
+                },
+                {
+                  'id': 3,
+                  'type': 'limit_100',
+                  'title': 'Limit elérve',
+                  'message': 'Q: 1000 Ft-tal túllépted a limitet.',
+                  'timestamp': 1778803200000,
+                  'isRead': false,
+                  'isActive': true,
+                  'priority': 'critical',
+                  'categoryId': 6,
+                  'categoryName': 'Q',
+                  'categoryColor': '#dc2626',
+                  'categoryIconSlot': 2,
+                  'transactionId': 26051502,
+                  'amount': 4200,
+                  'triggerDate': '2026.05.15',
+                  'createdAt': 1778803200000,
+                  'updatedAt': 1778803200000,
+                },
               ];
             }
             return true;
@@ -175,7 +214,11 @@ void main() {
       final read = await bridge.expenseMarkNotificationCardRead(1);
       final deleted = await bridge.expenseDeleteNotificationCard(1);
 
-      expect(cards.single.title, 'Ismétlődő tranzakció');
+      expect(cards, hasLength(3));
+      expect(cards[0].title, 'Ismétlődő tranzakció');
+      expect(cards[1].type, ExpenseNotificationType.transactionCreated);
+      expect(cards[2].type, ExpenseNotificationType.limit100);
+      expect(cards[2].priority, 'critical');
       expect(read, isTrue);
       expect(deleted, isTrue);
       expect(invoked, [
