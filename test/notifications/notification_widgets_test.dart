@@ -60,6 +60,38 @@ void main() {
     expect(readId, 1);
     expect(deleteId, 1);
   });
+
+  testWidgets('notification logbox renders transaction and limit labels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Column(
+          children: [
+            NotificationLogBox(
+              card: notificationCard(id: 20, type: 'transaction_created'),
+              onMarkRead: (_) {},
+              onDelete: (_) {},
+            ),
+            NotificationLogBox(
+              card: notificationCard(id: 21, type: 'limit_75'),
+              onMarkRead: (_) {},
+              onDelete: (_) {},
+            ),
+            NotificationLogBox(
+              card: notificationCard(id: 22, type: 'limit_100'),
+              onMarkRead: (_) {},
+              onDelete: (_) {},
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('Új tranzakció'), findsOneWidget);
+    expect(find.text('Limit 75%'), findsOneWidget);
+    expect(find.text('Limit elérve'), findsOneWidget);
+  });
 }
 
 ExpenseNotificationCard card() => ExpenseNotificationCard.fromMap({
@@ -74,4 +106,18 @@ ExpenseNotificationCard card() => ExpenseNotificationCard.fromMap({
   'categoryName': 'Lakhatás',
   'categoryColor': '#dc2626',
   'amount': 120000,
+});
+
+ExpenseNotificationCard notificationCard({
+  required int id,
+  required String type,
+}) => ExpenseNotificationCard.fromMap({
+  'id': id,
+  'type': type,
+  'title': 'Teszt',
+  'message': 'Teszt üzenet',
+  'timestamp': DateTime(2026, 5, 15, 8).millisecondsSinceEpoch,
+  'isRead': false,
+  'isActive': true,
+  'priority': 'normal',
 });

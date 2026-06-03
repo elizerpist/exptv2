@@ -209,6 +209,9 @@ class _SwipeBorder extends StatelessWidget {
 String _typeLabel(ExpenseNotificationType type) {
   return switch (type) {
     ExpenseNotificationType.recurringTransactionAlert => 'Ismétlődő tranzakció',
+    ExpenseNotificationType.transactionCreated => 'Új tranzakció',
+    ExpenseNotificationType.limit75 => 'Limit 75%',
+    ExpenseNotificationType.limit100 => 'Limit elérve',
     ExpenseNotificationType.budgetAlert => 'Limit alert',
     ExpenseNotificationType.spendingLimit => 'Költési limit',
     ExpenseNotificationType.monthlyBudgetAlert => 'Havi limit alert',

@@ -30,4 +30,41 @@ void main() {
     expect(card.categoryName, 'Lakhatás');
     expect(card.amount, 120000);
   });
+
+  test('parses transaction and limit notification card types', () {
+    final transaction = ExpenseNotificationCard.fromMap({
+      'id': 8,
+      'type': 'transaction_created',
+      'title': 'Új tranzakció',
+      'message': 'Tesco - 4200 Ft',
+      'timestamp': 1778803200000,
+      'isRead': false,
+      'isActive': true,
+      'priority': 'normal',
+    });
+    final limit75 = ExpenseNotificationCard.fromMap({
+      'id': 9,
+      'type': 'limit_75',
+      'title': 'Limit 75%',
+      'message': '12000 Ft maradt a limitből',
+      'timestamp': 1778803200000,
+      'isRead': false,
+      'isActive': true,
+      'priority': 'warning',
+    });
+    final limit100 = ExpenseNotificationCard.fromMap({
+      'id': 10,
+      'type': 'limit_100',
+      'title': 'Limit elérve',
+      'message': '3000 Ft-tal túllépted a limitet',
+      'timestamp': 1778803200000,
+      'isRead': false,
+      'isActive': true,
+      'priority': 'critical',
+    });
+
+    expect(transaction.type, ExpenseNotificationType.transactionCreated);
+    expect(limit75.type, ExpenseNotificationType.limit75);
+    expect(limit100.type, ExpenseNotificationType.limit100);
+  });
 }

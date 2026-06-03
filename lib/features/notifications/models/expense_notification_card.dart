@@ -1,5 +1,8 @@
 enum ExpenseNotificationType {
   recurringTransactionAlert('recurring_transaction_alert'),
+  transactionCreated('transaction_created'),
+  limit75('limit_75'),
+  limit100('limit_100'),
   budgetAlert('budget_alert'),
   spendingLimit('spending_limit'),
   monthlyBudgetAlert('monthly_budget_alert'),
