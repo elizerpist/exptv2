@@ -18,7 +18,6 @@ class ExpenseRepository(context: Context) {
     private val notificationCards = db.notificationCards()
     private val notificationEmitter = ExpenseNotificationEmitter(appContext)
     private val settingsStore = ExpenseSettingsStore(appContext)
-    private val notificationHelper = RecurringNotificationHelper(appContext)
     private val debugClockStore = RecurringDebugClockStore(appContext)
     private val seedPrefs = appContext.getSharedPreferences("expense_seed", Context.MODE_PRIVATE)
 
@@ -160,7 +159,6 @@ class ExpenseRepository(context: Context) {
     suspend fun processDueRecurringTransactions(targetMillis: Long = recurringTargetMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
         val processed = syncRecurringGhosts(targetMillis)
-        notificationHelper.notifyProcessed(processed)
         return processed.map { it.toMap() }
     }
 
@@ -673,14 +671,21 @@ class ExpenseRepository(context: Context) {
             )
             recurringTransactions.update(updated)
             recurringGhosts.markActivated(ghost.id, transaction.id, now)
-            notificationCards.insert(
-                RecurringNotificationCardFactory.activationCard(
+            notificationEmitter.emit(
+                ExpenseNotificationCardFactory.recurringActivated(
                     recurring = updated,
                     ghost = ghost,
                     transaction = transaction,
                     now = now,
                 ),
+                notificationCards,
             )
+            if (transaction.amount < 0) {
+                val category = categories.byId(transaction.transactionCategoryID)
+                if (category != null) {
+                    emitLimitAlertsForTransaction(transaction, category)
+                }
+            }
             processed.add(updated)
         }
         return processed
