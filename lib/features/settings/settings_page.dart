@@ -14,6 +14,7 @@ import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/backheader_style_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
+import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/recurring_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
 import 'widgets/options/simple_options_panel.dart';
@@ -22,6 +23,7 @@ import 'widgets/options/theme_options_panel.dart';
 enum _SettingsMenu {
   root,
   parsedApp,
+  permissions,
   fastInfo,
   statistics,
   recurring,
@@ -155,6 +157,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 SettingsOptionItem(
                   title: 'Megfigyelni kívánt alkalmazás',
                   onTap: () => _open(_SettingsMenu.parsedApp),
+                ),
+                SettingsOptionItem(
+                  title: 'Engedélyek',
+                  onTap: () => _open(_SettingsMenu.permissions),
                 ),
                 SettingsOptionItem(
                   title: 'FastInfo',
@@ -315,6 +321,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+      _SettingsMenu.permissions => PermissionsOptionsPanel(
+        nativeBridge: widget.nativeBridge,
+      ),
       _SettingsMenu.fastInfo => FastInfoOptionsPanel(
         config: _settingsStore.fastInfoConfig,
         onChanged: _updateFastInfoConfig,
@@ -371,6 +380,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _menuTitle(_SettingsMenu menu) {
     return switch (menu) {
       _SettingsMenu.parsedApp => 'Megfigyelni kívánt alkalmazás',
+      _SettingsMenu.permissions => 'Engedélyek',
       _SettingsMenu.fastInfo => 'FastInfo',
       _SettingsMenu.statistics => 'Statisztikák',
       _SettingsMenu.recurring => 'Ismétlődő tranzakciók',

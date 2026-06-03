@@ -244,6 +244,12 @@ void main() {
     },
   );
 
+  test('opens Android notification settings through native bridge', () async {
+    await bridge.openAppNotificationSettings();
+
+    expect(calls.single.method, 'openAppNotificationSettings');
+  });
+
   test('manages recurring transactions through native bridge', () async {
     final rows = await bridge.expenseListRecurringTransactions();
     expect(rows.single.name, 'Lakbér');

@@ -11,11 +11,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/settings_page_methods');
   final savedParserRules = <Map<dynamic, dynamic>>[];
+  final calls = <String>[];
 
   setUp(() {
     savedParserRules.clear();
+    calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
           switch (call.method) {
             case 'expenseLoadSettings':
               return <String, Object?>{
@@ -156,6 +159,11 @@ void main() {
   });
 
   testWidgets('opens theme, FastInfo, and recurring submenus', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(buildSubject());
     await tester.pumpAndSettle();
 
@@ -211,6 +219,70 @@ void main() {
     );
     final decoration = colorDot.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFF0EA5E9));
+  });
+
+  testWidgets('permissions menu opens Android permission actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Engedélyek'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Engedélyek'), findsOneWidget);
+    expect(find.text('Használati útmutató'), findsOneWidget);
+    expect(find.text('Android push értesítések'), findsOneWidget);
+
+    final permissionCallsStart = calls.length;
+    await tester.tap(find.byKey(const ValueKey('permissions-request-post')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('permissions-app-notifications')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('permissions-app-info')));
+    await tester.pumpAndSettle();
+
+    final scrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('permissions-options-scroll')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('permissions-notification-listener')),
+      120,
+      scrollable: scrollable,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('permissions-notification-listener')),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('permissions-accessibility')),
+      120,
+      scrollable: scrollable,
+    );
+    await tester.tap(find.byKey(const ValueKey('permissions-accessibility')));
+    await tester.pumpAndSettle();
+
+    expect(
+      calls.sublist(permissionCallsStart),
+      containsAllInOrder([
+        'requestPostNotifications',
+        'sendTestNotification',
+        'openAppNotificationSettings',
+        'openAppInfoSettings',
+        'openNotificationAccessSettings',
+        'openAccessibilitySettings',
+      ]),
+    );
   });
 
   testWidgets(

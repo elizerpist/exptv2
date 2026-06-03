@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../data/notification_repository.dart';
 import '../models/expense_notification_card.dart';
 
@@ -42,6 +43,8 @@ class NotificationStore extends ChangeNotifier {
 
   Future<void> start() async => _reload();
 
+  Future<void> refresh() async => _reload();
+
   void shiftMonth(int direction) {
     if (direction == 0) return;
     _selectedMonth = DateTime(
@@ -77,8 +80,13 @@ class NotificationStore extends ChangeNotifier {
         return byTime != 0 ? byTime : right.id.compareTo(left.id);
       });
       _cards = rows;
+      DebugConsole.log(
+        '[Notification] cards reloaded count=${rows.length} '
+        'visible=${visibleCards.length} month=$selectedMonthKey',
+      );
     } catch (error) {
       _error = error.toString();
+      DebugConsole.log('[Notification] cards reload failed: $error');
     } finally {
       _loading = false;
       notifyListeners();

@@ -274,7 +274,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   budgetEditorActiveKey: _budgetEditorActiveKey,
                 ),
                 StatsPage(store: _transactionStore),
-                NotificationsPage(nativeBridge: widget.nativeBridge),
+                NotificationsPage(
+                  nativeBridge: widget.nativeBridge,
+                  active: _activeTab == AppTab.notifications,
+                ),
                 SettingsPage(
                   store: widget.store,
                   nativeBridge: widget.nativeBridge,

@@ -513,6 +513,10 @@ class NativeBridge {
     await _methodChannel.invokeMethod<void>('openAppInfoSettings');
   }
 
+  Future<void> openAppNotificationSettings() async {
+    await _methodChannel.invokeMethod<void>('openAppNotificationSettings');
+  }
+
   Future<void> requestPostNotifications() async {
     await _methodChannel.invokeMethod<void>('requestPostNotifications');
   }

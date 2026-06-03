@@ -8,9 +8,14 @@ import 'widgets/notification_log_box.dart';
 import 'widgets/notification_month_header.dart';
 
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key, required this.nativeBridge});
+  const NotificationsPage({
+    super.key,
+    required this.nativeBridge,
+    this.active = true,
+  });
 
   final NativeBridge nativeBridge;
+  final bool active;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -23,7 +28,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void initState() {
     super.initState();
     _store = NotificationStore(NotificationRepository(widget.nativeBridge));
-    _store.start();
+    if (widget.active) _store.start();
+  }
+
+  @override
+  void didUpdateWidget(covariant NotificationsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) {
+      _store.refresh();
+    }
   }
 
   @override
