@@ -38,8 +38,9 @@ object ExpenseLimitNotificationEvaluator {
         limit: CategoryLimitEntity,
         targetLabel: String,
         category: TransactionCategoryEntity?,
-        transaction: ExpenseTransactionEntity,
+        transaction: ExpenseTransactionEntity?,
         spentAmount: Double,
+        triggerDate: String? = transaction?.date,
     ): ExpenseLimitAlert? {
         if (!limit.hasLimit || !limit.alertActive || limit.limitAmount <= 0.0) return null
         val usageRatio = spentAmount / limit.limitAmount
@@ -59,6 +60,9 @@ object ExpenseLimitNotificationEvaluator {
             spentAmount = abs(spentAmount),
             remainingAmount = remainingAmount,
             usageRatio = usageRatio,
+            targetType = limit.targetType,
+            targetId = limit.targetId,
+            triggerDate = triggerDate,
         )
     }
 }

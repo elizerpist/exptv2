@@ -201,6 +201,7 @@ class ExpenseRepository(context: Context) {
 
     suspend fun upsertCategoryLimit(args: Map<*, *>): Map<String, Any?> {
         seedIfEmpty()
+        Log.d("ExpenseNotification", "[Notification] limit upsert requested args=$args")
         val targetType = normalizeTargetType(args["targetType"]?.toString())
             ?: throw ExpenseValidationException("INVALID_LIMIT_TARGET", "Limit target type is required")
         val targetId = optionalInt(args["targetId"])
@@ -247,7 +248,13 @@ class ExpenseRepository(context: Context) {
             updatedAt = now,
         )
         val newId = categoryLimits.insert(row).toInt()
-        return row.copy(id = if (row.id == 0) newId else row.id).toMap()
+        val saved = row.copy(id = if (row.id == 0) newId else row.id)
+        Log.d(
+            "ExpenseNotification",
+            "[Notification] limit upsert saved id=${saved.id} target=${saved.targetType}:${saved.targetId} type=${saved.transactionType} window=${saved.window} period=${saved.periodKey} hasLimit=${saved.hasLimit} alertActive=${saved.alertActive} amount=${saved.limitAmount}",
+        )
+        emitLimitAlertForLimitChange(saved)
+        return saved.toMap()
     }
 
     suspend fun addCategory(args: Map<*, *>): Map<String, Any?> {
@@ -424,9 +431,14 @@ class ExpenseRepository(context: Context) {
             transactionCategoryID = categoryId,
         )
         transactions.insert(row)
-        emitTransactionCreated(row, category)
+        Log.d(
+            "ExpenseNotification",
+            "[Notification] transaction saved id=${row.id} amount=${row.amount} category=${row.transactionCategoryID}",
+        )
         if (row.amount < 0) {
             emitLimitAlertsForTransaction(row, category)
+        } else {
+            Log.d("ExpenseNotification", "[Notification] transaction limit evaluation skipped id=${row.id} reason=non_expense")
         }
         return row.toMap()
     }
@@ -501,23 +513,71 @@ class ExpenseRepository(context: Context) {
 
 
 
-    private suspend fun emitTransactionCreated(
-        transaction: ExpenseTransactionEntity,
-        category: TransactionCategoryEntity,
-    ) {
-        val now = System.currentTimeMillis()
+    private suspend fun emitLimitAlertForLimitChange(limit: CategoryLimitEntity) {
+        if (limit.transactionType != "expense") {
+            Log.d(
+                "ExpenseNotification",
+                "[Notification] limit change skipped id=${limit.id} reason=non_expense type=${limit.transactionType}",
+            )
+            return
+        }
+        if (!limit.hasLimit || !limit.alertActive || limit.limitAmount <= 0.0) {
+            Log.d(
+                "ExpenseNotification",
+                "[Notification] limit change skipped id=${limit.id} reason=inactive hasLimit=${limit.hasLimit} alertActive=${limit.alertActive} amount=${limit.limitAmount}",
+            )
+            return
+        }
+        val category = when (limit.targetType) {
+            "category" -> categories.byId(limit.targetId)
+            else -> null
+        }
+        if (limit.targetType == "category" && category == null) {
+            Log.d(
+                "ExpenseNotification",
+                "[Notification] limit change skipped id=${limit.id} reason=missing_category category=${limit.targetId}",
+            )
+            return
+        }
+        val dateRange = dateRangeForStoredLimit(limit)
+        val spent = transactions.expenseSpentTotal(
+            categoryId = if (limit.targetType == "category") limit.targetId else null,
+            startDate = dateRange.first,
+            endDate = dateRange.second,
+        )
+        val label = if (limit.targetType == "overview") "Kiadási budget" else category?.name ?: "Limit"
+        val alert = ExpenseLimitNotificationEvaluator.evaluate(
+            limit = limit,
+            targetLabel = label,
+            category = category,
+            transaction = null,
+            spentAmount = spent,
+            triggerDate = limit.periodKey,
+        )
         Log.d(
             "ExpenseNotification",
-            "[Notification] transaction created requested id=${transaction.id} category=${category.transactionCategoryID}",
+            "[Notification] limit change result id=${limit.id} target=${limit.targetType}:${limit.targetId} spent=$spent limit=${limit.limitAmount} range=${dateRange.first}..${dateRange.second} threshold=${alert?.type ?: "none"}",
         )
-        notificationEmitter.emit(
-            ExpenseNotificationCardFactory.transactionCreated(
-                transaction = transaction,
-                category = category,
-                now = now,
-            ),
-            notificationCards,
-        )
+        if (alert != null) {
+            notificationEmitter.emit(
+                ExpenseNotificationCardFactory.limitAlert(alert, System.currentTimeMillis()),
+                notificationCards,
+            )
+        }
+    }
+
+    private fun dateRangeForStoredLimit(limit: CategoryLimitEntity): Pair<String, String> {
+        return when (limit.window) {
+            "monthly" -> {
+                val periods = ExpenseLimitNotificationEvaluator.periodsFor("${limit.periodKey}.01")
+                periods.monthStart to periods.monthEnd
+            }
+            "yearly" -> {
+                val year = limit.periodKey.toIntOrNull()
+                if (year == null) "" to "" else "%04d.01.01".format(year) to "%04d.12.31".format(year)
+            }
+            else -> "" to ""
+        }
     }
 
     private suspend fun emitLimitAlertsForTransaction(
@@ -663,6 +723,10 @@ class ExpenseRepository(context: Context) {
                 transactionCategoryID = ghost.categoryId,
             )
             transactions.insert(transaction)
+            Log.d(
+                "ExpenseNotification",
+                "[Notification] recurring activation requested ghost=${ghost.id} recurring=${recurring.id} transaction=${transaction.id} amount=${transaction.amount}",
+            )
             val now = System.currentTimeMillis()
             val updated = recurring.copy(
                 lastProcessedPeriodKey = ghost.periodKey,
@@ -684,7 +748,17 @@ class ExpenseRepository(context: Context) {
                 val category = categories.byId(transaction.transactionCategoryID)
                 if (category != null) {
                     emitLimitAlertsForTransaction(transaction, category)
+                } else {
+                    Log.d(
+                        "ExpenseNotification",
+                        "[Notification] recurring limit evaluation skipped transaction=${transaction.id} reason=missing_category category=${transaction.transactionCategoryID}",
+                    )
                 }
+            } else {
+                Log.d(
+                    "ExpenseNotification",
+                    "[Notification] recurring limit evaluation skipped transaction=${transaction.id} reason=non_expense",
+                )
             }
             processed.add(updated)
         }

@@ -57,6 +57,34 @@ class ExpenseNotificationCardFactoryTest {
     }
 
     @Test
+    fun buildsLimitCardWithoutTransactionForLimitChange() {
+        val alert = ExpenseLimitAlert(
+            type = "limit_100",
+            title = "Limit elérve",
+            targetLabel = "Kiadási budget",
+            category = null,
+            transaction = null,
+            limitAmount = 10000.0,
+            spentAmount = 12000.0,
+            remainingAmount = -2000.0,
+            usageRatio = 1.2,
+            targetType = "overview",
+            targetId = 0,
+            triggerDate = "2026-05",
+        )
+
+        val card = ExpenseNotificationCardFactory.limitAlert(alert, now)
+
+        assertEquals("limit_100", card.type)
+        assertEquals("Kiadási budget", card.categoryName)
+        assertEquals(null, card.categoryId)
+        assertEquals(null, card.transactionId)
+        assertEquals(12000.0, card.amount!!, 0.0)
+        assertEquals("2026-05", card.triggerDate)
+        assertTrue(card.message.contains("2000 Ft-tal túllépted"))
+    }
+
+    @Test
     fun buildsLimitCardsWithRemainingAndOverageText() {
         val remaining = ExpenseLimitAlert(
             type = "limit_75",

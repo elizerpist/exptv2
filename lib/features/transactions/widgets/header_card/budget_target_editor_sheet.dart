@@ -503,17 +503,18 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     final amount = math.max(0.0, rawAmount).toDouble();
     final overview = item.overview;
     final category = item.category;
+    final alertActive = amount > 0;
     if (overview != null) {
       await widget.onSaveOverview(
         overview.kind,
         limitAmount: amount,
-        alertActive: false,
+        alertActive: alertActive,
       );
     } else if (category != null) {
       await widget.onSaveCategory(
         category,
         limitAmount: amount,
-        alertActive: false,
+        alertActive: alertActive,
       );
     }
   }
@@ -549,7 +550,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       spent: category.spent,
       hasLimit: hasLimit,
       limitAmount: hasLimit ? amount : 0,
-      alertActive: false,
+      alertActive: hasLimit,
       color: category.color,
       iconSlot: category.iconSlot,
       category: category.category,

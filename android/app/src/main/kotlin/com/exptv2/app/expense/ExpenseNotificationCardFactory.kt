@@ -9,11 +9,14 @@ data class ExpenseLimitAlert(
     val title: String,
     val targetLabel: String,
     val category: TransactionCategoryEntity?,
-    val transaction: ExpenseTransactionEntity,
+    val transaction: ExpenseTransactionEntity?,
     val limitAmount: Double,
     val spentAmount: Double,
     val remainingAmount: Double,
     val usageRatio: Double,
+    val targetType: String = "category",
+    val targetId: Int = 0,
+    val triggerDate: String? = null,
 )
 
 object ExpenseNotificationCardFactory {
@@ -77,6 +80,12 @@ object ExpenseNotificationCardFactory {
 
     fun limitAlert(alert: ExpenseLimitAlert, now: Long): NotificationCardEntity {
         val category = alert.category
+        val transaction = alert.transaction
+        val fallbackCategoryId = when {
+            transaction != null -> transaction.transactionCategoryID
+            alert.targetType == "category" && alert.targetId > 0 -> alert.targetId
+            else -> null
+        }
         val message = when {
             alert.remainingAmount > 0.0 ->
                 "${alert.targetLabel}: ${formatHuf(alert.remainingAmount)} Ft maradt a limitből."
@@ -93,15 +102,15 @@ object ExpenseNotificationCardFactory {
             isRead = false,
             isActive = true,
             priority = if (alert.type == "limit_100") "critical" else "warning",
-            categoryId = category?.transactionCategoryID ?: alert.transaction.transactionCategoryID,
+            categoryId = category?.transactionCategoryID ?: fallbackCategoryId,
             categoryName = category?.name ?: alert.targetLabel,
             categoryColor = category?.backgroundColor
                 ?: category?.colorSlot?.let { CategoryColorSlotManager.colorForSlot(it) },
             categoryIconSlot = category?.iconSlot ?: 0,
             recurringTransactionId = null,
-            transactionId = alert.transaction.id,
-            amount = abs(alert.transaction.amount),
-            triggerDate = alert.transaction.date,
+            transactionId = transaction?.id,
+            amount = abs(transaction?.amount ?: alert.spentAmount),
+            triggerDate = alert.triggerDate ?: transaction?.date,
             nextDueDate = null,
             createdAt = now,
             updatedAt = now,

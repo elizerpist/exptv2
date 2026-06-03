@@ -681,7 +681,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(savedAmount, 250);
-    expect(savedAlert, isFalse);
+    expect(savedAlert, isTrue);
 
     await tester.tap(find.byKey(const ValueKey('limit-reset-inline-button')));
     await tester.pumpAndSettle();
@@ -690,6 +690,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
     expect(savedAmount, 0);
+    expect(savedAlert, isFalse);
   });
 
   testWidgets('category limit editor slider updates the limit amount', (
