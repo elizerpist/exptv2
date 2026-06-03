@@ -10,7 +10,6 @@ import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
-import 'state/fast_info_metrics_resolver.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
@@ -80,6 +79,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   var _categoryEditorOpen = false;
   var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
+  int? _lastHomeBuildEntriesLogged;
+  bool? _lastHomeBuildOverlayLogged;
+  bool? _lastHomeBuildHeaderExpandedLogged;
 
   @override
   void initState() {
@@ -136,6 +138,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       child: ListenableBuilder(
         listenable: widget.store,
         builder: (context, _) {
+          final homeBuildStartedAt = DateTime.now();
           if (widget.store.loading) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
@@ -154,16 +157,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             );
           }
 
-          final fastInfoMetrics = FastInfoMetricsResolver.resolve(
-            transactions: widget.store.transactions,
-            categories: widget.store.categories,
-            limits: widget.store.limits,
-            now: widget.store.currentDate,
-          );
+          final fastInfoMetrics = widget.store.fastInfoMetrics;
           final visibleTransactions = widget.store.visibleTransactions;
           final visibleGhostTransactions =
               widget.store.visibleGhostTransactions;
           final visibleLogEntries = widget.store.visibleDisplayLogEntries;
+          _logHomeBuildFrame(
+            startedAt: homeBuildStartedAt,
+            entryCount: visibleLogEntries.length,
+            visibleTransactionCount: visibleTransactions.length,
+            visibleGhostCount: visibleGhostTransactions.length,
+          );
           _notifyBlockingOverlay(
             _categoryEditorOpen ||
                 (_budgetEditorItem != null &&
@@ -366,6 +370,37 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     );
   }
 
+  void _logHomeBuildFrame({
+    required DateTime startedAt,
+    required int entryCount,
+    required int visibleTransactionCount,
+    required int visibleGhostCount,
+  }) {
+    final overlayOpen =
+        _categoryMode != null ||
+        _categoryEditorOpen ||
+        _budgetEditorItem != null;
+    final shouldLogState =
+        _lastHomeBuildEntriesLogged != entryCount ||
+        _lastHomeBuildOverlayLogged != overlayOpen ||
+        _lastHomeBuildHeaderExpandedLogged != _headerExpanded;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final elapsed = _elapsedMs(startedAt);
+      final shouldLog = shouldLogState || elapsed > 32;
+      if (!shouldLog) return;
+      _lastHomeBuildEntriesLogged = entryCount;
+      _lastHomeBuildOverlayLogged = overlayOpen;
+      _lastHomeBuildHeaderExpandedLogged = _headerExpanded;
+      DebugConsole.log(
+        '[Perf] HomeBuild frame entries=$entryCount '
+        'records=$visibleTransactionCount ghosts=$visibleGhostCount '
+        'headerExpanded=$_headerExpanded overlay=$overlayOpen '
+        'elapsed=${elapsed}ms jank=${elapsed > 32}',
+      );
+    });
+  }
+
   void _syncBudgetEditorActiveKey() {
     if (!mounted) return;
     final nextKey = widget.budgetEditorActiveKey?.value;
@@ -393,12 +428,25 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   Future<void> _expandHeader() async {
+    final startedAt = DateTime.now();
+    final entryCount = widget.store.visibleDisplayLogEntries.length;
+    final transactionCount = widget.store.transactions.length;
+    DebugConsole.log(
+      '[HeaderCard] expand requested progress=${_headerSlideController.value.toStringAsFixed(2)} '
+      'entries=$entryCount transactions=$transactionCount',
+    );
     _headerSlideController.stop();
     _fastInfoExtent.value = 0;
     setState(() {
       _headerExpanded = true;
     });
-    final startedAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[HeaderCard] expand first frame elapsed=${_elapsedMs(startedAt)}ms '
+        'progress=${_headerSlideController.value.toStringAsFixed(2)}',
+      );
+    });
     DebugConsole.log(
       '[HeaderCard] expand start progress=${_headerSlideController.value.toStringAsFixed(2)}',
     );
@@ -410,12 +458,25 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   Future<void> _collapseHeader() async {
+    final startedAt = DateTime.now();
+    final entryCount = widget.store.visibleDisplayLogEntries.length;
+    final transactionCount = widget.store.transactions.length;
+    DebugConsole.log(
+      '[HeaderCard] collapse requested progress=${_headerSlideController.value.toStringAsFixed(2)} '
+      'entries=$entryCount transactions=$transactionCount',
+    );
     _headerSlideController.stop();
     _fastInfoExtent.value = 0;
     setState(() {
       _headerExpanded = false;
     });
-    final startedAt = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[HeaderCard] collapse first frame elapsed=${_elapsedMs(startedAt)}ms '
+        'progress=${_headerSlideController.value.toStringAsFixed(2)}',
+      );
+    });
     DebugConsole.log(
       '[HeaderCard] collapse start progress=${_headerSlideController.value.toStringAsFixed(2)}',
     );
@@ -644,13 +705,21 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openCategoryMenu() {
+    final requestedAt = DateTime.now();
+    final closing =
+        _categoryMode != null ||
+        _categoryEditorOpen ||
+        _budgetEditorItem != null;
+    DebugConsole.log(
+      '[CategoryMenu] ${closing ? 'close' : 'open'} requested '
+      'entries=${widget.store.visibleDisplayLogEntries.length} '
+      'categories=${widget.store.categories.length} headerExpanded=$_headerExpanded',
+    );
     _headerPullController.stop();
     _headerPullController.value = 0;
     widget.onBudgetTargetEditorClosed?.call();
     setState(() {
-      if (_categoryMode != null ||
-          _categoryEditorOpen ||
-          _budgetEditorItem != null) {
+      if (closing) {
         _categoryMode = null;
         _categoryEditorOpen = false;
         _budgetEditorItem = null;
@@ -660,6 +729,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _headerExpanded = false;
       _fastInfoExtent.value = 0;
       _categoryMode = CategoryOverlayMode.picker;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[CategoryMenu] ${closing ? 'close' : 'open'} first frame '
+        'elapsed=${_elapsedMs(requestedAt)}ms mode=${_categoryMode?.name ?? 'none'}',
+      );
     });
   }
 

@@ -17,6 +17,7 @@ import '../models/transaction_log_entry.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../models/transaction_summary.dart';
+import 'fast_info_metrics_resolver.dart';
 
 class TransactionStore extends ChangeNotifier {
   TransactionStore(this._repository, {DateTime Function()? clock})
@@ -36,6 +37,10 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionRecord> _transactions = [];
   List<RecurringGhostRecord> _recurringGhostTransactions = [];
   List<CategoryLimit> _limits = [];
+  List<TransactionCategory> _categoriesView = const [];
+  List<TransactionRecord> _transactionsView = const [];
+  List<RecurringGhostRecord> _recurringGhostTransactionsView = const [];
+  List<CategoryLimit> _limitsView = const [];
   Map<int, TransactionCategory> _categoriesById = const {};
   Map<int, int> _categoryTransactionCounts = const {};
   final _activeCategoriesCache = <TransactionType, List<TransactionCategory>>{};
@@ -50,6 +55,8 @@ class TransactionStore extends ChangeNotifier {
   final _overviewBudgetItemsCache = <String, List<OverviewBudgetData>>{};
   final _backheaderBudgetItemsCache = <String, List<BackheaderBudgetItem>>{};
   TransactionSummary? _totalSummaryCache;
+  Map<String, FastInfoMetricResult>? _fastInfoMetricsCache;
+  String? _fastInfoMetricsDateKey;
   double? _totalIncomeCache;
   double? _totalExpenseCache;
   bool get loading => _loading;
@@ -69,11 +76,35 @@ class TransactionStore extends ChangeNotifier {
   Map<int, int> get categoryTransactionCounts => _categoryTransactionCounts;
   Map<int, TransactionCategory> get categoriesById => _categoriesById;
 
-  List<TransactionCategory> get categories => List.unmodifiable(_categories);
-  List<TransactionRecord> get transactions => List.unmodifiable(_transactions);
+  List<TransactionCategory> get categories => _categoriesView;
+  List<TransactionRecord> get transactions => _transactionsView;
   List<RecurringGhostRecord> get recurringGhostTransactions =>
-      List.unmodifiable(_recurringGhostTransactions);
-  List<CategoryLimit> get limits => List.unmodifiable(_limits);
+      _recurringGhostTransactionsView;
+  List<CategoryLimit> get limits => _limitsView;
+
+  Map<String, FastInfoMetricResult> get fastInfoMetrics {
+    final now = _clock();
+    final dateKey =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final cached = _fastInfoMetricsCache;
+    if (cached != null && _fastInfoMetricsDateKey == dateKey) return cached;
+    final stopwatch = Stopwatch()..start();
+    final metrics = FastInfoMetricsResolver.resolve(
+      transactions: _transactions,
+      categories: _categories,
+      limits: _limits,
+      now: now,
+    );
+    _fastInfoMetricsCache = metrics;
+    _fastInfoMetricsDateKey = dateKey;
+    final elapsed = stopwatch.elapsedMilliseconds;
+    DebugConsole.log(
+      '[Perf] FastInfo metrics build transactions=${_transactions.length} '
+      'categories=${_categories.length} limits=${_limits.length} '
+      'cards=${metrics.length} elapsed=${elapsed}ms',
+    );
+    return metrics;
+  }
 
   List<TransactionCategory> get activeCategories =>
       _activeCategoriesFor(_filter.type);
@@ -434,6 +465,11 @@ class TransactionStore extends ChangeNotifier {
     _totalExpenseCache = null;
   }
 
+  void _invalidateFastInfoMetrics() {
+    _fastInfoMetricsCache = null;
+    _fastInfoMetricsDateKey = null;
+  }
+
   void _prewarmCriticalCaches(String reason) {
     final stopwatch = Stopwatch()..start();
     for (final type in TransactionType.values) {
@@ -503,8 +539,10 @@ class TransactionStore extends ChangeNotifier {
         '[Recurring] loaded ${_recurringGhostTransactions.length} pending ghosts',
       );
       _limits = payload.limits;
+      _rebuildPublicViews();
       _rebuildDerivedIndexes();
       _invalidateViewCaches();
+      _invalidateFastInfoMetrics();
       _prewarmCriticalCaches('start');
     } catch (error) {
       _error = error.toString();
@@ -809,6 +847,7 @@ class TransactionStore extends ChangeNotifier {
     );
     if (generation != null && generation != _summaryChangeGeneration) return;
     _recurringGhostTransactions = _sortGhosts(ghosts);
+    _rebuildPublicViews();
     _invalidateViewCaches();
     _prewarmCriticalCaches('recurring-ghosts');
     DebugConsole.log(
@@ -825,10 +864,21 @@ class TransactionStore extends ChangeNotifier {
       payload.recurringGhostTransactions,
     );
     _limits = payload.limits;
+    _rebuildPublicViews();
     _rebuildDerivedIndexes();
     _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
     _prewarmCriticalCaches('reload');
     notifyListeners();
+  }
+
+  void _rebuildPublicViews() {
+    _categoriesView = List<TransactionCategory>.unmodifiable(_categories);
+    _transactionsView = List<TransactionRecord>.unmodifiable(_transactions);
+    _recurringGhostTransactionsView = List<RecurringGhostRecord>.unmodifiable(
+      _recurringGhostTransactions,
+    );
+    _limitsView = List<CategoryLimit>.unmodifiable(_limits);
   }
 
   void _rebuildDerivedIndexes() {

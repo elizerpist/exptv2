@@ -65,6 +65,64 @@ void main() {
     },
   );
 
+  test('store reuses public collection snapshots until data changes', () async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(repository);
+    await store.start();
+
+    final transactions = store.transactions;
+    final categories = store.categories;
+    final limits = store.limits;
+
+    expect(identical(store.transactions, transactions), isTrue);
+    expect(identical(store.categories, categories), isTrue);
+    expect(identical(store.limits, limits), isTrue);
+
+    await store.addTransaction(
+      merchant: 'Fresh Shop',
+      amount: 42,
+      type: TransactionType.expense,
+      categoryId: 6,
+      date: '2026.06.03',
+      time: '10:00',
+    );
+
+    expect(identical(store.transactions, transactions), isFalse);
+    expect(identical(store.categories, categories), isFalse);
+    expect(identical(store.limits, limits), isFalse);
+  });
+
+  test(
+    'store reuses FastInfo metrics until transaction data changes',
+    () async {
+      final repository = FakeTransactionRepository();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 6, 3, 12),
+      );
+      await store.start();
+
+      final metrics = store.fastInfoMetrics;
+      final metricsAgain = store.fastInfoMetrics;
+
+      expect(identical(metrics, metricsAgain), isTrue);
+      expect(metrics['adatbazis_sorok_szama']?.pillValue, '6');
+
+      await store.addTransaction(
+        merchant: 'Fresh Shop',
+        amount: 42,
+        type: TransactionType.expense,
+        categoryId: 6,
+        date: '2026.06.03',
+        time: '10:00',
+      );
+
+      final refreshedMetrics = store.fastInfoMetrics;
+      expect(identical(refreshedMetrics, metrics), isFalse);
+      expect(refreshedMetrics['adatbazis_sorok_szama']?.pillValue, '7');
+    },
+  );
+
   test('store applies merchant fast filter and search query', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();

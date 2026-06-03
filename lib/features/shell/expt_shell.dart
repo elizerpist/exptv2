@@ -76,6 +76,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     unawaited(_processRecurringOnResume());
   }
 
+  int _elapsedMs(DateTime startedAt) {
+    return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
   Future<void> _syncRecurringAlarms() async {
     try {
       await _recurringAlarmService.syncRecurringAlarms();
@@ -117,10 +121,23 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _selectTab(AppTab tab) {
     if (_activeTab == tab) return;
+    final requestedAt = DateTime.now();
+    final previous = _activeTab;
+    DebugConsole.log(
+      '[Perf] BottomNav tap from=${previous.id} to=${tab.id} '
+      'homeOverlay=$_homeBlockingOverlayOpen',
+    );
     _sheetHostKey.currentState?.closeAll();
     setState(() {
       _activeTab = tab;
       _homeBlockingOverlayOpen = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _activeTab != tab) return;
+      DebugConsole.log(
+        '[Perf] BottomNav frame from=${previous.id} to=${tab.id} '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
     });
   }
 
