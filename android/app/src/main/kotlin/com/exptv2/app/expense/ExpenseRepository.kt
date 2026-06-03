@@ -16,6 +16,7 @@ class ExpenseRepository(context: Context) {
     private val recurringTransactions = db.recurringTransactions()
     private val recurringGhosts = db.recurringGhostTransactions()
     private val notificationCards = db.notificationCards()
+    private val notificationEmitter = ExpenseNotificationEmitter(appContext)
     private val settingsStore = ExpenseSettingsStore(appContext)
     private val notificationHelper = RecurringNotificationHelper(appContext)
     private val debugClockStore = RecurringDebugClockStore(appContext)
@@ -406,7 +407,7 @@ class ExpenseRepository(context: Context) {
         val categoryId = (args["transactionCategoryID"] as? Number)?.toInt()
             ?: args["transactionCategoryID"]?.toString()?.toIntOrNull()
             ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category is required")
-        categories.byId(categoryId)
+        val category = categories.byId(categoryId)
             ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
 
         val date = formatDate(args["date"]?.toString())
@@ -425,6 +426,10 @@ class ExpenseRepository(context: Context) {
             transactionCategoryID = categoryId,
         )
         transactions.insert(row)
+        emitTransactionCreated(row, category)
+        if (row.amount < 0) {
+            emitLimitAlertsForTransaction(row, category)
+        }
         return row.toMap()
     }
 
@@ -497,6 +502,85 @@ class ExpenseRepository(context: Context) {
     }
 
 
+
+    private suspend fun emitTransactionCreated(
+        transaction: ExpenseTransactionEntity,
+        category: TransactionCategoryEntity,
+    ) {
+        val now = System.currentTimeMillis()
+        Log.d(
+            "ExpenseNotification",
+            "[Notification] transaction created requested id=${transaction.id} category=${category.transactionCategoryID}",
+        )
+        notificationEmitter.emit(
+            ExpenseNotificationCardFactory.transactionCreated(
+                transaction = transaction,
+                category = category,
+                now = now,
+            ),
+            notificationCards,
+        )
+    }
+
+    private suspend fun emitLimitAlertsForTransaction(
+        transaction: ExpenseTransactionEntity,
+        transactionCategory: TransactionCategoryEntity,
+    ) {
+        val startedAt = System.currentTimeMillis()
+        val periods = ExpenseLimitNotificationEvaluator.periodsFor(transaction.date)
+        val limits = categoryLimits.activeExpenseLimitsForTransaction(
+            categoryId = transaction.transactionCategoryID,
+            monthKey = periods.monthKey,
+            yearKey = periods.yearKey,
+        )
+        Log.d(
+            "ExpenseNotification",
+            "[Notification] limit evaluation start transaction=${transaction.id} category=${transaction.transactionCategoryID} limits=${limits.size}",
+        )
+        for (limit in limits) {
+            val categoryId = if (limit.targetType == "category") limit.targetId else null
+            val dateRange = dateRangeForLimit(limit, periods)
+            val spent = transactions.expenseSpentTotal(
+                categoryId = categoryId,
+                startDate = dateRange.first,
+                endDate = dateRange.second,
+            )
+            val label = if (limit.targetType == "overview") "Kiadási budget" else transactionCategory.name
+            val category = if (limit.targetType == "category") transactionCategory else null
+            val alert = ExpenseLimitNotificationEvaluator.evaluate(
+                limit = limit,
+                targetLabel = label,
+                category = category,
+                transaction = transaction,
+                spentAmount = spent,
+            )
+            Log.d(
+                "ExpenseNotification",
+                "[Notification] limit result id=${limit.id} target=${limit.targetType}:${limit.targetId} spent=$spent limit=${limit.limitAmount} threshold=${alert?.type ?: "none"}",
+            )
+            if (alert != null) {
+                notificationEmitter.emit(
+                    ExpenseNotificationCardFactory.limitAlert(alert, System.currentTimeMillis()),
+                    notificationCards,
+                )
+            }
+        }
+        Log.d(
+            "ExpenseNotification",
+            "[Perf] limit evaluation complete transaction=${transaction.id} elapsed=${System.currentTimeMillis() - startedAt}ms",
+        )
+    }
+
+    private fun dateRangeForLimit(
+        limit: CategoryLimitEntity,
+        periods: ExpenseLimitPeriods,
+    ): Pair<String, String> {
+        return when (limit.window) {
+            "monthly" -> periods.monthStart to periods.monthEnd
+            "yearly" -> periods.yearStart to periods.yearEnd
+            else -> "" to ""
+        }
+    }
 
     private fun recurringTargetMillis(): Long = debugClockStore.effectiveNow()
 
