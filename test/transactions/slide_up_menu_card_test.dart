@@ -1,4 +1,6 @@
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +31,86 @@ void main() {
     expect(
       DebugConsole.allText,
       contains('[SlideUpMenu] TestMenu open complete'),
+    );
+  });
+
+  testWidgets(
+    'veil tap hides keyboard instead of dismissing when keyboard is open',
+    (tester) async {
+      var dismissed = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 600),
+              viewInsets: EdgeInsets.only(bottom: 180),
+            ),
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: SizedBox(
+                width: 390,
+                height: 600,
+                child: SlideUpMenuCard(
+                  cardKey: const ValueKey('test-slide-card'),
+                  debugLabel: 'KeyboardDismissMenu',
+                  panelHeight: 260,
+                  onDismissed: () => dismissed = true,
+                  child: const SizedBox(height: 260),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(const Offset(24, 24));
+      await tester.pumpAndSettle();
+
+      expect(dismissed, isFalse);
+      expect(find.byKey(const ValueKey('test-slide-card')), findsOneWidget);
+      expect(
+        DebugConsole.allText,
+        contains('[SlideUpMenu] KeyboardDismissMenu veil tap unfocus keyboard'),
+      );
+    },
+  );
+
+  testWidgets('category editor sheet does not follow keyboard lift', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(390, 600),
+            viewInsets: EdgeInsets.only(bottom: 180),
+          ),
+          child: Scaffold(
+            resizeToAvoidBottomInset: false,
+            body: SizedBox(
+              width: 390,
+              height: 600,
+              child: CategoryEditorSheet(
+                activeType: TransactionType.expense,
+                panelHeight: 260,
+                onSave: (_) {},
+                onClose: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_slideCardTranslationY(tester), moreOrLessEquals(0, epsilon: 0.1));
+    expect(
+      DebugConsole.allText,
+      isNot(contains('[SlideUpMenu] AddCategory keyboard lift inset=180.0')),
     );
   });
 

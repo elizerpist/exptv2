@@ -143,16 +143,20 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 ),
                 const SizedBox(width: 12),
                 Flexible(
-                  child: Text(
-                    current.amountText,
-                    key: const ValueKey('backheader-active-amount'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: AppColors.gray800,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                  fit: FlexFit.tight,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      current.amountText,
+                      key: const ValueKey('backheader-active-amount'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: AppColors.gray800,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),

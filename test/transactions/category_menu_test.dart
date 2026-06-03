@@ -45,10 +45,22 @@ void main() {
     expect(find.text('Q'), findsOneWidget);
     expect(find.text('Salary'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.tap(
+      find.byKey(const ValueKey('category-card-6')),
+      warnIfMissed: false,
+    );
     expect(selected?.name, 'Q');
 
-    await tester.longPress(find.byKey(const ValueKey('category-icon-6')));
+    selected = null;
+    modified = null;
+    await tester.tap(find.byKey(const ValueKey('category-icon-6')));
+    expect(selected?.name, 'Q');
+    expect(modified, isNull);
+
+    await tester.longPress(
+      find.byKey(const ValueKey('category-card-6')),
+      warnIfMissed: false,
+    );
     expect(modified?.name, 'Q');
 
     await tester.tap(find.byKey(const ValueKey('category-delete-6')));
@@ -79,7 +91,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Válassz kategóriát'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.tap(
+      find.byKey(const ValueKey('category-card-6')),
+      warnIfMissed: false,
+    );
     await tester.pumpAndSettle();
 
     expect(store.activeCategory?.name, 'Q');

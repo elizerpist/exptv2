@@ -57,8 +57,12 @@ void main() {
       find.byKey(const ValueKey('notification-logbox-opacity-1')),
     );
     expect(opacity.opacity, lessThan(1));
+    expect(_swipeBorderFinder(), findsNothing);
 
     await gesture.moveBy(const Offset(-80, 0));
+    await tester.pump();
+    expect(deletedIds, isEmpty);
+
     await gesture.up();
     await tester.pumpAndSettle();
 
@@ -165,4 +169,12 @@ ExpenseNotificationCard notificationCard({
   'isRead': false,
   'isActive': true,
   'priority': 'normal',
+});
+
+Finder _swipeBorderFinder() => find.byWidgetPredicate((widget) {
+  if (widget is! Container) return false;
+  final decoration = widget.decoration;
+  if (decoration is! BoxDecoration) return false;
+  final border = decoration.border;
+  return border is Border && border.top.width == 3;
 });

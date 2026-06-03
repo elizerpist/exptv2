@@ -23,6 +23,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.dragExclusionKeys = const <GlobalKey>[],
     this.openRequestedAt,
     this.deferEntryAnimation = false,
+    this.keyboardAvoidance = true,
   });
 
   final Key cardKey;
@@ -39,6 +40,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final List<GlobalKey> dragExclusionKeys;
   final DateTime? openRequestedAt;
   final bool deferEntryAnimation;
+  final bool keyboardAvoidance;
 
   @override
   State<SlideUpMenuCard> createState() => _SlideUpMenuCardState();
@@ -143,11 +145,16 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
           final panelHeight = (widget.panelHeight ?? availableHeight)
               .clamp(0.0, availableHeight)
               .toDouble();
-          final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+          final rawKeyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+          final keyboardInset = widget.keyboardAvoidance
+              ? rawKeyboardInset
+              : 0.0;
           _panelHeight = panelHeight;
           _keyboardInset = keyboardInset;
           _logLayout(availableHeight, panelHeight);
-          _logKeyboardLift(keyboardInset, panelHeight);
+          if (widget.keyboardAvoidance) {
+            _logKeyboardLift(keyboardInset, panelHeight);
+          }
           return Stack(
             children: [
               if (widget.showFocusVeil)
@@ -156,6 +163,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
                       if (_closing) return;
+                      if (_unfocusKeyboardIfNeeded('veil tap')) return;
                       DebugConsole.log(
                         '[SlideUpMenu] $_debugLabel veil tap dismiss',
                       );
@@ -391,8 +399,29 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     });
   }
 
+  bool _unfocusKeyboardIfNeeded(String source) {
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    final keyboardVisible = _keyboardInset > 0.5;
+    final editableFocused = _hasEditableFocus(primaryFocus);
+    if (!editableFocused && !keyboardVisible) return false;
+    primaryFocus?.unfocus();
+    DebugConsole.log(
+      '[SlideUpMenu] $_debugLabel $source unfocus keyboard '
+      'inset=${_keyboardInset.toStringAsFixed(1)}',
+    );
+    return true;
+  }
+
+  bool _hasEditableFocus(FocusNode? focusNode) {
+    final focusContext = focusNode?.context;
+    if (focusContext == null) return false;
+    if (focusContext.widget is EditableText) return true;
+    return focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
     if (_closing) return;
+    _unfocusKeyboardIfNeeded('card tap');
     _resetPointerGestureState();
     if (_isDragExcluded(event.position)) {
       _dragActive = false;

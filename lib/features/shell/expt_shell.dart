@@ -439,15 +439,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
-    final homeOverlayCoversShellNavigation =
-        _activeTab == AppTab.home && _homeBlockingOverlayOpen;
     final shellNavigation = _buildShellNavigation();
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
       body: Stack(
         children: [
-          if (homeOverlayCoversShellNavigation) ...shellNavigation,
           Positioned.fill(
             child: PageView.builder(
               key: const ValueKey('shell-page-stack'),
@@ -458,7 +455,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   _buildShellPage(appTabs[index], expenseTheme),
             ),
           ),
-          if (!homeOverlayCoversShellNavigation) ...shellNavigation,
+          ...shellNavigation,
           DebugFloatingButton(
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:

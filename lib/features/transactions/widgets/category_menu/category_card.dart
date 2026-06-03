@@ -40,7 +40,11 @@ class CategoryCard extends StatelessWidget {
               shadowColor: Colors.black.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(18),
               child: InkWell(
+                key: ValueKey(
+                  'category-card-${category.transactionCategoryID}',
+                ),
                 onTap: () => onSelect(category),
+                onLongPress: () => onModify(category),
                 borderRadius: BorderRadius.circular(18),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 85, 12, 18),
@@ -56,7 +60,7 @@ class CategoryCard extends StatelessWidget {
                       Text(
                         category.name,
                         key: ValueKey(
-                          'category-card-${category.transactionCategoryID}',
+                          'category-card-title-${category.transactionCategoryID}',
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -93,7 +97,8 @@ class CategoryCard extends StatelessWidget {
                 key: ValueKey(
                   'category-icon-${category.transactionCategoryID}',
                 ),
-                onTap: () => onModify(category),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSelect(category),
                 onLongPress: () => onModify(category),
                 child: CategoryIconBadge(
                   category: category,

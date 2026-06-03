@@ -141,7 +141,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             bottom: false,
             child: Builder(
               builder: (context) {
-                final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
                 final actionBottomInset =
                     SlideUpPanelMetrics.transactionActionBottomInset +
                     (_categoryPickerOpen ? 2 : 0);
@@ -158,7 +157,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         _logContentMetrics(
                           availableHeight: constraints.maxHeight,
                           panelHeight: panelHeight,
-                          keyboardInset: keyboardInset,
+                          keyboardInset: 0,
                         );
                       }
                       return Column(

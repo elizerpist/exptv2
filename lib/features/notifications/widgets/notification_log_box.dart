@@ -64,13 +64,14 @@ class _NotificationLogBoxState extends State<NotificationLogBox> {
     _dragDx += details.delta.dx;
     final clamped = _dragDx.clamp(-_maxDragOffset, _maxDragOffset).toDouble();
     setState(() => _visualDx = clamped);
-    if (_dragDx.abs() >= _dismissThreshold) {
-      _triggerDelete(_dragDx < 0 ? -1 : 1);
-    }
   }
 
   void _handleDragEnd() {
     if (_triggered || _collapsed) return;
+    if (_dragDx.abs() >= _dismissThreshold) {
+      _triggerDelete(_dragDx < 0 ? -1 : 1);
+      return;
+    }
     _resetDrag();
   }
 
@@ -91,7 +92,6 @@ class _NotificationLogBoxState extends State<NotificationLogBox> {
       snapshotHex: widget.card.categoryColor,
       fallback: AppColors.primary,
     );
-    final swipeOpacity = _borderOpacity(_dragDx.abs());
     return Align(
       alignment: Alignment.topCenter,
       heightFactor: 1,
@@ -118,162 +118,126 @@ class _NotificationLogBoxState extends State<NotificationLogBox> {
                         'notification-logbox-opacity-${widget.card.id}',
                       ),
                       opacity: _contentOpacity,
-                      child: Stack(
-                        children: [
-                          Container(
-                            constraints: const BoxConstraints(minHeight: 140),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 140),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(25),
+                          border: Border.all(color: AppColors.gray200),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              offset: const Offset(0, 2),
+                              blurRadius: 3,
                             ),
-                            decoration: BoxDecoration(
-                              color: AppColors.white,
-                              borderRadius: BorderRadius.circular(25),
-                              border: Border.all(color: AppColors.gray200),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  offset: const Offset(0, 2),
-                                  blurRadius: 3,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 46,
-                                      height: 46,
-                                      decoration: BoxDecoration(
-                                        color: categoryColor,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.notifications_none,
-                                        color: AppColors.white,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _typeLabel(widget.card.type),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.gray800,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            widget.card.message.isNotEmpty
-                                                ? widget.card.message
-                                                : widget.card.title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColors.gray500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: categoryColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.notifications_none,
+                                    color: AppColors.white,
+                                    size: 24,
+                                  ),
                                 ),
-                                const SizedBox(height: 16),
-                                Container(height: 1, color: AppColors.gray200),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        widget.card.categoryName ??
-                                            widget.card.priority,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _typeLabel(widget.card.type),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.gray800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        widget.card.message.isNotEmpty
+                                            ? widget.card.message
+                                            : widget.card.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
                                           fontWeight: FontWeight.w500,
                                           color: AppColors.gray500,
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      _timestampLabel(widget.card.timestamp),
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.gray500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    widget.card.isRead
-                                        ? 'Elolvasva'
-                                        : 'Új értesítés',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.primary,
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          _SwipeBorder(
-                            opacity: swipeOpacity,
-                            color: AppColors.expense,
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            Container(height: 1, color: AppColors.gray200),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    widget.card.categoryName ??
+                                        widget.card.priority,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.gray500,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _timestampLabel(widget.card.timestamp),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.gray500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                widget.card.isRead
+                                    ? 'Elolvasva'
+                                    : 'Új értesítés',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-      ),
-    );
-  }
-
-  double _borderOpacity(double distance) {
-    if (distance <= 0) return 0;
-    return (distance / _dismissThreshold).clamp(0.0, 1.0).toDouble();
-  }
-}
-
-class _SwipeBorder extends StatelessWidget {
-  const _SwipeBorder({required this.opacity, required this.color});
-
-  final double opacity;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Opacity(
-        opacity: opacity,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 140),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: color, width: 3),
-          ),
-        ),
       ),
     );
   }

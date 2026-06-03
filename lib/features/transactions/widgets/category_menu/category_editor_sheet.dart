@@ -31,6 +31,7 @@ class CategoryEditorSheet extends StatelessWidget {
       debugLabel: initialCategory == null ? 'AddCategory' : 'EditCategory',
       panelHeight: panelHeight,
       visible: visible,
+      keyboardAvoidance: false,
       onDismissed: onClose,
       child: SafeArea(
         top: false,

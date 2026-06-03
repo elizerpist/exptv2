@@ -66,7 +66,9 @@ class TransactionHomePage extends StatefulWidget {
 }
 
 class _TransactionHomePageState extends State<TransactionHomePage>
-    with TickerProviderStateMixin {
+    with
+        TickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin<TransactionHomePage> {
   var _headerExpanded = false;
   late final ValueNotifier<double> _fastInfoExtent;
   var _balanceHidden = false;
@@ -120,7 +122,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final expenseTheme =
         widget.expenseTheme ??
         ExpenseTheme.fromSettings(

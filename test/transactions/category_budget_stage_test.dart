@@ -780,6 +780,33 @@ void main() {
     );
   });
 
+  testWidgets('classic backheader right-aligns amount without limit', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 40, 0)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final amount = tester.getRect(
+      find.byKey(const ValueKey('backheader-active-amount')),
+    );
+
+    expect(amount.right, moreOrLessEquals(360, epsilon: 1));
+  });
+
   testWidgets(
     'stage title stays enlarged while amount returns to compact size',
     (tester) async {

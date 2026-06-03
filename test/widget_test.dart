@@ -244,6 +244,29 @@ void main() {
     expect(logs, isNot(contains('[Perf] HomeBuild frame')));
   });
 
+  testWidgets('bottom nav return to home reuses the existing home page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await tester.tap(find.text('Főoldal'));
+    await tester.pumpAndSettle();
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] BottomNav tap from=settings to=home'));
+    expect(logs, contains('[Perf] BottomNav frame from=settings to=home'));
+    expect(
+      logs,
+      isNot(contains('[Perf] Store start skipped reason=completed')),
+    );
+    expect(logs, isNot(contains('[Perf] FastInfo metrics build')));
+  });
+
   testWidgets('first launch requests Android notification permission once', (
     tester,
   ) async {
