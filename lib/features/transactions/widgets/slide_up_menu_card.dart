@@ -65,12 +65,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   double _snapStartDy = 0;
   double _snapEndDy = 0;
   double _panelHeight = 0;
+  double _keyboardInset = 0;
   double _dragStartY = 0;
   double _gestureDx = 0;
   double _gestureDy = 0;
   double? _lastLoggedAvailableHeight;
   double? _lastLoggedPanelHeight;
   double? _lastLoggedDragOffset;
+  double? _lastLoggedKeyboardInset;
   DateTime? _openStartedAt;
   DateTime? _dragStartedAt;
   int _openGeneration = 0;
@@ -141,8 +143,11 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
           final panelHeight = (widget.panelHeight ?? availableHeight)
               .clamp(0.0, availableHeight)
               .toDouble();
+          final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           _panelHeight = panelHeight;
+          _keyboardInset = keyboardInset;
           _logLayout(availableHeight, panelHeight);
+          _logKeyboardLift(keyboardInset, panelHeight);
           return Stack(
             children: [
               if (widget.showFocusVeil)
@@ -191,7 +196,10 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                           panelHeight;
                       return Transform.translate(
                         key: const ValueKey('slide-up-menu-transform'),
-                        offset: Offset(0, entryOffset + _dragDy.value),
+                        offset: Offset(
+                          0,
+                          entryOffset + _dragDy.value - keyboardInset,
+                        ),
                         child: child,
                       );
                     },
@@ -369,6 +377,20 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     });
   }
 
+  void _logKeyboardLift(double keyboardInset, double panelHeight) {
+    if (_lastLoggedKeyboardInset == keyboardInset) return;
+    _lastLoggedKeyboardInset = keyboardInset;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel keyboard lift '
+        'inset=${keyboardInset.toStringAsFixed(1)} '
+        'panel=${panelHeight.toStringAsFixed(1)} '
+        'transform=${(-keyboardInset).toStringAsFixed(1)}',
+      );
+    });
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
     if (_closing) return;
     _resetPointerGestureState();
@@ -521,7 +543,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     widget.onDismissed?.call();
   }
 
-  double get _dragMaxOffset => math.max(_panelHeight, 1);
+  double get _dragMaxOffset => math.max(_panelHeight + _keyboardInset, 1);
 
   bool _isDragExcluded(Offset globalPosition) {
     for (final key in widget.dragExclusionKeys) {

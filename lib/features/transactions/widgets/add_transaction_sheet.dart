@@ -150,7 +150,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     SlideUpPanelMetrics.horizontalInset,
                     14,
                     SlideUpPanelMetrics.horizontalInset,
-                    keyboardInset + actionBottomInset,
+                    actionBottomInset,
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {

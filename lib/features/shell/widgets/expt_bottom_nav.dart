@@ -25,6 +25,7 @@ class ExptBottomNav extends StatefulWidget {
 class _ExptBottomNavState extends State<ExptBottomNav> {
   late AppTab _optimisticActiveTab;
   String? _lastLoggedBuildKey;
+  AppTab? _pointerDispatchedTab;
 
   @override
   void initState() {
@@ -94,16 +95,25 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
       tab: tab,
       active: _optimisticActiveTab == tab,
       badgeCount: badgeCount,
-      onPointerDown: () => _logPointerDown(tab),
+      onPointerDown: () => _handlePointerDown(tab),
       onTap: () => _handleTap(tab),
     );
   }
 
-  void _logPointerDown(AppTab tab) {
+  void _handlePointerDown(AppTab tab) {
+    final requestedAt = DateTime.now();
     DebugConsole.log(
       '[Perf] BottomNav pointer tab=${tab.id} active=${_optimisticActiveTab.id} '
       'parent=${widget.activeTab.id}',
     );
+    _activateOptimistic(tab, requestedAt, source: 'pointer');
+    if (widget.activeTab == tab) return;
+    _pointerDispatchedTab = tab;
+    DebugConsole.log(
+      '[Perf] BottomNav pointer dispatch tab=${tab.id} '
+      'elapsed=${DateTime.now().difference(requestedAt).inMilliseconds}ms',
+    );
+    widget.onTabSelected(tab);
   }
 
   void _handleTap(AppTab tab) {
@@ -112,17 +122,33 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
       '[Perf] BottomNav item tap tab=${tab.id} '
       'active=${_optimisticActiveTab.id} parent=${widget.activeTab.id}',
     );
-    if (_optimisticActiveTab != tab) {
-      setState(() => _optimisticActiveTab = tab);
-      DebugConsole.log('[Perf] BottomNav optimistic active tab=${tab.id}');
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _optimisticActiveTab != tab) return;
-        DebugConsole.log(
-          '[Perf] BottomNav optimistic frame tab=${tab.id} '
-          'elapsed=${DateTime.now().difference(requestedAt).inMilliseconds}ms',
-        );
-      });
+    if (_pointerDispatchedTab == tab) {
+      _pointerDispatchedTab = null;
+      DebugConsole.log(
+        '[Perf] BottomNav item tap dispatch skipped tab=${tab.id}',
+      );
+      return;
     }
+    _activateOptimistic(tab, requestedAt, source: 'tap');
     widget.onTabSelected(tab);
+  }
+
+  void _activateOptimistic(
+    AppTab tab,
+    DateTime requestedAt, {
+    required String source,
+  }) {
+    if (_optimisticActiveTab == tab) return;
+    setState(() => _optimisticActiveTab = tab);
+    DebugConsole.log(
+      '[Perf] BottomNav optimistic active tab=${tab.id} source=$source',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _optimisticActiveTab != tab) return;
+      DebugConsole.log(
+        '[Perf] BottomNav optimistic frame tab=${tab.id} source=$source '
+        'elapsed=${DateTime.now().difference(requestedAt).inMilliseconds}ms',
+      );
+    });
   }
 }

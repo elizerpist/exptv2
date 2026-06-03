@@ -1,5 +1,6 @@
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,6 +30,98 @@ void main() {
       DebugConsole.allText,
       contains('[SlideUpMenu] TestMenu open complete'),
     );
+  });
+
+  testWidgets(
+    'slide card translates by keyboard inset without resizing panel',
+    (tester) async {
+      DebugConsole.clear();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 600),
+              viewInsets: EdgeInsets.only(bottom: 180),
+            ),
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: SizedBox(
+                width: 390,
+                height: 600,
+                child: SlideUpMenuCard(
+                  cardKey: const ValueKey('test-slide-card'),
+                  debugLabel: 'KeyboardMenu',
+                  panelHeight: 260,
+                  child: const SizedBox(height: 260),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_slideCardTranslationY(tester), moreOrLessEquals(-180));
+      expect(
+        DebugConsole.allText,
+        contains('[SlideUpMenu] KeyboardMenu keyboard lift inset=180.0'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[SlideUpMenu] KeyboardMenu layout available=600.0 panel=260.0',
+        ),
+      );
+    },
+  );
+
+  testWidgets('panel metrics ignore keyboard inset for stable card content', (
+    tester,
+  ) async {
+    late double closedNoKeyboard;
+    late double budgetNoKeyboard;
+    late double closedWithKeyboard;
+    late double budgetWithKeyboard;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            closedNoKeyboard = SlideUpPanelMetrics.transactionHeight(
+              context,
+              pickerOpen: false,
+            );
+            budgetNoKeyboard = SlideUpPanelMetrics.budgetHeight(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(390, 600),
+            viewInsets: EdgeInsets.only(bottom: 240),
+          ),
+          child: Builder(
+            builder: (context) {
+              closedWithKeyboard = SlideUpPanelMetrics.transactionHeight(
+                context,
+                pickerOpen: false,
+              );
+              budgetWithKeyboard = SlideUpPanelMetrics.budgetHeight(context);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(closedWithKeyboard, closedNoKeyboard);
+    expect(budgetWithKeyboard, budgetNoKeyboard);
   });
 
   testWidgets('slide card can stage entry animation until after layout', (

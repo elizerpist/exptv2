@@ -11,7 +11,6 @@ class SlideUpPanelMetrics {
   static const transactionActionBottomInset = 44.0;
   static const budgetActionBottomInset = transactionActionBottomInset;
   static const horizontalInset = 20.0;
-  static const keyboardInsetCap = 180.0;
   static const transactionClosedMaxHeight = 417.0;
   static const transactionCompactMaxHeight = 540.0;
   static const transactionCompactScreenFactor = 0.90;
@@ -32,7 +31,6 @@ class SlideUpPanelMetrics {
     required bool pickerOpen,
   }) {
     final screenHeight = _screenHeight(context);
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final compactHeight = math.min(
       transactionCompactMaxHeight,
       screenHeight * transactionCompactScreenFactor,
@@ -44,17 +42,12 @@ class SlideUpPanelMetrics {
     final baseHeight = pickerOpen
         ? math.max(fullHeightForScreen(screenHeight), compactHeight)
         : closedHeight;
-    return (baseHeight + math.min(keyboardInset, keyboardInsetCap))
-        .clamp(0.0, screenHeight)
-        .toDouble();
+    return baseHeight.clamp(0.0, screenHeight).toDouble();
   }
 
   static double budgetHeight(BuildContext context) {
     final screenHeight = _screenHeight(context);
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    return (budgetBaseHeight + math.min(keyboardInset, keyboardInsetCap))
-        .clamp(0.0, screenHeight)
-        .toDouble();
+    return budgetBaseHeight.clamp(0.0, screenHeight).toDouble();
   }
 
   static double _screenHeight(BuildContext context) {

@@ -140,7 +140,6 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
         bottom: false,
         child: Builder(
           builder: (context) {
-            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             const horizontalInset = SlideUpPanelMetrics.horizontalInset;
             return Column(
               children: [
@@ -188,9 +187,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                   padding: EdgeInsets.only(
                     left: horizontalInset,
                     right: horizontalInset,
-                    bottom:
-                        keyboardInset +
-                        SlideUpPanelMetrics.budgetActionBottomInset,
+                    bottom: SlideUpPanelMetrics.budgetActionBottomInset,
                   ),
                   child: _BudgetLimitSaveButton(
                     saving: _saving,

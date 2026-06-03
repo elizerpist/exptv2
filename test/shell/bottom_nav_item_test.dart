@@ -60,6 +60,40 @@ void main() {
     },
   );
 
+  testWidgets('bottom nav dispatches and highlights on pointer down', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    var selectedTab = AppTab.home;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: ExptBottomNav(
+            activeTab: AppTab.home,
+            onTabSelected: (tab) => selectedTab = tab,
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('bottom-nav-settings'))),
+    );
+    await tester.pump();
+
+    expect(selectedTab, AppTab.settings);
+    final settingsLabel = tester.widget<Text>(find.text('Beállítások'));
+    expect(settingsLabel.style?.color, AppColors.primary);
+    expect(
+      DebugConsole.allText,
+      contains('[Perf] BottomNav pointer dispatch tab=settings'),
+    );
+
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets('notifications tab hides unread badge when count is zero', (
     tester,
   ) async {
