@@ -14,6 +14,20 @@ enum FastInfoSlotType {
   }
 }
 
+enum FastInfoLayoutMode {
+  mixed('mixed'),
+  sixBoxes('sixBoxes');
+
+  const FastInfoLayoutMode(this.nativeValue);
+  final String nativeValue;
+
+  static FastInfoLayoutMode fromAny(Object? value) {
+    return value?.toString() == FastInfoLayoutMode.sixBoxes.nativeValue
+        ? FastInfoLayoutMode.sixBoxes
+        : FastInfoLayoutMode.mixed;
+  }
+}
+
 class FastInfoSlot {
   const FastInfoSlot({
     required this.id,
@@ -137,6 +151,7 @@ class FastInfoConfig {
   FastInfoConfig({
     required List<FastInfoSlot?> pills,
     required List<FastInfoSlot?> boxes,
+    this.layoutMode = FastInfoLayoutMode.mixed,
   }) : pills = _fixed(pills),
        boxes = _fixed(boxes);
 
@@ -176,14 +191,29 @@ class FastInfoConfig {
     return FastInfoConfig(
       pills: [for (final raw in rawPills) migrate(raw, FastInfoSlotType.pill)],
       boxes: [for (final raw in rawBoxes) migrate(raw, FastInfoSlotType.box)],
+      layoutMode: FastInfoLayoutMode.fromAny(map['layoutMode']),
     );
   }
 
   final List<FastInfoSlot?> pills;
   final List<FastInfoSlot?> boxes;
+  final FastInfoLayoutMode layoutMode;
+
+  FastInfoConfig copyWith({
+    List<FastInfoSlot?>? pills,
+    List<FastInfoSlot?>? boxes,
+    FastInfoLayoutMode? layoutMode,
+  }) {
+    return FastInfoConfig(
+      pills: pills ?? this.pills,
+      boxes: boxes ?? this.boxes,
+      layoutMode: layoutMode ?? this.layoutMode,
+    );
+  }
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
+      'layoutMode': layoutMode.nativeValue,
       'pills': pills.map((slot) => slot?.toMap()).toList(),
       'boxes': boxes.map((slot) => slot?.toMap()).toList(),
     };

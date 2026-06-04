@@ -42,6 +42,7 @@ class ExpenseSettingsStore(context: Context) {
 
     fun updateFastInfoConfig(args: Map<*, *>): Map<String, Any?> {
         val normalized = mapOf(
+            "layoutMode" to normalizeFastInfoLayoutMode(args["layoutMode"]),
             "pills" to fixedSlots(args["pills"]),
             "boxes" to fixedSlots(args["boxes"]),
         )
@@ -61,7 +62,12 @@ class ExpenseSettingsStore(context: Context) {
         return slots
     }
 
+    private fun normalizeFastInfoLayoutMode(value: Any?): String {
+        return if (value?.toString() == "sixBoxes") "sixBoxes" else "mixed"
+    }
+
     private fun defaultFastInfoConfig(): Map<String, Any?> = mapOf(
+        "layoutMode" to "mixed",
         "pills" to listOf(
             mapOf("id" to "megtakaritas", "label" to "Megtakarítás", "value" to "156,780 Ft", "type" to "pill"),
             null,

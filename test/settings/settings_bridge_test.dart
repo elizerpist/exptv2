@@ -184,6 +184,7 @@ void main() {
 
   test('updates FastInfo config through native bridge', () async {
     final config = FastInfoConfig(
+      layoutMode: FastInfoLayoutMode.sixBoxes,
       pills: const [
         FastInfoSlot(
           id: 'megtakaritas',
@@ -200,9 +201,11 @@ void main() {
     final updated = await bridge.expenseUpdateFastInfoConfig(config);
 
     expect(updated.pills.first?.id, 'megtakaritas');
+    expect(updated.layoutMode, FastInfoLayoutMode.sixBoxes);
     expect(calls.single.method, 'expenseUpdateFastInfoConfig');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['pills'], isA<List<Object?>>());
+    expect(payload['layoutMode'], 'sixBoxes');
   });
 
   test(

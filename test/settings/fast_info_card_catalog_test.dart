@@ -116,4 +116,33 @@ void main() {
       for (final slot in [...config.pills, ...config.boxes]) slot?.id,
     }, hasLength(6));
   });
+
+  test('layout mode defaults to mixed and unknown values migrate to mixed', () {
+    expect(FastInfoConfig.defaults().layoutMode, FastInfoLayoutMode.mixed);
+    expect(
+      FastInfoConfig.fromMap(const <String, Object?>{
+        'layoutMode': 'unknown',
+        'pills': <Object?>[],
+        'boxes': <Object?>[],
+      }).layoutMode,
+      FastInfoLayoutMode.mixed,
+    );
+  });
+
+  test('six box mode round-trips without changing slot membership', () {
+    final original = FastInfoConfig.defaults().copyWith(
+      layoutMode: FastInfoLayoutMode.sixBoxes,
+    );
+    final restored = FastInfoConfig.fromMap(original.toMap());
+
+    expect(restored.layoutMode, FastInfoLayoutMode.sixBoxes);
+    expect(
+      restored.pills.map((slot) => slot?.id),
+      original.pills.map((slot) => slot?.id),
+    );
+    expect(
+      restored.boxes.map((slot) => slot?.id),
+      original.boxes.map((slot) => slot?.id),
+    );
+  });
 }
