@@ -211,7 +211,7 @@ class _PoolCardSurface extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              metric?.pillValue ?? card.pillValue,
+              metric?.pillValue ?? 'Nincs adat',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

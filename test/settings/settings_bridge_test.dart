@@ -41,7 +41,12 @@ void main() {
                       'value': '156,780 Ft',
                       'type': 'pill',
                     },
-                    null,
+                    <String, Object?>{
+                      'id': 'havi_limit_allapot',
+                      'label': 'Havi limit állapot',
+                      'value': '74%',
+                      'type': 'pill',
+                    },
                     null,
                   ],
                   'boxes': <Object?>[
@@ -131,7 +136,8 @@ void main() {
     expect(settings.themeSettings.cardColor, AppCardColor.lightgray);
     expect(settings.themeSettings.backheaderStyle, BackheaderStyle.heroToken);
     expect(settings.fastInfoConfig.pills.first?.label, 'Megtakarítás');
-    expect(settings.fastInfoConfig.boxes.first?.extra, '-4,500 Ft');
+    expect(settings.fastInfoConfig.pills[1]?.id, 'havi_koltes');
+    expect(settings.fastInfoConfig.boxes.first, isNull);
   });
 
   test('updates theme settings through native bridge', () async {

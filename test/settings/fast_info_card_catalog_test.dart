@@ -3,61 +3,117 @@ import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('catalog contains many unique selectable cards', () {
-    expect(fastInfoCardCatalog.length, greaterThan(60));
-    expect(
-      fastInfoCardCatalog.map((card) => card.id).toSet().length,
-      fastInfoCardCatalog.length,
-    );
-    expect(fastInfoCardById('havi_koltes')?.title, 'Havi költés');
-    expect(
-      fastInfoCardById('debug_riasztasok')?.visualType,
-      FastInfoVisualType.status,
-    );
+  const expectedIds = <String>{
+    'mai_koltes',
+    'heti_koltes',
+    'havi_koltes',
+    'megtakaritas',
+    'koltesi_trend',
+    'legutobbi_tranzakcio',
+    'varhato_ho_vegi_koltes',
+    'leggyorsabban_fogyo_kategorialimit',
+    'leggyakoribb_kereskedo',
+    'atlagos_napi_koltes',
+    'no_spend_napok_szama',
+    'top_kategoria_ma',
+    'top_kategoria_heten',
+    'legnagyobb_novekedo_kategoria',
+    'kovetkezo_ismetlo_kiadas',
+    'havi_fix_koltseg_osszesen',
+    'bevetel_ebben_a_honapban',
+    'kiadas_bevetel_arany',
+  };
+
+  test('catalog exposes exactly the approved canonical cards', () {
+    expect(fastInfoCardCatalog.map((card) => card.id).toSet(), expectedIds);
+    expect(fastInfoCardCatalog, hasLength(18));
+    expect(fastInfoCardById('debug_riasztasok'), isNull);
   });
 
-  test('slot created from a card keeps pill and box render data', () {
+  test('slot created from a card persists identity only', () {
     final card = fastInfoCardById('havi_koltes')!;
 
     final pill = FastInfoSlot.fromCard(card, FastInfoSlotType.pill);
     final box = FastInfoSlot.fromCard(card, FastInfoSlotType.box);
 
     expect(pill.id, 'havi_koltes');
+    expect(pill.label, 'Havi költés');
     expect(pill.type, FastInfoSlotType.pill);
-    expect(pill.value, card.pillValue);
-    expect(pill.boxValue, card.boxValue);
+    expect(pill.value, isEmpty);
+    expect(pill.pillValue, isNull);
     expect(box.type, FastInfoSlotType.box);
-    expect(box.value, card.boxValue);
-    expect(box.pillValue, card.pillValue);
-    expect(box.visualType, FastInfoVisualType.progress);
+    expect(box.value, isEmpty);
+    expect(box.boxValue, isNull);
+    expect(box.visualType, FastInfoVisualType.plain);
   });
 
-  test('slot serializes and deserializes optional render fields', () {
-    final slot = FastInfoSlot.fromCard(
-      fastInfoCardById('koltesi_trend')!,
-      FastInfoSlotType.box,
-    );
-    final restored = FastInfoSlot.fromMap(slot.toMap());
+  test('slot deserializes optional legacy render fields', () {
+    final restored = FastInfoSlot.fromMap(const <String, Object?>{
+      'id': 'havi_koltes',
+      'label': 'Régi havi költés',
+      'value': '184k',
+      'pillValue': '184k',
+      'boxValue': '184k / 250k',
+      'boxSubtitle': 'Régi alcím',
+      'progress': 0.74,
+      'visualType': 'progress',
+      'type': 'box',
+    });
 
-    expect(restored.id, slot.id);
-    expect(restored.label, slot.label);
-    expect(restored.pillValue, slot.pillValue);
-    expect(restored.boxValue, slot.boxValue);
-    expect(restored.boxSubtitle, slot.boxSubtitle);
-    expect(restored.visualType, slot.visualType);
+    expect(restored.id, 'havi_koltes');
+    expect(restored.label, 'Régi havi költés');
+    expect(restored.pillValue, '184k');
+    expect(restored.boxValue, '184k / 250k');
+    expect(restored.boxSubtitle, 'Régi alcím');
+    expect(restored.progress, 0.74);
+    expect(restored.visualType, FastInfoVisualType.progress);
     expect(restored.type, FastInfoSlotType.box);
   });
 
-  test('defaults use catalog cards and preserve six fixed slots', () {
+  test(
+    'config maps merged ids, removes deleted ids, and globally deduplicates',
+    () {
+      final config = FastInfoConfig.fromMap({
+        'pills': [
+          {'id': 'havi_limit_allapot', 'type': 'pill'},
+          {'id': 'mai_koltes', 'type': 'pill'},
+          {'id': 'debug_riasztasok', 'type': 'pill'},
+        ],
+        'boxes': [
+          {'id': 'havi_koltes', 'type': 'box'},
+          {'id': 'puffer_napok_szama', 'type': 'box'},
+          {'id': 'top_kategoria_honapban', 'type': 'box'},
+        ],
+      });
+
+      expect(config.pills.map((slot) => slot?.id).toList(), [
+        'havi_koltes',
+        'mai_koltes',
+        null,
+      ]);
+      expect(config.boxes.map((slot) => slot?.id).toList(), [
+        null,
+        'atlagos_napi_koltes',
+        'top_kategoria_heten',
+      ]);
+    },
+  );
+
+  test('defaults use six unique canonical cards in fixed slots', () {
     final config = FastInfoConfig.defaults();
 
-    expect(config.pills.length, 3);
-    expect(config.boxes.length, 3);
-    expect(config.pills[0]?.id, 'havi_koltes');
-    expect(config.pills[1]?.id, 'mai_maradek_keret');
-    expect(config.pills[2]?.id, 'koltesi_trend');
-    expect(config.boxes[0]?.id, 'mai_koltes');
-    expect(config.boxes[1]?.id, 'havi_limit_allapot');
-    expect(config.boxes[2]?.id, 'kovetkezo_ismetlo_kiadas');
+    expect(config.pills.map((slot) => slot?.id).toList(), [
+      'havi_koltes',
+      'koltesi_trend',
+      'kiadas_bevetel_arany',
+    ]);
+    expect(config.boxes.map((slot) => slot?.id).toList(), [
+      'mai_koltes',
+      'heti_koltes',
+      'kovetkezo_ismetlo_kiadas',
+    ]);
+    expect({
+      for (final slot in [...config.pills, ...config.boxes]) slot?.id,
+    }, hasLength(6));
   });
 }

@@ -35,14 +35,14 @@ class FastInfoSlot {
     return FastInfoSlot(
       id: card.id,
       label: card.title,
-      value: type == FastInfoSlotType.pill ? card.pillValue : card.boxValue,
+      value: '',
       type: type,
-      extra: card.boxSubtitle,
-      progress: card.progress,
-      pillValue: card.pillValue,
-      boxValue: card.boxValue,
-      boxSubtitle: card.boxSubtitle,
-      visualType: card.visualType,
+      extra: null,
+      progress: null,
+      pillValue: null,
+      boxValue: null,
+      boxSubtitle: null,
+      visualType: FastInfoVisualType.plain,
     );
   }
 
@@ -162,9 +162,20 @@ class FastInfoConfig {
   }
 
   factory FastInfoConfig.fromMap(Map<dynamic, dynamic> map) {
+    final seen = <String>{};
+
+    FastInfoSlot? migrate(Object? raw, FastInfoSlotType type) {
+      if (raw is! Map<dynamic, dynamic>) return null;
+      final id = canonicalFastInfoCardId(raw['id']?.toString() ?? '');
+      if (id == null || !seen.add(id)) return null;
+      return FastInfoSlot.fromCard(fastInfoCardById(id)!, type);
+    }
+
+    final rawPills = _rawFixedSlots(map['pills']);
+    final rawBoxes = _rawFixedSlots(map['boxes']);
     return FastInfoConfig(
-      pills: _slots(map['pills']),
-      boxes: _slots(map['boxes']),
+      pills: [for (final raw in rawPills) migrate(raw, FastInfoSlotType.pill)],
+      boxes: [for (final raw in rawBoxes) migrate(raw, FastInfoSlotType.box)],
     );
   }
 
@@ -178,12 +189,14 @@ class FastInfoConfig {
     };
   }
 
-  static List<FastInfoSlot?> _slots(Object? value) {
-    if (value is! List) return const <FastInfoSlot?>[null, null, null];
-    return value.map((item) {
-      if (item is Map<dynamic, dynamic>) return FastInfoSlot.fromMap(item);
-      return null;
-    }).toList();
+  static List<Object?> _rawFixedSlots(Object? value) {
+    final fixed = value is List
+        ? List<Object?>.from(value.take(3))
+        : <Object?>[];
+    while (fixed.length < 3) {
+      fixed.add(null);
+    }
+    return fixed;
   }
 
   static List<FastInfoSlot?> _fixed(List<FastInfoSlot?> values) {
