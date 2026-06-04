@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -49,9 +49,21 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: exptv2-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
+      - name: Publish latest debug APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_PATH: build/app/outputs/flutter-apk/app-debug.apk
+        run: |
+          git tag -f debug-latest "$GITHUB_SHA"
+          git push origin refs/tags/debug-latest --force
+          if gh release view debug-latest >/dev/null 2>&1; then
+            gh release upload debug-latest "$APK_PATH#exptv2-debug.apk" --clobber
+            gh release edit debug-latest \
+              --title "Latest debug APK" \
+              --notes "Latest debug APK built from main commit $GITHUB_SHA."
+          else
+            gh release create debug-latest "$APK_PATH#exptv2-debug.apk" \
+              --prerelease \
+              --title "Latest debug APK" \
+              --notes "Latest debug APK built from main commit $GITHUB_SHA."
+          fi
