@@ -11,6 +11,7 @@ import '../models/budget_goal_kind.dart';
 import '../models/category_budget_bar_data.dart';
 import '../models/overview_budget_data.dart';
 import '../models/category_limit.dart';
+import '../models/fast_info_metric_snapshot.dart';
 import '../models/recurring_ghost_record.dart';
 import '../models/summary_window.dart';
 import '../models/transaction_log_entry.dart';
@@ -96,11 +97,27 @@ class TransactionStore extends ChangeNotifier {
     final cached = _fastInfoMetricsCache;
     if (cached != null && _fastInfoMetricsDateKey == dateKey) return cached;
     final stopwatch = Stopwatch()..start();
-    final metrics = FastInfoMetricsResolver.resolve(
-      transactions: _transactions,
-      categories: _categories,
+    final periodKey = LimitManager.periodKeyFor(SummaryWindow.monthly, now);
+    final savingLimit = LimitManager.findLimit(
       limits: _limits,
-      now: now,
+      targetType: LimitTargetType.overview,
+      targetId: 0,
+      transactionType: BudgetGoalKind.savingGoal.transactionType,
+      window: LimitWindow.monthly,
+      periodKey: periodKey,
+    );
+    final metrics = FastInfoMetricsResolver.resolve(
+      FastInfoMetricSnapshot(
+        transactions: _transactions,
+        categories: _categories,
+        limits: _limits,
+        recurringGhosts: _recurringGhostTransactions,
+        now: now,
+        balance: _totalSummary.balance,
+        savingGoal: savingLimit?.hasLimit == true
+            ? savingLimit!.limitAmount
+            : null,
+      ),
     );
     _fastInfoMetricsCache = metrics;
     _fastInfoMetricsDateKey = dateKey;
@@ -887,6 +904,7 @@ class TransactionStore extends ChangeNotifier {
     _recurringGhostTransactions = _sortGhosts(ghosts);
     _rebuildPublicViews();
     _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
     _prewarmCriticalCaches('recurring-ghosts');
     DebugConsole.log(
       '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',

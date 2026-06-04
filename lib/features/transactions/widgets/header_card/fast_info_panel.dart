@@ -35,7 +35,7 @@ class FastInfoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('fast-info-panel'),
-      height: 300,
+      height: 328,
       color: backgroundColor,
       child: Stack(
         children: [
@@ -167,18 +167,33 @@ class _FastInfoPill extends StatelessWidget {
                 ),
               ],
             ),
-            child: Text(
-              metric?.pillValue ??
-                  slot?.pillValue ??
-                  slot?.value ??
-                  'Üres pill slot',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: slot == null ? AppColors.gray400 : AppColors.gray800,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    metric?.pillValue ??
+                        (slot == null ? 'Üres pill slot' : 'Nincs adat'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: slot == null
+                          ? AppColors.gray400
+                          : AppColors.gray800,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (metric?.trend case final trend?) ...[
+                  const SizedBox(width: 5),
+                  FastInfoPillTrend(
+                    key: ValueKey('fastinfo-trend-${slot!.id}'),
+                    slotId: slot!.id,
+                    trend: trend,
+                  ),
+                ],
+              ],
             ),
           ),
           if (onClear != null && slot != null)
@@ -252,16 +267,16 @@ class _FastInfoBox extends StatelessWidget {
           Container(
             key: ValueKey('fastinfo-box-slot-$index'),
             width: double.infinity,
-            height: 84,
+            height: 112,
             padding: EdgeInsets.fromLTRB(
-              10,
-              10,
+              8,
+              8,
               onClear != null && slot != null ? 28 : 10,
-              10,
+              8,
             ),
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               border: slot == null
                   ? Border.all(color: AppColors.gray300)
                   : null,
@@ -332,6 +347,8 @@ class _FastInfoBox extends StatelessWidget {
   }
 
   Widget _filledBoxContent(FastInfoSlot slot, FastInfoMetricResult? metric) {
+    final secondaryValues =
+        metric?.secondaryValues.take(3).toList() ?? const <String>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -341,29 +358,33 @@ class _FastInfoBox extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: AppColors.gray600,
-            fontSize: 11,
+            fontSize: 9,
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 1),
         Text(
-          metric?.boxValue ?? slot.boxValue ?? slot.value,
+          metric?.primaryValue ?? 'Nincs adat',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: AppColors.gray800,
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),
-        if ((metric?.boxSubtitle ?? slot.boxSubtitle ?? slot.extra) != null)
+        for (final secondary in secondaryValues)
           Text(
-            metric?.boxSubtitle ?? slot.boxSubtitle ?? slot.extra!,
+            secondary,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.gray500, fontSize: 9),
+            style: const TextStyle(
+              color: AppColors.gray500,
+              fontSize: 8,
+              height: 1.1,
+            ),
           ),
-        const SizedBox(height: 3),
+        const Spacer(),
         FastInfoVisual(slot: slot, metric: metric),
       ],
     );
@@ -382,7 +403,7 @@ class _FastInfoBox extends StatelessWidget {
           child: _DropReadyFrame(
             frameKey: ValueKey('fastinfo-box-drop-frame-$index'),
             dropReady: dropReady,
-            radius: 13,
+            radius: 8,
             child: child,
           ),
         );

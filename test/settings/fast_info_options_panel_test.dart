@@ -139,6 +139,17 @@ void main() {
 
       expect(find.text('184k'), findsNothing);
       expect(find.text('27k'), findsWidgets);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('fast-info-panel'))).height,
+        328,
+      );
+      expect(find.text('Nincs adat'), findsNothing);
+      expect(find.textContaining('Debug'), findsNothing);
+      final pool = tester.widget<GridView>(
+        find.byKey(const ValueKey('fastinfo-card-pool')),
+      );
+      final delegate = pool.childrenDelegate as SliverChildBuilderDelegate;
+      expect(delegate.childCount, 12);
     },
   );
 

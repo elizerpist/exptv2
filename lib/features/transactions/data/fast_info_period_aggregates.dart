@@ -122,15 +122,15 @@ class FastInfoPeriodAggregates {
       final date = weekStart.add(Duration(days: index));
       final isFuture = date.isAfter(today);
       return FastInfoWeeklyBar(
-        value: isFuture ? 0 : expenseOn(date),
+        value: isFuture ? 0.0 : expenseOn(date),
         isFuture: isFuture,
         semantic: FastInfoSemantic.neutral,
       );
     }),
   );
 
-  double expenseOn(DateTime date) => _expenseByDay[_dateOnly(date)] ?? 0;
-  double incomeOn(DateTime date) => _incomeByDay[_dateOnly(date)] ?? 0;
+  double expenseOn(DateTime date) => _expenseByDay[_dateOnly(date)] ?? 0.0;
+  double incomeOn(DateTime date) => _incomeByDay[_dateOnly(date)] ?? 0.0;
 
   double expenseBetween(DateTime start, DateTime end) =>
       _sumRows(expenseRowsBetween(start, end));
@@ -171,11 +171,16 @@ class FastInfoPeriodAggregates {
   ) {
     final groups = <int, List<FastInfoDatedTransaction>>{};
     for (final row in rows) {
-      groups.putIfAbsent(row.record.transactionCategoryID, () => []).add(row);
+      groups
+          .putIfAbsent(
+            row.record.transactionCategoryID,
+            () => <FastInfoDatedTransaction>[],
+          )
+          .add(row);
     }
-    return Map.unmodifiable({
+    return Map<int, List<FastInfoDatedTransaction>>.unmodifiable({
       for (final entry in groups.entries)
-        entry.key: List.unmodifiable(entry.value),
+        entry.key: List<FastInfoDatedTransaction>.unmodifiable(entry.value),
     });
   }
 
@@ -186,11 +191,11 @@ class FastInfoPeriodAggregates {
     for (final row in rows) {
       final name = row.record.displayMerchant.trim();
       if (name.isEmpty) continue;
-      groups.putIfAbsent(name, () => []).add(row);
+      groups.putIfAbsent(name, () => <FastInfoDatedTransaction>[]).add(row);
     }
-    return Map.unmodifiable({
+    return Map<String, List<FastInfoDatedTransaction>>.unmodifiable({
       for (final entry in groups.entries)
-        entry.key: List.unmodifiable(entry.value),
+        entry.key: List<FastInfoDatedTransaction>.unmodifiable(entry.value),
     });
   }
 
@@ -210,7 +215,7 @@ class FastInfoPeriodAggregates {
     return List.unmodifiable(
       List.generate(length, (index) {
         final date = start.add(Duration(days: index));
-        if (ignoreAfterToday && date.isAfter(today)) return 0;
+        if (ignoreAfterToday && date.isAfter(today)) return 0.0;
         return expenseOn(date);
       }),
     );

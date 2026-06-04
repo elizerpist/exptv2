@@ -70,4 +70,9 @@ class FastInfoMetricResult {
   final FastInfoAvatar? avatar;
   final List<FastInfoChartSeries> chartSeries;
   final List<FastInfoWeeklyBar> weeklyBars;
+
+  String get boxValue => primaryValue;
+  String get boxSubtitle => secondaryValues.join(' · ');
+  List<double> get series =>
+      chartSeries.isEmpty ? const <double>[] : chartSeries.first.values;
 }

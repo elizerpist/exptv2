@@ -1,91 +1,200 @@
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/fast_info_metric_snapshot.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/fast_info_metrics_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  final today = DateTime(2026, 6, 3, 12);
+  test('resolves the approved finance metrics from one snapshot', () {
+    final metrics = FastInfoMetricsResolver.resolve(_snapshot());
 
-  test('resolves day month limit and trend cards from transactions', () {
-    final metrics = FastInfoMetricsResolver.resolve(
-      transactions: _transactions,
-      categories: _categories,
-      limits: _limits,
-      now: today,
-    );
-
-    expect(metrics['mai_koltes']?.pillValue, '7k');
-    expect(metrics['mai_koltes']?.boxValue, '7 000 Ft');
-    expect(metrics['mai_koltes']?.boxSubtitle, '2 tranzakció ma');
-
-    expect(metrics['havi_koltes']?.pillValue, '27k');
-    expect(metrics['havi_koltes']?.boxValue, '27k / 100k');
-    expect(metrics['havi_koltes']?.boxSubtitle, 'A havi keret 27%-a');
-    expect(metrics['havi_koltes']?.progress, closeTo(0.27, 0.001));
-
-    expect(metrics['havi_limit_allapot']?.pillValue, '27%');
-    expect(metrics['havi_limit_allapot']?.boxSubtitle, '73k maradt');
-
-    expect(metrics['koltesi_trend']?.pillValue, '-10%');
-    expect(metrics['koltesi_trend']?.boxValue, '-10%');
-    expect(metrics['koltesi_trend']?.boxSubtitle, 'Az előző időszakhoz képest');
-  });
-
-  test('box metrics expose richer chart data for the same card', () {
-    final metrics = FastInfoMetricsResolver.resolve(
-      transactions: _transactions,
-      categories: _categories,
-      limits: _limits,
-      now: today,
-    );
-
-    final metric = metrics['atlagos_napi_koltes'];
-
-    expect(metric?.pillValue, '9k');
-    expect(metric?.boxValue, '9 000 Ft');
-    expect(metric?.boxSubtitle, '3 aktív nap alapján');
-    expect(metric?.series, hasLength(7));
-    expect(metric?.series.last, 7000);
-  });
-
-  test('all catalog cards receive live metric output', () {
-    final metrics = FastInfoMetricsResolver.resolve(
-      transactions: _transactions,
-      categories: _categories,
-      limits: _limits,
-      now: today,
-    );
-
+    expect(metrics, hasLength(18));
     expect(
       metrics.keys.toSet(),
       fastInfoCardCatalog.map((card) => card.id).toSet(),
     );
-    expect(metrics.values.every((metric) => metric.pillValue.isNotEmpty), true);
-    expect(metrics.values.every((metric) => metric.boxValue.isNotEmpty), true);
+    expect(metrics['mai_koltes']?.primaryValue, '7 000 Ft elköltve');
+    expect(
+      metrics['mai_koltes']?.progress,
+      closeTo(7000 / ((300000 - 16000) / 28), 0.001),
+    );
+    expect(metrics['mai_koltes']?.semantic, FastInfoSemantic.good);
+    expect(metrics['mai_koltes']?.trend, isNotNull);
+
+    expect(metrics['heti_koltes']?.weeklyBars, hasLength(7));
+    expect(metrics['heti_koltes']?.weeklyBars.last.isFuture, isTrue);
+    expect(metrics['havi_koltes']?.chartSeries, hasLength(3));
+    expect(metrics['havi_koltes']?.chartSeries.first.values, hasLength(3));
+    expect(metrics['havi_koltes']?.trend, isNotNull);
+
+    expect(metrics['megtakaritas']?.progress, closeTo(127000 / 50000, 0.001));
+    expect(metrics['koltesi_trend']?.trend, isNotNull);
+    expect(metrics['koltesi_trend']?.progress, isNull);
+    expect(metrics['koltesi_trend']?.chartSeries, isEmpty);
+    expect(
+      metrics['atlagos_napi_koltes']?.secondaryValues,
+      contains('Puffer: 170 nap'),
+    );
+    expect(
+      metrics['kiadas_bevetel_arany']?.progress,
+      closeTo(23000 / 150000, 0.001),
+    );
   });
+
+  test('omits visuals that have no meaningful denominator', () {
+    final noLimit = FastInfoMetricsResolver.resolve(
+      _snapshot(limits: const <CategoryLimit>[]),
+    );
+    final noGoal = FastInfoMetricsResolver.resolve(_snapshot(savingGoal: null));
+    final zeroIncome = FastInfoMetricsResolver.resolve(
+      _snapshot(
+        transactions: _transactions
+            .where((record) => record.amount < 0)
+            .toList(),
+      ),
+    );
+
+    expect(noLimit['mai_koltes']?.progress, isNull);
+    expect(noLimit['havi_koltes']?.progress, isNull);
+    expect(
+      noLimit['heti_koltes']?.weeklyBars
+          .where((bar) => !bar.isFuture)
+          .every((bar) => bar.semantic == FastInfoSemantic.neutral),
+      isTrue,
+    );
+    expect(noGoal['megtakaritas']?.progress, isNull);
+    expect(noGoal['megtakaritas']?.secondaryValues, contains('Nincs cél'));
+    expect(zeroIncome['kiadas_bevetel_arany']?.progress, isNull);
+    expect(zeroIncome['kiadas_bevetel_arany']?.primaryValue, 'Nincs adat');
+  });
+
+  test('omits trends when the comparison period is zero', () {
+    final metrics = FastInfoMetricsResolver.resolve(
+      _snapshot(
+        transactions: <TransactionRecord>[_transaction(1, '2026.06.03', -7000)],
+      ),
+    );
+
+    expect(metrics['koltesi_trend']?.trend, isNull);
+    expect(metrics['havi_koltes']?.trend, isNull);
+    expect(
+      metrics['koltesi_trend']?.secondaryValues,
+      contains('Nincs összehasonlítás'),
+    );
+    expect(
+      metrics['havi_koltes']?.secondaryValues,
+      contains('Nincs összehasonlítás'),
+    );
+  });
+
+  test(
+    'expense semantics use green below 75, yellow through 100, then red',
+    () {
+      FastInfoSemantic semanticFor(double expense) {
+        final metrics = FastInfoMetricsResolver.resolve(
+          _snapshot(
+            now: DateTime(2026, 6, 1, 12),
+            transactions: <TransactionRecord>[
+              _transaction(1, '2026.06.01', -expense),
+            ],
+            limits: <CategoryLimit>[_monthlyLimit(100)],
+          ),
+        );
+        return metrics['havi_koltes']!.semantic;
+      }
+
+      expect(semanticFor(74), FastInfoSemantic.good);
+      expect(semanticFor(75), FastInfoSemantic.warning);
+      expect(semanticFor(100), FastInfoSemantic.warning);
+      expect(semanticFor(101), FastInfoSemantic.bad);
+    },
+  );
+}
+
+FastInfoMetricSnapshot _snapshot({
+  DateTime? now,
+  List<TransactionRecord>? transactions,
+  List<CategoryLimit>? limits,
+  double? savingGoal = 50000,
+}) {
+  return FastInfoMetricSnapshot(
+    now: now ?? DateTime(2026, 6, 3, 12),
+    balance: 300000,
+    savingGoal: savingGoal,
+    transactions: transactions ?? _transactions,
+    categories: _categories,
+    limits: limits ?? <CategoryLimit>[_monthlyLimit(300000)],
+  );
+}
+
+CategoryLimit _monthlyLimit(double amount) {
+  return CategoryLimit(
+    id: 1,
+    targetType: LimitTargetType.overview,
+    targetId: 0,
+    transactionType: 'expense',
+    window: LimitWindow.monthly,
+    periodKey: '2026-06',
+    hasLimit: true,
+    limitAmount: amount,
+    alertActive: true,
+    createdAt: 0,
+    updatedAt: 0,
+  );
+}
+
+final _transactions = <TransactionRecord>[
+  _transaction(1, '2026.06.03', -3000, time: '09:10'),
+  _transaction(2, '2026.06.03', -4000, time: '11:30'),
+  _transaction(3, '2026.06.02', -10000),
+  _transaction(4, '2026.06.01', -6000),
+  _transaction(5, '2026.05.15', -30000),
+  _transaction(6, '2026.05.02', -10000),
+  _transaction(7, '2026.04.20', -50000),
+  _transaction(8, '2026.06.01', 150000),
+];
+
+TransactionRecord _transaction(
+  int id,
+  String date,
+  double amount, {
+  String time = '12:00',
+}) {
+  return TransactionRecord(
+    id: id,
+    date: date,
+    time: time,
+    latitude: null,
+    longitude: null,
+    address: null,
+    merchant: amount > 0 ? 'Fizetés' : 'Bolt $id',
+    amount: amount,
+    userAssignedName: null,
+    transactionCategoryID: amount > 0 ? 2 : 1,
+  );
 }
 
 const _categories = <TransactionCategory>[
   TransactionCategory(
     transactionCategoryID: 1,
-    name: 'Etel',
+    name: 'Étel',
     type: 'expense',
     colorSlot: 0,
     iconSlot: 0,
     backgroundColor: null,
     icon: 'restaurant',
     notification: null,
-    hasLimit: true,
-    limitAmount: 60000,
-    alertActive: true,
+    hasLimit: false,
+    limitAmount: 0,
+    alertActive: false,
     isCustomIcon: false,
     originalIcon: null,
   ),
   TransactionCategory(
     transactionCategoryID: 2,
-    name: 'Fizetes',
+    name: 'Fizetés',
     type: 'income',
     colorSlot: 1,
     iconSlot: 1,
@@ -97,109 +206,5 @@ const _categories = <TransactionCategory>[
     alertActive: false,
     isCustomIcon: false,
     originalIcon: null,
-  ),
-];
-
-const _limits = <CategoryLimit>[
-  CategoryLimit(
-    id: 1,
-    targetType: LimitTargetType.overview,
-    targetId: 0,
-    transactionType: 'expense',
-    window: LimitWindow.monthly,
-    periodKey: '2026-06',
-    hasLimit: true,
-    limitAmount: 100000,
-    alertActive: true,
-    createdAt: 0,
-    updatedAt: 0,
-  ),
-  CategoryLimit(
-    id: 2,
-    targetType: LimitTargetType.category,
-    targetId: 1,
-    transactionType: 'expense',
-    window: LimitWindow.monthly,
-    periodKey: '2026-06',
-    hasLimit: true,
-    limitAmount: 60000,
-    alertActive: true,
-    createdAt: 0,
-    updatedAt: 0,
-  ),
-];
-
-const _transactions = <TransactionRecord>[
-  TransactionRecord(
-    id: 1,
-    date: '2026.06.03',
-    time: '09:10',
-    latitude: null,
-    longitude: null,
-    address: null,
-    merchant: 'Pekseg',
-    amount: -3000,
-    userAssignedName: null,
-    transactionCategoryID: 1,
-  ),
-  TransactionRecord(
-    id: 2,
-    date: '2026.06.03',
-    time: '11:30',
-    latitude: null,
-    longitude: null,
-    address: null,
-    merchant: 'Ebed',
-    amount: -4000,
-    userAssignedName: null,
-    transactionCategoryID: 1,
-  ),
-  TransactionRecord(
-    id: 3,
-    date: '2026.06.02',
-    time: '17:30',
-    latitude: null,
-    longitude: null,
-    address: null,
-    merchant: 'Bolt',
-    amount: -12000,
-    userAssignedName: null,
-    transactionCategoryID: 1,
-  ),
-  TransactionRecord(
-    id: 4,
-    date: '2026.06.01',
-    time: '18:00',
-    latitude: null,
-    longitude: null,
-    address: null,
-    merchant: 'Piac',
-    amount: -8000,
-    userAssignedName: null,
-    transactionCategoryID: 1,
-  ),
-  TransactionRecord(
-    id: 5,
-    date: '2026.05.15',
-    time: '10:00',
-    latitude: null,
-    longitude: null,
-    address: null,
-    merchant: 'Elozo honap',
-    amount: -30000,
-    userAssignedName: null,
-    transactionCategoryID: 1,
-  ),
-  TransactionRecord(
-    id: 6,
-    date: '2026.06.01',
-    time: '08:00',
-    latitude: null,
-    longitude: null,
-    address: null,
-    merchant: 'Fizetes',
-    amount: 150000,
-    userAssignedName: null,
-    transactionCategoryID: 2,
   ),
 ];

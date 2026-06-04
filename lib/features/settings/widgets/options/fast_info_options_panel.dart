@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimensions.dart';
-import '../../../../features/transactions/state/fast_info_metrics_resolver.dart';
+import '../../../../features/transactions/data/fast_info_preview_data.dart';
+import '../../../../features/transactions/models/fast_info_metric.dart';
 import '../../../../features/transactions/widgets/header_card/fast_info_panel.dart';
 import '../../models/fast_info_card_catalog.dart';
 import '../../models/fast_info_config.dart';
@@ -23,11 +24,13 @@ class FastInfoOptionsPanel extends StatefulWidget {
 
 class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
   late FastInfoConfig _draft;
+  late final Map<String, FastInfoMetricResult> _previewMetrics;
 
   @override
   void initState() {
     super.initState();
     _draft = widget.config;
+    _previewMetrics = buildFastInfoPreviewMetrics();
   }
 
   @override
@@ -54,19 +57,23 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
     return Column(
       children: [
         SizedBox(
-          height: 320,
-          child: FastInfoPanel(
-            config: _draft,
-            backgroundColor: AppColors.gray100,
-            metrics: FastInfoMetricsResolver.preview(),
-            pillTop: 27,
-            boxTop: 175,
-            onDropPillCard: (index, cardId) =>
-                _assign(FastInfoSlotType.pill, index, cardId),
-            onDropBoxCard: (index, cardId) =>
-                _assign(FastInfoSlotType.box, index, cardId),
-            onClearPillSlot: (index) => _clear(FastInfoSlotType.pill, index),
-            onClearBoxSlot: (index) => _clear(FastInfoSlotType.box, index),
+          key: const ValueKey('fastinfo-preview-host'),
+          height: 348,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: FastInfoPanel(
+              config: _draft,
+              backgroundColor: AppColors.gray100,
+              metrics: _previewMetrics,
+              pillTop: 27,
+              boxTop: 175,
+              onDropPillCard: (index, cardId) =>
+                  _assign(FastInfoSlotType.pill, index, cardId),
+              onDropBoxCard: (index, cardId) =>
+                  _assign(FastInfoSlotType.box, index, cardId),
+              onClearPillSlot: (index) => _clear(FastInfoSlotType.pill, index),
+              onClearBoxSlot: (index) => _clear(FastInfoSlotType.box, index),
+            ),
           ),
         ),
         Expanded(
@@ -87,10 +94,7 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
             itemCount: freeCards.length,
             itemBuilder: (context, index) {
               final card = freeCards[index];
-              return _PoolCard(
-                card: card,
-                metric: FastInfoMetricsResolver.preview()[card.id],
-              );
+              return _PoolCard(card: card, metric: _previewMetrics[card.id]);
             },
           ),
         ),

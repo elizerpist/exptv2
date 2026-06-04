@@ -1,226 +1,249 @@
-import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
-import 'package:exptv2/features/transactions/state/fast_info_metrics_resolver.dart';
+import 'package:exptv2/features/transactions/models/fast_info_metric.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/fast_info_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
-    'same card renders compact value in pill and richer content in box',
-    (tester) async {
-      final card = fastInfoCardById('havi_koltes')!;
-      final config = FastInfoConfig(
-        pills: [FastInfoSlot.fromCard(card, FastInfoSlotType.pill), null, null],
-        boxes: [FastInfoSlot.fromCard(card, FastInfoSlotType.box), null, null],
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: FastInfoPanel(config: config)),
-        ),
-      );
-
-      expect(find.text('184k'), findsOneWidget);
-      expect(find.text('Havi költés'), findsOneWidget);
-      expect(find.text('184k / 250k'), findsOneWidget);
-      expect(find.text('A havi keret 74%-a'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('fastinfo-visual-progress-havi_koltes')),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'live metrics override stored catalog values in pills and boxes',
-    (tester) async {
-      final card = fastInfoCardById('havi_koltes')!;
-      final config = FastInfoConfig(
-        pills: [FastInfoSlot.fromCard(card, FastInfoSlotType.pill), null, null],
-        boxes: [FastInfoSlot.fromCard(card, FastInfoSlotType.box), null, null],
-      );
-      const metrics = <String, FastInfoMetricResult>{
-        'havi_koltes': FastInfoMetricResult(
-          pillValue: '27k',
-          boxValue: '27k / 100k',
-          boxSubtitle: 'A havi keret 27%-a',
-          progress: 0.27,
-          series: <double>[3000, 12000, 8000, 7000],
-        ),
-      };
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: FastInfoPanel(config: config, metrics: metrics),
-          ),
-        ),
-      );
-
-      expect(find.text('184k'), findsNothing);
-      expect(find.text('27k'), findsOneWidget);
-      expect(find.text('184k / 250k'), findsNothing);
-      expect(find.text('27k / 100k'), findsOneWidget);
-      expect(find.text('A havi keret 27%-a'), findsOneWidget);
-    },
-  );
-
-  testWidgets('clear buttons are shown only when callbacks are provided', (
+  testWidgets('renders all structured visual types compositionally', (
     tester,
   ) async {
-    final config = FastInfoConfig.defaults();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: FastInfoPanel(config: config)),
-      ),
-    );
-    expect(find.byKey(const ValueKey('fastinfo-clear-pill-0')), findsNothing);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: FastInfoPanel(
-            config: config,
-            onClearPillSlot: (_) {},
-            onClearBoxSlot: (_) {},
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const ValueKey('fastinfo-clear-pill-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('fastinfo-clear-box-0')), findsOneWidget);
-  });
-
-  testWidgets('drag target callback receives dropped card id', (tester) async {
-    String? dropped;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Stack(
-            children: [
-              FastInfoPanel(
-                config: FastInfoConfig(
-                  pills: const [null, null, null],
-                  boxes: const [null, null, null],
-                ),
-                onDropPillCard: (index, cardId) => dropped = '$index:$cardId',
-              ),
-              Positioned(
-                left: 24,
-                top: 260,
-                child: Draggable<String>(
-                  data: 'mai_koltes',
-                  feedback: const Material(child: Text('Mai költés')),
-                  child: const SizedBox(
-                    width: 80,
-                    height: 40,
-                    child: Text('Drag'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    final dragStart = tester.getCenter(find.text('Drag'));
-    final dropCenter = tester.getCenter(
-      find.byKey(const ValueKey('fastinfo-pill-drop-0')),
-    );
-    await tester.dragFrom(dragStart, dropCenter - dragStart);
-    await tester.pumpAndSettle();
-
-    expect(dropped, '0:mai_koltes');
-  });
-
-  testWidgets('box clear control stays inside the slot footprint', (
-    tester,
-  ) async {
-    final card = fastInfoCardById('havi_koltes')!;
     final config = FastInfoConfig(
-      pills: const [null, null, null],
-      boxes: [FastInfoSlot.fromCard(card, FastInfoSlotType.box), null, null],
+      pills: [
+        _slot('mai_koltes', FastInfoSlotType.pill),
+        _slot('koltesi_trend', FastInfoSlotType.pill),
+        null,
+      ],
+      boxes: [
+        _slot('havi_koltes', FastInfoSlotType.box),
+        _slot('heti_koltes', FastInfoSlotType.box),
+        _slot('legutobbi_tranzakcio', FastInfoSlotType.box),
+      ],
     );
+    final metrics = <String, FastInfoMetricResult>{
+      'mai_koltes': const FastInfoMetricResult(
+        pillValue: '7k',
+        primaryValue: '7 000 Ft elköltve',
+        progressKind: FastInfoProgressKind.bar,
+        progress: .5,
+        trend: FastInfoTrend(
+          direction: FastInfoTrendDirection.up,
+          text: '+5%',
+          semantic: FastInfoSemantic.bad,
+        ),
+      ),
+      'koltesi_trend': const FastInfoMetricResult(
+        pillValue: '53k',
+        primaryValue: '53 000 Ft',
+        trend: FastInfoTrend(
+          direction: FastInfoTrendDirection.down,
+          text: '-10%',
+          semantic: FastInfoSemantic.good,
+        ),
+      ),
+      'havi_koltes': const FastInfoMetricResult(
+        pillValue: '27k',
+        primaryValue: '27 000 Ft',
+        secondaryValues: <String>['9% a havi keretből'],
+        progressKind: FastInfoProgressKind.bar,
+        progress: .09,
+        chartKind: FastInfoChartKind.multiLine,
+        chartSeries: <FastInfoChartSeries>[
+          FastInfoChartSeries(label: 'Aktuális', values: <double>[8, 12, 7]),
+          FastInfoChartSeries(label: 'Előző', values: <double>[5, 9, 4]),
+          FastInfoChartSeries(label: 'Két hónapja', values: <double>[4, 7, 6]),
+        ],
+      ),
+      'heti_koltes': const FastInfoMetricResult(
+        pillValue: '27k',
+        primaryValue: '27 000 Ft',
+        chartKind: FastInfoChartKind.weeklyBars,
+        weeklyBars: <FastInfoWeeklyBar>[
+          FastInfoWeeklyBar(
+            value: 8,
+            isFuture: false,
+            semantic: FastInfoSemantic.good,
+          ),
+          FastInfoWeeklyBar(
+            value: 12,
+            isFuture: false,
+            semantic: FastInfoSemantic.warning,
+          ),
+          FastInfoWeeklyBar(
+            value: 7,
+            isFuture: false,
+            semantic: FastInfoSemantic.bad,
+          ),
+          FastInfoWeeklyBar(
+            value: 0,
+            isFuture: true,
+            semantic: FastInfoSemantic.neutral,
+          ),
+          FastInfoWeeklyBar(
+            value: 0,
+            isFuture: true,
+            semantic: FastInfoSemantic.neutral,
+          ),
+          FastInfoWeeklyBar(
+            value: 0,
+            isFuture: true,
+            semantic: FastInfoSemantic.neutral,
+          ),
+          FastInfoWeeklyBar(
+            value: 0,
+            isFuture: true,
+            semantic: FastInfoSemantic.neutral,
+          ),
+        ],
+      ),
+      'legutobbi_tranzakcio': const FastInfoMetricResult(
+        pillValue: '-2k',
+        primaryValue: '-2 000 Ft',
+        secondaryValues: <String>['Kávézó', 'Étel · 14:00'],
+        avatar: FastInfoAvatar(colorHex: '#22c55e', iconSlot: 0),
+      ),
+    };
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: FastInfoPanel(config: config, onClearBoxSlot: (_) {}),
+          body: FastInfoPanel(config: config, metrics: metrics),
         ),
       ),
     );
 
     expect(
-      tester.getSize(find.byKey(const ValueKey('fastinfo-box-slot-0'))),
-      tester.getSize(find.byKey(const ValueKey('fastinfo-box-slot-1'))),
+      find.byKey(const ValueKey('fastinfo-progress-havi_koltes')),
+      findsOneWidget,
     );
-
-    final boxRect = tester.getRect(
-      find.byKey(const ValueKey('fastinfo-box-slot-0')),
+    expect(
+      find.byKey(const ValueKey('fastinfo-weekly-bars-heti_koltes')),
+      findsOneWidget,
     );
-    final clearRect = tester.getRect(
-      find.byKey(const ValueKey('fastinfo-clear-box-0')),
+    expect(
+      find.byKey(const ValueKey('fastinfo-multiline-havi_koltes')),
+      findsOneWidget,
     );
-    expect(clearRect.top, greaterThanOrEqualTo(boxRect.top));
-    expect(clearRect.right, lessThanOrEqualTo(boxRect.right));
+    expect(
+      find.byKey(const ValueKey('fastinfo-multiline-legend-havi_koltes')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-avatar-legutobbi_tranzakcio')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-trend-koltesi_trend')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-pill-trend-mai_koltes')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('fastinfo-box-slot-0'))).height,
+      112,
+    );
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('drop-ready box keeps scale and adds fab colored border', (
+  testWidgets('does not render filler visuals for plain metric', (
     tester,
   ) async {
+    final config = FastInfoConfig(
+      pills: const [null, null, null],
+      boxes: [_slot('mai_koltes', FastInfoSlotType.box), null, null],
+    );
+    const metrics = <String, FastInfoMetricResult>{
+      'mai_koltes': FastInfoMetricResult(
+        pillValue: '0',
+        primaryValue: '0 Ft elköltve',
+      ),
+    };
+
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Stack(
-            children: [
-              FastInfoPanel(
-                config: FastInfoConfig(
-                  pills: const [null, null, null],
-                  boxes: const [null, null, null],
-                ),
-                onDropBoxCard: (index, cardId) {},
-              ),
-              Positioned(
-                left: 24,
-                top: 260,
-                child: Draggable<String>(
-                  data: 'mai_koltes',
-                  feedback: const Material(child: Text('Mai költés')),
-                  child: const SizedBox(
-                    width: 80,
-                    height: 40,
-                    child: Text('Drag'),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          body: FastInfoPanel(config: config, metrics: metrics),
         ),
       ),
     );
 
-    final dragStart = tester.getCenter(find.text('Drag'));
-    final dropCenter = tester.getCenter(
-      find.byKey(const ValueKey('fastinfo-box-drop-0')),
+    expect(
+      find.byKey(const ValueKey('fastinfo-progress-mai_koltes')),
+      findsNothing,
     );
-    final gesture = await tester.startGesture(dragStart);
-    await tester.pump();
-    await gesture.moveTo(dropCenter);
-    await tester.pump(const Duration(milliseconds: 150));
-
-    final frame = tester.widget<AnimatedContainer>(
-      find.byKey(const ValueKey('fastinfo-box-drop-frame-0')),
+    expect(
+      find.byKey(const ValueKey('fastinfo-sparkline-mai_koltes')),
+      findsNothing,
     );
-    final decoration = frame.foregroundDecoration! as BoxDecoration;
-    expect(decoration.border?.top.color, AppColors.primary);
-    expect(decoration.border?.top.width, 1);
-
-    await gesture.up();
-    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('fastinfo-weekly-bars-mai_koltes')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-multiline-mai_koltes')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-avatar-mai_koltes')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-trend-mai_koltes')),
+      findsNothing,
+    );
   });
+
+  for (final width in <double>[320, 600]) {
+    testWidgets('keeps structured panel overflow-free at width $width', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: width,
+              child: FastInfoPanel(
+                config: FastInfoConfig.defaults(),
+                metrics: const <String, FastInfoMetricResult>{
+                  'havi_koltes': FastInfoMetricResult(
+                    pillValue: '27k',
+                    primaryValue: '27 000 Ft',
+                  ),
+                  'koltesi_trend': FastInfoMetricResult(
+                    pillValue: '-12%',
+                    primaryValue: '53 000 Ft',
+                  ),
+                  'kiadas_bevetel_arany': FastInfoMetricResult(
+                    pillValue: '42%',
+                    primaryValue: '42%',
+                  ),
+                  'mai_koltes': FastInfoMetricResult(
+                    pillValue: '7k',
+                    primaryValue: '7 000 Ft elköltve',
+                  ),
+                  'heti_koltes': FastInfoMetricResult(
+                    pillValue: '27k',
+                    primaryValue: '27 000 Ft',
+                  ),
+                  'kovetkezo_ismetlo_kiadas': FastInfoMetricResult(
+                    pillValue: '8k',
+                    primaryValue: 'Telefon · 8 000 Ft',
+                  ),
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+  }
+}
+
+FastInfoSlot _slot(String id, FastInfoSlotType type) {
+  return FastInfoSlot.fromCard(fastInfoCardById(id)!, type);
 }

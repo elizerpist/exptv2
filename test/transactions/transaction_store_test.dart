@@ -1,3 +1,4 @@
+import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -6,6 +7,40 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _savingGoal = CategoryLimit(
+  id: 91,
+  targetType: LimitTargetType.overview,
+  targetId: 0,
+  transactionType: 'saving',
+  window: LimitWindow.monthly,
+  periodKey: '2025-09',
+  hasLimit: true,
+  limitAmount: 100000,
+  alertActive: true,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _rentGhost = RecurringGhostRecord(
+  id: 91,
+  recurringTransactionId: 91,
+  periodKey: '2025-09',
+  name: 'Rent',
+  amount: 100000,
+  transactionType: 'expense',
+  date: '2025.09.28',
+  time: '08:00',
+  categoryId: 6,
+  categoryName: 'Q',
+  categoryColor: '#dc2626',
+  categoryIconSlot: 2,
+  triggerMillis: 0,
+  isActivated: false,
+  activatedTransactionId: null,
+  createdAt: 0,
+  updatedAt: 0,
+);
 
 void main() {
   test('store loads bootstrap and filters by active type', () async {
@@ -98,7 +133,7 @@ void main() {
       final repository = FakeTransactionRepository();
       final store = TransactionStore(
         repository,
-        clock: () => DateTime(2026, 6, 3, 12),
+        clock: () => DateTime(2025, 9, 25, 12),
       );
       await store.start();
 
@@ -106,20 +141,36 @@ void main() {
       final metricsAgain = store.fastInfoMetrics;
 
       expect(identical(metrics, metricsAgain), isTrue);
-      expect(metrics['adatbazis_sorok_szama']?.pillValue, '6');
+      expect(
+        metrics.keys,
+        containsAll(fastInfoCardCatalog.map((card) => card.id)),
+      );
+      expect(
+        metrics['atlagos_napi_koltes']?.secondaryValues.single,
+        startsWith('Puffer:'),
+      );
+      expect(metrics['megtakaritas']?.progress, closeTo(0, .001));
+      expect(
+        metrics['kovetkezo_ismetlo_kiadas']?.primaryValue,
+        contains('Rent'),
+      );
 
       await store.addTransaction(
         merchant: 'Fresh Shop',
         amount: 42,
         type: TransactionType.expense,
         categoryId: 6,
-        date: '2026.06.03',
+        date: '2025.09.25',
         time: '10:00',
       );
 
       final refreshedMetrics = store.fastInfoMetrics;
       expect(identical(refreshedMetrics, metrics), isFalse);
-      expect(refreshedMetrics['adatbazis_sorok_szama']?.pillValue, '7');
+      expect(refreshedMetrics['legutobbi_tranzakcio']?.primaryValue, '-42 Ft');
+
+      final beforeProjection = store.fastInfoMetrics;
+      await store.cycleSummaryWindow();
+      expect(identical(store.fastInfoMetrics, beforeProjection), isFalse);
     },
   );
 
@@ -400,6 +451,8 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   final renameArgs = <String>[];
   String? resetMerchant;
   var loadCount = 0;
+  final limits = <CategoryLimit>[_savingGoal];
+  final recurringGhostTransactions = <RecurringGhostRecord>[_rentGhost];
   final categories = <TransactionCategory>[
     TransactionCategory.fromMap({
       'transactionCategoryID': 5,
@@ -471,7 +524,8 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
     return TransactionBootstrap(
       categories: categories,
       transactions: transactions,
-      limits: const [],
+      limits: limits,
+      recurringGhostTransactions: recurringGhostTransactions,
     );
   }
 
@@ -567,7 +621,7 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   @override
   Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
     DateTime? targetDate,
-  }) async => const [];
+  }) async => recurringGhostTransactions;
 
   @override
   Future<Map<int, int>> categoryCounts() async => {5: 1, 6: 3};
