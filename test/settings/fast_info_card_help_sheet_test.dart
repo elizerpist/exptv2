@@ -33,19 +33,40 @@ void main() {
         find.byKey(const ValueKey('fastinfo-help-box-arrows-mai_koltes')),
         findsOneWidget,
       );
-      expect(find.text('Számítás'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('fastinfo-help-card-preview-mai_koltes')),
+        findsOneWidget,
+      );
+      expect(find.text('Ez azt mutatja'), findsOneWidget);
+      expect(find.text('Így számol'), findsOneWidget);
       expect(find.text('Ha nincs elég adat'), findsOneWidget);
       expect(find.textContaining('Napi plafon'), findsWidgets);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('close button dismisses the help sheet', (tester) async {
+  testWidgets('only the handle drag dismisses the help sheet', (tester) async {
     await _pumpHelpLauncher(tester, 'mai_koltes');
 
     await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('fastinfo-help-close')));
+
+    expect(find.byKey(const ValueKey('fastinfo-help-close')), findsNothing);
+
+    await tester.drag(
+      find.byKey(const ValueKey('fastinfo-help-body-mai_koltes')),
+      const Offset(0, 180),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-mai_koltes')),
+      findsOneWidget,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('fastinfo-help-drag-handle-mai_koltes')),
+      const Offset(0, 180),
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -64,7 +85,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
         await tester.pumpAndSettle();
         await tester.drag(
-          find.byKey(ValueKey('fastinfo-help-sheet-${card.id}')),
+          find.byKey(ValueKey('fastinfo-help-body-${card.id}')),
           const Offset(0, -800),
         );
         await tester.pumpAndSettle();
@@ -80,7 +101,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
     await tester.pumpAndSettle();
     await tester.drag(
-      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      find.byKey(const ValueKey('fastinfo-help-body-havi_koltes')),
       const Offset(0, -900),
     );
     await tester.pumpAndSettle();

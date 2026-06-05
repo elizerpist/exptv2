@@ -18,22 +18,38 @@ class FastInfoHelpCallout {
 
 class FastInfoCardHelp {
   const FastInfoCardHelp({
-    required this.purpose,
+    required String purpose,
     required this.details,
-    required this.calculation,
+    required List<String> calculation,
     required this.comparison,
     required this.missingData,
     required this.pillCallouts,
     required this.boxCallouts,
-  });
+  }) : _purpose = purpose,
+       _calculation = calculation;
 
-  final String purpose;
+  final String _purpose;
   final String details;
-  final List<String> calculation;
+  final List<String> _calculation;
   final String comparison;
   final String missingData;
   final List<FastInfoHelpCallout> pillCallouts;
   final List<FastInfoHelpCallout> boxCallouts;
+
+  String get purpose => _withPrefix(_purpose, 'Ez azt mutatja:');
+
+  List<String> get calculation {
+    if (_calculation.isEmpty)
+      return const <String>['Így számol: nincs külön képlet.'];
+    return <String>[
+      _withPrefix(_calculation.first, 'Így számol:'),
+      ..._calculation.skip(1),
+    ];
+  }
+}
+
+String _withPrefix(String value, String prefix) {
+  return value.startsWith(prefix) ? value : '$prefix $value';
 }
 
 const genericFastInfoCardHelp = FastInfoCardHelp(
@@ -75,7 +91,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   'mai_koltes': FastInfoCardHelp(
     purpose: 'Megmutatja, ma mennyi ment el, és tartható-e a napi tempó.',
     details:
-        'A nagy kártyanézet a mai elköltött összeget, a napi ajánlott plafonból maradó részt, a mai kiadási tranzakciószámot és a 30 napos napi átlaghoz mért eltérést fogja össze.',
+        'A nagy kártyanézet a mai elköltött összeget, a napi ajánlott plafonból maradó részt, a mai kiadási tranzakciószámot és a 30 napos napi átlaghoz mért eltérést fogja össze. A tempó és a százalék fixek nélkül számol, de a fő összeg a valós mai költés.',
     calculation: <String>[
       'Napi plafon = max(0, havi limit - mai nap előtti aktuális havi kiadás) / maival együtt hátralévő hónapnapok.',
       'A mai trend a mai kiadást veti össze az elmúlt 30 nap napi átlagos kiadásával.',
@@ -107,7 +123,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   'heti_koltes': FastInfoCardHelp(
     purpose: 'Megmutatja a hétfőtől máig tartó költést és annak napi alakját.',
     details:
-        'A kártya a jelenlegi heti kiadást, a havi limitből származtatott heti keret maradékát, valamint az előző hét azonos napjáig mért eltérést mutatja.',
+        'A kártya a jelenlegi heti kiadást, a havi limitből származtatott heti keret maradékát, valamint az előző hét azonos napjáig mért eltérést mutatja. A kerettempó fixek nélkül számol, hogy a lakbér ne torzítsa el a hétköznapi költést.',
     calculation: <String>[
       'Heti keret = havi kiadási limit / 4.345.',
       'A hét oszlopai hétfőtől vasárnapig a napi kiadást mutatják; a jövőbeli napok üresek.',
@@ -140,7 +156,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     purpose:
         'Összeveti az aktuális naptári hónap költését az előző hónapokkal.',
     details:
-        'A nagy kártyanézet az aktuális havi kiadást, a havi limit állapotát és az előző hónap azonos napjához mért eltérést mutatja.',
+        'A nagy kártyanézet az aktuális havi kiadást, a havi limit állapotát és az előző hónap azonos napjához mért eltérést mutatja. A limittempó fixek nélkül számol, a fő összeg viszont a valós havi költés.',
     calculation: <String>[
       'A havi költés az aktuális naptári hónap kiadásainak összege.',
       'A haladásjelző = aktuális havi kiadás / havi kiadási limit.',
@@ -211,7 +227,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   'koltesi_trend': FastInfoCardHelp(
     purpose: 'Megmutatja, hogy az elmúlt 30 nap költése nőtt vagy csökkent-e.',
     details:
-        'A kártya az elmúlt gördülő 30 nap kiadását, az azt megelőző 30 napot, a százalékos változást és a havi limithez képesti kerettempót mutatja.',
+        'A kártya az elmúlt gördülő 30 nap kiadását, az azt megelőző 30 napot, a százalékos változást és a havi limithez képesti kerettempót mutatja. Az összehasonlítás fixek nélkül készül, hogy az ismétlődő nagy tételek ne torzítsanak.',
     calculation: <String>[
       'Aktuális időszak = maival záródó elmúlt 30 nap kiadása.',
       'Előző időszak = az azt közvetlenül megelőző 30 nap kiadása.',
@@ -472,7 +488,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   'top_kategoria_heten': FastInfoCardHelp(
     purpose: 'Összeveti a hét és a hónap leggyakoribb kiadási kategóriáját.',
     details:
-        'A heti elsődleges kategória darabszám alapján rangsorol, a részletekben a heti és havi darabszámok és összegek is látszanak.',
+        'A heti elsődleges kategória összeg alapján rangsorol, a részletekben a heti és havi értékek is látszanak. A rangsor fixek nélkül készül, ezért a lakbér nem nyomja el a napi kategóriákat.',
     calculation: <String>[
       'Rangsor = tranzakciószám, majd nagyobb teljes kiadás, majd kategórianév.',
     ],
@@ -506,7 +522,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     purpose:
         'Megmutatja, melyik kategória változott a legnagyobbat két gördülő 30 napos időszak között.',
     details:
-        'A kártya az aktuális és az előző 30 nap kategóriaösszegét, valamint a növekedés vagy csökkenés irányát mutatja.',
+        'A kártya az aktuális és az előző 30 nap kategóriaösszegét, valamint a növekedés vagy csökkenés irányát mutatja. A változást fixek nélkül számolja, hogy a rendszeres tételek ne döntsenek helyetted.',
     calculation: <String>[
       'Rangsor = új kategóriák előre, majd legnagyobb abszolút százalékos változás, majd aktuális összeg, majd név.',
     ],

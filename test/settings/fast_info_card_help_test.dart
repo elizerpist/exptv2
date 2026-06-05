@@ -40,4 +40,40 @@ void main() {
       );
     }
   });
+
+  test(
+    'simple help copy explains purpose, calculation, and fixed exclusions',
+    () {
+      for (final help in fastInfoCardHelpById.values) {
+        final joined = <String>[
+          help.purpose,
+          help.details,
+          ...help.calculation,
+          help.comparison,
+          help.missingData,
+        ].join(' ');
+        expect(joined, contains('Ez azt mutatja'));
+        expect(joined, contains('Így számol'));
+      }
+
+      for (final id in <String>[
+        'mai_koltes',
+        'heti_koltes',
+        'havi_koltes',
+        'koltesi_trend',
+        'top_kategoria_heten',
+        'legnagyobb_novekedo_kategoria',
+      ]) {
+        final help = fastInfoCardHelpById[id]!;
+        final joined = <String>[
+          help.purpose,
+          help.details,
+          ...help.calculation,
+          help.comparison,
+          help.missingData,
+        ].join(' ').toLowerCase();
+        expect(joined, contains('fixek nélkül'), reason: id);
+      }
+    },
+  );
 }

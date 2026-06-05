@@ -71,7 +71,10 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('fastinfo-help-close')));
+    await tester.drag(
+      find.byKey(const ValueKey('fastinfo-help-drag-handle-megtakaritas')),
+      const Offset(0, 180),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('fastinfo-pill-slot-0')));

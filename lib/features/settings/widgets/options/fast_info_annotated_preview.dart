@@ -28,9 +28,9 @@ class FastInfoAnnotatedPreview extends StatelessWidget {
     final selectedCallouts = callouts.take(4).toList(growable: false);
     final isPill = type == FastInfoAnnotatedPreviewType.pill;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final previewHeight = isPill ? 38.0 : 112.0;
+    final previewHeight = isPill ? 38.0 : 136.0;
     final scaledPreviewHeight = previewHeight * textScale.clamp(1.0, 1.6);
-    final previewWidth = isPill ? 260.0 : 150.0;
+    final previewWidth = isPill ? 320.0 : 156.0;
     final slot = FastInfoSlot.fromCard(
       card,
       isPill ? FastInfoSlotType.pill : FastInfoSlotType.box,
@@ -80,17 +80,24 @@ class FastInfoAnnotatedPreview extends StatelessWidget {
                   child: KeyedSubtree(
                     key: ValueKey('fastinfo-help-${type.name}-${card.id}'),
                     child: isPill
-                        ? FastInfoPillCard(
-                            slot: slot,
-                            metric: metric,
-                            index: 0,
-                            height: scaledPreviewHeight,
-                            slotKeyPrefix:
-                                'fastinfo-help-${type.name}-${card.id}-surface',
-                            dropKeyPrefix:
-                                'fastinfo-help-${type.name}-${card.id}-surface',
-                            clearKeyPrefix:
-                                'fastinfo-help-${type.name}-${card.id}-surface-clear',
+                        ? FittedBox(
+                            fit: BoxFit.contain,
+                            child: SizedBox(
+                              width: 320,
+                              height: scaledPreviewHeight,
+                              child: FastInfoPillCard(
+                                slot: slot,
+                                metric: metric,
+                                index: 0,
+                                height: scaledPreviewHeight,
+                                slotKeyPrefix:
+                                    'fastinfo-help-${type.name}-${card.id}-surface',
+                                dropKeyPrefix:
+                                    'fastinfo-help-${type.name}-${card.id}-surface',
+                                clearKeyPrefix:
+                                    'fastinfo-help-${type.name}-${card.id}-surface-clear',
+                              ),
+                            ),
                           )
                         : FastInfoBoxCard(
                             slot: slot,
