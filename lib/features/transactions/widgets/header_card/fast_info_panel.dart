@@ -10,8 +10,8 @@ class FastInfoPanel extends StatelessWidget {
     super.key,
     required this.config,
     this.backgroundColor = AppColors.gray100,
-    this.pillTop = 54,
-    this.boxTop = 202,
+    this.pillTop = 44,
+    this.boxTop = 192,
     this.metrics = const <String, FastInfoMetricResult>{},
     this.onDropPillCard,
     this.onDropBoxCard,
@@ -43,19 +43,32 @@ class FastInfoPanel extends StatelessWidget {
             top: pillTop,
             left: 20,
             right: 20,
-            child: config.layoutMode == FastInfoLayoutMode.sixBoxes
-                ? _buildUpperBoxRow()
-                : _buildPillColumn(),
+            child: _buildPresentationRow(
+              presentation: config.upperRowPresentation,
+              slots: config.pills,
+              pillSlotKeyPrefix: 'fastinfo-pill',
+              pillDropKeyPrefix: 'fastinfo-pill',
+              pillClearKeyPrefix: 'fastinfo-clear-pill',
+              boxSlotKeyPrefix: 'fastinfo-upper-box',
+              boxDropKeyPrefix: 'fastinfo-pill',
+              boxClearKeyPrefix: 'fastinfo-clear-pill',
+              onDropCard: onDropPillCard,
+              onClear: onClearPillSlot,
+            ),
           ),
           Positioned(
             top: boxTop,
             left: 20,
             right: 20,
-            child: _buildBoxRow(
+            child: _buildPresentationRow(
+              presentation: config.lowerRowPresentation,
               slots: config.boxes,
-              slotKeyPrefix: 'fastinfo-box',
-              dropKeyPrefix: 'fastinfo-box',
-              clearKeyPrefix: 'fastinfo-clear-box',
+              pillSlotKeyPrefix: 'fastinfo-lower-pill',
+              pillDropKeyPrefix: 'fastinfo-lower-pill',
+              pillClearKeyPrefix: 'fastinfo-clear-box',
+              boxSlotKeyPrefix: 'fastinfo-box',
+              boxDropKeyPrefix: 'fastinfo-box',
+              boxClearKeyPrefix: 'fastinfo-clear-box',
               onDropCard: onDropBoxCard,
               onClear: onClearBoxSlot,
             ),
@@ -65,34 +78,63 @@ class FastInfoPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildPillColumn() {
+  Widget _buildPresentationRow({
+    required FastInfoRowPresentation presentation,
+    required List<FastInfoSlot?> slots,
+    required String pillSlotKeyPrefix,
+    required String pillDropKeyPrefix,
+    required String pillClearKeyPrefix,
+    required String boxSlotKeyPrefix,
+    required String boxDropKeyPrefix,
+    required String boxClearKeyPrefix,
+    required FastInfoCardDropCallback? onDropCard,
+    required ValueChanged<int>? onClear,
+  }) {
+    return switch (presentation) {
+      FastInfoRowPresentation.pill => _buildPillColumn(
+        slots: slots,
+        slotKeyPrefix: pillSlotKeyPrefix,
+        dropKeyPrefix: pillDropKeyPrefix,
+        clearKeyPrefix: pillClearKeyPrefix,
+        onDropCard: onDropCard,
+        onClear: onClear,
+      ),
+      FastInfoRowPresentation.box => _buildBoxRow(
+        slots: slots,
+        slotKeyPrefix: boxSlotKeyPrefix,
+        dropKeyPrefix: boxDropKeyPrefix,
+        clearKeyPrefix: boxClearKeyPrefix,
+        onDropCard: onDropCard,
+        onClear: onClear,
+      ),
+    };
+  }
+
+  Widget _buildPillColumn({
+    required List<FastInfoSlot?> slots,
+    required String slotKeyPrefix,
+    required String dropKeyPrefix,
+    required String clearKeyPrefix,
+    required FastInfoCardDropCallback? onDropCard,
+    required ValueChanged<int>? onClear,
+  }) {
     return Column(
       children: [
         for (var i = 0; i < 3; i += 1) ...[
           FastInfoPillCard(
-            slot: config.pills[i],
-            metric: _metricFor(config.pills[i]),
+            slot: slots[i]?.asType(FastInfoSlotType.pill),
+            metric: _metricFor(slots[i]),
             index: i,
-            onDropCard: onDropPillCard,
-            onClear: onClearPillSlot,
+            slotKeyPrefix: slotKeyPrefix,
+            dropKeyPrefix: dropKeyPrefix,
+            clearKeyPrefix: clearKeyPrefix,
+            onDropCard: onDropCard,
+            onClear: onClear,
             onTap: onCardTap,
           ),
           if (i != 2) const SizedBox(height: 10),
         ],
       ],
-    );
-  }
-
-  Widget _buildUpperBoxRow() {
-    return _buildBoxRow(
-      slots: [
-        for (final slot in config.pills) slot?.asType(FastInfoSlotType.box),
-      ],
-      slotKeyPrefix: 'fastinfo-upper-box',
-      dropKeyPrefix: 'fastinfo-pill',
-      clearKeyPrefix: 'fastinfo-clear-pill',
-      onDropCard: onDropPillCard,
-      onClear: onClearPillSlot,
     );
   }
 
@@ -109,7 +151,7 @@ class FastInfoPanel extends StatelessWidget {
         for (var i = 0; i < 3; i += 1) ...[
           Expanded(
             child: FastInfoBoxCard(
-              slot: slots[i],
+              slot: slots[i]?.asType(FastInfoSlotType.box),
               metric: _metricFor(slots[i]),
               index: i,
               slotKeyPrefix: slotKeyPrefix,

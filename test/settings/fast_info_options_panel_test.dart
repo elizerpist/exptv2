@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('layout selector switches preview without changing cards', (
+  testWidgets('upper row selector switches preview without changing cards', (
     tester,
   ) async {
     FastInfoConfig? changed;
@@ -15,10 +15,12 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('fastinfo-layout-six-boxes')));
+    await tester.tap(find.byKey(const ValueKey('fastinfo-upper-row-box')));
     await tester.pumpAndSettle();
 
     expect(changed?.layoutMode, FastInfoLayoutMode.sixBoxes);
+    expect(changed?.upperRowPresentation, FastInfoRowPresentation.box);
+    expect(changed?.lowerRowPresentation, FastInfoRowPresentation.box);
     expect(
       changed?.pills.map((slot) => slot?.id),
       FastInfoConfig.defaults().pills.map((slot) => slot?.id),
@@ -28,6 +30,33 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsNothing);
+  });
+
+  testWidgets('row selectors switch the lower row without changing cards', (
+    tester,
+  ) async {
+    FastInfoConfig? changed;
+    await tester.pumpWidget(
+      _subject(
+        config: FastInfoConfig.defaults(),
+        onChanged: (value) => changed = value,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('fastinfo-lower-row-pill')));
+    await tester.pumpAndSettle();
+
+    expect(changed?.upperRowPresentation, FastInfoRowPresentation.pill);
+    expect(changed?.lowerRowPresentation, FastInfoRowPresentation.pill);
+    expect(
+      changed?.boxes.map((slot) => slot?.id),
+      FastInfoConfig.defaults().boxes.map((slot) => slot?.id),
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-lower-pill-slot-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsNothing);
   });
 
   testWidgets('pool and assigned card taps open help', (tester) async {
@@ -210,7 +239,7 @@ void main() {
       );
 
       expect(find.text('184k'), findsNothing);
-      expect(find.text('27k'), findsWidgets);
+      expect(find.textContaining('27 000 Ft'), findsWidgets);
       expect(
         tester.getSize(find.byKey(const ValueKey('fast-info-panel'))).height,
         328,

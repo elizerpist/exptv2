@@ -180,12 +180,19 @@ void main() {
     expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('fastinfo-layout-selector')),
+      find.byKey(const ValueKey('fastinfo-upper-row-selector')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('fastinfo-layout-mixed')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('fastinfo-layout-six-boxes')),
+      find.byKey(const ValueKey('fastinfo-lower-row-selector')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-upper-row-pill')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-lower-row-box')),
       findsOneWidget,
     );
     final fastInfoFrameBottom = tester

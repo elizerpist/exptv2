@@ -277,6 +277,34 @@ void main() {
     expect(upperTop, lessThan(lowerTop));
   });
 
+  testWidgets('lower row can render assigned box slots as pills', (
+    tester,
+  ) async {
+    final config = FastInfoConfig.defaults().copyWith(
+      lowerRowPresentation: FastInfoRowPresentation.pill,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(config: config, onDropBoxCard: (_, _) {}),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('fastinfo-lower-pill-slot-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('fastinfo-lower-pill-drop-0')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('assigned card tap reports canonical card id', (tester) async {
     final tapped = <String>[];
 

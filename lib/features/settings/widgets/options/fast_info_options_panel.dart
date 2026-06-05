@@ -59,32 +59,30 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-          child: SegmentedButton<FastInfoLayoutMode>(
-            key: const ValueKey('fastinfo-layout-selector'),
-            segments: const <ButtonSegment<FastInfoLayoutMode>>[
-              ButtonSegment<FastInfoLayoutMode>(
-                value: FastInfoLayoutMode.mixed,
-                label: KeyedSubtree(
-                  key: ValueKey('fastinfo-layout-mixed'),
-                  child: Text('3 pill + 3 box'),
-                ),
+          child: Column(
+            children: [
+              _RowPresentationSelector(
+                selectorKey: const ValueKey('fastinfo-upper-row-selector'),
+                pillKey: const ValueKey('fastinfo-upper-row-pill'),
+                boxKey: const ValueKey('fastinfo-upper-row-box'),
+                label: 'Felső sor',
+                value: _draft.upperRowPresentation,
+                onChanged: (value) {
+                  _emit(_draft.copyWith(upperRowPresentation: value));
+                },
               ),
-              ButtonSegment<FastInfoLayoutMode>(
-                value: FastInfoLayoutMode.sixBoxes,
-                label: KeyedSubtree(
-                  key: ValueKey('fastinfo-layout-six-boxes'),
-                  child: Text('6 box'),
-                ),
+              const SizedBox(height: 6),
+              _RowPresentationSelector(
+                selectorKey: const ValueKey('fastinfo-lower-row-selector'),
+                pillKey: const ValueKey('fastinfo-lower-row-pill'),
+                boxKey: const ValueKey('fastinfo-lower-row-box'),
+                label: 'Alsó sor',
+                value: _draft.lowerRowPresentation,
+                onChanged: (value) {
+                  _emit(_draft.copyWith(lowerRowPresentation: value));
+                },
               ),
             ],
-            selected: <FastInfoLayoutMode>{_draft.layoutMode},
-            onSelectionChanged: (selection) {
-              _emit(_draft.copyWith(layoutMode: selection.single));
-            },
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
           ),
         ),
         SizedBox(
@@ -183,6 +181,67 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
   void _emit(FastInfoConfig config) {
     setState(() => _draft = config);
     widget.onChanged(config);
+  }
+}
+
+class _RowPresentationSelector extends StatelessWidget {
+  const _RowPresentationSelector({
+    required this.selectorKey,
+    required this.pillKey,
+    required this.boxKey,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Key selectorKey;
+  final Key pillKey;
+  final Key boxKey;
+  final String label;
+  final FastInfoRowPresentation value;
+  final ValueChanged<FastInfoRowPresentation> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.gray700,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SegmentedButton<FastInfoRowPresentation>(
+            key: selectorKey,
+            segments: <ButtonSegment<FastInfoRowPresentation>>[
+              ButtonSegment<FastInfoRowPresentation>(
+                value: FastInfoRowPresentation.pill,
+                label: KeyedSubtree(key: pillKey, child: const Text('Pill')),
+              ),
+              ButtonSegment<FastInfoRowPresentation>(
+                value: FastInfoRowPresentation.box,
+                label: KeyedSubtree(key: boxKey, child: const Text('Box')),
+              ),
+            ],
+            selected: <FastInfoRowPresentation>{value},
+            onSelectionChanged: (selection) => onChanged(selection.single),
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

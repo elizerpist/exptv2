@@ -206,6 +206,8 @@ void main() {
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['pills'], isA<List<Object?>>());
     expect(payload['layoutMode'], 'sixBoxes');
+    expect(payload['upperRowPresentation'], 'box');
+    expect(payload['lowerRowPresentation'], 'box');
   });
 
   test(

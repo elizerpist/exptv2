@@ -28,6 +28,28 @@ enum FastInfoLayoutMode {
   }
 }
 
+enum FastInfoRowPresentation {
+  pill('pill'),
+  box('box');
+
+  const FastInfoRowPresentation(this.nativeValue);
+  final String nativeValue;
+
+  static FastInfoRowPresentation fromAny(
+    Object? value, {
+    FastInfoRowPresentation fallback = FastInfoRowPresentation.box,
+  }) {
+    final raw = value?.toString();
+    if (raw == FastInfoRowPresentation.pill.nativeValue) {
+      return FastInfoRowPresentation.pill;
+    }
+    if (raw == FastInfoRowPresentation.box.nativeValue) {
+      return FastInfoRowPresentation.box;
+    }
+    return fallback;
+  }
+}
+
 class FastInfoSlot {
   const FastInfoSlot({
     required this.id,
@@ -151,9 +173,25 @@ class FastInfoConfig {
   FastInfoConfig({
     required List<FastInfoSlot?> pills,
     required List<FastInfoSlot?> boxes,
-    this.layoutMode = FastInfoLayoutMode.mixed,
+    FastInfoLayoutMode? layoutMode,
+    FastInfoRowPresentation? upperRowPresentation,
+    FastInfoRowPresentation? lowerRowPresentation,
   }) : pills = _fixed(pills),
-       boxes = _fixed(boxes);
+       boxes = _fixed(boxes),
+       upperRowPresentation =
+           upperRowPresentation ?? _upperPresentationFor(layoutMode),
+       lowerRowPresentation =
+           lowerRowPresentation ?? _lowerPresentationFor(layoutMode),
+       layoutMode = upperRowPresentation != null || lowerRowPresentation != null
+           ? _layoutModeFor(
+               upperRowPresentation ?? _upperPresentationFor(layoutMode),
+               lowerRowPresentation ?? _lowerPresentationFor(layoutMode),
+             )
+           : layoutMode ??
+                 _layoutModeFor(
+                   _upperPresentationFor(null),
+                   _lowerPresentationFor(null),
+                 );
 
   factory FastInfoConfig.defaults() {
     return FastInfoConfig(
@@ -186,37 +224,90 @@ class FastInfoConfig {
       return FastInfoSlot.fromCard(fastInfoCardById(id)!, type);
     }
 
+    final layoutMode = FastInfoLayoutMode.fromAny(map['layoutMode']);
     final rawPills = _rawFixedSlots(map['pills']);
     final rawBoxes = _rawFixedSlots(map['boxes']);
+    final upperFallback = _upperPresentationFor(layoutMode);
+    final lowerFallback = _lowerPresentationFor(layoutMode);
     return FastInfoConfig(
       pills: [for (final raw in rawPills) migrate(raw, FastInfoSlotType.pill)],
       boxes: [for (final raw in rawBoxes) migrate(raw, FastInfoSlotType.box)],
-      layoutMode: FastInfoLayoutMode.fromAny(map['layoutMode']),
+      layoutMode: layoutMode,
+      upperRowPresentation: FastInfoRowPresentation.fromAny(
+        map['upperRowPresentation'],
+        fallback: upperFallback,
+      ),
+      lowerRowPresentation: FastInfoRowPresentation.fromAny(
+        map['lowerRowPresentation'],
+        fallback: lowerFallback,
+      ),
     );
   }
 
   final List<FastInfoSlot?> pills;
   final List<FastInfoSlot?> boxes;
   final FastInfoLayoutMode layoutMode;
+  final FastInfoRowPresentation upperRowPresentation;
+  final FastInfoRowPresentation lowerRowPresentation;
 
   FastInfoConfig copyWith({
     List<FastInfoSlot?>? pills,
     List<FastInfoSlot?>? boxes,
     FastInfoLayoutMode? layoutMode,
+    FastInfoRowPresentation? upperRowPresentation,
+    FastInfoRowPresentation? lowerRowPresentation,
   }) {
+    final nextUpper =
+        upperRowPresentation ??
+        (layoutMode == null
+            ? this.upperRowPresentation
+            : _upperPresentationFor(layoutMode));
+    final nextLower =
+        lowerRowPresentation ??
+        (layoutMode == null
+            ? this.lowerRowPresentation
+            : _lowerPresentationFor(layoutMode));
     return FastInfoConfig(
       pills: pills ?? this.pills,
       boxes: boxes ?? this.boxes,
-      layoutMode: layoutMode ?? this.layoutMode,
+      layoutMode: layoutMode,
+      upperRowPresentation: nextUpper,
+      lowerRowPresentation: nextLower,
     );
   }
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
       'layoutMode': layoutMode.nativeValue,
+      'upperRowPresentation': upperRowPresentation.nativeValue,
+      'lowerRowPresentation': lowerRowPresentation.nativeValue,
       'pills': pills.map((slot) => slot?.toMap()).toList(),
       'boxes': boxes.map((slot) => slot?.toMap()).toList(),
     };
+  }
+
+  static FastInfoRowPresentation _upperPresentationFor(
+    FastInfoLayoutMode? layoutMode,
+  ) {
+    return layoutMode == FastInfoLayoutMode.sixBoxes
+        ? FastInfoRowPresentation.box
+        : FastInfoRowPresentation.pill;
+  }
+
+  static FastInfoRowPresentation _lowerPresentationFor(
+    FastInfoLayoutMode? layoutMode,
+  ) {
+    return FastInfoRowPresentation.box;
+  }
+
+  static FastInfoLayoutMode _layoutModeFor(
+    FastInfoRowPresentation upper,
+    FastInfoRowPresentation lower,
+  ) {
+    return upper == FastInfoRowPresentation.box &&
+            lower == FastInfoRowPresentation.box
+        ? FastInfoLayoutMode.sixBoxes
+        : FastInfoLayoutMode.mixed;
   }
 
   static List<Object?> _rawFixedSlots(Object? value) {

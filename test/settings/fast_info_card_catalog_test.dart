@@ -145,4 +145,29 @@ void main() {
       original.boxes.map((slot) => slot?.id),
     );
   });
+
+  test('row presentations round-trip independently from slot membership', () {
+    final original = FastInfoConfig.defaults().copyWith(
+      upperRowPresentation: FastInfoRowPresentation.box,
+      lowerRowPresentation: FastInfoRowPresentation.pill,
+    );
+    final restored = FastInfoConfig.fromMap(original.toMap());
+
+    expect(restored.layoutMode, FastInfoLayoutMode.mixed);
+    expect(restored.upperRowPresentation, FastInfoRowPresentation.box);
+    expect(restored.lowerRowPresentation, FastInfoRowPresentation.pill);
+    expect(restored.pills.map((slot) => slot?.id), [
+      'havi_koltes',
+      'koltesi_trend',
+      'kiadas_bevetel_arany',
+    ]);
+    expect(restored.boxes.map((slot) => slot?.id), [
+      'mai_koltes',
+      'heti_koltes',
+      'kovetkezo_ismetlo_kiadas',
+    ]);
+    expect(original.toMap()['layoutMode'], 'mixed');
+    expect(original.toMap()['upperRowPresentation'], 'box');
+    expect(original.toMap()['lowerRowPresentation'], 'pill');
+  });
 }
