@@ -92,6 +92,27 @@ void main() {
     );
   });
 
+  test('approved FastInfo cards expose typed visuals', () {
+    final metrics = FastInfoMetricsResolver.resolve(_snapshot());
+
+    expect(
+      metrics['mai_koltes']!.visual.kind,
+      FastInfoVisualKind.thresholdMarkerBar,
+    );
+    expect(
+      metrics['heti_koltes']!.visual.kind,
+      FastInfoVisualKind.deviationMeter,
+    );
+    expect(
+      metrics['top_kategoria_heten']!.visual.kind,
+      FastInfoVisualKind.miniAvatarRow,
+    );
+    expect(
+      metrics['kiadas_bevetel_arany']!.visual.kind,
+      FastInfoVisualKind.remainingSpentSplit,
+    );
+  });
+
   test('omits visuals that have no meaningful denominator', () {
     final noLimit = FastInfoMetricsResolver.resolve(
       _snapshot(limits: const <CategoryLimit>[]),

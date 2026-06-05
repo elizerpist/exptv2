@@ -133,6 +133,14 @@ class _FastInfoMetricScope {
           ? FastInfoSemantic.neutral
           : expenseSemantic(progress),
       trend: expenseTrend(variableToday, rollingDailyAverage),
+      visual: progress == null
+          ? FastInfoVisualDescriptor.none
+          : FastInfoVisualDescriptor(
+              kind: FastInfoVisualKind.thresholdMarkerBar,
+              value: progress,
+              marker: ceiling > 0 ? rollingDailyAverage / ceiling : null,
+              semantic: expenseSemantic(progress),
+            ),
     );
   }
 
@@ -164,6 +172,16 @@ class _FastInfoMetricScope {
         data.currentWeekVariableExpense,
         data.previousWeekSameDayVariableExpense,
       ),
+      visual: monthlyLimit == null
+          ? FastInfoVisualDescriptor.none
+          : FastInfoVisualDescriptor(
+              kind: FastInfoVisualKind.deviationMeter,
+              value: _weeklyPacePoints() / 100,
+              semantic: _weeklyPacePoints() > 0
+                  ? FastInfoSemantic.bad
+                  : FastInfoSemantic.good,
+              values: [for (final bar in bars) bar.value],
+            ),
     );
   }
 
@@ -172,13 +190,17 @@ class _FastInfoMetricScope {
     final progress = limit == null
         ? null
         : data.currentMonthVariableExpense / limit;
+    final monthIndex = data.previousMonthSameDayVariableExpense > 0
+        ? data.currentMonthVariableExpense /
+              data.previousMonthSameDayVariableExpense
+        : null;
     return FastInfoMetricResult(
       pillValue: _compactAmount(data.currentMonthExpense),
       primaryValue: formatHuf(data.currentMonthExpense),
       secondaryValues: <String>[
         if (progress != null) '${_percent(progress)}% a havi keretből',
-        if (data.previousMonthSameDayVariableExpense > 0)
-          'előző hónap index: ${_percent(data.currentMonthVariableExpense / data.previousMonthSameDayVariableExpense)}%'
+        if (monthIndex != null)
+          'előző hónap index: ${_percent(monthIndex)}%'
         else
           'Nincs összehasonlítás',
         if (limit != null)
@@ -210,6 +232,14 @@ class _FastInfoMetricScope {
           values: data.twoMonthsAgoDailySeries,
         ),
       ],
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.sameDayIndexMarker,
+        value: monthIndex,
+        compareValue: progress,
+        semantic: monthIndex == null
+            ? FastInfoSemantic.neutral
+            : expenseSemantic(monthIndex),
+      ),
     );
   }
 
@@ -238,6 +268,17 @@ class _FastInfoMetricScope {
           : progress >= .75
           ? FastInfoSemantic.warning
           : FastInfoSemantic.neutral,
+      visual: progress == null
+          ? FastInfoVisualDescriptor.none
+          : FastInfoVisualDescriptor(
+              kind: FastInfoVisualKind.goalMarker,
+              value: progress,
+              semantic: progress >= 1
+                  ? FastInfoSemantic.good
+                  : progress >= .75
+                  ? FastInfoSemantic.warning
+                  : FastInfoSemantic.neutral,
+            ),
     );
   }
 
@@ -252,6 +293,17 @@ class _FastInfoMetricScope {
         if (data.previousRolling30Expense <= 0) 'Nincs összehasonlítás',
       ],
       trend: expenseTrend(data.rolling30Expense, data.previousRolling30Expense),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.zoneMarker,
+        value: data.previousRolling30Expense > 0
+            ? data.rolling30Expense / data.previousRolling30Expense
+            : null,
+        semantic: data.previousRolling30Expense > 0
+            ? expenseSemantic(
+                data.rolling30Expense / data.previousRolling30Expense,
+              )
+            : FastInfoSemantic.neutral,
+      ),
     );
   }
 
@@ -269,6 +321,10 @@ class _FastInfoMetricScope {
         '${category?.name ?? 'Nincs kategória'} · ${row.record.displayTime}',
       ],
       avatar: avatarForCategory(category),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.avatar,
+        avatar: avatarForCategory(category),
+      ),
     );
   }
 
@@ -300,6 +356,14 @@ class _FastInfoMetricScope {
       chartSeries: <FastInfoChartSeries>[
         FastInfoChartSeries(label: 'Előrejelzés', values: forecast),
       ],
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.projectionFill,
+        value: ratio,
+        values: forecast,
+        semantic: ratio == null
+            ? FastInfoSemantic.neutral
+            : expenseSemantic(ratio),
+      ),
     );
   }
 
@@ -327,6 +391,12 @@ class _FastInfoMetricScope {
       progress: top.ratio,
       semantic: expenseSemantic(top.ratio),
       avatar: avatarForCategory(top.category),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.overflowRisk,
+        value: top.ratio,
+        semantic: expenseSemantic(top.ratio),
+        avatar: avatarForCategory(top.category),
+      ),
     );
   }
 
@@ -352,6 +422,11 @@ class _FastInfoMetricScope {
         formatHuf(_sum(top.value)),
       ],
       avatar: _mostFrequentCategoryAvatar(top.value),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.activityStrip,
+        value: top.value.length.toDouble(),
+        avatar: _mostFrequentCategoryAvatar(top.value),
+      ),
     );
   }
 
@@ -368,6 +443,10 @@ class _FastInfoMetricScope {
       chartSeries: <FastInfoChartSeries>[
         FastInfoChartSeries(label: '30 nap', values: data.rolling30DailySeries),
       ],
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.spikeLine,
+        values: data.rolling30DailySeries,
+      ),
     );
   }
 
@@ -386,6 +465,11 @@ class _FastInfoMetricScope {
       progressKind: FastInfoProgressKind.ring,
       progress: count / data.elapsedMonthDays,
       semantic: FastInfoSemantic.good,
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.sevenDayStrip,
+        value: count / data.elapsedMonthDays,
+        semantic: FastInfoSemantic.good,
+      ),
     );
   }
 
@@ -404,6 +488,11 @@ class _FastInfoMetricScope {
         'Mai költés ${_percent(share)}%-a',
       ],
       avatar: avatarForCategory(top.category),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.avatar,
+        value: share,
+        avatar: avatarForCategory(top.category),
+      ),
     );
   }
 
@@ -426,6 +515,24 @@ class _FastInfoMetricScope {
           'Hónap: ${monthly.name} · ${monthly.count} db · ${formatHuf(monthly.amount)}',
       ],
       avatar: avatarForCategory(primary.category),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.miniAvatarRow,
+        avatar: avatarForCategory(primary.category),
+        points: <FastInfoVisualPoint>[
+          if (weekly != null)
+            FastInfoVisualPoint(
+              label: 'Hét',
+              value: weekly.amount,
+              avatar: avatarForCategory(weekly.category),
+            ),
+          if (monthly != null)
+            FastInfoVisualPoint(
+              label: 'Hó',
+              value: monthly.amount,
+              avatar: avatarForCategory(monthly.category),
+            ),
+        ],
+      ),
     );
   }
 
@@ -473,6 +580,12 @@ class _FastInfoMetricScope {
         semantic: up ? FastInfoSemantic.bad : FastInfoSemantic.good,
       ),
       avatar: avatarForCategory(top.category),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.analogMeter,
+        value: top.change,
+        semantic: up ? FastInfoSemantic.bad : FastInfoSemantic.good,
+        avatar: avatarForCategory(top.category),
+      ),
     );
   }
 
@@ -505,6 +618,11 @@ class _FastInfoMetricScope {
         '7 nap: ${sevenDays.length} tétel · ${formatHuf(sevenTotal)}',
       ],
       avatar: avatarForGhost(next),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.fixedLoad,
+        value: sevenTotal,
+        avatar: avatarForGhost(next),
+      ),
     );
   }
 
@@ -541,6 +659,14 @@ class _FastInfoMetricScope {
       semantic: progress == null
           ? FastInfoSemantic.neutral
           : expenseSemantic(progress),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.paidRemainingSplit,
+        value: total <= 0 ? null : deducted / total,
+        compareValue: total <= 0 ? null : remaining / total,
+        semantic: progress == null
+            ? FastInfoSemantic.neutral
+            : expenseSemantic(progress),
+      ),
     );
   }
 
@@ -564,6 +690,14 @@ class _FastInfoMetricScope {
         data.currentMonthIncome,
         data.previousMonthSameDayIncome,
       ),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.incomeComparisonBars,
+        value: data.currentMonthIncome,
+        compareValue: data.previousMonthSameDayIncome,
+        semantic: data.currentMonthIncome >= data.previousMonthSameDayIncome
+            ? FastInfoSemantic.good
+            : FastInfoSemantic.bad,
+      ),
     );
   }
 
@@ -584,16 +718,26 @@ class _FastInfoMetricScope {
       progressKind: FastInfoProgressKind.bar,
       progress: ratio,
       semantic: expenseSemantic(ratio),
+      visual: FastInfoVisualDescriptor(
+        kind: FastInfoVisualKind.remainingSpentSplit,
+        value: math.max(0, 1 - ratio),
+        compareValue: ratio,
+        semantic: expenseSemantic(ratio),
+      ),
     );
   }
 
   String _weeklyPaceLabel() {
-    if (weeklyAllowance <= 0) return 'időarányhoz képest 0p';
-    final actualShare = data.currentWeekVariableExpense / weeklyAllowance;
-    final expectedShare = data.today.weekday / 7;
-    final points = ((actualShare - expectedShare) * 100).round();
+    final points = _weeklyPacePoints();
     final prefix = points > 0 ? '+' : '';
     return 'időarányhoz képest $prefix${points}p';
+  }
+
+  int _weeklyPacePoints() {
+    if (weeklyAllowance <= 0) return 0;
+    final actualShare = data.currentWeekVariableExpense / weeklyAllowance;
+    final expectedShare = data.today.weekday / 7;
+    return ((actualShare - expectedShare) * 100).round();
   }
 
   String? _paceStatus() {
