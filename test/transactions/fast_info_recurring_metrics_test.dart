@@ -17,6 +17,7 @@ void main() {
             _rent,
             _phone,
             _insurance,
+            _salary,
             _nextMonth,
           ],
         ),
@@ -33,8 +34,8 @@ void main() {
       expect(metrics['kovetkezo_ismetlo_kiadas']?.avatar, isNotNull);
       expect(metrics['havi_fix_koltseg_osszesen']?.primaryValue, '128 000 Ft');
       expect(metrics['havi_fix_koltseg_osszesen']?.secondaryValues, [
-        'Levonva 100k · marad 28k',
-        'Legnagyobb Lakbér · keret után 72k',
+        '28k hátra 128k fixből',
+        'Levonva 100k · legnagyobb Lakbér',
       ]);
       expect(
         metrics['havi_fix_koltseg_osszesen']?.progress,
@@ -111,6 +112,26 @@ const _insurance = RecurringGhostRecord(
   categoryName: 'Számlák',
   categoryColor: '#663399',
   categoryIconSlot: 2,
+  triggerMillis: 0,
+  isActivated: false,
+  activatedTransactionId: null,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _salary = RecurringGhostRecord(
+  id: 5,
+  recurringTransactionId: 5,
+  periodKey: '2026-06',
+  name: 'Fizetés',
+  amount: 300000,
+  transactionType: 'income',
+  date: '2026.06.04',
+  time: '08:00',
+  categoryId: 5,
+  categoryName: 'Bevétel',
+  categoryColor: '#16a34a',
+  categoryIconSlot: 5,
   triggerMillis: 0,
   isActivated: false,
   activatedTransactionId: null,

@@ -66,6 +66,53 @@ void main() {
     expect(store.visibleGhostTransactions, isEmpty);
   });
 
+  test('recurring income ghosts are loaded for FastInfo', () async {
+    final incomeGhost = ghostFixture(
+      id: 20,
+      recurringId: 90,
+      name: 'Salary',
+      amount: 300000,
+      transactionType: 'income',
+      categoryName: 'Income',
+      categoryColor: '#16a34a',
+      categoryIconSlot: 4,
+    );
+    final repository = GhostRepository(
+      bootstrapGhosts: [ghostFixture(), incomeGhost],
+      projectedGhosts: [ghostFixture(id: 5), incomeGhost],
+    );
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 10),
+    );
+
+    await store.start();
+
+    final loadedIncomeGhost = store.recurringGhostTransactions.singleWhere(
+      (ghost) => ghost.type == TransactionType.income,
+    );
+    expect(loadedIncomeGhost.categoryName, 'Income');
+    expect(
+      store.fastInfoMetrics['bevetel_ebben_a_honapban']?.primaryValue,
+      '300 000 Ft',
+    );
+    expect(
+      store.fastInfoMetrics['bevetel_ebben_a_honapban']?.secondaryValues,
+      contains('Várható bevétel: 300 000 Ft'),
+    );
+    expect(
+      store.fastInfoMetrics['havi_fix_koltseg_osszesen']?.primaryValue,
+      '500 Ft',
+    );
+
+    await store.cycleSummaryWindow();
+    store.setActiveType(TransactionType.income);
+
+    expect(store.visibleGhostTransactions.single.name, 'Salary');
+    expect(store.visibleGhostTransactions.single.displayAmount, '+300 000 Ft');
+    expect(store.activeSummary.formattedFor(TransactionType.income), '+0 Ft');
+  });
+
   testWidgets('log list renders pending recurring ghost logboxes', (
     tester,
   ) async {
@@ -206,6 +253,13 @@ RecurringGhostRecord ghostFixture({
   int year = 2026,
   int month = 5,
   int id = 1,
+  int recurringId = 9,
+  String name = 'Rent',
+  double amount = 500,
+  String transactionType = 'expense',
+  String categoryName = 'Q',
+  String categoryColor = '#dc2626',
+  int categoryIconSlot = 2,
   bool activated = false,
 }) {
   final periodKey =
@@ -214,17 +268,17 @@ RecurringGhostRecord ghostFixture({
       '${year.toString().padLeft(4, '0')}.${month.toString().padLeft(2, '0')}.15';
   return RecurringGhostRecord.fromMap({
     'id': id,
-    'recurringTransactionId': 9,
+    'recurringTransactionId': recurringId,
     'periodKey': periodKey,
-    'name': 'Rent',
-    'amount': 500,
-    'transactionType': 'expense',
+    'name': name,
+    'amount': amount,
+    'transactionType': transactionType,
     'date': date,
     'time': '00:00',
     'categoryId': 6,
-    'categoryName': 'Q',
-    'categoryColor': '#dc2626',
-    'categoryIconSlot': 2,
+    'categoryName': categoryName,
+    'categoryColor': categoryColor,
+    'categoryIconSlot': categoryIconSlot,
     'triggerMillis': 1778803200000,
     'isActivated': activated,
     'activatedTransactionId': activated ? 120 : null,

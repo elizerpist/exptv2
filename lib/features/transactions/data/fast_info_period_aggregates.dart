@@ -122,6 +122,10 @@ class FastInfoPeriodAggregates {
     previousWeekStart.add(Duration(days: today.weekday)),
   );
   double get currentMonthIncome => incomeBetween(currentMonthStart, tomorrow);
+  double get currentMonthPendingIncomeGhost =>
+      pendingIncomeGhostBetween(currentMonthStart, nextMonthStart);
+  double get currentMonthExpectedIncome =>
+      currentMonthIncome + currentMonthPendingIncomeGhost;
   double get previousMonthSameDayIncome =>
       incomeBetween(previousMonthStart, _sameDayCutoff(previousMonthStart));
   double get rolling30Income => incomeBetween(rolling30Start, tomorrow);
@@ -175,6 +179,15 @@ class FastInfoPeriodAggregates {
 
   double incomeBetween(DateTime start, DateTime end) =>
       _sumRows(incomeRowsBetween(start, end));
+
+  double pendingIncomeGhostBetween(DateTime start, DateTime end) {
+    return recurringGhostsBetween(start, end, pendingOnly: true).fold<double>(
+      0,
+      (sum, row) => row.record.type == TransactionType.income
+          ? sum + row.record.amount.abs()
+          : sum,
+    );
+  }
 
   List<FastInfoDatedTransaction> expenseRowsBetween(
     DateTime start,
