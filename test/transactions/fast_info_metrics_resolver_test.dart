@@ -43,6 +43,55 @@ void main() {
     );
   });
 
+  test('daily weekly monthly FastInfo metrics use variable pace', () {
+    final metrics = FastInfoMetricsResolver.resolve(
+      _snapshot(
+        now: DateTime(2026, 6, 10, 12),
+        transactions: <TransactionRecord>[
+          _transaction(1, '2026.06.08', -10000),
+          _transaction(2, '2026.06.09', -20000),
+          _transaction(3, '2026.06.10', -5000),
+          _transaction(4, '2026.06.10', -200000, recurringTransactionId: 77),
+          _transaction(5, '2026.05.10', -30000),
+        ],
+      ),
+    );
+
+    final dailyCeiling = (300000 - 30000) / 21;
+    expect(metrics['mai_koltes']?.primaryValue, '205 000 Ft elköltve');
+    expect(
+      metrics['mai_koltes']?.progress,
+      closeTo(5000 / dailyCeiling, 0.001),
+    );
+    expect(
+      metrics['mai_koltes']?.secondaryValues.any(
+        (value) => value.endsWith('költhető'),
+      ),
+      isTrue,
+    );
+
+    expect(metrics['heti_koltes']?.weeklyBars[2].value, 5000);
+    expect(
+      metrics['heti_koltes']?.weeklyBars[2].semantic,
+      FastInfoSemantic.good,
+    );
+    expect(
+      metrics['heti_koltes']?.secondaryValues.any(
+        (value) => value.startsWith('időarányhoz képest'),
+      ),
+      isTrue,
+    );
+
+    expect(metrics['havi_koltes']?.progress, closeTo(35000 / 300000, 0.001));
+    expect(metrics['havi_koltes']?.chartSeries.first.values[9], 5000);
+    expect(
+      metrics['havi_koltes']?.secondaryValues.any(
+        (value) => value.startsWith('előző hónap index:'),
+      ),
+      isTrue,
+    );
+  });
+
   test('omits visuals that have no meaningful denominator', () {
     final noLimit = FastInfoMetricsResolver.resolve(
       _snapshot(limits: const <CategoryLimit>[]),
@@ -161,6 +210,7 @@ TransactionRecord _transaction(
   String date,
   double amount, {
   String time = '12:00',
+  int? recurringTransactionId,
 }) {
   return TransactionRecord(
     id: id,
@@ -173,6 +223,7 @@ TransactionRecord _transaction(
     amount: amount,
     userAssignedName: null,
     transactionCategoryID: amount > 0 ? 2 : 1,
+    recurringTransactionId: recurringTransactionId,
   );
 }
 

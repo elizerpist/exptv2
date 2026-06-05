@@ -59,7 +59,7 @@ class _FastInfoMetricScope {
   double get dailyCeiling {
     final limit = monthlyLimit;
     if (limit == null) return 0.0;
-    return math.max(0, limit - data.currentMonthExpenseBeforeToday) /
+    return math.max(0, limit - data.currentMonthVariableExpenseBeforeToday) /
         data.remainingMonthDaysIncludingToday;
   }
 
@@ -111,13 +111,17 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _todaySpend() {
     final ceiling = dailyCeiling;
-    final progress = ceiling > 0 ? data.todayExpense / ceiling : null;
+    final variableToday = data.todayVariableExpense;
+    final progress = ceiling > 0 ? variableToday / ceiling : null;
     final count = data.expenseRowsBetween(data.today, data.tomorrow).length;
     final secondary = <String>[
-      if (progress != null)
-        '${formatHuf(math.max(0, ceiling - data.todayExpense))} maradt',
       '$count tranzakció ma',
-      if (rollingDailyAverage <= 0) 'Nincs összehasonlítás',
+      if (progress != null)
+        '${formatHuf(math.max(0, ceiling - variableToday))} költhető',
+      if (rollingDailyAverage > 0)
+        'napi átlaghoz képest:'
+      else
+        'Nincs összehasonlítás',
     ];
     return FastInfoMetricResult(
       pillValue: _compactAmount(data.todayExpense),
@@ -128,7 +132,7 @@ class _FastInfoMetricScope {
       semantic: progress == null
           ? FastInfoSemantic.neutral
           : expenseSemantic(progress),
-      trend: expenseTrend(data.todayExpense, rollingDailyAverage),
+      trend: expenseTrend(variableToday, rollingDailyAverage),
     );
   }
 
@@ -149,29 +153,36 @@ class _FastInfoMetricScope {
       primaryValue: formatHuf(data.currentWeekExpense),
       secondaryValues: <String>[
         if (monthlyLimit != null)
-          '${formatHuf(math.max(0, weeklyAllowance - data.currentWeekExpense))} maradt',
-        if (data.previousWeekSameDayExpense <= 0) 'Nincs összehasonlítás',
+          '${formatHuf(math.max(0, weeklyAllowance - data.currentWeekVariableExpense))} költhető',
+        if (monthlyLimit != null) _weeklyPaceLabel(),
+        if (data.previousWeekSameDayVariableExpense <= 0)
+          'Nincs összehasonlítás',
       ],
       chartKind: FastInfoChartKind.weeklyBars,
       weeklyBars: bars,
       trend: expenseTrend(
-        data.currentWeekExpense,
-        data.previousWeekSameDayExpense,
+        data.currentWeekVariableExpense,
+        data.previousWeekSameDayVariableExpense,
       ),
     );
   }
 
   FastInfoMetricResult _monthlySpend() {
     final limit = monthlyLimit;
-    final progress = limit == null ? null : data.currentMonthExpense / limit;
+    final progress = limit == null
+        ? null
+        : data.currentMonthVariableExpense / limit;
     return FastInfoMetricResult(
       pillValue: _compactAmount(data.currentMonthExpense),
       primaryValue: formatHuf(data.currentMonthExpense),
       secondaryValues: <String>[
         if (progress != null) '${_percent(progress)}% a havi keretből',
+        if (data.previousMonthSameDayVariableExpense > 0)
+          'előző hónap index: ${_percent(data.currentMonthVariableExpense / data.previousMonthSameDayVariableExpense)}%'
+        else
+          'Nincs összehasonlítás',
         if (limit != null)
-          '${formatHuf(math.max(0, limit - data.currentMonthExpense))} maradt',
-        if (data.previousMonthSameDayExpense <= 0) 'Nincs összehasonlítás',
+          '${formatHuf(math.max(0, limit - data.currentMonthVariableExpense))} költhető',
       ],
       progressKind: progress == null ? null : FastInfoProgressKind.bar,
       progress: progress,
@@ -179,14 +190,16 @@ class _FastInfoMetricScope {
           ? FastInfoSemantic.neutral
           : expenseSemantic(progress),
       trend: expenseTrend(
-        data.currentMonthExpense,
-        data.previousMonthSameDayExpense,
+        data.currentMonthVariableExpense,
+        data.previousMonthSameDayVariableExpense,
       ),
       chartKind: FastInfoChartKind.multiLine,
       chartSeries: <FastInfoChartSeries>[
         FastInfoChartSeries(
           label: 'Aktuális',
-          values: data.currentMonthDailySeries.take(data.today.day).toList(),
+          values: data.currentMonthVariableDailySeries
+              .take(data.today.day)
+              .toList(),
         ),
         FastInfoChartSeries(
           label: 'Előző',
@@ -572,6 +585,15 @@ class _FastInfoMetricScope {
       progress: ratio,
       semantic: expenseSemantic(ratio),
     );
+  }
+
+  String _weeklyPaceLabel() {
+    if (weeklyAllowance <= 0) return 'időarányhoz képest 0p';
+    final actualShare = data.currentWeekVariableExpense / weeklyAllowance;
+    final expectedShare = data.today.weekday / 7;
+    final points = ((actualShare - expectedShare) * 100).round();
+    final prefix = points > 0 ? '+' : '';
+    return 'időarányhoz képest $prefix${points}p';
   }
 
   String? _paceStatus() {

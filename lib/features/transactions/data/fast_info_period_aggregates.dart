@@ -89,17 +89,31 @@ class FastInfoPeriodAggregates {
   double get todayExpense => expenseOn(today);
   double get todayVariableExpense => variableExpenseOn(today);
   double get currentMonthExpense => expenseBetween(currentMonthStart, tomorrow);
+  double get currentMonthVariableExpense =>
+      variableExpenseBetween(currentMonthStart, tomorrow);
   double get currentMonthExpenseBeforeToday =>
       expenseBetween(currentMonthStart, today);
+  double get currentMonthVariableExpenseBeforeToday =>
+      variableExpenseBetween(currentMonthStart, today);
   double get previousMonthExpense =>
       expenseBetween(previousMonthStart, currentMonthStart);
   double get previousMonthSameDayExpense =>
       expenseBetween(previousMonthStart, _sameDayCutoff(previousMonthStart));
+  double get previousMonthSameDayVariableExpense => variableExpenseBetween(
+    previousMonthStart,
+    _sameDayCutoff(previousMonthStart),
+  );
   double get rolling30Expense => expenseBetween(rolling30Start, tomorrow);
   double get previousRolling30Expense =>
       expenseBetween(previousRolling30Start, rolling30Start);
   double get currentWeekExpense => expenseBetween(weekStart, tomorrow);
+  double get currentWeekVariableExpense =>
+      variableExpenseBetween(weekStart, tomorrow);
   double get previousWeekSameDayExpense => expenseBetween(
+    previousWeekStart,
+    previousWeekStart.add(Duration(days: today.weekday)),
+  );
+  double get previousWeekSameDayVariableExpense => variableExpenseBetween(
     previousWeekStart,
     previousWeekStart.add(Duration(days: today.weekday)),
   );
@@ -112,6 +126,12 @@ class FastInfoPeriodAggregates {
     currentMonthStart,
     daysInCurrentMonth,
     ignoreAfterToday: true,
+  );
+  List<double> get currentMonthVariableDailySeries => _dailyExpenseSeries(
+    currentMonthStart,
+    daysInCurrentMonth,
+    ignoreAfterToday: true,
+    variableOnly: true,
   );
   List<double> get previousMonthDailySeries => _dailyExpenseSeries(
     previousMonthStart,
@@ -129,7 +149,7 @@ class FastInfoPeriodAggregates {
       final date = weekStart.add(Duration(days: index));
       final isFuture = date.isAfter(today);
       return FastInfoWeeklyBar(
-        value: isFuture ? 0.0 : expenseOn(date),
+        value: isFuture ? 0.0 : variableExpenseOn(date),
         isFuture: isFuture,
         semantic: FastInfoSemantic.neutral,
       );
@@ -228,12 +248,13 @@ class FastInfoPeriodAggregates {
     DateTime start,
     int length, {
     bool ignoreAfterToday = false,
+    bool variableOnly = false,
   }) {
     return List.unmodifiable(
       List.generate(length, (index) {
         final date = start.add(Duration(days: index));
         if (ignoreAfterToday && date.isAfter(today)) return 0.0;
-        return expenseOn(date);
+        return variableOnly ? variableExpenseOn(date) : expenseOn(date);
       }),
     );
   }
