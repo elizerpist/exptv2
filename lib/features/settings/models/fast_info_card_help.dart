@@ -39,8 +39,9 @@ class FastInfoCardHelp {
   String get purpose => _withPrefix(_purpose, 'Ez azt mutatja:');
 
   List<String> get calculation {
-    if (_calculation.isEmpty)
+    if (_calculation.isEmpty) {
       return const <String>['Így számol: nincs külön képlet.'];
+    }
     return <String>[
       _withPrefix(_calculation.first, 'Így számol:'),
       ..._calculation.skip(1),
