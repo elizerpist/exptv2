@@ -196,51 +196,105 @@ void main() {
     );
   });
 
-  for (final width in <double>[320, 600]) {
-    testWidgets('keeps structured panel overflow-free at width $width', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: width,
-              child: FastInfoPanel(
-                config: FastInfoConfig.defaults(),
-                metrics: const <String, FastInfoMetricResult>{
-                  'havi_koltes': FastInfoMetricResult(
-                    pillValue: '27k',
-                    primaryValue: '27 000 Ft',
-                  ),
-                  'koltesi_trend': FastInfoMetricResult(
-                    pillValue: '-12%',
-                    primaryValue: '53 000 Ft',
-                  ),
-                  'kiadas_bevetel_arany': FastInfoMetricResult(
-                    pillValue: '42%',
-                    primaryValue: '42%',
-                  ),
-                  'mai_koltes': FastInfoMetricResult(
-                    pillValue: '7k',
-                    primaryValue: '7 000 Ft elköltve',
-                  ),
-                  'heti_koltes': FastInfoMetricResult(
-                    pillValue: '27k',
-                    primaryValue: '27 000 Ft',
-                  ),
-                  'kovetkezo_ismetlo_kiadas': FastInfoMetricResult(
-                    pillValue: '8k',
-                    primaryValue: 'Telefon · 8 000 Ft',
-                  ),
-                },
-              ),
-            ),
+  testWidgets('six box mode renders upper slots as a distinct box row', (
+    tester,
+  ) async {
+    final config = FastInfoConfig.defaults().copyWith(
+      layoutMode: FastInfoLayoutMode.sixBoxes,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: FastInfoPanel(config: config)),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('fastinfo-upper-box-slot-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsOneWidget);
+
+    final upperTop = tester
+        .getTopLeft(find.byKey(const ValueKey('fastinfo-upper-box-slot-0')))
+        .dy;
+    final lowerTop = tester
+        .getTopLeft(find.byKey(const ValueKey('fastinfo-box-slot-0')))
+        .dy;
+    expect(upperTop, lessThan(lowerTop));
+  });
+
+  testWidgets('assigned card tap reports canonical card id', (tester) async {
+    final tapped = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(
+            config: FastInfoConfig.defaults(),
+            onCardTap: tapped.add,
           ),
         ),
-      );
+      ),
+    );
 
-      expect(tester.takeException(), isNull);
-    });
+    await tester.tap(find.byKey(const ValueKey('fastinfo-pill-slot-0')));
+    await tester.pumpAndSettle();
+
+    expect(tapped, <String>['havi_koltes']);
+  });
+
+  for (final width in <double>[320, 600]) {
+    for (final layoutMode in FastInfoLayoutMode.values) {
+      testWidgets(
+        'keeps structured panel overflow-free in ${layoutMode.name} at width $width',
+        (tester) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: SizedBox(
+                  width: width,
+                  child: FastInfoPanel(
+                    config: FastInfoConfig.defaults().copyWith(
+                      layoutMode: layoutMode,
+                    ),
+                    metrics: const <String, FastInfoMetricResult>{
+                      'havi_koltes': FastInfoMetricResult(
+                        pillValue: '27k',
+                        primaryValue: '27 000 Ft',
+                      ),
+                      'koltesi_trend': FastInfoMetricResult(
+                        pillValue: '-12%',
+                        primaryValue: '53 000 Ft',
+                      ),
+                      'kiadas_bevetel_arany': FastInfoMetricResult(
+                        pillValue: '42%',
+                        primaryValue: '42%',
+                      ),
+                      'mai_koltes': FastInfoMetricResult(
+                        pillValue: '7k',
+                        primaryValue: '7 000 Ft elköltve',
+                      ),
+                      'heti_koltes': FastInfoMetricResult(
+                        pillValue: '27k',
+                        primaryValue: '27 000 Ft',
+                      ),
+                      'kovetkezo_ismetlo_kiadas': FastInfoMetricResult(
+                        pillValue: '8k',
+                        primaryValue: 'Telefon · 8 000 Ft',
+                      ),
+                    },
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   }
 }
 
