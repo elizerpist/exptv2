@@ -7,6 +7,7 @@ import '../../../../features/transactions/models/fast_info_metric.dart';
 import '../../../../features/transactions/widgets/header_card/fast_info_panel.dart';
 import '../../models/fast_info_card_catalog.dart';
 import '../../models/fast_info_config.dart';
+import 'fast_info_card_help_sheet.dart';
 
 class FastInfoOptionsPanel extends StatefulWidget {
   const FastInfoOptionsPanel({
@@ -56,6 +57,36 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+          child: SegmentedButton<FastInfoLayoutMode>(
+            key: const ValueKey('fastinfo-layout-selector'),
+            segments: const <ButtonSegment<FastInfoLayoutMode>>[
+              ButtonSegment<FastInfoLayoutMode>(
+                value: FastInfoLayoutMode.mixed,
+                label: KeyedSubtree(
+                  key: ValueKey('fastinfo-layout-mixed'),
+                  child: Text('3 pill + 3 box'),
+                ),
+              ),
+              ButtonSegment<FastInfoLayoutMode>(
+                value: FastInfoLayoutMode.sixBoxes,
+                label: KeyedSubtree(
+                  key: ValueKey('fastinfo-layout-six-boxes'),
+                  child: Text('6 box'),
+                ),
+              ),
+            ],
+            selected: <FastInfoLayoutMode>{_draft.layoutMode},
+            onSelectionChanged: (selection) {
+              _emit(_draft.copyWith(layoutMode: selection.single));
+            },
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
         SizedBox(
           key: const ValueKey('fastinfo-preview-host'),
           height: 348,
@@ -73,6 +104,7 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
                   _assign(FastInfoSlotType.box, index, cardId),
               onClearPillSlot: (index) => _clear(FastInfoSlotType.pill, index),
               onClearBoxSlot: (index) => _clear(FastInfoSlotType.box, index),
+              onCardTap: _openHelp,
             ),
           ),
         ),
@@ -94,7 +126,11 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
             itemCount: freeCards.length,
             itemBuilder: (context, index) {
               final card = freeCards[index];
-              return _PoolCard(card: card, metric: _previewMetrics[card.id]);
+              return _PoolCard(
+                card: card,
+                metric: _previewMetrics[card.id],
+                onTap: () => _openHelp(card.id),
+              );
             },
           ),
         ),
@@ -120,7 +156,7 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
     } else {
       boxes[index] = FastInfoSlot.fromCard(card, FastInfoSlotType.box);
     }
-    _emit(FastInfoConfig(pills: pills, boxes: boxes));
+    _emit(_draft.copyWith(pills: pills, boxes: boxes));
   }
 
   void _clear(FastInfoSlotType type, int index) {
@@ -131,7 +167,17 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
     } else {
       boxes[index] = null;
     }
-    _emit(FastInfoConfig(pills: pills, boxes: boxes));
+    _emit(_draft.copyWith(pills: pills, boxes: boxes));
+  }
+
+  void _openHelp(String cardId) {
+    final card = fastInfoCardById(cardId);
+    if (card == null) return;
+    showFastInfoCardHelpSheet(
+      context,
+      card: card,
+      metric: _previewMetrics[cardId],
+    );
   }
 
   void _emit(FastInfoConfig config) {
@@ -141,10 +187,15 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
 }
 
 class _PoolCard extends StatelessWidget {
-  const _PoolCard({required this.card, required this.metric});
+  const _PoolCard({
+    required this.card,
+    required this.metric,
+    required this.onTap,
+  });
 
   final FastInfoCardDefinition card;
   final FastInfoMetricResult? metric;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +216,14 @@ class _PoolCard extends StatelessWidget {
       ),
       child: KeyedSubtree(
         key: ValueKey('fastinfo-pool-card-${card.id}'),
-        child: _PoolCardSurface(card: card, metric: metric),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: _PoolCardSurface(card: card, metric: metric),
+          ),
+        ),
       ),
     );
   }

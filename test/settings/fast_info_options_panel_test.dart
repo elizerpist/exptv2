@@ -4,6 +4,74 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('layout selector switches preview without changing cards', (
+    tester,
+  ) async {
+    FastInfoConfig? changed;
+    await tester.pumpWidget(
+      _subject(
+        config: FastInfoConfig.defaults(),
+        onChanged: (value) => changed = value,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('fastinfo-layout-six-boxes')));
+    await tester.pumpAndSettle();
+
+    expect(changed?.layoutMode, FastInfoLayoutMode.sixBoxes);
+    expect(
+      changed?.pills.map((slot) => slot?.id),
+      FastInfoConfig.defaults().pills.map((slot) => slot?.id),
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-upper-box-slot-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsNothing);
+  });
+
+  testWidgets('pool and assigned card taps open help', (tester) async {
+    await tester.pumpWidget(_subject(config: FastInfoConfig.defaults()));
+
+    await tester.tap(
+      find.byKey(const ValueKey('fastinfo-pool-card-megtakaritas')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-megtakaritas')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('fastinfo-help-close')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('fastinfo-pill-slot-0')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('clear button does not open card help', (tester) async {
+    FastInfoConfig? changed;
+    await tester.pumpWidget(
+      _subject(
+        config: FastInfoConfig.defaults(),
+        onChanged: (value) => changed = value,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('fastinfo-clear-pill-0')));
+    await tester.pumpAndSettle();
+
+    expect(changed?.pills[0], isNull);
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsNothing,
+    );
+  });
+
   testWidgets('assigned cards disappear from pool and clear returns them', (
     tester,
   ) async {
@@ -33,6 +101,10 @@ void main() {
 
     await _dragCardToPill(tester, 'mai_koltes', 0);
 
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-mai_koltes')),
+      findsNothing,
+    );
     expect(changed?.pills[0]?.id, 'mai_koltes');
     expect(
       find.byKey(const ValueKey('fastinfo-pool-card-mai_koltes')),
@@ -184,6 +256,24 @@ void main() {
     expect(draggable.delay, const Duration(milliseconds: 650));
     expect(draggable.hapticFeedbackOnStart, isTrue);
   });
+}
+
+Widget _subject({
+  required FastInfoConfig config,
+  ValueChanged<FastInfoConfig>? onChanged,
+}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: SizedBox(
+        width: 390,
+        height: 780,
+        child: FastInfoOptionsPanel(
+          config: config,
+          onChanged: onChanged ?? (_) {},
+        ),
+      ),
+    ),
+  );
 }
 
 Future<void> _dragCardToPill(

@@ -179,6 +179,21 @@ void main() {
     expect(find.text('FastInfo'), findsOneWidget);
     expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('fastinfo-layout-selector')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('fastinfo-layout-mixed')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('fastinfo-layout-six-boxes')),
+      findsOneWidget,
+    );
+    final fastInfoFrameBottom = tester
+        .getBottomLeft(
+          find.byKey(const ValueKey('settings-submenu-content-frame')),
+        )
+        .dy;
+    expect(fastInfoFrameBottom, 1200 - AppDimensions.bottomNavHeight);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 
