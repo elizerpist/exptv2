@@ -1,6 +1,7 @@
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/fast_info_metric_snapshot.dart';
+import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/fast_info_metrics_resolver.dart';
@@ -113,6 +114,66 @@ void main() {
     );
   });
 
+  test('remaining FastInfo metrics follow fixed exclusion rules', () {
+    final metrics = FastInfoMetricsResolver.resolve(
+      _snapshot(
+        now: DateTime(2026, 6, 10, 12),
+        transactions: <TransactionRecord>[
+          _transaction(1, '2026.06.04', -3000, categoryId: 1),
+          _transaction(
+            2,
+            '2026.06.06',
+            -200000,
+            categoryId: 3,
+            recurringTransactionId: 77,
+          ),
+          _transaction(8, '2026.06.07', -2000, categoryId: 1),
+          _transaction(3, '2026.06.08', -4000, categoryId: 1),
+          _transaction(
+            4,
+            '2026.06.09',
+            -200000,
+            categoryId: 3,
+            recurringTransactionId: 77,
+          ),
+          _transaction(5, '2026.06.10', -15000, categoryId: 4),
+          _transaction(6, '2026.05.10', -10000, categoryId: 4),
+          _transaction(7, '2026.06.01', 300000, categoryId: 2),
+        ],
+        categories: _extendedCategories,
+        recurringGhosts: <RecurringGhostRecord>[
+          _ghost(
+            id: 1,
+            recurringTransactionId: 77,
+            name: 'Lakbér',
+            amount: 200000,
+            date: '2026.06.06',
+            isActivated: true,
+          ),
+          _ghost(
+            id: 2,
+            recurringTransactionId: 88,
+            name: 'Telefon',
+            amount: 12000,
+            date: '2026.06.20',
+          ),
+        ],
+      ),
+    );
+
+    expect(metrics['no_spend_napok_szama']?.primaryValue, '3 / 7 nap');
+    expect(metrics['top_kategoria_heten']?.primaryValue, 'Utazás');
+    expect(
+      metrics['legnagyobb_novekedo_kategoria']?.secondaryValues.join(' '),
+      contains('%'),
+    );
+    expect(
+      metrics['havi_fix_koltseg_osszesen']?.secondaryValues.join(' '),
+      contains('fixből'),
+    );
+    expect(metrics['kiadas_bevetel_arany']?.primaryValue, contains('maradt'));
+  });
+
   test('omits visuals that have no meaningful denominator', () {
     final noLimit = FastInfoMetricsResolver.resolve(
       _snapshot(limits: const <CategoryLimit>[]),
@@ -186,7 +247,9 @@ void main() {
 FastInfoMetricSnapshot _snapshot({
   DateTime? now,
   List<TransactionRecord>? transactions,
+  List<TransactionCategory>? categories,
   List<CategoryLimit>? limits,
+  List<RecurringGhostRecord>? recurringGhosts,
   double? savingGoal = 50000,
 }) {
   return FastInfoMetricSnapshot(
@@ -194,8 +257,9 @@ FastInfoMetricSnapshot _snapshot({
     balance: 300000,
     savingGoal: savingGoal,
     transactions: transactions ?? _transactions,
-    categories: _categories,
+    categories: categories ?? _categories,
     limits: limits ?? <CategoryLimit>[_monthlyLimit(300000)],
+    recurringGhosts: recurringGhosts ?? const <RecurringGhostRecord>[],
   );
 }
 
@@ -232,6 +296,7 @@ TransactionRecord _transaction(
   double amount, {
   String time = '12:00',
   int? recurringTransactionId,
+  int? categoryId,
 }) {
   return TransactionRecord(
     id: id,
@@ -243,7 +308,7 @@ TransactionRecord _transaction(
     merchant: amount > 0 ? 'Fizetés' : 'Bolt $id',
     amount: amount,
     userAssignedName: null,
-    transactionCategoryID: amount > 0 ? 2 : 1,
+    transactionCategoryID: categoryId ?? (amount > 0 ? 2 : 1),
     recurringTransactionId: recurringTransactionId,
   );
 }
@@ -280,3 +345,66 @@ const _categories = <TransactionCategory>[
     originalIcon: null,
   ),
 ];
+
+final _extendedCategories = <TransactionCategory>[
+  ..._categories,
+  TransactionCategory(
+    transactionCategoryID: 3,
+    name: 'Lakbér',
+    type: 'expense',
+    colorSlot: 2,
+    iconSlot: 2,
+    backgroundColor: null,
+    icon: 'home',
+    notification: null,
+    hasLimit: false,
+    limitAmount: 0,
+    alertActive: false,
+    isCustomIcon: false,
+    originalIcon: null,
+  ),
+  TransactionCategory(
+    transactionCategoryID: 4,
+    name: 'Utazás',
+    type: 'expense',
+    colorSlot: 3,
+    iconSlot: 3,
+    backgroundColor: null,
+    icon: 'directions_bus',
+    notification: null,
+    hasLimit: false,
+    limitAmount: 0,
+    alertActive: false,
+    isCustomIcon: false,
+    originalIcon: null,
+  ),
+];
+
+RecurringGhostRecord _ghost({
+  required int id,
+  required int recurringTransactionId,
+  required String name,
+  required double amount,
+  required String date,
+  bool isActivated = false,
+}) {
+  return RecurringGhostRecord(
+    id: id,
+    recurringTransactionId: recurringTransactionId,
+    periodKey: '2026-06',
+    name: name,
+    amount: amount,
+    transactionType: 'expense',
+    date: date,
+    time: '08:00',
+    categoryId: 3,
+    categoryName: 'Lakbér',
+    categoryColor: '#64748b',
+    categoryIconSlot: 2,
+    triggerMillis: 0,
+    isActivated: isActivated,
+    activatedTransactionId: isActivated ? 1000 + id : null,
+    createdAt: 0,
+    updatedAt: 0,
+  );
+}

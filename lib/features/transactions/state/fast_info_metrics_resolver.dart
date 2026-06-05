@@ -72,7 +72,7 @@ class _FastInfoMetricScope {
       : data.currentMonthExpense /
             data.elapsedMonthDays *
             data.daysInCurrentMonth;
-  double get rollingDailyAverage => data.rolling30Expense / 30;
+  double get rollingDailyAverage => data.rolling30VariableExpense / 30;
 
   FastInfoMetricResult safeMetricFor(String id) {
     try {
@@ -402,7 +402,7 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _topMerchant() {
     final entries = data
-        .merchantExpenseGroups(data.expenseRows)
+        .merchantExpenseGroups(data.variableExpenseRows)
         .entries
         .toList();
     if (entries.isEmpty) return _noData('Nincs kereskedő');
@@ -441,33 +441,48 @@ class _FastInfoMetricScope {
       ],
       chartKind: FastInfoChartKind.sparkline,
       chartSeries: <FastInfoChartSeries>[
-        FastInfoChartSeries(label: '30 nap', values: data.rolling30DailySeries),
+        FastInfoChartSeries(
+          label: '30 nap',
+          values: data.rolling30VariableDailySeries,
+        ),
       ],
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.spikeLine,
-        values: data.rolling30DailySeries,
+        values: data.rolling30VariableDailySeries,
       ),
     );
   }
 
   FastInfoMetricResult _noSpendDays() {
+    const windowDays = 7;
+    final start = data.today.subtract(const Duration(days: windowDays - 1));
     var count = 0;
-    for (var day = 1; day <= data.today.day; day += 1) {
-      if (data.expenseOn(DateTime(data.today.year, data.today.month, day)) ==
-          0) {
-        count += 1;
-      }
+    final points = <FastInfoVisualPoint>[];
+    for (var index = 0; index < windowDays; index += 1) {
+      final date = start.add(Duration(days: index));
+      final noSpend = data.variableExpenseOn(date) == 0;
+      if (noSpend) count += 1;
+      points.add(
+        FastInfoVisualPoint(
+          label: '${date.month}.${date.day}',
+          value: noSpend ? 1 : 0,
+          semantic: noSpend ? FastInfoSemantic.good : FastInfoSemantic.bad,
+          isToday: _isSameDay(date, data.today),
+        ),
+      );
     }
+    final progress = count / windowDays;
     return FastInfoMetricResult(
-      pillValue: '$count nap',
-      primaryValue: '$count nap',
-      secondaryValues: <String>['Eltelt: ${data.elapsedMonthDays} nap'],
+      pillValue: '$count / 7',
+      primaryValue: '$count / 7 nap',
+      secondaryValues: const <String>['elmúlt 7 nap', 'fixek nélkül'],
       progressKind: FastInfoProgressKind.ring,
-      progress: count / data.elapsedMonthDays,
+      progress: progress,
       semantic: FastInfoSemantic.good,
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.sevenDayStrip,
-        value: count / data.elapsedMonthDays,
+        value: progress,
+        points: points,
         semantic: FastInfoSemantic.good,
       ),
     );
@@ -475,7 +490,7 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _topCategoryToday() {
     final top = _topCategory(
-      data.expenseRowsBetween(data.today, data.tomorrow),
+      data.variableExpenseRowsBetween(data.today, data.tomorrow),
       byAmount: true,
     );
     if (top == null) return _noData('Ma nincs költés');
@@ -498,10 +513,12 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _topCategoryWeekMonth() {
     final weekly = _topCategory(
-      data.expenseRowsBetween(data.weekStart, data.tomorrow),
+      data.variableExpenseRowsBetween(data.weekStart, data.tomorrow),
+      byAmount: true,
     );
     final monthly = _topCategory(
-      data.expenseRowsBetween(data.currentMonthStart, data.tomorrow),
+      data.variableExpenseRowsBetween(data.currentMonthStart, data.tomorrow),
+      byAmount: true,
     );
     if (weekly == null && monthly == null) return _noData('Nincs kategória');
     final primary = weekly ?? monthly!;
@@ -538,10 +555,13 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _largestCategoryChange() {
     final current = _categoryAmounts(
-      data.expenseRowsBetween(data.rolling30Start, data.tomorrow),
+      data.variableExpenseRowsBetween(data.rolling30Start, data.tomorrow),
     );
     final previous = _categoryAmounts(
-      data.expenseRowsBetween(data.previousRolling30Start, data.rolling30Start),
+      data.variableExpenseRowsBetween(
+        data.previousRolling30Start,
+        data.rolling30Start,
+      ),
     );
     final changes = <_CategoryChange>[];
     for (final id in <int>{...current.keys, ...previous.keys}) {
@@ -573,6 +593,8 @@ class _FastInfoMetricScope {
       primaryValue: top.name,
       secondaryValues: <String>[
         '30 nap: ${formatHuf(top.current)} · előtte ${formatHuf(top.previous)}',
+        'változás: ${top.isNew ? '+100%' : _signedPercent(top.change)}',
+        'fixek nélkül',
       ],
       trend: FastInfoTrend(
         direction: up ? FastInfoTrendDirection.up : FastInfoTrendDirection.down,
@@ -651,8 +673,8 @@ class _FastInfoMetricScope {
       pillValue: _compactAmount(total),
       primaryValue: formatHuf(total),
       secondaryValues: <String>[
-        'Levonva ${_compactAmount(deducted)} · marad ${_compactAmount(remaining)}',
-        'Legnagyobb ${largest.record.name}${limit == null ? '' : ' · keret után ${_compactAmount(math.max(0, limit - total))}'}',
+        '${_compactAmount(remaining)} hátra ${_compactAmount(total)} fixből',
+        'Levonva ${_compactAmount(deducted)} · legnagyobb ${largest.record.name}',
       ],
       progressKind: progress == null ? null : FastInfoProgressKind.ring,
       progress: progress,
@@ -711,16 +733,21 @@ class _FastInfoMetricScope {
       );
     }
     final ratio = data.currentMonthExpense / data.currentMonthIncome;
+    final remainingRatio = math.max(0.0, 1 - ratio);
+    final remainingAmount = math.max(0.0, cashflow);
     return FastInfoMetricResult(
-      pillValue: '${_percent(ratio)}%',
-      primaryValue: '${_percent(ratio)}%',
-      secondaryValues: <String>['Cashflow: ${_signedHuf(cashflow)}'],
+      pillValue: '${_percent(remainingRatio)}% maradt',
+      primaryValue: '${_percent(remainingRatio)}% maradt',
+      secondaryValues: <String>[
+        '${formatHuf(remainingAmount)} bevételből',
+        'elköltve ${_percent(ratio)}%',
+      ],
       progressKind: FastInfoProgressKind.bar,
       progress: ratio,
       semantic: expenseSemantic(ratio),
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.remainingSpentSplit,
-        value: math.max(0, 1 - ratio),
+        value: remainingRatio,
         compareValue: ratio,
         semantic: expenseSemantic(ratio),
       ),
@@ -752,7 +779,7 @@ class _FastInfoMetricScope {
 
   List<_CategoryLimitState> _categoryLimitStates() {
     final spent = _categoryAmounts(
-      data.expenseRowsBetween(data.currentMonthStart, data.tomorrow),
+      data.variableExpenseRowsBetween(data.currentMonthStart, data.tomorrow),
     );
     final states = <_CategoryLimitState>[];
     for (final limit in snapshot.limits) {
@@ -839,6 +866,11 @@ class _FastInfoMetricScope {
   FastInfoMetricResult _noData(String message) =>
       FastInfoMetricResult(pillValue: 'Nincs adat', primaryValue: message);
 }
+
+bool _isSameDay(DateTime left, DateTime right) =>
+    left.year == right.year &&
+    left.month == right.month &&
+    left.day == right.day;
 
 FastInfoSemantic expenseSemantic(double ratio) {
   if (ratio > 1) return FastInfoSemantic.bad;

@@ -104,8 +104,12 @@ class FastInfoPeriodAggregates {
     _sameDayCutoff(previousMonthStart),
   );
   double get rolling30Expense => expenseBetween(rolling30Start, tomorrow);
+  double get rolling30VariableExpense =>
+      variableExpenseBetween(rolling30Start, tomorrow);
   double get previousRolling30Expense =>
       expenseBetween(previousRolling30Start, rolling30Start);
+  double get previousRolling30VariableExpense =>
+      variableExpenseBetween(previousRolling30Start, rolling30Start);
   double get currentWeekExpense => expenseBetween(weekStart, tomorrow);
   double get currentWeekVariableExpense =>
       variableExpenseBetween(weekStart, tomorrow);
@@ -143,6 +147,8 @@ class FastInfoPeriodAggregates {
   );
   List<double> get rolling30DailySeries =>
       _dailyExpenseSeries(rolling30Start, 30);
+  List<double> get rolling30VariableDailySeries =>
+      _dailyExpenseSeries(rolling30Start, 30, variableOnly: true);
 
   List<FastInfoWeeklyBar> get currentWeekBars => List.unmodifiable(
     List.generate(7, (index) {
