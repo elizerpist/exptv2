@@ -12,6 +12,7 @@ class TransactionRecord {
     required this.amount,
     required this.userAssignedName,
     required this.transactionCategoryID,
+    this.recurringTransactionId,
   });
 
   final int id;
@@ -24,9 +25,13 @@ class TransactionRecord {
   final double amount;
   final String? userAssignedName;
   final int transactionCategoryID;
+  final int? recurringTransactionId;
 
   TransactionType get type =>
       amount > 0 ? TransactionType.income : TransactionType.expense;
+
+  bool get isRecurringGenerated =>
+      recurringTransactionId != null && recurringTransactionId! > 0;
 
   String get displayMerchant => (userAssignedName?.trim().isNotEmpty ?? false)
       ? userAssignedName!.trim()
@@ -61,6 +66,7 @@ class TransactionRecord {
       amount: _double(map['amount']),
       userAssignedName: map['userAssignedName']?.toString(),
       transactionCategoryID: _int(map['transactionCategoryID']),
+      recurringTransactionId: _nullableInt(map['recurringTransactionId']),
     );
   }
 
@@ -76,6 +82,8 @@ class TransactionRecord {
       'amount': amount,
       'userAssignedName': userAssignedName,
       'transactionCategoryID': transactionCategoryID,
+      if (recurringTransactionId != null)
+        'recurringTransactionId': recurringTransactionId,
     };
   }
 }
@@ -95,3 +103,4 @@ int _int(Object? value) => value is int ? value : int.parse(value.toString());
 double _double(Object? value) =>
     value is num ? value.toDouble() : double.parse(value.toString());
 double? _nullableDouble(Object? value) => value == null ? null : _double(value);
+int? _nullableInt(Object? value) => value == null ? null : _int(value);

@@ -38,6 +38,9 @@ class FastInfoPeriodAggregates {
     expenseRows = List.unmodifiable(
       datedTransactions.where((row) => row.record.amount < 0),
     );
+    variableExpenseRows = List.unmodifiable(
+      expenseRows.where((row) => !row.record.isRecurringGenerated),
+    );
     incomeRows = List.unmodifiable(
       datedTransactions.where((row) => row.record.amount > 0),
     );
@@ -50,6 +53,7 @@ class FastInfoPeriodAggregates {
     );
 
     _expenseByDay = _totalsByDay(expenseRows);
+    _variableExpenseByDay = _totalsByDay(variableExpenseRows);
     _incomeByDay = _totalsByDay(incomeRows);
   }
 
@@ -58,9 +62,11 @@ class FastInfoPeriodAggregates {
   late final Map<int, TransactionCategory> categoriesById;
   late final List<FastInfoDatedTransaction> datedTransactions;
   late final List<FastInfoDatedTransaction> expenseRows;
+  late final List<FastInfoDatedTransaction> variableExpenseRows;
   late final List<FastInfoDatedTransaction> incomeRows;
   late final List<FastInfoDatedRecurringGhost> datedRecurringGhosts;
   late final Map<DateTime, double> _expenseByDay;
+  late final Map<DateTime, double> _variableExpenseByDay;
   late final Map<DateTime, double> _incomeByDay;
 
   DateTime get currentMonthStart => DateTime(today.year, today.month);
@@ -81,6 +87,7 @@ class FastInfoPeriodAggregates {
       daysInCurrentMonth - today.day + 1;
 
   double get todayExpense => expenseOn(today);
+  double get todayVariableExpense => variableExpenseOn(today);
   double get currentMonthExpense => expenseBetween(currentMonthStart, tomorrow);
   double get currentMonthExpenseBeforeToday =>
       expenseBetween(currentMonthStart, today);
@@ -130,10 +137,15 @@ class FastInfoPeriodAggregates {
   );
 
   double expenseOn(DateTime date) => _expenseByDay[_dateOnly(date)] ?? 0.0;
+  double variableExpenseOn(DateTime date) =>
+      _variableExpenseByDay[_dateOnly(date)] ?? 0.0;
   double incomeOn(DateTime date) => _incomeByDay[_dateOnly(date)] ?? 0.0;
 
   double expenseBetween(DateTime start, DateTime end) =>
       _sumRows(expenseRowsBetween(start, end));
+
+  double variableExpenseBetween(DateTime start, DateTime end) =>
+      _sumRows(variableExpenseRowsBetween(start, end));
 
   double incomeBetween(DateTime start, DateTime end) =>
       _sumRows(incomeRowsBetween(start, end));
@@ -142,6 +154,11 @@ class FastInfoPeriodAggregates {
     DateTime start,
     DateTime end,
   ) => _rowsBetween(expenseRows, start, end);
+
+  List<FastInfoDatedTransaction> variableExpenseRowsBetween(
+    DateTime start,
+    DateTime end,
+  ) => _rowsBetween(variableExpenseRows, start, end);
 
   List<FastInfoDatedTransaction> incomeRowsBetween(
     DateTime start,

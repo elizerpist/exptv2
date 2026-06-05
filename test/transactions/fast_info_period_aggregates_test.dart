@@ -63,9 +63,34 @@ void main() {
       true,
     ]);
   });
+
+  test('variable expense totals exclude activated recurring expenses', () {
+    final data = FastInfoPeriodAggregates(
+      snapshot: FastInfoMetricSnapshot(
+        now: DateTime(2026, 6, 10, 12),
+        balance: 0,
+        transactions: [
+          _expense(1, '2026.06.10', 5000),
+          _expense(2, '2026.06.10', 200000, recurringTransactionId: 77),
+        ],
+      ),
+    );
+
+    expect(data.todayExpense, 205000);
+    expect(data.todayVariableExpense, 5000);
+    expect(
+      data.variableExpenseBetween(data.currentMonthStart, data.tomorrow),
+      5000,
+    );
+  });
 }
 
-TransactionRecord _expense(int id, String date, double amount) {
+TransactionRecord _expense(
+  int id,
+  String date,
+  double amount, {
+  int? recurringTransactionId,
+}) {
   return TransactionRecord(
     id: id,
     date: date,
@@ -77,5 +102,6 @@ TransactionRecord _expense(int id, String date, double amount) {
     amount: -amount,
     userAssignedName: null,
     transactionCategoryID: 1,
+    recurringTransactionId: recurringTransactionId,
   );
 }
