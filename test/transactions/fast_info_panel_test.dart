@@ -143,7 +143,59 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const ValueKey('fastinfo-box-slot-0'))).height,
-      112,
+      136,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('approved pill anatomy renders title values and visual', (
+    tester,
+  ) async {
+    final config = FastInfoConfig(
+      pills: [_slot('kiadas_bevetel_arany', FastInfoSlotType.pill), null, null],
+      boxes: const [null, null, null],
+    );
+    const metrics = <String, FastInfoMetricResult>{
+      'kiadas_bevetel_arany': FastInfoMetricResult(
+        pillValue: '29% maradt',
+        primaryValue: '29% maradt',
+        secondaryValues: <String>['180 000 Ft bevételből'],
+        visual: FastInfoVisualDescriptor(
+          kind: FastInfoVisualKind.remainingSpentSplit,
+          value: .29,
+          compareValue: .71,
+          semantic: FastInfoSemantic.good,
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(config: config, metrics: metrics),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('fastinfo-pill-title-kiadas_bevetel_arany')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-pill-primary-kiadas_bevetel_arany')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-pill-secondary-kiadas_bevetel_arany'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-visual-remaining-spent-kiadas_bevetel_arany'),
+      ),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });

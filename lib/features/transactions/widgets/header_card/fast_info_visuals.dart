@@ -8,15 +8,27 @@ import '../../models/fast_info_metric.dart';
 import '../category_menu/category_icon_badge.dart';
 
 class FastInfoVisual extends StatelessWidget {
-  const FastInfoVisual({super.key, required this.slot, required this.metric});
+  const FastInfoVisual({
+    super.key,
+    required this.slot,
+    required this.metric,
+    this.includeTrend = true,
+  });
 
   final FastInfoSlot slot;
   final FastInfoMetricResult? metric;
+  final bool includeTrend;
 
   @override
   Widget build(BuildContext context) {
     final value = metric;
     if (value == null || !_hasVisual(value)) return const SizedBox.shrink();
+    if (value.visual.kind != FastInfoVisualKind.none) {
+      return SizedBox(
+        height: 28,
+        child: _TypedVisual(slotId: slot.id, visual: value.visual),
+      );
+    }
 
     return SizedBox(
       height: 28,
@@ -54,9 +66,9 @@ class FastInfoVisual extends StatelessWidget {
                 ],
               ),
             ),
-          if (value.trend case final trend?) ...[
+          if (includeTrend && value.trend != null) ...[
             if (_hasGraph(value)) const SizedBox(width: 5),
-            _TrendVisual(slotId: slot.id, trend: trend),
+            _TrendVisual(slotId: slot.id, trend: value.trend!),
           ],
         ],
       ),
@@ -64,7 +76,10 @@ class FastInfoVisual extends StatelessWidget {
   }
 
   bool _hasVisual(FastInfoMetricResult value) {
-    return value.avatar != null || _hasGraph(value) || value.trend != null;
+    return value.visual.kind != FastInfoVisualKind.none ||
+        value.avatar != null ||
+        _hasGraph(value) ||
+        value.trend != null;
   }
 
   bool _hasGraph(FastInfoMetricResult value) {
@@ -84,6 +99,314 @@ class FastInfoVisual extends StatelessWidget {
       null => false,
     };
   }
+}
+
+class _TypedVisual extends StatelessWidget {
+  const _TypedVisual({required this.slotId, required this.visual});
+
+  final String slotId;
+  final FastInfoVisualDescriptor visual;
+
+  @override
+  Widget build(BuildContext context) {
+    final key = ValueKey('fastinfo-visual-${_visualKey(visual.kind)}-$slotId');
+    return switch (visual.kind) {
+      FastInfoVisualKind.remainingSpentSplit => _SplitBar(
+        key: key,
+        leftValue: visual.value ?? 0,
+        rightValue: visual.compareValue ?? 0,
+        leftColor: AppColors.income,
+        rightColor: AppColors.gray400,
+      ),
+      FastInfoVisualKind.paidRemainingSplit => _SplitBar(
+        key: key,
+        leftValue: visual.value ?? 0,
+        rightValue: visual.compareValue ?? 0,
+        leftColor: AppColors.primary,
+        rightColor: AppColors.gray300,
+      ),
+      FastInfoVisualKind.thresholdMarkerBar ||
+      FastInfoVisualKind.sameDayIndexMarker ||
+      FastInfoVisualKind.goalMarker ||
+      FastInfoVisualKind.zoneMarker ||
+      FastInfoVisualKind.projectionFill ||
+      FastInfoVisualKind.overflowRisk => _MarkerBar(
+        key: key,
+        value: visual.value ?? 0,
+        marker: visual.marker,
+        color: _semanticColor(visual.semantic),
+      ),
+      FastInfoVisualKind.deviationMeter || FastInfoVisualKind.analogMeter =>
+        _DeviationMeter(key: key, value: visual.value ?? 0),
+      FastInfoVisualKind.activityStrip ||
+      FastInfoVisualKind.sevenDayStrip ||
+      FastInfoVisualKind.fixedLoad ||
+      FastInfoVisualKind.incomeComparisonBars => _MiniBars(
+        key: key,
+        values: visual.points.isNotEmpty
+            ? [for (final point in visual.points) point.value]
+            : visual.values,
+        color: _semanticColor(visual.semantic),
+      ),
+      FastInfoVisualKind.spikeLine => _LineChart(
+        chartKey: key,
+        series: [FastInfoChartSeries(label: 'trend', values: visual.values)],
+      ),
+      FastInfoVisualKind.miniAvatarRow => _MiniAvatarRow(
+        key: key,
+        points: visual.points,
+        fallbackAvatar: visual.avatar,
+      ),
+      FastInfoVisualKind.avatar => _TypedAvatar(
+        key: key,
+        avatar: visual.avatar,
+      ),
+      FastInfoVisualKind.none => const SizedBox.shrink(),
+    };
+  }
+}
+
+class _SplitBar extends StatelessWidget {
+  const _SplitBar({
+    super.key,
+    required this.leftValue,
+    required this.rightValue,
+    required this.leftColor,
+    required this.rightColor,
+  });
+
+  final double leftValue;
+  final double rightValue;
+  final Color leftColor;
+  final Color rightColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = leftValue.clamp(0.0, 1.0);
+    final right = rightValue.clamp(0.0, 1.0);
+    final total = math.max(.001, left + right);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: Row(
+        children: [
+          Expanded(
+            flex: math.max(1, (left / total * 1000).round()),
+            child: ColoredBox(color: leftColor),
+          ),
+          Expanded(
+            flex: math.max(1, (right / total * 1000).round()),
+            child: ColoredBox(color: rightColor),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarkerBar extends StatelessWidget {
+  const _MarkerBar({
+    super.key,
+    required this.value,
+    this.marker,
+    required this.color,
+  });
+
+  final double value;
+  final double? marker;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = value.clamp(0.0, 1.0);
+    final markerValue = marker?.clamp(0.0, 1.0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.gray200,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: fill,
+              child: Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(999),
+                  ),
+                ),
+              ),
+            ),
+            if (markerValue != null)
+              Positioned(
+                left: constraints.maxWidth * markerValue,
+                child: Container(
+                  width: 2,
+                  height: 14,
+                  color: AppColors.gray700,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DeviationMeter extends StatelessWidget {
+  const _DeviationMeter({super.key, required this.value});
+
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = value.clamp(-1.0, 1.0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final center = constraints.maxWidth / 2;
+        final width = normalized.abs() * center;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(height: 4, color: AppColors.gray200),
+            Positioned(
+              left: center - .5,
+              child: Container(width: 1, height: 14, color: AppColors.gray500),
+            ),
+            Positioned(
+              left: normalized < 0 ? center - width : center,
+              child: Container(
+                width: math.max(1, width),
+                height: 8,
+                color: normalized > 0 ? AppColors.expense : AppColors.income,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MiniBars extends StatelessWidget {
+  const _MiniBars({super.key, required this.values, required this.color});
+
+  final List<double> values;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = values.isEmpty ? const <double>[1, 1, 1] : values;
+    final maxValue = data.fold<double>(0, math.max);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (var index = 0; index < math.min(14, data.length); index += 1)
+          Expanded(
+            child: FractionallySizedBox(
+              heightFactor: maxValue <= 0
+                  ? .2
+                  : math.max(.2, data[index] / maxValue),
+              child: Container(
+                margin: EdgeInsets.only(
+                  right: index == data.length - 1 ? 0 : 2,
+                ),
+                color: color,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MiniAvatarRow extends StatelessWidget {
+  const _MiniAvatarRow({
+    super.key,
+    required this.points,
+    required this.fallbackAvatar,
+  });
+
+  final List<FastInfoVisualPoint> points;
+  final FastInfoAvatar? fallbackAvatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatars = points.isEmpty
+        ? <FastInfoAvatar?>[fallbackAvatar]
+        : [for (final point in points) point.avatar];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        for (final avatar in avatars.take(3)) ...[
+          if (avatar == null)
+            const SizedBox(width: 18, height: 18)
+          else
+            CategoryIconBadge(
+              colorSlot: 0,
+              iconSlot: avatar.iconSlot,
+              size: 18,
+              iconSize: 11,
+              backgroundColor: AppColors.fromHex(avatar.colorHex),
+              showShadow: false,
+            ),
+          const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+}
+
+class _TypedAvatar extends StatelessWidget {
+  const _TypedAvatar({super.key, required this.avatar});
+
+  final FastInfoAvatar? avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = avatar;
+    if (value == null) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerRight,
+      child: CategoryIconBadge(
+        colorSlot: 0,
+        iconSlot: value.iconSlot,
+        size: 24,
+        iconSize: 14,
+        backgroundColor: AppColors.fromHex(value.colorHex),
+        showShadow: false,
+      ),
+    );
+  }
+}
+
+String _visualKey(FastInfoVisualKind kind) {
+  return switch (kind) {
+    FastInfoVisualKind.none => 'none',
+    FastInfoVisualKind.thresholdMarkerBar => 'threshold-marker',
+    FastInfoVisualKind.deviationMeter => 'deviation-meter',
+    FastInfoVisualKind.sameDayIndexMarker => 'same-day-index',
+    FastInfoVisualKind.goalMarker => 'goal-marker',
+    FastInfoVisualKind.zoneMarker => 'zone-marker',
+    FastInfoVisualKind.avatar => 'avatar',
+    FastInfoVisualKind.projectionFill => 'projection-fill',
+    FastInfoVisualKind.overflowRisk => 'overflow-risk',
+    FastInfoVisualKind.activityStrip => 'activity-strip',
+    FastInfoVisualKind.spikeLine => 'spike-line',
+    FastInfoVisualKind.sevenDayStrip => 'seven-day-strip',
+    FastInfoVisualKind.miniAvatarRow => 'mini-avatar-row',
+    FastInfoVisualKind.analogMeter => 'analog-meter',
+    FastInfoVisualKind.fixedLoad => 'fixed-load',
+    FastInfoVisualKind.paidRemainingSplit => 'paid-remaining',
+    FastInfoVisualKind.incomeComparisonBars => 'income-comparison',
+    FastInfoVisualKind.remainingSpentSplit => 'remaining-spent',
+  };
 }
 
 class FastInfoPillTrend extends StatelessWidget {

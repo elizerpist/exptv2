@@ -66,34 +66,18 @@ class FastInfoPillCard extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(
-                      metric?.pillValue ??
-                          (slot == null ? 'Üres pill slot' : 'Nincs adat'),
+              child: slot == null
+                  ? Text(
+                      'Üres pill slot',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: slot == null
-                            ? AppColors.gray400
-                            : AppColors.gray800,
+                      style: const TextStyle(
+                        color: AppColors.gray400,
                         fontWeight: FontWeight.w700,
                       ),
-                    ),
-                  ),
-                  if (metric?.trend case final trend?) ...[
-                    const SizedBox(width: 5),
-                    FastInfoPillTrend(
-                      key: ValueKey('fastinfo-trend-${slot!.id}'),
-                      slotId: slot!.id,
-                      trend: trend,
-                    ),
-                  ],
-                ],
-              ),
+                    )
+                  : _filledPillContent(slot!, metric),
             ),
           ),
           if (onClear != null && slot != null)
@@ -118,6 +102,86 @@ class FastInfoPillCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _filledPillContent(FastInfoSlot slot, FastInfoMetricResult? metric) {
+    final primary = metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat';
+    final secondary = metric?.secondaryValues.isNotEmpty == true
+        ? metric!.secondaryValues.first
+        : metric?.pillValue ?? '';
+    return Row(
+      children: [
+        SizedBox(
+          width: 94,
+          child: Text(
+            slot.label,
+            key: ValueKey('fastinfo-pill-title-${slot.id}'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.gray600,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                primary,
+                key: ValueKey('fastinfo-pill-primary-${slot.id}'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.gray800,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0,
+                ),
+              ),
+              if (secondary.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  secondary,
+                  key: ValueKey('fastinfo-pill-secondary-${slot.id}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.gray500,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+        SizedBox(
+          width: 78,
+          child: FastInfoVisual(
+            slot: slot,
+            metric: metric,
+            includeTrend: false,
+          ),
+        ),
+        if (metric?.trend case final trend?) ...[
+          const SizedBox(width: 4),
+          FastInfoPillTrend(
+            key: ValueKey('fastinfo-trend-${slot.id}'),
+            slotId: slot.id,
+            trend: trend,
+          ),
+        ],
+      ],
     );
   }
 
@@ -162,7 +226,7 @@ class FastInfoBoxCard extends StatelessWidget {
     this.slotKeyPrefix = 'fastinfo-box',
     this.dropKeyPrefix = 'fastinfo-box',
     this.clearKeyPrefix = 'fastinfo-clear-box',
-    this.height = 112,
+    this.height = 136,
     this.onDropCard,
     this.onClear,
     this.onTap,
