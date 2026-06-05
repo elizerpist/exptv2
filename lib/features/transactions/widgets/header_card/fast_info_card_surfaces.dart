@@ -16,6 +16,7 @@ class FastInfoPillCard extends StatelessWidget {
     this.slotKeyPrefix = 'fastinfo-pill',
     this.dropKeyPrefix = 'fastinfo-pill',
     this.clearKeyPrefix = 'fastinfo-clear-pill',
+    this.height = 38,
     this.onDropCard,
     this.onClear,
     this.onTap,
@@ -27,6 +28,7 @@ class FastInfoPillCard extends StatelessWidget {
   final String slotKeyPrefix;
   final String dropKeyPrefix;
   final String clearKeyPrefix;
+  final double height;
   final FastInfoCardDropCallback? onDropCard;
   final ValueChanged<int>? onClear;
   final ValueChanged<String>? onTap;
@@ -41,7 +43,7 @@ class FastInfoPillCard extends StatelessWidget {
             Container(
               key: ValueKey('$slotKeyPrefix-slot-$index'),
               width: double.infinity,
-              height: 38,
+              height: height,
               alignment: Alignment.center,
               padding: EdgeInsets.only(
                 left: 14,
@@ -160,6 +162,7 @@ class FastInfoBoxCard extends StatelessWidget {
     this.slotKeyPrefix = 'fastinfo-box',
     this.dropKeyPrefix = 'fastinfo-box',
     this.clearKeyPrefix = 'fastinfo-clear-box',
+    this.height = 112,
     this.onDropCard,
     this.onClear,
     this.onTap,
@@ -171,6 +174,7 @@ class FastInfoBoxCard extends StatelessWidget {
   final String slotKeyPrefix;
   final String dropKeyPrefix;
   final String clearKeyPrefix;
+  final double height;
   final FastInfoCardDropCallback? onDropCard;
   final ValueChanged<int>? onClear;
   final ValueChanged<String>? onTap;
@@ -185,7 +189,7 @@ class FastInfoBoxCard extends StatelessWidget {
             Container(
               key: ValueKey('$slotKeyPrefix-slot-$index'),
               width: double.infinity,
-              height: 112,
+              height: height,
               padding: EdgeInsets.fromLTRB(
                 8,
                 8,
