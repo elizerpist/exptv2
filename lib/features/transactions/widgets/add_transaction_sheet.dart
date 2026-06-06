@@ -149,7 +149,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     SlideUpPanelMetrics.horizontalInset,
-                    12,
+                    14,
                     SlideUpPanelMetrics.horizontalInset,
                     actionBottomInset,
                   ),
