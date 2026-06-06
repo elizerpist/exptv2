@@ -12,6 +12,7 @@ import 'category_scroll_picker.dart';
 import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
 import 'slide_up_panel_metrics.dart';
+import 'transaction_menu_metrics.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
@@ -132,6 +133,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           visible: widget.visible,
           openRequestedAt: widget.openRequestedAt,
           deferEntryAnimation: true,
+          focusVeilPassthroughTop: TransactionMenuMetrics.overlayTop,
           dragExclusionKeys: _categoryPickerOpen
               ? [_categoryPickerBoundaryKey]
               : const <GlobalKey>[],

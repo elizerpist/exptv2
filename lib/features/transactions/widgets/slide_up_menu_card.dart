@@ -29,6 +29,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.visible = true,
     this.showFocusVeil = true,
     this.focusVeilOpacity = 0.28,
+    this.focusVeilPassthroughTop = 0,
     this.dragExclusionKeys = const <GlobalKey>[],
     this.canDragFrom,
     this.openRequestedAt,
@@ -48,6 +49,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final bool visible;
   final bool showFocusVeil;
   final double focusVeilOpacity;
+  final double focusVeilPassthroughTop;
   final List<GlobalKey> dragExclusionKeys;
   final SlideUpDragGate? canDragFrom;
   final DateTime? openRequestedAt;
@@ -168,20 +170,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
           if (widget.keyboardAvoidance) {
             _logKeyboardLift(keyboardInset, panelHeight);
           }
+          final focusVeilTapTop = widget.focusVeilPassthroughTop
+              .clamp(0.0, availableHeight)
+              .toDouble();
           return Stack(
             children: [
               if (widget.showFocusVeil)
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (_closing) return;
-                      if (_unfocusKeyboardIfNeeded('veil tap')) return;
-                      DebugConsole.log(
-                        '[SlideUpMenu] $_debugLabel veil tap dismiss',
-                      );
-                      _dismiss();
-                    },
+                  child: IgnorePointer(
                     child: AnimatedBuilder(
                       animation: Listenable.merge([_entry, _dragDy]),
                       builder: (context, child) {
@@ -203,6 +199,17 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                         ),
                       ),
                     ),
+                  ),
+                ),
+              if (widget.showFocusVeil && focusVeilTapTop < availableHeight)
+                Positioned(
+                  top: focusVeilTapTop,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _handleVeilTap,
                   ),
                 ),
               Align(
@@ -423,6 +430,13 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       'inset=${_keyboardInset.toStringAsFixed(1)}',
     );
     return true;
+  }
+
+  void _handleVeilTap() {
+    if (_closing) return;
+    if (_unfocusKeyboardIfNeeded('veil tap')) return;
+    DebugConsole.log('[SlideUpMenu] $_debugLabel veil tap dismiss');
+    _dismiss();
   }
 
   bool _hasEditableFocus(FocusNode? focusNode) {
