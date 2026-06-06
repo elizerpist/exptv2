@@ -1,6 +1,7 @@
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/data/settings_repository.dart';
 import 'package:exptv2/features/settings/state/settings_store.dart';
+import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,8 +58,9 @@ void main() {
 
     expect(
       DebugConsole.entries.any(
-        (entry) =>
-            entry.contains('[Recurring] save Telefon day=15 amount=7990'),
+        (entry) => entry.contains(
+          '[Recurring] save Telefon type=expense day=15 amount=7990',
+        ),
       ),
       isTrue,
     );
@@ -75,18 +77,67 @@ void main() {
       isTrue,
     );
   });
+
+  test('saves recurring income transactions with income type', () async {
+    Map<dynamic, dynamic>? savedPayload;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          switch (call.method) {
+            case 'expenseLoadSettings':
+              return <String, Object?>{};
+            case 'expenseListRecurringTransactions':
+              return <Map<String, Object?>>[
+                recurringRow(
+                  id: 11,
+                  name: 'Fizetés',
+                  transactionType: 'income',
+                ),
+              ];
+            case 'expenseListCategories':
+              return <Map<String, Object?>>[
+                categoryRow(id: 1, name: 'Fizetés', type: 'income'),
+              ];
+            case 'expenseAddRecurringTransaction':
+              savedPayload = Map<dynamic, dynamic>.from(
+                call.arguments as Map<dynamic, dynamic>,
+              );
+              return recurringRow(
+                id: 11,
+                name: 'Fizetés',
+                transactionType: 'income',
+              );
+          }
+          return null;
+        });
+
+    await store.start();
+    await store.saveRecurringTransaction(
+      name: 'Fizetés',
+      amount: 560000,
+      transactionType: TransactionType.income,
+      dayOfMonth: 5,
+      categoryId: 1,
+    );
+
+    expect(savedPayload?['transactionType'], 'income');
+    expect(
+      store.recurringTransactions.single.transactionType,
+      TransactionType.income,
+    );
+  });
 }
 
 Map<String, Object?> recurringRow({
   int id = 7,
   String name = 'Lakbér',
   bool isActive = true,
+  String transactionType = 'expense',
 }) {
   return <String, Object?>{
     'id': id,
     'name': name,
     'amount': 165000,
-    'transactionType': 'expense',
+    'transactionType': transactionType,
     'dayOfMonth': 1,
     'categoryId': 6,
     'categoryName': 'Q',
@@ -100,11 +151,15 @@ Map<String, Object?> recurringRow({
   };
 }
 
-Map<String, Object?> categoryRow() {
+Map<String, Object?> categoryRow({
+  int id = 6,
+  String name = 'Q',
+  String type = 'kiadás',
+}) {
   return <String, Object?>{
-    'transactionCategoryID': 6,
-    'name': 'Q',
-    'type': 'kiadás',
+    'transactionCategoryID': id,
+    'name': name,
+    'type': type,
     'colorSlot': 7,
     'iconSlot': 2,
     'backgroundColor': '#dc2626',

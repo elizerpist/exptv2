@@ -243,6 +243,59 @@ void main() {
     expect(decoration.color, const Color(0xFF0EA5E9));
   });
 
+  testWidgets('recurring settings can switch to income categories', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          switch (call.method) {
+            case 'expenseLoadSettings':
+              return <String, Object?>{};
+            case 'expenseListRecurringTransactions':
+              return <Map<String, Object?>>[];
+            case 'expenseListCategories':
+              return <Map<String, Object?>>[
+                categoryRow(id: 6, name: 'Lakhatás', type: 'kiadás'),
+                categoryRow(id: 1, name: 'Fizetés', type: 'income'),
+              ];
+            case 'loadNotificationParserProfiles':
+              return <String, Object?>{'profiles': <Object?>[]};
+            case 'listInstalledApps':
+              return <Map<String, Object?>>[];
+            case 'getStatus':
+              return <String, Object?>{
+                'captureMode': 'both',
+                'notificationListenerEnabled': false,
+                'accessibilityEnabled': false,
+                'notificationListenerActive': false,
+                'accessibilityActive': false,
+                'lastNotificationListenerEvent': 0,
+                'lastAccessibilityEvent': 0,
+                'totalEvents': 0,
+              };
+          }
+          return null;
+        });
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ismétlődő tranzakciók'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('recurring-type-expense')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('recurring-type-income')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('recurring-type-income')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bevételi kategória'), findsOneWidget);
+    expect(find.text('Fizetés'), findsWidgets);
+  });
+
   testWidgets('permissions menu opens Android permission actions', (
     tester,
   ) async {
@@ -501,5 +554,24 @@ Map<String, Object?> recurringRow() {
     'isActive': true,
     'createdAt': 1777593600000,
     'updatedAt': 1777593600000,
+  };
+}
+
+Map<String, Object?> categoryRow({
+  required int id,
+  required String name,
+  required String type,
+}) {
+  return <String, Object?>{
+    'transactionCategoryID': id,
+    'name': name,
+    'type': type,
+    'colorSlot': 7,
+    'iconSlot': 2,
+    'backgroundColor': type == 'income' ? '#22c55e' : '#dc2626',
+    'hasLimit': false,
+    'limitAmount': 0,
+    'alertActive': false,
+    'isCustomIcon': true,
   };
 }

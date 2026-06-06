@@ -25,9 +25,13 @@ class SettingsStore extends ChangeNotifier {
   List<RecurringTransaction> get recurringTransactions =>
       List.unmodifiable(_recurringTransactions);
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
-  List<TransactionCategory> get expenseCategories => _categories
-      .where((category) => category.normalizedType == TransactionType.expense)
-      .toList();
+  List<TransactionCategory> get expenseCategories =>
+      categoriesFor(TransactionType.expense);
+  List<TransactionCategory> get incomeCategories =>
+      categoriesFor(TransactionType.income);
+
+  List<TransactionCategory> categoriesFor(TransactionType type) =>
+      _categories.where((category) => category.normalizedType == type).toList();
 
   Future<void> start() async {
     _loading = true;
@@ -61,6 +65,7 @@ class SettingsStore extends ChangeNotifier {
     int? id,
     required String name,
     required double amount,
+    TransactionType transactionType = TransactionType.expense,
     required int dayOfMonth,
     required int categoryId,
     bool isActive = true,
@@ -68,13 +73,14 @@ class SettingsStore extends ChangeNotifier {
     final draft = RecurringTransactionDraft(
       name: name,
       amount: amount,
-      transactionType: TransactionType.expense,
+      transactionType: transactionType,
       dayOfMonth: dayOfMonth,
       categoryId: categoryId,
       isActive: isActive,
     );
     DebugConsole.log(
-      '[Recurring] save $name day=$dayOfMonth amount=${_debugAmount(amount)}',
+      '[Recurring] save $name type=${transactionType.nativeValue} '
+      'day=$dayOfMonth amount=${_debugAmount(amount)}',
     );
     if (id == null) {
       await _repository.addRecurringTransaction(draft);

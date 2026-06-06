@@ -248,6 +248,13 @@ class _FastInfoMetricScope {
   FastInfoMetricResult _savings() {
     final goal = snapshot.savingGoal;
     final progress = goal != null && goal > 0 ? actualSavings / goal : null;
+    final projectedSavings = math.max(
+      0.0,
+      data.currentMonthExpectedIncome - projectedMonthExpense,
+    );
+    final projectedProgress = goal != null && goal > 0
+        ? projectedSavings / goal
+        : null;
     final rate = data.currentMonthIncome > 0
         ? actualSavings / data.currentMonthIncome
         : null;
@@ -255,10 +262,13 @@ class _FastInfoMetricScope {
       pillValue: _compactAmount(actualSavings),
       primaryValue: formatHuf(actualSavings),
       secondaryValues: <String>[
+        'bevétel - kiadás hóban',
         if (goal == null || goal <= 0)
           'Nincs cél'
         else
-          'Cél: ${formatHuf(goal)}',
+          'cél: ${formatHuf(goal)}',
+        if (projectedProgress != null)
+          'várható cél: ${_percent(projectedProgress)}%',
         if (rate != null) 'Megtakarítási ráta: ${_percent(rate)}%',
       ],
       progressKind: progress == null ? null : FastInfoProgressKind.ring,
@@ -275,6 +285,7 @@ class _FastInfoMetricScope {
           : FastInfoVisualDescriptor(
               kind: FastInfoVisualKind.goalMarker,
               value: progress,
+              marker: projectedProgress,
               semantic: progress >= 1
                   ? FastInfoSemantic.good
                   : progress >= .75
@@ -285,26 +296,26 @@ class _FastInfoMetricScope {
   }
 
   FastInfoMetricResult _rollingSpendTrend() {
-    final pace = _paceStatus();
+    final current = data.rolling30VariableExpense;
+    final previous = data.previousRolling30VariableExpense;
+    final index = previous > 0 ? current / previous : null;
+    final trend = expenseTrend(current, previous);
     return FastInfoMetricResult(
-      pillValue: _compactAmount(data.rolling30Expense),
-      primaryValue: formatHuf(data.rolling30Expense),
+      pillValue: _compactAmount(current),
+      primaryValue: formatHuf(current),
       secondaryValues: <String>[
-        'Előző 30 nap: ${formatHuf(data.previousRolling30Expense)}',
-        if (pace != null) 'Kerettempó: $pace',
-        if (data.previousRolling30Expense <= 0) 'Nincs összehasonlítás',
+        'előző 30 nap: ${formatHuf(previous)}',
+        if (trend != null) 'előző 30 naphoz ${trend.text}',
+        'fix tételek nélkül',
+        if (previous <= 0) 'Nincs összehasonlítás',
       ],
-      trend: expenseTrend(data.rolling30Expense, data.previousRolling30Expense),
+      trend: trend,
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.zoneMarker,
-        value: data.previousRolling30Expense > 0
-            ? data.rolling30Expense / data.previousRolling30Expense
-            : null,
-        semantic: data.previousRolling30Expense > 0
-            ? expenseSemantic(
-                data.rolling30Expense / data.previousRolling30Expense,
-              )
-            : FastInfoSemantic.neutral,
+        value: index,
+        semantic: index == null
+            ? FastInfoSemantic.neutral
+            : expenseSemantic(index),
       ),
     );
   }
@@ -313,14 +324,16 @@ class _FastInfoMetricScope {
     if (data.datedTransactions.isEmpty) return _noData('Nincs tranzakció');
     final row = data.datedTransactions.first;
     final category = data.categoriesById[row.record.transactionCategoryID];
+    final merchant = row.record.displayMerchant.isEmpty
+        ? 'Névtelen tranzakció'
+        : row.record.displayMerchant;
+    final categoryName = category?.name ?? 'Nincs kategória';
     return FastInfoMetricResult(
       pillValue: _signedCompact(row.record.amount),
       primaryValue: row.record.displayAmount,
       secondaryValues: <String>[
-        row.record.displayMerchant.isEmpty
-            ? 'Névtelen tranzakció'
-            : row.record.displayMerchant,
-        '${category?.name ?? 'Nincs kategória'} · ${row.record.displayTime}',
+        '$merchant · $categoryName',
+        _latestTimeLabel(row),
       ],
       avatar: avatarForCategory(category),
       visual: FastInfoVisualDescriptor(
@@ -771,16 +784,6 @@ class _FastInfoMetricScope {
     return ((actualShare - expectedShare) * 100).round();
   }
 
-  String? _paceStatus() {
-    final limit = monthlyLimit;
-    if (limit == null || limit <= 0) return null;
-    final actual = data.currentMonthExpense / limit;
-    final expected = data.elapsedMonthDays / data.daysInCurrentMonth;
-    if (actual > expected * 1.15) return 'gyors';
-    if (actual < expected * .80) return 'lassú';
-    return 'normál';
-  }
-
   List<_CategoryLimitState> _categoryLimitStates() {
     final spent = _categoryAmounts(
       data.variableExpenseRowsBetween(data.currentMonthStart, data.tomorrow),
@@ -865,6 +868,11 @@ class _FastInfoMetricScope {
       for (final entry in data.categoryExpenseGroups(rows).entries)
         entry.key: _sum(entry.value),
     };
+  }
+
+  String _latestTimeLabel(FastInfoDatedTransaction row) {
+    if (_isSameDay(row.date, data.today)) return 'ma ${row.record.displayTime}';
+    return '${row.record.normalizedDate} ${row.record.displayTime}';
   }
 
   FastInfoMetricResult _noData(String message) =>

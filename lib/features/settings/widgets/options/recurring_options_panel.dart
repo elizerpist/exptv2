@@ -26,18 +26,21 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
   final _dayController = TextEditingController(text: '1');
   TransactionCategory? _selectedCategory;
   RecurringTransaction? _editing;
+  var _selectedType = TransactionType.expense;
   var _categoryPickerOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedCategory = widget.store.expenseCategories.firstOrNull;
+    _selectedCategory = widget.store.categoriesFor(_selectedType).firstOrNull;
   }
 
   @override
   void didUpdateWidget(covariant RecurringOptionsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _selectedCategory ??= widget.store.expenseCategories.firstOrNull;
+    _selectedCategory = _resolveSelectedCategory(
+      widget.store.categoriesFor(_selectedType),
+    );
   }
 
   @override
@@ -57,16 +60,18 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SettingsSection(
-              title: _editing == null
-                  ? 'Új ismétlődő kiadás hozzáadása'
-                  : 'Ismétlődő kiadás módosítása',
+              title: _editing == null ? _newSectionTitle : _editSectionTitle,
               children: [
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
+                      _typeSelector(),
+                      const SizedBox(height: 16),
                       _field(
-                        label: 'Kiadás neve',
+                        label: _selectedType == TransactionType.income
+                            ? 'Bevétel neve'
+                            : 'Kiadás neve',
                         controller: _nameController,
                         hint: 'pl. Lakbér, Telefon számla...',
                       ),
@@ -107,14 +112,14 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
               ],
             ),
             SettingsSection(
-              title: 'Meglévő ismétlődő kiadások',
+              title: 'Meglévő ismétlődő tranzakciók',
               children: widget.store.recurringTransactions.isEmpty
                   ? const [
                       Padding(
                         padding: EdgeInsets.all(20),
                         child: Center(
                           child: Text(
-                            'Még nincsenek ismétlődő kiadások',
+                            'Még nincsenek ismétlődő tranzakciók',
                             style: TextStyle(color: AppColors.gray500),
                           ),
                         ),
@@ -122,7 +127,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
                     ]
                   : widget.store.recurringTransactions.map((transaction) {
                       final category = CategoryColorResolver.findById(
-                        widget.store.expenseCategories,
+                        widget.store.categories,
                         transaction.categoryId,
                       );
                       return _RecurringCard(
@@ -144,7 +149,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
                 Padding(
                   padding: EdgeInsets.all(16),
                   child: Text(
-                    'Az ismétlődő kiadások automatikusan hozzáadódnak a kiválasztott napon minden hónapban. Az inaktív kiadások nem kerülnek automatikusan hozzáadásra.',
+                    'Az ismétlődő bevételek és kiadások automatikusan hozzáadódnak a kiválasztott napon minden hónapban. Az inaktív tételek nem kerülnek automatikusan hozzáadásra.',
                     style: TextStyle(color: AppColors.gray500, height: 1.35),
                   ),
                 ),
@@ -154,6 +159,49 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
         ),
       ),
     );
+  }
+
+  String get _newSectionTitle => _selectedType == TransactionType.income
+      ? 'Új ismétlődő bevétel hozzáadása'
+      : 'Új ismétlődő kiadás hozzáadása';
+
+  String get _editSectionTitle => _selectedType == TransactionType.income
+      ? 'Ismétlődő bevétel módosítása'
+      : 'Ismétlődő kiadás módosítása';
+
+  Widget _typeSelector() {
+    return Row(
+      children: [
+        Expanded(
+          child: _TypeChoice(
+            key: const ValueKey('recurring-type-expense'),
+            label: 'Kiadás',
+            selected: _selectedType == TransactionType.expense,
+            color: AppColors.expense,
+            onTap: () => _selectType(TransactionType.expense),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _TypeChoice(
+            key: const ValueKey('recurring-type-income'),
+            label: 'Bevétel',
+            selected: _selectedType == TransactionType.income,
+            color: AppColors.income,
+            onTap: () => _selectType(TransactionType.income),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _selectType(TransactionType type) {
+    if (_selectedType == type) return;
+    setState(() {
+      _selectedType = type;
+      _categoryPickerOpen = false;
+      _selectedCategory = widget.store.categoriesFor(type).firstOrNull;
+    });
   }
 
   Widget _field({
@@ -210,18 +258,18 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
   }
 
   Widget _categoryPicker() {
-    final categories = widget.store.expenseCategories;
-    final selected = categories.contains(_selectedCategory)
-        ? _selectedCategory
-        : categories.firstOrNull;
+    final categories = widget.store.categoriesFor(_selectedType);
+    final selected = _resolveSelectedCategory(categories);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Kategória',
-            style: TextStyle(
+          Text(
+            _selectedType == TransactionType.income
+                ? 'Bevételi kategória'
+                : 'Kiadási kategória',
+            style: const TextStyle(
               fontWeight: FontWeight.w600,
               color: AppColors.gray800,
             ),
@@ -251,9 +299,26 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
     );
   }
 
+  TransactionCategory? _resolveSelectedCategory(
+    List<TransactionCategory> categories,
+  ) {
+    if (categories.isEmpty) return null;
+    final selected = _selectedCategory;
+    if (selected != null &&
+        selected.normalizedType == _selectedType &&
+        categories.any(
+          (category) =>
+              category.transactionCategoryID == selected.transactionCategoryID,
+        )) {
+      return selected;
+    }
+    return categories.first;
+  }
+
   Future<void> _save() async {
     final category =
-        _selectedCategory ?? widget.store.expenseCategories.firstOrNull;
+        _selectedCategory ??
+        widget.store.categoriesFor(_selectedType).firstOrNull;
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.'));
     final day = int.tryParse(_dayController.text);
     if (category == null || amount == null || day == null) return;
@@ -261,6 +326,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
       id: _editing?.id,
       name: _nameController.text.trim(),
       amount: amount,
+      transactionType: _selectedType,
       dayOfMonth: day,
       categoryId: category.transactionCategoryID,
       isActive: _editing?.isActive ?? true,
@@ -269,6 +335,7 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
     setState(() {
       _editing = null;
       _categoryPickerOpen = false;
+      _selectedCategory = widget.store.categoriesFor(_selectedType).firstOrNull;
       _nameController.clear();
       _amountController.clear();
       _dayController.text = '1';
@@ -278,15 +345,62 @@ class _RecurringOptionsPanelState extends State<RecurringOptionsPanel> {
   void _edit(RecurringTransaction transaction) {
     setState(() {
       _editing = transaction;
+      _selectedType = transaction.transactionType;
       _categoryPickerOpen = false;
       _nameController.text = transaction.name;
       _amountController.text = transaction.amount.toStringAsFixed(0);
       _dayController.text = transaction.dayOfMonth.toString();
-      _selectedCategory = widget.store.expenseCategories.firstWhere(
-        (category) => category.transactionCategoryID == transaction.categoryId,
-        orElse: () => widget.store.expenseCategories.first,
+      final categories = widget.store.categoriesFor(
+        transaction.transactionType,
       );
+      _selectedCategory = categories.isEmpty
+          ? null
+          : categories.firstWhere(
+              (category) =>
+                  category.transactionCategoryID == transaction.categoryId,
+              orElse: () => categories.first,
+            );
     });
+  }
+}
+
+class _TypeChoice extends StatelessWidget {
+  const _TypeChoice({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: 42,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.12) : AppColors.gray100,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? color : AppColors.gray200),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? color : AppColors.gray600,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -339,7 +453,7 @@ class _RecurringCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${transaction.amount.toStringAsFixed(0)} Ft • hónap ${transaction.dayOfMonth}. napja',
+                  '${transaction.transactionType.label} • ${transaction.amount.toStringAsFixed(0)} Ft • hónap ${transaction.dayOfMonth}. napja',
                   style: const TextStyle(color: AppColors.gray500),
                 ),
               ],

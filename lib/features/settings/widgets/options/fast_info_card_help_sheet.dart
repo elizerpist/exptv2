@@ -42,7 +42,14 @@ class FastInfoCardHelpSheet extends StatefulWidget {
 }
 
 class _FastInfoCardHelpSheetState extends State<FastInfoCardHelpSheet> {
-  final _bodyDragExclusionKey = GlobalKey();
+  final _bodyKey = GlobalKey();
+  final _bodyScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _bodyScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +64,7 @@ class _FastInfoCardHelpSheetState extends State<FastInfoCardHelpSheet> {
       panelHeight: panelHeight,
       visible: true,
       deferEntryAnimation: true,
-      dragExclusionKeys: [_bodyDragExclusionKey],
+      canDragFrom: _canDragFrom,
       onDismissed: () => Navigator.of(context).pop(),
       child: SafeArea(
         top: false,
@@ -67,9 +74,10 @@ class _FastInfoCardHelpSheetState extends State<FastInfoCardHelpSheet> {
             _SheetHandle(key: ValueKey('fastinfo-help-drag-handle-${card.id}')),
             Expanded(
               child: KeyedSubtree(
-                key: _bodyDragExclusionKey,
+                key: _bodyKey,
                 child: SingleChildScrollView(
                   key: ValueKey('fastinfo-help-body-${card.id}'),
+                  controller: _bodyScrollController,
                   padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,6 +145,30 @@ class _FastInfoCardHelpSheetState extends State<FastInfoCardHelpSheet> {
         ),
       ),
     );
+  }
+
+  bool _canDragFrom(
+    Offset globalPosition,
+    Offset startGlobalPosition,
+    double gestureDx,
+    double gestureDy,
+  ) {
+    if (!_isInsideBody(startGlobalPosition)) return true;
+    if (gestureDy <= 0) return false;
+    if (!_bodyScrollController.hasClients) return true;
+    return _bodyScrollController.position.pixels <= 0.5;
+  }
+
+  bool _isInsideBody(Offset globalPosition) {
+    final context = _bodyKey.currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return false;
+    }
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    return (topLeft & renderObject.size).contains(globalPosition);
   }
 }
 

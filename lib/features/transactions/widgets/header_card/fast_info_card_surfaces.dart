@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/fast_info_config.dart';
 import '../../state/fast_info_metrics_resolver.dart';
+import '../category_menu/category_icon_badge.dart';
 import 'fast_info_visuals.dart';
 
 typedef FastInfoCardDropCallback = void Function(int index, String cardId);
@@ -116,6 +117,15 @@ class FastInfoPillCard extends StatelessWidget {
     }
     if (slot.id == 'havi_koltes') {
       return _MonthlySpendPillContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'megtakaritas') {
+      return _SavingsPillContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'koltesi_trend') {
+      return _RollingTrendPillContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'legutobbi_tranzakcio') {
+      return _LatestTransactionPillContent(slot: slot, metric: metric);
     }
 
     final primary = metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat';
@@ -730,18 +740,329 @@ class _MonthlyIndexMeter extends StatelessWidget {
             height: 7,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(999),
-              child: const Row(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
                     flex: 33,
-                    child: ColoredBox(color: AppColors.income),
+                    child: SizedBox.expand(
+                      key: ValueKey('fastinfo-monthly-index-good-$slotId'),
+                      child: const ColoredBox(color: AppColors.income),
+                    ),
                   ),
                   Expanded(
                     flex: 32,
-                    child: ColoredBox(color: Color(0xFFF59E0B)),
+                    child: SizedBox.expand(
+                      key: ValueKey('fastinfo-monthly-index-warning-$slotId'),
+                      child: const ColoredBox(color: Color(0xFFF59E0B)),
+                    ),
                   ),
                   Expanded(
                     flex: 35,
+                    child: SizedBox.expand(
+                      key: ValueKey('fastinfo-monthly-index-bad-$slotId'),
+                      child: const ColoredBox(color: AppColors.expense),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: chartLeft + chartWidth * needle - 1,
+            top: chartTop + 1,
+            width: 2,
+            height: 17,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.gray700,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavingsPillContent extends StatelessWidget {
+  const _SavingsPillContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _PillTitle(slot: slot),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PillValues(
+            slotId: slot.id,
+            primary: metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat',
+            secondary:
+                _secondaryStarting(metric, 'várható cél:') ??
+                _secondaryStarting(metric, 'cél'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 84,
+          child: _SavingProjectionMeter(slotId: slot.id, metric: metric),
+        ),
+      ],
+    );
+  }
+}
+
+class _RollingTrendPillContent extends StatelessWidget {
+  const _RollingTrendPillContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _PillTitle(slot: slot),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PillValues(
+            slotId: slot.id,
+            primary: metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat',
+            secondary: _rollingChangeText(metric),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 84,
+          child: _RollingZoneMeter(
+            slotId: slot.id,
+            value: metric?.visual.value,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LatestTransactionPillContent extends StatelessWidget {
+  const _LatestTransactionPillContent({
+    required this.slot,
+    required this.metric,
+  });
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _PillTitle(slot: slot),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PillValues(
+            slotId: slot.id,
+            primary: metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat',
+            secondary: _latestMerchantCategory(metric).join(' · '),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 84,
+          child: _FastInfoAvatarBadge(
+            key: ValueKey('fastinfo-last-transaction-pill-avatar-${slot.id}'),
+            avatar: metric?.avatar ?? metric?.visual.avatar,
+            size: 25,
+            iconSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PillTitle extends StatelessWidget {
+  const _PillTitle({required this.slot});
+
+  final FastInfoSlot slot;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 98,
+      child: Text(
+        slot.label,
+        key: ValueKey('fastinfo-pill-title-${slot.id}'),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.gray700,
+          fontSize: 7.6,
+          fontWeight: FontWeight.w800,
+          height: 1.05,
+        ),
+      ),
+    );
+  }
+}
+
+class _PillValues extends StatelessWidget {
+  const _PillValues({
+    required this.slotId,
+    required this.primary,
+    required this.secondary,
+  });
+
+  final String slotId;
+  final String primary;
+  final String? secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final secondaryText = secondary?.trim() ?? '';
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          primary,
+          key: ValueKey('fastinfo-pill-primary-$slotId'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.gray800,
+            fontSize: 12.3,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+          ),
+        ),
+        if (secondaryText.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            secondaryText,
+            key: ValueKey('fastinfo-pill-secondary-$slotId'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.gray500,
+              fontSize: 8,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SavingProjectionMeter extends StatelessWidget {
+  const _SavingProjectionMeter({required this.slotId, required this.metric});
+
+  final String slotId;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = (metric?.progress ?? metric?.visual.value ?? 0)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final expected = (metric?.visual.marker ?? metric?.visual.compareValue)
+        ?.clamp(0.0, 1.0)
+        .toDouble();
+    const chartLeft = 3.0;
+    const chartWidth = 78.0;
+    return SizedBox(
+      key: ValueKey('fastinfo-saving-projection-$slotId'),
+      width: 84,
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: chartLeft,
+            top: 11,
+            width: chartWidth,
+            height: 7,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: AppColors.gray200),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: now,
+                    child: const ColoredBox(color: AppColors.income),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expected != null)
+            Positioned(
+              left: chartLeft + chartWidth * expected - 1,
+              top: 4,
+              width: 2,
+              height: 17,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF06B6D4),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RollingZoneMeter extends StatelessWidget {
+  const _RollingZoneMeter({required this.slotId, required this.value});
+
+  final String slotId;
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final needle = _rollingZoneNeedle(value);
+    const chartLeft = 3.0;
+    const chartTop = 3.0;
+    const chartWidth = 78.0;
+    return SizedBox(
+      key: ValueKey('fastinfo-rolling-zone-$slotId'),
+      width: 84,
+      height: 24,
+      child: Stack(
+        children: [
+          Positioned(
+            left: chartLeft,
+            top: chartTop + 7,
+            width: chartWidth,
+            height: 7,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: const [
+                  Expanded(
+                    flex: 36,
+                    child: ColoredBox(color: AppColors.income),
+                  ),
+                  Expanded(
+                    flex: 28,
+                    child: ColoredBox(color: Color(0xFFF59E0B)),
+                  ),
+                  Expanded(
+                    flex: 36,
                     child: ColoredBox(color: AppColors.expense),
                   ),
                 ],
@@ -902,6 +1223,15 @@ class FastInfoBoxCard extends StatelessWidget {
     if (slot.id == 'havi_koltes') {
       return _MonthlySpendBoxContent(slot: slot, metric: metric);
     }
+    if (slot.id == 'megtakaritas') {
+      return _SavingsBoxContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'koltesi_trend') {
+      return _RollingTrendBoxContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'legutobbi_tranzakcio') {
+      return _LatestTransactionBoxContent(slot: slot, metric: metric);
+    }
 
     final secondaryValues =
         metric?.secondaryValues.take(3).toList() ?? const <String>[];
@@ -964,6 +1294,397 @@ class FastInfoBoxCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _SavingsBoxContent extends StatelessWidget {
+  const _SavingsBoxContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (metric?.progress ?? metric?.visual.value ?? 0)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BoxTitle(slot.label),
+        const SizedBox(height: 3),
+        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
+        if (_secondaryStarting(metric, 'bevétel') case final subtitle?) ...[
+          const SizedBox(height: 2),
+          _BoxSecondary(subtitle),
+        ],
+        const Spacer(),
+        const _BoxMicroLabel('Cél haladás:'),
+        const SizedBox(height: 3),
+        Center(
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 4,
+                  backgroundColor: AppColors.gray200,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    _fastInfoSemanticColor(
+                      metric?.semantic ?? FastInfoSemantic.neutral,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(progress * 100).round()}%',
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: AppColors.gray800,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_secondaryStarting(metric, 'cél:') case final goal?) ...[
+          const SizedBox(height: 3),
+          Center(child: _BoxSecondary(goal, fontSize: 6.6)),
+        ],
+        const SizedBox(height: 5),
+        const _BoxMicroLabel('Havi állás:'),
+        const SizedBox(height: 2),
+        Text(
+          _positiveCompact(metric),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.income,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RollingTrendBoxContent extends StatelessWidget {
+  const _RollingTrendBoxContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final previous = _secondaryStarting(metric, 'előző 30 nap:');
+    final trend = metric?.trend;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BoxTitle(slot.label),
+        const SizedBox(height: 3),
+        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
+        if (previous != null) ...[
+          const SizedBox(height: 2),
+          _BoxSecondary(previous),
+        ],
+        const SizedBox(height: 3),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.gray100,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: const Text(
+            'Fix tételek nélkül',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.gray500,
+              fontSize: 6.2,
+              fontWeight: FontWeight.w900,
+              height: 1.0,
+            ),
+          ),
+        ),
+        const Spacer(),
+        const _BoxMicroLabel('30 nap vs előző 30:'),
+        const SizedBox(height: 4),
+        _RollingSplitBar(
+          key: ValueKey('fastinfo-rolling-split-${slot.id}'),
+          index: metric?.visual.value,
+        ),
+        const SizedBox(height: 3),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: _BoxSecondary(
+                _compactPreviousLabel(previous),
+                fontSize: 6.4,
+              ),
+            ),
+            Flexible(
+              child: _BoxSecondary(metric?.pillValue ?? '', fontSize: 6.4),
+            ),
+          ],
+        ),
+        if (trend != null) ...[
+          const SizedBox(height: 5),
+          const _BoxMicroLabel('Változás:'),
+          const SizedBox(height: 2),
+          _DailyTrendValue(trend: trend),
+        ],
+      ],
+    );
+  }
+}
+
+class _LatestTransactionBoxContent extends StatelessWidget {
+  const _LatestTransactionBoxContent({
+    required this.slot,
+    required this.metric,
+  });
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = _latestMerchantCategory(metric);
+    final time = (metric?.secondaryValues.length ?? 0) > 1
+        ? metric!.secondaryValues[1]
+        : '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BoxTitle(slot.label),
+        const SizedBox(height: 3),
+        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
+        if (time.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          _BoxSecondary(time),
+        ],
+        const Spacer(),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _FastInfoAvatarBadge(
+                key: ValueKey('fastinfo-last-transaction-avatar-${slot.id}'),
+                avatar: metric?.avatar ?? metric?.visual.avatar,
+                size: 32,
+                iconSize: 18,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                names.first,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.gray800,
+                  fontSize: 7.4,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                names.length > 1 ? names[1] : '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.gray500,
+                  fontSize: 6.6,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        const _BoxMicroLabel('Összeg:'),
+        const SizedBox(height: 2),
+        Text(
+          metric?.primaryValue ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: (metric?.primaryValue.startsWith('+') ?? false)
+                ? AppColors.income
+                : AppColors.expense,
+            fontSize: 10.4,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RollingSplitBar extends StatelessWidget {
+  const _RollingSplitBar({super.key, required this.index});
+
+  final double? index;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = (index ?? 1).clamp(0.0, 3.0).toDouble();
+    final total = 1 + current;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: SizedBox(
+        height: 13,
+        child: Row(
+          children: [
+            Expanded(
+              flex: math.max(1, (1 / total * 1000).round()),
+              child: const ColoredBox(color: AppColors.gray400),
+            ),
+            Expanded(
+              flex: math.max(1, (current / total * 1000).round()),
+              child: ColoredBox(
+                color: current > 1 ? AppColors.expense : AppColors.income,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FastInfoAvatarBadge extends StatelessWidget {
+  const _FastInfoAvatarBadge({
+    super.key,
+    required this.avatar,
+    required this.size,
+    required this.iconSize,
+  });
+
+  final FastInfoAvatar? avatar;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = avatar;
+    if (value == null) return SizedBox(width: size, height: size);
+    return Center(
+      child: CategoryIconBadge(
+        colorSlot: 0,
+        iconSlot: value.iconSlot,
+        size: size,
+        iconSize: iconSize,
+        backgroundColor: AppColors.fromHex(value.colorHex),
+        showShadow: false,
+      ),
+    );
+  }
+}
+
+class _BoxTitle extends StatelessWidget {
+  const _BoxTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: AppColors.gray600,
+        fontSize: 9,
+        fontWeight: FontWeight.w700,
+        height: 1.0,
+      ),
+    );
+  }
+}
+
+class _BoxPrimary extends StatelessWidget {
+  const _BoxPrimary(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 15,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            text,
+            maxLines: 1,
+            style: const TextStyle(
+              color: AppColors.gray800,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              height: 1.0,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BoxSecondary extends StatelessWidget {
+  const _BoxSecondary(this.text, {this.fontSize = 8});
+
+  final String text;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: AppColors.gray500,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        height: 1.0,
+      ),
+    );
+  }
+}
+
+class _BoxMicroLabel extends StatelessWidget {
+  const _BoxMicroLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: AppColors.gray500,
+        fontSize: 6.3,
+        fontWeight: FontWeight.w900,
+        height: 1.0,
+      ),
     );
   }
 }
@@ -1302,6 +2023,59 @@ class _WeeklyBoxBars extends StatelessWidget {
 Color _weeklyBarColor(FastInfoWeeklyBar bar) {
   if (bar.isFuture) return AppColors.gray200;
   return _fastInfoSemanticColor(bar.semantic);
+}
+
+String? _secondaryStarting(FastInfoMetricResult? metric, String prefix) {
+  final lowerPrefix = prefix.toLowerCase();
+  for (final value in metric?.secondaryValues ?? const <String>[]) {
+    final trimmed = value.trim();
+    if (trimmed.toLowerCase().startsWith(lowerPrefix)) return trimmed;
+  }
+  return null;
+}
+
+String _rollingChangeText(FastInfoMetricResult? metric) {
+  final secondary = _secondaryStarting(metric, 'előző 30 naphoz');
+  if (secondary != null) return secondary;
+  final trend = metric?.trend;
+  return trend == null ? '' : 'előző 30 naphoz ${trend.text}';
+}
+
+List<String> _latestMerchantCategory(FastInfoMetricResult? metric) {
+  final raw = metric?.secondaryValues.isNotEmpty == true
+      ? metric!.secondaryValues.first
+      : 'Névtelen tranzakció · Nincs kategória';
+  final parts = raw
+      .split('·')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return const ['Névtelen tranzakció', 'Nincs kategória'];
+  if (parts.length == 1) return [parts.first, ''];
+  return [parts.first, parts[1]];
+}
+
+String _positiveCompact(FastInfoMetricResult? metric) {
+  final value = metric?.pillValue ?? metric?.primaryValue ?? '';
+  if (value.isEmpty || value.startsWith('+') || value.startsWith('-')) {
+    return value;
+  }
+  return '+$value';
+}
+
+String _compactPreviousLabel(String? value) {
+  if (value == null) return '';
+  return value.replaceFirst(RegExp(r'^előző 30 nap:\s*'), '');
+}
+
+double _rollingZoneNeedle(double? index) {
+  final value = index;
+  if (value == null || value <= 0) return .5;
+  if (value <= 1) return (value * .36).clamp(.04, .36).toDouble();
+  if (value <= 1.15) {
+    return (.36 + ((value - 1) / .15) * .28).clamp(.36, .64).toDouble();
+  }
+  return (.64 + ((value - 1.15) / .45) * .36).clamp(.64, .96).toDouble();
 }
 
 String _weeklyTransactionText(FastInfoMetricResult? metric) {

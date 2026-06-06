@@ -733,6 +733,7 @@ class ExpenseRepository(context: Context) {
                 amount = signedAmount,
                 userAssignedName = ghost.name,
                 transactionCategoryID = ghost.categoryId,
+                recurringTransactionId = recurring.id,
             )
             transactions.insert(transaction)
             Log.d(

@@ -20,6 +20,7 @@ import androidx.room.PrimaryKey
         Index("date"),
         Index("merchant"),
         Index("amount"),
+        Index("recurringTransactionId"),
         Index(value = ["date", "time", "id"]),
         Index(value = ["amount", "date", "time", "id"]),
         Index(value = ["transactionCategoryID", "date", "time", "id"]),
@@ -36,6 +37,7 @@ data class ExpenseTransactionEntity(
     val amount: Double,
     val userAssignedName: String?,
     val transactionCategoryID: Int,
+    val recurringTransactionId: Int? = null,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "id" to id,
@@ -48,5 +50,6 @@ data class ExpenseTransactionEntity(
         "amount" to amount,
         "userAssignedName" to userAssignedName,
         "transactionCategoryID" to transactionCategoryID,
+        "recurringTransactionId" to recurringTransactionId,
     )
 }

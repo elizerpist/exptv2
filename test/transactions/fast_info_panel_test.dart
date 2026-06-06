@@ -130,12 +130,22 @@ void main() {
       findsNothing,
     );
     expect(
+      find.byKey(
+        const ValueKey('fastinfo-last-transaction-avatar-legutobbi_tranzakcio'),
+      ),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('fastinfo-avatar-legutobbi_tranzakcio')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-rolling-zone-koltesi_trend')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey('fastinfo-trend-koltesi_trend')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('fastinfo-pill-trend-mai_koltes')),
@@ -664,8 +674,210 @@ void main() {
     );
     expect(index, findsOneWidget);
     expect(tester.getSize(index), const Size(84, 24));
+    for (final key in <String>[
+      'fastinfo-monthly-index-good-havi_koltes',
+      'fastinfo-monthly-index-warning-havi_koltes',
+      'fastinfo-monthly-index-bad-havi_koltes',
+    ]) {
+      final segment = find.byKey(ValueKey(key));
+      expect(segment, findsOneWidget);
+      expect(tester.getSize(segment).height, 7);
+      expect(tester.getSize(segment).width, greaterThan(0));
+    }
     expect(
       find.byKey(const ValueKey('fastinfo-visual-same-day-index-havi_koltes')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('savings box and pill follow v25 projection decision', (
+    tester,
+  ) async {
+    const metrics = <String, FastInfoMetricResult>{
+      'megtakaritas': FastInfoMetricResult(
+        pillValue: '220k',
+        primaryValue: '220 000 Ft',
+        secondaryValues: <String>[
+          'bevétel - kiadás hóban',
+          'cél: 300 000 Ft',
+          'várható cél: 86%',
+        ],
+        progressKind: FastInfoProgressKind.ring,
+        progress: .73,
+        semantic: FastInfoSemantic.neutral,
+        visual: FastInfoVisualDescriptor(
+          kind: FastInfoVisualKind.goalMarker,
+          value: .73,
+          marker: .86,
+          semantic: FastInfoSemantic.good,
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(
+            config: FastInfoConfig(
+              pills: [_slot('megtakaritas', FastInfoSlotType.pill), null, null],
+              boxes: [_slot('megtakaritas', FastInfoSlotType.box), null, null],
+            ),
+            metrics: metrics,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Megtakarítás'), findsWidgets);
+    expect(find.text('220 000 Ft'), findsWidgets);
+    expect(find.text('várható cél: 86%'), findsOneWidget);
+    expect(find.text('Cél haladás:'), findsOneWidget);
+    expect(find.text('73%'), findsOneWidget);
+    expect(find.text('cél: 300 000 Ft'), findsOneWidget);
+    expect(find.text('Havi állás:'), findsOneWidget);
+    expect(find.text('+220k'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('fastinfo-saving-projection-megtakaritas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-visual-goal-marker-megtakaritas')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'rolling trend box and pill follow v25 fixed-free zone decision',
+    (tester) async {
+      const metrics = <String, FastInfoMetricResult>{
+        'koltesi_trend': FastInfoMetricResult(
+          pillValue: '1.02M',
+          primaryValue: '1 020 000 Ft',
+          secondaryValues: <String>[
+            'előző 30 nap: 905 000 Ft',
+            'előző 30 naphoz +13%',
+            'fix tételek nélkül',
+          ],
+          trend: FastInfoTrend(
+            direction: FastInfoTrendDirection.up,
+            text: '+13%',
+            semantic: FastInfoSemantic.bad,
+          ),
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.zoneMarker,
+            value: 1.13,
+            semantic: FastInfoSemantic.warning,
+          ),
+        ),
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FastInfoPanel(
+              config: FastInfoConfig(
+                pills: [
+                  _slot('koltesi_trend', FastInfoSlotType.pill),
+                  null,
+                  null,
+                ],
+                boxes: [
+                  _slot('koltesi_trend', FastInfoSlotType.box),
+                  null,
+                  null,
+                ],
+              ),
+              metrics: metrics,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('30 napos trend'), findsWidgets);
+      expect(find.text('1 020 000 Ft'), findsWidgets);
+      expect(find.text('előző 30 naphoz +13%'), findsOneWidget);
+      expect(find.text('Fix tételek nélkül'), findsOneWidget);
+      expect(find.text('30 nap vs előző 30:'), findsOneWidget);
+      expect(find.text('Változás:'), findsOneWidget);
+      expect(find.text('+13%'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('fastinfo-rolling-zone-koltesi_trend')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('fastinfo-rolling-split-koltesi_trend')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('fastinfo-trend-koltesi_trend')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('latest transaction box and pill use category icon avatar', (
+    tester,
+  ) async {
+    const metrics = <String, FastInfoMetricResult>{
+      'legutobbi_tranzakcio': FastInfoMetricResult(
+        pillValue: '-4 890 Ft',
+        primaryValue: '-4 890 Ft',
+        secondaryValues: <String>['Kávézó · Étel', 'ma 16:12'],
+        avatar: FastInfoAvatar(colorHex: '#f97316', iconSlot: 2),
+        visual: FastInfoVisualDescriptor(
+          kind: FastInfoVisualKind.avatar,
+          avatar: FastInfoAvatar(colorHex: '#f97316', iconSlot: 2),
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(
+            config: FastInfoConfig(
+              pills: [
+                _slot('legutobbi_tranzakcio', FastInfoSlotType.pill),
+                null,
+                null,
+              ],
+              boxes: [
+                _slot('legutobbi_tranzakcio', FastInfoSlotType.box),
+                null,
+                null,
+              ],
+            ),
+            metrics: metrics,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Utolsó tranzakció'), findsWidgets);
+    expect(find.text('-4 890 Ft'), findsWidgets);
+    expect(find.text('Kávézó · Étel'), findsOneWidget);
+    expect(find.text('Kávézó'), findsOneWidget);
+    expect(find.text('Étel'), findsOneWidget);
+    expect(find.text('ma 16:12'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-last-transaction-avatar-legutobbi_tranzakcio'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+          'fastinfo-last-transaction-pill-avatar-legutobbi_tranzakcio',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-visual-avatar-legutobbi_tranzakcio')),
       findsNothing,
     );
     expect(tester.takeException(), isNull);

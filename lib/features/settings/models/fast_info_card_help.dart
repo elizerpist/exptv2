@@ -216,91 +216,107 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   ),
   'megtakaritas': FastInfoCardHelp(
     purpose:
-        'Megmutatja az aktuális havi tényleges megtakarítást és a célhoz viszonyított haladást.',
+        'Megmutatja, mennyi pénz maradt meg ebben a hónapban a bevételedből.',
     details:
-        'A kártya a havi bevétel és havi kiadás különbségéből számolt megtakarítást, a beállított megtakarítási célt és a megtakarítási rátát foglalja össze.',
+        'A nagy szám az eddigi havi bevétel mínusz az eddigi havi kiadás. A kör azt mutatja, hogy ez a beállított megtakarítási cél hány százaléka. A pill jobb oldalán a zöld csík a mostani állás, a kék vonal pedig azt mutatja, várhatóan hol állsz majd hó végén.',
     calculation: <String>[
-      'Aktuális megtakarítás = max(0, aktuális havi bevétel - aktuális havi kiadás).',
-      'Célhaladás = aktuális megtakarítás / beállított megtakarítási cél.',
-      'Megtakarítási ráta = aktuális megtakarítás / aktuális havi bevétel.',
+      'Mostani megtakarítás = max(0, aktuális havi bevétel - aktuális havi kiadás).',
+      'Mostani célhaladás = mostani megtakarítás / beállított havi megtakarítási cél.',
+      'Várható hó végi célhaladás = max(0, várható havi bevétel - várható havi kiadás) / cél.',
+      'A várható havi bevételbe a még be nem érkezett ismétlődő bevételek is beleszámítanak.',
     ],
     comparison:
-        'A vizuál nem időszakokat hasonlít, hanem a beállított havi cél teljesülését mutatja.',
+        'Nem két hónapot hasonlít. Azt mutatja, hogy a saját havi célodhoz képest hol tartasz most, és hova érhetsz hó végére.',
     missingData:
-        'Cél nélkül Nincs cél látszik; havi bevétel nélkül a megtakarítási ráta kimarad.',
+        'Ha nincs megtakarítási cél, a kártya csak az eddigi megmaradt pénzt írja ki, célhaladás nélkül.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Aktuális havi megtakarítás',
+        'Mostani havi megtakarítás',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Zöld: mostani célállás; kék vonal: várható hó végi állás',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
       _title,
       FastInfoHelpCallout(
         FastInfoHelpAnchor.primaryValue,
-        'Megtakarított összeg',
+        'Eddig megmaradt pénz ebben a hónapban',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Megtakarítási cél és ráta',
+        'Cél, célhaladás és havi állás',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Haladás a beállított megtakarítási cél felé',
+        'A kör a megtakarítási cél teljesülését mutatja',
       ),
     ],
   ),
   'koltesi_trend': FastInfoCardHelp(
-    purpose: 'Megmutatja, hogy az elmúlt 30 nap költése nőtt vagy csökkent-e.',
+    purpose:
+        'Megmutatja, hogy az elmúlt 30 napban több vagy kevesebb pénz ment el, mint az előtte lévő 30 napban.',
     details:
-        'A kártya az elmúlt gördülő 30 nap kiadását, az azt megelőző 30 napot, a százalékos változást és a havi limithez képesti kerettempót mutatja. Az összehasonlítás fixek nélkül készül, hogy az ismétlődő nagy tételek ne torzítsanak.',
+        'Ez mindig gördülő összehasonlítás: ma visszanéz 30 napot, és mellé teszi az azt megelőző 30 napot. A fix, ismétlődő tételeket kihagyja, hogy például a lakbér ne torzítsa el a képet.',
     calculation: <String>[
-      'Aktuális időszak = maival záródó elmúlt 30 nap kiadása.',
-      'Előző időszak = az azt közvetlenül megelőző 30 nap kiadása.',
+      'Aktuális időszak = elmúlt 30 nap változó kiadása, fixek nélkül, vagyis a fix tételek kihagyásával.',
+      'Előző időszak = az azt megelőző 30 nap változó kiadása, fixek nélkül, vagyis a fix tételek kihagyásával.',
       'Változás = aktuális időszak / előző időszak - 1.',
+      'Ha nőtt a költés, a százalék piros felfelé; ha csökkent, zöld lefelé.',
     ],
     comparison:
-        'Mindig az elmúlt 60 napot figyeli: utolsó 30 nap kontra előtti 30 nap.',
+        'Mindig az elmúlt 60 napot nézi kettévágva: jobb oldal az elmúlt 30 nap, bal oldal az előző 30 nap.',
     missingData:
-        'Ha az előző 30 nap összege nulla, a százalékos trend nem jelenik meg.',
+        'Ha az előző 30 napban nem volt összehasonlítható változó kiadás, a százalékos változás nem jelenik meg.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Elmúlt 30 nap költése',
+        'Elmúlt 30 nap változó költése',
       ),
-      _pillTrend,
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Zöld-sárga-piros sáv: mennyire nőtt vagy csökkent a költés',
+      ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
       _title,
       FastInfoHelpCallout(
         FastInfoHelpAnchor.primaryValue,
-        'Legutóbbi 30 nap összege',
+        'Elmúlt 30 nap összege fixek nélkül',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Előző 30 nap és kerettempó',
+        'Előző 30 nap összege és a fixek nélküli jelölés',
       ),
       FastInfoHelpCallout(
-        FastInfoHelpAnchor.trend,
-        'Piros felfelé vagy zöld lefelé nyíl; nincs grafikon',
+        FastInfoHelpAnchor.visual,
+        'Megfelezett csík: előző 30 nap és elmúlt 30 nap aránya',
       ),
     ],
   ),
   'legutobbi_tranzakcio': FastInfoCardHelp(
-    purpose: 'A legfrissebb rögzített tranzakciót mutatja gyors ellenőrzésre.',
+    purpose: 'Megmutatja a legutoljára rögzített tranzakciót.',
     details:
-        'A nagy kártyanézetben az összeg, a kereskedő vagy név, a kategória és az időpont jelenik meg.',
+        'A nagy szám a tranzakció összege. A színes kör a kategória színe és ikonja. Alatta a bolt vagy név, majd a kategórianév látszik. A pillben ugyanez röviden: összeg, bolt és kategória.',
     calculation: <String>[
-      'A legújabb dátumú és időpontú tranzakció kerül kiválasztásra.',
+      'Az app dátum, idő és azonosító alapján kiválasztja a legfrissebb tranzakciót.',
+      'A kategóriaikon és szín a tranzakció kategóriájából jön.',
+      'Ha a tranzakció ismétlődő ghostból aktiválódott, a rekord megkapja az ismétlődő tranzakció azonosítóját is.',
     ],
     comparison:
-        'Ez a kártya nem hasonlít időszakokat, csak a legutolsó eseményt mutatja.',
+        'Ez nem összehasonlító kártya. Egyetlen dolgot mutat: mi volt a legutolsó pénzmozgás.',
     missingData:
-        'Üres tranzakciós előzmény esetén Nincs tranzakció állapot jelenik meg.',
+        'Ha még nincs tranzakció, Nincs tranzakció állapot jelenik meg.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
         'Legutóbbi tranzakció összege',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.avatar,
+        'Kategória színe és ikonja',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
@@ -314,7 +330,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Kereskedő, kategória és időpont',
+        'Bolt vagy név, kategória és időpont',
       ),
       _title,
     ],

@@ -42,7 +42,7 @@ const fastInfoCardCatalog = <FastInfoCardDefinition>[
   FastInfoCardDefinition(id: 'heti_koltes', title: 'Heti költés'),
   FastInfoCardDefinition(id: 'havi_koltes', title: 'Havi költés'),
   FastInfoCardDefinition(id: 'megtakaritas', title: 'Megtakarítás'),
-  FastInfoCardDefinition(id: 'koltesi_trend', title: '30 napos költési trend'),
+  FastInfoCardDefinition(id: 'koltesi_trend', title: '30 napos trend'),
   FastInfoCardDefinition(
     id: 'legutobbi_tranzakcio',
     title: 'Utolsó tranzakció',

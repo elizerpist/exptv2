@@ -45,37 +45,62 @@ void main() {
     },
   );
 
-  testWidgets('only the handle drag dismisses the help sheet', (tester) async {
-    await _pumpHelpLauncher(tester, 'mai_koltes');
+  testWidgets('body scrolls normally but drags the help sheet at top', (
+    tester,
+  ) async {
+    await _pumpHelpLauncher(tester, 'havi_koltes');
 
     await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('fastinfo-help-close')), findsNothing);
+    final before = _slideCardTranslationY(tester);
 
     await tester.drag(
-      find.byKey(const ValueKey('fastinfo-help-body-mai_koltes')),
-      const Offset(0, 180),
+      find.byKey(const ValueKey('fastinfo-help-body-havi_koltes')),
+      const Offset(0, -420),
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('fastinfo-help-sheet-mai_koltes')),
+      _slideCardTranslationY(tester),
+      moreOrLessEquals(before, epsilon: 0.1),
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
       findsOneWidget,
     );
 
     await tester.drag(
-      find.byKey(const ValueKey('fastinfo-help-drag-handle-mai_koltes')),
+      find.byKey(const ValueKey('fastinfo-help-drag-handle-havi_koltes')),
       const Offset(0, 180),
     );
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
+    await tester.pumpAndSettle();
+    final reopened = _slideCardTranslationY(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('fastinfo-help-body-havi_koltes')),
+      ),
+    );
+    await gesture.moveBy(const Offset(0, 70));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), greaterThan(reopened + 40));
+    await gesture.up();
+    await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('fastinfo-help-sheet-mai_koltes')),
-      findsNothing,
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsOneWidget,
     );
   });
 
-  testWidgets('help sheet uses card shell and only handle moves it', (
+  testWidgets('help sheet card handle still supports free drag', (
     tester,
   ) async {
     await _pumpHelpLauncher(tester, 'havi_koltes');
@@ -88,16 +113,6 @@ void main() {
       findsOneWidget,
     );
     final before = _slideCardTranslationY(tester);
-
-    await tester.drag(
-      find.byKey(const ValueKey('fastinfo-help-body-havi_koltes')),
-      const Offset(0, 90),
-    );
-    await tester.pump();
-    expect(
-      _slideCardTranslationY(tester),
-      moreOrLessEquals(before, epsilon: 0.1),
-    );
 
     final gesture = await tester.startGesture(
       tester.getCenter(

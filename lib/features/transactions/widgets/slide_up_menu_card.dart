@@ -6,6 +6,14 @@ import 'package:flutter/material.dart';
 import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 
+typedef SlideUpDragGate =
+    bool Function(
+      Offset globalPosition,
+      Offset startGlobalPosition,
+      double gestureDx,
+      double gestureDy,
+    );
+
 class SlideUpMenuCard extends StatefulWidget {
   const SlideUpMenuCard({
     super.key,
@@ -21,6 +29,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.showFocusVeil = true,
     this.focusVeilOpacity = 0.28,
     this.dragExclusionKeys = const <GlobalKey>[],
+    this.canDragFrom,
     this.openRequestedAt,
     this.deferEntryAnimation = false,
     this.keyboardAvoidance = true,
@@ -38,6 +47,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final bool showFocusVeil;
   final double focusVeilOpacity;
   final List<GlobalKey> dragExclusionKeys;
+  final SlideUpDragGate? canDragFrom;
   final DateTime? openRequestedAt;
   final bool deferEntryAnimation;
   final bool keyboardAvoidance;
@@ -69,6 +79,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   double _panelHeight = 0;
   double _keyboardInset = 0;
   double _dragStartY = 0;
+  Offset _dragStartGlobalPosition = Offset.zero;
   double _gestureDx = 0;
   double _gestureDy = 0;
   double? _lastLoggedAvailableHeight;
@@ -432,6 +443,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     }
     _dragActive = true;
     _dragStartY = event.localPosition.dy;
+    _dragStartGlobalPosition = event.position;
     _snapBackController.stop();
     _dragStartedAt = DateTime.now();
     _lastLoggedDragOffset = _dragDy.value;
@@ -441,6 +453,18 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     if (_closing || !_dragActive) return;
     _gestureDx += event.delta.dx;
     _gestureDy += event.delta.dy;
+
+    final dragGate = widget.canDragFrom;
+    if (dragGate != null &&
+        !dragGate(
+          event.position,
+          _dragStartGlobalPosition,
+          _gestureDx,
+          _gestureDy,
+        )) {
+      _verticalDragAccepted = false;
+      return;
+    }
 
     if (!_verticalDragAccepted) {
       final absDx = _gestureDx.abs();
