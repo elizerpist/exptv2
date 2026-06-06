@@ -66,6 +66,26 @@ void main() {
     },
   );
 
+  test('TransactionRecord treats recurring rule links as generated', () {
+    final record = TransactionRecord.fromMap({
+      'id': 250905,
+      'date': '2025.09.24',
+      'time': '21:56',
+      'merchant': 'Bank hitel',
+      'amount': -100000,
+      'userAssignedName': 'Hitel',
+      'transactionCategoryID': 6,
+      'recurringRuleId': 42,
+      'recurringInstanceId': 4201,
+    });
+
+    expect(record.isRecurringGenerated, isTrue);
+    expect(record.recurringRuleId, 42);
+    expect(record.recurringInstanceId, 4201);
+    expect(record.toMap(), containsPair('recurringRuleId', 42));
+    expect(record.toMap(), containsPair('recurringInstanceId', 4201));
+  });
+
   test('TransactionSummary calculates income expense and active total', () {
     final records = [
       TransactionRecord.fromMap({

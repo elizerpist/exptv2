@@ -41,11 +41,7 @@ Modify native files:
 Create Dart files:
 
 - `lib/features/transactions/models/recurring_rule.dart`: Dart model and draft for recurring rules.
-- `lib/features/transactions/models/recurring_rule_instance.dart`: Dart model for pending/activated instances.
-- `lib/features/transactions/widgets/recurring_manager/recurring_manager_sheet.dart`: combined manager sheet.
-- `lib/features/transactions/widgets/recurring_manager/recurring_rule_editor.dart`: upper form for date/push rules.
-- `lib/features/transactions/widgets/recurring_manager/recurring_rule_list.dart`: lower grouped manager list.
-- `lib/features/transactions/widgets/recurring_manager/push_rule_training_panel.dart`: rule-scoped parser trainer.
+- `lib/features/transactions/widgets/recurring_manager_sheet.dart`: combined manager sheet with upper editor, push trainer, and grouped rule list.
 
 Modify Dart files:
 
@@ -58,8 +54,8 @@ Modify Dart files:
 - `lib/features/transactions/widgets/transaction_log_list.dart`: pass new ghost records.
 - `lib/features/shell/expt_shell.dart`: FAB long-press opens recurring manager, no category editor long-press.
 - `lib/features/shell/widgets/expt_fab.dart`: preserve long-press callback shape.
-- `lib/features/settings/settings_page.dart`: remove recurring manager entry and keep only global push-match setting.
-- `lib/features/settings/state/settings_store.dart`: remove recurring CRUD, add push-match setting persistence.
+- `lib/features/settings/settings_page.dart`: remove recurring manager entry.
+- `lib/features/settings/state/settings_store.dart`: remove recurring CRUD from Settings bootstrap/store.
 - `lib/features/settings/data/settings_repository.dart`: remove recurring CRUD from Settings repository.
 - `lib/features/settings/widgets/options/recurring_options_panel.dart`: remove after manager replacement.
 - `lib/features/transactions/widgets/category_menu/category_menu_panel.dart`: add header plus button.

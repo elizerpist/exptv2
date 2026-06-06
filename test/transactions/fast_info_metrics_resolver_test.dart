@@ -175,6 +175,30 @@ void main() {
     expect(metrics['kiadas_bevetel_arany']?.primaryValue, contains('maradt'));
   });
 
+  test(
+    'recurring generated income is excluded from income comparison visual',
+    () {
+      final metrics = FastInfoMetricsResolver.resolve(
+        _snapshot(
+          now: DateTime(2026, 6, 10, 12),
+          transactions: <TransactionRecord>[
+            _transaction(1, '2026.06.01', 100000, recurringTransactionId: 55),
+            _transaction(2, '2026.06.02', 25000),
+            _transaction(3, '2026.05.05', 40000),
+            _transaction(4, '2026.05.06', 300000, recurringTransactionId: 55),
+          ],
+        ),
+      );
+
+      final metric = metrics['bevetel_ebben_a_honapban']!;
+
+      expect(metric.primaryValue, '125 000 Ft');
+      expect(metric.visual.kind, FastInfoVisualKind.incomeComparisonBars);
+      expect(metric.visual.value, 25000);
+      expect(metric.visual.compareValue, 40000);
+    },
+  );
+
   test('pending recurring income ghosts feed expected income metrics', () {
     final metrics = FastInfoMetricsResolver.resolve(
       _snapshot(

@@ -13,6 +13,7 @@ import '../models/overview_budget_data.dart';
 import '../models/category_limit.dart';
 import '../models/fast_info_metric_snapshot.dart';
 import '../models/recurring_ghost_record.dart';
+import '../models/recurring_rule.dart';
 import '../models/summary_window.dart';
 import '../models/transaction_log_entry.dart';
 import '../models/transaction_category.dart';
@@ -44,6 +45,7 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionCategory> _categories = [];
   List<TransactionRecord> _transactions = [];
   List<RecurringGhostRecord> _recurringGhostTransactions = [];
+  List<RecurringRule> _recurringRules = const [];
   List<CategoryLimit> _limits = [];
   List<TransactionCategory> _categoriesView = const [];
   List<TransactionRecord> _transactionsView = const [];
@@ -89,6 +91,7 @@ class TransactionStore extends ChangeNotifier {
   List<RecurringGhostRecord> get recurringGhostTransactions =>
       _recurringGhostTransactionsView;
   List<CategoryLimit> get limits => _limitsView;
+  List<RecurringRule> get recurringRules => List.unmodifiable(_recurringRules);
 
   Map<String, FastInfoMetricResult> get fastInfoMetrics {
     final now = _clock();
@@ -800,6 +803,72 @@ class TransactionStore extends ChangeNotifier {
     return count;
   }
 
+  Future<void> loadRecurringRules() async {
+    _recurringRules = await _repository.listRecurringRules();
+    notifyListeners();
+  }
+
+  Future<void> saveRecurringRule({
+    int? id,
+    required RecurringTriggerType triggerType,
+    TransactionType? transactionType,
+    required String name,
+    required double estimatedAmount,
+    required int expectedDayOfMonth,
+    required int categoryId,
+    bool isActive = true,
+    String appFilterText = '',
+    String packageName = '',
+    String appLabel = '',
+    String sampleText = '',
+    String includeKeyword = '',
+    String amountPattern = '',
+    String amountSelection = '',
+    String merchantPattern = '',
+    String merchantSelection = '',
+    int dateToleranceDays = 5,
+    double amountTolerancePercent = 20,
+    double amountToleranceMin = 5000,
+  }) async {
+    final draft = RecurringRuleDraft(
+      triggerType: triggerType,
+      transactionType: transactionType ?? activeType,
+      name: name,
+      estimatedAmount: estimatedAmount,
+      expectedDayOfMonth: expectedDayOfMonth,
+      categoryId: categoryId,
+      isActive: isActive,
+      appFilterText: appFilterText,
+      packageName: packageName,
+      appLabel: appLabel,
+      sampleText: sampleText,
+      includeKeyword: includeKeyword,
+      amountPattern: amountPattern,
+      amountSelection: amountSelection,
+      merchantPattern: merchantPattern,
+      merchantSelection: merchantSelection,
+      dateToleranceDays: dateToleranceDays,
+      amountTolerancePercent: amountTolerancePercent,
+      amountToleranceMin: amountToleranceMin,
+    );
+    if (id == null) {
+      await _repository.addRecurringRule(draft);
+    } else {
+      await _repository.updateRecurringRule(id, draft);
+    }
+    await _reloadRecurringRuleState();
+  }
+
+  Future<void> toggleRecurringRule(RecurringRule rule) async {
+    await _repository.toggleRecurringRule(rule.id, !rule.isActive);
+    await _reloadRecurringRuleState();
+  }
+
+  Future<void> deleteRecurringRule(RecurringRule rule) async {
+    await _repository.deleteRecurringRule(rule.id);
+    await _reloadRecurringRuleState();
+  }
+
   Future<void> addCategory({
     required String name,
     required TransactionType type,
@@ -910,6 +979,12 @@ class TransactionStore extends ChangeNotifier {
       '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
     );
     notifyListeners();
+  }
+
+  Future<void> _reloadRecurringRuleState() async {
+    _recurringRules = await _repository.listRecurringRules();
+    await _reload();
+    _scheduleNotificationRefresh();
   }
 
   void _scheduleNotificationRefresh() {

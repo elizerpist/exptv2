@@ -35,17 +35,32 @@ class CategoryMenuPanel extends StatelessWidget {
         .toList();
     return Column(
       children: [
-        const SizedBox(
+        SizedBox(
           height: 54,
-          child: Center(
-            child: Text(
-              'Válassz kategóriát',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.gray800,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Text(
+                'Válassz kategóriát',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.gray800,
+                ),
               ),
-            ),
+              Positioned(
+                right: 14,
+                child: IconButton(
+                  key: const ValueKey('category-menu-add-button'),
+                  tooltip: 'Új kategória',
+                  onPressed: onAdd,
+                  icon: const Icon(
+                    Icons.add_rounded,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(

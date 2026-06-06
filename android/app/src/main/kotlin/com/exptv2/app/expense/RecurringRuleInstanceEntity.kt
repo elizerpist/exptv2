@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.util.Calendar
 
 object RecurringRuleInstanceStatus {
     const val PENDING = "pending"
@@ -71,4 +72,41 @@ data class RecurringRuleInstanceEntity(
         "createdAt" to createdAt,
         "updatedAt" to updatedAt,
     )
+
+    fun toLegacyGhostMap(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "recurringTransactionId" to ruleId,
+        "periodKey" to periodKey,
+        "name" to nameSnapshot,
+        "amount" to estimatedAmount,
+        "transactionType" to transactionTypeSnapshot,
+        "date" to estimatedDate,
+        "time" to "00:00",
+        "categoryId" to categoryIdSnapshot,
+        "categoryName" to categoryNameSnapshot,
+        "categoryColor" to categoryColorSnapshot,
+        "categoryIconSlot" to categoryIconSlotSnapshot,
+        "triggerMillis" to triggerMillisForDate(estimatedDate),
+        "isActivated" to (status == RecurringRuleInstanceStatus.ACTIVATED),
+        "activatedTransactionId" to activatedTransactionId,
+        "createdAt" to createdAt,
+        "updatedAt" to updatedAt,
+    )
+}
+
+private fun triggerMillisForDate(value: String): Long {
+    val parts = value.trim().replace('.', '-').split("-")
+    if (parts.size != 3) return 0L
+    val year = parts[0].toIntOrNull() ?: return 0L
+    val month = parts[1].toIntOrNull() ?: return 0L
+    val day = parts[2].toIntOrNull() ?: return 0L
+    return Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, month - 1)
+        set(Calendar.DAY_OF_MONTH, day)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }

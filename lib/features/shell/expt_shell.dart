@@ -27,6 +27,7 @@ import '../transactions/widgets/category_menu/category_editor_panel.dart';
 import '../transactions/widgets/category_menu/category_editor_sheet.dart';
 import '../transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
+import '../transactions/widgets/recurring_manager_sheet.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
@@ -329,9 +330,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _handleFabLongPressed() {
     DebugConsole.log(
-      '[SlideUpMenu] AddCategory shell open requested source=fabLongPress',
+      '[SlideUpMenu] RecurringManager shell open requested source=fabLongPress',
     );
-    _sheetHostKey.currentState?.openCategory();
+    _sheetHostKey.currentState?.openRecurring();
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
@@ -465,6 +466,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             child: _ShellSheetHost(
               key: _sheetHostKey,
               store: _transactionStore,
+              nativeBridge: widget.nativeBridge,
               budgetEditorActiveKey: _budgetEditorActiveKey,
             ),
           ),
@@ -478,10 +480,12 @@ class _ShellSheetHost extends StatefulWidget {
   const _ShellSheetHost({
     super.key,
     required this.store,
+    required this.nativeBridge,
     required this.budgetEditorActiveKey,
   });
 
   final TransactionStore store;
+  final NativeBridge nativeBridge;
   final ValueNotifier<String?> budgetEditorActiveKey;
 
   @override
@@ -491,6 +495,7 @@ class _ShellSheetHost extends StatefulWidget {
 class _ShellSheetHostState extends State<_ShellSheetHost> {
   final _transactionSlotKey = GlobalKey<_TransactionSheetSlotState>();
   final _categorySlotKey = GlobalKey<_CategorySheetSlotState>();
+  final _recurringSlotKey = GlobalKey<_RecurringSheetSlotState>();
   final _budgetSlotKey = GlobalKey<_BudgetTargetSheetSlotState>();
 
   void openTransaction({
@@ -499,6 +504,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     TransactionRecord? transaction,
   }) {
     _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _transactionSlotKey.currentState?.open(
       requestedAt: requestedAt,
@@ -509,8 +515,16 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 
   void openCategory() {
     _transactionSlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _categorySlotKey.currentState?.open();
+  }
+
+  void openRecurring() {
+    _transactionSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.open(requestedAt: DateTime.now());
   }
 
   void openBudgetTargetEditor(
@@ -520,6 +534,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   }) {
     _transactionSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.open(
       item,
       requestedAt: requestedAt,
@@ -538,6 +553,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   void closeAll() {
     _transactionSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
   }
 
@@ -553,6 +569,13 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
         ),
         Positioned.fill(
           child: _CategorySheetSlot(key: _categorySlotKey, store: widget.store),
+        ),
+        Positioned.fill(
+          child: _RecurringSheetSlot(
+            key: _recurringSlotKey,
+            store: widget.store,
+            nativeBridge: widget.nativeBridge,
+          ),
         ),
         Positioned.fill(
           child: _BudgetTargetSheetSlot(
@@ -691,6 +714,51 @@ class _CategorySheetSlotState extends State<_CategorySheetSlot> {
     return (screenHeight - TransactionMenuMetrics.overlayTop)
         .clamp(0.0, screenHeight)
         .toDouble();
+  }
+}
+
+class _RecurringSheetSlot extends StatefulWidget {
+  const _RecurringSheetSlot({
+    super.key,
+    required this.store,
+    required this.nativeBridge,
+  });
+
+  final TransactionStore store;
+  final NativeBridge nativeBridge;
+
+  @override
+  State<_RecurringSheetSlot> createState() => _RecurringSheetSlotState();
+}
+
+class _RecurringSheetSlotState extends State<_RecurringSheetSlot> {
+  var _open = false;
+  DateTime? _openRequestedAt;
+
+  void open({required DateTime requestedAt}) {
+    setState(() {
+      _open = true;
+      _openRequestedAt = requestedAt;
+    });
+  }
+
+  void close() {
+    if (!_open && _openRequestedAt == null) return;
+    setState(() {
+      _open = false;
+      _openRequestedAt = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RecurringManagerSheet(
+      store: widget.store,
+      visible: _open,
+      openRequestedAt: _openRequestedAt,
+      onLoadInstalledApps: widget.nativeBridge.listInstalledApps,
+      onClose: close,
+    );
   }
 }
 

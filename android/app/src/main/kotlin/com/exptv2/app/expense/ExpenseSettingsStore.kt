@@ -10,6 +10,7 @@ class ExpenseSettingsStore(context: Context) {
     fun loadSettings(): Map<String, Any?> = mapOf(
         "themeSettings" to loadThemeSettings(),
         "fastInfoConfig" to loadFastInfoConfig(),
+        "pushRecurringSettings" to loadPushRecurringSettings(),
     )
 
     fun loadThemeSettings(): Map<String, Any?> {
@@ -46,6 +47,20 @@ class ExpenseSettingsStore(context: Context) {
         return normalized
     }
 
+    fun loadPushRecurringSettings(): Map<String, Any?> = mapOf(
+        "conflictPolicy" to loadPushRecurringConflictPolicy(),
+    )
+
+    fun loadPushRecurringConflictPolicy(): String {
+        return normalizePushRecurringConflictPolicy(prefs.getString(KEY_PUSH_RECURRING_CONFLICT_POLICY, null))
+    }
+
+    fun updatePushRecurringSettings(args: Map<*, *>): Map<String, Any?> {
+        val policy = normalizePushRecurringConflictPolicy(args["conflictPolicy"]?.toString())
+        prefs.edit().putString(KEY_PUSH_RECURRING_CONFLICT_POLICY, policy).apply()
+        return loadSettings()
+    }
+
     private fun defaultFastInfoConfig(): Map<String, Any?> = ExpenseFastInfoConfigNormalizer.defaultConfig()
 
     private fun jsonObjectToMap(json: JSONObject): Map<String, Any?> {
@@ -63,7 +78,17 @@ class ExpenseSettingsStore(context: Context) {
         else -> value
     }
 
+    private fun normalizePushRecurringConflictPolicy(value: String?): String {
+        return when (value) {
+            PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE -> PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE
+            else -> PUSH_RECURRING_POLICY_BEST_MATCH
+        }
+    }
+
     companion object {
+        const val PUSH_RECURRING_POLICY_BEST_MATCH = "automaticBestMatch"
+        const val PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE = "askOnMultipleMatches"
+
         private const val KEY_MAGNET_TYPE = "magnetType"
         private const val KEY_CARD_COLOR = "cardColor"
         private const val KEY_THEME = "theme"
@@ -71,5 +96,6 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BOX_COLOR = "boxColor"
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_FAST_INFO = "fastInfoConfig"
+        private const val KEY_PUSH_RECURRING_CONFLICT_POLICY = "pushRecurringConflictPolicy"
     }
 }

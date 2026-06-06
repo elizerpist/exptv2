@@ -61,6 +61,9 @@ void main() {
           if (call.method == 'expenseListRecurringTransactions') {
             return <Map<String, Object?>>[];
           }
+          if (call.method == 'expenseListRecurringRules') {
+            return <Map<String, Object?>>[];
+          }
           if (call.method == 'expenseListCategories') {
             return (expenseBootstrapPayload()['categories']
                 as List<Map<String, Object?>>);
@@ -304,17 +307,24 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
-  testWidgets('FAB long press opens the new category editor', (tester) async {
+  testWidgets('FAB long press opens the recurring manager', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
     await tester.longPress(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Új kiadási kategória'), findsOneWidget);
+    expect(find.text('Ismétlődő kiadás'), findsOneWidget);
+    expect(find.text('Kiadás a fő pill alapján'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('recurring-trigger-date')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-trigger-push')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('category-editor-slide-card')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
@@ -500,7 +510,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('slide-up-menu-veil')));
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('category-menu-add-button')));
     await tester.pumpAndSettle();
 
     final categorySaveBottom = tester
@@ -681,7 +694,7 @@ void main() {
       find.byKey(const ValueKey('category-menu-back-button')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('category-add-button')), findsNothing);
+    expect(find.byKey(const ValueKey('category-menu-add-button')), findsOneWidget);
   });
 
   testWidgets('transaction editor is focused and aligned to summary pill', (
@@ -752,8 +765,8 @@ void main() {
         findsNothing,
       );
       await _tapFab(tester);
-      expect(find.text('Új kiadási tranzakció'), findsOneWidget);
-      expect(find.text('Új bevételi tranzakció'), findsNothing);
+      expect(find.text('Új bevételi tranzakció'), findsOneWidget);
+      expect(find.text('Új kiadási tranzakció'), findsNothing);
     },
   );
 

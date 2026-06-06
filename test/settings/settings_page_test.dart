@@ -91,8 +91,6 @@ void main() {
                 ),
               );
               return call.arguments;
-            case 'expenseListRecurringTransactions':
-              return <Map<String, Object?>>[recurringRow()];
             case 'expenseListCategories':
               return <Map<String, Object?>>[
                 <String, Object?>{
@@ -156,9 +154,10 @@ void main() {
     expect(find.text('Adatvédelem és biztonság'), findsOneWidget);
     expect(find.text('Visszajelzések'), findsOneWidget);
     expect(find.text('Információ és támogatás'), findsOneWidget);
+    expect(find.text('Ismétlődő tranzakciók'), findsNothing);
   });
 
-  testWidgets('opens theme, FastInfo, and recurring submenus', (tester) async {
+  testWidgets('opens theme and FastInfo submenus', (tester) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -203,97 +202,6 @@ void main() {
     expect(fastInfoFrameBottom, 1200 - AppDimensions.bottomNavHeight);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Ismétlődő tranzakciók'));
-    await tester.pumpAndSettle();
-    expect(find.text('Ismétlődő tranzakciók'), findsOneWidget);
-    expect(find.text('Új ismétlődő kiadás hozzáadása'), findsOneWidget);
-    expect(find.text('Lakbér'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('recurring-category-selector')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('recurring-category-scroll-list')),
-      findsNothing,
-    );
-    expect(find.byType(DropdownButtonFormField), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('recurring-category-selector')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('recurring-category-scroll-list')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('recurring-category-option-6')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('recurring-category-scroll-list')),
-      findsNothing,
-    );
-
-    final colorDot = tester.widget<Container>(
-      find.descendant(
-        of: find.byKey(const ValueKey('recurring-category-color-7')),
-        matching: find.byType(Container),
-      ),
-    );
-    final decoration = colorDot.decoration! as BoxDecoration;
-    expect(decoration.color, const Color(0xFF0EA5E9));
-  });
-
-  testWidgets('recurring settings can switch to income categories', (
-    tester,
-  ) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          switch (call.method) {
-            case 'expenseLoadSettings':
-              return <String, Object?>{};
-            case 'expenseListRecurringTransactions':
-              return <Map<String, Object?>>[];
-            case 'expenseListCategories':
-              return <Map<String, Object?>>[
-                categoryRow(id: 6, name: 'Lakhatás', type: 'kiadás'),
-                categoryRow(id: 1, name: 'Fizetés', type: 'income'),
-              ];
-            case 'loadNotificationParserProfiles':
-              return <String, Object?>{'profiles': <Object?>[]};
-            case 'listInstalledApps':
-              return <Map<String, Object?>>[];
-            case 'getStatus':
-              return <String, Object?>{
-                'captureMode': 'both',
-                'notificationListenerEnabled': false,
-                'accessibilityEnabled': false,
-                'notificationListenerActive': false,
-                'accessibilityActive': false,
-                'lastNotificationListenerEvent': 0,
-                'lastAccessibilityEvent': 0,
-                'totalEvents': 0,
-              };
-          }
-          return null;
-        });
-
-    await tester.pumpWidget(buildSubject());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Ismétlődő tranzakciók'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('recurring-type-expense')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('recurring-type-income')), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('recurring-type-income')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Bevételi kategória'), findsOneWidget);
-    expect(find.text('Fizetés'), findsWidgets);
   });
 
   testWidgets('permissions menu opens Android permission actions', (
@@ -538,40 +446,4 @@ void main() {
 
     expect(bottom, 1200 - AppDimensions.bottomNavHeight);
   });
-}
-
-Map<String, Object?> recurringRow() {
-  return <String, Object?>{
-    'id': 7,
-    'name': 'Lakbér',
-    'amount': 165000,
-    'transactionType': 'expense',
-    'dayOfMonth': 1,
-    'categoryId': 6,
-    'categoryName': 'Q',
-    'categoryColor': '#dc2626',
-    'categoryIconSlot': 2,
-    'isActive': true,
-    'createdAt': 1777593600000,
-    'updatedAt': 1777593600000,
-  };
-}
-
-Map<String, Object?> categoryRow({
-  required int id,
-  required String name,
-  required String type,
-}) {
-  return <String, Object?>{
-    'transactionCategoryID': id,
-    'name': name,
-    'type': type,
-    'colorSlot': 7,
-    'iconSlot': 2,
-    'backgroundColor': type == 'income' ? '#22c55e' : '#dc2626',
-    'hasLimit': false,
-    'limitAmount': 0,
-    'alertActive': false,
-    'isCustomIcon': true,
-  };
 }

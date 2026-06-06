@@ -18,6 +18,7 @@ data class PushRecurringMatchRule(
     val dateToleranceDays: Int,
     val amountTolerancePercent: Double,
     val amountToleranceMin: Double,
+    val merchantSelection: String,
 )
 
 data class PushRecurringMatchEvent(
@@ -54,14 +55,34 @@ object PushRecurringMatcher {
         val allowedAmountDelta = maxOf(rule.estimatedAmount * rule.amountTolerancePercent / 100.0, rule.amountToleranceMin)
         val amountDelta = abs(rule.estimatedAmount - event.amount)
         if (amountDelta > allowedAmountDelta) return PushRecurringMatchScore(rule.instanceId, false, 0.0)
+        val merchantScore = merchantScore(rule.merchantSelection, event.merchant)
+        if (merchantScore == null) return PushRecurringMatchScore(rule.instanceId, false, 0.0)
         val dateScore = 1.0 - (days.toDouble() / rule.dateToleranceDays.coerceAtLeast(1).toDouble() * 0.2)
-        val amountScore = 1.0 - (amountDelta / allowedAmountDelta * 0.2)
+        val amountScore = if (allowedAmountDelta <= 0.0) {
+            1.0
+        } else 1.0 - (amountDelta / allowedAmountDelta * 0.2)
         return PushRecurringMatchScore(
             instanceId = rule.instanceId,
             matches = true,
-            confidence = ((dateScore + amountScore) / 2.0).coerceIn(0.0, 1.0),
+            confidence = ((dateScore + amountScore + merchantScore) / 3.0).coerceIn(0.0, 1.0),
         )
     }
+
+    private fun merchantScore(expected: String, actual: String): Double? {
+        val expectedText = normalize(expected)
+        if (expectedText.isEmpty()) return 1.0
+        val actualText = normalize(actual)
+        if (actualText == expectedText) return 1.0
+        if (actualText.contains(expectedText) || expectedText.contains(actualText)) return 0.9
+        return null
+    }
+
+    private fun normalize(value: String): String = value
+        .replace('\u00A0', ' ')
+        .replace('\u202F', ' ')
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .lowercase(Locale.ROOT)
 
     private fun parseDateMillis(date: String): Long {
         return SimpleDateFormat("yyyy.MM.dd", Locale.US).apply {

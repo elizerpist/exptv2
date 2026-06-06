@@ -27,6 +27,9 @@ interface RecurringRuleDao {
     @Delete
     suspend fun delete(row: RecurringRuleEntity)
 
+    @Query("UPDATE recurring_rules SET categoryName = :categoryName, categoryColor = :categoryColor, categoryIconSlot = :categoryIconSlot, updatedAt = :updatedAt WHERE categoryId = :categoryId")
+    suspend fun updateCategorySnapshot(categoryId: Int, categoryName: String, categoryColor: String, categoryIconSlot: Int, updatedAt: Long)
+
     @Query("DELETE FROM recurring_rules")
     suspend fun clearAll()
 }

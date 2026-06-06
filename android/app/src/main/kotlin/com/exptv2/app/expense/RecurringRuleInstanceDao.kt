@@ -16,6 +16,9 @@ interface RecurringRuleInstanceDao {
     @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' AND triggerTypeSnapshot = 'date' AND estimatedDate <= :date ORDER BY estimatedDate ASC, id ASC")
     suspend fun dueDateTriggered(date: String): List<RecurringRuleInstanceEntity>
 
+    @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' AND triggerTypeSnapshot = 'date' AND estimatedDate >= :date ORDER BY estimatedDate ASC, id ASC LIMIT 1")
+    suspend fun nextDateTriggeredAtOrAfter(date: String): RecurringRuleInstanceEntity?
+
     @Query("SELECT * FROM recurring_rule_instances WHERE ruleId = :ruleId AND periodKey = :periodKey LIMIT 1")
     suspend fun byRuleAndPeriod(ruleId: Int, periodKey: String): RecurringRuleInstanceEntity?
 
@@ -36,6 +39,9 @@ interface RecurringRuleInstanceDao {
 
     @Query("DELETE FROM recurring_rule_instances WHERE ruleId = :ruleId AND status = 'pending'")
     suspend fun deletePendingForRule(ruleId: Int)
+
+    @Query("UPDATE recurring_rule_instances SET categoryNameSnapshot = :categoryName, categoryColorSnapshot = :categoryColor, categoryIconSlotSnapshot = :categoryIconSlot, updatedAt = :updatedAt WHERE categoryIdSnapshot = :categoryId AND status = 'pending'")
+    suspend fun updatePendingCategorySnapshot(categoryId: Int, categoryName: String, categoryColor: String, categoryIconSlot: Int, updatedAt: Long)
 
     @Query("DELETE FROM recurring_rule_instances")
     suspend fun clearAll()

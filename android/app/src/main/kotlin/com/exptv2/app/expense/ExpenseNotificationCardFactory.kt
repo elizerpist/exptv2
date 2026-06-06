@@ -78,6 +78,34 @@ object ExpenseNotificationCardFactory {
         )
     }
 
+    fun recurringRuleActivated(
+        rule: RecurringRuleEntity,
+        instance: RecurringRuleInstanceEntity,
+        transaction: ExpenseTransactionEntity,
+        now: Long,
+    ): NotificationCardEntity {
+        return NotificationCardEntity(
+            type = "recurring_transaction_alert",
+            title = "Ismétlődő tranzakció aktiválva",
+            message = "${rule.name} teljes értékű tranzakcióként rögzítve.",
+            timestamp = now,
+            isRead = false,
+            isActive = true,
+            priority = "info",
+            categoryId = instance.categoryIdSnapshot,
+            categoryName = instance.categoryNameSnapshot,
+            categoryColor = instance.categoryColorSnapshot,
+            categoryIconSlot = instance.categoryIconSlotSnapshot,
+            recurringTransactionId = rule.id,
+            transactionId = transaction.id,
+            amount = abs(transaction.amount),
+            triggerDate = instance.estimatedDate,
+            nextDueDate = nextDueDate(instance.periodKey, rule.expectedDayOfMonth),
+            createdAt = now,
+            updatedAt = now,
+        )
+    }
+
     fun limitAlert(alert: ExpenseLimitAlert, now: Long): NotificationCardEntity {
         val category = alert.category
         val transaction = alert.transaction

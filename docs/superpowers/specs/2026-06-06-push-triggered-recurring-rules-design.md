@@ -217,7 +217,7 @@ Candidate score inputs:
 
 - app/package/app label match
 - include keyword match
-- merchant regex/selection match
+- merchant regex extraction and optional merchant selection match
 - parsed amount present
 - amount within tolerance
 - event date within `estimatedDate +/- dateToleranceDays`
@@ -233,6 +233,10 @@ Default tolerances:
 The matcher should compare only pending push-triggered instances for the current
 period. It should not activate future-month instances and should not revive
 past pending instances.
+
+If `merchantSelection` was learned from the sample push, it is a disambiguation
+constraint. This prevents two similar fixed items from the same bank app from
+matching only on app, date, and approximate amount.
 
 Conflict handling is global Settings state, not per-rule state:
 
@@ -252,7 +256,8 @@ The component includes:
 
 - app picker/filter
 - sample notification text
-- transaction type inherited from the manager type toggle
+- transaction type inherited from the active main income/expense pill, with no
+  separate income/expense selector inside the recurring manager
 - amount token selection
 - merchant token selection
 - advanced regex fields
@@ -293,7 +298,7 @@ Height and gestures:
 
 Top controls:
 
-- trigger mode: `Időzített` / `Push alapján`
+- trigger mode: `Idő` / `Push`
 - no separate `Kiadás` / `Bevétel` selector; the active main pill is the source
   of truth for a new rule's type
 
@@ -328,8 +333,7 @@ Bottom manager list:
 
 Saving:
 
-- New rules use the active main transaction pill type captured when the recurring
-  manager is opened.
+- New rules use the currently active main transaction pill type when saved.
 - If no item is selected, save creates a new rule.
 - If an item is selected, save updates that rule.
 - After save, the bottom list refreshes and the manager stays open.
@@ -338,12 +342,10 @@ Saving:
 
 Remove the current recurring transaction Settings panel.
 
-Settings should keep only global automation options relevant outside a single
-rule:
+Settings should not expose recurring transaction CRUD anymore. Global automation
+settings can remain in the native settings payload without a recurring submenu:
 
-- Push fixed-item match handling:
-  - automatic best match
-  - ask on multiple matches
+- push fixed-item match handling: automatic best match / ask on multiple matches
 
 ### Category Creation
 
