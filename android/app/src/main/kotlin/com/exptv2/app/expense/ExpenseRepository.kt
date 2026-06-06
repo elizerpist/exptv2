@@ -15,6 +15,8 @@ class ExpenseRepository(context: Context) {
     private val categoryLimits = db.categoryLimits()
     private val recurringTransactions = db.recurringTransactions()
     private val recurringGhosts = db.recurringGhostTransactions()
+    private val recurringRules = db.recurringRules()
+    private val recurringRuleInstances = db.recurringRuleInstances()
     private val notificationCards = db.notificationCards()
     private val notificationEmitter = ExpenseNotificationEmitter(appContext)
     private val settingsStore = ExpenseSettingsStore(appContext)
@@ -23,16 +25,17 @@ class ExpenseRepository(context: Context) {
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
-        syncRecurringGhosts(recurringTargetMillis())
+        val targetMillis = recurringTargetMillis()
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
         val categoryRows = categories.all()
         val transactionRows = transactions.all()
         val limitRows = categoryLimits.list(null, null, null)
-        val ghostRows = recurringGhosts.pending()
+        val instanceRows = recurringRuleInstances.pending()
         return mapOf(
             "categories" to categoryRows.map { it.toMap() },
             "transactions" to transactionRows.map { it.toMap() },
             "limits" to limitRows.map { it.toMap() },
-            "recurringGhostTransactions" to ghostRows.map { it.toMap() },
+            "recurringGhostTransactions" to instanceRows.map { it.toMap() },
         )
     }
 
@@ -92,14 +95,15 @@ class ExpenseRepository(context: Context) {
 
     suspend fun listRecurringGhostTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()
-        syncRecurringGhosts(recurringTargetMillis())
-        return recurringGhosts.pending().map { it.toMap() }
+        ensureRecurringRuleInstancesForPeriod(recurringTargetMillis())
+        return recurringRuleInstances.pending().map { it.toMap() }
     }
 
     suspend fun ensureRecurringGhostTransactions(targetMillis: Long = recurringTargetMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
         ensureRecurringGhostsForActivePeriod(targetMillis)
-        return recurringGhosts.pending().map { it.toMap() }
+        return recurringRuleInstances.pending().map { it.toMap() }
     }
 
     suspend fun addRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
@@ -653,6 +657,42 @@ class ExpenseRepository(context: Context) {
     }
 
     private fun recurringTargetMillis(): Long = debugClockStore.effectiveNow()
+
+    private suspend fun ensureRecurringRuleInstancesForPeriod(targetMillis: Long) {
+        val now = System.currentTimeMillis()
+        val currentPeriod = RecurringRuleInstancePlanner.plan(targetMillis, 1, 0.0).periodKey
+        recurringRuleInstances.expirePastPending(currentPeriod, now)
+        for (rule in recurringRules.active()) {
+            val plan = RecurringRuleInstancePlanner.plan(
+                targetMillis = targetMillis,
+                expectedDayOfMonth = rule.expectedDayOfMonth,
+                estimatedAmount = rule.estimatedAmount,
+            )
+            if (recurringRuleInstances.byRuleAndPeriod(rule.id, plan.periodKey) != null) continue
+            recurringRuleInstances.insert(
+                RecurringRuleInstanceEntity(
+                    ruleId = rule.id,
+                    periodKey = plan.periodKey,
+                    status = RecurringRuleInstanceStatus.PENDING,
+                    estimatedDate = plan.estimatedDate,
+                    estimatedAmount = plan.estimatedAmount,
+                    triggerTypeSnapshot = rule.triggerType,
+                    transactionTypeSnapshot = rule.transactionType,
+                    nameSnapshot = rule.name,
+                    categoryIdSnapshot = rule.categoryId,
+                    categoryNameSnapshot = rule.categoryName,
+                    categoryColorSnapshot = rule.categoryColor,
+                    categoryIconSlotSnapshot = rule.categoryIconSlot,
+                    activatedTransactionId = null,
+                    activatedAt = null,
+                    matchedNotificationEventId = null,
+                    matchConfidence = null,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+    }
 
     private suspend fun syncRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
         ensureRecurringGhostsForActivePeriod(targetMillis)
