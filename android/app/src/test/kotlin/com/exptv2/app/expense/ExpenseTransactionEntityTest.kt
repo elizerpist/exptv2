@@ -22,4 +22,29 @@ class ExpenseTransactionEntityTest {
 
         assertEquals(9, row.toMap()["recurringTransactionId"])
     }
+
+    @Test
+    fun transactionMapIncludesRecurringRuleAndInstanceLinks() {
+        val row = ExpenseTransactionEntity(
+            id = 26060101,
+            date = "2026.06.01",
+            time = "09:10",
+            latitude = null,
+            longitude = null,
+            address = "Push",
+            merchant = "OTP Bank",
+            amount = -120000.0,
+            userAssignedName = "Lakáshitel",
+            transactionCategoryID = 6,
+            recurringTransactionId = 9,
+            recurringRuleId = 90,
+            recurringInstanceId = 900,
+        )
+
+        val map = row.toMap()
+
+        assertEquals(9, map["recurringTransactionId"])
+        assertEquals(90, map["recurringRuleId"])
+        assertEquals(900, map["recurringInstanceId"])
+    }
 }
