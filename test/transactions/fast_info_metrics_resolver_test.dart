@@ -175,6 +175,37 @@ void main() {
     expect(metrics['kiadas_bevetel_arany']?.primaryValue, contains('maradt'));
   });
 
+  test('pending recurring income ghosts feed expected income metrics', () {
+    final metrics = FastInfoMetricsResolver.resolve(
+      _snapshot(
+        now: DateTime(2026, 6, 3, 12),
+        transactions: const <TransactionRecord>[],
+        recurringGhosts: <RecurringGhostRecord>[
+          _ghost(
+            id: 9,
+            recurringTransactionId: 99,
+            name: 'Fizetés',
+            amount: 300000,
+            date: '2026.06.05',
+            transactionType: 'income',
+            categoryId: 2,
+            categoryName: 'Fizetés',
+          ),
+        ],
+      ),
+    );
+
+    expect(metrics['bevetel_ebben_a_honapban']?.primaryValue, '300 000 Ft');
+    expect(
+      metrics['bevetel_ebben_a_honapban']?.secondaryValues,
+      contains('Várható bevétel: 300 000 Ft'),
+    );
+    expect(
+      metrics['megtakaritas']?.secondaryValues,
+      contains('várható cél: 600%'),
+    );
+  });
+
   test('omits visuals that have no meaningful denominator', () {
     final noLimit = FastInfoMetricsResolver.resolve(
       _snapshot(limits: const <CategoryLimit>[]),
@@ -388,6 +419,9 @@ RecurringGhostRecord _ghost({
   required double amount,
   required String date,
   bool isActivated = false,
+  String transactionType = 'expense',
+  int categoryId = 3,
+  String categoryName = 'Lakbér',
 }) {
   return RecurringGhostRecord(
     id: id,
@@ -395,11 +429,11 @@ RecurringGhostRecord _ghost({
     periodKey: '2026-06',
     name: name,
     amount: amount,
-    transactionType: 'expense',
+    transactionType: transactionType,
     date: date,
     time: '08:00',
-    categoryId: 3,
-    categoryName: 'Lakbér',
+    categoryId: categoryId,
+    categoryName: categoryName,
     categoryColor: '#64748b',
     categoryIconSlot: 2,
     triggerMillis: 0,

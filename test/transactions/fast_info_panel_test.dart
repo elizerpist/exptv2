@@ -811,6 +811,24 @@ void main() {
         findsOneWidget,
       );
       expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey('fastinfo-rolling-split-koltesi_trend'),
+              ),
+            )
+            .height,
+        13,
+      );
+      for (final key in <String>[
+        'fastinfo-rolling-split-prev-koltesi_trend',
+        'fastinfo-rolling-split-current-koltesi_trend',
+      ]) {
+        final segment = find.byKey(ValueKey(key));
+        expect(segment, findsOneWidget);
+        expect(tester.getSize(segment).width, greaterThan(0));
+      }
+      expect(
         find.byKey(const ValueKey('fastinfo-trend-koltesi_trend')),
         findsNothing,
       );
@@ -878,6 +896,279 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('fastinfo-visual-avatar-legutobbi_tranzakcio')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('forecast box and pill follow v25 trend and limit decision', (
+    tester,
+  ) async {
+    const metrics = <String, FastInfoMetricResult>{
+      'varhato_ho_vegi_koltes': FastInfoMetricResult(
+        pillValue: '870k',
+        primaryValue: '870 000 Ft',
+        secondaryValues: <String>['havi keret 72%', 'sáv 780-940k'],
+        semantic: FastInfoSemantic.good,
+        chartKind: FastInfoChartKind.sparkline,
+        chartSeries: <FastInfoChartSeries>[
+          FastInfoChartSeries(
+            label: 'Előrejelzés',
+            values: <double>[20, 18, 21, 15, 9, 11, 8],
+          ),
+        ],
+        visual: FastInfoVisualDescriptor(
+          kind: FastInfoVisualKind.projectionFill,
+          value: .72,
+          marker: .72,
+          compareValue: .58,
+          values: <double>[20, 18, 21, 15, 9, 11, 8],
+          semantic: FastInfoSemantic.good,
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(
+            config: FastInfoConfig(
+              pills: [
+                _slot('varhato_ho_vegi_koltes', FastInfoSlotType.pill),
+                null,
+                null,
+              ],
+              boxes: [
+                _slot('varhato_ho_vegi_koltes', FastInfoSlotType.box),
+                null,
+                null,
+              ],
+            ),
+            metrics: metrics,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Várható hó végi'), findsOneWidget);
+    expect(find.text('Várható hó végi költés'), findsOneWidget);
+    expect(find.text('870 000 Ft'), findsWidgets);
+    expect(find.text('optimista/várt/pesszimista'), findsNothing);
+    expect(find.text('Fix-korrigált becslés'), findsOneWidget);
+    expect(find.text('Becslés trend:'), findsOneWidget);
+    expect(find.text('elmúlt 7 nap · today kék'), findsOneWidget);
+    expect(find.text('Becslési sáv:'), findsOneWidget);
+    expect(find.text('havi keret 72%'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-forecast-line-varhato_ho_vegi_koltes'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-forecast-range-varhato_ho_vegi_koltes'),
+      ),
+      findsOneWidget,
+    );
+    final pillLimit = find.byKey(
+      const ValueKey('fastinfo-forecast-pill-limit-varhato_ho_vegi_koltes'),
+    );
+    expect(pillLimit, findsOneWidget);
+    expect(tester.getSize(pillLimit), const Size(84, 24));
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-visual-projection-varhato_ho_vegi_koltes'),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tightest limit box and pill follow v25 avatar projection decision', (
+    tester,
+  ) async {
+    const metrics = <String, FastInfoMetricResult>{
+      'leggyorsabban_fogyo_kategorialimit': FastInfoMetricResult(
+        pillValue: 'Étel 90%',
+        primaryValue: 'Étel',
+        secondaryValues: <String>[
+          '54 200 / 60 000 Ft',
+          '5 800 Ft maradt',
+          'várható 108%',
+          'Étel hó végére',
+        ],
+        progressKind: FastInfoProgressKind.bar,
+        progress: .90,
+        semantic: FastInfoSemantic.warning,
+        avatar: FastInfoAvatar(colorHex: '#f59e0b', iconSlot: 2),
+        visual: FastInfoVisualDescriptor(
+          kind: FastInfoVisualKind.overflowRisk,
+          value: 1.08,
+          compareValue: .90,
+          semantic: FastInfoSemantic.bad,
+          avatar: FastInfoAvatar(colorHex: '#f59e0b', iconSlot: 2),
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(
+            config: FastInfoConfig(
+              pills: [
+                _slot(
+                  'leggyorsabban_fogyo_kategorialimit',
+                  FastInfoSlotType.pill,
+                ),
+                null,
+                null,
+              ],
+              boxes: [
+                _slot(
+                  'leggyorsabban_fogyo_kategorialimit',
+                  FastInfoSlotType.box,
+                ),
+                null,
+                null,
+              ],
+            ),
+            metrics: metrics,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Legszűkebb limit'), findsWidgets);
+    expect(find.text('Étel'), findsWidgets);
+    expect(find.text('54 200 / 60 000 Ft'), findsOneWidget);
+    expect(find.text('5 800 Ft maradt'), findsOneWidget);
+    expect(find.text('Limit állás:'), findsOneWidget);
+    expect(find.text('Figyelendő:'), findsOneWidget);
+    expect(find.text('90%'), findsOneWidget);
+    expect(find.text('várható 108%'), findsOneWidget);
+    expect(find.text('Étel hó végére'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey(
+          'fastinfo-tightest-limit-avatar-leggyorsabban_fogyo_kategorialimit',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+          'fastinfo-tightest-limit-progress-leggyorsabban_fogyo_kategorialimit',
+        ),
+      ),
+      findsOneWidget,
+    );
+    final overflow = find.byKey(
+      const ValueKey(
+        'fastinfo-tightest-limit-pill-overflow-leggyorsabban_fogyo_kategorialimit',
+      ),
+    );
+    expect(overflow, findsOneWidget);
+    expect(tester.getSize(overflow), const Size(84, 24));
+    expect(
+      find.byKey(
+        const ValueKey(
+          'fastinfo-visual-overflow-risk-leggyorsabban_fogyo_kategorialimit',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('top merchant box and pill follow v25 activity decision', (
+    tester,
+  ) async {
+    const metrics = <String, FastInfoMetricResult>{
+      'leggyakoribb_kereskedo': FastInfoMetricResult(
+        pillValue: 'Spar 14x',
+        primaryValue: 'Spar',
+        secondaryValues: <String>[
+          'legtöbb tranzakció',
+          '14 alkalom',
+          '82 400 Ft',
+          '6 aktív nap',
+          'Bolt',
+        ],
+        avatar: FastInfoAvatar(colorHex: '#3b82f6', iconSlot: 4),
+        visual: FastInfoVisualDescriptor(
+          kind: FastInfoVisualKind.activityStrip,
+          value: 14,
+          avatar: FastInfoAvatar(colorHex: '#3b82f6', iconSlot: 4),
+          points: <FastInfoVisualPoint>[
+            FastInfoVisualPoint(label: '1', value: 1),
+            FastInfoVisualPoint(label: '2', value: 0),
+            FastInfoVisualPoint(label: '3', value: 1),
+            FastInfoVisualPoint(label: '4', value: 1),
+            FastInfoVisualPoint(label: '5', value: 0),
+            FastInfoVisualPoint(label: '6', value: 1),
+            FastInfoVisualPoint(label: '7', value: 0),
+            FastInfoVisualPoint(label: '8', value: 0),
+            FastInfoVisualPoint(label: '9', value: 1),
+            FastInfoVisualPoint(label: '10', value: 0),
+            FastInfoVisualPoint(label: '11', value: 1, isToday: true),
+            FastInfoVisualPoint(label: '12', value: 0),
+            FastInfoVisualPoint(label: '13', value: 0),
+            FastInfoVisualPoint(label: '14', value: 0),
+          ],
+        ),
+      ),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FastInfoPanel(
+            config: FastInfoConfig(
+              pills: [
+                _slot('leggyakoribb_kereskedo', FastInfoSlotType.pill),
+                null,
+                null,
+              ],
+              boxes: [
+                _slot('leggyakoribb_kereskedo', FastInfoSlotType.box),
+                null,
+                null,
+              ],
+            ),
+            metrics: metrics,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Gyakori kereskedő'), findsWidgets);
+    expect(find.text('Spar'), findsWidgets);
+    expect(find.text('Spar 14x'), findsOneWidget);
+    expect(find.text('legtöbb tranzakció'), findsOneWidget);
+    expect(find.text('Bolt'), findsOneWidget);
+    expect(find.text('Tranzakció:'), findsOneWidget);
+    expect(find.text('14 alkalom'), findsOneWidget);
+    expect(find.text('Összesen:'), findsOneWidget);
+    expect(find.text('82 400 Ft'), findsOneWidget);
+    expect(find.text('6 aktív nap'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-top-merchant-avatar-leggyakoribb_kereskedo'),
+      ),
+      findsOneWidget,
+    );
+    final strip = find.byKey(
+      const ValueKey('fastinfo-merchant-days-leggyakoribb_kereskedo'),
+    );
+    expect(strip, findsOneWidget);
+    expect(tester.getSize(strip), const Size(84, 24));
+    expect(
+      find.byKey(
+        const ValueKey('fastinfo-visual-activity-leggyakoribb_kereskedo'),
+      ),
       findsNothing,
     );
     expect(tester.takeException(), isNull);

@@ -24,6 +24,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.debugLabel,
     this.panelHeight,
     this.dragHandleExtent = 56,
+    this.dismissThreshold = _SlideUpMenuCardState.defaultDismissThreshold,
     this.entryDuration = const Duration(milliseconds: 192),
     this.visible = true,
     this.showFocusVeil = true,
@@ -42,6 +43,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final String? debugLabel;
   final double? panelHeight;
   final double dragHandleExtent;
+  final double dismissThreshold;
   final Duration entryDuration;
   final bool visible;
   final bool showFocusVeil;
@@ -58,7 +60,7 @@ class SlideUpMenuCard extends StatefulWidget {
 
 class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     with TickerProviderStateMixin {
-  static const _dismissThreshold = 90.0;
+  static const defaultDismissThreshold = 90.0;
   static const _minDragOffset = 0.0;
   static const _axisLockSlop = 8.0;
   static const _horizontalAxisBias = 1.2;
@@ -510,14 +512,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       _resetPointerGestureState();
       return;
     }
-    final decision = dragOffset > _dismissThreshold ? 'dismiss' : 'snap';
+    final decision = dragOffset > widget.dismissThreshold ? 'dismiss' : 'snap';
     DebugConsole.log(
-      '[SlideUpMenu] $_debugLabel drag end offset=${dragOffset.toStringAsFixed(1)} threshold=${_dismissThreshold.toStringAsFixed(1)} max=${_dragMaxOffset.toStringAsFixed(1)} elapsed=${_elapsedMs(_dragStartedAt)}ms decision=$decision',
+      '[SlideUpMenu] $_debugLabel drag end offset=${dragOffset.toStringAsFixed(1)} threshold=${widget.dismissThreshold.toStringAsFixed(1)} max=${_dragMaxOffset.toStringAsFixed(1)} elapsed=${_elapsedMs(_dragStartedAt)}ms decision=$decision',
     );
     _dragStartedAt = null;
     _lastLoggedDragOffset = null;
     _resetPointerGestureState();
-    if (dragOffset > _dismissThreshold) {
+    if (dragOffset > widget.dismissThreshold) {
       _dismiss();
       return;
     }
@@ -546,7 +548,9 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   void _logDragMove(double offset, double delta) {
     final last = _lastLoggedDragOffset;
     final crossedThreshold =
-        last != null && last <= _dismissThreshold && offset > _dismissThreshold;
+        last != null &&
+        last <= widget.dismissThreshold &&
+        offset > widget.dismissThreshold;
     if (last != null && (offset - last).abs() < 28 && !crossedThreshold) {
       return;
     }

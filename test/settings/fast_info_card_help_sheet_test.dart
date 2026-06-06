@@ -100,6 +100,44 @@ void main() {
     );
   });
 
+  testWidgets('help sheet drag can be cancelled before dismiss threshold', (
+    tester,
+  ) async {
+    await _pumpHelpLauncher(tester, 'havi_koltes');
+
+    await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('fastinfo-help-drag-handle-havi_koltes')),
+      const Offset(0, 120),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsOneWidget,
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('fastinfo-help-drag-handle-havi_koltes')),
+      ),
+    );
+    await gesture.moveBy(const Offset(0, 190));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), greaterThan(150));
+    await gesture.moveBy(const Offset(0, -170));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), lessThan(60));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('help sheet card handle still supports free drag', (
     tester,
   ) async {

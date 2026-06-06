@@ -59,28 +59,32 @@ class _FastInfoOptionsPanelState extends State<FastInfoOptionsPanel> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-          child: Column(
+          child: Row(
             children: [
-              _RowPresentationSelector(
-                selectorKey: const ValueKey('fastinfo-upper-row-selector'),
-                pillKey: const ValueKey('fastinfo-upper-row-pill'),
-                boxKey: const ValueKey('fastinfo-upper-row-box'),
-                label: 'Felső sor',
-                value: _draft.upperRowPresentation,
-                onChanged: (value) {
-                  _emit(_draft.copyWith(upperRowPresentation: value));
-                },
+              Expanded(
+                child: _RowPresentationSelector(
+                  selectorKey: const ValueKey('fastinfo-upper-row-toggle'),
+                  pillKey: const ValueKey('fastinfo-upper-row-pill'),
+                  boxKey: const ValueKey('fastinfo-upper-row-box'),
+                  label: 'Felső sor',
+                  value: _draft.upperRowPresentation,
+                  onChanged: (value) {
+                    _emit(_draft.copyWith(upperRowPresentation: value));
+                  },
+                ),
               ),
-              const SizedBox(height: 6),
-              _RowPresentationSelector(
-                selectorKey: const ValueKey('fastinfo-lower-row-selector'),
-                pillKey: const ValueKey('fastinfo-lower-row-pill'),
-                boxKey: const ValueKey('fastinfo-lower-row-box'),
-                label: 'Alsó sor',
-                value: _draft.lowerRowPresentation,
-                onChanged: (value) {
-                  _emit(_draft.copyWith(lowerRowPresentation: value));
-                },
+              const SizedBox(width: 8),
+              Expanded(
+                child: _RowPresentationSelector(
+                  selectorKey: const ValueKey('fastinfo-lower-row-toggle'),
+                  pillKey: const ValueKey('fastinfo-lower-row-pill'),
+                  boxKey: const ValueKey('fastinfo-lower-row-box'),
+                  label: 'Alsó sor',
+                  value: _draft.lowerRowPresentation,
+                  onChanged: (value) {
+                    _emit(_draft.copyWith(lowerRowPresentation: value));
+                  },
+                ),
               ),
             ],
           ),
@@ -203,44 +207,74 @@ class _RowPresentationSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 72,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.gray700,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: SegmentedButton<FastInfoRowPresentation>(
-            key: selectorKey,
-            segments: <ButtonSegment<FastInfoRowPresentation>>[
-              ButtonSegment<FastInfoRowPresentation>(
-                value: FastInfoRowPresentation.pill,
-                label: KeyedSubtree(key: pillKey, child: const Text('Pill')),
-              ),
-              ButtonSegment<FastInfoRowPresentation>(
-                value: FastInfoRowPresentation.box,
-                label: KeyedSubtree(key: boxKey, child: const Text('Box')),
+    final activeKey = value == FastInfoRowPresentation.pill ? pillKey : boxKey;
+    final activeLabel = value == FastInfoRowPresentation.pill ? 'Pill' : 'Box';
+    final nextValue = value == FastInfoRowPresentation.pill
+        ? FastInfoRowPresentation.box
+        : FastInfoRowPresentation.pill;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: selectorKey,
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => onChanged(nextValue),
+        child: Ink(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppColors.gray300),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                offset: const Offset(0, 1),
+                blurRadius: 3,
               ),
             ],
-            selected: <FastInfoRowPresentation>{value},
-            onSelectionChanged: (selection) => onChanged(selection.single),
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray600,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              KeyedSubtree(
+                key: activeKey,
+                child: Text(
+                  activeLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray900,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.all_inclusive,
+                size: 14,
+                color: AppColors.primary,
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

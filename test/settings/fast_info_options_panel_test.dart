@@ -15,7 +15,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('fastinfo-upper-row-box')));
+    await tester.tap(find.byKey(const ValueKey('fastinfo-upper-row-toggle')));
     await tester.pumpAndSettle();
 
     expect(changed?.layoutMode, FastInfoLayoutMode.sixBoxes);
@@ -43,7 +43,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('fastinfo-lower-row-pill')));
+    await tester.tap(find.byKey(const ValueKey('fastinfo-lower-row-toggle')));
     await tester.pumpAndSettle();
 
     expect(changed?.upperRowPresentation, FastInfoRowPresentation.pill);
@@ -57,6 +57,32 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsNothing);
+  });
+
+  testWidgets('row controls use compact cycling toggle buttons', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_subject(config: FastInfoConfig.defaults()));
+
+    expect(find.byType(SegmentedButton<FastInfoRowPresentation>), findsNothing);
+    expect(
+      find.byKey(const ValueKey('fastinfo-upper-row-toggle')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('fastinfo-lower-row-toggle')),
+      findsOneWidget,
+    );
+
+    final upperSize = tester.getSize(
+      find.byKey(const ValueKey('fastinfo-upper-row-toggle')),
+    );
+    final lowerSize = tester.getSize(
+      find.byKey(const ValueKey('fastinfo-lower-row-toggle')),
+    );
+    expect(upperSize.height, lessThanOrEqualTo(34));
+    expect(lowerSize.height, lessThanOrEqualTo(34));
+    expect(upperSize.width + lowerSize.width, lessThanOrEqualTo(350));
   });
 
   testWidgets('pool and assigned card taps open help', (tester) async {

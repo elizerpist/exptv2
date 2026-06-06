@@ -21,8 +21,12 @@ void main() {
     expect(metrics['legutobbi_tranzakcio']?.avatar, isNotNull);
     expect(metrics['leggyakoribb_kereskedo']?.primaryValue, 'Kávézó');
     expect(
-      metrics['leggyakoribb_kereskedo']?.secondaryValues.first,
-      '4 tranzakció',
+      metrics['leggyakoribb_kereskedo']?.secondaryValues,
+      contains('legtöbb tranzakció'),
+    );
+    expect(
+      metrics['leggyakoribb_kereskedo']?.secondaryValues,
+      contains('4 alkalom'),
     );
     expect(metrics['leggyakoribb_kereskedo']?.avatar, isNotNull);
     expect(metrics['top_kategoria_ma']?.primaryValue, 'Étel');

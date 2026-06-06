@@ -344,32 +344,50 @@ class _FastInfoMetricScope {
   }
 
   FastInfoMetricResult _forecast() {
-    final average = data.elapsedMonthDays == 0
+    final activatedFixed = _sum(
+      data
+          .expenseRowsBetween(data.currentMonthStart, data.tomorrow)
+          .where((row) => row.record.isRecurringGenerated),
+    );
+    final pendingFixed = data
+        .recurringGhostsBetween(
+          data.currentMonthStart,
+          data.nextMonthStart,
+          expensesOnly: true,
+          pendingOnly: true,
+        )
+        .fold<double>(0, (sum, row) => sum + row.record.amount.abs());
+    final monthlyFixed = activatedFixed + pendingFixed;
+    final projectedVariable = data.elapsedMonthDays == 0
         ? 0.0
-        : data.currentMonthExpense / data.elapsedMonthDays;
+        : data.currentMonthVariableExpense /
+              data.elapsedMonthDays *
+              data.daysInCurrentMonth;
+    final projectedExpense = projectedVariable + monthlyFixed;
     final forecast = <double>[
-      for (var day = 1; day <= data.daysInCurrentMonth; day += 1)
-        if (day <= data.today.day)
-          data.currentMonthDailySeries[day - 1]
-        else
-          average,
+      for (var index = 6; index >= 0; index -= 1)
+        _forecastEstimateForDay(
+          data.today.subtract(Duration(days: index)),
+          monthlyFixed,
+        ),
     ];
     final limit = monthlyLimit;
-    final ratio = limit == null ? null : projectedMonthExpense / limit;
-    final remaining = data.currentMonthIncome - projectedMonthExpense;
+    final ratio = limit == null ? null : projectedExpense / limit;
+    final optimistic = projectedExpense * .9;
+    final pessimistic = projectedExpense * 1.08;
     return FastInfoMetricResult(
-      pillValue: _compactAmount(projectedMonthExpense),
-      primaryValue: formatHuf(projectedMonthExpense),
+      pillValue: _compactAmount(projectedExpense),
+      primaryValue: formatHuf(projectedExpense),
       secondaryValues: <String>[
-        'Becsült maradék: ${_signedHuf(remaining)}',
-        if (ratio != null) 'Kockázat: ${_riskLabel(ratio)}',
+        if (ratio != null) 'havi keret ${_percent(ratio)}%',
+        'sáv ${_compactAmount(optimistic)}-${_compactAmount(pessimistic)}',
       ],
       semantic: ratio == null
           ? FastInfoSemantic.neutral
           : expenseSemantic(ratio),
       chartKind: FastInfoChartKind.sparkline,
       chartSeries: <FastInfoChartSeries>[
-        FastInfoChartSeries(label: 'Előrejelzés', values: forecast),
+        FastInfoChartSeries(label: 'Elmúlt 7 nap', values: forecast),
       ],
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.projectionFill,
@@ -380,6 +398,18 @@ class _FastInfoMetricScope {
             : expenseSemantic(ratio),
       ),
     );
+  }
+
+  double _forecastEstimateForDay(DateTime day, double monthlyFixed) {
+    if (day.isBefore(data.currentMonthStart)) return monthlyFixed;
+    final cappedDay = day.isAfter(data.today) ? data.today : day;
+    final elapsedDays = math.max(1, cappedDay.day);
+    final variableUntilDay = data.variableExpenseBetween(
+      data.currentMonthStart,
+      cappedDay.add(const Duration(days: 1)),
+    );
+    return variableUntilDay / elapsedDays * data.daysInCurrentMonth +
+        monthlyFixed;
   }
 
   FastInfoMetricResult _categoryLimitState() {
@@ -395,11 +425,20 @@ class _FastInfoMetricScope {
         .where((state) => state.ratio >= .75 && state.ratio <= 1)
         .length;
     final over = states.where((state) => state.ratio > 1).length;
+    final elapsedShare = data.daysInCurrentMonth <= 0
+        ? 1.0
+        : data.elapsedMonthDays / data.daysInCurrentMonth;
+    final projectedRatio = elapsedShare <= 0
+        ? top.ratio
+        : top.ratio / elapsedShare;
     return FastInfoMetricResult(
-      pillValue: '${top.name} ${_percent(top.ratio)}%',
+      pillValue: 'várható ${_percent(projectedRatio)}%',
       primaryValue: top.name,
       secondaryValues: <String>[
         '${formatHuf(top.spent)} / ${formatHuf(top.limit)}',
+        '${formatHuf(math.max(0, top.limit - top.spent))} maradt',
+        'várható ${_percent(projectedRatio)}%',
+        '${top.name} hó végére',
         'Közel: $near · felett: $over',
       ],
       progressKind: FastInfoProgressKind.bar,
@@ -408,8 +447,9 @@ class _FastInfoMetricScope {
       avatar: avatarForCategory(top.category),
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.overflowRisk,
-        value: top.ratio,
-        semantic: expenseSemantic(top.ratio),
+        value: projectedRatio,
+        compareValue: top.ratio,
+        semantic: expenseSemantic(projectedRatio),
         avatar: avatarForCategory(top.category),
       ),
     );
@@ -426,21 +466,29 @@ class _FastInfoMetricScope {
       if (byCount != 0) return byCount;
       final byAmount = _sum(b.value).compareTo(_sum(a.value));
       if (byAmount != 0) return byAmount;
+      final byFreshness = _latestDate(b.value).compareTo(_latestDate(a.value));
+      if (byFreshness != 0) return byFreshness;
       return a.key.compareTo(b.key);
     });
     final top = entries.first;
+    final activity = _merchantActivityPoints(top.value);
+    final activeDays = activity.where((point) => point.value > 0).length;
     return FastInfoMetricResult(
-      pillValue: _shortText(top.key),
+      pillValue: '${_shortText(top.key)} ${top.value.length}x',
       primaryValue: top.key,
       secondaryValues: <String>[
-        '${top.value.length} tranzakció',
+        'legtöbb tranzakció',
+        '${top.value.length} alkalom',
         formatHuf(_sum(top.value)),
+        '$activeDays aktív nap',
+        _mostFrequentCategoryName(top.value),
       ],
       avatar: _mostFrequentCategoryAvatar(top.value),
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.activityStrip,
         value: top.value.length.toDouble(),
         avatar: _mostFrequentCategoryAvatar(top.value),
+        points: activity,
       ),
     );
   }
@@ -863,6 +911,37 @@ class _FastInfoMetricScope {
     return avatarForCategory(_topCategory(rows)?.category);
   }
 
+  String _mostFrequentCategoryName(List<FastInfoDatedTransaction> rows) {
+    return _topCategory(rows)?.name ?? 'Kategória';
+  }
+
+  List<FastInfoVisualPoint> _merchantActivityPoints(
+    List<FastInfoDatedTransaction> rows,
+  ) {
+    final start = DateTime(
+      data.today.year,
+      data.today.month,
+      data.today.day,
+    ).subtract(const Duration(days: 13));
+    return <FastInfoVisualPoint>[
+      for (var index = 0; index < 14; index += 1)
+        () {
+          final day = start.add(Duration(days: index));
+          final count = rows.where((row) => _isSameDay(row.date, day)).length;
+          return FastInfoVisualPoint(
+            label: '${index + 1}',
+            value: count.toDouble(),
+            isToday: _isSameDay(day, data.today),
+          );
+        }(),
+    ];
+  }
+
+  DateTime _latestDate(List<FastInfoDatedTransaction> rows) {
+    if (rows.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
+    return rows.map((row) => row.date).reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
   Map<int, double> _categoryAmounts(Iterable<FastInfoDatedTransaction> rows) {
     return {
       for (final entry in data.categoryExpenseGroups(rows).entries)
@@ -999,12 +1078,6 @@ String _shortText(String value) {
   final trimmed = value.trim();
   if (trimmed.length <= 10) return trimmed;
   return '${trimmed.substring(0, 9)}…';
-}
-
-String _riskLabel(double ratio) {
-  if (ratio > 1) return 'magas';
-  if (ratio >= .75) return 'közepes';
-  return 'alacsony';
 }
 
 String _periodKey(DateTime date) =>

@@ -62,6 +62,7 @@ class _FastInfoCardHelpSheetState extends State<FastInfoCardHelpSheet> {
       cardKey: ValueKey('fastinfo-help-sheet-${card.id}'),
       debugLabel: 'FastInfoHelp:${card.id}',
       panelHeight: panelHeight,
+      dismissThreshold: 160,
       visible: true,
       deferEntryAnimation: true,
       canDragFrom: _canDragFrom,

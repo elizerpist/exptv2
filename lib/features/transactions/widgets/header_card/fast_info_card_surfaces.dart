@@ -127,6 +127,15 @@ class FastInfoPillCard extends StatelessWidget {
     if (slot.id == 'legutobbi_tranzakcio') {
       return _LatestTransactionPillContent(slot: slot, metric: metric);
     }
+    if (slot.id == 'varhato_ho_vegi_koltes') {
+      return _ForecastPillContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'leggyorsabban_fogyo_kategorialimit') {
+      return _TightestLimitPillContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'leggyakoribb_kereskedo') {
+      return _TopMerchantPillContent(slot: slot, metric: metric);
+    }
 
     final primary = metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat';
     final secondary = metric?.secondaryValues.isNotEmpty == true
@@ -886,17 +895,121 @@ class _LatestTransactionPillContent extends StatelessWidget {
   }
 }
 
-class _PillTitle extends StatelessWidget {
-  const _PillTitle({required this.slot});
+class _ForecastPillContent extends StatelessWidget {
+  const _ForecastPillContent({required this.slot, required this.metric});
 
   final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _PillTitle(slot: slot),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PillValues(
+            slotId: slot.id,
+            primary: metric?.primaryValue ?? metric?.pillValue ?? 'Nincs adat',
+            secondary:
+                _secondaryStarting(metric, 'havi keret') ??
+                _secondaryStarting(metric, 'sáv') ??
+                '',
+          ),
+        ),
+        const SizedBox(width: 8),
+        _ProjectionLimitMeter(
+          key: ValueKey('fastinfo-forecast-pill-limit-${slot.id}'),
+          value: metric?.visual.value ?? metric?.progress,
+          semantic:
+              metric?.semantic ??
+              metric?.visual.semantic ??
+              FastInfoSemantic.neutral,
+        ),
+      ],
+    );
+  }
+}
+
+class _TightestLimitPillContent extends StatelessWidget {
+  const _TightestLimitPillContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _PillTitle(slot: slot, label: 'Legszűkebb limit'),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PillValues(
+            slotId: slot.id,
+            primary:
+                _secondaryStarting(metric, 'várható') ??
+                metric?.pillValue ??
+                'Nincs adat',
+            secondary:
+                _secondaryContaining(metric, 'hó végére') ??
+                '${metric?.primaryValue ?? ''} hó végére'.trim(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _OverflowProjectionMeter(
+          key: ValueKey('fastinfo-tightest-limit-pill-overflow-${slot.id}'),
+          value: metric?.visual.value ?? metric?.progress,
+          semantic:
+              metric?.visual.semantic ??
+              metric?.semantic ??
+              FastInfoSemantic.neutral,
+        ),
+      ],
+    );
+  }
+}
+
+class _TopMerchantPillContent extends StatelessWidget {
+  const _TopMerchantPillContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _PillTitle(slot: slot, label: 'Gyakori kereskedő'),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PillValues(
+            slotId: slot.id,
+            primary: metric?.pillValue ?? metric?.primaryValue ?? 'Nincs adat',
+            secondary: _secondaryContaining(metric, 'aktív nap') ?? '',
+          ),
+        ),
+        const SizedBox(width: 8),
+        _MerchantDaysStrip(
+          key: ValueKey('fastinfo-merchant-days-${slot.id}'),
+          points: metric?.visual.points ?? const <FastInfoVisualPoint>[],
+        ),
+      ],
+    );
+  }
+}
+
+class _PillTitle extends StatelessWidget {
+  const _PillTitle({required this.slot, this.label});
+
+  final FastInfoSlot slot;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 98,
       child: Text(
-        slot.label,
+        label ?? slot.label,
         key: ValueKey('fastinfo-pill-title-${slot.id}'),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
@@ -1232,6 +1345,15 @@ class FastInfoBoxCard extends StatelessWidget {
     if (slot.id == 'legutobbi_tranzakcio') {
       return _LatestTransactionBoxContent(slot: slot, metric: metric);
     }
+    if (slot.id == 'varhato_ho_vegi_koltes') {
+      return _ForecastBoxContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'leggyorsabban_fogyo_kategorialimit') {
+      return _TightestLimitBoxContent(slot: slot, metric: metric);
+    }
+    if (slot.id == 'leggyakoribb_kereskedo') {
+      return _TopMerchantBoxContent(slot: slot, metric: metric);
+    }
 
     final secondaryValues =
         metric?.secondaryValues.take(3).toList() ?? const <String>[];
@@ -1420,6 +1542,7 @@ class _RollingTrendBoxContent extends StatelessWidget {
         const SizedBox(height: 4),
         _RollingSplitBar(
           key: ValueKey('fastinfo-rolling-split-${slot.id}'),
+          slotId: slot.id,
           index: metric?.visual.value,
         ),
         const SizedBox(height: 3),
@@ -1534,9 +1657,592 @@ class _LatestTransactionBoxContent extends StatelessWidget {
   }
 }
 
-class _RollingSplitBar extends StatelessWidget {
-  const _RollingSplitBar({super.key, required this.index});
+class _ForecastBoxContent extends StatelessWidget {
+  const _ForecastBoxContent({required this.slot, required this.metric});
 
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _BoxTitle('Várható hó végi'),
+        const SizedBox(height: 3),
+        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
+        const SizedBox(height: 3),
+        _SmallBadge(text: 'Fix-korrigált becslés'),
+        const Spacer(),
+        const _BoxMicroLabel('Becslés trend:'),
+        const SizedBox(height: 3),
+        _ForecastLineChart(
+          key: ValueKey('fastinfo-forecast-line-${slot.id}'),
+          values: metric?.visual.values ?? metric?.series ?? const <double>[],
+          width: 98,
+          height: 29,
+        ),
+        const SizedBox(height: 2),
+        const Center(
+          child: _BoxSecondary('elmúlt 7 nap · today kék', fontSize: 6.6),
+        ),
+        const SizedBox(height: 4),
+        const _BoxMicroLabel('Becslési sáv:'),
+        const SizedBox(height: 2),
+        _ForecastRangeMeter(
+          key: ValueKey('fastinfo-forecast-range-${slot.id}'),
+        ),
+      ],
+    );
+  }
+}
+
+class _TightestLimitBoxContent extends StatelessWidget {
+  const _TightestLimitBoxContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress =
+        (metric?.progress ??
+                metric?.visual.compareValue ??
+                metric?.visual.value ??
+                0)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _BoxTitle('Legszűkebb limit'),
+        const SizedBox(height: 3),
+        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
+        if (_secondaryAt(metric, 0).isNotEmpty) ...[
+          const SizedBox(height: 2),
+          _BoxSecondary(_secondaryAt(metric, 0)),
+        ],
+        const SizedBox(height: 4),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _FastInfoAvatarBadge(
+                key: ValueKey('fastinfo-tightest-limit-avatar-${slot.id}'),
+                avatar: metric?.avatar ?? metric?.visual.avatar,
+                size: 25,
+                iconSize: 14,
+              ),
+              const SizedBox(height: 2),
+              _BoxSecondary(
+                _secondaryContaining(metric, 'maradt') ?? '',
+                fontSize: 6.8,
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        const _BoxMicroLabel('Limit állás:'),
+        const SizedBox(height: 3),
+        _TightestLimitProgress(
+          key: ValueKey('fastinfo-tightest-limit-progress-${slot.id}'),
+          progress: progress,
+          semantic: metric?.semantic ?? FastInfoSemantic.neutral,
+        ),
+        const SizedBox(height: 4),
+        const _BoxMicroLabel('Figyelendő:'),
+        const SizedBox(height: 2),
+        Text(
+          _percentFromRatio(progress),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _fastInfoSemanticColor(
+              metric?.semantic ?? FastInfoSemantic.neutral,
+            ),
+            fontSize: 10.4,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TopMerchantBoxContent extends StatelessWidget {
+  const _TopMerchantBoxContent({required this.slot, required this.metric});
+
+  final FastInfoSlot slot;
+  final FastInfoMetricResult? metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _BoxTitle('Gyakori kereskedő'),
+        const SizedBox(height: 3),
+        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
+        const SizedBox(height: 2),
+        _BoxSecondary(
+          _secondaryStarting(metric, 'legtöbb') ?? 'legtöbb tranzakció',
+        ),
+        const SizedBox(height: 4),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _FastInfoAvatarBadge(
+                key: ValueKey('fastinfo-top-merchant-avatar-${slot.id}'),
+                avatar: metric?.avatar ?? metric?.visual.avatar,
+                size: 25,
+                iconSize: 14,
+              ),
+              const SizedBox(height: 2),
+              _BoxSecondary(_merchantCategoryName(metric), fontSize: 6.8),
+            ],
+          ),
+        ),
+        const Spacer(),
+        const _BoxMicroLabel('Tranzakció:'),
+        const SizedBox(height: 2),
+        _BoxSecondary(
+          _secondaryContaining(metric, 'alkalom') ?? '',
+          fontSize: 7.3,
+        ),
+        const SizedBox(height: 4),
+        const _BoxMicroLabel('Összesen:'),
+        const SizedBox(height: 2),
+        _BoxSecondary(_secondaryEnding(metric, 'Ft') ?? '', fontSize: 7.3),
+      ],
+    );
+  }
+}
+
+class _SmallBadge extends StatelessWidget {
+  const _SmallBadge({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.gray100,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.gray500,
+          fontSize: 6.2,
+          fontWeight: FontWeight.w900,
+          height: 1.0,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectionLimitMeter extends StatelessWidget {
+  const _ProjectionLimitMeter({
+    super.key,
+    required this.value,
+    required this.semantic,
+  });
+
+  final double? value;
+  final FastInfoSemantic semantic;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = (value ?? 0).clamp(0.0, 1.5).toDouble();
+    final fill = ratio.clamp(0.0, 1.0).toDouble();
+    const chartLeft = 3.0;
+    const chartWidth = 78.0;
+    return SizedBox(
+      width: 84,
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: chartLeft,
+            right: 3,
+            top: 11,
+            height: 7,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: AppColors.gray200),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: fill,
+                    child: ColoredBox(color: _fastInfoSemanticColor(semantic)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: chartLeft + chartWidth * fill - 1,
+            top: 4,
+            width: 2,
+            height: 17,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF06B6D4),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverflowProjectionMeter extends StatelessWidget {
+  const _OverflowProjectionMeter({
+    super.key,
+    required this.value,
+    required this.semantic,
+  });
+
+  final double? value;
+  final FastInfoSemantic semantic;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = (value ?? 0).clamp(0.0, 1.5).toDouble();
+    final over = ratio > 1;
+    final fill = ratio.clamp(0.0, 1.0).toDouble();
+    return SizedBox(
+      width: 84,
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 3,
+            top: 11,
+            width: over ? 62 : 78,
+            height: 7,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: AppColors.gray200),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: fill,
+                    child: ColoredBox(color: _fastInfoSemanticColor(semantic)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (over)
+            const Positioned(
+              left: 67,
+              right: 3,
+              top: 14,
+              child: _DashedLine(color: AppColors.expense),
+            ),
+          Positioned(
+            left: over ? 75 : 3 + 78 * fill - 1,
+            top: 4,
+            width: 2,
+            height: 17,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: over ? AppColors.expense : const Color(0xFF06B6D4),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ForecastRangeMeter extends StatelessWidget {
+  const _ForecastRangeMeter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 19,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 4,
+            right: 4,
+            top: 8,
+            height: 5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Row(
+                children: const [
+                  Expanded(
+                    flex: 36,
+                    child: ColoredBox(color: AppColors.income),
+                  ),
+                  Expanded(
+                    flex: 38,
+                    child: ColoredBox(color: Color(0xFFF59E0B)),
+                  ),
+                  Expanded(
+                    flex: 26,
+                    child: ColoredBox(color: AppColors.expense),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 25,
+            right: 16,
+            top: 7,
+            height: 7,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: AppColors.gray700.withValues(alpha: .18),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 58,
+            top: 2,
+            width: 2,
+            height: 15,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF06B6D4),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TightestLimitProgress extends StatelessWidget {
+  const _TightestLimitProgress({
+    super.key,
+    required this.progress,
+    required this.semantic,
+  });
+
+  final double progress;
+  final FastInfoSemantic semantic;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DailyLimitProgress(progress: progress, semantic: semantic);
+  }
+}
+
+class _MerchantDaysStrip extends StatelessWidget {
+  const _MerchantDaysStrip({super.key, required this.points});
+
+  final List<FastInfoVisualPoint> points;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = points.isEmpty
+        ? List<FastInfoVisualPoint>.generate(
+            14,
+            (index) => FastInfoVisualPoint(label: '${index + 1}', value: 0),
+          )
+        : points.take(14).toList(growable: false);
+    return SizedBox(
+      width: 84,
+      height: 24,
+      child: Center(
+        child: SizedBox(
+          width: 78,
+          height: 14,
+          child: Row(
+            children: [
+              for (var index = 0; index < visible.length; index += 1) ...[
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: visible[index].value > 0
+                          ? const Color(0xFF3B82F6)
+                          : AppColors.gray200,
+                      borderRadius: BorderRadius.circular(2),
+                      border: visible[index].isToday
+                          ? Border.all(color: const Color(0xFF06B6D4))
+                          : null,
+                    ),
+                    child: const SizedBox(height: 9),
+                  ),
+                ),
+                if (index < visible.length - 1) const SizedBox(width: 1),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ForecastLineChart extends StatelessWidget {
+  const _ForecastLineChart({
+    super.key,
+    required this.values,
+    required this.width,
+    required this.height,
+  });
+
+  final List<double> values;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: CustomPaint(
+        painter: _ForecastLineChartPainter(
+          values.isEmpty ? const [1, 2, 1.4, 2.2] : values,
+        ),
+      ),
+    );
+  }
+}
+
+class _ForecastLineChartPainter extends CustomPainter {
+  const _ForecastLineChartPainter(this.values);
+
+  final List<double> values;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty || size.width <= 0 || size.height <= 0) return;
+    final gridPaint = Paint()
+      ..color = AppColors.gray200
+      ..strokeWidth = .7
+      ..style = PaintingStyle.stroke;
+    for (final y in <double>[
+      size.height * .82,
+      size.height * .50,
+      size.height * .18,
+    ]) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    final minValue = values.reduce(math.min);
+    final maxValue = values.reduce(math.max);
+    final spread = maxValue - minValue;
+    final path = Path();
+    final offsets = <Offset>[];
+    for (var index = 0; index < values.length; index += 1) {
+      final x = values.length == 1
+          ? 0.0
+          : size.width * index / (values.length - 1);
+      final normalized = spread <= 0 ? .5 : (values[index] - minValue) / spread;
+      final y = size.height - normalized * (size.height - 2) - 1;
+      final point = Offset(x, y);
+      offsets.add(point);
+      if (index == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    final paint = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(path, paint);
+    if (offsets.isNotEmpty) {
+      final today = offsets.last;
+      final dotPaint = Paint()..color = const Color(0xFF06B6D4);
+      canvas.drawCircle(today, 2.6, dotPaint);
+      canvas.drawCircle(
+        today,
+        2.6,
+        Paint()
+          ..color = AppColors.white
+          ..strokeWidth = 1
+          ..style = PaintingStyle.stroke,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ForecastLineChartPainter oldDelegate) {
+    return oldDelegate.values != values;
+  }
+}
+
+class _DashedLine extends StatelessWidget {
+  const _DashedLine({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _DashedLinePainter(color));
+  }
+}
+
+class _DashedLinePainter extends CustomPainter {
+  const _DashedLinePainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    var x = 0.0;
+    while (x < size.width) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(math.min(x + 4, size.width), 0),
+        paint,
+      );
+      x += 7;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedLinePainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
+class _RollingSplitBar extends StatelessWidget {
+  const _RollingSplitBar({
+    super.key,
+    required this.slotId,
+    required this.index,
+  });
+
+  final String slotId;
   final double? index;
 
   @override
@@ -1551,11 +2257,15 @@ class _RollingSplitBar extends StatelessWidget {
           children: [
             Expanded(
               flex: math.max(1, (1 / total * 1000).round()),
-              child: const ColoredBox(color: AppColors.gray400),
+              child: ColoredBox(
+                key: ValueKey('fastinfo-rolling-split-prev-$slotId'),
+                color: AppColors.gray400,
+              ),
             ),
             Expanded(
               flex: math.max(1, (current / total * 1000).round()),
               child: ColoredBox(
+                key: ValueKey('fastinfo-rolling-split-current-$slotId'),
                 color: current > 1 ? AppColors.expense : AppColors.income,
               ),
             ),
@@ -2032,6 +2742,48 @@ String? _secondaryStarting(FastInfoMetricResult? metric, String prefix) {
     if (trimmed.toLowerCase().startsWith(lowerPrefix)) return trimmed;
   }
   return null;
+}
+
+String? _secondaryContaining(FastInfoMetricResult? metric, String fragment) {
+  final lowerFragment = fragment.toLowerCase();
+  for (final value in metric?.secondaryValues ?? const <String>[]) {
+    final trimmed = value.trim();
+    if (trimmed.toLowerCase().contains(lowerFragment)) return trimmed;
+  }
+  return null;
+}
+
+String? _secondaryEnding(FastInfoMetricResult? metric, String suffix) {
+  final lowerSuffix = suffix.toLowerCase();
+  for (final value in metric?.secondaryValues ?? const <String>[]) {
+    final trimmed = value.trim();
+    if (trimmed.toLowerCase().endsWith(lowerSuffix)) return trimmed;
+  }
+  return null;
+}
+
+String _secondaryAt(FastInfoMetricResult? metric, int index) {
+  final values = metric?.secondaryValues ?? const <String>[];
+  if (index < 0 || index >= values.length) return '';
+  return values[index];
+}
+
+String _percentFromRatio(double ratio) => '${(ratio * 100).round()}%';
+
+String _merchantCategoryName(FastInfoMetricResult? metric) {
+  for (final value in metric?.secondaryValues ?? const <String>[]) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty ||
+        trimmed.contains('tranzakció') ||
+        trimmed.contains('alkalom') ||
+        trimmed.contains('aktív nap') ||
+        trimmed.endsWith('Ft') ||
+        trimmed.startsWith('legtöbb')) {
+      continue;
+    }
+    return trimmed;
+  }
+  return 'Kategória';
 }
 
 String _rollingChangeText(FastInfoMetricResult? metric) {

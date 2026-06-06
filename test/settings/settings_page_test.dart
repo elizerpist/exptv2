@@ -180,11 +180,11 @@ void main() {
     expect(find.byKey(const ValueKey('fastinfo-pill-slot-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('fastinfo-box-slot-0')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('fastinfo-upper-row-selector')),
+      find.byKey(const ValueKey('fastinfo-upper-row-toggle')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('fastinfo-lower-row-selector')),
+      find.byKey(const ValueKey('fastinfo-lower-row-toggle')),
       findsOneWidget,
     );
     expect(
