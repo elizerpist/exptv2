@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/transactions/models/fast_info_metric.dart';
@@ -140,7 +141,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('fastinfo-rolling-pill-split-koltesi_trend')),
+      find.byKey(const ValueKey('fastinfo-rolling-pill-band-koltesi_trend')),
       findsOneWidget,
     );
     expect(
@@ -749,8 +750,9 @@ void main() {
   });
 
   testWidgets(
-    'rolling trend box and pill follow v25 fixed-free zone decision',
+    'rolling trend box and pill follow v25 fixed-free band decision',
     (tester) async {
+      DebugConsole.clear();
       const metrics = <String, FastInfoMetricResult>{
         'koltesi_trend': FastInfoMetricResult(
           pillValue: '1.02M',
@@ -797,17 +799,17 @@ void main() {
 
       expect(find.text('30 napos trend'), findsWidgets);
       expect(find.text('1 020 000 Ft'), findsWidgets);
-      expect(find.text('fix nélkül · ↑13%'), findsOneWidget);
+      expect(find.text('előző 30 naphoz +13%'), findsOneWidget);
       expect(find.text('Fix tételek nélkül'), findsOneWidget);
       expect(find.text('30 nap vs előző 30:'), findsOneWidget);
       expect(find.text('Változás:'), findsOneWidget);
       expect(find.text('+13%'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('fastinfo-rolling-pill-split-koltesi_trend')),
+        find.byKey(const ValueKey('fastinfo-rolling-pill-band-koltesi_trend')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('fastinfo-rolling-zone-koltesi_trend')),
+        find.byKey(const ValueKey('fastinfo-rolling-pill-split-koltesi_trend')),
         findsNothing,
       );
       expect(
@@ -824,9 +826,30 @@ void main() {
             .height,
         13,
       );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('fastinfo-rolling-pill-band-koltesi_trend'),
+          ),
+        ),
+        const Size(78, 18),
+      );
+      final bandRect = tester.getRect(
+        find.byKey(const ValueKey('fastinfo-rolling-pill-band-koltesi_trend')),
+      );
+      final needleRect = tester.getRect(
+        find.byKey(
+          const ValueKey('fastinfo-rolling-pill-band-needle-koltesi_trend'),
+        ),
+      );
+      expect(
+        needleRect.center.dx - bandRect.left,
+        greaterThan(bandRect.width * .64),
+      );
       for (final key in <String>[
-        'fastinfo-rolling-pill-split-prev-koltesi_trend',
-        'fastinfo-rolling-pill-split-current-koltesi_trend',
+        'fastinfo-rolling-pill-band-low-koltesi_trend',
+        'fastinfo-rolling-pill-band-mid-koltesi_trend',
+        'fastinfo-rolling-pill-band-high-koltesi_trend',
         'fastinfo-rolling-split-prev-koltesi_trend',
         'fastinfo-rolling-split-current-koltesi_trend',
       ]) {
@@ -837,6 +860,15 @@ void main() {
       expect(
         find.byKey(const ValueKey('fastinfo-trend-koltesi_trend')),
         findsNothing,
+      );
+      expect(
+        DebugConsole.entries.any(
+          (entry) =>
+              entry.contains('[FastInfo][30dTrend] pill band') &&
+              entry.contains('slot=koltesi_trend') &&
+              entry.contains('index=1.13'),
+        ),
+        isTrue,
       );
       expect(tester.takeException(), isNull);
     },

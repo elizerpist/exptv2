@@ -262,7 +262,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       'Változás = aktuális oldal / előző oldal - 1. Ha nőtt a költés, piros felfelé nyíl; ha csökkent, zöld lefelé nyíl jelenik meg.',
     ],
     comparison:
-        'A box megosztott sávja két részt mutat: bal oldalt az előző 30 nap, jobb oldalt az elmúlt 30 nap. A pill jobb oldalán egy zóna marker mutatja, hogy az aktuális 30 nap mennyire tér el az előzőtől.',
+        'A box megosztott sávja két részt mutat: bal oldalt az előző 30 nap, jobb oldalt az elmúlt 30 nap. A pill jobb oldalán zöld-sárga-piros sáv van: a tű mutatja, hogy az aktuális 30 nap mennyire tér el az előzőtől.',
     missingData:
         'Ha az előző 30 napban nem volt összehasonlítható változó kiadás, a százalékos változás nem jelenik meg.',
     pillCallouts: <FastInfoHelpCallout>[
@@ -276,7 +276,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Zóna marker: balra jobb, középen közel azonos, jobbra rosszabb',
+        'Zöld-sárga-piros sáv tűvel: balra jobb, középen közel azonos, jobbra rosszabb',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[

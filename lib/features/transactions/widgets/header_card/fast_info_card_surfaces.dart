@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/fast_info_config.dart';
 import '../../state/fast_info_metrics_resolver.dart';
@@ -9,6 +10,17 @@ import '../category_menu/category_icon_badge.dart';
 import 'fast_info_visuals.dart';
 
 typedef FastInfoCardDropCallback = void Function(int index, String cardId);
+
+final Map<String, String> _fastInfoDebugLogSignatures = <String, String>{};
+
+void _logFastInfoDebugOnce(String key, String message) {
+  final alreadyVisible = DebugConsole.entries.any(
+    (entry) => entry.contains(message),
+  );
+  if (_fastInfoDebugLogSignatures[key] == message && alreadyVisible) return;
+  _fastInfoDebugLogSignatures[key] = message;
+  DebugConsole.log(message);
+}
 
 class FastInfoPillCard extends StatelessWidget {
   const FastInfoPillCard({
@@ -872,12 +884,12 @@ class _RollingTrendPillContent extends StatelessWidget {
         const SizedBox(width: 8),
         SizedBox(
           width: 84,
-          child: _RollingSplitBar(
-            key: ValueKey('fastinfo-rolling-pill-split-${slot.id}'),
-            slotId: slot.id,
-            value: metric?.visual.value,
-            height: 9,
-            segmentKeyPrefix: 'fastinfo-rolling-pill-split',
+          child: Align(
+            alignment: Alignment.center,
+            child: _RollingPillBand(
+              slotId: slot.id,
+              value: metric?.visual.value,
+            ),
           ),
         ),
       ],
@@ -3523,19 +3535,25 @@ class _RollingSplitBar extends StatelessWidget {
     super.key,
     required this.slotId,
     required this.value,
-    this.height = 13,
-    this.segmentKeyPrefix = 'fastinfo-rolling-split',
   });
 
   final String slotId;
   final double? value;
-  final double height;
-  final String segmentKeyPrefix;
 
   @override
   Widget build(BuildContext context) {
+    const height = 13.0;
+    const segmentKeyPrefix = 'fastinfo-rolling-split';
     final current = (value ?? 1).clamp(0.0, 3.0).toDouble();
     final total = 1 + current;
+    final previousFlex = math.max(1, (1 / total * 1000).round());
+    final currentFlex = math.max(1, (current / total * 1000).round());
+    _logFastInfoDebugOnce(
+      'rolling-split-$segmentKeyPrefix-$slotId',
+      '[FastInfo][30dTrend] split slot=$slotId prefix=$segmentKeyPrefix '
+          'index=${_debugNumber(current)} prevFlex=$previousFlex '
+          'currentFlex=$currentFlex height=${_debugNumber(height)}',
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: SizedBox(
@@ -3543,14 +3561,14 @@ class _RollingSplitBar extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              flex: math.max(1, (1 / total * 1000).round()),
+              flex: previousFlex,
               child: ColoredBox(
                 key: ValueKey('$segmentKeyPrefix-prev-$slotId'),
                 color: AppColors.gray400,
               ),
             ),
             Expanded(
-              flex: math.max(1, (current / total * 1000).round()),
+              flex: currentFlex,
               child: ColoredBox(
                 key: ValueKey('$segmentKeyPrefix-current-$slotId'),
                 color: current > 1 ? AppColors.expense : AppColors.income,
@@ -3561,6 +3579,100 @@ class _RollingSplitBar extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RollingPillBand extends StatelessWidget {
+  const _RollingPillBand({required this.slotId, required this.value});
+
+  final String slotId;
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    const width = 78.0;
+    const height = 18.0;
+    final index = (value ?? 1).clamp(0.0, 3.0).toDouble();
+    final needle = _rollingBandNeedle(index);
+    final needleLeft = (width * needle - 1).clamp(0.0, width - 2).toDouble();
+    _logFastInfoDebugOnce(
+      'rolling-pill-band-$slotId',
+      '[FastInfo][30dTrend] pill band slot=$slotId '
+          'index=${_debugNumber(index)} needle=${_debugNumber(needle)} '
+          'width=${_debugNumber(width)} height=${_debugNumber(height)}',
+    );
+    return SizedBox(
+      key: ValueKey('fastinfo-rolling-pill-band-$slotId'),
+      width: width,
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 7,
+            height: 7,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: width * .36,
+                    child: ColoredBox(
+                      key: ValueKey('fastinfo-rolling-pill-band-low-$slotId'),
+                      color: AppColors.income,
+                    ),
+                  ),
+                  SizedBox(
+                    width: width * .28,
+                    child: ColoredBox(
+                      key: ValueKey('fastinfo-rolling-pill-band-mid-$slotId'),
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  ),
+                  Expanded(
+                    child: ColoredBox(
+                      key: ValueKey('fastinfo-rolling-pill-band-high-$slotId'),
+                      color: AppColors.expense,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: needleLeft,
+            top: 1,
+            width: 2,
+            height: 17,
+            child: DecoratedBox(
+              key: ValueKey('fastinfo-rolling-pill-band-needle-$slotId'),
+              decoration: BoxDecoration(
+                color: AppColors.gray700,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+double _rollingBandNeedle(double index) {
+  if (index <= 0) return .5;
+  if (index < 1) {
+    return (index * .36).clamp(.04, .36).toDouble();
+  }
+  if (index <= 1.1) {
+    return (.36 + ((index - 1) / .1) * .28).clamp(.36, .64).toDouble();
+  }
+  return (.64 + ((index - 1.1) / .4) * .32).clamp(.64, .96).toDouble();
+}
+
+String _debugNumber(double value) {
+  final fixed = value.toStringAsFixed(2);
+  return fixed.endsWith('00') ? value.toStringAsFixed(0) : fixed;
 }
 
 class _FastInfoAvatarBadge extends StatelessWidget {
@@ -4074,6 +4186,8 @@ String _merchantCategoryName(FastInfoMetricResult? metric) {
 }
 
 String _rollingPillSecondary(FastInfoMetricResult? metric) {
+  final comparison = _secondaryStarting(metric, 'előző 30 naphoz');
+  if (comparison != null) return comparison;
   final trend = metric?.trend;
   if (trend == null) {
     return _secondaryContaining(metric, 'fix') ?? '';
