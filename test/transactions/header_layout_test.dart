@@ -194,7 +194,7 @@ void main() {
         find.byKey(const ValueKey('category-menu-back-button')),
         findsNothing,
       );
-      expect(find.byKey(const ValueKey('category-add-button')), findsNothing);
+      expect(find.byKey(const ValueKey('category-menu-add-button')), findsOneWidget);
     },
   );
 

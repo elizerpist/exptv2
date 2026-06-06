@@ -2,6 +2,7 @@ import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/models/notification_parser_rule.dart';
 import 'package:exptv2/features/settings/models/recurring_transaction.dart';
+import 'package:exptv2/features/transactions/models/recurring_rule.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:flutter/services.dart';
@@ -61,11 +62,16 @@ void main() {
                     null,
                   ],
                 },
+                'pushRecurringSettings': <String, Object?>{
+                  'conflictPolicy': 'askOnMultipleMatches',
+                },
               };
             case 'expenseUpdateThemeSettings':
               return call.arguments;
             case 'expenseUpdateFastInfoConfig':
               return call.arguments;
+            case 'expenseUpdatePushRecurringSettings':
+              return <String, Object?>{'pushRecurringSettings': call.arguments};
             case 'loadNotificationParserProfiles':
               return <String, Object?>{
                 'profiles': <Object?>[
@@ -138,6 +144,10 @@ void main() {
     expect(settings.fastInfoConfig.pills.first?.label, 'Megtakarítás');
     expect(settings.fastInfoConfig.pills[1]?.id, 'havi_koltes');
     expect(settings.fastInfoConfig.boxes.first, isNull);
+    expect(
+      settings.pushRecurringSettings.conflictPolicy,
+      PushRecurringConflictPolicy.askOnMultipleMatches,
+    );
   });
 
   test('updates theme settings through native bridge', () async {
@@ -208,6 +218,22 @@ void main() {
     expect(payload['layoutMode'], 'sixBoxes');
     expect(payload['upperRowPresentation'], 'box');
     expect(payload['lowerRowPresentation'], 'box');
+  });
+
+  test('updates push recurring settings through native bridge', () async {
+    final updated = await bridge.expenseUpdatePushRecurringSettings(
+      const PushRecurringSettings(
+        conflictPolicy: PushRecurringConflictPolicy.automaticBestMatch,
+      ),
+    );
+
+    expect(
+      updated.conflictPolicy,
+      PushRecurringConflictPolicy.automaticBestMatch,
+    );
+    expect(calls.single.method, 'expenseUpdatePushRecurringSettings');
+    final payload = calls.single.arguments as Map<dynamic, dynamic>;
+    expect(payload['conflictPolicy'], 'automaticBestMatch');
   });
 
   test(

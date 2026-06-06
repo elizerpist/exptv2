@@ -796,10 +796,12 @@ class _FastInfoMetricScope {
     final expectedIncome = data.currentMonthExpectedIncome;
     final pendingIncome = data.currentMonthPendingIncomeGhost;
     final receivedIncome = data.currentMonthIncome;
+    final variableIncome = data.currentMonthVariableIncome;
+    final previousVariableIncome = data.previousMonthSameDayVariableIncome;
     final coverage = rollingDailyAverage > 0
         ? receivedIncome / rollingDailyAverage
         : null;
-    final trend = incomeTrend(receivedIncome, data.previousMonthSameDayIncome);
+    final trend = incomeTrend(variableIncome, previousVariableIncome);
     return FastInfoMetricResult(
       pillValue: trend == null
           ? _compactAmount(receivedIncome)
@@ -810,7 +812,7 @@ class _FastInfoMetricScope {
         if (pendingIncome > 0)
           'várt ${_compactAmount(expectedIncome)} · ghost ${_compactAmount(pendingIncome)}',
         if (coverage != null) 'Fedezet: ${coverage.floor()} nap',
-        if (data.previousMonthSameDayIncome <= 0) 'Nincs összehasonlítás',
+        if (previousVariableIncome <= 0) 'Nincs összehasonlítás',
       ],
       semantic: coverage == null
           ? FastInfoSemantic.neutral
@@ -820,10 +822,10 @@ class _FastInfoMetricScope {
       trend: trend,
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.incomeComparisonBars,
-        value: receivedIncome,
-        compareValue: data.previousMonthSameDayIncome,
+        value: variableIncome,
+        compareValue: previousVariableIncome,
         marker: expectedIncome,
-        semantic: receivedIncome >= data.previousMonthSameDayIncome
+        semantic: variableIncome >= previousVariableIncome
             ? FastInfoSemantic.good
             : FastInfoSemantic.bad,
       ),

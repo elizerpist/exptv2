@@ -44,6 +44,9 @@ class FastInfoPeriodAggregates {
     incomeRows = List.unmodifiable(
       datedTransactions.where((row) => row.record.amount > 0),
     );
+    variableIncomeRows = List.unmodifiable(
+      incomeRows.where((row) => !row.record.isRecurringGenerated),
+    );
     datedRecurringGhosts = List.unmodifiable(
       <FastInfoDatedRecurringGhost>[
         for (final record in snapshot.recurringGhosts)
@@ -55,6 +58,7 @@ class FastInfoPeriodAggregates {
     _expenseByDay = _totalsByDay(expenseRows);
     _variableExpenseByDay = _totalsByDay(variableExpenseRows);
     _incomeByDay = _totalsByDay(incomeRows);
+    _variableIncomeByDay = _totalsByDay(variableIncomeRows);
   }
 
   final FastInfoMetricSnapshot snapshot;
@@ -64,10 +68,12 @@ class FastInfoPeriodAggregates {
   late final List<FastInfoDatedTransaction> expenseRows;
   late final List<FastInfoDatedTransaction> variableExpenseRows;
   late final List<FastInfoDatedTransaction> incomeRows;
+  late final List<FastInfoDatedTransaction> variableIncomeRows;
   late final List<FastInfoDatedRecurringGhost> datedRecurringGhosts;
   late final Map<DateTime, double> _expenseByDay;
   late final Map<DateTime, double> _variableExpenseByDay;
   late final Map<DateTime, double> _incomeByDay;
+  late final Map<DateTime, double> _variableIncomeByDay;
 
   DateTime get currentMonthStart => DateTime(today.year, today.month);
   DateTime get nextMonthStart => DateTime(today.year, today.month + 1);
@@ -122,13 +128,21 @@ class FastInfoPeriodAggregates {
     previousWeekStart.add(Duration(days: today.weekday)),
   );
   double get currentMonthIncome => incomeBetween(currentMonthStart, tomorrow);
+  double get currentMonthVariableIncome =>
+      variableIncomeBetween(currentMonthStart, tomorrow);
   double get currentMonthPendingIncomeGhost =>
       pendingIncomeGhostBetween(currentMonthStart, nextMonthStart);
   double get currentMonthExpectedIncome =>
       currentMonthIncome + currentMonthPendingIncomeGhost;
   double get previousMonthSameDayIncome =>
       incomeBetween(previousMonthStart, _sameDayCutoff(previousMonthStart));
+  double get previousMonthSameDayVariableIncome => variableIncomeBetween(
+    previousMonthStart,
+    _sameDayCutoff(previousMonthStart),
+  );
   double get rolling30Income => incomeBetween(rolling30Start, tomorrow);
+  double get rolling30VariableIncome =>
+      variableIncomeBetween(rolling30Start, tomorrow);
 
   List<double> get currentMonthDailySeries => _dailyExpenseSeries(
     currentMonthStart,
@@ -170,6 +184,8 @@ class FastInfoPeriodAggregates {
   double variableExpenseOn(DateTime date) =>
       _variableExpenseByDay[_dateOnly(date)] ?? 0.0;
   double incomeOn(DateTime date) => _incomeByDay[_dateOnly(date)] ?? 0.0;
+  double variableIncomeOn(DateTime date) =>
+      _variableIncomeByDay[_dateOnly(date)] ?? 0.0;
 
   double expenseBetween(DateTime start, DateTime end) =>
       _sumRows(expenseRowsBetween(start, end));
@@ -179,6 +195,9 @@ class FastInfoPeriodAggregates {
 
   double incomeBetween(DateTime start, DateTime end) =>
       _sumRows(incomeRowsBetween(start, end));
+
+  double variableIncomeBetween(DateTime start, DateTime end) =>
+      _sumRows(variableIncomeRowsBetween(start, end));
 
   double pendingIncomeGhostBetween(DateTime start, DateTime end) {
     return recurringGhostsBetween(start, end, pendingOnly: true).fold<double>(
@@ -203,6 +222,11 @@ class FastInfoPeriodAggregates {
     DateTime start,
     DateTime end,
   ) => _rowsBetween(incomeRows, start, end);
+
+  List<FastInfoDatedTransaction> variableIncomeRowsBetween(
+    DateTime start,
+    DateTime end,
+  ) => _rowsBetween(variableIncomeRows, start, end);
 
   List<FastInfoDatedRecurringGhost> recurringGhostsBetween(
     DateTime start,

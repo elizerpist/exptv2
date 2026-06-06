@@ -1,0 +1,112 @@
+package com.exptv2.app.expense
+
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import java.util.Calendar
+
+object RecurringRuleInstanceStatus {
+    const val PENDING = "pending"
+    const val ACTIVATED = "activated"
+    const val EXPIRED = "expired"
+}
+
+@Entity(
+    tableName = "recurring_rule_instances",
+    foreignKeys = [
+        ForeignKey(
+            entity = RecurringRuleEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["ruleId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["ruleId", "periodKey"], unique = true),
+        Index("status"),
+        Index("periodKey"),
+        Index("estimatedDate"),
+        Index("matchedNotificationEventId"),
+    ],
+)
+data class RecurringRuleInstanceEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val ruleId: Int,
+    val periodKey: String,
+    val status: String,
+    val estimatedDate: String,
+    val estimatedAmount: Double,
+    val triggerTypeSnapshot: String,
+    val transactionTypeSnapshot: String,
+    val nameSnapshot: String,
+    val categoryIdSnapshot: Int,
+    val categoryNameSnapshot: String,
+    val categoryColorSnapshot: String,
+    val categoryIconSlotSnapshot: Int,
+    val activatedTransactionId: Int?,
+    val activatedAt: Long?,
+    val matchedNotificationEventId: Long?,
+    val matchConfidence: Double?,
+    val createdAt: Long,
+    val updatedAt: Long,
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "ruleId" to ruleId,
+        "periodKey" to periodKey,
+        "status" to status,
+        "estimatedDate" to estimatedDate,
+        "estimatedAmount" to estimatedAmount,
+        "triggerTypeSnapshot" to triggerTypeSnapshot,
+        "transactionTypeSnapshot" to transactionTypeSnapshot,
+        "nameSnapshot" to nameSnapshot,
+        "categoryIdSnapshot" to categoryIdSnapshot,
+        "categoryNameSnapshot" to categoryNameSnapshot,
+        "categoryColorSnapshot" to categoryColorSnapshot,
+        "categoryIconSlotSnapshot" to categoryIconSlotSnapshot,
+        "activatedTransactionId" to activatedTransactionId,
+        "activatedAt" to activatedAt,
+        "matchedNotificationEventId" to matchedNotificationEventId,
+        "matchConfidence" to matchConfidence,
+        "createdAt" to createdAt,
+        "updatedAt" to updatedAt,
+    )
+
+    fun toLegacyGhostMap(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "recurringTransactionId" to ruleId,
+        "periodKey" to periodKey,
+        "name" to nameSnapshot,
+        "amount" to estimatedAmount,
+        "transactionType" to transactionTypeSnapshot,
+        "date" to estimatedDate,
+        "time" to "00:00",
+        "categoryId" to categoryIdSnapshot,
+        "categoryName" to categoryNameSnapshot,
+        "categoryColor" to categoryColorSnapshot,
+        "categoryIconSlot" to categoryIconSlotSnapshot,
+        "triggerMillis" to triggerMillisForDate(estimatedDate),
+        "isActivated" to (status == RecurringRuleInstanceStatus.ACTIVATED),
+        "activatedTransactionId" to activatedTransactionId,
+        "createdAt" to createdAt,
+        "updatedAt" to updatedAt,
+    )
+}
+
+private fun triggerMillisForDate(value: String): Long {
+    val parts = value.trim().replace('.', '-').split("-")
+    if (parts.size != 3) return 0L
+    val year = parts[0].toIntOrNull() ?: return 0L
+    val month = parts[1].toIntOrNull() ?: return 0L
+    val day = parts[2].toIntOrNull() ?: return 0L
+    return Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, month - 1)
+        set(Calendar.DAY_OF_MONTH, day)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}

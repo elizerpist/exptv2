@@ -2,6 +2,8 @@ package com.exptv2.app
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
+import com.exptv2.app.expense.ExpenseRepository
 import java.security.MessageDigest
 
 class NotificationEventRepository(context: Context) {
@@ -27,7 +29,16 @@ class NotificationEventRepository(context: Context) {
             isDuplicate = duplicate,
         )
         val id = dao.insert(entity)
-        return entity.copy(id = id)
+        val saved = entity.copy(id = id)
+        runCatching {
+            ExpenseRepository(appContext).processNotificationEventForRecurring(saved)
+        }.onFailure { error ->
+            Log.d(
+                "ExpenseNotification",
+                "[RecurringPush] event=${saved.id} processing failed: ${error.message}",
+            )
+        }
+        return saved
     }
 
     suspend fun allEvents(): List<NotificationEventEntity> = dao.allEvents()

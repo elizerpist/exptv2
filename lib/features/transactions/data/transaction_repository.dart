@@ -1,6 +1,7 @@
 import '../../../services/native_bridge.dart';
 import '../models/category_limit.dart';
 import '../models/recurring_ghost_record.dart';
+import '../models/recurring_rule.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 
@@ -81,6 +82,29 @@ abstract class TransactionRepositoryContract {
   Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
     DateTime? targetDate,
   });
+  Future<List<RecurringRule>> listRecurringRules() async {
+    return const <RecurringRule>[];
+  }
+
+  Future<RecurringRule> addRecurringRule(RecurringRuleDraft draft) {
+    throw UnimplementedError('addRecurringRule');
+  }
+
+  Future<RecurringRule> updateRecurringRule(
+    int id,
+    RecurringRuleDraft draft,
+  ) {
+    throw UnimplementedError('updateRecurringRule');
+  }
+
+  Future<RecurringRule> toggleRecurringRule(
+    int id,
+    bool isActive,
+  ) {
+    throw UnimplementedError('toggleRecurringRule');
+  }
+
+  Future<bool> deleteRecurringRule(int id) async => false;
   Future<TransactionCategory> addCategory(Map<String, Object?> payload);
   Future<TransactionCategory> updateCategory(
     int id,
@@ -166,6 +190,37 @@ class TransactionRepository implements TransactionRepositoryContract {
     return _bridge.expenseEnsureRecurringGhostTransactions(
       targetDate: targetDate,
     );
+  }
+
+  @override
+  Future<List<RecurringRule>> listRecurringRules() {
+    return _bridge.expenseListRecurringRules();
+  }
+
+  @override
+  Future<RecurringRule> addRecurringRule(RecurringRuleDraft draft) {
+    return _bridge.expenseAddRecurringRule(draft);
+  }
+
+  @override
+  Future<RecurringRule> updateRecurringRule(
+    int id,
+    RecurringRuleDraft draft,
+  ) {
+    return _bridge.expenseUpdateRecurringRule(id, draft);
+  }
+
+  @override
+  Future<RecurringRule> toggleRecurringRule(
+    int id,
+    bool isActive,
+  ) {
+    return _bridge.expenseToggleRecurringRule(id, isActive);
+  }
+
+  @override
+  Future<bool> deleteRecurringRule(int id) {
+    return _bridge.expenseDeleteRecurringRule(id);
   }
 
   @override

@@ -13,6 +13,8 @@ class TransactionRecord {
     required this.userAssignedName,
     required this.transactionCategoryID,
     this.recurringTransactionId,
+    this.recurringRuleId,
+    this.recurringInstanceId,
   });
 
   final int id;
@@ -26,12 +28,16 @@ class TransactionRecord {
   final String? userAssignedName;
   final int transactionCategoryID;
   final int? recurringTransactionId;
+  final int? recurringRuleId;
+  final int? recurringInstanceId;
 
   TransactionType get type =>
       amount > 0 ? TransactionType.income : TransactionType.expense;
 
   bool get isRecurringGenerated =>
-      recurringTransactionId != null && recurringTransactionId! > 0;
+      _positiveId(recurringTransactionId) ||
+      _positiveId(recurringRuleId) ||
+      _positiveId(recurringInstanceId);
 
   String get displayMerchant => (userAssignedName?.trim().isNotEmpty ?? false)
       ? userAssignedName!.trim()
@@ -64,6 +70,8 @@ class TransactionRecord {
       address: map['address']?.toString(),
       merchant: map['merchant']?.toString() ?? '',
       amount: _double(map['amount']),
+      recurringRuleId: _nullableInt(map['recurringRuleId']),
+      recurringInstanceId: _nullableInt(map['recurringInstanceId']),
       userAssignedName: map['userAssignedName']?.toString(),
       transactionCategoryID: _int(map['transactionCategoryID']),
       recurringTransactionId: _nullableInt(map['recurringTransactionId']),
@@ -80,6 +88,9 @@ class TransactionRecord {
       'address': address,
       'merchant': merchant,
       'amount': amount,
+      if (recurringRuleId != null) 'recurringRuleId': recurringRuleId,
+      if (recurringInstanceId != null)
+        'recurringInstanceId': recurringInstanceId,
       'userAssignedName': userAssignedName,
       'transactionCategoryID': transactionCategoryID,
       if (recurringTransactionId != null)
@@ -104,3 +115,4 @@ double _double(Object? value) =>
     value is num ? value.toDouble() : double.parse(value.toString());
 double? _nullableDouble(Object? value) => value == null ? null : _double(value);
 int? _nullableInt(Object? value) => value == null ? null : _int(value);
+bool _positiveId(int? value) => value != null && value > 0;

@@ -3,6 +3,7 @@ package com.exptv2.app.expense
 import android.content.Context
 import android.util.Log
 import androidx.room.withTransaction
+import com.exptv2.app.NotificationEventEntity
 import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
 import com.exptv2.app.expense.recurring.RecurringDebugClockStore
 import java.util.Calendar
@@ -15,6 +16,8 @@ class ExpenseRepository(context: Context) {
     private val categoryLimits = db.categoryLimits()
     private val recurringTransactions = db.recurringTransactions()
     private val recurringGhosts = db.recurringGhostTransactions()
+    private val recurringRules = db.recurringRules()
+    private val recurringRuleInstances = db.recurringRuleInstances()
     private val notificationCards = db.notificationCards()
     private val notificationEmitter = ExpenseNotificationEmitter(appContext)
     private val settingsStore = ExpenseSettingsStore(appContext)
@@ -23,16 +26,17 @@ class ExpenseRepository(context: Context) {
 
     suspend fun bootstrap(): Map<String, Any?> {
         seedIfEmpty()
-        syncRecurringGhosts(recurringTargetMillis())
+        val targetMillis = recurringTargetMillis()
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
         val categoryRows = categories.all()
         val transactionRows = transactions.all()
         val limitRows = categoryLimits.list(null, null, null)
-        val ghostRows = recurringGhosts.pending()
+        val instanceRows = recurringRuleInstances.pendingForPeriod(periodKeyFromMillis(targetMillis))
         return mapOf(
             "categories" to categoryRows.map { it.toMap() },
             "transactions" to transactionRows.map { it.toMap() },
             "limits" to limitRows.map { it.toMap() },
-            "recurringGhostTransactions" to ghostRows.map { it.toMap() },
+            "recurringGhostTransactions" to instanceRows.map { it.toLegacyGhostMap() },
         )
     }
 
@@ -61,6 +65,8 @@ class ExpenseRepository(context: Context) {
 
     fun updateFastInfoConfig(args: Map<*, *>): Map<String, Any?> = settingsStore.updateFastInfoConfig(args)
 
+    fun updatePushRecurringSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updatePushRecurringSettings(args)
+
 
     suspend fun listNotificationCards(): List<Map<String, Any?>> {
         seedIfEmpty()
@@ -86,20 +92,91 @@ class ExpenseRepository(context: Context) {
 
     suspend fun listRecurringTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()
-        syncRecurringGhosts(recurringTargetMillis())
         return recurringTransactions.all().map { it.toMap() }
+    }
+
+    suspend fun listRecurringRules(): List<Map<String, Any?>> {
+        seedIfEmpty()
+        ensureRecurringRuleInstancesForPeriod(recurringTargetMillis())
+        return recurringRules.all().map { it.toMap() }
+    }
+
+    suspend fun addRecurringRule(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val row = buildRecurringRule(args, null)
+        val id = recurringRules.insert(row).toInt()
+        val saved = row.copy(id = id)
+        ensureRecurringRuleInstancesForPeriod(recurringTargetMillis())
+        RecurringAlarmScheduler(appContext).sync()
+        return saved.toMap()
+    }
+
+    suspend fun updateRecurringRule(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val id = optionalInt(args["id"])
+            ?: throw ExpenseValidationException("INVALID_RECURRING_RULE", "Recurring rule id is required")
+        val existing = recurringRules.byId(id)
+            ?: throw ExpenseValidationException("INVALID_RECURRING_RULE", "Recurring rule does not exist")
+        val row = buildRecurringRule(args, existing)
+        recurringRules.update(row)
+        recurringRuleInstances.deletePendingForRule(row.id)
+        if (row.isActive) {
+            ensureRecurringRuleInstancesForPeriod(recurringTargetMillis())
+        }
+        RecurringAlarmScheduler(appContext).sync()
+        return row.toMap()
+    }
+
+    suspend fun toggleRecurringRule(args: Map<*, *>): Map<String, Any?> {
+        seedIfEmpty()
+        val id = optionalInt(args["id"])
+            ?: throw ExpenseValidationException("INVALID_RECURRING_RULE", "Recurring rule id is required")
+        val existing = recurringRules.byId(id)
+            ?: throw ExpenseValidationException("INVALID_RECURRING_RULE", "Recurring rule does not exist")
+        val row = existing.copy(
+            isActive = boolArg(args["isActive"], !existing.isActive),
+            updatedAt = System.currentTimeMillis(),
+        )
+        recurringRules.update(row)
+        if (row.isActive) {
+            ensureRecurringRuleInstancesForPeriod(recurringTargetMillis())
+        } else {
+            recurringRuleInstances.deletePendingForRule(row.id)
+        }
+        RecurringAlarmScheduler(appContext).sync()
+        return row.toMap()
+    }
+
+    suspend fun deleteRecurringRule(id: Int): Boolean {
+        seedIfEmpty()
+        val existing = recurringRules.byId(id) ?: return false
+        recurringRuleInstances.deletePendingForRule(id)
+        recurringRules.delete(existing)
+        RecurringAlarmScheduler(appContext).sync()
+        return true
     }
 
     suspend fun listRecurringGhostTransactions(): List<Map<String, Any?>> {
         seedIfEmpty()
-        syncRecurringGhosts(recurringTargetMillis())
-        return recurringGhosts.pending().map { it.toMap() }
+        val targetMillis = recurringTargetMillis()
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
+        return recurringRuleInstances.pendingForPeriod(periodKeyFromMillis(targetMillis)).map { it.toLegacyGhostMap() }
     }
 
     suspend fun ensureRecurringGhostTransactions(targetMillis: Long = recurringTargetMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
-        ensureRecurringGhostsForActivePeriod(targetMillis)
-        return recurringGhosts.pending().map { it.toMap() }
+        val currentMillis = recurringTargetMillis()
+        val currentPeriod = periodKeyFromMillis(currentMillis)
+        val targetPeriod = periodKeyFromMillis(targetMillis)
+        ensureRecurringRuleInstancesForPeriod(currentMillis)
+        if (targetPeriod < currentPeriod) return emptyList()
+        if (targetPeriod != currentPeriod) {
+            ensureRecurringRuleInstancesForPeriod(
+                targetMillis = targetMillis,
+                expirePastPending = false,
+            )
+        }
+        return recurringRuleInstances.pendingForPeriod(targetPeriod).map { it.toLegacyGhostMap() }
     }
 
     suspend fun addRecurringTransaction(args: Map<*, *>): Map<String, Any?> {
@@ -158,25 +235,93 @@ class ExpenseRepository(context: Context) {
 
     suspend fun processDueRecurringTransactions(targetMillis: Long = recurringTargetMillis()): List<Map<String, Any?>> {
         seedIfEmpty()
-        val processed = syncRecurringGhosts(targetMillis)
-        return processed.map { it.toMap() }
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
+        return activateDueDateTriggeredRuleInstances(targetMillis).map { it.toMap() }
+    }
+
+    suspend fun processNotificationEventForRecurring(event: NotificationEventEntity): Map<String, Any?>? {
+        seedIfEmpty()
+        if (event.isDuplicate) return null
+        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) return null
+        val targetMillis = event.timestamp
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
+        val periodKey = RecurringRuleInstancePlanner.plan(targetMillis, 1, 0.0).periodKey
+        val activePushRules = recurringRules.active()
+            .filter { RecurringTriggerType.normalize(it.triggerType) == RecurringTriggerType.PUSH }
+            .associateBy { it.id }
+        if (activePushRules.isEmpty()) return null
+        val notificationText = notificationText(event)
+        val eventDate = dateFromMillis(targetMillis)
+        val candidates = mutableListOf<PushRecurringCandidate>()
+        for (instance in recurringRuleInstances.pendingForPeriod(periodKey)) {
+            if (instance.triggerTypeSnapshot != RecurringTriggerType.PUSH) continue
+            val rule = activePushRules[instance.ruleId] ?: continue
+            val parsed = PushRecurringParser.parse(
+                text = notificationText,
+                amountPattern = rule.amountPattern,
+                merchantPattern = rule.merchantPattern,
+                includeKeyword = rule.includeKeyword,
+            )
+            val amount = parsed.amount ?: continue
+            val merchant = parsed.merchant?.takeIf { it.isNotBlank() } ?: continue
+            if (parsed.error != null) continue
+            val score = PushRecurringMatcher.score(
+                rule = PushRecurringMatchRule(
+                    ruleId = rule.id,
+                    instanceId = instance.id,
+                    estimatedDate = instance.estimatedDate,
+                    estimatedAmount = instance.estimatedAmount,
+                    transactionType = rule.transactionType,
+                    appFilterText = rule.appFilterText,
+                    packageName = rule.packageName,
+                    appLabel = rule.appLabel,
+                    dateToleranceDays = rule.dateToleranceDays,
+                    amountTolerancePercent = rule.amountTolerancePercent,
+                    amountToleranceMin = rule.amountToleranceMin,
+                    merchantSelection = rule.merchantSelection,
+                ),
+                event = PushRecurringMatchEvent(
+                    notificationEventId = event.id,
+                    appLabel = event.appLabel,
+                    packageName = event.packageName,
+                    date = eventDate,
+                    amount = amount,
+                    merchant = merchant,
+                    transactionType = rule.transactionType,
+                ),
+            )
+            if (score.matches) {
+                candidates.add(PushRecurringCandidate(rule, instance, parsed, score))
+            }
+        }
+        if (candidates.isEmpty()) return null
+        if (settingsStore.loadPushRecurringConflictPolicy() == ExpenseSettingsStore.PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE && candidates.size > 1) {
+            Log.d(
+                "ExpenseNotification",
+                "[RecurringPush] ambiguous notification=${event.id} matches=${candidates.map { it.instance.id }}",
+            )
+            return mapOf("status" to "ambiguous", "matchCount" to candidates.size)
+        }
+        val selected = candidates.maxByOrNull { it.score.confidence } ?: return null
+        return activatePushRecurringCandidate(selected, event).toMap()
     }
 
     suspend fun nextRecurringTriggerMillis(targetMillis: Long = recurringTargetMillis()): Long? {
         seedIfEmpty()
-        ensureRecurringGhostsForActivePeriod(targetMillis)
-        nextPendingRecurringTriggerAtOrAfter(targetMillis)?.let { return it }
-        ensureRecurringGhostsForActivePeriod(nextRecurringMonthMillis(targetMillis))
-        return nextPendingRecurringTriggerAtOrAfter(targetMillis)
+        ensureRecurringRuleInstancesForPeriod(targetMillis)
+        nextPendingRuleTriggerAtOrAfter(targetMillis)?.let { return it }
+        ensureRecurringRuleInstancesForPeriod(
+            targetMillis = nextRecurringMonthMillis(targetMillis),
+            expirePastPending = false,
+        )
+        return nextPendingRuleTriggerAtOrAfter(targetMillis)
     }
 
-    private suspend fun nextPendingRecurringTriggerAtOrAfter(targetMillis: Long): Long? {
-        return recurringGhosts.pending()
-            .asSequence()
-            .filter { !it.isActivated }
-            .map { it.triggerMillis }
-            .filter { it >= targetMillis }
-            .minOrNull()
+    private suspend fun nextPendingRuleTriggerAtOrAfter(targetMillis: Long): Long? {
+        val date = dateFromMillis(targetMillis)
+        return recurringRuleInstances.nextDateTriggeredAtOrAfter(date)
+            ?.let { triggerMillisFromDate(it.estimatedDate) }
+            ?.let { if (it < targetMillis) targetMillis else it }
     }
 
     private fun nextRecurringMonthMillis(targetMillis: Long): Long {
@@ -325,6 +470,20 @@ class ExpenseRepository(context: Context) {
             updatedAt = now,
         )
         recurringGhosts.updatePendingCategorySnapshot(
+            categoryId = row.transactionCategoryID,
+            categoryName = row.name,
+            categoryColor = snapshotColor,
+            categoryIconSlot = snapshotIconSlot,
+            updatedAt = now,
+        )
+        recurringRules.updateCategorySnapshot(
+            categoryId = row.transactionCategoryID,
+            categoryName = row.name,
+            categoryColor = snapshotColor,
+            categoryIconSlot = snapshotIconSlot,
+            updatedAt = now,
+        )
+        recurringRuleInstances.updatePendingCategorySnapshot(
             categoryId = row.transactionCategoryID,
             categoryName = row.name,
             categoryColor = snapshotColor,
@@ -654,6 +813,153 @@ class ExpenseRepository(context: Context) {
 
     private fun recurringTargetMillis(): Long = debugClockStore.effectiveNow()
 
+    private suspend fun ensureRecurringRuleInstancesForPeriod(
+        targetMillis: Long,
+        expirePastPending: Boolean = true,
+    ) {
+        val now = System.currentTimeMillis()
+        val currentPeriod = RecurringRuleInstancePlanner.plan(targetMillis, 1, 0.0).periodKey
+        if (expirePastPending) recurringRuleInstances.expirePastPending(currentPeriod, now)
+        for (rule in recurringRules.active()) {
+            val plan = RecurringRuleInstancePlanner.plan(
+                targetMillis = targetMillis,
+                expectedDayOfMonth = rule.expectedDayOfMonth,
+                estimatedAmount = rule.estimatedAmount,
+            )
+            if (recurringRuleInstances.byRuleAndPeriod(rule.id, plan.periodKey) != null) continue
+            recurringRuleInstances.insert(
+                RecurringRuleInstanceEntity(
+                    ruleId = rule.id,
+                    periodKey = plan.periodKey,
+                    status = RecurringRuleInstanceStatus.PENDING,
+                    estimatedDate = plan.estimatedDate,
+                    estimatedAmount = plan.estimatedAmount,
+                    triggerTypeSnapshot = rule.triggerType,
+                    transactionTypeSnapshot = rule.transactionType,
+                    nameSnapshot = rule.name,
+                    categoryIdSnapshot = rule.categoryId,
+                    categoryNameSnapshot = rule.categoryName,
+                    categoryColorSnapshot = rule.categoryColor,
+                    categoryIconSlotSnapshot = rule.categoryIconSlot,
+                    activatedTransactionId = null,
+                    activatedAt = null,
+                    matchedNotificationEventId = null,
+                    matchConfidence = null,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+    }
+
+    private suspend fun activateDueDateTriggeredRuleInstances(targetMillis: Long): List<RecurringRuleEntity> {
+        val processed = mutableListOf<RecurringRuleEntity>()
+        val now = System.currentTimeMillis()
+        for (instance in recurringRuleInstances.dueDateTriggered(dateFromMillis(targetMillis))) {
+            val rule = recurringRules.byId(instance.ruleId) ?: continue
+            if (!rule.isActive) {
+                recurringRuleInstances.updateStatus(instance.id, RecurringRuleInstanceStatus.EXPIRED, now)
+                continue
+            }
+            if (RecurringTriggerType.normalize(rule.triggerType) != RecurringTriggerType.DATE) continue
+            val signedAmount = if (instance.transactionTypeSnapshot == "income") {
+                kotlin.math.abs(instance.estimatedAmount)
+            } else {
+                -kotlin.math.abs(instance.estimatedAmount)
+            }
+            val transaction = ExpenseTransactionEntity(
+                id = nextId(instance.estimatedDate),
+                date = instance.estimatedDate,
+                time = recurringTime(targetMillis),
+                latitude = null,
+                longitude = null,
+                address = "Recurring rule transaction",
+                merchant = instance.nameSnapshot,
+                amount = signedAmount,
+                userAssignedName = instance.nameSnapshot,
+                transactionCategoryID = instance.categoryIdSnapshot,
+                recurringTransactionId = rule.id,
+                recurringRuleId = rule.id,
+                recurringInstanceId = instance.id,
+            )
+            transactions.insert(transaction)
+            recurringRuleInstances.markActivated(
+                id = instance.id,
+                transactionId = transaction.id,
+                activatedAt = now,
+                eventId = null,
+                confidence = null,
+            )
+            Log.d(
+                "ExpenseNotification",
+                "[RecurringRule] date activation instance=${instance.id} rule=${rule.id} transaction=${transaction.id} amount=${transaction.amount}",
+            )
+            notificationEmitter.emit(
+                ExpenseNotificationCardFactory.recurringRuleActivated(
+                    rule = rule,
+                    instance = instance,
+                    transaction = transaction,
+                    now = now,
+                ),
+                notificationCards,
+            )
+            categories.byId(transaction.transactionCategoryID)?.let { emitLimitAlertsForTransaction(transaction, it) }
+            processed.add(rule.copy(updatedAt = now))
+        }
+        return processed
+    }
+
+    private suspend fun activatePushRecurringCandidate(
+        candidate: PushRecurringCandidate,
+        event: NotificationEventEntity,
+    ): ExpenseTransactionEntity {
+        val rule = candidate.rule
+        val instance = candidate.instance
+        val merchant = candidate.parsed.merchant?.takeIf { it.isNotBlank() } ?: rule.name
+        val parsedAmount = candidate.parsed.amount ?: rule.estimatedAmount
+        val date = dateFromMillis(event.timestamp)
+        val signedAmount = if (rule.transactionType == "income") {
+            kotlin.math.abs(parsedAmount)
+        } else {
+            -kotlin.math.abs(parsedAmount)
+        }
+        val transaction = ExpenseTransactionEntity(
+            id = nextId(date),
+            date = date,
+            time = timeFromMillis(event.timestamp),
+            latitude = null,
+            longitude = null,
+            address = "Push recurring transaction",
+            merchant = merchant,
+            amount = signedAmount,
+            userAssignedName = rule.name,
+            transactionCategoryID = rule.categoryId,
+            recurringTransactionId = rule.id,
+            recurringRuleId = rule.id,
+            recurringInstanceId = instance.id,
+        )
+        transactions.insert(transaction)
+        val now = System.currentTimeMillis()
+        recurringRuleInstances.markActivated(
+            id = instance.id,
+            transactionId = transaction.id,
+            activatedAt = now,
+            eventId = event.id,
+            confidence = candidate.score.confidence,
+        )
+        notificationEmitter.emit(
+            ExpenseNotificationCardFactory.recurringRuleActivated(
+                rule = rule,
+                instance = instance,
+                transaction = transaction,
+                now = now,
+            ),
+            notificationCards,
+        )
+        categories.byId(transaction.transactionCategoryID)?.let { emitLimitAlertsForTransaction(transaction, it) }
+        return transaction
+    }
+
     private suspend fun syncRecurringGhosts(targetMillis: Long): List<RecurringTransactionEntity> {
         ensureRecurringGhostsForActivePeriod(targetMillis)
         return activateDueRecurringGhosts(targetMillis)
@@ -779,6 +1085,126 @@ class ExpenseRepository(context: Context) {
     }
 
 
+    private suspend fun buildRecurringRule(args: Map<*, *>, existing: RecurringRuleEntity?): RecurringRuleEntity {
+        val name = args["name"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: existing?.name
+            ?: throw ExpenseValidationException("INVALID_RECURRING_RULE_NAME", "Recurring rule name is required")
+        val estimatedAmount = doubleArg(args["estimatedAmount"], existing?.estimatedAmount ?: 0.0)
+        if (estimatedAmount <= 0.0) {
+            throw ExpenseValidationException("INVALID_RECURRING_RULE_AMOUNT", "Estimated amount must be greater than zero")
+        }
+        val expectedDay = optionalInt(args["expectedDayOfMonth"]) ?: existing?.expectedDayOfMonth
+            ?: throw ExpenseValidationException("INVALID_RECURRING_RULE_DAY", "Expected day is required")
+        if (expectedDay !in 1..31) {
+            throw ExpenseValidationException("INVALID_RECURRING_RULE_DAY", "Expected day must be between 1 and 31")
+        }
+        val categoryId = optionalInt(args["categoryId"]) ?: existing?.categoryId
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category is required")
+        val category = categories.byId(categoryId)
+            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val triggerType = RecurringTriggerType.normalize(args["triggerType"]?.toString() ?: existing?.triggerType)
+        val transactionType = normalizeNativeTransactionType(args["transactionType"]?.toString()) ?: existing?.transactionType ?: "expense"
+        val appFilterText = args["appFilterText"]?.toString() ?: existing?.appFilterText ?: ""
+        val packageName = args["packageName"]?.toString() ?: existing?.packageName ?: ""
+        val appLabel = args["appLabel"]?.toString() ?: existing?.appLabel ?: ""
+        val sampleText = args["sampleText"]?.toString() ?: existing?.sampleText ?: ""
+        val includeKeyword = args["includeKeyword"]?.toString() ?: existing?.includeKeyword ?: ""
+        val amountPattern = args["amountPattern"]?.toString() ?: existing?.amountPattern ?: ""
+        val amountSelection = args["amountSelection"]?.toString() ?: existing?.amountSelection ?: ""
+        val merchantPattern = args["merchantPattern"]?.toString() ?: existing?.merchantPattern ?: ""
+        val merchantSelection = args["merchantSelection"]?.toString() ?: existing?.merchantSelection ?: ""
+        val dateToleranceDays = optionalInt(args["dateToleranceDays"]) ?: existing?.dateToleranceDays ?: 5
+        val amountTolerancePercent = doubleArg(args["amountTolerancePercent"], existing?.amountTolerancePercent ?: 20.0)
+        val amountToleranceMin = doubleArg(args["amountToleranceMin"], existing?.amountToleranceMin ?: 5000.0)
+        validateRecurringRulePushSettings(
+            triggerType = triggerType,
+            appFilterText = appFilterText,
+            sampleText = sampleText,
+            includeKeyword = includeKeyword,
+            amountPattern = amountPattern,
+            amountSelection = amountSelection,
+            merchantPattern = merchantPattern,
+            merchantSelection = merchantSelection,
+            dateToleranceDays = dateToleranceDays,
+            amountTolerancePercent = amountTolerancePercent,
+            amountToleranceMin = amountToleranceMin,
+        )
+        val now = System.currentTimeMillis()
+        return RecurringRuleEntity(
+            id = existing?.id ?: 0,
+            triggerType = triggerType,
+            transactionType = transactionType,
+            name = name,
+            estimatedAmount = kotlin.math.abs(estimatedAmount),
+            expectedDayOfMonth = expectedDay,
+            categoryId = category.transactionCategoryID,
+            categoryName = category.name,
+            categoryColor = category.backgroundColor ?: colorForSlot(category.colorSlot ?: 4),
+            categoryIconSlot = category.iconSlot ?: 0,
+            isActive = boolArg(args["isActive"], existing?.isActive ?: true),
+            appFilterText = appFilterText,
+            packageName = packageName,
+            appLabel = appLabel,
+            sampleText = sampleText,
+            includeKeyword = includeKeyword,
+            amountPattern = amountPattern,
+            amountSelection = amountSelection,
+            merchantPattern = merchantPattern,
+            merchantSelection = merchantSelection,
+            dateToleranceDays = dateToleranceDays,
+            amountTolerancePercent = amountTolerancePercent,
+            amountToleranceMin = amountToleranceMin,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+        )
+    }
+
+    private fun validateRecurringRulePushSettings(
+        triggerType: String,
+        appFilterText: String,
+        sampleText: String,
+        includeKeyword: String,
+        amountPattern: String,
+        amountSelection: String,
+        merchantPattern: String,
+        merchantSelection: String,
+        dateToleranceDays: Int,
+        amountTolerancePercent: Double,
+        amountToleranceMin: Double,
+    ) {
+        if (dateToleranceDays < 0 || amountTolerancePercent < 0.0 || amountToleranceMin < 0.0) {
+            throw ExpenseValidationException(
+                "INVALID_RECURRING_RULE_PUSH",
+                "Push recurring tolerances cannot be negative",
+            )
+        }
+        if (RecurringTriggerType.normalize(triggerType) != RecurringTriggerType.PUSH) return
+        if (appFilterText.isBlank()) {
+            throw ExpenseValidationException(
+                "INVALID_RECURRING_RULE_PUSH",
+                "Push recurring app filter is required",
+            )
+        }
+        if (amountSelection.isBlank() || merchantSelection.isBlank()) {
+            throw ExpenseValidationException(
+                "INVALID_RECURRING_RULE_PUSH",
+                "Push recurring amount and merchant selections are required",
+            )
+        }
+        val parsed = PushRecurringParser.parse(
+            text = sampleText,
+            amountPattern = amountPattern,
+            merchantPattern = merchantPattern,
+            includeKeyword = includeKeyword,
+        )
+        if (parsed.error != null || parsed.amount == null || parsed.merchant.isNullOrBlank()) {
+            throw ExpenseValidationException(
+                "INVALID_RECURRING_RULE_PUSH",
+                "Push recurring sample must extract amount and merchant",
+            )
+        }
+    }
+
     private suspend fun buildRecurringRow(args: Map<*, *>, existing: RecurringTransactionEntity?): RecurringTransactionEntity {
         val name = args["name"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
             ?: existing?.name
@@ -838,6 +1264,49 @@ class ExpenseRepository(context: Context) {
         )
     }
 
+    private fun dateFromMillis(targetMillis: Long): String {
+        val calendar = Calendar.getInstance().apply { timeInMillis = targetMillis }
+        return "%04d.%02d.%02d".format(
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH) + 1,
+            calendar.get(Calendar.DAY_OF_MONTH),
+        )
+    }
+
+    private fun periodKeyFromMillis(targetMillis: Long): String {
+        val calendar = Calendar.getInstance().apply { timeInMillis = targetMillis }
+        return "%04d-%02d".format(
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH) + 1,
+        )
+    }
+
+    private fun timeFromMillis(targetMillis: Long): String {
+        val calendar = Calendar.getInstance().apply { timeInMillis = targetMillis }
+        return "%02d:%02d".format(calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE))
+    }
+
+    private fun triggerMillisFromDate(value: String): Long {
+        val parts = value.trim().replace('.', '-').split("-")
+        if (parts.size != 3) return 0L
+        val year = parts[0].toIntOrNull() ?: return 0L
+        val month = parts[1].toIntOrNull() ?: return 0L
+        val day = parts[2].toIntOrNull() ?: return 0L
+        return Calendar.getInstance().apply {
+            set(Calendar.YEAR, year)
+            set(Calendar.MONTH, month - 1)
+            set(Calendar.DAY_OF_MONTH, day)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    private fun notificationText(event: NotificationEventEntity): String = listOf(event.title, event.text, event.bigText, event.subText)
+        .filter { it.isNotBlank() }
+        .joinToString("\n")
+
     private suspend fun seedIfEmpty() {
         val currentVersion = seedPrefs.getInt("demo_seed_version", 0)
         if (currentVersion < ExpenseSeedData.version) {
@@ -857,6 +1326,8 @@ class ExpenseRepository(context: Context) {
     private suspend fun resetDemoData() {
         db.withTransaction {
             notificationCards.clearAllHard()
+            recurringRuleInstances.clearAll()
+            recurringRules.clearAll()
             recurringGhosts.clearAll()
             recurringTransactions.clearAll()
             transactions.clearAll()
@@ -882,6 +1353,13 @@ class ExpenseRepository(context: Context) {
     private suspend fun nextCategoryId(): Int = (categories.maxId() ?: 0) + 1
 
     private fun typeFromAmount(amount: Double): String = if (amount > 0) "income" else "expense"
+
+    private data class PushRecurringCandidate(
+        val rule: RecurringRuleEntity,
+        val instance: RecurringRuleInstanceEntity,
+        val parsed: PushRecurringParseResult,
+        val score: PushRecurringMatchScore,
+    )
 
     private data class TransactionPageQuery(
         val type: String?,

@@ -15,7 +15,6 @@ import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/backheader_style_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
 import 'widgets/options/permissions_options_panel.dart';
-import 'widgets/options/recurring_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
 import 'widgets/options/simple_options_panel.dart';
 import 'widgets/options/theme_options_panel.dart';
@@ -26,7 +25,6 @@ enum _SettingsMenu {
   permissions,
   fastInfo,
   statistics,
-  recurring,
   currency,
   language,
   backheader,
@@ -169,10 +167,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 SettingsOptionItem(
                   title: 'Statisztikák',
                   onTap: () => _open(_SettingsMenu.statistics),
-                ),
-                SettingsOptionItem(
-                  title: 'Ismétlődő tranzakciók',
-                  onTap: () => _open(_SettingsMenu.recurring),
                   isLast: true,
                 ),
               ],
@@ -336,7 +330,6 @@ class _SettingsPageState extends State<SettingsPage> {
         settings: _settingsStore.themeSettings,
         onChanged: _updateThemeSettings,
       ),
-      _SettingsMenu.recurring => RecurringOptionsPanel(store: _settingsStore),
       _SettingsMenu.currency => const SimpleOptionsPanel(
         title: 'Pénznem kiválasztása',
         children: ['EUR - Euro', 'HUF - Magyar Forint', 'USD - US Dollar'],
@@ -383,7 +376,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.permissions => 'Engedélyek',
       _SettingsMenu.fastInfo => 'FastInfo',
       _SettingsMenu.statistics => 'Statisztikák',
-      _SettingsMenu.recurring => 'Ismétlődő tranzakciók',
       _SettingsMenu.currency => 'Pénznem Beállítások',
       _SettingsMenu.language => 'Nyelv Beállítások',
       _SettingsMenu.backheader => 'Backheader',

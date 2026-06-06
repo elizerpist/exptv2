@@ -24,6 +24,9 @@ class ExpenseMethodChannel(
             "expenseUpdateFastInfoConfig" -> scope.launchResult(result) {
                 repository.updateFastInfoConfig(call.argumentsMap())
             }
+            "expenseUpdatePushRecurringSettings" -> scope.launchResult(result) {
+                repository.updatePushRecurringSettings(call.argumentsMap())
+            }
             "expenseListNotificationCards" -> scope.launchResult(result) {
                 repository.listNotificationCards()
             }
@@ -42,6 +45,24 @@ class ExpenseMethodChannel(
             }
             "expenseListRecurringTransactions" -> scope.launchResult(result) {
                 repository.listRecurringTransactions()
+            }
+            "expenseListRecurringRules" -> scope.launchResult(result) {
+                repository.listRecurringRules()
+            }
+            "expenseAddRecurringRule" -> scope.launchResult(result) {
+                repository.addRecurringRule(call.argumentsMap())
+            }
+            "expenseUpdateRecurringRule" -> scope.launchResult(result) {
+                repository.updateRecurringRule(call.argumentsMap())
+            }
+            "expenseToggleRecurringRule" -> scope.launchResult(result) {
+                repository.toggleRecurringRule(call.argumentsMap())
+            }
+            "expenseDeleteRecurringRule" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: call.argumentsMap()["id"]?.toString()?.toIntOrNull()
+                    ?: throw ExpenseValidationException("INVALID_RECURRING_RULE", "Recurring rule id is required")
+                repository.deleteRecurringRule(id)
             }
             "expenseListRecurringGhostTransactions" -> scope.launchResult(result) {
                 repository.listRecurringGhostTransactions()

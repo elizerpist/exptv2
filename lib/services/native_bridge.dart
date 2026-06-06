@@ -9,6 +9,7 @@ import '../features/settings/models/notification_parser_rule.dart';
 import '../features/settings/models/recurring_transaction.dart';
 import '../features/transactions/models/category_limit.dart';
 import '../features/transactions/models/recurring_ghost_record.dart';
+import '../features/transactions/models/recurring_rule.dart';
 import '../features/transactions/models/transaction_category.dart';
 import '../features/transactions/models/transaction_record.dart';
 import '../models/installed_app.dart';
@@ -19,10 +20,12 @@ class ExpenseSettingsPayload {
   const ExpenseSettingsPayload({
     required this.themeSettings,
     required this.fastInfoConfig,
+    required this.pushRecurringSettings,
   });
 
   final AppThemeSettings themeSettings;
   final FastInfoConfig fastInfoConfig;
+  final PushRecurringSettings pushRecurringSettings;
 }
 
 class ExpenseBootstrapPayload {
@@ -306,6 +309,7 @@ class NativeBridge {
     final payload = map ?? <dynamic, dynamic>{};
     final theme = payload['themeSettings'];
     final fastInfo = payload['fastInfoConfig'];
+    final pushRecurring = payload['pushRecurringSettings'];
     return ExpenseSettingsPayload(
       themeSettings: theme is Map<dynamic, dynamic>
           ? AppThemeSettings.fromMap(theme)
@@ -313,6 +317,9 @@ class NativeBridge {
       fastInfoConfig: fastInfo is Map<dynamic, dynamic>
           ? FastInfoConfig.fromMap(fastInfo)
           : FastInfoConfig.defaults(),
+      pushRecurringSettings: pushRecurring is Map<dynamic, dynamic>
+          ? PushRecurringSettings.fromMap(pushRecurring)
+          : PushRecurringSettings.defaults(),
     );
   }
 
@@ -334,6 +341,19 @@ class NativeBridge {
       config.toMap(),
     );
     return FastInfoConfig.fromMap(row ?? config.toMap());
+  }
+
+  Future<PushRecurringSettings> expenseUpdatePushRecurringSettings(
+    PushRecurringSettings settings,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdatePushRecurringSettings',
+      settings.toMap(),
+    );
+    final payload = row?['pushRecurringSettings'];
+    return payload is Map<dynamic, dynamic>
+        ? PushRecurringSettings.fromMap(payload)
+        : PushRecurringSettings.fromMap(row ?? settings.toMap());
   }
 
   Future<List<RecurringTransaction>> expenseListRecurringTransactions() async {
@@ -427,6 +447,56 @@ class NativeBridge {
         .cast<Map<dynamic, dynamic>>()
         .map(RecurringGhostRecord.fromMap)
         .toList();
+  }
+
+  Future<List<RecurringRule>> expenseListRecurringRules() async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseListRecurringRules',
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(RecurringRule.fromMap)
+        .toList();
+  }
+
+  Future<RecurringRule> expenseAddRecurringRule(
+    RecurringRuleDraft draft,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseAddRecurringRule',
+      draft.toMap(),
+    );
+    return RecurringRule.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<RecurringRule> expenseUpdateRecurringRule(
+    int id,
+    RecurringRuleDraft draft,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateRecurringRule',
+      {'id': id, ...draft.toMap()},
+    );
+    return RecurringRule.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<RecurringRule> expenseToggleRecurringRule(
+    int id,
+    bool isActive,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseToggleRecurringRule',
+      {'id': id, 'isActive': isActive},
+    );
+    return RecurringRule.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<bool> expenseDeleteRecurringRule(int id) async {
+    final deleted = await _methodChannel.invokeMethod<bool>(
+      'expenseDeleteRecurringRule',
+      {'id': id},
+    );
+    return deleted ?? false;
   }
 
   Future<List<ExpenseNotificationCard>> expenseListNotificationCards() async {

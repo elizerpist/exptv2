@@ -14,9 +14,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryLimitEntity::class,
         RecurringTransactionEntity::class,
         RecurringGhostTransactionEntity::class,
+        RecurringRuleEntity::class,
+        RecurringRuleInstanceEntity::class,
         NotificationCardEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
@@ -25,6 +27,8 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
     abstract fun categoryLimits(): CategoryLimitDao
     abstract fun recurringTransactions(): RecurringTransactionDao
     abstract fun recurringGhostTransactions(): RecurringGhostTransactionDao
+    abstract fun recurringRules(): RecurringRuleDao
+    abstract fun recurringRuleInstances(): RecurringRuleInstanceDao
     abstract fun notificationCards(): NotificationCardDao
 
     companion object {
@@ -185,6 +189,221 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN recurringRuleId INTEGER")
+                db.execSQL("ALTER TABLE transactions ADD COLUMN recurringInstanceId INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_recurringRuleId ON transactions(recurringRuleId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_recurringInstanceId ON transactions(recurringInstanceId)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS recurring_rules (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        triggerType TEXT NOT NULL,
+                        transactionType TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        estimatedAmount REAL NOT NULL,
+                        expectedDayOfMonth INTEGER NOT NULL,
+                        categoryId INTEGER NOT NULL,
+                        categoryName TEXT NOT NULL,
+                        categoryColor TEXT NOT NULL,
+                        categoryIconSlot INTEGER NOT NULL,
+                        isActive INTEGER NOT NULL,
+                        appFilterText TEXT NOT NULL,
+                        packageName TEXT NOT NULL,
+                        appLabel TEXT NOT NULL,
+                        sampleText TEXT NOT NULL,
+                        includeKeyword TEXT NOT NULL,
+                        amountPattern TEXT NOT NULL,
+                        amountSelection TEXT NOT NULL,
+                        merchantPattern TEXT NOT NULL,
+                        merchantSelection TEXT NOT NULL,
+                        dateToleranceDays INTEGER NOT NULL,
+                        amountTolerancePercent REAL NOT NULL,
+                        amountToleranceMin REAL NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(categoryId) REFERENCES transaction_categories(transactionCategoryID) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rules_triggerType ON recurring_rules(triggerType)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rules_transactionType ON recurring_rules(transactionType)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rules_categoryId ON recurring_rules(categoryId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rules_expectedDayOfMonth ON recurring_rules(expectedDayOfMonth)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rules_isActive ON recurring_rules(isActive)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS recurring_rule_instances (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        ruleId INTEGER NOT NULL,
+                        periodKey TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        estimatedDate TEXT NOT NULL,
+                        estimatedAmount REAL NOT NULL,
+                        triggerTypeSnapshot TEXT NOT NULL,
+                        transactionTypeSnapshot TEXT NOT NULL,
+                        nameSnapshot TEXT NOT NULL,
+                        categoryIdSnapshot INTEGER NOT NULL,
+                        categoryNameSnapshot TEXT NOT NULL,
+                        categoryColorSnapshot TEXT NOT NULL,
+                        categoryIconSlotSnapshot INTEGER NOT NULL,
+                        activatedTransactionId INTEGER,
+                        activatedAt INTEGER,
+                        matchedNotificationEventId INTEGER,
+                        matchConfidence REAL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(ruleId) REFERENCES recurring_rules(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_recurring_rule_instances_ruleId_periodKey
+                    ON recurring_rule_instances(ruleId, periodKey)
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rule_instances_status ON recurring_rule_instances(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rule_instances_periodKey ON recurring_rule_instances(periodKey)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rule_instances_estimatedDate ON recurring_rule_instances(estimatedDate)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_recurring_rule_instances_matchedNotificationEventId ON recurring_rule_instances(matchedNotificationEventId)")
+
+                db.execSQL(
+                    """
+                    INSERT INTO recurring_rules (
+                        id,
+                        triggerType,
+                        transactionType,
+                        name,
+                        estimatedAmount,
+                        expectedDayOfMonth,
+                        categoryId,
+                        categoryName,
+                        categoryColor,
+                        categoryIconSlot,
+                        isActive,
+                        appFilterText,
+                        packageName,
+                        appLabel,
+                        sampleText,
+                        includeKeyword,
+                        amountPattern,
+                        amountSelection,
+                        merchantPattern,
+                        merchantSelection,
+                        dateToleranceDays,
+                        amountTolerancePercent,
+                        amountToleranceMin,
+                        createdAt,
+                        updatedAt
+                    )
+                    SELECT
+                        id,
+                        'date',
+                        transactionType,
+                        name,
+                        amount,
+                        dayOfMonth,
+                        categoryId,
+                        categoryName,
+                        categoryColor,
+                        categoryIconSlot,
+                        isActive,
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        3,
+                        10.0,
+                        100.0,
+                        createdAt,
+                        updatedAt
+                    FROM recurring_transactions
+                    """.trimIndent(),
+                )
+
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO recurring_rule_instances (
+                        id,
+                        ruleId,
+                        periodKey,
+                        status,
+                        estimatedDate,
+                        estimatedAmount,
+                        triggerTypeSnapshot,
+                        transactionTypeSnapshot,
+                        nameSnapshot,
+                        categoryIdSnapshot,
+                        categoryNameSnapshot,
+                        categoryColorSnapshot,
+                        categoryIconSlotSnapshot,
+                        activatedTransactionId,
+                        activatedAt,
+                        matchedNotificationEventId,
+                        matchConfidence,
+                        createdAt,
+                        updatedAt
+                    )
+                    SELECT
+                        id,
+                        recurringTransactionId,
+                        periodKey,
+                        CASE WHEN isActivated = 1 THEN 'activated' ELSE 'pending' END,
+                        date,
+                        amount,
+                        'date',
+                        transactionType,
+                        name,
+                        categoryId,
+                        categoryName,
+                        categoryColor,
+                        categoryIconSlot,
+                        activatedTransactionId,
+                        CASE WHEN isActivated = 1 THEN updatedAt ELSE NULL END,
+                        NULL,
+                        NULL,
+                        createdAt,
+                        updatedAt
+                    FROM recurring_ghost_transactions
+                    """.trimIndent(),
+                )
+
+                db.execSQL(
+                    """
+                    UPDATE transactions
+                    SET recurringRuleId = recurringTransactionId
+                    WHERE recurringTransactionId IS NOT NULL
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    UPDATE transactions
+                    SET recurringInstanceId = (
+                        SELECT recurring_rule_instances.id
+                        FROM recurring_rule_instances
+                        WHERE recurring_rule_instances.activatedTransactionId = transactions.id
+                        LIMIT 1
+                    )
+                    WHERE recurringTransactionId IS NOT NULL
+                      AND EXISTS (
+                        SELECT 1
+                        FROM recurring_rule_instances
+                        WHERE recurring_rule_instances.activatedTransactionId = transactions.id
+                      )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -198,6 +417,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
+                        MIGRATION_7_8,
                     )
                     .build().also { instance = it }
             }
