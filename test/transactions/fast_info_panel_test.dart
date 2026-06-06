@@ -140,7 +140,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('fastinfo-rolling-zone-koltesi_trend')),
+      find.byKey(const ValueKey('fastinfo-rolling-pill-split-koltesi_trend')),
       findsOneWidget,
     );
     expect(
@@ -203,7 +203,7 @@ void main() {
     );
     expect(
       find.byKey(
-        const ValueKey('fastinfo-visual-remaining-spent-kiadas_bevetel_arany'),
+        const ValueKey('fastinfo-income-spent-split-kiadas_bevetel_arany'),
       ),
       findsOneWidget,
     );
@@ -797,14 +797,18 @@ void main() {
 
       expect(find.text('30 napos trend'), findsWidgets);
       expect(find.text('1 020 000 Ft'), findsWidgets);
-      expect(find.text('előző 30 naphoz +13%'), findsOneWidget);
+      expect(find.text('fix nélkül · ↑13%'), findsOneWidget);
       expect(find.text('Fix tételek nélkül'), findsOneWidget);
       expect(find.text('30 nap vs előző 30:'), findsOneWidget);
       expect(find.text('Változás:'), findsOneWidget);
       expect(find.text('+13%'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('fastinfo-rolling-zone-koltesi_trend')),
+        find.byKey(const ValueKey('fastinfo-rolling-pill-split-koltesi_trend')),
         findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('fastinfo-rolling-zone-koltesi_trend')),
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('fastinfo-rolling-split-koltesi_trend')),
@@ -821,6 +825,8 @@ void main() {
         13,
       );
       for (final key in <String>[
+        'fastinfo-rolling-pill-split-prev-koltesi_trend',
+        'fastinfo-rolling-pill-split-current-koltesi_trend',
         'fastinfo-rolling-split-prev-koltesi_trend',
         'fastinfo-rolling-split-current-koltesi_trend',
       ]) {
@@ -1174,6 +1180,236 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('remaining v25 cards render dedicated box and pill layouts', (
+    tester,
+  ) async {
+    final cases = <_V25SurfaceCase>[
+      _V25SurfaceCase(
+        id: 'atlagos_napi_koltes',
+        metric: const FastInfoMetricResult(
+          pillValue: '18 400 Ft',
+          primaryValue: '18 400 Ft',
+          secondaryValues: <String>[
+            'elmúlt 30 nap átlaga',
+            'Puffer: 12 nap',
+            '3 kiugró nap húzza',
+            'fixek nélkül',
+          ],
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.spikeLine,
+            values: <double>[10, 16, 12, 30, 11, 35, 14],
+          ),
+        ),
+        expectedTexts: <String>['Napi átlag', 'Költési ritmus:', 'Elég még:'],
+        expectedKeys: <String>[
+          'fastinfo-average-spike-atlagos_napi_koltes',
+          'fastinfo-average-line-atlagos_napi_koltes',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'no_spend_napok_szama',
+        metric: const FastInfoMetricResult(
+          pillValue: '3 / 7 nap',
+          primaryValue: '8 nap',
+          secondaryValues: <String>[
+            'aktuális hónapban',
+            'elmúlt 7 nap',
+            'arány: 44%',
+            'fixek nélkül',
+          ],
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.sevenDayStrip,
+            value: .44,
+            values: <double>[1, 0, 1, 1, 0, 0, 1],
+            points: <FastInfoVisualPoint>[
+              FastInfoVisualPoint(label: '1', value: 0),
+              FastInfoVisualPoint(label: '2', value: 1),
+              FastInfoVisualPoint(label: '3', value: 0),
+              FastInfoVisualPoint(label: '4', value: 1, isToday: true),
+            ],
+          ),
+        ),
+        expectedTexts: <String>['Költésmentes', 'Havi ritmus:', 'Arány:'],
+        expectedKeys: <String>[
+          'fastinfo-no-spend-week-no_spend_napok_szama',
+          'fastinfo-no-spend-month-no_spend_napok_szama',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'top_kategoria_heten',
+        metric: const FastInfoMetricResult(
+          pillValue: 'Ma Étel 18.9k',
+          primaryValue: 'Étel',
+          secondaryValues: <String>[
+            'ma 18.9k',
+            'Hét 82k · Hó 144k',
+            'fixek nélkül',
+          ],
+          avatar: FastInfoAvatar(colorHex: '#f97316', iconSlot: 0),
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.miniAvatarRow,
+            points: <FastInfoVisualPoint>[
+              FastInfoVisualPoint(
+                label: 'Ma',
+                value: 18900,
+                avatar: FastInfoAvatar(colorHex: '#f97316', iconSlot: 0),
+              ),
+              FastInfoVisualPoint(
+                label: 'Hét',
+                value: 82400,
+                avatar: FastInfoAvatar(colorHex: '#3b82f6', iconSlot: 1),
+              ),
+              FastInfoVisualPoint(
+                label: 'Hó',
+                value: 144000,
+                avatar: FastInfoAvatar(colorHex: '#8b5cf6', iconSlot: 2),
+              ),
+            ],
+          ),
+        ),
+        expectedTexts: <String>['Top kategóriák', 'Ma / hét / hó:'],
+        expectedKeys: <String>[
+          'fastinfo-top-categories-icons-top_kategoria_heten',
+          'fastinfo-top-categories-list-top_kategoria_heten',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'legnagyobb_novekedo_kategoria',
+        metric: const FastInfoMetricResult(
+          pillValue: 'Étel +22k',
+          primaryValue: 'Étel ↑ +22k',
+          secondaryValues: <String>['+52% · fix nélkül'],
+          trend: FastInfoTrend(
+            direction: FastInfoTrendDirection.up,
+            text: '+52%',
+            semantic: FastInfoSemantic.bad,
+          ),
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.analogMeter,
+            value: .52,
+            values: <double>[42000, 64000],
+          ),
+        ),
+        expectedTexts: <String>[
+          'Kategóriaváltozás',
+          'Mini vonal:',
+          'Változás:',
+        ],
+        expectedKeys: <String>[
+          'fastinfo-category-change-meter-legnagyobb_novekedo_kategoria',
+          'fastinfo-category-change-lines-legnagyobb_novekedo_kategoria',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'kovetkezo_ismetlo_kiadas',
+        metric: const FastInfoMetricResult(
+          pillValue: 'Telefon 8k',
+          primaryValue: 'Telefon',
+          secondaryValues: <String>[
+            '8 000 Ft · 2 nap múlva',
+            '7 nap: 2 tétel · 28 000 Ft',
+            'Számlák',
+          ],
+          avatar: FastInfoAvatar(colorHex: '#8b5cf6', iconSlot: 2),
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.fixedLoad,
+            values: <double>[0, 8000, 0, 20000, 0, 0, 0],
+            avatar: FastInfoAvatar(colorHex: '#8b5cf6', iconSlot: 2),
+          ),
+        ),
+        expectedTexts: <String>['Következő fix', 'Következő 7 nap:'],
+        expectedKeys: <String>[
+          'fastinfo-next-fixed-pill-week-kovetkezo_ismetlo_kiadas',
+          'fastinfo-next-fixed-week-kovetkezo_ismetlo_kiadas',
+          'fastinfo-next-fixed-avatar-kovetkezo_ismetlo_kiadas',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'havi_fix_koltseg_osszesen',
+        metric: const FastInfoMetricResult(
+          pillValue: 'hátra 28k',
+          primaryValue: '128 000 Ft',
+          secondaryValues: <String>[
+            'levonva 100k · hátra 28k',
+            '128k fixből',
+            'Lakbér 100k',
+          ],
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.paidRemainingSplit,
+            value: .78,
+            compareValue: .22,
+          ),
+        ),
+        expectedTexts: <String>['Havi fixek', 'Levont / hátra:', 'Legnagyobb:'],
+        expectedKeys: <String>[
+          'fastinfo-monthly-fixed-pill-split-havi_fix_koltseg_osszesen',
+          'fastinfo-monthly-fixed-split-havi_fix_koltseg_osszesen',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'bevetel_ebben_a_honapban',
+        metric: const FastInfoMetricResult(
+          pillValue: '+6% előzőhöz',
+          primaryValue: '620 000 Ft',
+          secondaryValues: <String>[
+            'eddig beérkezett',
+            'várt 780k · ghost 160k',
+            'Fedezet: 34 nap',
+          ],
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.incomeComparisonBars,
+            value: 620000,
+            compareValue: 585000,
+            marker: 780000,
+          ),
+        ),
+        expectedTexts: <String>['Havi bevétel', 'Bevételi tempó:', 'Fedezet:'],
+        expectedKeys: <String>[
+          'fastinfo-income-compare-bevetel_ebben_a_honapban',
+          'fastinfo-income-bars-bevetel_ebben_a_honapban',
+        ],
+      ),
+      _V25SurfaceCase(
+        id: 'kiadas_bevetel_arany',
+        metric: const FastInfoMetricResult(
+          pillValue: '29% maradt',
+          primaryValue: '71%',
+          secondaryValues: <String>[
+            '440k / 620k',
+            '180k bevételből',
+            'Összes tartalék: 1.2M',
+          ],
+          progress: .71,
+          visual: FastInfoVisualDescriptor(
+            kind: FastInfoVisualKind.remainingSpentSplit,
+            value: .29,
+            compareValue: .71,
+          ),
+        ),
+        expectedTexts: <String>[
+          'Bevétel elköltve',
+          'Arány:',
+          'Összes tartalék:',
+        ],
+        expectedKeys: <String>[
+          'fastinfo-income-spent-split-kiadas_bevetel_arany',
+          'fastinfo-income-spent-ratio-kiadas_bevetel_arany',
+        ],
+      ),
+    ];
+
+    for (final item in cases) {
+      await _pumpV25SurfaceCase(tester, item);
+      for (final text in item.expectedTexts) {
+        expect(find.text(text), findsWidgets, reason: item.id);
+      }
+      for (final key in item.expectedKeys) {
+        expect(find.byKey(ValueKey(key)), findsOneWidget, reason: item.id);
+      }
+      expect(tester.takeException(), isNull, reason: item.id);
+    }
+  });
+
   testWidgets('does not render filler visuals for plain metric', (
     tester,
   ) async {
@@ -1335,8 +1571,9 @@ void main() {
                         primaryValue: '27 000 Ft',
                       ),
                       'kovetkezo_ismetlo_kiadas': FastInfoMetricResult(
-                        pillValue: '8k',
-                        primaryValue: 'Telefon · 8 000 Ft',
+                        pillValue: 'Telefon 8k',
+                        primaryValue: 'Telefon',
+                        secondaryValues: <String>['8 000 Ft · 2 nap múlva'],
                       ),
                     },
                   ),
@@ -1354,4 +1591,38 @@ void main() {
 
 FastInfoSlot _slot(String id, FastInfoSlotType type) {
   return FastInfoSlot.fromCard(fastInfoCardById(id)!, type);
+}
+
+class _V25SurfaceCase {
+  const _V25SurfaceCase({
+    required this.id,
+    required this.metric,
+    required this.expectedTexts,
+    required this.expectedKeys,
+  });
+
+  final String id;
+  final FastInfoMetricResult metric;
+  final List<String> expectedTexts;
+  final List<String> expectedKeys;
+}
+
+Future<void> _pumpV25SurfaceCase(
+  WidgetTester tester,
+  _V25SurfaceCase item,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: FastInfoPanel(
+          config: FastInfoConfig(
+            pills: [_slot(item.id, FastInfoSlotType.pill), null, null],
+            boxes: [_slot(item.id, FastInfoSlotType.box), null, null],
+          ),
+          metrics: <String, FastInfoMetricResult>{item.id: item.metric},
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
 }

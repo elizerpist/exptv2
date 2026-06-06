@@ -64,11 +64,7 @@ const fastInfoCardCatalog = <FastInfoCardDefinition>[
     title: 'Átlagos napi költés',
   ),
   FastInfoCardDefinition(id: 'no_spend_napok_szama', title: 'No-spend napok'),
-  FastInfoCardDefinition(id: 'top_kategoria_ma', title: 'Top kategória ma'),
-  FastInfoCardDefinition(
-    id: 'top_kategoria_heten',
-    title: 'Top kategória héten/hónapban',
-  ),
+  FastInfoCardDefinition(id: 'top_kategoria_heten', title: 'Top kategóriák'),
   FastInfoCardDefinition(
     id: 'legnagyobb_novekedo_kategoria',
     title: 'Legnagyobb kategóriaváltozás',
@@ -107,6 +103,7 @@ const fastInfoLegacyIdMap = <String, String>{
   'kategoria_limit_kozeleben': 'leggyorsabban_fogyo_kategorialimit',
   'kategoria_limit_tullepve': 'leggyorsabban_fogyo_kategorialimit',
   'puffer_napok_szama': 'atlagos_napi_koltes',
+  'top_kategoria_ma': 'top_kategoria_heten',
   'top_kategoria_honapban': 'top_kategoria_heten',
   'legjobban_csokkeno_kategoria': 'legnagyobb_novekedo_kategoria',
   'kovetkezo_7_nap_fix_kiadasai': 'kovetkezo_ismetlo_kiadas',

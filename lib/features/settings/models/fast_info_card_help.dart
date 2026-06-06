@@ -71,10 +71,6 @@ const _pillValue = FastInfoHelpCallout(
   FastInfoHelpAnchor.pillValue,
   'A kártya legfontosabb rövid értéke',
 );
-const _pillTrend = FastInfoHelpCallout(
-  FastInfoHelpAnchor.pillTrend,
-  'Gyors összehasonlító irány és százalék',
-);
 const _title = FastInfoHelpCallout(
   FastInfoHelpAnchor.title,
   'Megmutatja, melyik FastInfo adatot látod',
@@ -473,20 +469,31 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   ),
   'atlagos_napi_koltes': FastInfoCardHelp(
     purpose:
-        'Megmutatja az elmúlt 30 nap napi költési alaptempóját és az egyenlegből fedezhető napokat.',
+        'Megmutatja, mennyi a napi átlagos változó költésed az elmúlt 30 nap alapján.',
     details:
-        'A kártya a gördülő 30 nap napi átlagát és a fejlécben használt valós egyenleg alapján számolt puffer napokat mutatja.',
+        'A boxban a nagy szám a napi átlag, alatta látszik, hogy ez az elmúlt 30 nap átlaga. A kis vonal a napi költési ritmust rajzolja. A pillben ugyanaz a napi átlag a főérték, a jobb oldali mini vonalon piros pontok jelzik a kiugró napokat, amelyek felhúzzák az átlagot.',
     calculation: <String>[
-      'Átlag = elmúlt 30 nap kiadása / 30.',
-      'Puffer napok = max(0, fejléc egyenleg) / átlagos napi költés.',
+      'Átlag = elmúlt 30 nap változó kiadása / 30.',
+      'A fix/időzített tételek kimaradnak, hogy például a lakbér ne húzza fel a mindennapi tempót.',
+      'Elég még = aktuális egyenleg / napi átlag.',
+      'Kiugró nap = olyan nap, amely jóval magasabb az átlagos napnál.',
     ],
     comparison:
-        'A vizuál az elmúlt 30 nap napi költéssorát mutatja, nem havi összehasonlítást.',
-    missingData: 'Nulla átlagos költésnél a puffer napok nem jelennek meg.',
+        'Nem hónapot hasonlít hónaphoz, hanem az elmúlt 30 nap napi ritmusát mutatja egy kis vonalon.',
+    missingData:
+        'Ha nincs változó költés az elmúlt 30 napban, az átlag 0 Ft, és az elég még sor nem jelenik meg.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Elmúlt 30 nap napi átlaga',
+        'Elmúlt 30 nap változó napi átlaga',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Hány kiugró nap húzza fel az átlagot',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Mini költési vonal piros kiugró pontokkal',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
@@ -494,7 +501,7 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       FastInfoHelpCallout(FastInfoHelpAnchor.primaryValue, 'Napi átlagköltés'),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Az egyenlegből fedezhető átlagos költési napok',
+        'Elmúlt 30 nap átlaga és fixek nélküli jelölés',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
@@ -503,19 +510,32 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     ],
   ),
   'no_spend_napok_szama': FastInfoCardHelp(
-    purpose: 'Megmutatja, hány eltelt hónapnapon nem volt kiadás.',
+    purpose:
+        'Megmutatja, mely napokon nem volt változó költésed, vagyis hány költésmentes napod volt.',
     details:
-        'A kártya az aktuális hónap elejétől máig számolja a kiadásmentes napokat.',
+        'A box a hónap eddigi költésmentes napjait mutatja. A havi csíkban a zöld nap költésmentes, a piros nap költős, a mai nap kék keretet kap. A pill külön az elmúlt 7 napot mutatja, hogy gyorsan lásd a legfrissebb ritmust.',
     calculation: <String>[
-      'Költésmentes nap = olyan eltelt hónapnap, ahol a napi kiadás összege nulla.',
-      'Arány = költésmentes napok / eltelt hónapnapok.',
+      'Költésmentes nap = olyan nap, ahol nincs változó kiadás.',
+      'Fix/időzített tétel nem rontja el a napot, mert az nem mindennapi döntés.',
+      'Box arány = havi költésmentes napok / eddig eltelt hónapnapok.',
+      'Pill érték = költésmentes napok száma az elmúlt 7 napból.',
     ],
-    comparison: 'Csak az aktuális hónap eddig eltelt napjait nézi.',
-    missingData: 'Jövőbeli nap soha nem számít költésmentes napnak.',
+    comparison:
+        'A box a hónapot mutatja, a pill az elmúlt 7 napot. A jövőbeli napok halványak.',
+    missingData:
+        'Jövőbeli nap nem számít költésmentes napnak. Ha még nincs adat, a csík semleges marad.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Költésmentes napok száma ebben a hónapban',
+        'Költésmentes napok az elmúlt 7 napból',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'A pill heti időtávja',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        '7 napos csík: zöld a költésmentes nap',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
@@ -526,85 +546,68 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Eltelt havi napok száma',
+        'Aktuális havi időtáv',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Költésmentes napok aránya az eltelt napokból',
+        'Havi napcsík: zöld szabad nap, piros költős nap, kék keret ma',
       ),
-    ],
-  ),
-  'top_kategoria_ma': FastInfoCardHelp(
-    purpose: 'Megmutatja a mai legnagyobb összegű kiadási kategóriát.',
-    details:
-        'A nagy kártyanézet a kategóriát, az összeget és a mai költésből való részesedést mutatja.',
-    calculation: <String>[
-      'Rangsor = mai kategóriaösszeg, majd tranzakciószám, majd kategórianév.',
-    ],
-    comparison: 'Csak a mai nap kiadási kategóriáit hasonlítja egymáshoz.',
-    missingData: 'Ha ma nincs költés, Ma nincs költés állapot jelenik meg.',
-    pillCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.pillValue,
-        'Mai legnagyobb összegű kategória',
-      ),
-    ],
-    boxCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.avatar,
-        'A kategória színe és ikonja',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.primaryValue,
-        'Top kategória neve',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.secondaryValues,
-        'Összeg és részesedés a mai költésből',
-      ),
-      _title,
     ],
   ),
   'top_kategoria_heten': FastInfoCardHelp(
-    purpose: 'Összeveti a hét és a hónap leggyakoribb kiadási kategóriáját.',
+    purpose:
+        'Megmutatja a mai, heti és havi top költési kategóriát egy kártyán.',
     details:
-        'A heti elsődleges kategória összeg alapján rangsorol, a részletekben a heti és havi értékek is látszanak. A rangsor fixek nélkül készül, ezért a lakbér nem nyomja el a napi kategóriákat.',
+        'A box főértéke a mai top kategória. Alatta a mai összeg látszik, a kis lista pedig Ma / Hét / Hó sorokban mutatja a három időtáv nyertesét szín+ikon avatarral. A pill ugyanezt tömöríti: fő sorban a mai top, alatta a heti és havi összeg, jobb oldalt három avatar.',
     calculation: <String>[
-      'Rangsor = tranzakciószám, majd nagyobb teljes kiadás, majd kategórianév.',
+      'Minden időtávnál az a kategória nyer, amelyikben a legtöbb változó pénz ment el.',
+      'Fixek nélkül számol: a fix/időzített tételek kimaradnak, ezért a lakbér nem lesz automatikusan top kategória.',
+      'Holtversenynél a több tranzakció, majd a kategórianév dönt.',
     ],
     comparison:
-        'A heti top kategóriát a hónap eddigi top kategóriájával mutatja együtt.',
+        'A három időtávot hasonlítja egymás mellé: ma, ezen a héten, ebben a hónapban.',
     missingData:
-        'Ha csak az egyik időszakban van adat, azt az elérhető időszakot használja.',
+        'Ha valamelyik időtávban nincs költés, az a sor kimarad, és a kártya az elérhető időtávot mutatja.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Heti leggyakoribb kategória',
+        'Mai top kategória és összege',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Heti és havi top összeg',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Ma / hét / hó top kategória avatarjai',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
-        FastInfoHelpAnchor.avatar,
-        'A heti top kategória avatarja',
-      ),
-      FastInfoHelpCallout(
         FastInfoHelpAnchor.primaryValue,
-        'Heti top kategória',
+        'Mai top kategória, ha van mai költés',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Heti és havi darabszámok és összegek',
+        'Mai összeg és fixek nélküli jelölés',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Ma / hét / hó lista szín+ikon avatarral',
       ),
       _title,
     ],
   ),
   'legnagyobb_novekedo_kategoria': FastInfoCardHelp(
     purpose:
-        'Megmutatja, melyik kategória változott a legnagyobbat két gördülő 30 napos időszak között.',
+        'Megmutatja, melyik kategória változott a legtöbb forinttal az előző 30 naphoz képest.',
     details:
-        'A kártya az aktuális és az előző 30 nap kategóriaösszegét, valamint a növekedés vagy csökkenés irányát mutatja. A változást fixek nélkül számolja, hogy a rendszeres tételek ne döntsenek helyetted.',
+        'A box főértéke a kategória neve, iránya és forintváltozása. A mini vonal azt mutatja, hogy az előző 30 naphoz képest merre mozdult. A pillben a jobb oldali mérő középről indul: jobbra piros növekedés, balra zöld csökkenés.',
     calculation: <String>[
-      'Rangsor = új kategóriák előre, majd legnagyobb abszolút százalékos változás, majd aktuális összeg, majd név.',
+      'Kiszámolja minden kategóriára: elmúlt 30 nap összege - előző 30 nap összege.',
+      'A legnagyobb abszolút forintváltozású kategória kerül a kártyára.',
+      'A százalék csak magyarázó érték; a győztest a forintváltozás választja ki.',
+      'Fixek nélkül számol: a fix/időzített tételek kimaradnak.',
     ],
     comparison:
         'Az elmúlt 30 napot az azt megelőző 30 nappal hasonlítja össze.',
@@ -613,31 +616,36 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Legnagyobbat változó kategória',
-      ),
-      _pillTrend,
-    ],
-    boxCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(FastInfoHelpAnchor.avatar, 'Kategória-avatar'),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.primaryValue,
-        'Változó kategória neve',
+        'Kategória és forintváltozás',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Elmúlt 30 nap és előző 30 nap összege',
+        'Százalékos változás és fixek nélküli jelölés',
       ),
       FastInfoHelpCallout(
-        FastInfoHelpAnchor.trend,
-        'Piros növekedés vagy zöld csökkenés',
+        FastInfoHelpAnchor.visual,
+        'Középvonalas eltérésmérő: balra csökkenés, jobbra növekedés',
+      ),
+    ],
+    boxCallouts: <FastInfoHelpCallout>[
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.primaryValue,
+        'Kategória neve, irány és forintváltozás',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Százalékos változás és fixek nélküli jelölés',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Mini vonal az előző és az aktuális 30 nap közti mozgásra',
       ),
     ],
   ),
   'kovetkezo_ismetlo_kiadas': FastInfoCardHelp(
-    purpose:
-        'Megmutatja a következő esedékes ismétlődő kiadást és a következő 7 nap terhét.',
+    purpose: 'Megmutatja, melyik fix/időzített kiadás jön legközelebb.',
     details:
-        'A nagy kártyanézet a következő tétel nevét, összegét, esedékességét, valamint a következő hét tételszámát és összegét mutatja.',
+        'A boxban a következő fix tétel neve a főérték, alatta az összeg és hogy hány nap múlva jön. Az avatar a kategóriát jelzi. A 7 napos mini timeline megmutatja, mely napokon jön fix terhelés. A pill ugyanezt tömöríti: név + összeg, alatta visszaszámlálás, jobbra heti terhelés.',
     calculation: <String>[
       'A következő függő ismétlődő kiadási tétel kerül előre.',
       'A 7 napos összeg a mai naptól számított következő hét függő kiadási tételeinek összege.',
@@ -648,7 +656,15 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Következő ismétlődő kiadás összege',
+        'Következő fix neve és rövid összege',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Visszaszámlálás napokban',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Következő 7 nap fix terhelése oszlopokkal',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
@@ -658,31 +674,44 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.primaryValue,
-        'Következő tétel neve és összege',
+        'Következő tétel neve',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Esedékesség és következő 7 nap tételei',
+        'Összeg, esedékesség és következő 7 nap tételei',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        '7 napos timeline, kiemelve a következő fix napját',
       ),
       _title,
     ],
   ),
   'havi_fix_koltseg_osszesen': FastInfoCardHelp(
-    purpose: 'Összegzi az aktuális hónap várható fix kiadásait.',
+    purpose:
+        'Megmutatja, mennyi fix/időzített kiadás van ebben a hónapban, és mennyi van még hátra.',
     details:
-        'A kártya a havi fix költségek összegét, a már levont és hátralévő részt, a legnagyobb fix tételt és a fixek után maradó keretet mutatja.',
+        'A box főértéke a havi fixek teljes összege. A split sáv bal oldala a már levont fixeket, jobb oldala a hátralévő fixeket mutatja. A pill főértéke direkt a hátralévő összeg, mert ez a legfontosabb gyors döntési adat.',
     calculation: <String>[
       'Havi fix költség = az aktuális hónap ismétlődő kiadási tételeinek összege.',
       'Haladásjelző = havi fix költség / havi kiadási limit.',
     ],
     comparison:
-        'A vizuál a fix költségek havi limithez viszonyított arányát mutatja.',
+        'A vizuál a már levont és a még hátralévő havi fixeket teszi egymás mellé.',
     missingData:
         'Havi limit nélkül a limitfüggő értékek rejtve maradnak; fix költség nélkül Nincs havi fix költség jelenik meg.',
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Aktuális havi fix költségek összege',
+        'Hátralévő havi fix összeg',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Teljes havi fix összeg',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Levont / hátralévő split sáv',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
@@ -693,20 +722,23 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Levont, hátralévő, legnagyobb és keret után maradó összeg',
+        'Levont, hátralévő és legnagyobb fix tétel',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Fix költségek aránya a havi limitből',
+        'Levont / hátralévő split sáv',
       ),
     ],
   ),
   'bevetel_ebben_a_honapban': FastInfoCardHelp(
-    purpose: 'Megmutatja az aktuális havi bevételt és annak fedezeti erejét.',
+    purpose:
+        'Megmutatja, mennyi bevétel érkezett be ebben a hónapban, és mennyi várható még ghost bevételből.',
     details:
-        'A nagy kártyanézet a havi bevételt, az átlagos költéssel fedezhető napokat és az előző hónap azonos napjához mért eltérést mutatja.',
+        'A box nagy száma csak a ténylegesen beérkezett bevétel. A várt érték külön jelenik meg, mert abban a még nem aktivált ghost bevételek is benne vannak. A három oszlop: előző hónap azonos napjáig, most beérkezett, és várt hó végi bevétel. A pill főértéke az előző hónaphoz mért eltérés.',
     calculation: <String>[
-      'Fedezeti napok = aktuális havi bevétel / elmúlt 30 nap átlagos napi kiadása.',
+      'Beérkezett bevétel = ebben a hónapban ténylegesen rögzített bevétel.',
+      'Várt bevétel = beérkezett bevétel + még függő ghost bevételek.',
+      'Fedezeti napok = beérkezett bevétel / elmúlt 30 nap változó napi átlaga.',
     ],
     comparison:
         'Az aktuális hónap eddigi bevételét az előző hónap azonos napjáig beérkezett bevételhez hasonlítja.',
@@ -715,9 +747,16 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Aktuális havi bevétel',
+        'Előző hónap azonos napjához mért bevételi trend',
       ),
-      _pillTrend,
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Ténylegesen beérkezett bevétel',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Előző / most összehasonlító oszlopok',
+      ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
       _title,
@@ -727,22 +766,23 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Fedezeti napok és előző havi eltérés',
+        'Beérkezett, várt ghost bevétel és fedezeti napok',
       ),
       FastInfoHelpCallout(
-        FastInfoHelpAnchor.trend,
-        'Zöld növekedés vagy piros csökkenés',
+        FastInfoHelpAnchor.visual,
+        'Három oszlop: előző, most, várt bevétel',
       ),
     ],
   ),
   'kiadas_bevetel_arany': FastInfoCardHelp(
     purpose:
-        'Megmutatja, az aktuális havi bevétel mekkora része ment már el kiadásra.',
+        'Megmutatja, a ténylegesen beérkezett havi bevételből mennyi ment már el.',
     details:
-        'A kártya a kiadás/bevétel arányt és a nettó havi pénzáram-t foglalja össze.',
+        'Itt nem költési tempót nézünk, hanem valódi pénzügyi arányt. Ezért a fix/időzített kiadások is beleszámítanak. A box főértéke az elköltött százalék, a pill főértéke az, hogy hány százalék maradt. A split sáv bal zöld része a megmaradt bevétel, jobb szürke része az elköltött rész.',
     calculation: <String>[
-      'Arány = aktuális havi kiadás / aktuális havi bevétel.',
-      'Pénzáram = aktuális havi bevétel - aktuális havi kiadás.',
+      'Elköltött arány = aktuális havi valós kiadás / aktuális havi beérkezett bevétel.',
+      'Maradék arány = 1 - elköltött arány.',
+      'Valós kiadásba a fix/időzített kiadások is beleszámítanak.',
     ],
     comparison:
         'A haladásjelző nem múltbeli időszakot hasonlít, hanem a bevétel elköltött részét jelzi.',
@@ -751,7 +791,15 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
     pillCallouts: <FastInfoHelpCallout>[
       FastInfoHelpCallout(
         FastInfoHelpAnchor.pillValue,
-        'Elköltött havi bevétel százaléka',
+        'Megmaradt havi bevétel százaléka',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Megmaradt forint a beérkezett bevételből',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Bal zöld maradék, jobb szürke elköltött rész',
       ),
     ],
     boxCallouts: <FastInfoHelpCallout>[
@@ -762,11 +810,11 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Nettó havi pénzáram',
+        'Valós havi kiadás / beérkezett bevétel',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Zöld/sárga/piros kiadás-bevétel arány',
+        'Elköltött arány zöld/sárga/piros sávon',
       ),
     ],
   ),

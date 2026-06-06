@@ -15,7 +15,6 @@ void main() {
     'leggyakoribb_kereskedo',
     'atlagos_napi_koltes',
     'no_spend_napok_szama',
-    'top_kategoria_ma',
     'top_kategoria_heten',
     'legnagyobb_novekedo_kategoria',
     'kovetkezo_ismetlo_kiadas',
@@ -26,7 +25,7 @@ void main() {
 
   test('catalog exposes exactly the approved canonical cards', () {
     expect(fastInfoCardCatalog.map((card) => card.id).toSet(), expectedIds);
-    expect(fastInfoCardCatalog, hasLength(18));
+    expect(fastInfoCardCatalog, hasLength(17));
     expect(fastInfoCardById('debug_riasztasok'), isNull);
   });
 

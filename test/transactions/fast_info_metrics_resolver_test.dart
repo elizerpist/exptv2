@@ -11,7 +11,7 @@ void main() {
   test('resolves the approved finance metrics from one snapshot', () {
     final metrics = FastInfoMetricsResolver.resolve(_snapshot());
 
-    expect(metrics, hasLength(18));
+    expect(metrics, hasLength(17));
     expect(
       metrics.keys.toSet(),
       fastInfoCardCatalog.map((card) => card.id).toSet(),
@@ -162,17 +162,19 @@ void main() {
       ),
     );
 
-    expect(metrics['no_spend_napok_szama']?.primaryValue, '3 / 7 nap');
+    expect(metrics['no_spend_napok_szama']?.primaryValue, '6 nap');
+    expect(metrics['no_spend_napok_szama']?.pillValue, '3 / 7 nap');
     expect(metrics['top_kategoria_heten']?.primaryValue, 'Utazás');
     expect(
       metrics['legnagyobb_novekedo_kategoria']?.secondaryValues.join(' '),
-      contains('%'),
+      contains('fix nélkül'),
     );
     expect(
       metrics['havi_fix_koltseg_osszesen']?.secondaryValues.join(' '),
       contains('fixből'),
     );
-    expect(metrics['kiadas_bevetel_arany']?.primaryValue, contains('maradt'));
+    expect(metrics['kiadas_bevetel_arany']?.primaryValue, endsWith('%'));
+    expect(metrics['kiadas_bevetel_arany']?.pillValue, contains('maradt'));
   });
 
   test('pending recurring income ghosts feed expected income metrics', () {
@@ -195,10 +197,10 @@ void main() {
       ),
     );
 
-    expect(metrics['bevetel_ebben_a_honapban']?.primaryValue, '300 000 Ft');
+    expect(metrics['bevetel_ebben_a_honapban']?.primaryValue, '0 Ft');
     expect(
       metrics['bevetel_ebben_a_honapban']?.secondaryValues,
-      contains('Várható bevétel: 300 000 Ft'),
+      contains('várt 300k · ghost 300k'),
     );
     expect(
       metrics['megtakaritas']?.secondaryValues,

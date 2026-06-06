@@ -279,7 +279,7 @@ void main() {
         find.byKey(const ValueKey('fastinfo-card-pool')),
       );
       final delegate = pool.childrenDelegate as SliverChildBuilderDelegate;
-      expect(delegate.childCount, 12);
+      expect(delegate.childCount, 11);
     },
   );
 

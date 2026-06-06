@@ -29,10 +29,11 @@ void main() {
       contains('4 alkalom'),
     );
     expect(metrics['leggyakoribb_kereskedo']?.avatar, isNotNull);
-    expect(metrics['top_kategoria_ma']?.primaryValue, 'Étel');
+    expect(metrics['top_kategoria_ma'], isNull);
+    expect(metrics['top_kategoria_heten']?.primaryValue, 'Étel');
     expect(
       metrics['top_kategoria_heten']?.secondaryValues,
-      contains(startsWith('Hónap:')),
+      contains(startsWith('Hét:')),
     );
     expect(metrics['legnagyobb_novekedo_kategoria']?.trend?.text, '+50%');
     expect(

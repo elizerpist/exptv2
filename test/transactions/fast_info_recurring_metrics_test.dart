@@ -23,9 +23,10 @@ void main() {
         ),
       );
 
+      expect(metrics['kovetkezo_ismetlo_kiadas']?.primaryValue, 'Telefon');
       expect(
-        metrics['kovetkezo_ismetlo_kiadas']?.primaryValue,
-        'Telefon · 8 000 Ft',
+        metrics['kovetkezo_ismetlo_kiadas']?.secondaryValues,
+        contains('8 000 Ft · 2 nap múlva'),
       );
       expect(
         metrics['kovetkezo_ismetlo_kiadas']?.secondaryValues,
@@ -34,8 +35,9 @@ void main() {
       expect(metrics['kovetkezo_ismetlo_kiadas']?.avatar, isNotNull);
       expect(metrics['havi_fix_koltseg_osszesen']?.primaryValue, '128 000 Ft');
       expect(metrics['havi_fix_koltseg_osszesen']?.secondaryValues, [
-        '28k hátra 128k fixből',
-        'Levonva 100k · legnagyobb Lakbér',
+        'levonva 100k · hátra 28k',
+        '128k fixből',
+        'Lakbér 100k',
       ]);
       expect(
         metrics['havi_fix_koltseg_osszesen']?.progress,

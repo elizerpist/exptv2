@@ -146,8 +146,8 @@ void main() {
         containsAll(fastInfoCardCatalog.map((card) => card.id)),
       );
       expect(
-        metrics['atlagos_napi_koltes']?.secondaryValues.single,
-        startsWith('Puffer:'),
+        metrics['atlagos_napi_koltes']?.secondaryValues,
+        contains(startsWith('Puffer:')),
       );
       expect(metrics['megtakaritas']?.progress, closeTo(0, .001));
       expect(

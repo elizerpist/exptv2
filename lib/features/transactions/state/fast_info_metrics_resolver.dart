@@ -95,7 +95,6 @@ class _FastInfoMetricScope {
       'leggyakoribb_kereskedo' => _topMerchant(),
       'atlagos_napi_koltes' => _averageDailySpend(),
       'no_spend_napok_szama' => _noSpendDays(),
-      'top_kategoria_ma' => _topCategoryToday(),
       'top_kategoria_heten' => _topCategoryWeekMonth(),
       'legnagyobb_novekedo_kategoria' => _largestCategoryChange(),
       'kovetkezo_ismetlo_kiadas' => _nextRecurringExpense(),
@@ -495,86 +494,94 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _averageDailySpend() {
     final average = rollingDailyAverage;
+    final series = data.rolling30VariableDailySeries;
+    final bufferDays = average > 0
+        ? (math.max(0, snapshot.balance) / average).round()
+        : null;
+    final spikeCount = _spikeCount(series, average);
     return FastInfoMetricResult(
-      pillValue: _compactAmount(average),
+      pillValue: formatHuf(average),
       primaryValue: formatHuf(average),
       secondaryValues: <String>[
-        if (average > 0)
-          'Puffer: ${(math.max(0, snapshot.balance) / average).round()} nap',
+        'elmúlt 30 nap átlaga',
+        if (bufferDays != null) 'Puffer: $bufferDays nap',
+        '$spikeCount kiugró nap húzza',
+        'fixek nélkül',
       ],
       chartKind: FastInfoChartKind.sparkline,
       chartSeries: <FastInfoChartSeries>[
-        FastInfoChartSeries(
-          label: '30 nap',
-          values: data.rolling30VariableDailySeries,
-        ),
+        FastInfoChartSeries(label: '30 nap', values: series),
       ],
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.spikeLine,
-        values: data.rolling30VariableDailySeries,
+        values: series,
       ),
     );
   }
 
   FastInfoMetricResult _noSpendDays() {
-    const windowDays = 7;
-    final start = data.today.subtract(const Duration(days: windowDays - 1));
-    var count = 0;
-    final points = <FastInfoVisualPoint>[];
-    for (var index = 0; index < windowDays; index += 1) {
-      final date = start.add(Duration(days: index));
+    const weekDays = 7;
+    final weekStart = data.today.subtract(const Duration(days: weekDays - 1));
+    var weekCount = 0;
+    final weekValues = <double>[];
+    for (var index = 0; index < weekDays; index += 1) {
+      final date = weekStart.add(Duration(days: index));
       final noSpend = data.variableExpenseOn(date) == 0;
-      if (noSpend) count += 1;
-      points.add(
+      if (noSpend) weekCount += 1;
+      weekValues.add(noSpend ? 1 : 0);
+    }
+
+    final monthPoints = <FastInfoVisualPoint>[];
+    var monthCount = 0;
+    for (var day = 1; day <= data.daysInCurrentMonth; day += 1) {
+      final date = DateTime(data.today.year, data.today.month, day);
+      final isFuture = date.isAfter(data.today);
+      final noSpend = !isFuture && data.variableExpenseOn(date) == 0;
+      if (noSpend) monthCount += 1;
+      monthPoints.add(
         FastInfoVisualPoint(
-          label: '${date.month}.${date.day}',
-          value: noSpend ? 1 : 0,
-          semantic: noSpend ? FastInfoSemantic.good : FastInfoSemantic.bad,
+          label: '$day',
+          value: isFuture ? 0 : (noSpend ? 1 : 0),
+          semantic: isFuture
+              ? FastInfoSemantic.neutral
+              : noSpend
+              ? FastInfoSemantic.good
+              : FastInfoSemantic.bad,
           isToday: _isSameDay(date, data.today),
+          isFuture: isFuture,
         ),
       );
     }
-    final progress = count / windowDays;
+    final progress = data.elapsedMonthDays <= 0
+        ? 0.0
+        : monthCount / data.elapsedMonthDays;
     return FastInfoMetricResult(
-      pillValue: '$count / 7',
-      primaryValue: '$count / 7 nap',
-      secondaryValues: const <String>['elmúlt 7 nap', 'fixek nélkül'],
+      pillValue: '$weekCount / 7 nap',
+      primaryValue: '$monthCount nap',
+      secondaryValues: <String>[
+        'aktuális hónapban',
+        'elmúlt 7 nap',
+        'arány: ${_percent(progress)}%',
+        'fixek nélkül',
+      ],
       progressKind: FastInfoProgressKind.ring,
       progress: progress,
       semantic: FastInfoSemantic.good,
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.sevenDayStrip,
         value: progress,
-        points: points,
+        values: weekValues,
+        points: monthPoints,
         semantic: FastInfoSemantic.good,
       ),
     );
   }
 
-  FastInfoMetricResult _topCategoryToday() {
-    final top = _topCategory(
+  FastInfoMetricResult _topCategoryWeekMonth() {
+    final today = _topCategory(
       data.variableExpenseRowsBetween(data.today, data.tomorrow),
       byAmount: true,
     );
-    if (top == null) return _noData('Ma nincs költés');
-    final share = data.todayExpense > 0 ? top.amount / data.todayExpense : 0.0;
-    return FastInfoMetricResult(
-      pillValue: _shortText(top.name),
-      primaryValue: top.name,
-      secondaryValues: <String>[
-        formatHuf(top.amount),
-        'Mai költés ${_percent(share)}%-a',
-      ],
-      avatar: avatarForCategory(top.category),
-      visual: FastInfoVisualDescriptor(
-        kind: FastInfoVisualKind.avatar,
-        value: share,
-        avatar: avatarForCategory(top.category),
-      ),
-    );
-  }
-
-  FastInfoMetricResult _topCategoryWeekMonth() {
     final weekly = _topCategory(
       data.variableExpenseRowsBetween(data.weekStart, data.tomorrow),
       byAmount: true,
@@ -583,31 +590,46 @@ class _FastInfoMetricScope {
       data.variableExpenseRowsBetween(data.currentMonthStart, data.tomorrow),
       byAmount: true,
     );
-    if (weekly == null && monthly == null) return _noData('Nincs kategória');
-    final primary = weekly ?? monthly!;
+    if (today == null && weekly == null && monthly == null) {
+      return _noData('Nincs kategória');
+    }
+    final primary = today ?? weekly ?? monthly!;
+    final pillLabel = today != null
+        ? _periodCategoryLabel('Ma', today)
+        : weekly != null
+        ? _periodCategoryLabel('Hét', weekly)
+        : _periodCategoryLabel('Hó', monthly!);
     return FastInfoMetricResult(
-      pillValue: _shortText(primary.name),
+      pillValue: pillLabel,
       primaryValue: primary.name,
       secondaryValues: <String>[
+        if (today != null) 'ma ${_compactAmount(today.amount)}',
         if (weekly != null)
-          'Hét: ${weekly.count} db · ${formatHuf(weekly.amount)}',
+          'Hét: ${weekly.name} · ${_compactAmount(weekly.amount)}',
         if (monthly != null)
-          'Hónap: ${monthly.name} · ${monthly.count} db · ${formatHuf(monthly.amount)}',
+          'Hó: ${monthly.name} · ${_compactAmount(monthly.amount)}',
+        'fixek nélkül',
       ],
       avatar: avatarForCategory(primary.category),
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.miniAvatarRow,
         avatar: avatarForCategory(primary.category),
         points: <FastInfoVisualPoint>[
+          if (today != null)
+            FastInfoVisualPoint(
+              label: 'Ma|${today.name}',
+              value: today.amount,
+              avatar: avatarForCategory(today.category),
+            ),
           if (weekly != null)
             FastInfoVisualPoint(
-              label: 'Hét',
+              label: 'Hét|${weekly.name}',
               value: weekly.amount,
               avatar: avatarForCategory(weekly.category),
             ),
           if (monthly != null)
             FastInfoVisualPoint(
-              label: 'Hó',
+              label: 'Hó|${monthly.name}',
               value: monthly.amount,
               avatar: avatarForCategory(monthly.category),
             ),
@@ -641,9 +663,7 @@ class _FastInfoMetricScope {
     }
     if (changes.isEmpty) return _noData('Nincs összehasonlítható kategória');
     changes.sort((a, b) {
-      final byNew = (b.isNew ? 1 : 0).compareTo(a.isNew ? 1 : 0);
-      if (byNew != 0) return byNew;
-      final byChange = b.absoluteChange.compareTo(a.absoluteChange);
+      final byChange = b.absoluteAmountChange.compareTo(a.absoluteAmountChange);
       if (byChange != 0) return byChange;
       final byAmount = b.current.compareTo(a.current);
       if (byAmount != 0) return byAmount;
@@ -651,17 +671,19 @@ class _FastInfoMetricScope {
     });
     final top = changes.first;
     final up = top.current >= top.previous;
+    final arrow = up ? '↑' : '↓';
+    final percentText = top.isNew ? 'Új' : _signedPercent(top.change);
+    final deltaText = _signedCompact(top.amountChange);
     return FastInfoMetricResult(
-      pillValue: _shortText(top.name),
-      primaryValue: top.name,
+      pillValue: '${_shortText(top.name)} $deltaText',
+      primaryValue: '${top.name} $arrow $deltaText',
       secondaryValues: <String>[
+        '$percentText · fix nélkül',
         '30 nap: ${formatHuf(top.current)} · előtte ${formatHuf(top.previous)}',
-        'változás: ${top.isNew ? '+100%' : _signedPercent(top.change)}',
-        'fixek nélkül',
       ],
       trend: FastInfoTrend(
         direction: up ? FastInfoTrendDirection.up : FastInfoTrendDirection.down,
-        text: top.isNew ? 'Új' : _signedPercent(top.change),
+        text: percentText,
         semantic: up ? FastInfoSemantic.bad : FastInfoSemantic.good,
       ),
       avatar: avatarForCategory(top.category),
@@ -670,6 +692,7 @@ class _FastInfoMetricScope {
         value: top.change,
         semantic: up ? FastInfoSemantic.bad : FastInfoSemantic.good,
         avatar: avatarForCategory(top.category),
+        values: <double>[top.previous, top.current],
       ),
     );
   }
@@ -684,7 +707,8 @@ class _FastInfoMetricScope {
         )
         .toList();
     if (pending.isEmpty) return _noData('Nincs közelgő ismétlődő kiadás');
-    final next = pending.first.record;
+    final nextRow = pending.first;
+    final next = nextRow.record;
     final sevenDays = data.recurringGhostsBetween(
       data.today,
       data.today.add(const Duration(days: 7)),
@@ -695,17 +719,29 @@ class _FastInfoMetricScope {
       0,
       (sum, row) => sum + row.record.amount.abs(),
     );
+    final weekValues = <double>[
+      for (var index = 0; index < 7; index += 1)
+        sevenDays
+            .where(
+              (row) =>
+                  _isSameDay(row.date, data.today.add(Duration(days: index))),
+            )
+            .fold<double>(0, (sum, row) => sum + row.record.amount.abs()),
+    ];
+    final dueText = _relativeDayLabel(nextRow.date, data.today);
     return FastInfoMetricResult(
-      pillValue: _compactAmount(next.amount),
-      primaryValue: '${next.name} · ${formatHuf(next.amount.abs())}',
+      pillValue: '${_shortText(next.name)} ${_compactAmount(next.amount)}',
+      primaryValue: next.name,
       secondaryValues: <String>[
-        'Esedékes: ${next.date.replaceAll('.', '-')}',
+        '${formatHuf(next.amount.abs())} · $dueText',
         '7 nap: ${sevenDays.length} tétel · ${formatHuf(sevenTotal)}',
+        next.categoryName,
       ],
       avatar: avatarForGhost(next),
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.fixedLoad,
         value: sevenTotal,
+        values: weekValues,
         avatar: avatarForGhost(next),
       ),
     );
@@ -733,11 +769,12 @@ class _FastInfoMetricScope {
     final limit = monthlyLimit;
     final progress = limit == null ? null : total / limit;
     return FastInfoMetricResult(
-      pillValue: _compactAmount(total),
+      pillValue: 'hátra ${_compactAmount(remaining)}',
       primaryValue: formatHuf(total),
       secondaryValues: <String>[
-        '${_compactAmount(remaining)} hátra ${_compactAmount(total)} fixből',
-        'Levonva ${_compactAmount(deducted)} · legnagyobb ${largest.record.name}',
+        'levonva ${_compactAmount(deducted)} · hátra ${_compactAmount(remaining)}',
+        '${_compactAmount(total)} fixből',
+        '${largest.record.name} ${_compactAmount(largest.record.amount)}',
       ],
       progressKind: progress == null ? null : FastInfoProgressKind.ring,
       progress: progress,
@@ -758,16 +795,20 @@ class _FastInfoMetricScope {
   FastInfoMetricResult _monthlyIncome() {
     final expectedIncome = data.currentMonthExpectedIncome;
     final pendingIncome = data.currentMonthPendingIncomeGhost;
+    final receivedIncome = data.currentMonthIncome;
     final coverage = rollingDailyAverage > 0
-        ? expectedIncome / rollingDailyAverage
+        ? receivedIncome / rollingDailyAverage
         : null;
+    final trend = incomeTrend(receivedIncome, data.previousMonthSameDayIncome);
     return FastInfoMetricResult(
-      pillValue: _compactAmount(expectedIncome),
-      primaryValue: formatHuf(expectedIncome),
+      pillValue: trend == null
+          ? _compactAmount(receivedIncome)
+          : '${trend.text} előzőhöz',
+      primaryValue: formatHuf(receivedIncome),
       secondaryValues: <String>[
-        if (pendingIncome > 0) 'Várható bevétel: ${formatHuf(pendingIncome)}',
-        if (pendingIncome > 0 && data.currentMonthIncome > 0)
-          'Beérkezett: ${formatHuf(data.currentMonthIncome)}',
+        'eddig beérkezett',
+        if (pendingIncome > 0)
+          'várt ${_compactAmount(expectedIncome)} · ghost ${_compactAmount(pendingIncome)}',
         if (coverage != null) 'Fedezet: ${coverage.floor()} nap',
         if (data.previousMonthSameDayIncome <= 0) 'Nincs összehasonlítás',
       ],
@@ -776,12 +817,13 @@ class _FastInfoMetricScope {
           : coverage >= 30
           ? FastInfoSemantic.good
           : FastInfoSemantic.warning,
-      trend: incomeTrend(expectedIncome, data.previousMonthSameDayIncome),
+      trend: trend,
       visual: FastInfoVisualDescriptor(
         kind: FastInfoVisualKind.incomeComparisonBars,
-        value: expectedIncome,
+        value: receivedIncome,
         compareValue: data.previousMonthSameDayIncome,
-        semantic: expectedIncome >= data.previousMonthSameDayIncome
+        marker: expectedIncome,
+        semantic: receivedIncome >= data.previousMonthSameDayIncome
             ? FastInfoSemantic.good
             : FastInfoSemantic.bad,
       ),
@@ -802,10 +844,11 @@ class _FastInfoMetricScope {
     final remainingAmount = math.max(0.0, cashflow);
     return FastInfoMetricResult(
       pillValue: '${_percent(remainingRatio)}% maradt',
-      primaryValue: '${_percent(remainingRatio)}% maradt',
+      primaryValue: '${_percent(ratio)}%',
       secondaryValues: <String>[
-        '${formatHuf(remainingAmount)} bevételből',
-        'elköltve ${_percent(ratio)}%',
+        '${_compactAmount(data.currentMonthExpense)} / ${_compactAmount(data.currentMonthIncome)}',
+        '${_compactAmount(remainingAmount)} bevételből',
+        'Összes tartalék: ${_compactAmount(snapshot.balance)}',
       ],
       progressKind: FastInfoProgressKind.bar,
       progress: ratio,
@@ -1030,6 +1073,9 @@ class _CategoryStat {
   String get name => category?.name ?? 'Kategória';
 }
 
+String _periodCategoryLabel(String period, _CategoryStat stat) =>
+    '$period ${stat.name} ${_compactAmount(stat.amount)}';
+
 class _CategoryChange {
   const _CategoryChange({
     required this.category,
@@ -1044,11 +1090,25 @@ class _CategoryChange {
   String get name => category?.name ?? 'Kategória';
   bool get isNew => previous <= 0 && current > 0;
   double get change => previous <= 0 ? 0.0 : (current - previous) / previous;
-  double get absoluteChange => isNew ? double.infinity : change.abs();
+  double get amountChange => current - previous;
+  double get absoluteAmountChange => amountChange.abs();
 }
 
 double _sum(Iterable<FastInfoDatedTransaction> rows) =>
     rows.fold<double>(0, (sum, row) => sum + row.record.amount.abs());
+
+int _spikeCount(List<double> values, double average) {
+  if (average <= 0) return 0;
+  return values.where((value) => value > average * 1.5).length;
+}
+
+String _relativeDayLabel(DateTime date, DateTime today) {
+  final todayOnly = DateTime(today.year, today.month, today.day);
+  final days = date.difference(todayOnly).inDays;
+  if (days <= 0) return 'ma';
+  if (days == 1) return 'holnap';
+  return '$days nap múlva';
+}
 
 String _compactAmount(num amount) {
   final value = amount.abs();
