@@ -1251,11 +1251,13 @@ Create `recurring_manager_sheet_test.dart` with tests that pump `RecurringManage
 expect(find.byKey(const ValueKey('recurring-manager-sheet')), findsOneWidget);
 expect(find.byKey(const ValueKey('recurring-trigger-date')), findsOneWidget);
 expect(find.byKey(const ValueKey('recurring-trigger-push')), findsOneWidget);
-expect(find.byKey(const ValueKey('recurring-type-expense')), findsOneWidget);
-expect(find.byKey(const ValueKey('recurring-type-income')), findsOneWidget);
+expect(find.byKey(const ValueKey('recurring-type-expense')), findsNothing);
+expect(find.byKey(const ValueKey('recurring-type-income')), findsNothing);
 ```
 
-Add a second test that taps `recurring-trigger-push` and expects:
+Add a second test that opens `RecurringManagerSheet(activeType: TransactionType.income)`, saves a new date-triggered rule, and asserts the captured `RecurringRuleDraft.transactionType` is `TransactionType.income`. Repeat with `TransactionType.expense` in the same test to prove the manager uses the main pill context rather than an internal toggle.
+
+Add a third test that taps `recurring-trigger-push` and expects:
 
 ```dart
 expect(find.byKey(const ValueKey('push-rule-training-panel')), findsOneWidget);
@@ -1264,13 +1266,15 @@ expect(find.byKey(const ValueKey('push-rule-amount-pattern')), findsOneWidget);
 expect(find.byKey(const ValueKey('push-rule-merchant-pattern')), findsOneWidget);
 ```
 
+Add a fourth test for the tall manager card: pump with enough rules to overflow, scroll the content away from the top, drag down inside the body, and assert the sheet is not dismissed; scroll back to the top, drag down past the threshold, and assert it dismisses. Use the same scroll-top drag gate behavior covered by `test/settings/fast_info_card_help_sheet_test.dart`.
+
 - [ ] **Step 2: Implement sheet shell**
 
-Create `RecurringManagerSheet` as a slide-up card with one scroll view. Use keys from Step 1. Keep visual style aligned with `AddTransactionSheet`: white surface, rounded top corners, form sections, and full-width save button.
+Create `RecurringManagerSheet` as a slide-up card with one scroll view and a scroll-top drag gate. Use keys from Step 1. Keep visual style aligned with `AddTransactionSheet`: white surface, rounded top corners, form sections, and full-width save button. The max expanded height is the old add-category long-press card ceiling: it stops at the summary pill top.
 
 - [ ] **Step 3: Implement editor component**
 
-`RecurringRuleEditor` receives selected trigger/type, draft values, categories, and callbacks. It renders shared fields and embeds `PushRuleTrainingPanel` only when trigger is push.
+`RecurringRuleEditor` receives selected trigger, the inherited `activeType`, draft values, categories, and callbacks. It renders shared fields and embeds `PushRuleTrainingPanel` only when trigger is push. It must not render a separate income/expense segmented control.
 
 - [ ] **Step 4: Implement rule list**
 
@@ -1297,6 +1301,13 @@ Expected behavior:
 
 - `ExptFab.onPressed`: open add transaction.
 - `ExptFab.onLongPress`: open recurring manager.
+- Pass the current `TransactionStore.activeType` into the recurring manager when
+  it opens, matching the existing add-transaction FAB tap behavior.
+- Use the same max height ceiling as the previous long-press add-category card:
+  the card may grow for more content, but it stops at the summary pill top.
+- Use a scroll controller and `SlideUpMenuCard.canDragFrom` gate so body drag is
+  free manual drag only when the inner scrollable is at offset zero; otherwise
+  downward gestures scroll the body. The handle remains draggable at any offset.
 
 - [ ] **Step 6: Remove recurring Settings panel**
 
@@ -1307,10 +1318,10 @@ In `settings_page.dart`, remove `_SettingsMenu.recurring`, its tile, title mappi
 Add a compact option under existing automation/parser settings:
 
 ```dart
-enum PushRecurringMatchMode { askOnMultipleMatches, automaticBestMatch }
+enum PushRecurringConflictPolicy { automaticBestMatch, askOnMultipleMatches }
 ```
 
-Persist through settings native map using key `pushRecurringMatchMode`. Default is `askOnMultipleMatches`.
+Persist through grouped settings native map using `pushRecurringSettings` with `conflictPolicy = automaticBestMatch`. Unknown or missing values default to `automaticBestMatch`.
 
 - [ ] **Step 8: Run widget/settings tests**
 

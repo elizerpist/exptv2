@@ -241,7 +241,7 @@ Conflict handling is global Settings state, not per-rule state:
 - `askOnMultipleMatches`: if multiple plausible instances match, create a
   confirmation prompt/card instead of activating automatically.
 
-Recommended default: `askOnMultipleMatches`.
+Recommended default: `automaticBestMatch`.
 
 ## Parser Training In Push Rules
 
@@ -270,17 +270,32 @@ same bank app.
 
 - FAB tap: open the existing add transaction sheet.
 - FAB long press: open the recurring manager card.
+- The recurring manager inherits the same transaction type context as FAB tap:
+  the active main transaction pill determines whether a newly saved recurring
+  rule is `income` or `expense`.
 - FAB long press no longer opens category creation.
 
 ### Recurring Manager Card
 
 The recurring manager is a combined slide-up card, using the same interaction
-family as the add transaction sheet.
+family as the add transaction sheet and FastInfo helper sheets.
+
+Height and gestures:
+
+- the long-press recurring card can contain more content than the old category
+  card, but its maximum expanded height must stop at the top of the summary pill
+  area, matching the old add-category card height ceiling
+- the card content is scrollable
+- the card is manually draggable up/down and swipe-dismissible
+- a downward swipe inside the body becomes manual card drag only when the inner
+  scroll view is already at the top; otherwise it scrolls content normally
+- the handle area always supports free manual drag
 
 Top controls:
 
 - trigger mode: `Időzített` / `Push alapján`
-- transaction type: `Kiadás` / `Bevétel`
+- no separate `Kiadás` / `Bevétel` selector; the active main pill is the source
+  of truth for a new rule's type
 
 Middle editor:
 
@@ -313,6 +328,8 @@ Bottom manager list:
 
 Saving:
 
+- New rules use the active main transaction pill type captured when the recurring
+  manager is opened.
 - If no item is selected, save creates a new rule.
 - If an item is selected, save updates that rule.
 - After save, the bottom list refreshes and the manager stays open.
