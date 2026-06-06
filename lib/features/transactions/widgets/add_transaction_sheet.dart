@@ -143,13 +143,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             bottom: false,
             child: Builder(
               builder: (context) {
-                final actionBottomInset =
-                    SlideUpPanelMetrics.transactionActionBottomInset +
-                    (_categoryPickerOpen ? 2 : 0);
+                final actionBottomInset = _categoryPickerOpen
+                    ? SlideUpPanelMetrics.transactionActionBottomInset + 2
+                    : SlideUpPanelMetrics.transactionClosedActionBottomInset;
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     SlideUpPanelMetrics.horizontalInset,
-                    14,
+                    12,
                     SlideUpPanelMetrics.horizontalInset,
                     actionBottomInset,
                   ),
