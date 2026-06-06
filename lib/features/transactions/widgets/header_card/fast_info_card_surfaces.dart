@@ -3554,29 +3554,46 @@ class _RollingSplitBar extends StatelessWidget {
           'index=${_debugNumber(current)} prevFlex=$previousFlex '
           'currentFlex=$currentFlex height=${_debugNumber(height)}',
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: SizedBox(
-        height: height,
-        child: Row(
-          children: [
-            Expanded(
-              flex: previousFlex,
-              child: ColoredBox(
-                key: ValueKey('$segmentKeyPrefix-prev-$slotId'),
-                color: AppColors.gray400,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? math.max(1.0, constraints.maxWidth)
+            : 98.0;
+        _logFastInfoDebugOnce(
+          'rolling-split-layout-$slotId',
+          '[FastInfo][30dTrend] split layout slot=$slotId '
+              'width=${_debugNumber(width)} height=${_debugNumber(height)}',
+        );
+        return SizedBox(
+          width: width,
+          height: height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: DecoratedBox(
+              key: ValueKey('$segmentKeyPrefix-track-$slotId'),
+              decoration: const BoxDecoration(color: AppColors.gray200),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: previousFlex,
+                    child: ColoredBox(
+                      key: ValueKey('$segmentKeyPrefix-prev-$slotId'),
+                      color: AppColors.gray400,
+                    ),
+                  ),
+                  Expanded(
+                    flex: currentFlex,
+                    child: ColoredBox(
+                      key: ValueKey('$segmentKeyPrefix-current-$slotId'),
+                      color: current > 1 ? AppColors.expense : AppColors.income,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Expanded(
-              flex: currentFlex,
-              child: ColoredBox(
-                key: ValueKey('$segmentKeyPrefix-current-$slotId'),
-                color: current > 1 ? AppColors.expense : AppColors.income,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

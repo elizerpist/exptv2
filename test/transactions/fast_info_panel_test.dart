@@ -817,6 +817,12 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(
+          const ValueKey('fastinfo-rolling-split-track-koltesi_trend'),
+        ),
+        findsOneWidget,
+      );
+      expect(
         tester
             .getSize(
               find.byKey(
@@ -826,6 +832,15 @@ void main() {
             .height,
         13,
       );
+      final boxRect = tester.getRect(
+        find.byKey(const ValueKey('fastinfo-box-slot-0')),
+      );
+      final splitRect = tester.getRect(
+        find.byKey(const ValueKey('fastinfo-rolling-split-koltesi_trend')),
+      );
+      expect(splitRect.width, greaterThanOrEqualTo(boxRect.width - 24));
+      expect(splitRect.left, greaterThan(boxRect.left));
+      expect(splitRect.right, lessThan(boxRect.right));
       expect(
         tester.getSize(
           find.byKey(
@@ -867,6 +882,15 @@ void main() {
               entry.contains('[FastInfo][30dTrend] pill band') &&
               entry.contains('slot=koltesi_trend') &&
               entry.contains('index=1.13'),
+        ),
+        isTrue,
+      );
+      expect(
+        DebugConsole.entries.any(
+          (entry) =>
+              entry.contains('[FastInfo][30dTrend] split layout') &&
+              entry.contains('slot=koltesi_trend') &&
+              entry.contains('width='),
         ),
         isTrue,
       );
