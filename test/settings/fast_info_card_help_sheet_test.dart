@@ -75,6 +75,47 @@ void main() {
     );
   });
 
+  testWidgets('help sheet uses card shell and only handle moves it', (
+    tester,
+  ) async {
+    await _pumpHelpLauncher(tester, 'havi_koltes');
+
+    await tester.tap(find.byKey(const ValueKey('open-fastinfo-help')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('slide-up-menu-transform')),
+      findsOneWidget,
+    );
+    final before = _slideCardTranslationY(tester);
+
+    await tester.drag(
+      find.byKey(const ValueKey('fastinfo-help-body-havi_koltes')),
+      const Offset(0, 90),
+    );
+    await tester.pump();
+    expect(
+      _slideCardTranslationY(tester),
+      moreOrLessEquals(before, epsilon: 0.1),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('fastinfo-help-drag-handle-havi_koltes')),
+      ),
+    );
+    await gesture.moveBy(const Offset(0, 70));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), greaterThan(before + 40));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('fastinfo-help-sheet-havi_koltes')),
+      findsOneWidget,
+    );
+  });
+
   for (final card in fastInfoCardCatalog) {
     for (final width in <double>[320, 600]) {
       testWidgets('help sheet for ${card.id} fits at width $width', (
@@ -143,4 +184,11 @@ Future<void> _pumpHelpLauncher(
       ),
     ),
   );
+}
+
+double _slideCardTranslationY(WidgetTester tester) {
+  final transform = tester.widget<Transform>(
+    find.byKey(const ValueKey('slide-up-menu-transform')),
+  );
+  return transform.transform.getTranslation().y;
 }

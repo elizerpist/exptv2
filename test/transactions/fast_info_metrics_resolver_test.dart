@@ -82,6 +82,7 @@ void main() {
       ),
       isTrue,
     );
+    expect(metrics['heti_koltes']?.secondaryValues, contains('4 tranzakció'));
 
     expect(metrics['havi_koltes']?.progress, closeTo(35000 / 300000, 0.001));
     expect(metrics['havi_koltes']?.chartSeries.first.values[9], 5000);

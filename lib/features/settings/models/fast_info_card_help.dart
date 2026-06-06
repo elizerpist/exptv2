@@ -90,102 +90,127 @@ const _secondaryValues = FastInfoHelpCallout(
 
 const fastInfoCardHelpById = <String, FastInfoCardHelp>{
   'mai_koltes': FastInfoCardHelp(
-    purpose: 'Megmutatja, ma mennyi ment el, és tartható-e a napi tempó.',
+    purpose: 'Megmutatja, ma mennyi pénz ment el, és mennyi költhető még ma.',
     details:
-        'A nagy kártyanézet a mai elköltött összeget, a napi ajánlott plafonból maradó részt, a mai kiadási tranzakciószámot és a 30 napos napi átlaghoz mért eltérést fogja össze. A tempó és a százalék fixek nélkül számol, de a fő összeg a valós mai költés.',
+        'A fő szám a valós mai költés: ebben a fix tételek is benne vannak, mert ez mutatja meg, tényleg mennyi pénz fogyott ma. A napi keret és a százalék viszont fixek nélkül számol, hogy egy lakbér vagy más időzített nagy tétel ne tegye használhatatlanná a napi tempót.',
     calculation: <String>[
-      'Napi plafon = max(0, havi limit - mai nap előtti aktuális havi kiadás) / maival együtt hátralévő hónapnapok.',
-      'A mai trend a mai kiadást veti össze az elmúlt 30 nap napi átlagos kiadásával.',
+      'Napi plafon = max(0, havi limit - mai nap előtti változó havi költés) / maival együtt hátralévő hónapnapok.',
+      'Napi keret sáv = mai változó költés / napi plafon. Zöld 75% alatt, sárga 75-100% között, piros 100% felett.',
+      'A pill jobb oldali jelölője azt mutatja, hol van a 30 napos napi átlag ehhez a mai plafonhoz képest. Ha az átlag nagyobb, mint a plafon, jobbra szaggatott túlcsordulás látszik.',
     ],
     comparison:
-        'A százalékos nyíl a mai költést az elmúlt 30 nap napi átlagához hasonlítja.',
+        'A nyíl és a százalék azt mutatja, hogy a mai változó költés mennyivel több vagy kevesebb az elmúlt 30 nap napi átlagánál.',
     missingData:
-        'Havi limit nélkül a maradék napi plafon és a haladásjelző nem jelenik meg; összehasonlító alap nélkül a százalékos trend rejtve marad.',
+        'Havi limit nélkül nincs napi plafon, ezért a napi keret sáv és a még költhető összeg nem jelenik meg. Ha nincs 30 napos átlag, az összehasonlító százalék is eltűnik.',
     pillCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(FastInfoHelpAnchor.pillValue, 'Mai elköltött összeg'),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.pillTrend,
-        'Eltérés a 30 napos napi átlagtól',
-      ),
-    ],
-    boxCallouts: <FastInfoHelpCallout>[
-      _title,
-      FastInfoHelpCallout(FastInfoHelpAnchor.primaryValue, 'Ma elköltve'),
+      FastInfoHelpCallout(FastInfoHelpAnchor.pillValue, 'Mai valós költés'),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Maradék napi plafon és mai tranzakciószám',
+        'Ennyi költhető még ma a napi plafonból',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Napi plafon kihasználtsága; csak havi limit esetén',
+        'Napi plafon sáv és napi átlag jelölője',
       ),
-    ],
-  ),
-  'heti_koltes': FastInfoCardHelp(
-    purpose: 'Megmutatja a hétfőtől máig tartó költést és annak napi alakját.',
-    details:
-        'A kártya a jelenlegi heti kiadást, a havi limitből származtatott heti keret maradékát, valamint az előző hét azonos napjáig mért eltérést mutatja. A kerettempó fixek nélkül számol, hogy a lakbér ne torzítsa el a hétköznapi költést.',
-    calculation: <String>[
-      'Heti keret = havi kiadási limit / 4.345.',
-      'A hét oszlopai hétfőtől vasárnapig a napi kiadást mutatják; a jövőbeli napok üresek.',
-    ],
-    comparison:
-        'Az összehasonlítás az előző hetet csak ugyaneddig a hétköznapig nézi.',
-    missingData:
-        'Havi limit nélkül a heti maradék elmarad, az oszlopok pedig semleges színezést kapnak.',
-    pillCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.pillValue,
-        'Hétfőtől máig elköltve',
-      ),
-      _pillTrend,
-    ],
-    boxCallouts: <FastInfoHelpCallout>[
-      _title,
-      FastInfoHelpCallout(FastInfoHelpAnchor.primaryValue, 'Heti költés eddig'),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.secondaryValues,
-        'Heti keret maradéka és előző heti eltérés',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.visual,
-        'A hét hét napjának költése; jövőbeli napok üresek',
-      ),
-    ],
-  ),
-  'havi_koltes': FastInfoCardHelp(
-    purpose:
-        'Összeveti az aktuális naptári hónap költését az előző hónapokkal.',
-    details:
-        'A nagy kártyanézet az aktuális havi kiadást, a havi limit állapotát és az előző hónap azonos napjához mért eltérést mutatja. A limittempó fixek nélkül számol, a fő összeg viszont a valós havi költés.',
-    calculation: <String>[
-      'A havi költés az aktuális naptári hónap kiadásainak összege.',
-      'A haladásjelző = aktuális havi kiadás / havi kiadási limit.',
-    ],
-    comparison:
-        'A trend az aktuális hónapot az előző hónap azonos naptári napjáig gyűlt költéséhez hasonlítja; a vonalak az aktuális, előző és két hónappal korábbi napi költést rajzolják.',
-    missingData:
-        'Havi limit nélkül a limit haladásjelző és a maradék limitösszeg nem jelenik meg.',
-    pillCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.pillValue,
-        'Aktuális naptári hónap költése',
-      ),
-      _pillTrend,
     ],
     boxCallouts: <FastInfoHelpCallout>[
       _title,
       FastInfoHelpCallout(
         FastInfoHelpAnchor.primaryValue,
-        'Aktuális havi kiadás',
+        'Ma valósan elköltve',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.secondaryValues,
-        'Limitállapot és előző hónap azonos napjához mért eltérés',
+        'Mai tranzakciószám, napi plafon maradéka és átlaghoz mért eltérés',
       ),
       FastInfoHelpCallout(
         FastInfoHelpAnchor.visual,
-        'Három havi napi költésvonal, kiugró napokkal',
+        'Napi keret kihasználtsága fix/időzített tételek nélkül',
+      ),
+    ],
+  ),
+  'heti_koltes': FastInfoCardHelp(
+    purpose:
+        'Megmutatja, ezen a héten mennyi ment el, és a hét napjai közül melyik volt erősebb.',
+    details:
+        'A fő szám a valós heti költés. A keret, a heti ritmus színei és az időarányos eltérés fixek nélkül számolnak, mert a lakbérhez hasonló ismétlődő tételek elnyomnák a hétköznapi költést. A tranzakciószám azt mutatja, hány kiadási tétel volt hétfőtől máig.',
+    calculation: <String>[
+      'Heti keret = havi kiadási limit / 4.345. Ez egy átlagos hónap hetesítése.',
+      'A 7 oszlop hétfőtől vasárnapig mutatja a napi változó költést. A jövőbeli napok halványak, a mai nap kék keretet kap.',
+      'Időarányhoz képest p = heti változó költés keretaránya - a hét eltelt része. A p százalékpontot jelent.',
+    ],
+    comparison:
+        'A box alsó százaléka az aktuális heti változó költést az előző hét azonos napjáig tartó változó költéshez hasonlítja.',
+    missingData:
+        'Havi limit nélkül nincs heti keret és nincs költhető összeg. Az oszlopok akkor is látszhatnak, de kerethez viszonyított színezés nélkül.',
+    pillCallouts: <FastInfoHelpCallout>[
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.pillValue,
+        'Hétfőtől máig valósan elköltve',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Időarányos eltérés százalékpontban',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Balra jobb a tempó, jobbra rosszabb a tempó',
+      ),
+    ],
+    boxCallouts: <FastInfoHelpCallout>[
+      _title,
+      FastInfoHelpCallout(FastInfoHelpAnchor.primaryValue, 'Heti valós költés'),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Tranzakciószám, heti keret maradéka és előző heti eltérés',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        '7 napos heti ritmus fix/időzített tételek nélkül',
+      ),
+    ],
+  ),
+  'havi_koltes': FastInfoCardHelp(
+    purpose:
+        'Megmutatja, az aktuális naptári hónap eddig mennyibe került az előző hónaphoz képest.',
+    details:
+        'A fő szám a valós aktuális havi költés. A box line chartja három naptári hónapot hasonlít össze: előző hónap, aktuális hónap és az előző előtti hónap. Az index és a vonal fixek nélkül számol, hogy az ismétlődő időzített tételek ne torzítsák az összehasonlítást.',
+    calculation: <String>[
+      'Havi költés = az aktuális naptári hónap valós kiadásainak összege ma végéig.',
+      'Előző hónap index = aktuális hónap változó költése azonos napig / előző hónap változó költése azonos napig.',
+      'Ha az index 59%, akkor most ugyaneddig a napig az előző havi költés 59%-án állsz. 100% alatt kevesebb, 100% felett több.',
+    ],
+    comparison:
+        'Az összehasonlítás mindig naptári hónapokat néz azonos napig. Például június 6-án a június 1-6. költést hasonlítja május 1-6. költéshez.',
+    missingData:
+        'Ha nincs előző havi azonos napi adat, az index helyett Nincs összehasonlítás jelenik meg. Havi limit nélkül a limithez kötött maradék nem számolható, de a havi összehasonlítás ettől még működhet.',
+    pillCallouts: <FastInfoHelpCallout>[
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.pillValue,
+        'Aktuális havi valós költés',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Előző hónap indexe azonos napig',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Index skála: zöld kevesebb, sárga közel azonos, piros több',
+      ),
+    ],
+    boxCallouts: <FastInfoHelpCallout>[
+      _title,
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.primaryValue,
+        'Aktuális havi valós kiadás',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.secondaryValues,
+        'Aktuális hó eddig és azonos napig mért százalék',
+      ),
+      FastInfoHelpCallout(
+        FastInfoHelpAnchor.visual,
+        'Három havi napi költésvonal azonos napig, fixek nélkül',
       ),
     ],
   ),

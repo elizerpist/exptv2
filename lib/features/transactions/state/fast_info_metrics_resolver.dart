@@ -146,6 +146,7 @@ class _FastInfoMetricScope {
 
   FastInfoMetricResult _weeklySpend() {
     final dailyAllowance = weeklyAllowance > 0 ? weeklyAllowance / 7 : null;
+    final count = data.expenseRowsBetween(data.weekStart, data.tomorrow).length;
     final bars = <FastInfoWeeklyBar>[
       for (final bar in data.currentWeekBars)
         FastInfoWeeklyBar(
@@ -160,6 +161,7 @@ class _FastInfoMetricScope {
       pillValue: _compactAmount(data.currentWeekExpense),
       primaryValue: formatHuf(data.currentWeekExpense),
       secondaryValues: <String>[
+        '$count tranzakció',
         if (monthlyLimit != null)
           '${formatHuf(math.max(0, weeklyAllowance - data.currentWeekVariableExpense))} költhető',
         if (monthlyLimit != null) _weeklyPaceLabel(),
