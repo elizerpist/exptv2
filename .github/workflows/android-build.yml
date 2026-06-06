@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
   build-debug-apk:
@@ -49,23 +48,15 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
-      - name: Prepare debug APK artifact
+      - name: Prepare debug APK release file
         run: |
-          mkdir -p build/artifacts
-          cp build/app/outputs/flutter-apk/app-debug.apk build/artifacts/exptv2-debug.apk
-
-      - name: Upload debug APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: exptv2-debug-apk
-          path: build/artifacts/exptv2-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+          mkdir -p build/release
+          cp build/app/outputs/flutter-apk/app-debug.apk build/release/exptv2-debug.apk
 
       - name: Publish latest debug APK release
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_PATH: build/artifacts/exptv2-debug.apk
+          APK_PATH: build/release/exptv2-debug.apk
         run: |
           git tag -f debug-latest "$GITHUB_SHA"
           git push origin refs/tags/debug-latest --force
