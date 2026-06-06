@@ -873,7 +873,7 @@ Future<void> pumpExpandedMonthlyHome(
   await tester.pumpAndSettle();
 }
 
-class FakeHomeLimitRepository implements TransactionRepositoryContract {
+class FakeHomeLimitRepository extends TransactionRepositoryContract {
   FakeHomeLimitRepository();
 
   FakeHomeLimitRepository.withoutBudgetLimits();

@@ -497,7 +497,7 @@ TransactionRecord _record({
   );
 }
 
-class CalendarHomeRepository implements TransactionRepositoryContract {
+class CalendarHomeRepository extends TransactionRepositoryContract {
   @override
   Future<TransactionBootstrap> loadBootstrap() async =>
       const TransactionBootstrap(categories: [], transactions: [], limits: []);

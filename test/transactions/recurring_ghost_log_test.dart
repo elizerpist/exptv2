@@ -142,7 +142,7 @@ void main() {
   });
 }
 
-class GhostRepository implements TransactionRepositoryContract {
+class GhostRepository extends TransactionRepositoryContract {
   GhostRepository({
     List<RecurringGhostRecord>? bootstrapGhosts,
     this.projectedGhosts,

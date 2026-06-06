@@ -441,7 +441,7 @@ void main() {
   );
 }
 
-class FakeTransactionRepository implements TransactionRepositoryContract {
+class FakeTransactionRepository extends TransactionRepositoryContract {
   final savedPayloads = <Map<String, Object?>>[];
   final updatedPayloads = <Map<String, Object?>>[];
   final savedCategories = <Map<String, Object?>>[];

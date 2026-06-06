@@ -131,7 +131,7 @@ final categoryFixtures = <TransactionCategory>[
   }),
 ];
 
-class FakeTransactionRepository implements TransactionRepositoryContract {
+class FakeTransactionRepository extends TransactionRepositoryContract {
   final transactions = <TransactionRecord>[
     TransactionRecord.fromMap({
       'id': 1,

@@ -76,7 +76,7 @@ void main() {
   });
 }
 
-class FakeBudgetGoalRepository implements TransactionRepositoryContract {
+class FakeBudgetGoalRepository extends TransactionRepositoryContract {
   final savedLimits = <Map<String, Object?>>[];
   var limits = <CategoryLimit>[];
 

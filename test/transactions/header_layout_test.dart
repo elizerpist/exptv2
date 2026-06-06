@@ -572,7 +572,7 @@ void main() {
 double _screenHeight(WidgetTester tester) =>
     tester.view.physicalSize.height / tester.view.devicePixelRatio;
 
-class HeaderLayoutRepository implements TransactionRepositoryContract {
+class HeaderLayoutRepository extends TransactionRepositoryContract {
   @override
   Future<TransactionBootstrap> loadBootstrap() async => TransactionBootstrap(
     categories: [

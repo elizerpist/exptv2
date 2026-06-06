@@ -38,7 +38,7 @@ void main() {
   );
 }
 
-class FakeLimitRepository implements TransactionRepositoryContract {
+class FakeLimitRepository extends TransactionRepositoryContract {
   final savedLimits = <Map<String, Object?>>[];
   var limits = <CategoryLimit>[];
 
