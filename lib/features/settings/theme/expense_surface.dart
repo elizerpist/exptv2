@@ -277,7 +277,6 @@ class ExpenseSurfaceContainer extends StatelessWidget {
     final content = Stack(
       fit: StackFit.passthrough,
       children: [
-        Padding(padding: padding ?? EdgeInsets.zero, child: child),
         if (ExpenseSurface.needsInnerOverlay(
           style: style,
           pressed: pressed,
@@ -295,6 +294,7 @@ class ExpenseSurfaceContainer extends StatelessWidget {
               ),
             ),
           ),
+        Padding(padding: padding ?? EdgeInsets.zero, child: child),
       ],
     );
     final surface = Container(
