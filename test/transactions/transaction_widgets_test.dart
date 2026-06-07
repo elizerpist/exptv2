@@ -809,7 +809,7 @@ void main() {
     final deleteBorder = tester.widget<Opacity>(
       find.byKey(const ValueKey('transaction-logbox-delete-border-250905')),
     );
-    expect(cardTransform.transform.getTranslation().x, greaterThan(0));
+    expect(cardTransform.transform.getTranslation().x, greaterThan(35));
     expect(deleteBorder.opacity, greaterThan(0));
     expect(
       find.byKey(const ValueKey('transaction-logbox-filter-border-250905')),

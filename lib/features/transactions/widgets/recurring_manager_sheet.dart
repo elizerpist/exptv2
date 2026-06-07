@@ -127,7 +127,9 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
             bottom: false,
             child: Column(
               children: [
-                const _SheetHandle(),
+                const _SheetHandle(
+                  key: ValueKey('recurring-manager-drag-handle'),
+                ),
                 _TitleBar(
                   title: _editing == null
                       ? 'Ismétlődő ${activeType.label.toLowerCase()}'
@@ -272,15 +274,12 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
   }
 
   bool _canDragFrom(
-    Offset globalPosition,
+    Offset _globalPosition,
     Offset startGlobalPosition,
-    double gestureDx,
-    double gestureDy,
+    double _gestureDx,
+    double _gestureDy,
   ) {
-    if (!_isInsideBody(startGlobalPosition)) return true;
-    if (gestureDy <= 0) return false;
-    if (!_bodyScrollController.hasClients) return true;
-    return _bodyScrollController.position.pixels <= 0.5;
+    return !_isInsideBody(startGlobalPosition);
   }
 
   bool _isInsideBody(Offset globalPosition) {
@@ -531,7 +530,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
 const _appError = 'APP_REQUIRED';
 
 class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
+  const _SheetHandle({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -1165,7 +1164,7 @@ class _RuleCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(25),
         border: Border.all(color: AppColors.gray200),
       ),
       child: Row(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/debug/debug_text_input.dart';
 
 import '../../../models/installed_app.dart';
+import '../../transactions/widgets/slide_up_panel_metrics.dart';
 import 'installed_app_picker_sheet.dart';
 
 class AppFilterControl extends StatefulWidget {
@@ -52,12 +53,16 @@ class _AppFilterControlState extends State<AppFilterControl> {
   }
 
   Future<void> _openAppPicker() async {
+    final panelHeight = SlideUpPanelMetrics.fullHeight(context);
     final selected = await showModalBottomSheet<InstalledApp>(
       context: context,
-      showDragHandle: true,
+      isScrollControlled: true,
+      showDragHandle: false,
+      constraints: BoxConstraints(maxHeight: panelHeight),
       builder: (context) {
         return InstalledAppPickerSheet(
           appsFuture: widget.onLoadInstalledApps(),
+          height: panelHeight,
         );
       },
     );

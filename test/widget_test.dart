@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
 final updatedThemeSettings = <Map<dynamic, dynamic>>[];
+final recurringRulesPayload = <Map<String, Object?>>[];
 final deletedTransactionIds = <int>[];
 var firstLaunchNotificationPromptEnabled = false;
 var firstLaunchNotificationPromptCalls = 0;
@@ -25,6 +26,7 @@ void main() {
     savedTransactions.clear();
     updatedTransactions.clear();
     updatedThemeSettings.clear();
+    recurringRulesPayload.clear();
     deletedTransactionIds.clear();
     firstLaunchNotificationPromptEnabled = false;
     firstLaunchNotificationPromptCalls = 0;
@@ -63,7 +65,7 @@ void main() {
             return <Map<String, Object?>>[];
           }
           if (call.method == 'expenseListRecurringRules') {
-            return <Map<String, Object?>>[];
+            return recurringRulesPayload;
           }
           if (call.method == 'expenseListCategories') {
             return (expenseBootstrapPayload()['categories']
@@ -406,6 +408,106 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(triggerBorderColor('recurring-trigger-push'), AppColors.primary);
+  });
+
+  testWidgets('recurring manager body scroll never becomes sheet drag', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('recurring-trigger-push')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('recurring-push-advanced')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('recurring-push-advanced')));
+    await tester.pumpAndSettle();
+
+    final scrollFinder = find.byKey(
+      const ValueKey('recurring-manager-scroll'),
+    );
+    await tester.drag(scrollFinder, const Offset(0, -520));
+    await tester.pumpAndSettle();
+
+    final beforeDrag = _slideCardTranslationY(tester);
+    final gesture = await tester.startGesture(tester.getCenter(scrollFinder));
+    await gesture.moveBy(const Offset(0, 760));
+    await tester.pump();
+
+    expect(
+      _slideCardTranslationY(tester),
+      moreOrLessEquals(beforeDrag, epsilon: 0.1),
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('recurring-manager-card')), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('recurring-manager-drag-handle')),
+      const Offset(0, 220),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('recurring-manager-card')), findsNothing);
+  });
+
+  testWidgets('recurring rule cards use main logbox corner radius', (
+    tester,
+  ) async {
+    recurringRulesPayload.add(
+      <String, Object?>{
+        'id': 7,
+        'triggerType': 'date',
+        'transactionType': 'expense',
+        'name': 'Hitel',
+        'estimatedAmount': 123456,
+        'expectedDayOfMonth': 5,
+        'categoryId': 1,
+        'isActive': true,
+        'appFilterText': '',
+        'packageName': '',
+        'appLabel': '',
+        'sampleText': '',
+        'includeKeyword': '',
+        'amountPattern': '',
+        'amountSelection': '',
+        'merchantPattern': '',
+        'merchantSelection': '',
+        'dateToleranceDays': 5,
+        'amountTolerancePercent': 20,
+        'amountToleranceMin': 5000,
+        'createdAt': '2026-06-01T10:00:00.000',
+        'updatedAt': '2026-06-01T10:00:00.000',
+      },
+    );
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    final card = tester.widget<Container>(
+      find.byKey(const ValueKey('recurring-rule-card-7')),
+    );
+    final decoration = card.decoration! as BoxDecoration;
+    final radius = decoration.borderRadius! as BorderRadius;
+
+    expect(radius.topLeft.x, 25);
+    expect(radius.topRight.x, 25);
+    expect(radius.bottomLeft.x, 25);
+    expect(radius.bottomRight.x, 25);
   });
 
   testWidgets('FAB repeated taps keep opening the transaction sheet', (
@@ -1030,6 +1132,13 @@ void main() {
   testWidgets('settings contains push parser profiles and app picker', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
@@ -1054,6 +1163,23 @@ void main() {
 
     await tester.tap(find.byTooltip('Pick installed app'));
     await tester.pumpAndSettle();
+    final pickerRect = tester.getRect(
+      find.byKey(const ValueKey('installed-app-picker-sheet')),
+    );
+    expect(
+      pickerRect.height,
+      moreOrLessEquals(
+        SlideUpPanelMetrics.fullHeightForScreen(919),
+        epsilon: 1,
+      ),
+    );
+    expect(
+      pickerRect.top,
+      moreOrLessEquals(
+        919 - SlideUpPanelMetrics.fullHeightForScreen(919),
+        epsilon: 1,
+      ),
+    );
     expect(find.text('Notification Test'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
 
