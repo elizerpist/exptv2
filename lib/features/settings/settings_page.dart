@@ -18,6 +18,8 @@ import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
 import 'widgets/options/simple_options_panel.dart';
 import 'widgets/options/theme_options_panel.dart';
+import 'widgets/security/biometric_settings_panel.dart';
+import 'widgets/security/pin_settings_panel.dart';
 
 enum _SettingsMenu {
   root,
@@ -32,6 +34,8 @@ enum _SettingsMenu {
   exportData,
   importData,
   backup,
+  pinSecurity,
+  biometricSecurity,
   about,
   help,
   contact,
@@ -219,12 +223,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 SettingsOptionItem(title: 'Havi összefoglalók', isLast: true),
               ],
             ),
-            const SettingsSection(
+            SettingsSection(
               title: 'Adatvédelem és biztonság',
               children: [
-                SettingsOptionItem(title: 'PIN kód beállítása'),
-                SettingsOptionItem(title: 'Biometrikus azonosítás'),
                 SettingsOptionItem(
+                  title: 'PIN kód beállítása',
+                  onTap: () => _open(_SettingsMenu.pinSecurity),
+                ),
+                SettingsOptionItem(
+                  title: 'Biometrikus azonosítás',
+                  onTap: () => _open(_SettingsMenu.biometricSecurity),
+                ),
+                const SettingsOptionItem(
                   title: 'Adatvédelmi szabályzat',
                   isLast: true,
                 ),
@@ -330,6 +340,23 @@ class _SettingsPageState extends State<SettingsPage> {
         settings: _settingsStore.themeSettings,
         onChanged: _updateThemeSettings,
       ),
+      _SettingsMenu.pinSecurity => PinSettingsPanel(
+        settings: _settingsStore.securitySettings,
+        onSetPin: _settingsStore.setSecurityPin,
+        onChangePin: (currentPin, newPin) => _settingsStore.changeSecurityPin(
+          currentPin: currentPin,
+          newPin: newPin,
+        ),
+        onClearPin: _settingsStore.clearSecurityPin,
+      ),
+      _SettingsMenu.biometricSecurity => BiometricSettingsPanel(
+        settings: _settingsStore.securitySettings,
+        onRefreshAvailability: _settingsStore.refreshBiometricAvailability,
+        onAuthenticate: widget.nativeBridge.expenseAuthenticateBiometric,
+        onSetEnabled: _settingsStore.setBiometricEnabled,
+        onOpenPinSettings: () =>
+            setState(() => _activeMenu = _SettingsMenu.pinSecurity),
+      ),
       _SettingsMenu.currency => const SimpleOptionsPanel(
         title: 'Pénznem kiválasztása',
         children: ['EUR - Euro', 'HUF - Magyar Forint', 'USD - US Dollar'],
@@ -383,6 +410,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.exportData => 'Adatok Exportálása',
       _SettingsMenu.importData => 'Adatok Importálása',
       _SettingsMenu.backup => 'Biztonsági mentés',
+      _SettingsMenu.pinSecurity => 'PIN kód beállítása',
+      _SettingsMenu.biometricSecurity => 'Biometrikus azonosítás',
       _SettingsMenu.about => 'Az Alkalmazásról',
       _SettingsMenu.help => 'Súgó',
       _SettingsMenu.contact => 'Kapcsolat',

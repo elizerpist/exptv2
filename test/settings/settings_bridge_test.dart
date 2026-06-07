@@ -65,6 +65,12 @@ void main() {
                 'pushRecurringSettings': <String, Object?>{
                   'conflictPolicy': 'askOnMultipleMatches',
                 },
+                'securitySettings': <String, Object?>{
+                  'pinEnabled': true,
+                  'biometricEnabled': false,
+                  'biometricAvailable': true,
+                  'biometricLabel': 'Ujjlenyomat elerheto',
+                },
               };
             case 'expenseUpdateThemeSettings':
               return call.arguments;
@@ -72,6 +78,47 @@ void main() {
               return call.arguments;
             case 'expenseUpdatePushRecurringSettings':
               return <String, Object?>{'pushRecurringSettings': call.arguments};
+            case 'expenseSetSecurityPin':
+              return <String, Object?>{
+                'pinEnabled': true,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseChangeSecurityPin':
+              return <String, Object?>{
+                'pinEnabled': true,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseClearSecurityPin':
+              return <String, Object?>{
+                'pinEnabled': false,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseVerifySecurityPin':
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
+            case 'expenseSetBiometricEnabled':
+              return <String, Object?>{
+                'pinEnabled': true,
+                'biometricEnabled':
+                    (call.arguments as Map<dynamic, dynamic>)['enabled'] ==
+                    true,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseGetBiometricAvailability':
+              return <String, Object?>{
+                'pinEnabled': false,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseAuthenticateBiometric':
+              return true;
             case 'loadNotificationParserProfiles':
               return <String, Object?>{
                 'profiles': <Object?>[
@@ -148,6 +195,8 @@ void main() {
       settings.pushRecurringSettings.conflictPolicy,
       PushRecurringConflictPolicy.askOnMultipleMatches,
     );
+    expect(settings.securitySettings.pinEnabled, isTrue);
+    expect(settings.securitySettings.biometricAvailable, isTrue);
   });
 
   test('updates theme settings through native bridge', () async {
@@ -239,6 +288,63 @@ void main() {
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['conflictPolicy'], 'automaticBestMatch');
   });
+
+  test('updates security pin through native bridge', () async {
+    final updated = await bridge.expenseSetSecurityPin('1234');
+
+    expect(updated.pinEnabled, isTrue);
+    expect(calls.single.method, 'expenseSetSecurityPin');
+    final payload = calls.single.arguments as Map<dynamic, dynamic>;
+    expect(payload['pin'], '1234');
+  });
+
+  test('changes security pin through native bridge', () async {
+    final updated = await bridge.expenseChangeSecurityPin(
+      currentPin: '1234',
+      newPin: '4567',
+    );
+
+    expect(updated.pinEnabled, isTrue);
+    expect(calls.single.method, 'expenseChangeSecurityPin');
+    final payload = calls.single.arguments as Map<dynamic, dynamic>;
+    expect(payload['currentPin'], '1234');
+    expect(payload['newPin'], '4567');
+  });
+
+  test('clears security pin through native bridge', () async {
+    final updated = await bridge.expenseClearSecurityPin('1234');
+
+    expect(updated.pinEnabled, isFalse);
+    expect(updated.biometricEnabled, isFalse);
+    expect(calls.single.method, 'expenseClearSecurityPin');
+  });
+
+  test('verifies security pin through native bridge', () async {
+    expect(await bridge.expenseVerifySecurityPin('1234'), isTrue);
+    expect(await bridge.expenseVerifySecurityPin('0000'), isFalse);
+  });
+
+  test('updates biometric setting through native bridge', () async {
+    final updated = await bridge.expenseSetBiometricEnabled(true);
+
+    expect(updated.biometricEnabled, isTrue);
+    expect(calls.single.method, 'expenseSetBiometricEnabled');
+  });
+
+  test(
+    'loads biometric availability and authenticates through native bridge',
+    () async {
+      final availability = await bridge.expenseGetBiometricAvailability();
+      final authenticated = await bridge.expenseAuthenticateBiometric();
+
+      expect(availability.biometricAvailable, isTrue);
+      expect(authenticated, isTrue);
+      expect(calls.map((call) => call.method), <String>[
+        'expenseGetBiometricAvailability',
+        'expenseAuthenticateBiometric',
+      ]);
+    },
+  );
 
   test(
     'loads and saves notification parser profiles through native bridge',

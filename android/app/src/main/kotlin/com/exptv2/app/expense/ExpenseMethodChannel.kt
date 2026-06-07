@@ -1,23 +1,36 @@
 package com.exptv2.app.expense
 
 import android.content.Context
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 class ExpenseMethodChannel(
+    private val activity: FragmentActivity,
     context: Context,
     private val scope: CoroutineScope,
 ) {
     private val repository = ExpenseRepository(context)
+    private val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK
 
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "expenseLoadBootstrap" -> scope.launchResult(result) { repository.bootstrap() }
-            "expenseLoadSettings" -> scope.launchResult(result) { repository.loadSettings() }
+            "expenseLoadSettings" -> scope.launchResult(result) {
+                repository.loadSettings(
+                    biometricAvailable = biometricAvailable(),
+                    biometricLabel = biometricLabel(),
+                )
+            }
             "expenseUpdateThemeSettings" -> scope.launchResult(result) {
                 repository.updateThemeSettings(call.argumentsMap())
             }
@@ -26,6 +39,40 @@ class ExpenseMethodChannel(
             }
             "expenseUpdatePushRecurringSettings" -> scope.launchResult(result) {
                 repository.updatePushRecurringSettings(call.argumentsMap())
+            }
+            "expenseSetSecurityPin" -> scope.launchResult(result) {
+                val pin = call.argumentsMap()["pin"]?.toString()
+                    ?: throw ExpenseValidationException("PIN_REQUIRED", "PIN is required")
+                repository.setSecurityPin(pin)
+            }
+            "expenseChangeSecurityPin" -> scope.launchResult(result) {
+                val args = call.argumentsMap()
+                repository.changeSecurityPin(
+                    args["currentPin"]?.toString() ?: "",
+                    args["newPin"]?.toString() ?: "",
+                )
+            }
+            "expenseClearSecurityPin" -> scope.launchResult(result) {
+                repository.clearSecurityPin(call.argumentsMap()["currentPin"]?.toString() ?: "")
+            }
+            "expenseVerifySecurityPin" -> scope.launchResult(result) {
+                repository.verifySecurityPin(call.argumentsMap()["pin"]?.toString() ?: "")
+            }
+            "expenseSetBiometricEnabled" -> scope.launchResult(result) {
+                val enabled = call.argumentsMap()["enabled"] == true
+                repository.setBiometricEnabled(
+                    enabled = enabled,
+                    biometricAvailable = biometricAvailable(),
+                )
+            }
+            "expenseGetBiometricAvailability" -> scope.launchResult(result) {
+                repository.loadSecuritySettings(
+                    biometricAvailable = biometricAvailable(),
+                    biometricLabel = biometricLabel(),
+                )
+            }
+            "expenseAuthenticateBiometric" -> scope.launchResult(result) {
+                withContext(Dispatchers.Main) { authenticateBiometric() }
             }
             "expenseListNotificationCards" -> scope.launchResult(result) {
                 repository.listNotificationCards()
@@ -145,6 +192,40 @@ class ExpenseMethodChannel(
     }
 
     private fun MethodCall.argumentsMap(): Map<*, *> = arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+
+    private fun biometricAvailable(): Boolean {
+        val manager = BiometricManager.from(activity)
+        return manager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+
+    private fun biometricLabel(): String {
+        return if (biometricAvailable()) "Biometria elerheto" else "Nem elerheto"
+    }
+
+    private suspend fun authenticateBiometric(): Boolean = suspendCancellableCoroutine { continuation ->
+        val executor = ContextCompat.getMainExecutor(activity)
+        val prompt = BiometricPrompt(
+            activity,
+            executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    if (continuation.isActive) continuation.resume(true)
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    if (continuation.isActive) continuation.resume(false)
+                }
+            },
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Exptv2 belepes")
+            .setSubtitle("Azonositsd magad az alkalmazas megnyitasahoz")
+            .setNegativeButtonText("PIN hasznalata")
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        prompt.authenticate(info)
+        continuation.invokeOnCancellation { prompt.cancelAuthentication() }
+    }
 
     private fun CoroutineScope.launchResult(result: MethodChannel.Result, block: suspend () -> Any?) {
         launch {

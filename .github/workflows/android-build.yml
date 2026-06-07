@@ -57,18 +57,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           APK_PATH: build/release/exptv2-debug.apk
+          APK_NAME: exptv2-debug.apk
         run: |
           git tag -f debug-latest "$GITHUB_SHA"
           git push origin refs/tags/debug-latest --force
+          NOTES="Latest debug APK built from ${GITHUB_REF_NAME} commit ${GITHUB_SHA}."
           if gh release view debug-latest >/dev/null 2>&1; then
-            gh release delete-asset debug-latest app-debug.apk --yes >/dev/null 2>&1 || true
+            gh release delete-asset debug-latest "$APK_NAME" --yes >/dev/null 2>&1 || true
             gh release upload debug-latest "$APK_PATH" --clobber
             gh release edit debug-latest \
               --title "Latest debug APK" \
-              --notes "Latest debug APK built from main commit $GITHUB_SHA."
+              --notes "$NOTES"
           else
             gh release create debug-latest "$APK_PATH" \
               --prerelease \
               --title "Latest debug APK" \
-              --notes "Latest debug APK built from main commit $GITHUB_SHA."
+              --notes "$NOTES"
           fi
+          echo "Direct APK link: https://github.com/${GITHUB_REPOSITORY}/releases/download/debug-latest/${APK_NAME}"

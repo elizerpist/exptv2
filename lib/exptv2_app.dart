@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/security/security_gate.dart';
 import 'features/shell/expt_shell.dart';
 import 'services/native_bridge.dart';
 import 'state/event_store.dart';
@@ -17,7 +18,10 @@ class Exptv2App extends StatelessWidget {
       title: 'Exptv2',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: ExptShell(store: store, nativeBridge: nativeBridge),
+      home: SecurityGate(
+        nativeBridge: nativeBridge,
+        child: ExptShell(store: store, nativeBridge: nativeBridge),
+      ),
     );
   }
 }

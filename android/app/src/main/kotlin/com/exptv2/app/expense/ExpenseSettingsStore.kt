@@ -1,16 +1,26 @@
 package com.exptv2.app.expense
 
 import android.content.Context
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
+import java.security.SecureRandom
 
 class ExpenseSettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
 
-    fun loadSettings(): Map<String, Any?> = mapOf(
+    fun loadSettings(
+        biometricAvailable: Boolean = false,
+        biometricLabel: String = "Nem elerheto",
+    ): Map<String, Any?> = mapOf(
         "themeSettings" to loadThemeSettings(),
         "fastInfoConfig" to loadFastInfoConfig(),
         "pushRecurringSettings" to loadPushRecurringSettings(),
+        "securitySettings" to loadSecuritySettings(
+            biometricAvailable = biometricAvailable,
+            biometricLabel = biometricLabel,
+        ),
     )
 
     fun loadThemeSettings(): Map<String, Any?> {
@@ -65,6 +75,71 @@ class ExpenseSettingsStore(context: Context) {
         return loadSettings()
     }
 
+    fun loadSecuritySettings(
+        biometricAvailable: Boolean = false,
+        biometricLabel: String = "Nem elerheto",
+    ): Map<String, Any?> {
+        val pinEnabled = prefs.getString(KEY_SECURITY_PIN_HASH, null).isNullOrBlank().not()
+        val biometricEnabled = pinEnabled && prefs.getBoolean(KEY_SECURITY_BIOMETRIC_ENABLED, false)
+        return mapOf(
+            "pinEnabled" to pinEnabled,
+            "biometricEnabled" to biometricEnabled,
+            "biometricAvailable" to biometricAvailable,
+            "biometricLabel" to biometricLabel,
+        )
+    }
+
+    fun setSecurityPin(pin: String): Map<String, Any?> {
+        validatePin(pin)
+        val salt = newSalt()
+        prefs.edit()
+            .putString(KEY_SECURITY_PIN_SALT, salt)
+            .putString(KEY_SECURITY_PIN_HASH, hashPin(pin, salt))
+            .putBoolean(KEY_SECURITY_BIOMETRIC_ENABLED, false)
+            .apply()
+        return loadSecuritySettings()
+    }
+
+    fun changeSecurityPin(currentPin: String, newPin: String): Map<String, Any?> {
+        if (!verifySecurityPin(currentPin)) {
+            throw ExpenseValidationException("PIN_INVALID", "Invalid PIN")
+        }
+        return setSecurityPin(newPin)
+    }
+
+    fun clearSecurityPin(currentPin: String): Map<String, Any?> {
+        if (!verifySecurityPin(currentPin)) {
+            throw ExpenseValidationException("PIN_INVALID", "Invalid PIN")
+        }
+        prefs.edit()
+            .remove(KEY_SECURITY_PIN_SALT)
+            .remove(KEY_SECURITY_PIN_HASH)
+            .putBoolean(KEY_SECURITY_BIOMETRIC_ENABLED, false)
+            .apply()
+        return loadSecuritySettings()
+    }
+
+    fun verifySecurityPin(pin: String): Boolean {
+        val salt = prefs.getString(KEY_SECURITY_PIN_SALT, null) ?: return false
+        val storedHash = prefs.getString(KEY_SECURITY_PIN_HASH, null) ?: return false
+        return hashPin(pin, salt) == storedHash
+    }
+
+    fun setBiometricEnabled(enabled: Boolean, biometricAvailable: Boolean): Map<String, Any?> {
+        val pinEnabled = prefs.getString(KEY_SECURITY_PIN_HASH, null).isNullOrBlank().not()
+        if (enabled && !pinEnabled) {
+            throw ExpenseValidationException("PIN_NOT_CONFIGURED", "PIN is required")
+        }
+        if (enabled && !biometricAvailable) {
+            throw ExpenseValidationException("BIOMETRIC_UNAVAILABLE", "Biometric authentication is unavailable")
+        }
+        prefs.edit().putBoolean(KEY_SECURITY_BIOMETRIC_ENABLED, enabled).apply()
+        return loadSecuritySettings(
+            biometricAvailable = biometricAvailable,
+            biometricLabel = if (biometricAvailable) "Biometria elerheto" else "Nem elerheto",
+        )
+    }
+
     private fun defaultFastInfoConfig(): Map<String, Any?> = ExpenseFastInfoConfigNormalizer.defaultConfig()
 
     private fun jsonObjectToMap(json: JSONObject): Map<String, Any?> {
@@ -89,6 +164,24 @@ class ExpenseSettingsStore(context: Context) {
         }
     }
 
+    private fun validatePin(pin: String) {
+        if (!pin.matches(Regex("\\d{4,6}"))) {
+            throw ExpenseValidationException("PIN_REQUIRED", "PIN must be 4 to 6 digits")
+        }
+    }
+
+    private fun newSalt(): String {
+        val bytes = ByteArray(16)
+        SecureRandom().nextBytes(bytes)
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+
+    private fun hashPin(pin: String, salt: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val bytes = digest.digest("$salt:$pin".toByteArray(Charsets.UTF_8))
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+
     companion object {
         const val PUSH_RECURRING_POLICY_BEST_MATCH = "automaticBestMatch"
         const val PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE = "askOnMultipleMatches"
@@ -103,5 +196,8 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_FAST_INFO = "fastInfoConfig"
         private const val KEY_PUSH_RECURRING_CONFLICT_POLICY = "pushRecurringConflictPolicy"
+        private const val KEY_SECURITY_PIN_SALT = "securityPinSalt"
+        private const val KEY_SECURITY_PIN_HASH = "securityPinHash"
+        private const val KEY_SECURITY_BIOMETRIC_ENABLED = "securityBiometricEnabled"
     }
 }

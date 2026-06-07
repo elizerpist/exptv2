@@ -10,4 +10,12 @@ void main() {
 
     expect(manifest, contains('android.permission.QUERY_ALL_PACKAGES'));
   });
+
+  test('declares biometric permission for app unlock', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+
+    expect(manifest, contains('android.permission.USE_BIOMETRIC'));
+  });
 }
