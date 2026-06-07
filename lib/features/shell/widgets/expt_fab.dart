@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../settings/models/app_theme_settings.dart';
 
 class ExptFab extends StatefulWidget {
   const ExptFab({
     super.key,
     required this.onPressed,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onLongPress,
   });
 
   final VoidCallback onPressed;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onLongPress;
 
   @override
@@ -21,27 +24,46 @@ class ExptFab extends StatefulWidget {
 class _ExptFabState extends State<ExptFab> {
   @override
   Widget build(BuildContext context) {
-    return SizedBox.square(
-      key: const ValueKey('expt-fab'),
-      dimension: AppDimensions.fabSize,
-      child: Material(
-        color: AppColors.primary,
-        elevation: 5,
-        shadowColor: AppColors.fabShadow,
-        shape: const CircleBorder(),
-        child: InkResponse(
-          containedInkWell: true,
-          customBorder: const CircleBorder(),
-          highlightColor: Colors.white30,
-          onTap: _handleTap,
-          onLongPress: _handleLongPress,
-          child: Icon(
-            Icons.add,
-            color: AppColors.white,
-            size: AppDimensions.fabSize * AppDimensions.fabIconScale,
+    return ExpensePressable(
+      enabled: widget.surfaceStyle.hasPressEffect,
+      builder: (context, pressed) {
+        return SizedBox.square(
+          key: const ValueKey('expt-fab'),
+          dimension: AppDimensions.fabSize,
+          child: DecoratedBox(
+            decoration: ExpenseSurface.decoration(
+              style: widget.surfaceStyle,
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppDimensions.fabSize / 2),
+              pressed: pressed,
+              primary: true,
+              neutralShadow: const [
+                BoxShadow(
+                  color: AppColors.fabShadow,
+                  offset: Offset(0, 5),
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkResponse(
+                containedInkWell: true,
+                customBorder: const CircleBorder(),
+                highlightColor: Colors.white30,
+                onTap: _handleTap,
+                onLongPress: _handleLongPress,
+                child: Icon(
+                  Icons.add,
+                  color: AppColors.white,
+                  size: AppDimensions.fabSize * AppDimensions.fabIconScale,
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

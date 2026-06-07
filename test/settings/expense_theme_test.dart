@@ -19,6 +19,25 @@ void main() {
     expect(theme.logBox, AppColors.gray100);
   });
 
+  test('resolves all selectable surface colors and interaction styles', () {
+    final settings = AppThemeSettings.defaults().copyWith(
+      cardColor: AppCardColor.darkgray,
+      backgroundColor: AppBackgroundColor.darkgray,
+      boxColor: AppBoxColor.darkgray,
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+      contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+    );
+    final theme = ExpenseTheme.fromSettings(settings);
+
+    expect(theme.headerCard, AppColors.gray200);
+    expect(theme.appBackground, AppColors.gray200);
+    expect(theme.logBox, AppColors.gray200);
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
+    expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
+  });
+
   test('resolves primary accent from selected theme', () {
     expect(
       ExpenseTheme.fromSettings(

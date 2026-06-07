@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
 import '../models/recurring_ghost_record.dart';
 import '../models/transaction_category.dart';
 import '../slots/category_color_resolver.dart';
@@ -11,10 +12,14 @@ class RecurringGhostLogBox extends StatelessWidget {
     super.key,
     required this.ghost,
     required this.category,
+    this.surfaceColor = AppColors.gray100,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final RecurringGhostRecord ghost;
   final TransactionCategory? category;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -27,10 +32,11 @@ class RecurringGhostLogBox extends StatelessWidget {
       child: SizedBox(
         height: 72,
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.gray100,
+          decoration: ExpenseSurface.decoration(
+            style: surfaceStyle,
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: AppColors.gray300),
+            neutralBorder: Border.all(color: AppColors.gray300),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

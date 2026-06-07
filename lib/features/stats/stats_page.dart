@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
+import '../settings/theme/expense_theme.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
 
 class StatsPage extends StatelessWidget {
-  const StatsPage({super.key, required this.store});
+  const StatsPage({super.key, required this.store, this.expenseTheme});
 
   final TransactionStore store;
+  final ExpenseTheme? expenseTheme;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       key: const ValueKey('stats-page'),
-      color: AppColors.white,
+      color: expenseTheme?.appBackground ?? AppColors.white,
       child: Padding(
         padding: const EdgeInsets.only(bottom: AppDimensions.bottomNavHeight),
         child: ListenableBuilder(

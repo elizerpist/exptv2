@@ -391,7 +391,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     return true;
   }
 
-  List<Widget> _buildShellNavigation() {
+  List<Widget> _buildShellNavigation(ExpenseTheme expenseTheme) {
     return [
       Positioned(
         left: 0,
@@ -399,6 +399,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         bottom: 0,
         child: ExptBottomNav(
           activeTab: _activeTab,
+          surfaceColor: expenseTheme.logBox,
+          surfaceStyle: expenseTheme.buttonSurfaceStyle,
           unreadNotificationCount: _notificationStore.unreadCount,
           onTabSelected: _selectTab,
         ),
@@ -409,6 +411,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         bottom: AppDimensions.fabBottom,
         child: Center(
           child: ExptFab(
+            surfaceStyle: expenseTheme.buttonSurfaceStyle,
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,
           ),
@@ -422,7 +425,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       case AppTab.home:
         return _transactionHomePage;
       case AppTab.stats:
-        return StatsPage(store: _transactionStore);
+        return StatsPage(store: _transactionStore, expenseTheme: expenseTheme);
       case AppTab.notifications:
         return NotificationsPage(
           nativeBridge: widget.nativeBridge,
@@ -443,7 +446,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
-    final shellNavigation = _buildShellNavigation();
+    final shellNavigation = _buildShellNavigation(expenseTheme);
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,

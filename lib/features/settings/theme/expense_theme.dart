@@ -10,6 +10,8 @@ class ExpenseTheme {
     required this.headerCard,
     required this.appBackground,
     required this.logBox,
+    required this.buttonSurfaceStyle,
+    required this.contentSurfaceStyle,
   });
 
   final AppThemeSettings settings;
@@ -17,6 +19,8 @@ class ExpenseTheme {
   final Color headerCard;
   final Color appBackground;
   final Color logBox;
+  final ExpenseSurfaceInteraction buttonSurfaceStyle;
+  final ExpenseSurfaceInteraction contentSurfaceStyle;
 
   factory ExpenseTheme.fromSettings(AppThemeSettings settings) {
     return ExpenseTheme(
@@ -34,11 +38,15 @@ class ExpenseTheme {
       appBackground: switch (settings.backgroundColor) {
         AppBackgroundColor.white => AppColors.white,
         AppBackgroundColor.gray => AppColors.gray100,
+        AppBackgroundColor.darkgray => AppColors.gray200,
       },
       logBox: switch (settings.boxColor) {
         AppBoxColor.white => AppColors.white,
         AppBoxColor.gray => AppColors.gray100,
+        AppBoxColor.darkgray => AppColors.gray200,
       },
+      buttonSurfaceStyle: settings.buttonSurfaceStyle,
+      contentSurfaceStyle: settings.contentSurfaceStyle,
     );
   }
 }

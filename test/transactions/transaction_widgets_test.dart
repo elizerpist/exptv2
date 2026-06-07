@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
@@ -208,6 +209,31 @@ void main() {
     );
   });
 
+  testWidgets('summary pill uses configured surface color and style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Május 2026',
+          value: '-66 Ft',
+          surfaceColor: AppColors.gray200,
+          surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          onIntervalSwipe: () {},
+          onPeriodSwipe: (_) {},
+          onResetToCurrentMonth: () {},
+        ),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('summary-pill-container')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.gray200);
+    expect(decoration.boxShadow, isNotNull);
+  });
+
   testWidgets('search pill shows merchant filter capsule', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -223,6 +249,26 @@ void main() {
 
     expect(find.text('2 tranzakció találva'), findsOneWidget);
     expect(find.text('Rrr'), findsOneWidget);
+  });
+
+  testWidgets('search pill uses configured surface color', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(
+          query: '',
+          onQueryChanged: (_) {},
+          filteredCount: 0,
+          surfaceColor: AppColors.gray200,
+          surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+        ),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-container')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.gray200);
   });
 
   testWidgets('search pill shows merchant and category capsules with colors', (
@@ -479,6 +525,37 @@ void main() {
     final badgeContainer = tester.widget<Container>(find.byType(Container));
     final badgeDecoration = badgeContainer.decoration! as BoxDecoration;
     expect(badgeDecoration.boxShadow, isNull);
+  });
+
+  testWidgets('transaction log row uses configured surface color and style', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: record,
+          category: category,
+          surfaceColor: AppColors.gray200,
+          surfaceStyle: ExpenseSurfaceInteraction.insetInset,
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+        ),
+      ),
+    );
+
+    final rowContainer = tester.widget<Container>(
+      find.byKey(ValueKey('transaction-logbox-content-${record.id}')),
+    );
+    final rowDecoration = rowContainer.decoration! as BoxDecoration;
+    expect(rowDecoration.color, AppColors.gray200);
+    expect(rowDecoration.boxShadow, isNotNull);
+
+    final avatarSurface = tester.widget<DecoratedBox>(
+      find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
+    );
+    expect(avatarSurface.decoration, isA<BoxDecoration>());
   });
 
   testWidgets('transaction log rows do not build swipe overlays while idle', (

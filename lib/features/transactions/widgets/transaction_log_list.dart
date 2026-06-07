@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
 import '../models/recurring_ghost_record.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_log_entry.dart';
@@ -17,6 +18,9 @@ class TransactionLogList extends StatefulWidget {
     this.entries,
     this.categories = const [],
     this.categoriesById = const <int, TransactionCategory>{},
+    this.surfaceColor = AppColors.white,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     required this.onFastFilter,
     required this.onRecordTap,
     required this.onDeleteRequested,
@@ -32,6 +36,9 @@ class TransactionLogList extends StatefulWidget {
   final List<TransactionLogEntry>? entries;
   final List<TransactionCategory> categories;
   final Map<int, TransactionCategory> categoriesById;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final TransactionLogContextCallback onFastFilter;
   final ValueChanged<TransactionRecord> onRecordTap;
   final TransactionDeleteRequest onDeleteRequested;
@@ -112,6 +119,8 @@ class _TransactionLogListState extends State<TransactionLogList> {
               key: ValueKey('recurring-ghost-log-row-${ghost.id}'),
               ghost: ghost,
               category: _categoryForId(ghost.categoryId),
+              surfaceColor: widget.surfaceColor,
+              surfaceStyle: widget.surfaceStyle,
             );
           }
           final record = entry.record!;
@@ -120,6 +129,9 @@ class _TransactionLogListState extends State<TransactionLogList> {
             key: ValueKey('transaction-log-row-${record.id}'),
             record: record,
             category: category,
+            surfaceColor: widget.surfaceColor,
+            surfaceStyle: widget.surfaceStyle,
+            avatarSurfaceStyle: widget.avatarSurfaceStyle,
             onFastFilter: widget.onFastFilter,
             onTap: widget.onRecordTap,
             onDeleteRequested: widget.onDeleteRequested,

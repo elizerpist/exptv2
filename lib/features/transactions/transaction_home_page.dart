@@ -131,16 +131,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     super.build(context);
     final expenseTheme =
         widget.expenseTheme ??
-        ExpenseTheme.fromSettings(
-          const AppThemeSettings(
-            magnetType: MagnetType.fade,
-            cardColor: AppCardColor.lightgray,
-            theme: AppTheme.turquoise,
-            backgroundColor: AppBackgroundColor.gray,
-            boxColor: AppBoxColor.gray,
-            backheaderStyle: BackheaderStyle.classic,
-          ),
-        );
+        ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     return ColoredBox(
       color: expenseTheme.appBackground,
       child: ListenableBuilder(
@@ -194,6 +185,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   const SizedBox(height: TransactionHeaderMetrics.contentTop),
                   TransactionTypePills(
                     activeType: widget.store.activeType,
+                    surfaceColor: expenseTheme.logBox,
+                    surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onChanged: _setActiveType,
                   ),
                   SummaryPill(
@@ -201,6 +194,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     value: widget.store.activeSummary.formattedFor(
                       widget.store.activeType,
                     ),
+                    surfaceColor: expenseTheme.logBox,
+                    surfaceStyle: expenseTheme.contentSurfaceStyle,
                     onIntervalSwipe: () {
                       widget.store.cycleSummaryWindow();
                     },
@@ -214,6 +209,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   SearchPill(
                     query: widget.store.searchQuery,
                     onQueryChanged: widget.store.setSearchQuery,
+                    surfaceColor: expenseTheme.logBox,
+                    surfaceStyle: expenseTheme.contentSurfaceStyle,
                     merchantFilter: widget.store.merchantFilter,
                     categoryFilter: widget.store.activeCategory?.name,
                     categoryFilterColor: widget.store.activeCategory?.slotColor,
@@ -228,6 +225,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       ghostRecords: visibleGhostTransactions,
                       categories: widget.store.categories,
                       categoriesById: widget.store.categoriesById,
+                      surfaceColor: expenseTheme.logBox,
+                      surfaceStyle: expenseTheme.contentSurfaceStyle,
+                      avatarSurfaceStyle: expenseTheme.contentSurfaceStyle,
                       onFastFilter: _setMerchantFastFilter,
                       onRecordTap: _editTransaction,
                       onDeleteRequested: _requestDeleteTransaction,
@@ -284,6 +284,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       return HeaderFastInfoSurface(
                         visibleFastInfoExtent: visibleFastInfoExtent,
                         cardColor: expenseTheme.headerCard,
+                        surfaceStyle: expenseTheme.contentSurfaceStyle,
                         fastInfo: FastInfoPanel(
                           config:
                               widget.fastInfoConfig ??
@@ -521,6 +522,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         magnetType: expenseTheme.settings.magnetType,
         accent: expenseTheme.accent,
         cardColor: expenseTheme.headerCard,
+        surfaceStyle: expenseTheme.contentSurfaceStyle,
+        buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
         totalIncome: widget.store.totalIncomeAmount,
         totalExpense: widget.store.totalExpenseAmount,
         fastInfoVisible: visibleFastInfoExtent > 0,

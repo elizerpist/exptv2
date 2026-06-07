@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/debug/debug_console.dart';
 import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
 
 class SearchPill extends StatefulWidget {
   const SearchPill({
@@ -10,6 +11,8 @@ class SearchPill extends StatefulWidget {
     required this.query,
     required this.onQueryChanged,
     required this.filteredCount,
+    this.surfaceColor = AppColors.white,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.merchantFilter,
     this.merchantFilterColor,
     this.onClearMerchant,
@@ -21,6 +24,8 @@ class SearchPill extends StatefulWidget {
   final String query;
   final ValueChanged<String> onQueryChanged;
   final int filteredCount;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final String? merchantFilter;
   final Color? merchantFilterColor;
   final VoidCallback? onClearMerchant;
@@ -200,30 +205,37 @@ class _SearchPillState extends State<SearchPill> {
             valueListenable: _focused,
             child: content,
             builder: (context, focused, child) {
-              return Container(
-                key: const ValueKey('search-pill-container'),
-                margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                constraints: const BoxConstraints(minHeight: 46),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(
-                    color: focused ? AppColors.primary : AppColors.gray200,
-                    width: focused ? 1.5 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      offset: const Offset(0, 2),
-                      blurRadius: 3,
+              return ExpensePressable(
+                enabled: widget.surfaceStyle.hasPressEffect,
+                builder: (context, pressed) {
+                  return Container(
+                    key: const ValueKey('search-pill-container'),
+                    margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                    constraints: const BoxConstraints(minHeight: 46),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
                     ),
-                  ],
-                ),
-                child: child,
+                    decoration: ExpenseSurface.decoration(
+                      style: widget.surfaceStyle,
+                      color: widget.surfaceColor,
+                      borderRadius: BorderRadius.circular(25),
+                      pressed: pressed,
+                      neutralBorder: Border.all(
+                        color: focused ? AppColors.primary : AppColors.gray200,
+                        width: focused ? 1.5 : 1,
+                      ),
+                      neutralShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          offset: const Offset(0, 2),
+                          blurRadius: 3,
+                        ),
+                      ],
+                    ),
+                    child: child,
+                  );
+                },
               );
             },
           ),

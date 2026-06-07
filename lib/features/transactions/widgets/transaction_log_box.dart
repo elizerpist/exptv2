@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import 'category_menu/category_icon_badge.dart';
@@ -22,6 +23,9 @@ class TransactionLogBox extends StatefulWidget {
     super.key,
     required this.record,
     required this.category,
+    this.surfaceColor = AppColors.white,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onFastFilter,
     this.onTap,
     this.onDeleteRequested,
@@ -32,6 +36,9 @@ class TransactionLogBox extends StatefulWidget {
 
   final TransactionRecord record;
   final TransactionCategory? category;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final TransactionLogContextCallback? onFastFilter;
   final ValueChanged<TransactionRecord>? onTap;
   final TransactionDeleteRequest? onDeleteRequested;
@@ -175,71 +182,103 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Container(
-                      key: ValueKey(
-                        'transaction-logbox-content-${widget.record.id}',
-                      ),
-                      constraints: const BoxConstraints(minHeight: 70),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: AppColors.gray200),
-                      ),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            key: ValueKey(
-                              'transaction-logbox-avatar-${widget.record.id}',
-                            ),
-                            behavior: HitTestBehavior.opaque,
-                            onTap:
-                                widget.category == null ||
-                                    widget.onCategoryFilter == null
-                                ? null
-                                : () =>
-                                      widget.onCategoryFilter!(widget.category!),
-                            child: CategoryIconBadge(
-                              category: widget.category,
-                              backgroundColor:
-                                  widget.category?.slotColor ??
-                                  AppColors.gray500,
-                              size: 46,
-                              iconSize: 28,
-                              showShadow: false,
+                    ExpensePressable(
+                      enabled: widget.surfaceStyle.hasPressEffect,
+                      builder: (context, pressed) {
+                        return Container(
+                          key: ValueKey(
+                            'transaction-logbox-content-${widget.record.id}',
+                          ),
+                          constraints: const BoxConstraints(minHeight: 70),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: ExpenseSurface.decoration(
+                            style: widget.surfaceStyle,
+                            color: widget.surfaceColor,
+                            borderRadius: BorderRadius.circular(25),
+                            pressed: pressed,
+                            neutralBorder: Border.all(
+                              color: AppColors.gray200,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(child: _nameBlock()),
-                          const SizedBox(width: 12),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          child: Row(
                             children: [
-                              Text(
-                                widget.record.displayAmount,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: amountColor,
+                              GestureDetector(
+                                key: ValueKey(
+                                  'transaction-logbox-avatar-${widget.record.id}',
+                                ),
+                                behavior: HitTestBehavior.opaque,
+                                onTap:
+                                    widget.category == null ||
+                                        widget.onCategoryFilter == null
+                                    ? null
+                                    : () => widget.onCategoryFilter!(
+                                        widget.category!,
+                                      ),
+                                child: ExpensePressable(
+                                  enabled:
+                                      widget
+                                          .avatarSurfaceStyle
+                                          .hasPressEffect &&
+                                      widget.category != null &&
+                                      widget.onCategoryFilter != null,
+                                  builder: (context, avatarPressed) {
+                                    return DecoratedBox(
+                                      key: ValueKey(
+                                        'transaction-logbox-avatar-surface-${widget.record.id}',
+                                      ),
+                                      decoration: ExpenseSurface.decoration(
+                                        style: widget.avatarSurfaceStyle,
+                                        color: widget.category?.slotColor ??
+                                            AppColors.gray500,
+                                        borderRadius: BorderRadius.circular(23),
+                                        pressed: avatarPressed,
+                                      ),
+                                      child: CategoryIconBadge(
+                                        category: widget.category,
+                                        backgroundColor:
+                                            widget.category?.slotColor ??
+                                            AppColors.gray500,
+                                        size: 46,
+                                        iconSize: 28,
+                                        showShadow: false,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.record.displayTime,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.gray500,
-                                ),
+                              const SizedBox(width: 12),
+                              Expanded(child: _nameBlock()),
+                              const SizedBox(width: 12),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    widget.record.displayAmount,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: amountColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    widget.record.displayTime,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.gray500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                     if (visual.deleteOpacity > 0)
                       _SwipeBorder(

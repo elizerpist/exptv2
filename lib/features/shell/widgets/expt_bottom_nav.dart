@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
+import '../../settings/models/app_theme_settings.dart';
 import '../app_tab.dart';
 import 'bottom_nav_item.dart';
 
@@ -11,11 +12,15 @@ class ExptBottomNav extends StatefulWidget {
     super.key,
     required this.activeTab,
     required this.onTabSelected,
+    this.surfaceColor = AppColors.white,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.unreadNotificationCount = 0,
   });
 
   final AppTab activeTab;
   final ValueChanged<AppTab> onTabSelected;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final int unreadNotificationCount;
 
   @override
@@ -64,10 +69,12 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
         horizontal: AppDimensions.bottomNavHorizontalPadding,
         vertical: AppDimensions.bottomNavVerticalPadding,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(top: BorderSide(color: AppColors.gray200)),
-        boxShadow: [
+      decoration: ExpenseSurface.decoration(
+        style: widget.surfaceStyle,
+        color: widget.surfaceColor,
+        borderRadius: BorderRadius.zero,
+        neutralBorder: const Border(top: BorderSide(color: AppColors.gray200)),
+        neutralShadow: const [
           BoxShadow(
             color: AppColors.navShadow,
             offset: Offset(0, -8),
@@ -94,6 +101,8 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
     return BottomNavItem(
       tab: tab,
       active: _optimisticActiveTab == tab,
+      surfaceColor: widget.surfaceColor,
+      surfaceStyle: widget.surfaceStyle,
       badgeCount: badgeCount,
       onPointerDown: () => _handlePointerDown(tab),
       onTap: () => _handleTap(tab),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
 
 class SummaryPill extends StatefulWidget {
   const SummaryPill({
@@ -12,10 +13,14 @@ class SummaryPill extends StatefulWidget {
     required this.onIntervalSwipe,
     required this.onPeriodSwipe,
     required this.onResetToCurrentMonth,
+    this.surfaceColor = AppColors.white,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final String title;
   final String value;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback onIntervalSwipe;
   final ValueChanged<int> onPeriodSwipe;
   final VoidCallback onResetToCurrentMonth;
@@ -159,12 +164,19 @@ class _SummaryPillState extends State<SummaryPill>
       onVerticalDragUpdate: _handleVerticalDragUpdate,
       onVerticalDragCancel: _cancelDrag,
       onVerticalDragEnd: (_) => _endDrag(),
-      child: ValueListenableBuilder<Offset>(
-        key: const ValueKey('summary-pill-transform'),
-        valueListenable: _visualOffset,
-        child: RepaintBoundary(child: _SummaryPillBody(widget: widget)),
-        builder: (context, offset, child) {
-          return Transform.translate(offset: offset, child: child);
+      child: ExpensePressable(
+        enabled: widget.surfaceStyle.hasPressEffect,
+        builder: (context, pressed) {
+          return ValueListenableBuilder<Offset>(
+            key: const ValueKey('summary-pill-transform'),
+            valueListenable: _visualOffset,
+            child: RepaintBoundary(
+              child: _SummaryPillBody(widget: widget, pressed: pressed),
+            ),
+            builder: (context, offset, child) {
+              return Transform.translate(offset: offset, child: child);
+            },
+          );
         },
       ),
     );
@@ -172,21 +184,25 @@ class _SummaryPillState extends State<SummaryPill>
 }
 
 class _SummaryPillBody extends StatelessWidget {
-  const _SummaryPillBody({required this.widget});
+  const _SummaryPillBody({required this.widget, required this.pressed});
 
   final SummaryPill widget;
+  final bool pressed;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: const ValueKey('summary-pill-container'),
       margin: const EdgeInsets.symmetric(horizontal: 20),
       constraints: const BoxConstraints(minHeight: 70),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+      decoration: ExpenseSurface.decoration(
+        style: widget.surfaceStyle,
+        color: widget.surfaceColor,
         borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: AppColors.gray200),
-        boxShadow: [
+        pressed: pressed,
+        neutralBorder: Border.all(color: AppColors.gray200),
+        neutralShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
             offset: const Offset(0, 2),

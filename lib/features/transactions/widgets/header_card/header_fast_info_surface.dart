@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
 import 'transaction_header_metrics.dart';
 
 class HeaderFastInfoSurface extends StatelessWidget {
@@ -10,12 +11,14 @@ class HeaderFastInfoSurface extends StatelessWidget {
     required this.fastInfo,
     required this.header,
     this.cardColor = AppColors.gray100,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final double visibleFastInfoExtent;
   final Widget fastInfo;
   final Widget header;
   final Color cardColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +32,13 @@ class HeaderFastInfoSurface extends StatelessWidget {
       right: 0,
       child: DecoratedBox(
         key: const ValueKey('header-fast-info-surface'),
-        decoration: BoxDecoration(
+        decoration: ExpenseSurface.decoration(
+          style: surfaceStyle,
           color: cardColor,
           borderRadius: const BorderRadius.vertical(
             bottom: Radius.circular(24),
           ),
-          boxShadow: [
+          neutralShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.15),
               offset: const Offset(0, 4),

@@ -170,6 +170,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Téma Beállítások'), findsOneWidget);
     expect(find.text('Mágneskártya'), findsOneWidget);
+    expect(find.text('Sötétebb szürke'), findsWidgets);
+    expect(find.text('Neutrális -> befelé'), findsWidgets);
+    expect(find.text('Kifelé -> befelé'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 

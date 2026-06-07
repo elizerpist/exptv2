@@ -1,5 +1,6 @@
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/shell/app_tab.dart';
 import 'package:exptv2/features/shell/widgets/expt_bottom_nav.dart';
 import 'package:flutter/material.dart';
@@ -113,5 +114,27 @@ void main() {
       find.byKey(const ValueKey('bottom-nav-notifications-unread-badge')),
       findsNothing,
     );
+  });
+
+  testWidgets('active bottom nav item is held pressed for inset styles', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: ExptBottomNav(
+            activeTab: AppTab.home,
+            surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final activeSurface = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('bottom-nav-home-surface')),
+    );
+    final decoration = activeSurface.decoration as BoxDecoration;
+    expect(decoration.boxShadow, isNotNull);
   });
 }

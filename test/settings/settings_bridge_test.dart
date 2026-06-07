@@ -158,6 +158,8 @@ void main() {
         theme: AppTheme.turquoise,
         backgroundColor: AppBackgroundColor.white,
         boxColor: AppBoxColor.gray,
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+        contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
         backheaderStyle: BackheaderStyle.orbitBudget,
       ),
     );
@@ -167,6 +169,8 @@ void main() {
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
     expect(payload['cardColor'], 'darkgray');
+    expect(payload['buttonSurfaceStyle'], 'raisedInset');
+    expect(payload['contentSurfaceStyle'], 'neutralInset');
     expect(payload['backheaderStyle'], 'orbitBudget');
   });
 

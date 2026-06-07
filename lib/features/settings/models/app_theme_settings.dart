@@ -1,3 +1,7 @@
+import '../theme/expense_surface.dart';
+
+export '../theme/expense_surface.dart';
+
 enum MagnetType {
   fade('fade'),
   nofade('nofade'),
@@ -82,7 +86,8 @@ enum AppTheme {
 
 enum AppBackgroundColor {
   white('white'),
-  gray('gray');
+  gray('gray'),
+  darkgray('darkgray');
 
   const AppBackgroundColor(this.nativeValue);
   final String nativeValue;
@@ -98,7 +103,8 @@ enum AppBackgroundColor {
 
 enum AppBoxColor {
   white('white'),
-  gray('gray');
+  gray('gray'),
+  darkgray('darkgray');
 
   const AppBoxColor(this.nativeValue);
   final String nativeValue;
@@ -119,6 +125,8 @@ class AppThemeSettings {
     required this.theme,
     required this.backgroundColor,
     required this.boxColor,
+    required this.buttonSurfaceStyle,
+    required this.contentSurfaceStyle,
     required this.backheaderStyle,
   });
 
@@ -129,6 +137,8 @@ class AppThemeSettings {
       theme: AppTheme.turquoise,
       backgroundColor: AppBackgroundColor.gray,
       boxColor: AppBoxColor.gray,
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
     );
   }
@@ -140,6 +150,12 @@ class AppThemeSettings {
       theme: AppTheme.fromAny(map['theme']),
       backgroundColor: AppBackgroundColor.fromAny(map['backgroundColor']),
       boxColor: AppBoxColor.fromAny(map['boxColor']),
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.fromAny(
+        map['buttonSurfaceStyle'],
+      ),
+      contentSurfaceStyle: ExpenseSurfaceInteraction.fromAny(
+        map['contentSurfaceStyle'],
+      ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
     );
   }
@@ -149,6 +165,8 @@ class AppThemeSettings {
   final AppTheme theme;
   final AppBackgroundColor backgroundColor;
   final AppBoxColor boxColor;
+  final ExpenseSurfaceInteraction buttonSurfaceStyle;
+  final ExpenseSurfaceInteraction contentSurfaceStyle;
   final BackheaderStyle backheaderStyle;
 
   Map<String, Object?> toMap() {
@@ -158,6 +176,8 @@ class AppThemeSettings {
       'theme': theme.nativeValue,
       'backgroundColor': backgroundColor.nativeValue,
       'boxColor': boxColor.nativeValue,
+      'buttonSurfaceStyle': buttonSurfaceStyle.nativeValue,
+      'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
     };
   }
@@ -168,6 +188,8 @@ class AppThemeSettings {
     AppTheme? theme,
     AppBackgroundColor? backgroundColor,
     AppBoxColor? boxColor,
+    ExpenseSurfaceInteraction? buttonSurfaceStyle,
+    ExpenseSurfaceInteraction? contentSurfaceStyle,
     BackheaderStyle? backheaderStyle,
   }) {
     return AppThemeSettings(
@@ -176,6 +198,8 @@ class AppThemeSettings {
       theme: theme ?? this.theme,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       boxColor: boxColor ?? this.boxColor,
+      buttonSurfaceStyle: buttonSurfaceStyle ?? this.buttonSurfaceStyle,
+      contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
     );
   }

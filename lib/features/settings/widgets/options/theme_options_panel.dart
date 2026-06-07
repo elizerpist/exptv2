@@ -67,9 +67,53 @@ class ThemeOptionsPanel extends StatelessWidget {
         _sectionTitle('Háttér színe', 'Az alkalmazás háttérszíne:'),
         _backgroundOption('Fehér', 'Tiszta fehér alkalmazás háttér', AppBackgroundColor.white, AppColors.white),
         _backgroundOption('Szürke', 'Világosszürke alkalmazás háttér', AppBackgroundColor.gray, AppColors.gray100),
-        _sectionTitle('Box színek', 'Tranzakció és értesítés logbox-ok kitöltőszíne:'),
+        _backgroundOption('Sötétebb szürke', 'Erősebb szürke alkalmazás háttér', AppBackgroundColor.darkgray, AppColors.gray200),
+        _sectionTitle('Box színek', 'Tranzakció logbox, kereső és összesítő pill kitöltőszíne:'),
         _boxOption('Fehér', 'Fehér logbox háttér', AppBoxColor.white, AppColors.white),
         _boxOption('Szürke', 'Szürke logbox háttér', AppBoxColor.gray, AppColors.gray100),
+        _boxOption('Sötétebb szürke', 'Erősebb szürke logbox háttér', AppBoxColor.darkgray, AppColors.gray200),
+        _sectionTitle('Gomb design', 'Type pill, category, FAB és bottom nav interakció:'),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.neutralNeutral,
+          selected: settings.buttonSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
+        ),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.neutralInset,
+          selected: settings.buttonSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
+        ),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.insetInset,
+          selected: settings.buttonSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
+        ),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.raisedInset,
+          selected: settings.buttonSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
+        ),
+        _sectionTitle('Logbox / search / summary design', 'Tranzakció logbox, avatar, kereső és összesítő interakció:'),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.neutralNeutral,
+          selected: settings.contentSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
+        ),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.neutralInset,
+          selected: settings.contentSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
+        ),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.insetInset,
+          selected: settings.contentSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
+        ),
+        _surfaceOption(
+          value: ExpenseSurfaceInteraction.raisedInset,
+          selected: settings.contentSurfaceStyle,
+          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
+        ),
       ],
     );
   }
@@ -127,6 +171,20 @@ class ThemeOptionsPanel extends StatelessWidget {
       preview: _ColorPreview(color: color),
     );
   }
+
+  Widget _surfaceOption({
+    required ExpenseSurfaceInteraction value,
+    required ExpenseSurfaceInteraction selected,
+    required ValueChanged<ExpenseSurfaceInteraction> onSelect,
+  }) {
+    return SettingsRadioOption(
+      title: '${value.displayTitle}${selected == value ? ' (jelenlegi)' : ''}',
+      description: value.description,
+      selected: selected == value,
+      onTap: () => onSelect(value),
+      preview: _SurfacePreview(style: value),
+    );
+  }
 }
 
 class _ColorPreview extends StatelessWidget {
@@ -162,6 +220,34 @@ class _MagnetPreview extends StatelessWidget {
         totalExpense: 40,
         height: 24,
       ),
+    );
+  }
+}
+
+class _SurfacePreview extends StatelessWidget {
+  const _SurfacePreview({required this.style});
+
+  final ExpenseSurfaceInteraction style;
+
+  @override
+  Widget build(BuildContext context) {
+    final pressed = style == ExpenseSurfaceInteraction.neutralInset ||
+        style == ExpenseSurfaceInteraction.insetInset;
+    return ExpensePressable(
+      enabled: false,
+      forcePressed: pressed,
+      builder: (context, isPressed) {
+        return DecoratedBox(
+          decoration: ExpenseSurface.decoration(
+            style: style,
+            color: AppColors.gray100,
+            borderRadius: BorderRadius.circular(12),
+            pressed: isPressed,
+            neutralBorder: Border.all(color: AppColors.gray200),
+          ),
+          child: const SizedBox(width: 42, height: 30),
+        );
+      },
     );
   }
 }

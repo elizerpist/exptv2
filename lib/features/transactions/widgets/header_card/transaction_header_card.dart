@@ -17,6 +17,8 @@ class TransactionHeaderCard extends StatelessWidget {
     this.magnetType = MagnetType.fade,
     this.accent = AppColors.primary,
     this.cardColor = AppColors.gray100,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.totalIncome = 0,
     this.totalExpense = 0,
     this.fastInfoVisible = false,
@@ -36,6 +38,8 @@ class TransactionHeaderCard extends StatelessWidget {
   final MagnetType magnetType;
   final Color accent;
   final Color cardColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final double totalIncome;
   final double totalExpense;
   final bool fastInfoVisible;
@@ -77,12 +81,13 @@ class TransactionHeaderCard extends StatelessWidget {
             if (drawSurface)
               Positioned.fill(
                 child: DecoratedBox(
-                  decoration: BoxDecoration(
+                  decoration: ExpenseSurface.decoration(
+                    style: surfaceStyle,
                     color: cardColor,
                     borderRadius: const BorderRadius.vertical(
                       bottom: Radius.circular(24),
                     ),
-                    boxShadow: [
+                    neutralShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.15),
                         offset: const Offset(0, 4),
@@ -202,7 +207,10 @@ class TransactionHeaderCard extends StatelessWidget {
               top: TransactionHeaderMetrics.categoryButtonTop,
               right: 25,
               child: headerContentOpacity(
-                _HeaderCategoryButton(onPressed: onCategoryPressed),
+                _HeaderCategoryButton(
+                  surfaceStyle: buttonSurfaceStyle,
+                  onPressed: onCategoryPressed,
+                ),
               ),
             ),
           ],
@@ -252,27 +260,47 @@ class TransactionHeaderCard extends StatelessWidget {
                 width: 56,
                 height: 56,
                 child: Center(
-                  child: Material(
-                    color: AppColors.primary,
-                    elevation: 6,
-                    shadowColor: Colors.black.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(15),
-                    child: InkWell(
-                      key: const ValueKey('header-expand-button'),
-                      onTap: onExpandPressed,
-                      borderRadius: BorderRadius.circular(15),
-                      child: SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: Icon(
-                          expanded
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                          color: AppColors.white,
-                          size: 18,
+                  child: ExpensePressable(
+                    enabled: buttonSurfaceStyle.hasPressEffect,
+                    builder: (context, pressed) {
+                      final radius = BorderRadius.circular(15);
+                      return DecoratedBox(
+                        decoration: ExpenseSurface.decoration(
+                          style: buttonSurfaceStyle,
+                          color: AppColors.primary,
+                          borderRadius: radius,
+                          pressed: pressed,
+                          primary: true,
+                          neutralShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              offset: const Offset(0, 6),
+                              blurRadius: 12,
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: radius,
+                          child: InkWell(
+                            key: const ValueKey('header-expand-button'),
+                            onTap: onExpandPressed,
+                            borderRadius: radius,
+                            child: SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: Icon(
+                                expanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: AppColors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -285,36 +313,60 @@ class TransactionHeaderCard extends StatelessWidget {
 }
 
 class _HeaderCategoryButton extends StatelessWidget {
-  const _HeaderCategoryButton({required this.onPressed});
+  const _HeaderCategoryButton({
+    required this.surfaceStyle,
+    required this.onPressed,
+  });
 
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.primary,
-      elevation: 10,
-      shadowColor: Colors.black.withValues(alpha: 0.3),
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        key: const ValueKey('header-category-button'),
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(24),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              _MenuBar(),
-              SizedBox(height: 3),
-              _MenuBar(),
-              SizedBox(height: 3),
-              _MenuBar(),
+    final radius = BorderRadius.circular(24);
+    return ExpensePressable(
+      enabled: surfaceStyle.hasPressEffect,
+      builder: (context, pressed) {
+        return DecoratedBox(
+          decoration: ExpenseSurface.decoration(
+            style: surfaceStyle,
+            color: AppColors.primary,
+            borderRadius: radius,
+            pressed: pressed,
+            primary: true,
+            neutralShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                offset: const Offset(0, 10),
+                blurRadius: 20,
+              ),
             ],
           ),
-        ),
-      ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: InkWell(
+              key: const ValueKey('header-category-button'),
+              onTap: onPressed,
+              borderRadius: radius,
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    _MenuBar(),
+                    SizedBox(height: 3),
+                    _MenuBar(),
+                    SizedBox(height: 3),
+                    _MenuBar(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
