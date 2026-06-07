@@ -91,6 +91,9 @@ class _BottomNavItemState extends State<BottomNavItem> {
                   child: InkWell(
                     key: ValueKey('bottom-nav-${tab.id}'),
                     borderRadius: radius,
+                    onHighlightChanged: surfaceStyle.hasPressEffect
+                        ? _handleHighlightChanged
+                        : null,
                     onTap: widget.onTap,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -163,6 +166,15 @@ class _BottomNavItemState extends State<BottomNavItem> {
     _releaseTimer = Timer(const Duration(milliseconds: 120), () {
       _setPressed(false);
     });
+  }
+
+  void _handleHighlightChanged(bool highlighted) {
+    if (highlighted) {
+      _releaseTimer?.cancel();
+      _setPressed(true);
+      return;
+    }
+    _releasePressedSoon();
   }
 }
 
