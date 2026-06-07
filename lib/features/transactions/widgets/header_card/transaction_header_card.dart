@@ -98,6 +98,7 @@ class TransactionHeaderCard extends StatelessWidget {
                       blurRadius: 8,
                     ),
                   ],
+                  profile: ExpenseSurfaceProfile.headerCard,
                   child: const SizedBox.expand(),
                 ),
               ),
@@ -270,6 +271,9 @@ class TransactionHeaderCard extends StatelessWidget {
                     builder: (context, pressed) {
                       final radius = BorderRadius.circular(15);
                       return ExpenseSurfaceContainer(
+                        surfaceKey: const ValueKey(
+                          'header-expand-button-surface',
+                        ),
                         style: buttonSurfaceStyle,
                         color: AppColors.primary,
                         borderRadius: radius,
@@ -334,6 +338,7 @@ class _HeaderCategoryButton extends StatelessWidget {
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
         return ExpenseSurfaceContainer(
+          surfaceKey: const ValueKey('header-category-button-surface'),
           style: surfaceStyle,
           color: AppColors.primary,
           borderRadius: radius,

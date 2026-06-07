@@ -1,9 +1,101 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('inset surfaces expose the exact HTML inset shadow tokens', () {
+    final shadows = ExpenseSurface.insetShadowTokens(
+      style: ExpenseSurfaceInteraction.insetInset,
+      pressed: false,
+      primary: false,
+    );
+
+    expect(shadows, hasLength(2));
+    expect(shadows[0].color, const Color(0x5994A3B8));
+    expect(shadows[0].offset, const Offset(6, 6));
+    expect(shadows[0].blurRadius, 13);
+    expect(shadows[1].color, const Color(0xEBFFFFFF));
+    expect(shadows[1].offset, const Offset(-6, -6));
+    expect(shadows[1].blurRadius, 13);
+  });
+
+  test('header inset surfaces use the stronger HTML header tokens', () {
+    final shadows = ExpenseSurface.insetShadowTokens(
+      style: ExpenseSurfaceInteraction.insetInset,
+      pressed: false,
+      primary: false,
+      profile: ExpenseSurfaceProfile.headerCard,
+    );
+
+    expect(shadows, hasLength(2));
+    expect(shadows[0].color, const Color(0x5C94A3B8));
+    expect(shadows[0].offset, const Offset(9, 9));
+    expect(shadows[0].blurRadius, 19);
+    expect(shadows[1].color, const Color(0xEBFFFFFF));
+    expect(shadows[1].offset, const Offset(-9, -9));
+    expect(shadows[1].blurRadius, 19);
+  });
+
+  test('primary inset buttons expose the HTML blue inset shadow tokens', () {
+    final rest = ExpenseSurface.insetShadowTokens(
+      style: ExpenseSurfaceInteraction.insetInset,
+      pressed: false,
+      primary: true,
+    );
+    final pressed = ExpenseSurface.insetShadowTokens(
+      style: ExpenseSurfaceInteraction.insetInset,
+      pressed: true,
+      primary: true,
+    );
+
+    expect(rest, hasLength(2));
+    expect(rest[0].color, const Color(0x8F0E7490));
+    expect(rest[0].offset, const Offset(5, 5));
+    expect(rest[0].blurRadius, 10);
+    expect(rest[1].color, const Color(0x5C67E8F9));
+    expect(rest[1].offset, const Offset(-4, -4));
+    expect(rest[1].blurRadius, 9);
+    expect(pressed, hasLength(2));
+    expect(pressed[0].color, const Color(0xA30E7490));
+    expect(pressed[0].offset, const Offset(7, 7));
+    expect(pressed[0].blurRadius, 13);
+    expect(pressed[1].color, const Color(0x6167E8F9));
+    expect(pressed[1].offset, const Offset(-5, -5));
+    expect(pressed[1].blurRadius, 11);
+  });
+
+  test('active nav inset surfaces use their own HTML tokens', () {
+    final rest = ExpenseSurface.insetShadowTokens(
+      style: ExpenseSurfaceInteraction.insetInset,
+      pressed: false,
+      primary: false,
+      profile: ExpenseSurfaceProfile.activeNavItem,
+    );
+    final pressed = ExpenseSurface.insetShadowTokens(
+      style: ExpenseSurfaceInteraction.insetInset,
+      pressed: true,
+      primary: false,
+      profile: ExpenseSurfaceProfile.activeNavItem,
+    );
+
+    expect(rest, hasLength(2));
+    expect(rest[0].color, const Color(0x3306B6D4));
+    expect(rest[0].offset, const Offset(4, 4));
+    expect(rest[0].blurRadius, 9);
+    expect(rest[1].color, const Color(0xE0FFFFFF));
+    expect(rest[1].offset, const Offset(-4, -4));
+    expect(rest[1].blurRadius, 9);
+    expect(pressed, hasLength(2));
+    expect(pressed[0].color, const Color(0x3D06B6D4));
+    expect(pressed[0].offset, const Offset(6, 6));
+    expect(pressed[0].blurRadius, 12);
+    expect(pressed[1].color, const Color(0xE0FFFFFF));
+    expect(pressed[1].offset, const Offset(-5, -5));
+    expect(pressed[1].blurRadius, 10);
+  });
+
   test('raised surface uses the HTML neumorphism shadow tokens', () {
     final decoration = ExpenseSurface.decoration(
       style: ExpenseSurfaceInteraction.raisedInset,
@@ -133,5 +225,28 @@ void main() {
     );
     expect(stack.children.first, isA<Positioned>());
     expect(stack.children.last, isA<Padding>());
+  });
+
+  testWidgets('keyed surfaces log the resolved HTML surface state', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExpenseSurfaceContainer(
+          surfaceKey: const ValueKey('search-pill-container'),
+          style: ExpenseSurfaceInteraction.insetInset,
+          color: AppColors.gray200,
+          borderRadius: BorderRadius.circular(25),
+          child: const Text('content'),
+        ),
+      ),
+    );
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[ThemeSurface] surface key=search-pill-container'));
+    expect(logs, contains('style=insetInset'));
+    expect(logs, contains('profile=standard'));
+    expect(logs, contains('innerShadows=2'));
   });
 }

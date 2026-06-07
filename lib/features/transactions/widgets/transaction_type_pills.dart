@@ -77,6 +77,9 @@ class _TransactionTypePill extends StatelessWidget {
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
         return ExpenseSurfaceContainer(
+          surfaceKey: ValueKey(
+            'transaction-type-pill-${type.nativeValue}-surface',
+          ),
           style: surfaceStyle,
           color: surfaceColor,
           borderRadius: radius,

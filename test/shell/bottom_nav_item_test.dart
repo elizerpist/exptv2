@@ -149,4 +149,27 @@ void main() {
         .map((transform) => transform.transform.getTranslation().y);
     expect(transformYs, isNot(contains(moreOrLessEquals(2, epsilon: 0.01))));
   });
+
+  testWidgets('active bottom nav item uses the HTML inset nav gradient', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: ExptBottomNav(
+            activeTab: AppTab.home,
+            surfaceStyle: ExpenseSurfaceInteraction.insetInset,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final activeSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('bottom-nav-home-surface')),
+    );
+    final decoration = activeSurface.decoration as BoxDecoration;
+    final gradient = decoration.gradient! as LinearGradient;
+    expect(gradient.colors, const [Color(0x290891B2), Color(0x1A67E8F9)]);
+  });
 }

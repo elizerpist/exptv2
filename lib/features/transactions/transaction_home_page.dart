@@ -87,6 +87,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   int? _lastHomeBuildEntriesLogged;
   bool? _lastHomeBuildOverlayLogged;
   bool? _lastHomeBuildHeaderExpandedLogged;
+  String? _lastThemeSurfaceLogSignature;
 
   @override
   void initState() {
@@ -133,6 +134,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     final expenseTheme =
         widget.expenseTheme ??
         ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+    _logThemeSurfaceOnce(expenseTheme);
     return ColoredBox(
       color: expenseTheme.appBackground,
       child: ListenableBuilder(
@@ -377,6 +379,25 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         },
       ),
     );
+  }
+
+  void _logThemeSurfaceOnce(ExpenseTheme expenseTheme) {
+    final signature = 'typePills=${expenseTheme.buttonSurfaceStyle.nativeValue} '
+        'headerButtons=${expenseTheme.buttonSurfaceStyle.nativeValue} '
+        'summary=${expenseTheme.contentSurfaceStyle.nativeValue} '
+        'search=${expenseTheme.contentSurfaceStyle.nativeValue} '
+        'log=${expenseTheme.contentSurfaceStyle.nativeValue} '
+        'headerSurface=${expenseTheme.contentSurfaceStyle.nativeValue} '
+        'bg=${_hex(expenseTheme.appBackground)} '
+        'header=${_hex(expenseTheme.headerCard)} '
+        'logBox=${_hex(expenseTheme.logBox)}';
+    if (_lastThemeSurfaceLogSignature == signature) return;
+    _lastThemeSurfaceLogSignature = signature;
+    DebugConsole.log('[ThemeSurface] home fanout $signature');
+  }
+
+  String _hex(Color color) {
+    return '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}';
   }
 
   void _logHomeBuildFrame({

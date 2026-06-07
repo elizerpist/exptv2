@@ -46,6 +46,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
             blurRadius: 8,
           ),
         ],
+        profile: ExpenseSurfaceProfile.headerCard,
         child: SizedBox(
           height: TransactionHeaderMetrics.fastInfoHeight +
               TransactionHeaderMetrics.cardHeight,

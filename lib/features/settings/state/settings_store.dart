@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../../transactions/models/transaction_category.dart';
 import '../data/settings_repository.dart';
 import '../models/app_theme_settings.dart';
@@ -37,6 +38,7 @@ class SettingsStore extends ChangeNotifier {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
       _categories = payload.categories;
+      DebugConsole.log('[ThemeSurface] settings load ${_themeSignature()}');
     } catch (error) {
       _error = error.toString();
     } finally {
@@ -47,11 +49,22 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> updateThemeSettings(AppThemeSettings settings) async {
     _themeSettings = await _repository.updateThemeSettings(settings);
+    DebugConsole.log('[ThemeSurface] settings update ${_themeSignature()}');
     notifyListeners();
   }
 
   Future<void> updateFastInfoConfig(FastInfoConfig config) async {
     _fastInfoConfig = await _repository.updateFastInfoConfig(config);
     notifyListeners();
+  }
+
+  String _themeSignature() {
+    return 'button=${_themeSettings.buttonSurfaceStyle.nativeValue} '
+        'content=${_themeSettings.contentSurfaceStyle.nativeValue} '
+        'bg=${_themeSettings.backgroundColor.nativeValue} '
+        'card=${_themeSettings.cardColor.nativeValue} '
+        'box=${_themeSettings.boxColor.nativeValue} '
+        'magnet=${_themeSettings.magnetType.nativeValue} '
+        'backheader=${_themeSettings.backheaderStyle.nativeValue}';
   }
 }

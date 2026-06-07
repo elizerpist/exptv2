@@ -55,6 +55,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
+  String? _lastThemeSurfaceLogSignature;
 
   @override
   void initState() {
@@ -232,6 +233,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _themeSettings = settings;
       _transactionHomePage = _buildTransactionHomePage();
     });
+    DebugConsole.log('[ThemeSurface] shell apply ${_settingsSignature(settings)}');
   }
 
   void _applyFastInfoConfig(FastInfoConfig config) {
@@ -446,6 +448,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+    _logThemeSurfaceOnce(expenseTheme);
     final shellNavigation = _buildShellNavigation(expenseTheme);
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -479,6 +482,31 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  void _logThemeSurfaceOnce(ExpenseTheme expenseTheme) {
+    final signature = '${_settingsSignature(expenseTheme.settings)} '
+        'accent=${_hex(expenseTheme.accent)} '
+        'bgColor=${_hex(expenseTheme.appBackground)} '
+        'headerColor=${_hex(expenseTheme.headerCard)} '
+        'logBoxColor=${_hex(expenseTheme.logBox)}';
+    if (_lastThemeSurfaceLogSignature == signature) return;
+    _lastThemeSurfaceLogSignature = signature;
+    DebugConsole.log('[ThemeSurface] shell resolved $signature');
+  }
+
+  String _settingsSignature(AppThemeSettings settings) {
+    return 'button=${settings.buttonSurfaceStyle.nativeValue} '
+        'content=${settings.contentSurfaceStyle.nativeValue} '
+        'bg=${settings.backgroundColor.nativeValue} '
+        'card=${settings.cardColor.nativeValue} '
+        'box=${settings.boxColor.nativeValue} '
+        'magnet=${settings.magnetType.nativeValue} '
+        'backheader=${settings.backheaderStyle.nativeValue}';
+  }
+
+  String _hex(Color color) {
+    return '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}';
   }
 }
 

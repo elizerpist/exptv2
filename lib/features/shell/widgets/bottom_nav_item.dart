@@ -76,6 +76,9 @@ class _BottomNavItemState extends State<BottomNavItem> {
               borderRadius: radius,
               pressed: pressed,
               neutralShadow: null,
+              profile: active
+                  ? ExpenseSurfaceProfile.activeNavItem
+                  : ExpenseSurfaceProfile.standard,
               child: Material(
                 color: Colors.transparent,
                 borderRadius: radius,
