@@ -419,6 +419,32 @@ void main() {
     );
   });
 
+  testWidgets('header expand button is not clipped by the header surface', (
+    tester,
+  ) async {
+    final store = TransactionStore(HeaderLayoutRepository());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('header-expand-button')),
+        matching: find.byType(ClipRRect),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('header pull reveals FastInfo during drag and springs closed', (
     tester,
   ) async {

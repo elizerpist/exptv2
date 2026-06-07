@@ -597,7 +597,7 @@ void main() {
     );
     final rowDecoration = rowContainer.decoration! as BoxDecoration;
     expect(rowDecoration.color, AppColors.gray200);
-    expect(rowDecoration.gradient, isNotNull);
+    expect(rowDecoration.gradient, isNull);
 
     final avatarSurface = tester.widget<Container>(
       find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
@@ -627,6 +627,56 @@ void main() {
     );
     expect(badge.backgroundColor, Colors.transparent);
     expect(badge.showShadow, isFalse);
+  });
+
+  testWidgets('avatar press does not press the whole logbox surface', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+    var categoryTaps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: record,
+          category: category,
+          surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          onCategoryFilter: (_) => categoryTaps += 1,
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(ValueKey('transaction-logbox-avatar-${record.id}')),
+      ),
+    );
+    await tester.pump(ExpenseSurface.pressDuration);
+
+    final rowDecoration =
+        tester
+                .widget<Container>(
+                  find.byKey(ValueKey('transaction-logbox-content-${record.id}')),
+                )
+                .decoration!
+            as BoxDecoration;
+    final avatarDecoration =
+        tester
+                .widget<Container>(
+                  find.byKey(
+                    ValueKey('transaction-logbox-avatar-surface-${record.id}'),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(rowDecoration.boxShadow, isNotNull);
+    expect(avatarDecoration.boxShadow, isNull);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(categoryTaps, 1);
   });
 
   testWidgets('transaction log rows do not build swipe overlays while idle', (

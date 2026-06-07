@@ -45,6 +45,25 @@ void main() {
     expect(decoration.boxShadow![1].blurRadius, 16);
   });
 
+  test('non-primary inset surfaces stay flat like CSS inset box-shadow', () {
+    final baseInset = ExpenseSurface.decoration(
+      style: ExpenseSurfaceInteraction.insetInset,
+      color: AppColors.gray200,
+      borderRadius: BorderRadius.circular(25),
+    );
+    final pressedInset = ExpenseSurface.decoration(
+      style: ExpenseSurfaceInteraction.neutralInset,
+      color: AppColors.gray200,
+      borderRadius: BorderRadius.circular(25),
+      pressed: true,
+    );
+
+    expect(baseInset.color, AppColors.gray200);
+    expect(baseInset.gradient, isNull);
+    expect(pressedInset.color, AppColors.gray200);
+    expect(pressedInset.gradient, isNull);
+  });
+
   test('press offsets match the HTML downward slide animation', () {
     expect(
       ExpenseSurface.pressOffset(
