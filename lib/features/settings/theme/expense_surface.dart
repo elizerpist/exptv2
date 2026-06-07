@@ -274,16 +274,12 @@ class ExpenseSurfaceContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final offset = ExpenseSurface.pressOffset(style: style, pressed: pressed);
-    final content = Stack(
-      fit: StackFit.passthrough,
-      children: [
-        Padding(padding: padding ?? EdgeInsets.zero, child: child),
-        if (ExpenseSurface.needsInnerOverlay(
-          style: style,
-          pressed: pressed,
-          primary: primary,
-        ))
-          Positioned.fill(
+    final innerShadowLayer = ExpenseSurface.needsInnerOverlay(
+      style: style,
+      pressed: pressed,
+      primary: primary,
+    )
+        ? Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
                 painter: _ExpenseSurfaceInnerPainter(
@@ -291,10 +287,17 @@ class ExpenseSurfaceContainer extends StatelessWidget {
                   pressed: pressed,
                   primary: primary,
                   primaryColor: primaryColor ?? color,
+                  borderRadius: borderRadius,
                 ),
               ),
             ),
-          ),
+          )
+        : null;
+    final content = Stack(
+      fit: StackFit.passthrough,
+      children: [
+        if (innerShadowLayer != null) innerShadowLayer,
+        Padding(padding: padding ?? EdgeInsets.zero, child: child),
       ],
     );
     final surface = Container(
@@ -336,12 +339,14 @@ class _ExpenseSurfaceInnerPainter extends CustomPainter {
     required this.pressed,
     required this.primary,
     required this.primaryColor,
+    required this.borderRadius,
   });
 
   final ExpenseSurfaceInteraction style;
   final bool pressed;
   final bool primary;
   final Color primaryColor;
+  final BorderRadius borderRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -355,52 +360,34 @@ class _ExpenseSurfaceInnerPainter extends CustomPainter {
         ? 0.42
         : 0.35;
     final lightAlpha = primary ? (pressed ? 0.38 : 0.42) : 0.92;
-    final edge = (primary ? 11.0 : 18.0)
-        .clamp(4.0, size.shortestSide / 2)
-        .toDouble();
     final darkColor = (primary ? primaryDark : AppColors.gray400).withValues(
       alpha: darkAlpha,
     );
     final lightColor = (primary ? primaryLight : Colors.white).withValues(
       alpha: lightAlpha,
     );
+    final strokeWidth = (primary ? 9.0 : pressed ? 13.0 : 11.0)
+        .clamp(3.0, size.shortestSide / 3)
+        .toDouble();
+    final blur = primary ? (pressed ? 6.0 : 4.0) : (pressed ? 8.0 : 6.0);
+    final shadowRRect = borderRadius.toRRect(rect.deflate(strokeWidth / 2));
 
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, edge),
+    canvas.save();
+    canvas.clipRRect(borderRadius.toRRect(rect));
+    canvas.drawRRect(
+      shadowRRect,
       Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur)
         ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [darkColor, Colors.transparent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [darkColor, Colors.transparent, lightColor],
+          stops: const [0, 0.54, 1],
         ).createShader(rect),
     );
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, edge, size.height),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [darkColor, Colors.transparent],
-        ).createShader(rect),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(0, size.height - edge, size.width, edge),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [lightColor, Colors.transparent],
-        ).createShader(rect),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(size.width - edge, 0, edge, size.height),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerRight,
-          end: Alignment.centerLeft,
-          colors: [lightColor, Colors.transparent],
-        ).createShader(rect),
-    );
+    canvas.restore();
   }
 
   @override
@@ -408,7 +395,8 @@ class _ExpenseSurfaceInnerPainter extends CustomPainter {
     return oldDelegate.style != style ||
         oldDelegate.pressed != pressed ||
         oldDelegate.primary != primary ||
-        oldDelegate.primaryColor != primaryColor;
+        oldDelegate.primaryColor != primaryColor ||
+        oldDelegate.borderRadius != borderRadius;
   }
 }
 

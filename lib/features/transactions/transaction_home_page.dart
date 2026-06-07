@@ -19,6 +19,7 @@ import 'widgets/header_card/category_budget_stage.dart';
 import 'widgets/header_card/budget_target_editor_sheet.dart';
 import 'widgets/header_card/fast_info_panel.dart';
 import 'widgets/header_card/header_fast_info_surface.dart';
+import 'widgets/header_card/magnet_strip.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/search_pill.dart';
@@ -526,6 +527,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
         totalIncome: widget.store.activePeriodIncomeTotal,
         totalExpense: widget.store.activePeriodExpenseTotal,
+        budgetProgress: _headerBudgetProgress(),
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
         drawSurface: drawSurface,
@@ -549,6 +551,18 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         .clamp(0.0, 1.0)
         .toDouble();
     return 1 - fadeProgress;
+  }
+
+  BudgetStripProgress? _headerBudgetProgress() {
+    for (final overview in widget.store.overviewBudgetItems) {
+      if (!overview.hasLimit || overview.limitAmount <= 0) continue;
+      return BudgetStripProgress(
+        hasLimit: true,
+        spent: overview.amount,
+        limitAmount: overview.limitAmount,
+      );
+    }
+    return null;
   }
 
   double _headerSlideVisualProgress() {

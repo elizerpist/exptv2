@@ -21,6 +21,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.totalIncome = 0,
     this.totalExpense = 0,
+    this.budgetProgress,
     this.fastInfoVisible = false,
     this.balanceHidden = false,
     this.drawSurface = true,
@@ -42,6 +43,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final double totalIncome;
   final double totalExpense;
+  final BudgetStripProgress? budgetProgress;
   final bool fastInfoVisible;
   final bool balanceHidden;
   final bool drawSurface;
@@ -143,6 +145,7 @@ class TransactionHeaderCard extends StatelessWidget {
                   totalExpense: totalExpense,
                   accent: accent,
                   height: TransactionHeaderMetrics.magnetHeight,
+                  budgetProgress: budgetProgress,
                 ),
               ),
             ),

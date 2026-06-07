@@ -4,6 +4,25 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
+import '../../data/limit_manager.dart';
+
+class BudgetStripProgress {
+  const BudgetStripProgress({
+    required this.hasLimit,
+    required this.spent,
+    required this.limitAmount,
+  });
+
+  final bool hasLimit;
+  final double spent;
+  final double limitAmount;
+
+  bool get visible => hasLimit && limitAmount > 0;
+  double get factor => visible
+      ? (spent / limitAmount).clamp(0.0, 1.0).toDouble()
+      : 0.0;
+  Color get fillColor => LimitManager.progressColor(spent, limitAmount);
+}
 
 class MagnetStrip extends StatelessWidget {
   static const defaultHeight = 157.5;
@@ -15,6 +34,7 @@ class MagnetStrip extends StatelessWidget {
     required this.totalExpense,
     this.height = defaultHeight,
     this.accent = AppColors.primary,
+    this.budgetProgress,
   });
 
   final MagnetType type;
@@ -22,6 +42,7 @@ class MagnetStrip extends StatelessWidget {
   final double totalExpense;
   final double height;
   final Color accent;
+  final BudgetStripProgress? budgetProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +51,13 @@ class MagnetStrip extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
+        if (type == MagnetType.budget) {
+          return _BudgetMagnetProgressStrip(
+            width: width,
+            height: height,
+            progress: budgetProgress,
+          );
+        }
         return CustomPaint(
           key: ValueKey('magnet-strip-${type.nativeValue}'),
           size: Size(width, height),
@@ -41,6 +69,66 @@ class MagnetStrip extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BudgetMagnetProgressStrip extends StatelessWidget {
+  const _BudgetMagnetProgressStrip({
+    required this.width,
+    required this.height,
+    required this.progress,
+  });
+
+  final double width;
+  final double height;
+  final BudgetStripProgress? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = progress;
+    if (resolved == null || !resolved.visible) {
+      return SizedBox(
+        key: const ValueKey('magnet-strip-budget'),
+        width: width,
+        height: height,
+      );
+    }
+    return SizedBox(
+      key: const ValueKey('magnet-strip-budget'),
+      width: width,
+      height: height,
+      child: Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: SizedBox(
+            key: const ValueKey('magnet-budget-progress-track'),
+            width: width,
+            height: 2,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                ),
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: resolved.factor,
+                  child: DecoratedBox(
+                    key: const ValueKey('magnet-budget-progress-fill'),
+                    decoration: BoxDecoration(
+                      color: resolved.fillColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
