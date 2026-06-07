@@ -59,13 +59,39 @@ class ExpenseRepository(context: Context) {
 
 
 
-    fun loadSettings(): Map<String, Any?> = settingsStore.loadSettings()
+    fun loadSettings(
+        biometricAvailable: Boolean = false,
+        biometricLabel: String = "Nem elerheto",
+    ): Map<String, Any?> = settingsStore.loadSettings(
+        biometricAvailable = biometricAvailable,
+        biometricLabel = biometricLabel,
+    )
 
     fun updateThemeSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updateThemeSettings(args)
 
     fun updateFastInfoConfig(args: Map<*, *>): Map<String, Any?> = settingsStore.updateFastInfoConfig(args)
 
     fun updatePushRecurringSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updatePushRecurringSettings(args)
+
+    fun setSecurityPin(pin: String): Map<String, Any?> = settingsStore.setSecurityPin(pin)
+
+    fun changeSecurityPin(currentPin: String, newPin: String): Map<String, Any?> =
+        settingsStore.changeSecurityPin(currentPin, newPin)
+
+    fun clearSecurityPin(currentPin: String): Map<String, Any?> = settingsStore.clearSecurityPin(currentPin)
+
+    fun verifySecurityPin(pin: String): Boolean = settingsStore.verifySecurityPin(pin)
+
+    fun loadSecuritySettings(
+        biometricAvailable: Boolean = false,
+        biometricLabel: String = "Nem elerheto",
+    ): Map<String, Any?> = settingsStore.loadSecuritySettings(
+        biometricAvailable = biometricAvailable,
+        biometricLabel = biometricLabel,
+    )
+
+    fun setBiometricEnabled(enabled: Boolean, biometricAvailable: Boolean): Map<String, Any?> =
+        settingsStore.setBiometricEnabled(enabled, biometricAvailable)
 
 
     suspend fun listNotificationCards(): List<Map<String, Any?>> {

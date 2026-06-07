@@ -16,7 +16,7 @@ import androidx.core.app.ActivityCompat
 import com.exptv2.app.expense.ExpenseMethodChannel
 import com.exptv2.app.expense.recurring.RecurringAlarmMethodChannel
 import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -37,7 +37,7 @@ class MainActivity : FlutterActivity() {
         val modeStore = CaptureModeStore(this)
         val statusReader = PermissionStatusReader(this)
         val parserRuleStore = NotificationParserRuleStore(this)
-        val expenseChannel = ExpenseMethodChannel(this, scope)
+        val expenseChannel = ExpenseMethodChannel(this, this, scope)
         val recurringAlarmScheduler = RecurringAlarmScheduler(this)
         RecurringAlarmMethodChannel(this, scope).attach(
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/recurring_alarm"),
