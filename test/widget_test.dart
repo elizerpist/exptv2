@@ -817,7 +817,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('slide-up-menu-veil')));
+    await tester.tapAt(const Offset(12, 12));
     await tester.pumpAndSettle();
 
     expect(

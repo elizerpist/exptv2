@@ -858,69 +858,74 @@ class _PushTrainingForm extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _RecurringParserPreview(rule: rule),
-            Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                key: const ValueKey('recurring-push-advanced'),
-                initiallyExpanded: advancedOpen,
-                tilePadding: EdgeInsets.zero,
-                onExpansionChanged: onAdvancedChanged,
-                title: const Text('Haladó push egyezés'),
-                childrenPadding: EdgeInsets.zero,
-                children: [
-                  DebugTextField(
-                    fieldKey: const ValueKey('recurring-rule-keyword'),
-                    debugLabel: 'RecurringRule.keyword',
-                    controller: keyword,
-                    decoration: transactionFieldDecoration('Kulcsszó'),
-                    onChanged: (_) => onChanged(),
-                  ),
-                  const SizedBox(height: 10),
-                  DebugTextField(
-                    fieldKey: const ValueKey('recurring-rule-amount-pattern'),
-                    debugLabel: 'RecurringRule.amountPattern',
-                    controller: amountPattern,
-                    decoration: transactionFieldDecoration('Összeg regex'),
-                    onChanged: (_) => onChanged(),
-                  ),
-                  const SizedBox(height: 10),
-                  DebugTextField(
-                    fieldKey: const ValueKey('recurring-rule-merchant-pattern'),
-                    debugLabel: 'RecurringRule.merchantPattern',
-                    controller: merchantPattern,
-                    decoration: transactionFieldDecoration('Bolt regex'),
-                    onChanged: (_) => onChanged(),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DebugTextField(
-                          debugLabel: 'RecurringRule.dateTolerance',
-                          controller: dateTolerance,
-                          keyboardType: TextInputType.number,
-                          decoration: transactionFieldDecoration('Nap szórás'),
+            Material(
+              color: Colors.transparent,
+              child: Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  key: const ValueKey('recurring-push-advanced'),
+                  initiallyExpanded: advancedOpen,
+                  tilePadding: EdgeInsets.zero,
+                  onExpansionChanged: onAdvancedChanged,
+                  title: const Text('Haladó push egyezés'),
+                  childrenPadding: EdgeInsets.zero,
+                  children: [
+                    DebugTextField(
+                      fieldKey: const ValueKey('recurring-rule-keyword'),
+                      debugLabel: 'RecurringRule.keyword',
+                      controller: keyword,
+                      decoration: transactionFieldDecoration('Kulcsszó'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                    const SizedBox(height: 10),
+                    DebugTextField(
+                      fieldKey: const ValueKey('recurring-rule-amount-pattern'),
+                      debugLabel: 'RecurringRule.amountPattern',
+                      controller: amountPattern,
+                      decoration: transactionFieldDecoration('Összeg regex'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                    const SizedBox(height: 10),
+                    DebugTextField(
+                      fieldKey: const ValueKey('recurring-rule-merchant-pattern'),
+                      debugLabel: 'RecurringRule.merchantPattern',
+                      controller: merchantPattern,
+                      decoration: transactionFieldDecoration('Bolt regex'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DebugTextField(
+                            debugLabel: 'RecurringRule.dateTolerance',
+                            controller: dateTolerance,
+                            keyboardType: TextInputType.number,
+                            decoration: transactionFieldDecoration('Nap szórás'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DebugTextField(
-                          debugLabel: 'RecurringRule.amountTolerancePercent',
-                          controller: amountTolerancePercent,
-                          keyboardType: TextInputType.number,
-                          decoration: transactionFieldDecoration('% szórás'),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DebugTextField(
+                            debugLabel: 'RecurringRule.amountTolerancePercent',
+                            controller: amountTolerancePercent,
+                            keyboardType: TextInputType.number,
+                            decoration: transactionFieldDecoration('% szórás'),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  DebugTextField(
-                    debugLabel: 'RecurringRule.amountToleranceMin',
-                    controller: amountToleranceMin,
-                    keyboardType: TextInputType.number,
-                    decoration: transactionFieldDecoration('Minimum Ft szórás'),
-                  ),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    DebugTextField(
+                      debugLabel: 'RecurringRule.amountToleranceMin',
+                      controller: amountToleranceMin,
+                      keyboardType: TextInputType.number,
+                      decoration: transactionFieldDecoration('Minimum Ft szórás'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
