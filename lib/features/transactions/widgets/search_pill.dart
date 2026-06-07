@@ -237,7 +237,7 @@ class _SearchPillState extends State<SearchPill> {
                         blurRadius: 3,
                       ),
                     ],
-                    child: child,
+                    child: child ?? const SizedBox.shrink(),
                   );
                 },
               );
