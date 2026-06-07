@@ -74,7 +74,7 @@ void main() {
 
   test('progressColor follows the original white orange red thresholds', () {
     expect(LimitManager.progressColor(79, 100), Colors.white);
-    expect(LimitManager.progressColor(80, 100), const Color(0xffff9800));
+    expect(LimitManager.progressColor(80, 100), const Color(0xffff8800));
     expect(LimitManager.progressColor(100, 100), const Color(0xffff4444));
   });
 }

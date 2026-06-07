@@ -380,6 +380,35 @@ void main() {
     );
   });
 
+  testWidgets('category budget bar renders React-style limit progress fill', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 120,
+            child: CategoryBudgetBar(
+              bar: barFixture(6, 'Food', 80, 100),
+              onTap: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final fill = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('category-progress-fill')),
+    );
+    final decoration = fill.decoration as BoxDecoration;
+    expect(decoration.color, const Color(0xffff8800));
+
+    final barRect = tester.getRect(find.byKey(const ValueKey('category-budget-bar')));
+    final fillRect = tester.getRect(find.byKey(const ValueKey('category-progress-fill')));
+    expect(fillRect.width, moreOrLessEquals(barRect.width * 0.8, epsilon: 0.5));
+  });
+
   testWidgets(
     'category bar foreground shrinks over full-width gray background',
     (tester) async {

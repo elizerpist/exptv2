@@ -271,6 +271,53 @@ void main() {
     expect(decoration.color, AppColors.gray200);
   });
 
+  testWidgets('search pill text wrapper uses the configured surface color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(
+          query: '',
+          onQueryChanged: (_) {},
+          filteredCount: 0,
+          surfaceColor: AppColors.gray200,
+          surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+        ),
+      ),
+    );
+
+    final wrapper = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-text-wrapper')),
+    );
+    final decoration = wrapper.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.gray200);
+  });
+
+  testWidgets('focused search pill stays in pressed inset state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(
+          query: '',
+          onQueryChanged: (_) {},
+          filteredCount: 0,
+          surfaceColor: AppColors.gray200,
+          surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.pump();
+
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-container')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.gradient, isNotNull);
+  });
+
   testWidgets('search pill shows merchant and category capsules with colors', (
     tester,
   ) async {
@@ -556,6 +603,30 @@ void main() {
       find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
     );
     expect(avatarSurface.decoration, isA<BoxDecoration>());
+  });
+
+  testWidgets('transaction avatar lets the 3D surface own its background', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: record,
+          category: category,
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          onCategoryFilter: (_) {},
+        ),
+      ),
+    );
+
+    final badge = tester.widget<CategoryIconBadge>(
+      find.byKey(ValueKey('transaction-logbox-avatar-icon-${record.id}')),
+    );
+    expect(badge.backgroundColor, Colors.transparent);
+    expect(badge.showShadow, isFalse);
   });
 
   testWidgets('transaction log rows do not build swipe overlays while idle', (
