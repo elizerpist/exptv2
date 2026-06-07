@@ -7,6 +7,7 @@ import '../features/settings/models/app_theme_settings.dart';
 import '../features/settings/models/fast_info_config.dart';
 import '../features/settings/models/notification_parser_rule.dart';
 import '../features/settings/models/recurring_transaction.dart';
+import '../features/settings/models/security_settings.dart';
 import '../features/transactions/models/category_limit.dart';
 import '../features/transactions/models/recurring_ghost_record.dart';
 import '../features/transactions/models/recurring_rule.dart';
@@ -21,11 +22,13 @@ class ExpenseSettingsPayload {
     required this.themeSettings,
     required this.fastInfoConfig,
     required this.pushRecurringSettings,
+    required this.securitySettings,
   });
 
   final AppThemeSettings themeSettings;
   final FastInfoConfig fastInfoConfig;
   final PushRecurringSettings pushRecurringSettings;
+  final SecuritySettings securitySettings;
 }
 
 class ExpenseBootstrapPayload {
@@ -310,6 +313,7 @@ class NativeBridge {
     final theme = payload['themeSettings'];
     final fastInfo = payload['fastInfoConfig'];
     final pushRecurring = payload['pushRecurringSettings'];
+    final security = payload['securitySettings'];
     return ExpenseSettingsPayload(
       themeSettings: theme is Map<dynamic, dynamic>
           ? AppThemeSettings.fromMap(theme)
@@ -320,6 +324,9 @@ class NativeBridge {
       pushRecurringSettings: pushRecurring is Map<dynamic, dynamic>
           ? PushRecurringSettings.fromMap(pushRecurring)
           : PushRecurringSettings.defaults(),
+      securitySettings: security is Map<dynamic, dynamic>
+          ? SecuritySettings.fromMap(security)
+          : SecuritySettings.defaults(),
     );
   }
 
@@ -354,6 +361,63 @@ class NativeBridge {
     return payload is Map<dynamic, dynamic>
         ? PushRecurringSettings.fromMap(payload)
         : PushRecurringSettings.fromMap(row ?? settings.toMap());
+  }
+
+  Future<SecuritySettings> expenseSetSecurityPin(String pin) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseSetSecurityPin',
+      {'pin': pin},
+    );
+    return SecuritySettings.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<SecuritySettings> expenseChangeSecurityPin({
+    required String currentPin,
+    required String newPin,
+  }) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseChangeSecurityPin',
+      {'currentPin': currentPin, 'newPin': newPin},
+    );
+    return SecuritySettings.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<SecuritySettings> expenseClearSecurityPin(String currentPin) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseClearSecurityPin',
+      {'currentPin': currentPin},
+    );
+    return SecuritySettings.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<bool> expenseVerifySecurityPin(String pin) async {
+    final verified = await _methodChannel.invokeMethod<bool>(
+      'expenseVerifySecurityPin',
+      {'pin': pin},
+    );
+    return verified ?? false;
+  }
+
+  Future<SecuritySettings> expenseSetBiometricEnabled(bool enabled) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseSetBiometricEnabled',
+      {'enabled': enabled},
+    );
+    return SecuritySettings.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<SecuritySettings> expenseGetBiometricAvailability() async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseGetBiometricAvailability',
+    );
+    return SecuritySettings.fromMap(row ?? <dynamic, dynamic>{});
+  }
+
+  Future<bool> expenseAuthenticateBiometric() async {
+    final authenticated = await _methodChannel.invokeMethod<bool>(
+      'expenseAuthenticateBiometric',
+    );
+    return authenticated ?? false;
   }
 
   Future<List<RecurringTransaction>> expenseListRecurringTransactions() async {
