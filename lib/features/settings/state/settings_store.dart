@@ -4,6 +4,7 @@ import '../../transactions/models/transaction_category.dart';
 import '../data/settings_repository.dart';
 import '../models/app_theme_settings.dart';
 import '../models/fast_info_config.dart';
+import '../models/security_settings.dart';
 
 class SettingsStore extends ChangeNotifier {
   SettingsStore(this._repository);
@@ -13,12 +14,14 @@ class SettingsStore extends ChangeNotifier {
   String? _error;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
+  SecuritySettings _securitySettings = SecuritySettings.defaults();
   List<TransactionCategory> _categories = [];
 
   bool get loading => _loading;
   String? get error => _error;
   AppThemeSettings get themeSettings => _themeSettings;
   FastInfoConfig get fastInfoConfig => _fastInfoConfig;
+  SecuritySettings get securitySettings => _securitySettings;
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionCategory> get expenseCategories =>
       categoriesFor(TransactionType.expense);
@@ -36,6 +39,7 @@ class SettingsStore extends ChangeNotifier {
       final payload = await _repository.loadBootstrap();
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
+      _securitySettings = payload.securitySettings;
       _categories = payload.categories;
     } catch (error) {
       _error = error.toString();
@@ -52,6 +56,41 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> updateFastInfoConfig(FastInfoConfig config) async {
     _fastInfoConfig = await _repository.updateFastInfoConfig(config);
+    notifyListeners();
+  }
+
+  Future<void> setSecurityPin(String pin) async {
+    _securitySettings = await _repository.setSecurityPin(pin);
+    notifyListeners();
+  }
+
+  Future<void> changeSecurityPin({
+    required String currentPin,
+    required String newPin,
+  }) async {
+    _securitySettings = await _repository.changeSecurityPin(
+      currentPin: currentPin,
+      newPin: newPin,
+    );
+    notifyListeners();
+  }
+
+  Future<void> clearSecurityPin(String currentPin) async {
+    _securitySettings = await _repository.clearSecurityPin(currentPin);
+    notifyListeners();
+  }
+
+  Future<bool> verifySecurityPin(String pin) {
+    return _repository.verifySecurityPin(pin);
+  }
+
+  Future<void> setBiometricEnabled(bool enabled) async {
+    _securitySettings = await _repository.setBiometricEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> refreshBiometricAvailability() async {
+    _securitySettings = await _repository.loadBiometricAvailability();
     notifyListeners();
   }
 }
