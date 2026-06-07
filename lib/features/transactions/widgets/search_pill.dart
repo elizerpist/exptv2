@@ -205,17 +205,16 @@ class _SearchPillState extends State<SearchPill> {
     return TextFieldTapRegion(
       child: Material(
         color: Colors.transparent,
-        child: GestureDetector(
+        child: Listener(
           behavior: HitTestBehavior.translucent,
-          onTap: _requestFocus,
+          onPointerDown: (_) => _requestFocus(),
           child: ValueListenableBuilder<bool>(
             valueListenable: _focused,
             child: content,
             builder: (context, focused, child) {
               return ExpensePressable(
                 enabled: widget.surfaceStyle.hasPressEffect,
-                forcePressed:
-                    focused && widget.surfaceStyle.hasPressEffect,
+                forcePressed: focused && widget.surfaceStyle.hasPressEffect,
                 builder: (context, pressed) {
                   return ExpenseSurfaceContainer(
                     surfaceKey: const ValueKey('search-pill-container'),
