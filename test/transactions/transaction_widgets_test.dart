@@ -597,9 +597,9 @@ void main() {
     );
     final rowDecoration = rowContainer.decoration! as BoxDecoration;
     expect(rowDecoration.color, AppColors.gray200);
-    expect(rowDecoration.boxShadow, isNotNull);
+    expect(rowDecoration.gradient, isNotNull);
 
-    final avatarSurface = tester.widget<DecoratedBox>(
+    final avatarSurface = tester.widget<Container>(
       find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
     );
     expect(avatarSurface.decoration, isA<BoxDecoration>());

@@ -12,5 +12,5 @@ class TransactionMenuMetrics {
       typePillTopPadding +
       typePillMinHeight +
       typePillBottomPadding;
-  static const overlayTop = summaryPillTop;
+  static const overlayTop = summaryPillTop + 2;
 }

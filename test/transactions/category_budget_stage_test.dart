@@ -50,7 +50,7 @@ void main() {
 
     expect(find.text('Food'), findsOneWidget);
     expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
-    expect(find.byKey(const ValueKey('category-progress-fill')), findsNothing);
+    expect(find.byKey(const ValueKey('category-progress-fill')), findsOneWidget);
     expect(find.byKey(const ValueKey('category-budget-dot-0')), findsOneWidget);
 
     await tester.drag(
@@ -60,6 +60,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Travel'), findsOneWidget);
     expect(find.text('40 Ft'), findsOneWidget);
+    expect(find.byKey(const ValueKey('category-progress-fill')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     expect(tapped?.category?.title, 'Travel');
