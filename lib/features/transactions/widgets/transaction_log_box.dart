@@ -58,6 +58,8 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   bool _triggered = false;
   bool _deletePending = false;
   bool _deleteFrozen = false;
+  bool _bodyPressed = false;
+  Timer? _bodyReleaseTimer;
 
   bool get _hasCustomName =>
       widget.record.userAssignedName?.trim().isNotEmpty ?? false;
@@ -72,6 +74,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
 
   @override
   void dispose() {
+    _bodyReleaseTimer?.cancel();
     _swipeVisual.dispose();
     super.dispose();
   }
@@ -149,6 +152,35 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     await widget.onResetMerchantName?.call(widget.record);
   }
 
+  void _setBodyPressed(bool pressed) {
+    if (_bodyPressed == pressed || !mounted) return;
+    setState(() => _bodyPressed = pressed);
+  }
+
+  void _pressBody() {
+    if (!widget.surfaceStyle.hasPressEffect) return;
+    _bodyReleaseTimer?.cancel();
+    _setBodyPressed(true);
+  }
+
+  void _releaseBodySoon() {
+    if (!widget.surfaceStyle.hasPressEffect) return;
+    _bodyReleaseTimer?.cancel();
+    _bodyReleaseTimer = Timer(const Duration(milliseconds: 120), () {
+      _setBodyPressed(false);
+    });
+  }
+
+  Widget _bodyPressRegion(Widget child) {
+    if (!widget.surfaceStyle.hasPressEffect) return child;
+    return Listener(
+      onPointerDown: (_) => _pressBody(),
+      onPointerUp: (_) => _releaseBodySoon(),
+      onPointerCancel: (_) => _releaseBodySoon(),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final amountColor = widget.record.type == TransactionType.income
@@ -182,106 +214,99 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ExpensePressable(
-                      enabled: widget.surfaceStyle.hasPressEffect,
-                      builder: (context, pressed) {
-                        return ExpenseSurfaceContainer(
-                          surfaceKey: ValueKey(
-                            'transaction-logbox-content-${widget.record.id}',
-                          ),
-                          style: widget.surfaceStyle,
-                          color: widget.surfaceColor,
-                          borderRadius: BorderRadius.circular(25),
-                          pressed: pressed,
-                          constraints: const BoxConstraints(minHeight: 70),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          neutralBorder: Border.all(
-                            color: AppColors.gray200,
-                          ),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                key: ValueKey(
-                                  'transaction-logbox-avatar-${widget.record.id}',
-                                ),
-                                behavior: HitTestBehavior.opaque,
-                                onTap:
-                                    widget.category == null ||
-                                        widget.onCategoryFilter == null
-                                    ? null
-                                    : () => widget.onCategoryFilter!(
-                                        widget.category!,
-                                      ),
-                                child: ExpensePressable(
-                                  enabled:
-                                      widget
-                                          .avatarSurfaceStyle
-                                          .hasPressEffect &&
-                                      widget.category != null &&
-                                      widget.onCategoryFilter != null,
-                                  builder: (context, avatarPressed) {
-                                    final avatarColor =
-                                        widget.category?.slotColor ??
-                                        AppColors.gray500;
-                                    return ExpenseSurfaceContainer(
-                                      surfaceKey: ValueKey(
-                                        'transaction-logbox-avatar-surface-${widget.record.id}',
-                                      ),
-                                      style: widget.avatarSurfaceStyle,
-                                      color: avatarColor,
-                                      primaryColor: avatarColor,
-                                      primary: true,
-                                      borderRadius: BorderRadius.circular(23),
-                                      pressed: avatarPressed,
-                                      width: 46,
-                                      height: 46,
-                                      child: CategoryIconBadge(
-                                        key: ValueKey(
-                                          'transaction-logbox-avatar-icon-${widget.record.id}',
-                                        ),
-                                        category: widget.category,
-                                        backgroundColor: Colors.transparent,
-                                        size: 46,
-                                        iconSize: 28,
-                                        showShadow: false,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(child: _nameBlock()),
-                              const SizedBox(width: 12),
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    widget.record.displayAmount,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: amountColor,
-                                    ),
+                    ExpenseSurfaceContainer(
+                      surfaceKey: ValueKey(
+                        'transaction-logbox-content-${widget.record.id}',
+                      ),
+                      style: widget.surfaceStyle,
+                      color: widget.surfaceColor,
+                      borderRadius: BorderRadius.circular(25),
+                      pressed: _bodyPressed,
+                      constraints: const BoxConstraints(minHeight: 70),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      neutralBorder: Border.all(color: AppColors.gray200),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            key: ValueKey(
+                              'transaction-logbox-avatar-${widget.record.id}',
+                            ),
+                            behavior: HitTestBehavior.opaque,
+                            onTap:
+                                widget.category == null ||
+                                    widget.onCategoryFilter == null
+                                ? null
+                                : () => widget.onCategoryFilter!(
+                                    widget.category!,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    widget.record.displayTime,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.gray500,
-                                    ),
+                            child: ExpensePressable(
+                              enabled:
+                                  widget.avatarSurfaceStyle.hasPressEffect &&
+                                  widget.category != null &&
+                                  widget.onCategoryFilter != null,
+                              builder: (context, avatarPressed) {
+                                final avatarColor =
+                                    widget.category?.slotColor ??
+                                    AppColors.gray500;
+                                return ExpenseSurfaceContainer(
+                                  surfaceKey: ValueKey(
+                                    'transaction-logbox-avatar-surface-${widget.record.id}',
                                   ),
-                                ],
-                              ),
-                            ],
+                                  style: widget.avatarSurfaceStyle,
+                                  color: avatarColor,
+                                  primaryColor: avatarColor,
+                                  primary: true,
+                                  borderRadius: BorderRadius.circular(23),
+                                  pressed: avatarPressed,
+                                  width: 46,
+                                  height: 46,
+                                  child: CategoryIconBadge(
+                                    key: ValueKey(
+                                      'transaction-logbox-avatar-icon-${widget.record.id}',
+                                    ),
+                                    category: widget.category,
+                                    backgroundColor: Colors.transparent,
+                                    size: 46,
+                                    iconSize: 28,
+                                    showShadow: false,
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                        );
-                      },
+                          const SizedBox(width: 12),
+                          Expanded(child: _bodyPressRegion(_nameBlock())),
+                          const SizedBox(width: 12),
+                          _bodyPressRegion(
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  widget.record.displayAmount,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: amountColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.record.displayTime,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.gray500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     if (visual.deleteOpacity > 0)
                       _SwipeBorder(

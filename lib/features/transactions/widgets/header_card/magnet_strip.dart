@@ -58,12 +58,30 @@ class MagnetStripPainter extends CustomPainter {
   final double totalExpense;
   final Color accent;
 
+  static double incomeRatio(double totalIncome, double totalExpense) {
+    final total = totalIncome.abs() + totalExpense.abs();
+    if (total <= 0) return 0.5;
+    return (totalIncome.abs() / total).clamp(0.05, 0.95).toDouble();
+  }
+
+  static List<Color> gradientColorsFor(MagnetType type) {
+    return switch (type) {
+      MagnetType.nofade => const [
+        AppColors.income,
+        AppColors.income,
+        AppColors.expense,
+        AppColors.expense,
+      ],
+      MagnetType.budget => const [AppColors.expense, AppColors.income],
+      MagnetType.magnetcard => const [AppColors.gray500, AppColors.gray500],
+      MagnetType.adaptive => const [AppColors.income, AppColors.income],
+      MagnetType.fade => const [AppColors.income, AppColors.expense],
+    };
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final total = totalIncome.abs() + totalExpense.abs();
-    final ratio = total <= 0
-        ? 0.5
-        : (totalIncome.abs() / total).clamp(0.05, 0.95).toDouble();
+    final ratio = incomeRatio(totalIncome, totalExpense);
     final centerY = size.height / 2;
     final trackHeight = math.max(2.0, size.height * 6 / 35);
     final rect = Rect.fromLTWH(
@@ -89,7 +107,7 @@ class MagnetStripPainter extends CustomPainter {
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(pillRect, const Radius.circular(2)),
-        Paint()..color = accent.withValues(alpha: 0.85),
+        Paint()..color = AppColors.income.withValues(alpha: 0.85),
       );
       return;
     }
@@ -98,8 +116,8 @@ class MagnetStripPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(2)),
         Paint()
-          ..shader = const LinearGradient(
-            colors: [Color(0xFF16A34A), Color(0xFFDC2626)],
+          ..shader = LinearGradient(
+            colors: gradientColorsFor(type),
           ).createShader(rect),
       );
       return;
@@ -112,14 +130,14 @@ class MagnetStripPainter extends CustomPainter {
           Rect.fromLTRB(rect.left, rect.top, split, rect.bottom),
           const Radius.circular(2),
         ),
-        Paint()..color = const Color(0x4D2C2C2C),
+        Paint()..color = AppColors.income,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTRB(split, rect.top, rect.right, rect.bottom),
           const Radius.circular(2),
         ),
-        Paint()..color = const Color(0x0D2C2C2C),
+        Paint()..color = AppColors.expense,
       );
       return;
     }
@@ -127,8 +145,8 @@ class MagnetStripPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(2)),
       Paint()
-        ..shader = const LinearGradient(
-          colors: [Color(0x4D2C2C2C), Color(0x0D2C2C2C)],
+        ..shader = LinearGradient(
+          colors: gradientColorsFor(type),
         ).createShader(rect),
     );
   }

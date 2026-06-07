@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -93,13 +95,11 @@ class ExpenseSurface {
       ),
       _SurfaceDepth.inset => BoxDecoration(
         color: color,
-        gradient: _insetGradient(color),
         borderRadius: borderRadius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.62)),
       ),
       _SurfaceDepth.deepInset => BoxDecoration(
         color: color,
-        gradient: _deepInsetGradient(color),
         borderRadius: borderRadius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.56)),
       ),
@@ -137,6 +137,7 @@ class ExpenseSurface {
       );
     }
     final raised = depth == _SurfaceDepth.raised;
+    final inset = depth == _SurfaceDepth.inset;
     final light = _accentLight(color);
     final dark = _accentDark(color);
     return BoxDecoration(
@@ -150,6 +151,7 @@ class ExpenseSurface {
                 color,
                 dark,
               ],
+              stops: const [0, 0.46, 1],
             )
           : LinearGradient(
               begin: Alignment.topLeft,
@@ -159,6 +161,7 @@ class ExpenseSurface {
                 color,
                 light,
               ],
+              stops: inset ? const [0, 0.52, 1] : const [0, 0.5, 1],
             ),
       borderRadius: borderRadius,
       border: null,
@@ -175,7 +178,8 @@ class ExpenseSurface {
                 blurRadius: 16,
               ),
             ]
-          : style == ExpenseSurfaceInteraction.neutralInset && pressed
+          : pressed &&
+                style != ExpenseSurfaceInteraction.insetInset
           ? const <BoxShadow>[
               BoxShadow(
                 color: Color(0x2406B6D4),
@@ -203,30 +207,6 @@ class ExpenseSurface {
           ? _SurfaceDepth.inset
           : _SurfaceDepth.raised,
     };
-  }
-
-  static LinearGradient _insetGradient(Color color) {
-    return LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: <Color>[
-        Color.lerp(color, AppColors.gray400, 0.16)!,
-        color,
-        Color.lerp(color, Colors.white, 0.34)!,
-      ],
-    );
-  }
-
-  static LinearGradient _deepInsetGradient(Color color) {
-    return LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: <Color>[
-        Color.lerp(color, AppColors.gray500, 0.22)!,
-        Color.lerp(color, AppColors.gray400, 0.08)!,
-        Color.lerp(color, Colors.white, 0.28)!,
-      ],
-    );
   }
 
   static bool needsInnerOverlay({
@@ -270,6 +250,7 @@ class ExpenseSurfaceContainer extends StatelessWidget {
     this.width,
     this.height,
     this.animatePress = true,
+    this.clipContent = true,
   });
 
   final Key? surfaceKey;
@@ -288,10 +269,34 @@ class ExpenseSurfaceContainer extends StatelessWidget {
   final double? width;
   final double? height;
   final bool animatePress;
+  final bool clipContent;
 
   @override
   Widget build(BuildContext context) {
     final offset = ExpenseSurface.pressOffset(style: style, pressed: pressed);
+    final content = Stack(
+      fit: StackFit.passthrough,
+      children: [
+        Padding(padding: padding ?? EdgeInsets.zero, child: child),
+        if (ExpenseSurface.needsInnerOverlay(
+          style: style,
+          pressed: pressed,
+          primary: primary,
+        ))
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _ExpenseSurfaceInnerPainter(
+                  style: style,
+                  pressed: pressed,
+                  primary: primary,
+                  primaryColor: primaryColor ?? color,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
     final surface = Container(
       key: surfaceKey,
       margin: margin,
@@ -308,32 +313,9 @@ class ExpenseSurfaceContainer extends StatelessWidget {
         neutralBorder: neutralBorder,
         neutralShadow: neutralShadow,
       ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            Padding(padding: padding ?? EdgeInsets.zero, child: child),
-            if (ExpenseSurface.needsInnerOverlay(
-              style: style,
-              pressed: pressed,
-              primary: primary,
-            ))
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _ExpenseSurfaceInnerPainter(
-                      style: style,
-                      pressed: pressed,
-                      primary: primary,
-                      primaryColor: primaryColor ?? color,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
+      child: clipContent
+          ? ClipRRect(borderRadius: borderRadius, child: content)
+          : content,
     );
     if (!animatePress) return Transform.translate(offset: offset, child: surface);
     return TweenAnimationBuilder<Offset>(
@@ -372,50 +354,53 @@ class _ExpenseSurfaceInnerPainter extends CustomPainter {
         : style == ExpenseSurfaceInteraction.insetInset && pressed
         ? 0.42
         : 0.35;
-    final lightAlpha = primary ? 0.38 : 0.92;
+    final lightAlpha = primary ? (pressed ? 0.38 : 0.42) : 0.92;
+    final edge = (primary ? 11.0 : 18.0)
+        .clamp(4.0, size.shortestSide / 2)
+        .toDouble();
+    final darkColor = (primary ? primaryDark : AppColors.gray400).withValues(
+      alpha: darkAlpha,
+    );
+    final lightColor = (primary ? primaryLight : Colors.white).withValues(
+      alpha: lightAlpha,
+    );
 
     canvas.drawRect(
-      rect,
+      Rect.fromLTWH(0, 0, size.width, edge),
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.center,
-          colors: [
-            (primary ? primaryDark : AppColors.gray400).withValues(
-              alpha: darkAlpha,
-            ),
-            Colors.transparent,
-          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [darkColor, Colors.transparent],
         ).createShader(rect),
     );
     canvas.drawRect(
-      rect,
+      Rect.fromLTWH(0, 0, edge, size.height),
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.bottomRight,
-          end: Alignment.center,
-          colors: [
-            (primary ? primaryLight : Colors.white).withValues(
-              alpha: lightAlpha,
-            ),
-            Colors.transparent,
-          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [darkColor, Colors.transparent],
         ).createShader(rect),
     );
-    if (primary && !pressed) {
-      canvas.drawRect(
-        rect,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.center,
-            colors: [
-              Colors.white.withValues(alpha: 0.42),
-              Colors.transparent,
-            ],
-          ).createShader(rect),
-      );
-    }
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height - edge, size.width, edge),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [lightColor, Colors.transparent],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(size.width - edge, 0, edge, size.height),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [lightColor, Colors.transparent],
+        ).createShader(rect),
+    );
   }
 
   @override
@@ -445,15 +430,25 @@ class ExpensePressable extends StatefulWidget {
 
 class _ExpensePressableState extends State<ExpensePressable> {
   var _pressed = false;
+  Timer? _releaseTimer;
+
+  @override
+  void dispose() {
+    _releaseTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final effectivePressed = widget.forcePressed || _pressed;
     if (!widget.enabled) return widget.builder(context, effectivePressed);
     return Listener(
-      onPointerDown: (_) => _setPressed(true),
-      onPointerUp: (_) => _setPressed(false),
-      onPointerCancel: (_) => _setPressed(false),
+      onPointerDown: (_) {
+        _releaseTimer?.cancel();
+        _setPressed(true);
+      },
+      onPointerUp: (_) => _releasePressedSoon(),
+      onPointerCancel: (_) => _releasePressedSoon(),
       child: widget.builder(context, effectivePressed),
     );
   }
@@ -461,6 +456,13 @@ class _ExpensePressableState extends State<ExpensePressable> {
   void _setPressed(bool value) {
     if (_pressed == value || !mounted) return;
     setState(() => _pressed = value);
+  }
+
+  void _releasePressedSoon() {
+    _releaseTimer?.cancel();
+    _releaseTimer = Timer(const Duration(milliseconds: 120), () {
+      _setPressed(false);
+    });
   }
 }
 

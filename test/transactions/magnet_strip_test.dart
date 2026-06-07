@@ -1,3 +1,4 @@
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:flutter/material.dart';
@@ -63,5 +64,22 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('magnet-strip-adaptive')), findsOneWidget);
+  });
+
+  test('magnet strip uses app income expense ratio math', () {
+    expect(MagnetStripPainter.incomeRatio(80, -20), 0.8);
+    expect(MagnetStripPainter.incomeRatio(0, -20), 0.05);
+    expect(MagnetStripPainter.incomeRatio(20, 0), 0.95);
+  });
+
+  test('magnet strip fade uses income and expense colors', () {
+    expect(
+      MagnetStripPainter.gradientColorsFor(MagnetType.fade),
+      [AppColors.income, AppColors.expense],
+    );
+    expect(
+      MagnetStripPainter.gradientColorsFor(MagnetType.nofade),
+      [AppColors.income, AppColors.income, AppColors.expense, AppColors.expense],
+    );
   });
 }

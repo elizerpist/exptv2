@@ -38,6 +38,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
           bottom: Radius.circular(24),
         ),
         animatePress: false,
+        clipContent: false,
         neutralShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.15),

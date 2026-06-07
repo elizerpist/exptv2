@@ -187,6 +187,8 @@ class _SearchPillState extends State<SearchPill> {
                 disabledBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
+                filled: true,
+                fillColor: widget.surfaceColor,
                 contentPadding: EdgeInsets.zero,
                 hintText: hasFilters
                     ? '${widget.filteredCount} tranzakció találva'

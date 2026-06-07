@@ -291,6 +291,9 @@ void main() {
     );
     final decoration = wrapper.decoration! as BoxDecoration;
     expect(decoration.color, AppColors.gray200);
+    final textField = tester.widget<TextField>(find.byType(TextField));
+    expect(textField.decoration?.filled, isTrue);
+    expect(textField.decoration?.fillColor, AppColors.gray200);
   });
 
   testWidgets('focused search pill stays in pressed inset state', (
@@ -309,13 +312,20 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('search-pill-container')));
-    await tester.pump();
+    await tester.pump(ExpenseSurface.pressDuration);
 
-    final container = tester.widget<Container>(
-      find.byKey(const ValueKey('search-pill-container')),
-    );
-    final decoration = container.decoration! as BoxDecoration;
-    expect(decoration.gradient, isNotNull);
+    Iterable<double> transformYs() => tester
+        .widgetList<Transform>(
+          find.ancestor(
+            of: find.byKey(const ValueKey('search-pill-container')),
+            matching: find.byType(Transform),
+          ),
+        )
+        .map((transform) => transform.transform.getTranslation().y);
+    expect(transformYs(), contains(moreOrLessEquals(2, epsilon: 0.01)));
+
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(transformYs(), contains(moreOrLessEquals(2, epsilon: 0.01)));
   });
 
   testWidgets('search pill shows merchant and category capsules with colors', (
@@ -672,7 +682,8 @@ void main() {
                 .decoration!
             as BoxDecoration;
     expect(rowDecoration.boxShadow, isNotNull);
-    expect(avatarDecoration.boxShadow, isNull);
+    expect(avatarDecoration.gradient, isNotNull);
+    expect(avatarDecoration.boxShadow, isNotNull);
 
     await gesture.up();
     await tester.pumpAndSettle();

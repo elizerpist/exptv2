@@ -147,6 +147,8 @@ class TransactionStore extends ChangeNotifier {
 
   double get activePeriodIncomeTotal => _periodTotal(TransactionType.income);
 
+  double get activePeriodExpenseTotal => _periodTotal(TransactionType.expense);
+
   double get totalIncomeAmount {
     final cached = _totalIncomeCache;
     if (cached != null) return cached;

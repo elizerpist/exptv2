@@ -88,6 +88,7 @@ class TransactionHeaderCard extends StatelessWidget {
                     bottom: Radius.circular(24),
                   ),
                   animatePress: false,
+                  clipContent: false,
                   neutralShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.15),
@@ -273,6 +274,7 @@ class TransactionHeaderCard extends StatelessWidget {
                         primary: true,
                         width: 30,
                         height: 30,
+                        clipContent: false,
                         neutralShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.2),
@@ -336,6 +338,7 @@ class _HeaderCategoryButton extends StatelessWidget {
           primary: true,
           width: 48,
           height: 48,
+          clipContent: false,
           neutralShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.3),
