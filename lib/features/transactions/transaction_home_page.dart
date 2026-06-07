@@ -46,6 +46,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onBudgetTargetEditorRequested,
     this.onBudgetTargetEditorClosed,
     this.onFocusedSheetDismissRequested,
+    this.onAddCategoryEditorRequested,
     this.budgetEditorActiveKey,
   });
 
@@ -59,6 +60,7 @@ class TransactionHomePage extends StatefulWidget {
   final BudgetTargetEditorRequest? onBudgetTargetEditorRequested;
   final VoidCallback? onBudgetTargetEditorClosed;
   final VoidCallback? onFocusedSheetDismissRequested;
+  final VoidCallback? onAddCategoryEditorRequested;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -743,11 +745,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openAddCategory() {
+    final externalEditor = widget.onAddCategoryEditorRequested;
     setState(() {
-      _categoryMode = null;
-      _categoryEditorOpen = true;
+      _categoryMode = CategoryOverlayMode.picker;
+      _categoryEditorOpen = externalEditor == null;
       _editingCategory = null;
+      _budgetEditorItem = null;
     });
+    externalEditor?.call();
   }
 
   void _openModifyCategory(TransactionCategory category) {

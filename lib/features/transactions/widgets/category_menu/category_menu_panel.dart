@@ -33,62 +33,65 @@ class CategoryMenuPanel extends StatelessWidget {
     final filtered = categories
         .where((category) => category.normalizedType == activeType)
         .toList();
-    return Column(
+    return Stack(
       children: [
-        SizedBox(
-          height: 54,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              const Text(
-                'Válassz kategóriát',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.gray800,
-                ),
-              ),
-              Positioned(
-                right: 14,
-                child: IconButton(
-                  key: const ValueKey('category-menu-add-button'),
-                  tooltip: 'Új kategória',
-                  onPressed: onAdd,
-                  icon: const Icon(
-                    Icons.add_rounded,
-                    color: AppColors.primary,
+        Column(
+          children: [
+            const SizedBox(
+              height: 54,
+              child: Center(
+                child: Text(
+                  'Válassz kategóriát',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.gray800,
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 15,
-              crossAxisSpacing: 14,
-              mainAxisExtent: 150,
             ),
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final category = filtered[index];
-              final count =
-                  categoryTransactionCounts[category.transactionCategoryID] ??
-                  0;
-              return CategoryCard(
-                category: category,
-                transactionCount: count,
-                active:
-                    activeCategory?.transactionCategoryID ==
-                    category.transactionCategoryID,
-                onSelect: onSelect,
-                onModify: onModify,
-                onDelete: onDelete,
-              );
-            },
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 15,
+                  crossAxisSpacing: 14,
+                  mainAxisExtent: 150,
+                ),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final category = filtered[index];
+                  final count =
+                      categoryTransactionCounts[category.transactionCategoryID] ??
+                      0;
+                  return CategoryCard(
+                    category: category,
+                    transactionCount: count,
+                    active:
+                        activeCategory?.transactionCategoryID ==
+                        category.transactionCategoryID,
+                    onSelect: onSelect,
+                    onModify: onModify,
+                    onDelete: onDelete,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        Positioned(
+          top: 8,
+          right: 16,
+          child: FloatingActionButton.small(
+            key: const ValueKey('category-menu-add-button'),
+            heroTag: null,
+            tooltip: 'Új kategória',
+            onPressed: onAdd,
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.white,
+            elevation: 3,
+            child: const Icon(Icons.add_rounded),
           ),
         ),
       ],

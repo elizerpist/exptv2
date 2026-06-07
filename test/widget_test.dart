@@ -1,4 +1,5 @@
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
@@ -328,6 +329,83 @@ void main() {
     );
     expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+  });
+
+  testWidgets('recurring push training taps stay inside the manager', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('recurring-trigger-push')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('recurring-rule-sample')),
+      'Kartyas vasarlas: Tesco - 12 345 Ft',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('recurring-training-merchant')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('recurring-training-merchant')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('recurring-manager-card')), findsOneWidget);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('recurring-training-token-Tesco')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('recurring-training-token-Tesco')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('recurring-manager-card')), findsOneWidget);
+    expect(find.text('Tesco'), findsWidgets);
+
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('recurring-manager-card')), findsNothing);
+  });
+
+  testWidgets('recurring trigger pills use the same active primary color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    Color triggerBorderColor(String key) {
+      final container = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(AnimatedContainer),
+        ),
+      );
+      final decoration = container.decoration! as BoxDecoration;
+      return (decoration.border! as Border).top.color;
+    }
+
+    expect(triggerBorderColor('recurring-trigger-date'), AppColors.primary);
+
+    await tester.tap(find.byKey(const ValueKey('recurring-trigger-push')));
+    await tester.pumpAndSettle();
+
+    expect(triggerBorderColor('recurring-trigger-push'), AppColors.primary);
   });
 
   testWidgets('FAB repeated taps keep opening the transaction sheet', (
@@ -695,6 +773,58 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('category-menu-add-button')), findsOneWidget);
+  });
+
+  testWidgets('add category sheet keeps the picker behind and covers nav', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    final overlayRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-overlay')),
+    );
+    final addButtonRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-add-button')),
+    );
+    expect(addButtonRect.right, greaterThan(overlayRect.right - 56));
+
+    await tester.tap(find.byKey(const ValueKey('category-menu-add-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-editor-slide-card')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Stats'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('stats-page')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('category-editor-slide-card')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('slide-up-menu-veil')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('category-editor-slide-card')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
   });
 
   testWidgets('transaction editor is focused and aligned to summary pill', (

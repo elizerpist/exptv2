@@ -16,7 +16,6 @@ import 'category_scroll_picker.dart';
 import 'category_selector_field.dart';
 import 'slide_up_menu_card.dart';
 import 'slide_up_panel_metrics.dart';
-import 'transaction_menu_metrics.dart';
 
 enum _TrainingMode { amount, merchant }
 
@@ -121,7 +120,6 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
           openRequestedAt: widget.openRequestedAt,
           deferEntryAnimation: true,
           dismissThreshold: 150,
-          focusVeilPassthroughTop: TransactionMenuMetrics.overlayTop,
           canDragFrom: _canDragFrom,
           onDismissed: widget.onClose,
           child: SafeArea(
@@ -644,9 +642,7 @@ class _TriggerChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = triggerType == RecurringTriggerType.date
-        ? AppColors.primary
-        : const Color(0xFF0F766E);
+    const color = AppColors.primary;
     return InkWell(
       key: ValueKey('recurring-trigger-${triggerType.nativeValue}'),
       borderRadius: BorderRadius.circular(999),
