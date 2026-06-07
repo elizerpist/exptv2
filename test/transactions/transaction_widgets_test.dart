@@ -314,18 +314,29 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('search-pill-container')));
     await tester.pump(ExpenseSurface.pressDuration);
 
-    Iterable<double> transformYs() => tester
-        .widgetList<Transform>(
-          find.ancestor(
-            of: find.byKey(const ValueKey('search-pill-container')),
-            matching: find.byType(Transform),
-          ),
-        )
-        .map((transform) => transform.transform.getTranslation().y);
-    expect(transformYs(), contains(moreOrLessEquals(2, epsilon: 0.01)));
+    BoxDecoration surfaceDecoration() =>
+        tester
+                .widget<Container>(
+                  find.byKey(const ValueKey('search-pill-container')),
+                )
+                .decoration!
+            as BoxDecoration;
+    final textField = tester.widget<TextField>(find.byType(TextField));
+    var decoration = surfaceDecoration();
+    var border = decoration.border! as Border;
+    expect(textField.focusNode?.hasFocus, isTrue);
+    expect(decoration.color, AppColors.gray200);
+    expect(decoration.gradient, isNull);
+    expect(decoration.boxShadow, isNull);
+    expect(border.top.color, Colors.white.withValues(alpha: 0.62));
 
     await tester.pump(const Duration(milliseconds: 800));
-    expect(transformYs(), contains(moreOrLessEquals(2, epsilon: 0.01)));
+    decoration = surfaceDecoration();
+    border = decoration.border! as Border;
+    expect(textField.focusNode?.hasFocus, isTrue);
+    expect(decoration.gradient, isNull);
+    expect(decoration.boxShadow, isNull);
+    expect(border.top.color, Colors.white.withValues(alpha: 0.62));
   });
 
   testWidgets('search pill shows merchant and category capsules with colors', (
