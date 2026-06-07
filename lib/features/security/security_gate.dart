@@ -59,7 +59,6 @@ class _SecurityGateState extends State<SecurityGate>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
       _wasBackgrounded = true;
       return;

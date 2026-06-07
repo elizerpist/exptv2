@@ -91,6 +91,25 @@ void main() {
     expect(find.text('Unlocked app'), findsNothing);
   });
 
+  testWidgets('does not lock after biometric prompt inactive resume', (
+    tester,
+  ) async {
+    await tester.pumpWidget(subject());
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Unlocked app'), findsOneWidget);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unlocked app'), findsOneWidget);
+    expect(find.text('Feloldás'), findsNothing);
+  });
+
   testWidgets('does not lock during ordinary foreground pumping', (
     tester,
   ) async {
