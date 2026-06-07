@@ -3579,6 +3579,7 @@ class _RollingSplitBar extends StatelessWidget {
                     child: ColoredBox(
                       key: ValueKey('$segmentKeyPrefix-prev-$slotId'),
                       color: AppColors.gray400,
+                      child: const SizedBox.expand(),
                     ),
                   ),
                   Expanded(
@@ -3586,6 +3587,7 @@ class _RollingSplitBar extends StatelessWidget {
                     child: ColoredBox(
                       key: ValueKey('$segmentKeyPrefix-current-$slotId'),
                       color: current > 1 ? AppColors.expense : AppColors.income,
+                      child: const SizedBox.expand(),
                     ),
                   ),
                 ],
@@ -3631,29 +3633,38 @@ class _RollingPillBand extends StatelessWidget {
             height: 7,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(999),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: width * .36,
-                    child: ColoredBox(
-                      key: ValueKey('fastinfo-rolling-pill-band-low-$slotId'),
-                      color: AppColors.income,
+              child: DecoratedBox(
+                key: ValueKey('fastinfo-rolling-pill-band-track-$slotId'),
+                decoration: const BoxDecoration(color: AppColors.gray200),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: width * .36,
+                      child: ColoredBox(
+                        key: ValueKey('fastinfo-rolling-pill-band-low-$slotId'),
+                        color: AppColors.income,
+                        child: const SizedBox.expand(),
+                      ),
                     ),
-                  ),
-                  SizedBox(
-                    width: width * .28,
-                    child: ColoredBox(
-                      key: ValueKey('fastinfo-rolling-pill-band-mid-$slotId'),
-                      color: const Color(0xFFF59E0B),
+                    SizedBox(
+                      width: width * .28,
+                      child: ColoredBox(
+                        key: ValueKey('fastinfo-rolling-pill-band-mid-$slotId'),
+                        color: const Color(0xFFF59E0B),
+                        child: const SizedBox.expand(),
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: ColoredBox(
-                      key: ValueKey('fastinfo-rolling-pill-band-high-$slotId'),
-                      color: AppColors.expense,
+                    Expanded(
+                      child: ColoredBox(
+                        key: ValueKey(
+                          'fastinfo-rolling-pill-band-high-$slotId',
+                        ),
+                        color: AppColors.expense,
+                        child: const SizedBox.expand(),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

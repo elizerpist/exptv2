@@ -849,6 +849,12 @@ void main() {
         ),
         const Size(78, 18),
       );
+      expect(
+        find.byKey(
+          const ValueKey('fastinfo-rolling-pill-band-track-koltesi_trend'),
+        ),
+        findsOneWidget,
+      );
       final bandRect = tester.getRect(
         find.byKey(const ValueKey('fastinfo-rolling-pill-band-koltesi_trend')),
       );
@@ -871,6 +877,7 @@ void main() {
         final segment = find.byKey(ValueKey(key));
         expect(segment, findsOneWidget);
         expect(tester.getSize(segment).width, greaterThan(0));
+        expect(tester.getSize(segment).height, greaterThan(0));
       }
       expect(
         find.byKey(const ValueKey('fastinfo-trend-koltesi_trend')),

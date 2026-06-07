@@ -274,12 +274,17 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
   }
 
   bool _canDragFrom(
-    Offset _globalPosition,
+    Offset globalPosition,
     Offset startGlobalPosition,
-    double _gestureDx,
-    double _gestureDy,
+    double gestureDx,
+    double gestureDy,
   ) {
-    return !_isInsideBody(startGlobalPosition);
+    final hasFiniteGesture =
+        globalPosition.dx.isFinite &&
+        globalPosition.dy.isFinite &&
+        gestureDx.isFinite &&
+        gestureDy.isFinite;
+    return hasFiniteGesture && !_isInsideBody(startGlobalPosition);
   }
 
   bool _isInsideBody(Offset globalPosition) {
