@@ -52,6 +52,47 @@ void main() {
                     null,
                   ],
                 },
+                'securitySettings': <String, Object?>{
+                  'pinEnabled': false,
+                  'biometricEnabled': false,
+                  'biometricAvailable': true,
+                  'biometricLabel': 'Ujjlenyomat elerheto',
+                },
+              };
+            case 'expenseSetSecurityPin':
+              return <String, Object?>{
+                'pinEnabled': true,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseVerifySecurityPin':
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
+                  '1234';
+            case 'expenseClearSecurityPin':
+              return <String, Object?>{
+                'pinEnabled': false,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseSetBiometricEnabled':
+              return <String, Object?>{
+                'pinEnabled': true,
+                'biometricEnabled':
+                    (call.arguments as Map<dynamic, dynamic>)['enabled'] ==
+                    true,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
+              };
+            case 'expenseAuthenticateBiometric':
+              return true;
+            case 'expenseGetBiometricAvailability':
+              return <String, Object?>{
+                'pinEnabled': false,
+                'biometricEnabled': false,
+                'biometricAvailable': true,
+                'biometricLabel': 'Ujjlenyomat elerheto',
               };
             case 'loadNotificationParserProfiles':
               return <String, Object?>{
@@ -283,6 +324,49 @@ void main() {
         'openAccessibilitySettings',
       ]),
     );
+  });
+
+  testWidgets('sets security pin from settings', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('PIN kód beállítása'), 160);
+    await tester.tap(find.text('PIN kód beállítása'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PIN beállítása'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('pin-new-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('pin-confirm-input')),
+      '1234',
+    );
+    await tester.tap(find.byKey(const ValueKey('pin-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PIN aktív'), findsOneWidget);
+    expect(calls, contains('expenseSetSecurityPin'));
+  });
+
+  testWidgets('biometric setting requires pin first', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Biometrikus azonosítás'), 160);
+    await tester.tap(find.text('Biometrikus azonosítás'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PIN szükséges'), findsOneWidget);
+    expect(find.byKey(const ValueKey('biometric-enable-switch')), findsNothing);
   });
 
   testWidgets(
