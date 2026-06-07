@@ -82,4 +82,43 @@ void main() {
       [AppColors.income, AppColors.income, AppColors.expense, AppColors.expense],
     );
   });
+
+  testWidgets('budget magnet strip renders React-style limit progress', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: MagnetStrip(
+              type: MagnetType.budget,
+              totalIncome: 0,
+              totalExpense: 0,
+              height: 35,
+              budgetProgress: BudgetStripProgress(
+                hasLimit: true,
+                spent: 80,
+                limitAmount: 100,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-budget-progress-track')),
+    );
+    final fillRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-budget-progress-fill')),
+    );
+    final fill = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('magnet-budget-progress-fill')),
+    );
+    final decoration = fill.decoration as BoxDecoration;
+
+    expect(fillRect.width, moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5));
+    expect(decoration.color, const Color(0xffff8800));
+  });
 }
