@@ -13,10 +13,10 @@ void main() {
     );
 
     expect(shadows, hasLength(2));
-    expect(shadows[0].color, const Color(0x5994A3B8));
+    expect(shadows[0].color, AppColors.gray400.withValues(alpha: 0.35));
     expect(shadows[0].offset, const Offset(6, 6));
     expect(shadows[0].blurRadius, 13);
-    expect(shadows[1].color, const Color(0xEBFFFFFF));
+    expect(shadows[1].color, Colors.white.withValues(alpha: 0.92));
     expect(shadows[1].offset, const Offset(-6, -6));
     expect(shadows[1].blurRadius, 13);
   });
@@ -30,10 +30,10 @@ void main() {
     );
 
     expect(shadows, hasLength(2));
-    expect(shadows[0].color, const Color(0x5C94A3B8));
+    expect(shadows[0].color, AppColors.gray400.withValues(alpha: 0.36));
     expect(shadows[0].offset, const Offset(9, 9));
     expect(shadows[0].blurRadius, 19);
-    expect(shadows[1].color, const Color(0xEBFFFFFF));
+    expect(shadows[1].color, Colors.white.withValues(alpha: 0.92));
     expect(shadows[1].offset, const Offset(-9, -9));
     expect(shadows[1].blurRadius, 19);
   });
@@ -51,17 +51,17 @@ void main() {
     );
 
     expect(rest, hasLength(2));
-    expect(rest[0].color, const Color(0x8F0E7490));
+    expect(rest[0].color, const Color(0xFF0E7490).withValues(alpha: 0.56));
     expect(rest[0].offset, const Offset(5, 5));
     expect(rest[0].blurRadius, 10);
-    expect(rest[1].color, const Color(0x5C67E8F9));
+    expect(rest[1].color, AppColors.primaryLight.withValues(alpha: 0.36));
     expect(rest[1].offset, const Offset(-4, -4));
     expect(rest[1].blurRadius, 9);
     expect(pressed, hasLength(2));
-    expect(pressed[0].color, const Color(0xA30E7490));
+    expect(pressed[0].color, const Color(0xFF0E7490).withValues(alpha: 0.64));
     expect(pressed[0].offset, const Offset(7, 7));
     expect(pressed[0].blurRadius, 13);
-    expect(pressed[1].color, const Color(0x6167E8F9));
+    expect(pressed[1].color, AppColors.primaryLight.withValues(alpha: 0.38));
     expect(pressed[1].offset, const Offset(-5, -5));
     expect(pressed[1].blurRadius, 11);
   });
@@ -81,17 +81,17 @@ void main() {
     );
 
     expect(rest, hasLength(2));
-    expect(rest[0].color, const Color(0x3306B6D4));
+    expect(rest[0].color, AppColors.primary.withValues(alpha: 0.20));
     expect(rest[0].offset, const Offset(4, 4));
     expect(rest[0].blurRadius, 9);
-    expect(rest[1].color, const Color(0xE0FFFFFF));
+    expect(rest[1].color, Colors.white.withValues(alpha: 0.88));
     expect(rest[1].offset, const Offset(-4, -4));
     expect(rest[1].blurRadius, 9);
     expect(pressed, hasLength(2));
-    expect(pressed[0].color, const Color(0x3D06B6D4));
+    expect(pressed[0].color, AppColors.primary.withValues(alpha: 0.24));
     expect(pressed[0].offset, const Offset(6, 6));
     expect(pressed[0].blurRadius, 12);
-    expect(pressed[1].color, const Color(0xE0FFFFFF));
+    expect(pressed[1].color, Colors.white.withValues(alpha: 0.88));
     expect(pressed[1].offset, const Offset(-5, -5));
     expect(pressed[1].blurRadius, 10);
   });

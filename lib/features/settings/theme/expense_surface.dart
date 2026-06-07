@@ -143,27 +143,27 @@ class ExpenseSurface {
     if (depth == _SurfaceDepth.neutral) return const <BoxShadow>[];
     if (profile == ExpenseSurfaceProfile.activeNavItem && !primary) {
       return switch (depth) {
-        _SurfaceDepth.inset => const <BoxShadow>[
+        _SurfaceDepth.inset => <BoxShadow>[
           BoxShadow(
-            color: Color(0x3306B6D4),
-            offset: Offset(4, 4),
+            color: AppColors.primary.withValues(alpha: 0.20),
+            offset: const Offset(4, 4),
             blurRadius: 9,
           ),
           BoxShadow(
-            color: Color(0xE0FFFFFF),
-            offset: Offset(-4, -4),
+            color: Colors.white.withValues(alpha: 0.88),
+            offset: const Offset(-4, -4),
             blurRadius: 9,
           ),
         ],
-        _SurfaceDepth.deepInset => const <BoxShadow>[
+        _SurfaceDepth.deepInset => <BoxShadow>[
           BoxShadow(
-            color: Color(0x3D06B6D4),
-            offset: Offset(6, 6),
+            color: AppColors.primary.withValues(alpha: 0.24),
+            offset: const Offset(6, 6),
             blurRadius: 12,
           ),
           BoxShadow(
-            color: Color(0xE0FFFFFF),
-            offset: Offset(-5, -5),
+            color: Colors.white.withValues(alpha: 0.88),
+            offset: const Offset(-5, -5),
             blurRadius: 10,
           ),
         ],
@@ -180,70 +180,70 @@ class ExpenseSurface {
     }
     if (depth == _SurfaceDepth.raised) return const <BoxShadow>[];
     if (style == ExpenseSurfaceInteraction.neutralInset && pressed) {
-      return const <BoxShadow>[
+      return <BoxShadow>[
         BoxShadow(
-          color: Color(0x5794A3B8),
-          offset: Offset(4, 4),
+          color: AppColors.gray400.withValues(alpha: 0.34),
+          offset: const Offset(4, 4),
           blurRadius: 9,
         ),
         BoxShadow(
-          color: Color(0xE0FFFFFF),
-          offset: Offset(-4, -4),
+          color: Colors.white.withValues(alpha: 0.88),
+          offset: const Offset(-4, -4),
           blurRadius: 9,
         ),
       ];
     }
     if (style == ExpenseSurfaceInteraction.raisedInset && pressed) {
-      return const <BoxShadow>[
+      return <BoxShadow>[
         BoxShadow(
-          color: Color(0x4D94A3B8),
-          offset: Offset(4, 4),
+          color: AppColors.gray400.withValues(alpha: 0.30),
+          offset: const Offset(4, 4),
           blurRadius: 9,
         ),
         BoxShadow(
-          color: Color(0xE0FFFFFF),
-          offset: Offset(-4, -4),
+          color: Colors.white.withValues(alpha: 0.88),
+          offset: const Offset(-4, -4),
           blurRadius: 9,
         ),
       ];
     }
     if (depth == _SurfaceDepth.deepInset) {
-      return const <BoxShadow>[
+      return <BoxShadow>[
         BoxShadow(
-          color: Color(0x6B94A3B8),
-          offset: Offset(8, 8),
+          color: AppColors.gray400.withValues(alpha: 0.42),
+          offset: const Offset(8, 8),
           blurRadius: 15,
         ),
         BoxShadow(
-          color: Color(0xEBFFFFFF),
-          offset: Offset(-7, -7),
+          color: Colors.white.withValues(alpha: 0.92),
+          offset: const Offset(-7, -7),
           blurRadius: 14,
         ),
       ];
     }
     if (profile == ExpenseSurfaceProfile.headerCard) {
-      return const <BoxShadow>[
+      return <BoxShadow>[
         BoxShadow(
-          color: Color(0x5C94A3B8),
-          offset: Offset(9, 9),
+          color: AppColors.gray400.withValues(alpha: 0.36),
+          offset: const Offset(9, 9),
           blurRadius: 19,
         ),
         BoxShadow(
-          color: Color(0xEBFFFFFF),
-          offset: Offset(-9, -9),
+          color: Colors.white.withValues(alpha: 0.92),
+          offset: const Offset(-9, -9),
           blurRadius: 19,
         ),
       ];
     }
-    return const <BoxShadow>[
+    return <BoxShadow>[
       BoxShadow(
-        color: Color(0x5994A3B8),
-        offset: Offset(6, 6),
+        color: AppColors.gray400.withValues(alpha: 0.35),
+        offset: const Offset(6, 6),
         blurRadius: 13,
       ),
       BoxShadow(
-        color: Color(0xEBFFFFFF),
-        offset: Offset(-6, -6),
+        color: Colors.white.withValues(alpha: 0.92),
+        offset: const Offset(-6, -6),
         blurRadius: 13,
       ),
     ];
@@ -397,12 +397,12 @@ class ExpenseSurface {
     if (depth != _SurfaceDepth.inset && depth != _SurfaceDepth.deepInset) {
       return null;
     }
-    return const LinearGradient(
+    return LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: <Color>[
-        Color(0x290891B2),
-        Color(0x1A67E8F9),
+        AppColors.primaryDark.withValues(alpha: 0.16),
+        AppColors.primaryLight.withValues(alpha: 0.10),
       ],
     );
   }

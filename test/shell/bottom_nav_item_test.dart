@@ -170,6 +170,9 @@ void main() {
     );
     final decoration = activeSurface.decoration as BoxDecoration;
     final gradient = decoration.gradient! as LinearGradient;
-    expect(gradient.colors, const [Color(0x290891B2), Color(0x1A67E8F9)]);
+    expect(gradient.colors, [
+      AppColors.primaryDark.withValues(alpha: 0.16),
+      AppColors.primaryLight.withValues(alpha: 0.10),
+    ]);
   });
 }
