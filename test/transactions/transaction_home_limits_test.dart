@@ -11,6 +11,8 @@ import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/settings/theme/expense_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -351,6 +353,73 @@ void main() {
       expect(repository.savedLimits.single['targetId'], 6);
       expect(repository.savedLimits.single['transactionType'], 'expense');
       expect(repository.savedLimits.single['limitAmount'], 250);
+    },
+  );
+
+  testWidgets(
+    'budget magnet strip follows the active swiped category limit',
+    (tester) async {
+      final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+      repository.limits = [
+        CategoryLimit.fromMap({
+          'id': 10,
+          'targetType': 'overview',
+          'targetId': 0,
+          'transactionType': 'expense',
+          'window': 'monthly',
+          'periodKey': '2026-05',
+          'hasLimit': true,
+          'limitAmount': 1000,
+          'alertActive': false,
+          'createdAt': 0,
+          'updatedAt': 1,
+        }),
+        CategoryLimit.fromMap({
+          'id': 11,
+          'targetType': 'category',
+          'targetId': 6,
+          'transactionType': 'expense',
+          'window': 'monthly',
+          'periodKey': '2026-05',
+          'hasLimit': true,
+          'limitAmount': 125,
+          'alertActive': false,
+          'createdAt': 0,
+          'updatedAt': 1,
+        }),
+      ];
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 17),
+      );
+      final budgetTheme = ExpenseTheme.fromSettings(
+        AppThemeSettings.defaults().copyWith(magnetType: MagnetType.budget),
+      );
+
+      await pumpExpandedMonthlyHome(tester, store, expenseTheme: budgetTheme);
+      await tester.drag(
+        find.byKey(const ValueKey('category-budget-bar')),
+        const Offset(-180, 0),
+      );
+      await tester.pumpAndSettle();
+
+      final trackRect = tester.getRect(
+        find.byKey(const ValueKey('magnet-budget-progress-track')),
+      );
+      final fillRect = tester.getRect(
+        find.byKey(const ValueKey('magnet-budget-progress-fill')),
+      );
+      final fill = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('magnet-budget-progress-fill')),
+      );
+      final decoration = fill.decoration as BoxDecoration;
+
+      expect(find.text('Food'), findsOneWidget);
+      expect(
+        fillRect.width,
+        moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
+      );
+      expect(decoration.color, const Color(0xffff8800));
     },
   );
 
@@ -845,6 +914,7 @@ Future<void> pumpExpandedMonthlyHome(
   ValueChanged<bool>? onBlockingOverlayChanged,
   BudgetTargetEditorRequest? onBudgetTargetEditorRequested,
   ValueNotifier<String?>? budgetEditorActiveKey,
+  ExpenseTheme? expenseTheme,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -854,6 +924,7 @@ Future<void> pumpExpandedMonthlyHome(
           height: 780,
           child: TransactionHomePage(
             store: store,
+            expenseTheme: expenseTheme,
             onBlockingOverlayChanged: onBlockingOverlayChanged,
             onBudgetTargetEditorRequested: onBudgetTargetEditorRequested,
             budgetEditorActiveKey: budgetEditorActiveKey,
