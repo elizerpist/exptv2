@@ -94,4 +94,30 @@ void main() {
       const Offset(0, 1),
     );
   });
+
+  testWidgets('inset shadow layer stays behind child content', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          key: const ValueKey('expense-surface-test-host'),
+          child: ExpenseSurfaceContainer(
+            style: ExpenseSurfaceInteraction.neutralInset,
+            color: AppColors.gray200,
+            borderRadius: BorderRadius.circular(25),
+            pressed: true,
+            child: const Text('content'),
+          ),
+        ),
+      ),
+    );
+
+    final stack = tester.widget<Stack>(
+      find.descendant(
+        of: find.byKey(const ValueKey('expense-surface-test-host')),
+        matching: find.byType(Stack),
+      ),
+    );
+    expect(stack.children.first, isA<Positioned>());
+    expect(stack.children.last, isA<Padding>());
+  });
 }
