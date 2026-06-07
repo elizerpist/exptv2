@@ -43,23 +43,18 @@ class BottomNavItem extends StatelessWidget {
           enabled: surfaceStyle.hasPressEffect,
           forcePressed: active && surfaceStyle.hasPressEffect,
           builder: (context, pressed) {
-            final decoration = ExpenseSurface.decoration(
+            final resolvedColor =
+                active &&
+                    surfaceStyle == ExpenseSurfaceInteraction.neutralNeutral
+                ? AppColors.primaryActiveBackground
+                : surfaceTint;
+            return ExpenseSurfaceContainer(
+              surfaceKey: ValueKey('bottom-nav-${tab.id}-surface'),
               style: surfaceStyle,
-              color: surfaceTint,
+              color: resolvedColor,
               borderRadius: radius,
               pressed: pressed,
               neutralShadow: null,
-            );
-            return DecoratedBox(
-              key: ValueKey('bottom-nav-${tab.id}-surface'),
-              decoration: decoration.copyWith(
-                color:
-                    active &&
-                        surfaceStyle ==
-                            ExpenseSurfaceInteraction.neutralNeutral
-                    ? AppColors.primaryActiveBackground
-                    : null,
-              ),
               child: Material(
                 color: Colors.transparent,
                 borderRadius: radius,

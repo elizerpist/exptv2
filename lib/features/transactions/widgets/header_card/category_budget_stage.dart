@@ -17,6 +17,7 @@ import 'budget_bar_geometry.dart';
 import 'backheader_style_surface.dart';
 import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
+import 'category_progress_bar.dart';
 import 'transaction_header_metrics.dart';
 
 class CategoryBudgetStage extends StatefulWidget {
@@ -597,21 +598,33 @@ class _OverviewBudgetBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(height / 2),
                       child: SizedBox(
                         height: height,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(height / 2),
-                          ),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Padding(
-                              padding: EdgeInsets.only(left: height * 0.28),
-                              child: Icon(
-                                icon,
-                                color: AppColors.white,
-                                size: height * 0.65,
+                        child: ColoredBox(
+                          color: color,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Padding(
+                                  padding: EdgeInsets.only(left: height * 0.28),
+                                  child: Icon(
+                                    icon,
+                                    color: AppColors.white,
+                                    size: height * 0.65,
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (overview.hasLimit)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 12,
+                                  child: CategoryProgressBar(
+                                    spent: overview.amount,
+                                    limitAmount: overview.limitAmount,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),

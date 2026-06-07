@@ -44,12 +44,15 @@ enum ExpenseSurfaceInteraction {
 class ExpenseSurface {
   const ExpenseSurface._();
 
+  static const Duration pressDuration = Duration(milliseconds: 110);
+
   static BoxDecoration decoration({
     required ExpenseSurfaceInteraction style,
     required Color color,
     required BorderRadiusGeometry borderRadius,
     bool pressed = false,
     bool primary = false,
+    Color? primaryColor,
     Border? neutralBorder,
     List<BoxShadow>? neutralShadow,
   }) {
@@ -57,7 +60,10 @@ class ExpenseSurface {
     if (primary) {
       return _primaryDecoration(
         depth: depth,
+        style: style,
+        pressed: pressed,
         borderRadius: borderRadius,
+        color: primaryColor ?? AppColors.primary,
         neutralShadow: neutralShadow,
       );
     }
@@ -72,60 +78,90 @@ class ExpenseSurface {
         color: color,
         borderRadius: borderRadius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
-        boxShadow: _raisedShadow(color),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x5794A3B8),
+            offset: Offset(7, 7),
+            blurRadius: 15,
+          ),
+          BoxShadow(
+            color: Color(0xEBFFFFFF),
+            offset: Offset(-7, -7),
+            blurRadius: 15,
+          ),
+        ],
       ),
       _SurfaceDepth.inset => BoxDecoration(
         color: color,
         gradient: _insetGradient(color),
         borderRadius: borderRadius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.62)),
-        boxShadow: _insetShadow(color),
       ),
       _SurfaceDepth.deepInset => BoxDecoration(
         color: color,
         gradient: _deepInsetGradient(color),
         borderRadius: borderRadius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.56)),
-        boxShadow: _deepInsetShadow(color),
       ),
+    };
+  }
+
+  static Offset pressOffset({
+    required ExpenseSurfaceInteraction style,
+    required bool pressed,
+  }) {
+    if (!pressed || style == ExpenseSurfaceInteraction.neutralNeutral) {
+      return Offset.zero;
+    }
+    return switch (style) {
+      ExpenseSurfaceInteraction.neutralNeutral => Offset.zero,
+      ExpenseSurfaceInteraction.neutralInset => const Offset(0, 2),
+      ExpenseSurfaceInteraction.insetInset => const Offset(0, 1),
+      ExpenseSurfaceInteraction.raisedInset => const Offset(0, 2),
     };
   }
 
   static BoxDecoration _primaryDecoration({
     required _SurfaceDepth depth,
+    required ExpenseSurfaceInteraction style,
+    required bool pressed,
     required BorderRadiusGeometry borderRadius,
+    required Color color,
     required List<BoxShadow>? neutralShadow,
   }) {
     if (depth == _SurfaceDepth.neutral) {
       return BoxDecoration(
-        color: AppColors.primary,
+        color: color,
         borderRadius: borderRadius,
         boxShadow: neutralShadow,
       );
     }
     final raised = depth == _SurfaceDepth.raised;
+    final light = _accentLight(color);
+    final dark = _accentDark(color);
     return BoxDecoration(
-      color: AppColors.primary,
+      color: color,
       gradient: raised
-          ? const LinearGradient(
+          ? LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
-                AppColors.primaryLight,
-                AppColors.primary,
-                AppColors.primaryDark,
+                light,
+                color,
+                dark,
               ],
             )
-          : const LinearGradient(
+          : LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
-                AppColors.primaryDark,
-                AppColors.primary,
-                AppColors.primaryLight,
+                dark,
+                color,
+                light,
               ],
             ),
       borderRadius: borderRadius,
+      border: null,
       boxShadow: raised
           ? const <BoxShadow>[
               BoxShadow(
@@ -139,18 +175,15 @@ class ExpenseSurface {
                 blurRadius: 16,
               ),
             ]
-          : const <BoxShadow>[
+          : style == ExpenseSurfaceInteraction.neutralInset && pressed
+          ? const <BoxShadow>[
               BoxShadow(
-                color: Color(0x780E7490),
-                offset: Offset(4, 4),
-                blurRadius: 10,
+                color: Color(0x2406B6D4),
+                offset: Offset(0, 2),
+                blurRadius: 7,
               ),
-              BoxShadow(
-                color: Color(0x5C67E8F9),
-                offset: Offset(-4, -4),
-                blurRadius: 9,
-              ),
-            ],
+            ]
+          : null,
     );
   }
 
@@ -196,55 +229,201 @@ class ExpenseSurface {
     );
   }
 
-  static List<BoxShadow> _raisedShadow(Color color) {
-    return <BoxShadow>[
-      BoxShadow(
-        color: Color.lerp(color, AppColors.gray400, 0.64)!.withValues(
-          alpha: 0.38,
-        ),
-        offset: const Offset(7, 7),
-        blurRadius: 15,
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.92),
-        offset: const Offset(-7, -7),
-        blurRadius: 15,
-      ),
-    ];
+  static bool needsInnerOverlay({
+    required ExpenseSurfaceInteraction style,
+    required bool pressed,
+    required bool primary,
+  }) {
+    final depth = _depthFor(style, pressed);
+    return primary
+        ? depth != _SurfaceDepth.neutral
+        : depth == _SurfaceDepth.inset || depth == _SurfaceDepth.deepInset;
   }
 
-  static List<BoxShadow> _insetShadow(Color color) {
-    return <BoxShadow>[
-      BoxShadow(
-        color: Color.lerp(color, AppColors.gray500, 0.72)!.withValues(
-          alpha: 0.30,
-        ),
-        offset: const Offset(3, 3),
-        blurRadius: 7,
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.74),
-        offset: const Offset(-3, -3),
-        blurRadius: 7,
-      ),
-    ];
+  static Color _accentLight(Color color) {
+    if (color == AppColors.primary) return AppColors.primaryLight;
+    return Color.lerp(color, Colors.white, 0.42)!;
   }
 
-  static List<BoxShadow> _deepInsetShadow(Color color) {
-    return <BoxShadow>[
-      BoxShadow(
-        color: Color.lerp(color, AppColors.gray600, 0.72)!.withValues(
-          alpha: 0.36,
+  static Color _accentDark(Color color) {
+    if (color == AppColors.primary) return AppColors.primaryDark;
+    return Color.lerp(color, Colors.black, 0.22)!;
+  }
+}
+
+class ExpenseSurfaceContainer extends StatelessWidget {
+  const ExpenseSurfaceContainer({
+    super.key,
+    this.surfaceKey,
+    required this.style,
+    required this.color,
+    required this.borderRadius,
+    required this.child,
+    this.pressed = false,
+    this.primary = false,
+    this.primaryColor,
+    this.neutralBorder,
+    this.neutralShadow,
+    this.margin,
+    this.padding,
+    this.constraints,
+    this.width,
+    this.height,
+    this.animatePress = true,
+  });
+
+  final Key? surfaceKey;
+  final ExpenseSurfaceInteraction style;
+  final Color color;
+  final BorderRadius borderRadius;
+  final Widget child;
+  final bool pressed;
+  final bool primary;
+  final Color? primaryColor;
+  final Border? neutralBorder;
+  final List<BoxShadow>? neutralShadow;
+  final EdgeInsetsGeometry? margin;
+  final EdgeInsetsGeometry? padding;
+  final BoxConstraints? constraints;
+  final double? width;
+  final double? height;
+  final bool animatePress;
+
+  @override
+  Widget build(BuildContext context) {
+    final offset = ExpenseSurface.pressOffset(style: style, pressed: pressed);
+    final surface = Container(
+      key: surfaceKey,
+      margin: margin,
+      width: width,
+      height: height,
+      constraints: constraints,
+      decoration: ExpenseSurface.decoration(
+        style: style,
+        color: color,
+        borderRadius: borderRadius,
+        pressed: pressed,
+        primary: primary,
+        primaryColor: primaryColor,
+        neutralBorder: neutralBorder,
+        neutralShadow: neutralShadow,
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: [
+            Padding(padding: padding ?? EdgeInsets.zero, child: child),
+            if (ExpenseSurface.needsInnerOverlay(
+              style: style,
+              pressed: pressed,
+              primary: primary,
+            ))
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _ExpenseSurfaceInnerPainter(
+                      style: style,
+                      pressed: pressed,
+                      primary: primary,
+                      primaryColor: primaryColor ?? color,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-        offset: const Offset(4, 4),
-        blurRadius: 9,
       ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.72),
-        offset: const Offset(-4, -4),
-        blurRadius: 9,
-      ),
-    ];
+    );
+    if (!animatePress) return Transform.translate(offset: offset, child: surface);
+    return TweenAnimationBuilder<Offset>(
+      tween: Tween<Offset>(begin: Offset.zero, end: offset),
+      duration: ExpenseSurface.pressDuration,
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Transform.translate(offset: value, child: child);
+      },
+      child: surface,
+    );
+  }
+}
+
+class _ExpenseSurfaceInnerPainter extends CustomPainter {
+  const _ExpenseSurfaceInnerPainter({
+    required this.style,
+    required this.pressed,
+    required this.primary,
+    required this.primaryColor,
+  });
+
+  final ExpenseSurfaceInteraction style;
+  final bool pressed;
+  final bool primary;
+  final Color primaryColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rect = Offset.zero & size;
+    final primaryDark = ExpenseSurface._accentDark(primaryColor);
+    final primaryLight = ExpenseSurface._accentLight(primaryColor);
+    final darkAlpha = primary
+        ? (pressed ? 0.64 : 0.45)
+        : style == ExpenseSurfaceInteraction.insetInset && pressed
+        ? 0.42
+        : 0.35;
+    final lightAlpha = primary ? 0.38 : 0.92;
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.center,
+          colors: [
+            (primary ? primaryDark : AppColors.gray400).withValues(
+              alpha: darkAlpha,
+            ),
+            Colors.transparent,
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.bottomRight,
+          end: Alignment.center,
+          colors: [
+            (primary ? primaryLight : Colors.white).withValues(
+              alpha: lightAlpha,
+            ),
+            Colors.transparent,
+          ],
+        ).createShader(rect),
+    );
+    if (primary && !pressed) {
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.center,
+            colors: [
+              Colors.white.withValues(alpha: 0.42),
+              Colors.transparent,
+            ],
+          ).createShader(rect),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ExpenseSurfaceInnerPainter oldDelegate) {
+    return oldDelegate.style != style ||
+        oldDelegate.pressed != pressed ||
+        oldDelegate.primary != primary ||
+        oldDelegate.primaryColor != primaryColor;
   }
 }
 

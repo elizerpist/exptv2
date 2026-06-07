@@ -30,22 +30,21 @@ class HeaderFastInfoSurface extends StatelessWidget {
       top: -TransactionHeaderMetrics.fastInfoHeight + extent,
       left: 0,
       right: 0,
-      child: DecoratedBox(
-        key: const ValueKey('header-fast-info-surface'),
-        decoration: ExpenseSurface.decoration(
-          style: surfaceStyle,
-          color: cardColor,
-          borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(24),
-          ),
-          neutralShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              offset: const Offset(0, 4),
-              blurRadius: 8,
-            ),
-          ],
+      child: ExpenseSurfaceContainer(
+        surfaceKey: const ValueKey('header-fast-info-surface'),
+        style: surfaceStyle,
+        color: cardColor,
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(24),
         ),
+        animatePress: false,
+        neutralShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            offset: const Offset(0, 4),
+            blurRadius: 8,
+          ),
+        ],
         child: SizedBox(
           height: TransactionHeaderMetrics.fastInfoHeight +
               TransactionHeaderMetrics.cardHeight,

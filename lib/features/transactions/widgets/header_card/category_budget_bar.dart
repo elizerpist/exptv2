@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../slots/category_icon_manager.dart';
 import 'budget_bar_geometry.dart';
+import 'category_progress_bar.dart';
 
 class CategoryBudgetBar extends StatelessWidget {
   const CategoryBudgetBar({
@@ -70,27 +71,48 @@ class CategoryBudgetBar extends StatelessWidget {
                         child: ColoredBox(
                           key: const ValueKey('category-budget-remaining-fill'),
                           color: bar.color,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Padding(
-                              padding: EdgeInsets.only(left: iconLeftPadding),
-                              child: Image(
-                                image: CategoryIconManager.assetImage(
-                                  bar.iconSlot,
-                                ),
-                                width: compactIcon ? iconSize : height * 0.64,
-                                height: compactIcon ? iconSize : height * 0.64,
-                                color: AppColors.white,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(
-                                      Icons.category_outlined,
-                                      color: AppColors.white,
-                                      size: compactIcon
-                                          ? iconSize
-                                          : height * 0.64,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    left: iconLeftPadding,
+                                  ),
+                                  child: Image(
+                                    image: CategoryIconManager.assetImage(
+                                      bar.iconSlot,
                                     ),
+                                    width: compactIcon
+                                        ? iconSize
+                                        : height * 0.64,
+                                    height: compactIcon
+                                        ? iconSize
+                                        : height * 0.64,
+                                    color: AppColors.white,
+                                    errorBuilder:
+                                        (context, error, stackTrace) => Icon(
+                                          Icons.category_outlined,
+                                          color: AppColors.white,
+                                          size: compactIcon
+                                              ? iconSize
+                                              : height * 0.64,
+                                        ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (bar.hasLimit)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 12,
+                                  child: CategoryProgressBar(
+                                    spent: bar.spent,
+                                    limitAmount: bar.limitAmount,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),

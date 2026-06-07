@@ -7,7 +7,7 @@ import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 
 class LimitManager {
-  static const warningColor = Color(0xffff9800);
+  static const warningColor = Color(0xffff8800);
   static const overLimitColor = Color(0xffff4444);
 
   static LimitWindow windowForSummary(SummaryWindow window) {

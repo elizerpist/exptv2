@@ -8,11 +8,13 @@ class CategoryProgressBar extends StatelessWidget {
     required this.spent,
     required this.limitAmount,
     this.fillColor,
+    this.height = 2,
   });
 
   final double spent;
   final double limitAmount;
   final Color? fillColor;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +24,7 @@ class CategoryProgressBar extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(2),
       child: SizedBox(
-        height: 3,
+        height: height,
         child: Stack(
           fit: StackFit.expand,
           children: [

@@ -185,23 +185,21 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                     ExpensePressable(
                       enabled: widget.surfaceStyle.hasPressEffect,
                       builder: (context, pressed) {
-                        return Container(
-                          key: ValueKey(
+                        return ExpenseSurfaceContainer(
+                          surfaceKey: ValueKey(
                             'transaction-logbox-content-${widget.record.id}',
                           ),
+                          style: widget.surfaceStyle,
+                          color: widget.surfaceColor,
+                          borderRadius: BorderRadius.circular(25),
+                          pressed: pressed,
                           constraints: const BoxConstraints(minHeight: 70),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          decoration: ExpenseSurface.decoration(
-                            style: widget.surfaceStyle,
-                            color: widget.surfaceColor,
-                            borderRadius: BorderRadius.circular(25),
-                            pressed: pressed,
-                            neutralBorder: Border.all(
-                              color: AppColors.gray200,
-                            ),
+                          neutralBorder: Border.all(
+                            color: AppColors.gray200,
                           ),
                           child: Row(
                             children: [
@@ -225,22 +223,27 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                       widget.category != null &&
                                       widget.onCategoryFilter != null,
                                   builder: (context, avatarPressed) {
-                                    return DecoratedBox(
-                                      key: ValueKey(
+                                    final avatarColor =
+                                        widget.category?.slotColor ??
+                                        AppColors.gray500;
+                                    return ExpenseSurfaceContainer(
+                                      surfaceKey: ValueKey(
                                         'transaction-logbox-avatar-surface-${widget.record.id}',
                                       ),
-                                      decoration: ExpenseSurface.decoration(
-                                        style: widget.avatarSurfaceStyle,
-                                        color: widget.category?.slotColor ??
-                                            AppColors.gray500,
-                                        borderRadius: BorderRadius.circular(23),
-                                        pressed: avatarPressed,
-                                      ),
+                                      style: widget.avatarSurfaceStyle,
+                                      color: avatarColor,
+                                      primaryColor: avatarColor,
+                                      primary: true,
+                                      borderRadius: BorderRadius.circular(23),
+                                      pressed: avatarPressed,
+                                      width: 46,
+                                      height: 46,
                                       child: CategoryIconBadge(
+                                        key: ValueKey(
+                                          'transaction-logbox-avatar-icon-${widget.record.id}',
+                                        ),
                                         category: widget.category,
-                                        backgroundColor:
-                                            widget.category?.slotColor ??
-                                            AppColors.gray500,
+                                        backgroundColor: Colors.transparent,
                                         size: 46,
                                         iconSize: 28,
                                         showShadow: false,

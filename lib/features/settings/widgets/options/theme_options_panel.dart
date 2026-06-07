@@ -237,15 +237,15 @@ class _SurfacePreview extends StatelessWidget {
       enabled: false,
       forcePressed: pressed,
       builder: (context, isPressed) {
-        return DecoratedBox(
-          decoration: ExpenseSurface.decoration(
-            style: style,
-            color: AppColors.gray100,
-            borderRadius: BorderRadius.circular(12),
-            pressed: isPressed,
-            neutralBorder: Border.all(color: AppColors.gray200),
-          ),
-          child: const SizedBox(width: 42, height: 30),
+        return ExpenseSurfaceContainer(
+          style: style,
+          color: AppColors.gray100,
+          borderRadius: BorderRadius.circular(12),
+          pressed: isPressed,
+          neutralBorder: Border.all(color: AppColors.gray200),
+          width: 42,
+          height: 30,
+          child: const SizedBox.expand(),
         );
       },
     );

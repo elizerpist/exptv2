@@ -191,25 +191,23 @@ class _SummaryPillBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('summary-pill-container'),
+    return ExpenseSurfaceContainer(
+      surfaceKey: const ValueKey('summary-pill-container'),
+      style: widget.surfaceStyle,
+      color: widget.surfaceColor,
+      borderRadius: BorderRadius.circular(25),
+      pressed: pressed,
       margin: const EdgeInsets.symmetric(horizontal: 20),
       constraints: const BoxConstraints(minHeight: 70),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: ExpenseSurface.decoration(
-        style: widget.surfaceStyle,
-        color: widget.surfaceColor,
-        borderRadius: BorderRadius.circular(25),
-        pressed: pressed,
-        neutralBorder: Border.all(color: AppColors.gray200),
-        neutralShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            offset: const Offset(0, 2),
-            blurRadius: 3,
-          ),
-        ],
-      ),
+      neutralBorder: Border.all(color: AppColors.gray200),
+      neutralShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.1),
+          offset: const Offset(0, 2),
+          blurRadius: 3,
+        ),
+      ],
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

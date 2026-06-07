@@ -62,26 +62,25 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
       );
     }
 
-    return Container(
-      key: const ValueKey('expt-bottom-nav'),
+    return ExpenseSurfaceContainer(
+      surfaceKey: const ValueKey('expt-bottom-nav'),
+      style: widget.surfaceStyle,
+      color: widget.surfaceColor,
+      borderRadius: BorderRadius.zero,
+      animatePress: false,
       height: AppDimensions.bottomNavHeight,
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimensions.bottomNavHorizontalPadding,
         vertical: AppDimensions.bottomNavVerticalPadding,
       ),
-      decoration: ExpenseSurface.decoration(
-        style: widget.surfaceStyle,
-        color: widget.surfaceColor,
-        borderRadius: BorderRadius.zero,
-        neutralBorder: const Border(top: BorderSide(color: AppColors.gray200)),
-        neutralShadow: const [
-          BoxShadow(
-            color: AppColors.navShadow,
-            offset: Offset(0, -8),
-            blurRadius: 16,
-          ),
-        ],
-      ),
+      neutralBorder: const Border(top: BorderSide(color: AppColors.gray200)),
+      neutralShadow: const [
+        BoxShadow(
+          color: AppColors.navShadow,
+          offset: Offset(0, -8),
+          blurRadius: 16,
+        ),
+      ],
       child: Row(
         children: [
           _buildItem(AppTab.home),

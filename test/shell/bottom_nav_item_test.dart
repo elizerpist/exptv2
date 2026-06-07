@@ -131,10 +131,10 @@ void main() {
       ),
     );
 
-    final activeSurface = tester.widget<DecoratedBox>(
+    final activeSurface = tester.widget<Container>(
       find.byKey(const ValueKey('bottom-nav-home-surface')),
     );
     final decoration = activeSurface.decoration as BoxDecoration;
-    expect(decoration.boxShadow, isNotNull);
+    expect(decoration.gradient, isNotNull);
   });
 }

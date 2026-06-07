@@ -76,40 +76,42 @@ class _TransactionTypePill extends StatelessWidget {
     return ExpensePressable(
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
-        return Material(
-          color: Colors.transparent,
+        return ExpenseSurfaceContainer(
+          style: surfaceStyle,
+          color: surfaceColor,
           borderRadius: radius,
-          child: InkWell(
+          pressed: pressed,
+          primary: active,
+          constraints: const BoxConstraints(
+            minHeight: TransactionMenuMetrics.typePillMinHeight,
+          ),
+          neutralBorder: Border.all(
+            color: active ? AppColors.primary : AppColors.gray200,
+          ),
+          neutralShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: active ? 0.1 : 0.08),
+              offset: const Offset(0, 2),
+              blurRadius: active ? 3 : 4,
+            ),
+          ],
+          child: Material(
+            color: Colors.transparent,
             borderRadius: radius,
-            onTap: () => onTap(type),
-            child: Container(
-              constraints: const BoxConstraints(
-                minHeight: TransactionMenuMetrics.typePillMinHeight,
-              ),
-              alignment: Alignment.center,
-              decoration: ExpenseSurface.decoration(
-                style: surfaceStyle,
-                color: surfaceColor,
-                borderRadius: radius,
-                pressed: pressed,
-                primary: active,
-                neutralBorder: Border.all(
-                  color: active ? AppColors.primary : AppColors.gray200,
-                ),
-                neutralShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: active ? 0.1 : 0.08),
-                    offset: const Offset(0, 2),
-                    blurRadius: active ? 3 : 4,
+            child: InkWell(
+              borderRadius: radius,
+              onTap: () => onTap(type),
+              child: SizedBox(
+                height: TransactionMenuMetrics.typePillMinHeight,
+                child: Center(
+                  child: Text(
+                    type.label,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: active ? AppColors.white : AppColors.gray500,
+                    ),
                   ),
-                ],
-              ),
-              child: Text(
-                type.label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: active ? AppColors.white : AppColors.gray500,
                 ),
               ),
             ),

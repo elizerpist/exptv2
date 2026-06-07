@@ -31,82 +31,78 @@ class RecurringGhostLogBox extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       child: SizedBox(
         height: 72,
-        child: DecoratedBox(
-          decoration: ExpenseSurface.decoration(
-            style: surfaceStyle,
-            color: surfaceColor,
-            borderRadius: BorderRadius.circular(25),
-            neutralBorder: Border.all(color: AppColors.gray300),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                CategoryIconBadge(
+        child: ExpenseSurfaceContainer(
+          style: surfaceStyle,
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(25),
+          neutralBorder: Border.all(color: AppColors.gray300),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              CategoryIconBadge(
+                category: category,
+                backgroundColor: CategoryColorResolver.color(
                   category: category,
-                  backgroundColor: CategoryColorResolver.color(
-                    category: category,
-                    snapshotHex: ghost.categoryColor,
-                    fallback: AppColors.gray500,
-                  ),
-                  size: 46,
-                  iconSize: 28,
-                  showShadow: false,
+                  snapshotHex: ghost.categoryColor,
+                  fallback: AppColors.gray500,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ghost.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gray800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'Ghost',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.gray500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
+                size: 46,
+                iconSize: 28,
+                showShadow: false,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      ghost.displayAmount,
-                      style: TextStyle(
+                      ghost.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: amountColor,
+                        color: AppColors.gray800,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      ghost.displayTime,
-                      style: const TextStyle(
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Ghost',
+                      style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.gray500,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    ghost.displayAmount,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: amountColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    ghost.displayTime,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.gray500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

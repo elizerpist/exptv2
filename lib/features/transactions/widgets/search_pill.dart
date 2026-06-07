@@ -171,24 +171,28 @@ class _SearchPillState extends State<SearchPill> {
         const SizedBox(width: 8),
         Expanded(
           flex: 1,
-          child: DebugTextField(
-            debugLabel: 'SearchPill.query',
-            focusNode: _focusNode,
-            controller: _controller,
-            onChanged: widget.onQueryChanged,
-            onTapOutside: (_) => _focusNode.unfocus(),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
-              errorBorder: InputBorder.none,
-              focusedErrorBorder: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              hintText: hasFilters
-                  ? '${widget.filteredCount} tranzakció találva'
-                  : 'Keresés tranzakciók között...',
-              isDense: true,
+          child: Container(
+            key: const ValueKey('search-pill-text-wrapper'),
+            decoration: BoxDecoration(color: widget.surfaceColor),
+            child: DebugTextField(
+              debugLabel: 'SearchPill.query',
+              focusNode: _focusNode,
+              controller: _controller,
+              onChanged: widget.onQueryChanged,
+              onTapOutside: (_) => _focusNode.unfocus(),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintText: hasFilters
+                    ? '${widget.filteredCount} tranzakció találva'
+                    : 'Keresés tranzakciók között...',
+                isDense: true,
+              ),
             ),
           ),
         ),
@@ -207,32 +211,32 @@ class _SearchPillState extends State<SearchPill> {
             builder: (context, focused, child) {
               return ExpensePressable(
                 enabled: widget.surfaceStyle.hasPressEffect,
+                forcePressed:
+                    focused && widget.surfaceStyle.hasPressEffect,
                 builder: (context, pressed) {
-                  return Container(
-                    key: const ValueKey('search-pill-container'),
+                  return ExpenseSurfaceContainer(
+                    surfaceKey: const ValueKey('search-pill-container'),
+                    style: widget.surfaceStyle,
+                    color: widget.surfaceColor,
+                    borderRadius: BorderRadius.circular(25),
+                    pressed: pressed,
                     margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
                     constraints: const BoxConstraints(minHeight: 46),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 4,
                     ),
-                    decoration: ExpenseSurface.decoration(
-                      style: widget.surfaceStyle,
-                      color: widget.surfaceColor,
-                      borderRadius: BorderRadius.circular(25),
-                      pressed: pressed,
-                      neutralBorder: Border.all(
-                        color: focused ? AppColors.primary : AppColors.gray200,
-                        width: focused ? 1.5 : 1,
-                      ),
-                      neutralShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          offset: const Offset(0, 2),
-                          blurRadius: 3,
-                        ),
-                      ],
+                    neutralBorder: Border.all(
+                      color: focused ? AppColors.primary : AppColors.gray200,
+                      width: focused ? 1.5 : 1,
                     ),
+                    neutralShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        offset: const Offset(0, 2),
+                        blurRadius: 3,
+                      ),
+                    ],
                     child: child,
                   );
                 },

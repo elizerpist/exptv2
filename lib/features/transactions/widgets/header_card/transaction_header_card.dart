@@ -80,21 +80,22 @@ class TransactionHeaderCard extends StatelessWidget {
           children: [
             if (drawSurface)
               Positioned.fill(
-                child: DecoratedBox(
-                  decoration: ExpenseSurface.decoration(
-                    style: surfaceStyle,
-                    color: cardColor,
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(24),
-                    ),
-                    neutralShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        offset: const Offset(0, 4),
-                        blurRadius: 8,
-                      ),
-                    ],
+                child: ExpenseSurfaceContainer(
+                  surfaceKey: const ValueKey('transaction-header-surface'),
+                  style: surfaceStyle,
+                  color: cardColor,
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(24),
                   ),
+                  animatePress: false,
+                  neutralShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      offset: const Offset(0, 4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                  child: const SizedBox.expand(),
                 ),
               ),
             const Positioned(
@@ -264,21 +265,21 @@ class TransactionHeaderCard extends StatelessWidget {
                     enabled: buttonSurfaceStyle.hasPressEffect,
                     builder: (context, pressed) {
                       final radius = BorderRadius.circular(15);
-                      return DecoratedBox(
-                        decoration: ExpenseSurface.decoration(
-                          style: buttonSurfaceStyle,
-                          color: AppColors.primary,
-                          borderRadius: radius,
-                          pressed: pressed,
-                          primary: true,
-                          neutralShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              offset: const Offset(0, 6),
-                              blurRadius: 12,
-                            ),
-                          ],
-                        ),
+                      return ExpenseSurfaceContainer(
+                        style: buttonSurfaceStyle,
+                        color: AppColors.primary,
+                        borderRadius: radius,
+                        pressed: pressed,
+                        primary: true,
+                        width: 30,
+                        height: 30,
+                        neutralShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            offset: const Offset(0, 6),
+                            blurRadius: 12,
+                          ),
+                        ],
                         child: Material(
                           color: Colors.transparent,
                           borderRadius: radius,
@@ -327,21 +328,21 @@ class _HeaderCategoryButton extends StatelessWidget {
     return ExpensePressable(
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
-        return DecoratedBox(
-          decoration: ExpenseSurface.decoration(
-            style: surfaceStyle,
-            color: AppColors.primary,
-            borderRadius: radius,
-            pressed: pressed,
-            primary: true,
-            neutralShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                offset: const Offset(0, 10),
-                blurRadius: 20,
-              ),
-            ],
-          ),
+        return ExpenseSurfaceContainer(
+          style: surfaceStyle,
+          color: AppColors.primary,
+          borderRadius: radius,
+          pressed: pressed,
+          primary: true,
+          width: 48,
+          height: 48,
+          neutralShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              offset: const Offset(0, 10),
+              blurRadius: 20,
+            ),
+          ],
           child: Material(
             color: Colors.transparent,
             borderRadius: radius,
