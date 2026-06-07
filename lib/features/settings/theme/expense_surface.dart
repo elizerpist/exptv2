@@ -138,11 +138,15 @@ class ExpenseSurface {
     }
     final raised = depth == _SurfaceDepth.raised;
     final inset = depth == _SurfaceDepth.inset;
+    final solidNeutralPress =
+        style == ExpenseSurfaceInteraction.neutralInset && pressed;
     final light = _accentLight(color);
     final dark = _accentDark(color);
     return BoxDecoration(
       color: color,
-      gradient: raised
+      gradient: solidNeutralPress
+          ? null
+          : raised
           ? LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -286,7 +290,8 @@ class ExpenseSurfaceContainer extends StatelessWidget {
                   style: style,
                   pressed: pressed,
                   primary: primary,
-                  primaryColor: primaryColor ?? color,
+                  primaryColor:
+                      primaryColor ?? (primary ? AppColors.primary : color),
                   borderRadius: borderRadius,
                 ),
               ),

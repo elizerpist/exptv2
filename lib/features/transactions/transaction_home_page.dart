@@ -554,15 +554,34 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   BudgetStripProgress? _headerBudgetProgress() {
-    for (final overview in widget.store.overviewBudgetItems) {
-      if (!overview.hasLimit || overview.limitAmount <= 0) continue;
+    final item = _activeBackheaderItem();
+    if (item == null) return null;
+    final overview = item.overview;
+    if (overview != null) {
       return BudgetStripProgress(
-        hasLimit: true,
+        hasLimit: overview.hasLimit,
         spent: overview.amount,
         limitAmount: overview.limitAmount,
       );
     }
-    return null;
+    final category = item.category!;
+    return BudgetStripProgress(
+      hasLimit: category.hasLimit,
+      spent: category.spent,
+      limitAmount: category.limitAmount,
+    );
+  }
+
+  BackheaderBudgetItem? _activeBackheaderItem() {
+    final items = widget.store.backheaderBudgetItems;
+    if (items.isEmpty) return null;
+    final activeKey = _backheaderActiveKey;
+    if (activeKey != null) {
+      for (final item in items) {
+        if (item.key == activeKey) return item;
+      }
+    }
+    return items.first;
   }
 
   double _headerSlideVisualProgress() {

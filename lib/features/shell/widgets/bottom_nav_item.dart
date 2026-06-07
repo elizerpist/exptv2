@@ -41,7 +41,6 @@ class BottomNavItem extends StatelessWidget {
         ),
         child: ExpensePressable(
           enabled: surfaceStyle.hasPressEffect,
-          forcePressed: active && surfaceStyle.hasPressEffect,
           builder: (context, pressed) {
             final resolvedColor =
                 active &&
