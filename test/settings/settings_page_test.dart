@@ -170,7 +170,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Téma Beállítások'), findsOneWidget);
     expect(find.text('Mágneskártya'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Sötétebb szürke').first,
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Sötétebb szürke'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('Neutrális -> befelé').first,
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Neutrális -> befelé'), findsWidgets);
     expect(find.text('Kifelé -> befelé'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
