@@ -116,7 +116,7 @@ void main() {
     );
   });
 
-  testWidgets('active bottom nav item is held pressed for inset styles', (
+  testWidgets('active bottom nav item rests normally and presses on touch', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -124,7 +124,7 @@ void main() {
         home: Scaffold(
           bottomNavigationBar: ExptBottomNav(
             activeTab: AppTab.home,
-            surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
             onTabSelected: (_) {},
           ),
         ),
@@ -139,7 +139,22 @@ void main() {
 
     await tester.pump(ExpenseSurface.pressDuration);
 
-    final transformYs = tester
+    var transformYs = tester
+        .widgetList<Transform>(
+          find.ancestor(
+            of: find.byKey(const ValueKey('bottom-nav-home-surface')),
+            matching: find.byType(Transform),
+          ),
+        )
+        .map((transform) => transform.transform.getTranslation().y);
+    expect(transformYs, isNot(contains(moreOrLessEquals(2, epsilon: 0.01))));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('bottom-nav-home'))),
+    );
+    await tester.pump(ExpenseSurface.pressDuration);
+
+    transformYs = tester
         .widgetList<Transform>(
           find.ancestor(
             of: find.byKey(const ValueKey('bottom-nav-home-surface')),
@@ -148,5 +163,7 @@ void main() {
         )
         .map((transform) => transform.transform.getTranslation().y);
     expect(transformYs, contains(moreOrLessEquals(2, epsilon: 0.01)));
+
+    await gesture.up();
   });
 }

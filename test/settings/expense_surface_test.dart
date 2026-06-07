@@ -45,6 +45,20 @@ void main() {
     expect(decoration.boxShadow![1].blurRadius, 16);
   });
 
+  test('neutral-press primary pressed state stays solid like the HTML', () {
+    final decoration = ExpenseSurface.decoration(
+      style: ExpenseSurfaceInteraction.neutralInset,
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(25),
+      primary: true,
+      pressed: true,
+    );
+
+    expect(decoration.color, AppColors.primary);
+    expect(decoration.gradient, isNull);
+    expect(decoration.border, isNull);
+  });
+
   test('non-primary inset surfaces stay flat like CSS inset box-shadow', () {
     final baseInset = ExpenseSurface.decoration(
       style: ExpenseSurfaceInteraction.insetInset,
