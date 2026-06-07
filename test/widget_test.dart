@@ -52,6 +52,12 @@ void main() {
                 'pills': <Object?>[null, null, null],
                 'boxes': <Object?>[null, null, null],
               },
+              'securitySettings': <String, Object?>{
+                'pinEnabled': false,
+                'biometricEnabled': false,
+                'biometricAvailable': false,
+                'biometricLabel': 'Nem elerheto',
+              },
             };
           }
           if (call.method == 'expenseUpdateThemeSettings') {
