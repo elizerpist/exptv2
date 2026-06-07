@@ -15,6 +15,7 @@ class MagnetStrip extends StatelessWidget {
     required this.totalExpense,
     this.height = defaultHeight,
     this.accent = AppColors.primary,
+    this.budgetProgress,
   });
 
   final MagnetType type;
@@ -22,6 +23,7 @@ class MagnetStrip extends StatelessWidget {
   final double totalExpense;
   final double height;
   final Color accent;
+  final BudgetStripProgress? budgetProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +32,7 @@ class MagnetStrip extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        return CustomPaint(
+        final strip = CustomPaint(
           key: ValueKey('magnet-strip-${type.nativeValue}'),
           size: Size(width, height),
           painter: MagnetStripPainter(
@@ -40,8 +42,67 @@ class MagnetStrip extends StatelessWidget {
             accent: accent,
           ),
         );
+        final progress = budgetProgress;
+        if (type != MagnetType.budget ||
+            progress == null ||
+            !progress.hasLimit) {
+          return strip;
+        }
+        final trackHeight = math.max(2.0, height * 6 / 35);
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              strip,
+              SizedBox(
+                key: const ValueKey('magnet-budget-progress-track'),
+                width: width,
+                height: trackHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.gray200,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: progress.ratio,
+                      heightFactor: 1,
+                      child: const DecoratedBox(
+                        key: ValueKey('magnet-budget-progress-fill'),
+                        decoration: BoxDecoration(
+                          color: Color(0xffff8800),
+                          borderRadius: BorderRadius.all(Radius.circular(2)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
       },
     );
+  }
+}
+
+class BudgetStripProgress {
+  const BudgetStripProgress({
+    required this.hasLimit,
+    required this.spent,
+    required this.limitAmount,
+  });
+
+  final bool hasLimit;
+  final double spent;
+  final double limitAmount;
+
+  double get ratio {
+    if (!hasLimit || limitAmount <= 0) return 0;
+    return (spent.abs() / limitAmount.abs()).clamp(0.0, 1.0).toDouble();
   }
 }
 

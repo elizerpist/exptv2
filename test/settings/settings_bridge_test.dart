@@ -2,7 +2,6 @@ import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/models/notification_parser_rule.dart';
 import 'package:exptv2/features/settings/models/recurring_transaction.dart';
-import 'package:exptv2/features/settings/models/security_settings.dart';
 import 'package:exptv2/features/transactions/models/recurring_rule.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/services/native_bridge.dart';
@@ -101,8 +100,7 @@ void main() {
                 'biometricLabel': 'Ujjlenyomat elerheto',
               };
             case 'expenseVerifySecurityPin':
-              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
-                  '1234';
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
             case 'expenseSetBiometricEnabled':
               return <String, Object?>{
                 'pinEnabled': true,
@@ -333,17 +331,20 @@ void main() {
     expect(calls.single.method, 'expenseSetBiometricEnabled');
   });
 
-  test('loads biometric availability and authenticates through native bridge', () async {
-    final availability = await bridge.expenseGetBiometricAvailability();
-    final authenticated = await bridge.expenseAuthenticateBiometric();
+  test(
+    'loads biometric availability and authenticates through native bridge',
+    () async {
+      final availability = await bridge.expenseGetBiometricAvailability();
+      final authenticated = await bridge.expenseAuthenticateBiometric();
 
-    expect(availability.biometricAvailable, isTrue);
-    expect(authenticated, isTrue);
-    expect(calls.map((call) => call.method), <String>[
-      'expenseGetBiometricAvailability',
-      'expenseAuthenticateBiometric',
-    ]);
-  });
+      expect(availability.biometricAvailable, isTrue);
+      expect(authenticated, isTrue);
+      expect(calls.map((call) => call.method), <String>[
+        'expenseGetBiometricAvailability',
+        'expenseAuthenticateBiometric',
+      ]);
+    },
+  );
 
   test(
     'loads and saves notification parser profiles through native bridge',
