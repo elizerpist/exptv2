@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -5,7 +7,7 @@ import '../../../core/theme/app_dimensions.dart';
 import '../../settings/models/app_theme_settings.dart';
 import '../app_tab.dart';
 
-class BottomNavItem extends StatelessWidget {
+class BottomNavItem extends StatefulWidget {
   const BottomNavItem({
     super.key,
     required this.tab,
@@ -26,7 +28,26 @@ class BottomNavItem extends StatelessWidget {
   final int badgeCount;
 
   @override
+  State<BottomNavItem> createState() => _BottomNavItemState();
+}
+
+class _BottomNavItemState extends State<BottomNavItem> {
+  var _pressed = false;
+  Timer? _releaseTimer;
+
+  @override
+  void dispose() {
+    _releaseTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final tab = widget.tab;
+    final active = widget.active;
+    final surfaceStyle = widget.surfaceStyle;
+    final surfaceColor = widget.surfaceColor;
+    final badgeCount = widget.badgeCount;
     final color = active ? AppColors.primary : tab.inactiveColor;
     final radius = BorderRadius.circular(AppDimensions.navItemRadius);
     final surfaceTint =
@@ -41,6 +62,7 @@ class BottomNavItem extends StatelessWidget {
         ),
         child: ExpensePressable(
           enabled: surfaceStyle.hasPressEffect,
+          forcePressed: _pressed,
           builder: (context, pressed) {
             final resolvedColor =
                 active &&
@@ -59,11 +81,17 @@ class BottomNavItem extends StatelessWidget {
                 borderRadius: radius,
                 child: Listener(
                   behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) => onPointerDown?.call(),
+                  onPointerDown: (_) {
+                    _releaseTimer?.cancel();
+                    _setPressed(true);
+                    widget.onPointerDown?.call();
+                  },
+                  onPointerUp: (_) => _releasePressedSoon(),
+                  onPointerCancel: (_) => _releasePressedSoon(),
                   child: InkWell(
                     key: ValueKey('bottom-nav-${tab.id}'),
                     borderRadius: radius,
-                    onTap: onTap,
+                    onTap: widget.onTap,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         vertical: AppDimensions.navItemVerticalPadding,
@@ -123,6 +151,18 @@ class BottomNavItem extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed == value || !mounted) return;
+    setState(() => _pressed = value);
+  }
+
+  void _releasePressedSoon() {
+    _releaseTimer?.cancel();
+    _releaseTimer = Timer(const Duration(milliseconds: 120), () {
+      _setPressed(false);
+    });
   }
 }
 
