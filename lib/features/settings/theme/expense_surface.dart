@@ -436,6 +436,7 @@ class _ExpensePressableState extends State<ExpensePressable> {
     final effectivePressed = widget.forcePressed || _pressed;
     if (!widget.enabled) return widget.builder(context, effectivePressed);
     return Listener(
+      behavior: HitTestBehavior.translucent,
       onPointerDown: (_) {
         _releaseTimer?.cancel();
         _setPressed(true);
