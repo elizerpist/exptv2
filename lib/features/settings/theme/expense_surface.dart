@@ -296,7 +296,7 @@ class ExpenseSurfaceContainer extends StatelessWidget {
     final content = Stack(
       fit: StackFit.passthrough,
       children: [
-        if (innerShadowLayer != null) innerShadowLayer,
+        ?innerShadowLayer,
         Padding(padding: padding ?? EdgeInsets.zero, child: child),
       ],
     );
