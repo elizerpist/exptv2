@@ -172,7 +172,7 @@ void main() {
     expect(find.text('Mágneskártya'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Sötétebb szürke').first,
+      find.text('Sötétebb szürke'),
       120,
       scrollable: find.byType(Scrollable).last,
     );
@@ -180,7 +180,7 @@ void main() {
     expect(find.text('Sötétebb szürke'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Neutrális -> befelé').first,
+      find.text('Neutrális -> befelé'),
       160,
       scrollable: find.byType(Scrollable).last,
     );
