@@ -47,4 +47,29 @@ class ExpenseTransactionEntityTest {
         assertEquals(90, map["recurringRuleId"])
         assertEquals(900, map["recurringInstanceId"])
     }
+
+    @Test
+    fun transactionMapAllowsUncategorizedPushSource() {
+        val row = ExpenseTransactionEntity(
+            id = 26060701,
+            date = "2026.06.07",
+            time = "21:10",
+            latitude = null,
+            longitude = null,
+            address = "Push notification",
+            merchant = "Tesco",
+            amount = -12345.0,
+            userAssignedName = null,
+            transactionCategoryID = null,
+            recurringTransactionId = null,
+            recurringRuleId = null,
+            recurringInstanceId = null,
+            sourceNotificationEventId = 77L,
+        )
+
+        val map = row.toMap()
+
+        assertEquals(null, map["transactionCategoryID"])
+        assertEquals(77L, map["sourceNotificationEventId"])
+    }
 }

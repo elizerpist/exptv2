@@ -99,11 +99,14 @@ class CalendarRenderBuilder {
             } else if (record.amount < 0) {
               final absolute = record.amount.abs();
               expense += absolute;
-              expenseByCategory.update(
-                record.transactionCategoryID,
-                (value) => value + absolute,
-                ifAbsent: () => absolute,
-              );
+              final categoryId = record.transactionCategoryID;
+              if (categoryId != null) {
+                expenseByCategory.update(
+                  categoryId,
+                  (value) => value + absolute,
+                  ifAbsent: () => absolute,
+                );
+              }
             }
           }
           monthIncome += income;

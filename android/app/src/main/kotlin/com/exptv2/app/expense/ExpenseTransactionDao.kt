@@ -102,8 +102,14 @@ interface ExpenseTransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE transactionCategoryID = :categoryId")
     suspend fun countByCategory(categoryId: Int): Int
 
-    @Query("SELECT transactionCategoryID, COUNT(*) AS count FROM transactions GROUP BY transactionCategoryID")
+    @Query("SELECT transactionCategoryID, COUNT(*) AS count FROM transactions WHERE transactionCategoryID IS NOT NULL GROUP BY transactionCategoryID")
     suspend fun categoryCounts(): List<CategoryCountRow>
+
+    @Query("SELECT * FROM transactions WHERE sourceNotificationEventId IN (:eventIds)")
+    suspend fun bySourceNotificationEventIds(eventIds: List<Long>): List<ExpenseTransactionEntity>
+
+    @Query("SELECT * FROM transactions WHERE sourceNotificationEventId = :eventId ORDER BY id DESC LIMIT 1")
+    suspend fun bySourceNotificationEventId(eventId: Long): ExpenseTransactionEntity?
 
     @Query("DELETE FROM transactions")
     suspend fun clearAll()

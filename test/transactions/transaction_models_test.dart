@@ -86,6 +86,25 @@ void main() {
     expect(record.toMap(), containsPair('recurringInstanceId', 4201));
   });
 
+  test('TransactionRecord parses uncategorized push source payload', () {
+    final record = TransactionRecord.fromMap({
+      'id': 26060701,
+      'date': '2026.06.07',
+      'time': '21:10',
+      'merchant': 'Tesco',
+      'amount': -12345,
+      'userAssignedName': null,
+      'transactionCategoryID': null,
+      'sourceNotificationEventId': 77,
+    });
+
+    expect(record.transactionCategoryID, isNull);
+    expect(record.sourceNotificationEventId, 77);
+    expect(record.displayAmount, '-12 345 Ft');
+    expect(record.toMap(), containsPair('transactionCategoryID', null));
+    expect(record.toMap(), containsPair('sourceNotificationEventId', 77));
+  });
+
   test('TransactionSummary calculates income expense and active total', () {
     final records = [
       TransactionRecord.fromMap({

@@ -56,6 +56,14 @@ class ExpenseRepository(context: Context) {
         return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
     }
 
+    suspend fun transactionsBySourceNotificationEventIds(eventIds: List<Long>): Map<Long, ExpenseTransactionEntity> {
+        seedIfEmpty()
+        if (eventIds.isEmpty()) return emptyMap()
+        return transactions.bySourceNotificationEventIds(eventIds)
+            .mapNotNull { row -> row.sourceNotificationEventId?.let { it to row } }
+            .toMap()
+    }
+
 
 
 
@@ -594,11 +602,12 @@ class ExpenseRepository(context: Context) {
             throw ExpenseValidationException("INVALID_TRANSACTION_TYPE", "Type must be income or expense")
         }
 
-        val categoryId = (args["transactionCategoryID"] as? Number)?.toInt()
-            ?: args["transactionCategoryID"]?.toString()?.toIntOrNull()
-            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category is required")
-        val category = categories.byId(categoryId)
-            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val categoryId = optionalInt(args["transactionCategoryID"])
+        val category = categoryId?.let { id ->
+            categories.byId(id)
+                ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        }
+        val sourceNotificationEventId = optionalLong(args["sourceNotificationEventId"])
 
         val date = formatDate(args["date"]?.toString())
         val time = args["time"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: "00:00"
@@ -614,16 +623,18 @@ class ExpenseRepository(context: Context) {
             amount = signedAmount,
             userAssignedName = args["userAssignedName"]?.toString(),
             transactionCategoryID = categoryId,
+            sourceNotificationEventId = sourceNotificationEventId,
         )
         transactions.insert(row)
         Log.d(
             "ExpenseNotification",
             "[Notification] transaction saved id=${row.id} amount=${row.amount} category=${row.transactionCategoryID}",
         )
-        if (row.amount < 0) {
+        if (row.amount < 0 && category != null) {
             emitLimitAlertsForTransaction(row, category)
         } else {
-            Log.d("ExpenseNotification", "[Notification] transaction limit evaluation skipped id=${row.id} reason=non_expense")
+            val reason = if (row.amount >= 0) "non_expense" else "missing_category"
+            Log.d("ExpenseNotification", "[Notification] transaction limit evaluation skipped id=${row.id} reason=$reason")
         }
         return row.toMap()
     }
@@ -651,9 +662,15 @@ class ExpenseRepository(context: Context) {
             throw ExpenseValidationException("INVALID_TRANSACTION_TYPE", "Type must be income or expense")
         }
 
-        val categoryId = optionalInt(args["transactionCategoryID"]) ?: existing.transactionCategoryID
-        val category = categories.byId(categoryId)
-            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val categoryId = if (args.containsKey("transactionCategoryID")) {
+            optionalInt(args["transactionCategoryID"])
+        } else {
+            existing.transactionCategoryID
+        }
+        val category = categoryId?.let { id ->
+            categories.byId(id)
+                ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        }
 
         val signedAmount = if (type == "income") kotlin.math.abs(rawAmount) else -kotlin.math.abs(rawAmount)
         val row = existing.copy(
@@ -673,12 +690,13 @@ class ExpenseRepository(context: Context) {
             "ExpenseNotification",
             "[Notification] transaction update saved id=${row.id} oldAmount=${existing.amount} newAmount=${row.amount} oldCategory=${existing.transactionCategoryID} newCategory=${row.transactionCategoryID} oldDate=${existing.date} newDate=${row.date}",
         )
-        if (row.amount < 0) {
+        if (row.amount < 0 && category != null) {
             emitLimitAlertsForTransaction(row, category)
         } else {
+            val reason = if (row.amount >= 0) "non_expense" else "missing_category"
             Log.d(
                 "ExpenseNotification",
-                "[Notification] transaction update limit evaluation skipped id=${row.id} reason=non_expense",
+                "[Notification] transaction update limit evaluation skipped id=${row.id} reason=$reason",
             )
         }
         return row.toMap()
@@ -784,7 +802,7 @@ class ExpenseRepository(context: Context) {
         val startedAt = System.currentTimeMillis()
         val periods = ExpenseLimitNotificationEvaluator.periodsFor(transaction.date)
         val limits = categoryLimits.activeExpenseLimitsForTransaction(
-            categoryId = transaction.transactionCategoryID,
+            categoryId = transactionCategory.transactionCategoryID,
             monthKey = periods.monthKey,
             yearKey = periods.yearKey,
         )
@@ -929,7 +947,7 @@ class ExpenseRepository(context: Context) {
                 ),
                 notificationCards,
             )
-            categories.byId(transaction.transactionCategoryID)?.let { emitLimitAlertsForTransaction(transaction, it) }
+            categoryFor(transaction)?.let { category -> emitLimitAlertsForTransaction(transaction, category) }
             processed.add(rule.copy(updatedAt = now))
         }
         return processed
@@ -982,7 +1000,7 @@ class ExpenseRepository(context: Context) {
             ),
             notificationCards,
         )
-        categories.byId(transaction.transactionCategoryID)?.let { emitLimitAlertsForTransaction(transaction, it) }
+        categoryFor(transaction)?.let { category -> emitLimitAlertsForTransaction(transaction, category) }
         return transaction
     }
 
@@ -1090,7 +1108,7 @@ class ExpenseRepository(context: Context) {
                 notificationCards,
             )
             if (transaction.amount < 0) {
-                val category = categories.byId(transaction.transactionCategoryID)
+                val category = categoryFor(transaction)
                 if (category != null) {
                     emitLimitAlertsForTransaction(transaction, category)
                 } else {
@@ -1455,6 +1473,16 @@ class ExpenseRepository(context: Context) {
 
     private fun optionalInt(value: Any?): Int? {
         return (value as? Number)?.toInt() ?: value?.toString()?.toIntOrNull()
+    }
+
+    private fun optionalLong(value: Any?): Long? = when (value) {
+        is Number -> value.toLong()
+        null -> null
+        else -> value.toString().toLongOrNull()
+    }
+
+    private suspend fun categoryFor(transaction: ExpenseTransactionEntity): TransactionCategoryEntity? {
+        return transaction.transactionCategoryID?.let { categoryId -> categories.byId(categoryId) }
     }
 
     private fun doubleArg(value: Any?, fallback: Double): Double {

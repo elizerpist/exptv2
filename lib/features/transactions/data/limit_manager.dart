@@ -57,19 +57,22 @@ class LimitManager {
     final window = windowForSummary(summaryWindow);
     final periodKey = periodKeyFor(summaryWindow, referenceDate);
     final transactionType = activeType.nativeValue;
-    final records = (windowedTransactions ??
-            recordsForWindow(
-              transactions: transactions,
-              activeType: activeType,
-              summaryWindow: summaryWindow,
-              referenceDate: referenceDate,
-            ))
-        .toList();
+    final records =
+        (windowedTransactions ??
+                recordsForWindow(
+                  transactions: transactions,
+                  activeType: activeType,
+                  summaryWindow: summaryWindow,
+                  referenceDate: referenceDate,
+                ))
+            .toList();
 
     final spentByCategory = <int, double>{};
     for (final record in records) {
+      final categoryId = record.transactionCategoryID;
+      if (categoryId == null) continue;
       spentByCategory.update(
-        record.transactionCategoryID,
+        categoryId,
         (value) => value + record.amount.abs(),
         ifAbsent: () => record.amount.abs(),
       );

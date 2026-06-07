@@ -67,9 +67,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   @override
   void initState() {
     super.initState();
-    _swipeVisual = ValueNotifier<_SwipeVisualState>(
-      _SwipeVisualState.idle,
-    );
+    _swipeVisual = ValueNotifier<_SwipeVisualState>(_SwipeVisualState.idle);
   }
 
   @override
@@ -186,6 +184,10 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     final amountColor = widget.record.type == TransactionType.income
         ? AppColors.income
         : AppColors.expense;
+    final uncategorized = widget.category == null;
+    final avatarColor = uncategorized
+        ? AppColors.gray500
+        : widget.category!.slotColor;
     return GestureDetector(
       key: ValueKey('transaction-logbox-${widget.record.id}'),
       behavior: HitTestBehavior.opaque,
@@ -248,9 +250,6 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                   widget.category != null &&
                                   widget.onCategoryFilter != null,
                               builder: (context, avatarPressed) {
-                                final avatarColor =
-                                    widget.category?.slotColor ??
-                                    AppColors.gray500;
                                 return ExpenseSurfaceContainer(
                                   surfaceKey: ValueKey(
                                     'transaction-logbox-avatar-surface-${widget.record.id}',
@@ -272,6 +271,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                     size: 46,
                                     iconSize: 28,
                                     showShadow: false,
+                                    showQuestionMark: uncategorized,
                                   ),
                                 );
                               },

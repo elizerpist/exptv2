@@ -251,11 +251,10 @@ class FastInfoPeriodAggregates {
   ) {
     final groups = <int, List<FastInfoDatedTransaction>>{};
     for (final row in rows) {
+      final categoryId = row.record.transactionCategoryID;
+      if (categoryId == null) continue;
       groups
-          .putIfAbsent(
-            row.record.transactionCategoryID,
-            () => <FastInfoDatedTransaction>[],
-          )
+          .putIfAbsent(categoryId, () => <FastInfoDatedTransaction>[])
           .add(row);
     }
     return Map<int, List<FastInfoDatedTransaction>>.unmodifiable({
