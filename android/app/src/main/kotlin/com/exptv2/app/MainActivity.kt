@@ -53,6 +53,19 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(events)
                     }
+                    "loadNotificationEventPage" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val page = withContext(Dispatchers.IO) { repository.listPage(args).toMap() }
+                        result.success(page)
+                    }
+                    "markNotificationEventSystem" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val id = (args["id"] as? Number)?.toLong()
+                            ?: args["id"]?.toString()?.toLongOrNull()
+                            ?: 0L
+                        val updated = withContext(Dispatchers.IO) { repository.markSystem(id) }
+                        result.success(updated)
+                    }
                     "listInstalledApps" -> scope.launch {
                         val apps = withContext(Dispatchers.IO) { installedApps() }
                         result.success(apps)
