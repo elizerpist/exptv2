@@ -179,6 +179,7 @@ class _SearchPillState extends State<SearchPill> {
               focusNode: _focusNode,
               controller: _controller,
               onChanged: widget.onQueryChanged,
+              onTap: _requestFocus,
               onTapOutside: (_) => _focusNode.unfocus(),
               decoration: InputDecoration(
                 border: InputBorder.none,

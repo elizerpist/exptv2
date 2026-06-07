@@ -135,6 +135,18 @@ void main() {
       find.byKey(const ValueKey('bottom-nav-home-surface')),
     );
     final decoration = activeSurface.decoration as BoxDecoration;
-    expect(decoration.gradient, isNotNull);
+    expect(decoration.gradient, isNull);
+
+    await tester.pump(ExpenseSurface.pressDuration);
+
+    final transformYs = tester
+        .widgetList<Transform>(
+          find.ancestor(
+            of: find.byKey(const ValueKey('bottom-nav-home-surface')),
+            matching: find.byType(Transform),
+          ),
+        )
+        .map((transform) => transform.transform.getTranslation().y);
+    expect(transformYs, contains(moreOrLessEquals(2, epsilon: 0.01)));
   });
 }
