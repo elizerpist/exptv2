@@ -133,6 +133,16 @@ class EventStore extends ChangeNotifier {
     await _saveNotificationParserProfiles();
   }
 
+  Future<void> saveTrainedNotificationParserProfile(
+    NotificationParserProfile profile,
+  ) async {
+    final enabledProfile = profile.copyWith(enabled: true);
+    notificationParserConfig = notificationParserConfig.upsert(enabledProfile);
+    selectedNotificationParserProfileId = enabledProfile.id;
+    notifyListeners();
+    await _saveNotificationParserProfiles();
+  }
+
   Future<void> saveSelectedNotificationParserProfile() async {
     if (!selectedNotificationParserProfile.preview.isReady) return;
     await _saveNotificationParserProfiles();
@@ -152,6 +162,9 @@ class EventStore extends ChangeNotifier {
   }
 
   String? _firstProfileId() {
+    for (final profile in notificationParserProfiles) {
+      if (profile.enabled) return profile.id;
+    }
     return notificationParserProfiles.isEmpty
         ? null
         : notificationParserProfiles.first.id;

@@ -12,10 +12,12 @@ void main() {
 
   final savedParserRules = <Map<dynamic, dynamic>>[];
   final savedParserProfiles = <Map<dynamic, dynamic>>[];
+  var firstProfileEnabled = true;
 
   setUp(() {
     savedParserRules.clear();
     savedParserProfiles.clear();
+    firstProfileEnabled = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(methodChannel, (call) async {
           if (call.method == 'loadEvents') {
@@ -34,7 +36,7 @@ void main() {
                 <String, Object?>{
                   'id': 'bank-a',
                   'name': 'Bank A',
-                  'enabled': true,
+                  'enabled': firstProfileEnabled,
                   'appFilterText': r'^Bank A$',
                   'sampleText': 'Paid 999 Ft at Corner Shop',
                   'includeKeyword': 'Paid',
@@ -44,7 +46,7 @@ void main() {
                 <String, Object?>{
                   'id': 'bank-b',
                   'name': 'Bank B',
-                  'enabled': false,
+                  'enabled': !firstProfileEnabled,
                   'appFilterText': r'^Bank B$',
                   'sampleText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
                   'includeKeyword': '',
@@ -135,6 +137,21 @@ void main() {
     expect(store.notificationParserConfig.activeProfiles, hasLength(2));
     expect(savedParserProfiles, hasLength(1));
   });
+
+  test(
+    'selects the first enabled notification parser profile on load',
+    () async {
+      firstProfileEnabled = false;
+      final store = EventStore(
+        NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+        realtimeEnabled: false,
+      );
+
+      await store.start();
+
+      expect(store.selectedNotificationParserProfile.id, 'bank-b');
+    },
+  );
 
   test('adds a new notification parser profile', () async {
     final store = EventStore(
