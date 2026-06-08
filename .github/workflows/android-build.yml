@@ -45,6 +45,22 @@ jobs:
       - name: Run Flutter tests
         run: flutter test
 
+      - name: Configure Android signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.EXPTV2_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.EXPTV2_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.EXPTV2_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.EXPTV2_ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/exptv2-debug.keystore
+          cat > android/key.properties <<EOF
+          storeFile=app/exptv2-debug.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
       - name: Build debug APK
         run: flutter build apk --debug
 
