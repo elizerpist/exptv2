@@ -8,6 +8,7 @@ import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/export/transaction_export_service.dart';
+import '../transactions/sync/google_sheets_sync_controller.dart';
 import 'data/settings_repository.dart';
 import 'models/app_theme_settings.dart';
 import 'models/fast_info_config.dart';
@@ -49,6 +50,7 @@ class SettingsPage extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     this.expenseTheme,
+    this.googleSheetsSyncController,
     this.onThemeSettingsChanged,
     this.onFastInfoConfigChanged,
   });
@@ -56,6 +58,7 @@ class SettingsPage extends StatefulWidget {
   final EventStore store;
   final NativeBridge nativeBridge;
   final ExpenseTheme? expenseTheme;
+  final GoogleSheetsSyncController? googleSheetsSyncController;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final ValueChanged<FastInfoConfig>? onFastInfoConfigChanged;
 
@@ -368,6 +371,7 @@ class _SettingsPageState extends State<SettingsPage> {
           repository: TransactionRepository(widget.nativeBridge),
           nativeBridge: widget.nativeBridge,
         ),
+        googleSheetsSyncController: widget.googleSheetsSyncController,
       ),
       _SettingsMenu.importData => const SimpleOptionsPanel(
         title: 'Import formátum kiválasztása',

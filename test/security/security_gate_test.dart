@@ -48,13 +48,14 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Widget subject() {
+  Widget subject({VoidCallback? onUnlocked}) {
     return MaterialApp(
       home: SecurityGate(
         nativeBridge: NativeBridge(
           methodChannel: channel,
           eventChannel: const EventChannel('test/security_gate_events'),
         ),
+        onUnlocked: onUnlocked,
         child: const Text('Unlocked app'),
       ),
     );
@@ -123,6 +124,31 @@ void main() {
 
     expect(find.text('Unlocked app'), findsOneWidget);
     expect(find.text('Feloldás'), findsNothing);
+  });
+
+  testWidgets('reports app entry once after each unlock', (tester) async {
+    var unlockedCount = 0;
+    await tester.pumpWidget(subject(onUnlocked: () => unlockedCount += 1));
+    await tester.pumpAndSettle();
+
+    expect(unlockedCount, 0);
+    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
+    await tester.pumpAndSettle();
+    expect(unlockedCount, 1);
+
+    await tester.pump(const Duration(minutes: 30));
+    expect(unlockedCount, 1);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
+    await tester.pumpAndSettle();
+
+    expect(unlockedCount, 2);
   });
 
   testWidgets('biometric failure keeps pin fallback visible', (tester) async {

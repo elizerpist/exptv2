@@ -360,7 +360,8 @@ void main() {
     expect(find.text('CSV mentése telefonra'), findsOneWidget);
     expect(find.text('CSV megosztása'), findsOneWidget);
     expect(find.text('CSV másolása vágólapra'), findsNothing);
-    expect(find.text('Google Sheets (később)'), findsOneWidget);
+    expect(find.text('Google Sheets csatlakoztatása'), findsOneWidget);
+    expect(find.text('Szinkron most'), findsOneWidget);
 
     await tester.tap(find.text('CSV mentése telefonra'));
     await tester.pumpAndSettle();
@@ -371,10 +372,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, contains('expenseShareTextFile'));
     expect(find.text('CSV megosztás előkészítve'), findsOneWidget);
-
-    await tester.tap(find.text('Google Sheets (később)'));
-    await tester.pumpAndSettle();
-    expect(find.text('Google Sheets export később érkezik'), findsOneWidget);
   });
 
   testWidgets('permissions menu opens Android permission actions', (
