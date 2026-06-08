@@ -194,6 +194,8 @@ void main() {
       const Offset(0, -500),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('push-logbox-90')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('push-logbox-90')));
     await tester.pumpAndSettle();
 
