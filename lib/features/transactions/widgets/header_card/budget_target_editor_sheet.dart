@@ -3,8 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/debug/debug_console.dart';
-import '../../../../core/debug/debug_text_input.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
+import '../../../settings/theme/expense_theme.dart';
 import '../../data/budget_progress_manager.dart';
 import '../../data/limit_allocation_manager.dart';
 import '../../data/limit_slider_range.dart';
@@ -14,9 +15,9 @@ import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import '../../slots/category_icon_manager.dart';
-import '../amount_field.dart';
 import '../slide_up_menu_card.dart';
 import '../slide_up_panel_metrics.dart';
+import '../themed_pill_field.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_limit_slider.dart';
 
@@ -35,6 +36,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
     required this.onSaveOverview,
     required this.onSaveCategory,
     this.overviewItems = const [],
+    this.expenseTheme,
   });
 
   final BackheaderBudgetItem item;
@@ -45,6 +47,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
   final List<CategoryBudgetBarData> categoryBars;
   final List<OverviewBudgetData> overviewItems;
   final double periodIncome;
+  final ExpenseTheme? expenseTheme;
   final VoidCallback onCancel;
   final ValueChanged<BackheaderBudgetItem> onActiveItemChanged;
   final Future<void> Function(
@@ -128,6 +131,9 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final expenseTheme =
+        widget.expenseTheme ??
+        ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     return SlideUpMenuCard(
       cardKey: const ValueKey('budget-target-editor-card'),
       debugLabel: 'BudgetTargetEditor',
@@ -177,6 +183,8 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                             onSetToMax: _setOverviewToMax,
                             showSetToMax: _activeItem.overview != null,
                             partitionBar: _buildPartitionBar(),
+                            surfaceColor: expenseTheme.fieldSurface,
+                            surfaceStyle: expenseTheme.contentSurfaceStyle,
                           ),
                         ),
                       );
@@ -191,6 +199,8 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                   ),
                   child: _BudgetLimitSaveButton(
                     saving: _saving,
+                    surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                    color: expenseTheme.accent,
                     onSave: _savePendingChanges,
                   ),
                 ),
@@ -624,6 +634,8 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.onSetToMax,
     required this.showSetToMax,
     required this.partitionBar,
+    required this.surfaceColor,
+    required this.surfaceStyle,
   });
 
   final BackheaderBudgetItem item;
@@ -647,6 +659,8 @@ class _BudgetLimitCard extends StatelessWidget {
   final VoidCallback onSetToMax;
   final bool showSetToMax;
   final Widget partitionBar;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -751,34 +765,35 @@ class _BudgetLimitCard extends StatelessWidget {
           const SizedBox(height: 2),
         const Spacer(),
         const SizedBox(height: 12),
-        DebugTextField(
+        ThemedPillField(
           fieldKey: const ValueKey('limit-amount-input'),
           debugLabel: 'BudgetTargetEditor.amount',
           controller: amountController,
           focusNode: amountFocusNode,
           keyboardType: TextInputType.number,
           onChanged: onInputChanged,
-          decoration: transactionFieldDecoration(inputLabel).copyWith(
-            suffixText: 'Ft',
-            suffixIcon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showSetToMax)
-                  IconButton(
-                    key: const ValueKey('limit-slider-end-button'),
-                    onPressed: onSetToMax,
-                    icon: const Icon(Icons.last_page),
-                    tooltip: 'Max',
-                  ),
+          label: inputLabel,
+          suffixText: 'Ft',
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showSetToMax)
                 IconButton(
-                  key: const ValueKey('limit-reset-inline-button'),
-                  onPressed: onReset,
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Reset',
+                  key: const ValueKey('limit-slider-end-button'),
+                  onPressed: onSetToMax,
+                  icon: const Icon(Icons.last_page),
+                  tooltip: 'Max',
                 ),
-              ],
-            ),
+              IconButton(
+                key: const ValueKey('limit-reset-inline-button'),
+                onPressed: onReset,
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Reset',
+              ),
+            ],
           ),
+          surfaceColor: surfaceColor,
+          surfaceStyle: surfaceStyle,
         ),
       ],
     );
@@ -786,23 +801,27 @@ class _BudgetLimitCard extends StatelessWidget {
 }
 
 class _BudgetLimitSaveButton extends StatelessWidget {
-  const _BudgetLimitSaveButton({required this.saving, required this.onSave});
+  const _BudgetLimitSaveButton({
+    required this.saving,
+    required this.surfaceStyle,
+    required this.color,
+    required this.onSave,
+  });
 
   final bool saving;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final Color color;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
-      key: const ValueKey('limit-save-button'),
+    return ExpenseSurfaceButton(
+      buttonKey: const ValueKey('limit-save-button'),
+      label: 'Mentés',
       onPressed: saving ? null : onSave,
-      style: FilledButton.styleFrom(
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.white,
-        minimumSize: const Size.fromHeight(50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-      ),
-      child: Text(saving ? 'Mentés...' : 'Mentés'),
+      saving: saving,
+      surfaceStyle: surfaceStyle,
+      color: color,
     );
   }
 }

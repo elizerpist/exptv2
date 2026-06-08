@@ -478,6 +478,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               store: _transactionStore,
               nativeBridge: widget.nativeBridge,
               budgetEditorActiveKey: _budgetEditorActiveKey,
+              expenseTheme: expenseTheme,
             ),
           ),
         ],
@@ -517,11 +518,13 @@ class _ShellSheetHost extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     required this.budgetEditorActiveKey,
+    required this.expenseTheme,
   });
 
   final TransactionStore store;
   final NativeBridge nativeBridge;
   final ValueNotifier<String?> budgetEditorActiveKey;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_ShellSheetHost> createState() => _ShellSheetHostState();
@@ -600,6 +603,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
           child: _TransactionSheetSlot(
             key: _transactionSlotKey,
             store: widget.store,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
         Positioned.fill(
@@ -610,6 +614,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             key: _recurringSlotKey,
             store: widget.store,
             nativeBridge: widget.nativeBridge,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
         Positioned.fill(
@@ -617,6 +622,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             key: _budgetSlotKey,
             store: widget.store,
             activeKey: widget.budgetEditorActiveKey,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
       ],
@@ -625,9 +631,14 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 }
 
 class _TransactionSheetSlot extends StatefulWidget {
-  const _TransactionSheetSlot({super.key, required this.store});
+  const _TransactionSheetSlot({
+    super.key,
+    required this.store,
+    required this.expenseTheme,
+  });
 
   final TransactionStore store;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_TransactionSheetSlot> createState() => _TransactionSheetSlotState();
@@ -685,6 +696,7 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
       initialTransaction: _editingTransaction,
       openRequestedAt: _openRequestedAt,
       visible: _open,
+      expenseTheme: widget.expenseTheme,
       onClose: close,
     );
   }
@@ -757,10 +769,12 @@ class _RecurringSheetSlot extends StatefulWidget {
     super.key,
     required this.store,
     required this.nativeBridge,
+    required this.expenseTheme,
   });
 
   final TransactionStore store;
   final NativeBridge nativeBridge;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_RecurringSheetSlot> createState() => _RecurringSheetSlotState();
@@ -791,6 +805,7 @@ class _RecurringSheetSlotState extends State<_RecurringSheetSlot> {
       store: widget.store,
       visible: _open,
       openRequestedAt: _openRequestedAt,
+      expenseTheme: widget.expenseTheme,
       onLoadInstalledApps: widget.nativeBridge.listInstalledApps,
       onClose: close,
     );
@@ -802,10 +817,12 @@ class _BudgetTargetSheetSlot extends StatefulWidget {
     super.key,
     required this.store,
     required this.activeKey,
+    required this.expenseTheme,
   });
 
   final TransactionStore store;
   final ValueNotifier<String?> activeKey;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_BudgetTargetSheetSlot> createState() => _BudgetTargetSheetSlotState();
@@ -860,6 +877,7 @@ class _BudgetTargetSheetSlotState extends State<_BudgetTargetSheetSlot> {
           categoryBars: widget.store.categoryBudgetBars,
           overviewItems: widget.store.overviewBudgetItems,
           periodIncome: widget.store.activePeriodIncomeTotal,
+          expenseTheme: widget.expenseTheme,
           onCancel: close,
           onActiveItemChanged: _setActiveItem,
           onSaveOverview:

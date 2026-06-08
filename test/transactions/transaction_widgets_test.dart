@@ -9,6 +9,7 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
+import 'package:exptv2/features/transactions/widgets/themed_pill_field.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_box.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_list.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_type_pills.dart';
@@ -593,6 +594,33 @@ void main() {
     final badgeContainer = tester.widget<Container>(find.byType(Container));
     final badgeDecoration = badgeContainer.decoration! as BoxDecoration;
     expect(badgeDecoration.boxShadow, isNull);
+  });
+
+  testWidgets('themed pill field renders inset surface in neumorphism', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: '1200');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ThemedPillField(
+          fieldKey: const ValueKey('test-themed-pill-field'),
+          debugLabel: 'Test.amount',
+          controller: controller,
+          label: 'Összeg',
+          surfaceColor: AppColors.gray200,
+          surfaceStyle: ExpenseSurfaceInteraction.insetInset,
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('test-themed-pill-field-surface')),
+    );
+    final decoration = surface.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.gray200);
+    expect(decoration.boxShadow, isNull);
   });
 
   testWidgets('transaction log row uses configured surface color and style', (

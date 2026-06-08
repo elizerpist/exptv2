@@ -582,6 +582,91 @@ class ExpenseSurfaceContainer extends StatelessWidget {
   }
 }
 
+class ExpenseSurfaceButton extends StatelessWidget {
+  const ExpenseSurfaceButton({
+    super.key,
+    required this.buttonKey,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.saving = false,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.color = AppColors.primary,
+    this.foregroundColor = AppColors.white,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final bool saving;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final Color color;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = saving ? 'Mentés...' : label;
+    if (!surfaceStyle.hasPressEffect) {
+      final style = FilledButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: foregroundColor,
+        minimumSize: const Size.fromHeight(50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+      );
+      return icon == null
+          ? FilledButton(
+              key: buttonKey,
+              onPressed: saving ? null : onPressed,
+              style: style,
+              child: Text(text),
+            )
+          : FilledButton.icon(
+              key: buttonKey,
+              onPressed: saving ? null : onPressed,
+              icon: Icon(icon, size: 19),
+              label: Text(text),
+              style: style,
+            );
+    }
+    return ExpensePressable(
+      enabled: onPressed != null && !saving,
+      builder: (context, pressed) {
+        return GestureDetector(
+          key: buttonKey,
+          behavior: HitTestBehavior.opaque,
+          onTap: saving ? null : onPressed,
+          child: ExpenseSurfaceContainer(
+            style: surfaceStyle,
+            color: color,
+            primary: true,
+            primaryColor: color,
+            borderRadius: BorderRadius.circular(25),
+            pressed: pressed,
+            height: 50,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 19, color: foregroundColor),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: foregroundColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ExpenseSurfaceInnerPainter extends CustomPainter {
   const _ExpenseSurfaceInnerPainter({
     required this.borderRadius,

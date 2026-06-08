@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
+import 'themed_pill_field.dart';
 
 class AmountField extends StatelessWidget {
   const AmountField({
@@ -9,43 +10,27 @@ class AmountField extends StatelessWidget {
     required this.controller,
     this.focusNode,
     this.debugLabel = 'AmountField.amount',
+    this.surfaceColor = AppColors.gray50,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final TextEditingController controller;
   final FocusNode? focusNode;
   final String debugLabel;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
 
   @override
   Widget build(BuildContext context) {
-    return DebugTextField(
+    return ThemedPillField(
       debugLabel: debugLabel,
       controller: controller,
       focusNode: focusNode,
       keyboardType: TextInputType.number,
-      decoration: transactionFieldDecoration(
-        'Összeg',
-      ).copyWith(suffixText: 'Ft'),
+      label: 'Összeg',
+      suffixText: 'Ft',
+      surfaceColor: surfaceColor,
+      surfaceStyle: surfaceStyle,
     );
   }
-}
-
-InputDecoration transactionFieldDecoration(String label) {
-  return InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: AppColors.gray50,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(25),
-      borderSide: const BorderSide(color: AppColors.gray200),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(25),
-      borderSide: const BorderSide(color: AppColors.gray200),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(25),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-    ),
-  );
 }

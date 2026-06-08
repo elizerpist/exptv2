@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
-import 'amount_field.dart';
+import '../../settings/models/app_theme_settings.dart';
+import 'themed_pill_field.dart';
 
 class DateTimeFields extends StatelessWidget {
   const DateTimeFields({
@@ -14,6 +14,8 @@ class DateTimeFields extends StatelessWidget {
     this.dateFocusNode,
     this.timeFocusNode,
     this.debugLabelPrefix = 'DateTimeFields',
+    this.surfaceColor = AppColors.gray50,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final TextEditingController dateController;
@@ -23,43 +25,47 @@ class DateTimeFields extends StatelessWidget {
   final FocusNode? dateFocusNode;
   final FocusNode? timeFocusNode;
   final String debugLabelPrefix;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: DebugTextField(
+          child: ThemedPillField(
             debugLabel: '$debugLabelPrefix.date',
             controller: dateController,
             focusNode: dateFocusNode,
             keyboardType: TextInputType.datetime,
-            decoration: transactionFieldDecoration('Dátum').copyWith(
-              suffixIcon: IconButton(
-                key: const ValueKey('transaction-date-picker-button'),
-                onPressed: onPickDate ?? () => _pickDate(context),
-                icon: const Icon(Icons.calendar_month_outlined, size: 20),
-                color: AppColors.gray500,
-                tooltip: 'Dátum választása',
-              ),
+            label: 'Dátum',
+            surfaceColor: surfaceColor,
+            surfaceStyle: surfaceStyle,
+            suffixIcon: IconButton(
+              key: const ValueKey('transaction-date-picker-button'),
+              onPressed: onPickDate ?? () => _pickDate(context),
+              icon: const Icon(Icons.calendar_month_outlined, size: 20),
+              color: AppColors.gray500,
+              tooltip: 'Dátum választása',
             ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: DebugTextField(
+          child: ThemedPillField(
             debugLabel: '$debugLabelPrefix.time',
             controller: timeController,
             focusNode: timeFocusNode,
             keyboardType: TextInputType.datetime,
-            decoration: transactionFieldDecoration('Idő').copyWith(
-              suffixIcon: IconButton(
-                key: const ValueKey('transaction-time-picker-button'),
-                onPressed: onPickTime ?? () => _pickTime(context),
-                icon: const Icon(Icons.schedule_outlined, size: 20),
-                color: AppColors.gray500,
-                tooltip: 'Idő választása',
-              ),
+            label: 'Idő',
+            surfaceColor: surfaceColor,
+            surfaceStyle: surfaceStyle,
+            suffixIcon: IconButton(
+              key: const ValueKey('transaction-time-picker-button'),
+              onPressed: onPickTime ?? () => _pickTime(context),
+              icon: const Icon(Icons.schedule_outlined, size: 20),
+              color: AppColors.gray500,
+              tooltip: 'Idő választása',
             ),
           ),
         ),

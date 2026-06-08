@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/installed_app.dart';
+import '../../settings/models/app_theme_settings.dart';
 import '../../settings/models/notification_parser_rule.dart';
+import '../../settings/theme/expense_theme.dart';
 import '../../settings/widgets/app_filter_control.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_category.dart';
@@ -16,6 +18,7 @@ import 'category_scroll_picker.dart';
 import 'category_selector_field.dart';
 import 'slide_up_menu_card.dart';
 import 'slide_up_panel_metrics.dart';
+import 'themed_pill_field.dart';
 
 enum _TrainingMode { amount, merchant }
 
@@ -27,6 +30,7 @@ class RecurringManagerSheet extends StatefulWidget {
     required this.onClose,
     required this.onLoadInstalledApps,
     this.openRequestedAt,
+    this.expenseTheme,
   });
 
   final TransactionStore store;
@@ -34,6 +38,7 @@ class RecurringManagerSheet extends StatefulWidget {
   final VoidCallback onClose;
   final Future<List<InstalledApp>> Function() onLoadInstalledApps;
   final DateTime? openRequestedAt;
+  final ExpenseTheme? expenseTheme;
 
   @override
   State<RecurringManagerSheet> createState() => _RecurringManagerSheetState();
@@ -108,6 +113,9 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       builder: (context, _) {
         final panelHeight = SlideUpPanelMetrics.fullHeight(context);
         final activeType = _editing?.transactionType ?? widget.store.activeType;
+        final expenseTheme =
+            widget.expenseTheme ??
+            ExpenseTheme.fromSettings(AppThemeSettings.defaults());
         final categories = widget.store.categories
             .where((category) => category.normalizedType == activeType)
             .toList();
@@ -168,6 +176,8 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                             category: _category,
                             categoryPickerOpen: _categoryPickerOpen,
                             categories: categories,
+                            surfaceColor: expenseTheme.fieldSurface,
+                            surfaceStyle: expenseTheme.contentSurfaceStyle,
                             onCategoryTap: () => setState(
                               () => _categoryPickerOpen = !_categoryPickerOpen,
                             ),
@@ -222,27 +232,20 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                             ),
                           ],
                           const SizedBox(height: 14),
-                          FilledButton.icon(
-                            key: const ValueKey('recurring-manager-save'),
+                          ExpenseSurfaceButton(
+                            buttonKey: const ValueKey(
+                              'recurring-manager-save',
+                            ),
                             onPressed: _saving ? null : _save,
-                            icon: Icon(
-                              _editing == null
-                                  ? Icons.add_rounded
-                                  : Icons.save_outlined,
-                              size: 19,
-                            ),
-                            label: Text(
-                              _saving
-                                  ? 'Mentés...'
-                                  : _editing == null
-                                  ? 'Szabály hozzáadása'
-                                  : 'Szabály mentése',
-                            ),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: AppColors.white,
-                              minimumSize: const Size.fromHeight(50),
-                            ),
+                            icon: _editing == null
+                                ? Icons.add_rounded
+                                : Icons.save_outlined,
+                            label: _editing == null
+                                ? 'Szabály hozzáadása'
+                                : 'Szabály mentése',
+                            saving: _saving,
+                            surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                            color: expenseTheme.accent,
                           ),
                           if (_editing != null) ...[
                             const SizedBox(height: 8),
@@ -680,6 +683,8 @@ class _CommonForm extends StatelessWidget {
     required this.category,
     required this.categoryPickerOpen,
     required this.categories,
+    required this.surfaceColor,
+    required this.surfaceStyle,
     required this.onCategoryTap,
     required this.onCategorySelected,
   });
@@ -690,6 +695,8 @@ class _CommonForm extends StatelessWidget {
   final TransactionCategory? category;
   final bool categoryPickerOpen;
   final List<TransactionCategory> categories;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback onCategoryTap;
   final ValueChanged<TransactionCategory> onCategorySelected;
 
@@ -698,19 +705,28 @@ class _CommonForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DebugTextField(
+        ThemedPillField(
           fieldKey: const ValueKey('recurring-rule-name'),
           debugLabel: 'RecurringRule.name',
           controller: name,
-          decoration: transactionFieldDecoration('Név'),
+          label: 'Név',
+          surfaceColor: surfaceColor,
+          surfaceStyle: surfaceStyle,
         ),
         const SizedBox(height: 12),
         AmountField(
           controller: amount,
           debugLabel: 'RecurringRule.estimatedAmount',
+          surfaceColor: surfaceColor,
+          surfaceStyle: surfaceStyle,
         ),
         const SizedBox(height: 12),
-        CategorySelectorField(selected: category, onTap: onCategoryTap),
+        CategorySelectorField(
+          selected: category,
+          onTap: onCategoryTap,
+          surfaceColor: surfaceColor,
+          surfaceStyle: surfaceStyle,
+        ),
         if (categoryPickerOpen) ...[
           const SizedBox(height: 8),
           CategoryScrollPicker(
@@ -722,12 +738,14 @@ class _CommonForm extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 12),
-        DebugTextField(
+        ThemedPillField(
           fieldKey: const ValueKey('recurring-rule-day'),
           debugLabel: 'RecurringRule.expectedDay',
           controller: day,
           keyboardType: TextInputType.number,
-          decoration: transactionFieldDecoration('Várt nap a hónapban'),
+          label: 'Várt nap a hónapban',
+          surfaceColor: surfaceColor,
+          surfaceStyle: surfaceStyle,
         ),
       ],
     );

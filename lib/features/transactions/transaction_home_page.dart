@@ -346,6 +346,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     categoryBars: widget.store.categoryBudgetBars,
                     overviewItems: widget.store.overviewBudgetItems,
                     periodIncome: widget.store.activePeriodIncomeTotal,
+                    expenseTheme: expenseTheme,
                     onCancel: _closeBudgetTargetEditor,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onSaveOverview:
