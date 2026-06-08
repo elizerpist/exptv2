@@ -6,17 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('calendar menu modes keep original Hungarian labels and order', () {
+  test('calendar menu modes keep compact visual options', () {
     expect(CalendarMenuMode.values, const [
-      CalendarMenuMode.normal,
+      CalendarMenuMode.category,
       CalendarMenuMode.summary,
       CalendarMenuMode.heatmap,
-      CalendarMenuMode.category,
     ]);
-    expect(CalendarMenuMode.normal.title, 'Küszöbérték nézet');
+    expect(CalendarMenuMode.category.title, 'Domináns kategória');
     expect(CalendarMenuMode.summary.title, 'Összefoglaló');
     expect(CalendarMenuMode.heatmap.title, 'Hőtérkép');
-    expect(CalendarMenuMode.category.title, 'Domináns kategória');
   });
 
   test('render builder creates 12 Monday-first month grids', () {

@@ -29,7 +29,6 @@ enum _SettingsMenu {
   pushLog,
   permissions,
   fastInfo,
-  statistics,
   currency,
   language,
   backheader,
@@ -179,10 +178,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 SettingsOptionItem(
                   title: 'FastInfo',
                   onTap: () => _open(_SettingsMenu.fastInfo),
-                ),
-                SettingsOptionItem(
-                  title: 'Statisztikák',
-                  onTap: () => _open(_SettingsMenu.statistics),
                   isLast: true,
                 ),
               ],
@@ -409,10 +404,6 @@ class _SettingsPageState extends State<SettingsPage> {
         title: 'Biztonsági mentés',
         children: ['Új biztonsági mentés', 'Korábbi mentések'],
       ),
-      _SettingsMenu.statistics => const SimpleOptionsPanel(
-        title: 'Statisztikák',
-        children: ['Havi áttekintés', 'Kategória bontás', 'Trend'],
-      ),
       _SettingsMenu.about => const SimpleOptionsPanel(
         title: 'Expense Tracker',
         children: ['Verzió: 1.0.0', '© 2024 - Minden jog fenntartva'],
@@ -435,7 +426,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.pushLog => 'Elkapott push üzenetek',
       _SettingsMenu.permissions => 'Engedélyek',
       _SettingsMenu.fastInfo => 'FastInfo',
-      _SettingsMenu.statistics => 'Statisztikák',
       _SettingsMenu.currency => 'Pénznem Beállítások',
       _SettingsMenu.language => 'Nyelv Beállítások',
       _SettingsMenu.backheader => 'Backheader',

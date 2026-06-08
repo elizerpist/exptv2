@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/calendar_render_builder.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/calendar_menu_mode.dart';
@@ -16,10 +17,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('calendar mode selector renders four tappable mode buttons', (
+  testWidgets('calendar mode selector renders compact visual mode buttons', (
     tester,
   ) async {
-    var selected = CalendarMenuMode.normal;
+    var selected = CalendarMenuMode.category;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -36,47 +37,81 @@ void main() {
       find.byKey(const ValueKey('calendar-mode-selector')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('calendar-mode-normal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-mode-normal')), findsNothing);
+    expect(find.byKey(const ValueKey('calendar-mode-category')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-summary')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-heatmap')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('calendar-mode-category')),
-      findsOneWidget,
-    );
 
     await tester.tap(find.byKey(const ValueKey('calendar-mode-heatmap')));
     expect(selected, CalendarMenuMode.heatmap);
   });
 
   testWidgets(
-    'threshold slider panel shows editable Hungarian threshold label',
+    'threshold slider panel edits collapses and drags as category filter',
     (tester) async {
       var changed = 1000.0;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: CalendarValueSliderPanel.threshold(
-              value: 1000,
-              min: 0,
-              max: 2000,
-              onChanged: (value) => changed = value,
-              onMinChanged: (_) {},
-              onMaxChanged: (_) {},
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: CalendarValueSliderPanel.threshold(
+                value: 1000,
+                min: 0,
+                max: 2000,
+                onChanged: (value) => changed = value,
+                onMinChanged: (_) {},
+                onMaxChanged: (_) {},
+              ),
             ),
           ),
         ),
       );
 
-      expect(find.text('Küszöbérték: 1 000 Ft'), findsOneWidget);
+      expect(find.text('Domináns küszöb: 1 000 Ft'), findsOneWidget);
+      final panel = find.byKey(const ValueKey('calendar-threshold-slider-panel'));
+      final beforeTop = tester.getTopLeft(panel).dy;
+      await tester.drag(
+        find.byKey(const ValueKey('calendar-threshold-slider-drag-handle')),
+        const Offset(0, -70),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(panel).dy, lessThan(beforeTop));
+
       await tester.drag(
         find.byKey(const ValueKey('calendar-threshold-slider')),
         const Offset(80, 0),
       );
       expect(changed, isNot(1000));
+
+      await tester.tap(find.byKey(const ValueKey('calendar-threshold-slider-collapse')));
+      await tester.pumpAndSettle();
+      expect(panel, findsNothing);
+      expect(
+        find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getCenter(
+              find.byKey(
+                const ValueKey('calendar-threshold-slider-mini-button'),
+              ),
+            )
+            .dx,
+        greaterThan(320),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(panel, findsOneWidget);
     },
   );
 
-  testWidgets('heatmap slider panel shows editable current coloring label', (
+  testWidgets('heatmap slider panel shows editable and compact controls', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -94,17 +129,168 @@ void main() {
       ),
     );
 
-    expect(find.text('Aktuális színezés: 10 000 Ft'), findsOneWidget);
+    expect(find.text('Hőtérkép skála: 10 000 Ft'), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('calendar-heatmap-slider-collapse')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
     expect(
-      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .getCenter(
+            find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
+          )
+          .dx,
+      greaterThan(320),
+    );
+  });
+
+  testWidgets(
+    'calendar overlay slider card stays draggable after leaving bottom area',
+    (tester) async {
+      final year = DateTime.now().year;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: CalendarMenuOverlay(
+                fullScreen: true,
+                transactions: [
+                  _record(
+                    id: 1,
+                    date: '$year-01-02',
+                    amount: -8000,
+                    categoryId: 1,
+                  ),
+                  _record(
+                    id: 2,
+                    date: '$year-01-03',
+                    amount: -22000,
+                    categoryId: 1,
+                  ),
+                ],
+                categories: const [
+                  TransactionCategory(
+                    transactionCategoryID: 1,
+                    name: 'Élelmiszer',
+                    type: 'kiadás',
+                    colorSlot: 1,
+                    iconSlot: null,
+                    backgroundColor: null,
+                    icon: null,
+                    notification: null,
+                    hasLimit: false,
+                    limitAmount: 0,
+                    alertActive: false,
+                    isCustomIcon: false,
+                    originalIcon: null,
+                  ),
+                ],
+                onClose: () {},
+                onMonthSelect: (_, _) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final panel = find.byKey(
+        const ValueKey('calendar-threshold-slider-panel'),
+      );
+      final handle = find.byKey(
+        const ValueKey('calendar-threshold-slider-drag-handle'),
+      );
+
+      final initialTop = tester.getTopLeft(panel).dy;
+      await tester.drag(handle, const Offset(0, -260));
+      await tester.pumpAndSettle();
+      final raisedTop = tester.getTopLeft(panel).dy;
+      expect(raisedTop, lessThan(initialTop - 180));
+
+      await tester.drag(handle, const Offset(0, 80));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(panel).dy, greaterThan(raisedTop + 40));
+    },
+  );
+
+  testWidgets('threshold slider drag does not rebuild calendar render data', (
+    tester,
+  ) async {
+    final year = DateTime.now().year;
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarMenuOverlay(
+              fullScreen: true,
+              transactions: [
+                _record(
+                  id: 1,
+                  date: '$year-01-02',
+                  amount: -8000,
+                  categoryId: 1,
+                ),
+                _record(
+                  id: 2,
+                  date: '$year-01-03',
+                  amount: -22000,
+                  categoryId: 1,
+                ),
+              ],
+              categories: const [
+                TransactionCategory(
+                  transactionCategoryID: 1,
+                  name: 'Élelmiszer',
+                  type: 'kiadás',
+                  colorSlot: 1,
+                  iconSlot: null,
+                  backgroundColor: null,
+                  icon: null,
+                  notification: null,
+                  hasLimit: false,
+                  limitAmount: 0,
+                  alertActive: false,
+                  isCustomIcon: false,
+                  originalIcon: null,
+                ),
+              ],
+              onClose: () {},
+              onMonthSelect: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[Perf] CalendarRender build source=overlay'),
+    );
+
+    DebugConsole.clear();
+    await tester.drag(
+      find.byKey(const ValueKey('calendar-threshold-slider')),
+      const Offset(80, 0),
+    );
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      isNot(contains('[Perf] CalendarRender build source=overlay')),
     );
   });
 
   test('calendar canvas layout creates two columns and six rows', () {
     final layout = CalendarCanvasLayout.calculate(
       width: 390,
-      mode: CalendarMenuMode.normal,
+      mode: CalendarMenuMode.category,
     );
     expect(layout.monthRects.length, 12);
     expect(layout.monthRects[0].left, 0);
@@ -148,7 +334,7 @@ void main() {
             height: 500,
             child: CalendarCanvas(
               data: renderData,
-              mode: CalendarMenuMode.normal,
+              mode: CalendarMenuMode.category,
               thresholdValue: 1000,
               heatmapMinValue: 0,
               heatmapCurrentValue: 10000,
@@ -187,7 +373,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('calendar-mode-selector')), findsNothing);
     expect(find.byKey(const ValueKey('stats-menu-trigger')), findsOneWidget);
-    expect(find.text('Küszöbérték nézet'), findsOneWidget);
+    expect(find.text('Domináns kategória'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('calendar-threshold-slider')),
       findsOneWidget,
@@ -197,7 +383,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('stats-menu-mode-normal')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('stats-menu-mode-summary')),
@@ -259,7 +445,7 @@ void main() {
     final menuRect = tester.getRect(
       find.byKey(const ValueKey('stats-menu-trigger')),
     );
-    final titleTop = tester.getTopLeft(find.text('Küszöbérték nézet')).dy;
+    final titleTop = tester.getTopLeft(find.text('Domináns kategória')).dy;
     final yearTop = tester.getTopLeft(find.text(currentYear)).dy;
 
     expect(menuRect.left, lessThan(24));
@@ -437,12 +623,30 @@ void main() {
     );
     expect(find.byKey(const ValueKey('month-weekly-bars')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-highlight-tiles')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-spend-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-ratio-split')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-velocity-meter')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-weekpart-split')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-density-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-category-rank-bars')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-merchant-days-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-deep-stats-grid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-merchant-stats')), findsOneWidget);
     expect(find.text('Cashflow'), findsOneWidget);
     expect(find.text('Napi ritmus'), findsOneWidget);
     expect(find.text('Kategóriák'), findsOneWidget);
     expect(find.text('Heti bontás'), findsOneWidget);
     expect(find.text('Kiemelések'), findsOneWidget);
-    expect(find.text('Élelmiszer'), findsOneWidget);
+    expect(find.text('Költési térkép'), findsOneWidget);
+    expect(find.text('Bevétel / kiadás'), findsOneWidget);
+    expect(find.text('Tempó és limit'), findsOneWidget);
+    expect(find.text('Napok eloszlása'), findsOneWidget);
+    expect(find.text('Kategória rangsor'), findsOneWidget);
+    expect(find.text('Kereskedő ritmus'), findsOneWidget);
+    expect(find.text('Havi részletek'), findsOneWidget);
+    expect(find.text('Kereskedők'), findsOneWidget);
+    expect(find.text('Élelmiszer'), findsAtLeastNWidgets(1));
+    expect(find.text('Teszt'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('stats page renders calendar as a full screen tab', (
@@ -465,15 +669,12 @@ void main() {
 
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
-    expect(find.text('Küszöbérték nézet'), findsOneWidget);
+    expect(find.text('Domináns kategória'), findsOneWidget);
   });
 }
 
 Future<void> _tapFirstMonthCard(WidgetTester tester) async {
-  final topLeft = tester.getTopLeft(
-    find.byKey(const ValueKey('calendar-canvas')),
-  );
-  await tester.tapAt(topLeft + const Offset(84, 100));
+  await tester.tap(find.byKey(const ValueKey('calendar-month-hit-1')));
   await tester.pumpAndSettle();
 }
 

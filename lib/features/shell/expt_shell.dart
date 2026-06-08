@@ -56,6 +56,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
+  late StatsPage _statsPage;
 
   @override
   void initState() {
@@ -76,6 +77,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     unawaited(_transactionStore.start());
     _transactionHomePage = _buildTransactionHomePage();
+    _statsPage = _buildStatsPage();
     _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
@@ -164,6 +166,13 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
   }
 
+  StatsPage _buildStatsPage() {
+    return StatsPage(
+      store: _transactionStore,
+      expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
+    );
+  }
+
   void _requestPostNotificationsOnFirstLaunch() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -214,6 +223,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
       _transactionHomePage = _buildTransactionHomePage();
+      _statsPage = _buildStatsPage();
     });
   }
 
@@ -233,6 +243,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _themeSettings = settings;
       _transactionHomePage = _buildTransactionHomePage();
+      _statsPage = _buildStatsPage();
     });
     DebugConsole.log('[ThemeSurface] shell apply ${_settingsSignature(settings)}');
   }
@@ -295,6 +306,23 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _jumpToTabPage(AppTab tab, DateTime requestedAt) {
     final pageIndex = appTabs.indexOf(tab);
+    if (tab == AppTab.stats) {
+      DebugConsole.log(
+        '[Perf] BottomNav page jump deferred tab=${tab.id} '
+        'reason=post-frame elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _activeTab != tab || !_pageController.hasClients) {
+          return;
+        }
+        _pageController.jumpToPage(pageIndex);
+        DebugConsole.log(
+          '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
+          'deferred=true elapsed=${_elapsedMs(requestedAt)}ms',
+        );
+      });
+      return;
+    }
     if (!_pageController.hasClients) {
       DebugConsole.log(
         '[Perf] BottomNav page jump deferred tab=${tab.id} '
@@ -435,7 +463,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       case AppTab.home:
         return _transactionHomePage;
       case AppTab.stats:
-        return StatsPage(store: _transactionStore, expenseTheme: expenseTheme);
+        return _statsPage;
       case AppTab.notifications:
         return NotificationsPage(
           nativeBridge: widget.nativeBridge,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/calendar_render_builder.dart';
 import '../../models/calendar_menu_mode.dart';
@@ -34,15 +36,48 @@ class CalendarMenuOverlay extends StatefulWidget {
 
 class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
   var _year = DateTime.now().year;
-  var _mode = CalendarMenuMode.normal;
+  var _mode = CalendarMenuMode.category;
   var _transitionLocked = false;
-  var _thresholdValue = 1000.0;
-  var _heatmapMinValue = 0.0;
-  var _heatmapCurrentValue = 10000.0;
-  var _heatmapMaxValue = 50000.0;
+  late final ValueNotifier<double> _thresholdValue;
+  late final ValueNotifier<double> _heatmapMinValue;
+  late final ValueNotifier<double> _heatmapCurrentValue;
+  late final ValueNotifier<double> _heatmapMaxValue;
   int? _focusedMonth;
   double? _customThresholdMin;
   double? _customThresholdMax;
+  int? _cachedDataYear;
+  List<TransactionRecord>? _cachedDataTransactions;
+  List<TransactionCategory>? _cachedDataCategories;
+  double? _cachedDataCustomThresholdMin;
+  double? _cachedDataCustomThresholdMax;
+  CalendarYearRenderData? _cachedData;
+
+  @override
+  void initState() {
+    super.initState();
+    _thresholdValue = ValueNotifier<double>(1000);
+    _heatmapMinValue = ValueNotifier<double>(0);
+    _heatmapCurrentValue = ValueNotifier<double>(10000);
+    _heatmapMaxValue = ValueNotifier<double>(50000);
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarMenuOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.transactions, widget.transactions) ||
+        !identical(oldWidget.categories, widget.categories)) {
+      _clearCalendarDataCache();
+    }
+  }
+
+  @override
+  void dispose() {
+    _thresholdValue.dispose();
+    _heatmapMinValue.dispose();
+    _heatmapCurrentValue.dispose();
+    _heatmapMaxValue.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,16 +103,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
   }
 
   Widget _buildPanel() {
-    final data = CalendarRenderBuilder.buildYear(
-      year: _year,
-      transactions: widget.transactions,
-      categories: widget.categories,
-      thresholdValue: _thresholdValue,
-      heatmapMinValue: _heatmapMinValue,
-      heatmapCurrentValue: _heatmapCurrentValue,
-      customThresholdMin: _customThresholdMin,
-      customThresholdMax: _customThresholdMax,
-    );
+    final data = _calendarData();
     final focusedMonth = _focusedMonth == null
         ? null
         : data.months[(_focusedMonth! - 1).clamp(0, data.months.length - 1)];
@@ -125,67 +151,163 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: focusedMonth == null
-                        ? CalendarCanvas(
-                            data: data,
-                            mode: _mode,
+                        ? _CalendarSliderValuesBuilder(
                             thresholdValue: _thresholdValue,
                             heatmapMinValue: _heatmapMinValue,
                             heatmapCurrentValue: _heatmapCurrentValue,
-                            onMonthSelected: _selectMonth,
+                            heatmapMaxValue: _heatmapMaxValue,
+                            builder:
+                                (
+                                  context,
+                                  threshold,
+                                  heatmapMin,
+                                  heatmapCurrent,
+                                  _,
+                                ) {
+                                  return CalendarCanvas(
+                                    data: data,
+                                    mode: _mode,
+                                    thresholdValue: threshold,
+                                    heatmapMinValue: heatmapMin,
+                                    heatmapCurrentValue: heatmapCurrent,
+                                    onMonthSelected: _selectMonth,
+                                  );
+                                },
                           )
                         : _FocusedMonthView(
                             month: focusedMonth,
                             mode: _mode,
                             transactions: widget.transactions,
                             categories: widget.categories,
+                            thresholdValue: _thresholdValue,
+                            heatmapMinValue: _heatmapMinValue,
+                            heatmapCurrentValue: _heatmapCurrentValue,
                           ),
                   ),
                 ),
               ],
             ),
-            if (_mode == CalendarMenuMode.normal &&
+            if (_mode == CalendarMenuMode.category &&
                 data.thresholdRange.min != data.thresholdRange.max)
-              CalendarValueSliderPanel.threshold(
-                value: _thresholdValue,
-                min: data.thresholdRange.min,
-                max: data.thresholdRange.max,
-                onChanged: (value) => setState(() => _thresholdValue = value),
-                onMinChanged: (value) =>
-                    setState(() => _customThresholdMin = value < 0 ? 0 : value),
-                onMaxChanged: (value) => setState(
-                  () => _customThresholdMax = value <= data.thresholdRange.min
-                      ? data.thresholdRange.min + 1
-                      : value,
+              Positioned.fill(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _thresholdValue,
+                  builder: (context, threshold, _) {
+                    return CalendarValueSliderPanel.threshold(
+                      value: threshold,
+                      min: data.thresholdRange.min,
+                      max: data.thresholdRange.max,
+                      onChanged: (value) => _thresholdValue.value = value,
+                      onMinChanged: (value) {
+                        final next = value < 0 ? 0.0 : value;
+                        setState(() {
+                          _customThresholdMin = next;
+                          if (_thresholdValue.value < next) {
+                            _thresholdValue.value = next;
+                          }
+                          _clearCalendarDataCache();
+                        });
+                      },
+                      onMaxChanged: (value) {
+                        final next = value <= data.thresholdRange.min
+                            ? data.thresholdRange.min + 1
+                            : value;
+                        setState(() {
+                          _customThresholdMax = next;
+                          if (_thresholdValue.value > next) {
+                            _thresholdValue.value = next;
+                          }
+                          _clearCalendarDataCache();
+                        });
+                      },
+                    );
+                  },
                 ),
               ),
             if (_mode == CalendarMenuMode.heatmap)
-              CalendarValueSliderPanel.heatmap(
-                value: _heatmapCurrentValue,
-                min: _heatmapMinValue,
-                max: _heatmapMaxValue,
-                onChanged: (value) {
-                  setState(() => _heatmapCurrentValue = value);
-                },
-                onMinChanged: (value) {
-                  setState(() {
-                    _heatmapMinValue = value < 0 ? 0 : value;
-                    if (_heatmapCurrentValue <= _heatmapMinValue) {
-                      _heatmapCurrentValue = _heatmapMinValue + 100;
-                    }
-                  });
-                },
-                onMaxChanged: (value) {
-                  setState(() {
-                    _heatmapMaxValue = value <= _heatmapMinValue
-                        ? _heatmapMinValue + 1000
-                        : value;
-                  });
-                },
+              Positioned.fill(
+                child: _CalendarSliderValuesBuilder(
+                  thresholdValue: _thresholdValue,
+                  heatmapMinValue: _heatmapMinValue,
+                  heatmapCurrentValue: _heatmapCurrentValue,
+                  heatmapMaxValue: _heatmapMaxValue,
+                  builder:
+                      (context, _, heatmapMin, heatmapCurrent, heatmapMax) {
+                        return CalendarValueSliderPanel.heatmap(
+                          value: heatmapCurrent,
+                          min: heatmapMin,
+                          max: heatmapMax,
+                          onChanged: (value) {
+                            _heatmapCurrentValue.value = value;
+                          },
+                          onMinChanged: (value) {
+                            final next = value < 0 ? 0.0 : value;
+                            _heatmapMinValue.value = next;
+                            if (_heatmapCurrentValue.value <= next) {
+                              _heatmapCurrentValue.value = next + 100;
+                            }
+                            if (_heatmapMaxValue.value <= next) {
+                              _heatmapMaxValue.value = next + 1000;
+                            }
+                          },
+                          onMaxChanged: (value) {
+                            final next = value <= heatmapMin
+                                ? heatmapMin + 1000
+                                : value;
+                            _heatmapMaxValue.value = next;
+                            if (_heatmapCurrentValue.value > next) {
+                              _heatmapCurrentValue.value = next;
+                            }
+                          },
+                        );
+                      },
+                ),
               ),
           ],
         ),
       ),
     );
+  }
+
+  CalendarYearRenderData _calendarData() {
+    final cached = _cachedData;
+    if (cached != null &&
+        _cachedDataYear == _year &&
+        identical(_cachedDataTransactions, widget.transactions) &&
+        identical(_cachedDataCategories, widget.categories) &&
+        _cachedDataCustomThresholdMin == _customThresholdMin &&
+        _cachedDataCustomThresholdMax == _customThresholdMax) {
+      return cached;
+    }
+
+    final stopwatch = Stopwatch()..start();
+    final data = CalendarRenderBuilder.buildYear(
+      year: _year,
+      transactions: widget.transactions,
+      categories: widget.categories,
+      thresholdValue: _thresholdValue.value,
+      heatmapMinValue: _heatmapMinValue.value,
+      heatmapCurrentValue: _heatmapCurrentValue.value,
+      customThresholdMin: _customThresholdMin,
+      customThresholdMax: _customThresholdMax,
+    );
+    _cachedData = data;
+    _cachedDataYear = _year;
+    _cachedDataTransactions = widget.transactions;
+    _cachedDataCategories = widget.categories;
+    _cachedDataCustomThresholdMin = _customThresholdMin;
+    _cachedDataCustomThresholdMax = _customThresholdMax;
+    DebugConsole.log(
+      '[Perf] CalendarRender build source=overlay year=$_year '
+      'transactions=${widget.transactions.length} '
+      'categories=${widget.categories.length} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+    return data;
+  }
+
+  void _clearCalendarDataCache() {
+    _cachedData = null;
   }
 
   void _selectMonth(int year, int month) {
@@ -222,6 +344,60 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
     Future<void>.delayed(const Duration(milliseconds: 300), () {
       if (mounted) setState(() => _transitionLocked = false);
     });
+  }
+}
+
+class _CalendarSliderValuesBuilder extends StatelessWidget {
+  const _CalendarSliderValuesBuilder({
+    required this.thresholdValue,
+    required this.heatmapMinValue,
+    required this.heatmapCurrentValue,
+    required this.heatmapMaxValue,
+    required this.builder,
+  });
+
+  final ValueListenable<double> thresholdValue;
+  final ValueListenable<double> heatmapMinValue;
+  final ValueListenable<double> heatmapCurrentValue;
+  final ValueListenable<double> heatmapMaxValue;
+  final Widget Function(
+    BuildContext context,
+    double thresholdValue,
+    double heatmapMinValue,
+    double heatmapCurrentValue,
+    double heatmapMaxValue,
+  )
+  builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: thresholdValue,
+      builder: (context, threshold, _) {
+        return ValueListenableBuilder<double>(
+          valueListenable: heatmapMinValue,
+          builder: (context, heatmapMin, _) {
+            return ValueListenableBuilder<double>(
+              valueListenable: heatmapCurrentValue,
+              builder: (context, heatmapCurrent, _) {
+                return ValueListenableBuilder<double>(
+                  valueListenable: heatmapMaxValue,
+                  builder: (context, heatmapMax, _) {
+                    return builder(
+                      context,
+                      threshold,
+                      heatmapMin,
+                      heatmapCurrent,
+                      heatmapMax,
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -414,12 +590,18 @@ class _FocusedMonthView extends StatelessWidget {
     required this.mode,
     required this.transactions,
     required this.categories,
+    required this.thresholdValue,
+    required this.heatmapMinValue,
+    required this.heatmapCurrentValue,
   });
 
   final CalendarMonthRenderData month;
   final CalendarMenuMode mode;
   final List<TransactionRecord> transactions;
   final List<TransactionCategory> categories;
+  final ValueListenable<double> thresholdValue;
+  final ValueListenable<double> heatmapMinValue;
+  final ValueListenable<double> heatmapCurrentValue;
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +611,28 @@ class _FocusedMonthView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FocusedMonthCanvas(month: month, mode: mode),
+          ValueListenableBuilder<double>(
+            valueListenable: thresholdValue,
+            builder: (context, threshold, _) {
+              return ValueListenableBuilder<double>(
+                valueListenable: heatmapMinValue,
+                builder: (context, heatmapMin, _) {
+                  return ValueListenableBuilder<double>(
+                    valueListenable: heatmapCurrentValue,
+                    builder: (context, heatmapCurrent, _) {
+                      return FocusedMonthCanvas(
+                        month: month,
+                        mode: mode,
+                        thresholdValue: threshold,
+                        heatmapMinValue: heatmapMin,
+                        heatmapCurrentValue: heatmapCurrent,
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
           const SizedBox(height: 14),
           MonthStatsCharts(
             year: month.year,

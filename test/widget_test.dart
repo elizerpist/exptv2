@@ -279,6 +279,37 @@ void main() {
     expect(logs, isNot(contains('[Perf] FastInfo metrics build')));
   });
 
+  testWidgets('stats tab switch defers heavy page jump and reuses cache', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await tester.tap(find.text('Stats'));
+    await tester.pumpAndSettle();
+
+    var logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] BottomNav pointer dispatch tab=stats'));
+    expect(logs, contains('[Perf] BottomNav page jump deferred tab=stats'));
+    expect(logs, contains('[Perf] CalendarRender build source=overlay'));
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await tester.tap(find.text('Stats'));
+    await tester.pumpAndSettle();
+
+    logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] BottomNav pointer dispatch tab=stats'));
+    expect(logs, contains('[Perf] BottomNav page jump deferred tab=stats'));
+    expect(
+      logs,
+      isNot(contains('[Perf] CalendarRender build source=overlay')),
+    );
+  });
+
   testWidgets('first launch requests Android notification permission once', (
     tester,
   ) async {

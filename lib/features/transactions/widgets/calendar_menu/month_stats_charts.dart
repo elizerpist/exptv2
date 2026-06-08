@@ -83,6 +83,46 @@ class MonthStatsCharts extends StatelessWidget {
           title: 'Kiemelések',
           child: _HighlightTiles(stats: stats),
         ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Költési térkép',
+          child: _DailySpendMap(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Bevétel / kiadás',
+          child: _IncomeExpenseRatio(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Tempó és limit',
+          child: _VelocityPanel(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Napok eloszlása',
+          child: _DayDistribution(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Kategória rangsor',
+          child: _CategoryRankVisual(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Kereskedő ritmus',
+          child: _MerchantRhythm(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Havi részletek',
+          child: _DeepStatsGrid(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _ChartCard(
+          title: 'Kereskedők',
+          child: _MerchantStats(stats: stats),
+        ),
       ],
     );
   }
@@ -419,6 +459,784 @@ class _HighlightTile extends StatelessWidget {
   }
 }
 
+class _DailySpendMap extends StatelessWidget {
+  const _DailySpendMap({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DailyValueStrip(
+          key: const ValueKey('month-spend-strip'),
+          values: stats.dailyExpenses,
+          color: AppColors.expense,
+        ),
+        const SizedBox(height: 10),
+        _MiniStatRow(
+          metrics: [
+            _StatMetric('Költős nap', '${stats.spendingDays}'),
+            _StatMetric('Nullás nap', '${stats.noSpendDays}'),
+            _StatMetric('Legdrágább', stats.mostExpensiveDayText),
+            _StatMetric('Csúcs összeg', formatHuf(stats.largestExpense ?? 0)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _IncomeExpenseRatio extends StatelessWidget {
+  const _IncomeExpenseRatio({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DailyValueStrip(values: stats.dailyIncomes, color: AppColors.income),
+        const SizedBox(height: 8),
+        _SplitProgressBar(
+          key: const ValueKey('month-ratio-split'),
+          leftValue: stats.income,
+          rightValue: stats.expense,
+          leftColor: AppColors.income,
+          rightColor: AppColors.expense,
+          height: 18,
+        ),
+        const SizedBox(height: 10),
+        _MiniStatRow(
+          metrics: [
+            _StatMetric('Bevétel', '+${formatHuf(stats.income)}'),
+            _StatMetric('Kiadás', '-${formatHuf(stats.expense)}'),
+            _StatMetric('Fedezet', stats.incomeExpenseRatio),
+            _StatMetric('Megtartás', _percentText(stats.savingsRate)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _VelocityPanel extends StatelessWidget {
+  const _VelocityPanel({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MarkerMeter(
+          key: const ValueKey('month-velocity-meter'),
+          value: stats.expensePressure,
+          marker: 1,
+          color: stats.expensePressure <= .75
+              ? AppColors.income
+              : stats.expensePressure <= 1
+              ? const Color(0xFFF59E0B)
+              : AppColors.expense,
+        ),
+        const SizedBox(height: 10),
+        _MiniStatRow(
+          metrics: [
+            _StatMetric('Nyomás', _percentText(stats.expensePressure)),
+            _StatMetric('Napi átlag', formatHuf(stats.averageDailyExpense)),
+            _StatMetric('Költős átlag', formatHuf(stats.averageSpendDay)),
+            _StatMetric('Medián', formatHuf(stats.medianExpense)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DayDistribution extends StatelessWidget {
+  const _DayDistribution({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SplitProgressBar(
+          key: const ValueKey('month-weekpart-split'),
+          leftValue: stats.weekdayExpense,
+          rightValue: stats.weekendExpense,
+          leftColor: AppColors.primary,
+          rightColor: const Color(0xFF06B6D4),
+          height: 14,
+        ),
+        const SizedBox(height: 10),
+        _DailyCountStrip(
+          key: const ValueKey('month-density-strip'),
+          counts: stats.dailyTransactionCounts,
+        ),
+        const SizedBox(height: 10),
+        _MiniStatRow(
+          metrics: [
+            _StatMetric('Hétköznap', formatHuf(stats.weekdayExpense)),
+            _StatMetric('Hétvége', formatHuf(stats.weekendExpense)),
+            _StatMetric('Aktív nap', _percentText(stats.activeDayShare)),
+            _StatMetric('Bevételes nap', '${stats.incomeDays}'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryRankVisual extends StatelessWidget {
+  const _CategoryRankVisual({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = stats.topCategories.take(6).toList(growable: false);
+    if (categories.isEmpty) {
+      return const Text(
+        'Nincs kategória adat',
+        style: TextStyle(color: AppColors.gray500, fontSize: 12),
+      );
+    }
+    return Column(
+      key: const ValueKey('month-category-rank-bars'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < categories.length; index += 1)
+          _RankBar(
+            label: '${index + 1}. ${categories[index].name}',
+            value: categories[index].amount,
+            percentage: categories[index].percentage,
+            total: stats.expense,
+            color: categories[index].color,
+          ),
+        const SizedBox(height: 4),
+        _MiniStatRow(
+          metrics: [
+            _StatMetric('Kategória', '${stats.categoryCount}'),
+            _StatMetric('Top arány', _percentText(stats.topCategoryShare)),
+            _StatMetric('Top név', stats.topCategoryName),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MerchantRhythm extends StatelessWidget {
+  const _MerchantRhythm({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('month-merchant-days-strip'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DailyCountStrip(
+          counts: stats.dailyTransactionCounts,
+          color: AppColors.primary,
+        ),
+        const SizedBox(height: 10),
+        _MiniStatRow(
+          metrics: [
+            _StatMetric('Kereskedő', '${stats.merchantCount}'),
+            _StatMetric('Top kereskedő', stats.topMerchantName),
+            _StatMetric('Top arány', _percentText(stats.topMerchantShare)),
+            _StatMetric('Átlag tétel', _signedHuf(stats.averageTransactionAmount)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniStatRow extends StatelessWidget {
+  const _MiniStatRow({required this.metrics});
+
+  final List<_StatMetric> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      childAspectRatio: 3.3,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      children: [
+        for (final metric in metrics) _MiniStat(metric: metric),
+      ],
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({required this.metric});
+
+  final _StatMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.gray50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.gray200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              metric.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.gray800,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              metric.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.gray500,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SplitProgressBar extends StatelessWidget {
+  const _SplitProgressBar({
+    super.key,
+    required this.leftValue,
+    required this.rightValue,
+    required this.leftColor,
+    required this.rightColor,
+    this.height = 12,
+  });
+
+  final double leftValue;
+  final double rightValue;
+  final Color leftColor;
+  final Color rightColor;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = leftValue.clamp(0.0, double.infinity).toDouble();
+    final right = rightValue.clamp(0.0, double.infinity).toDouble();
+    final total = math.max(.001, left + right);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: SizedBox(
+        height: height,
+        child: Row(
+          children: [
+            Expanded(
+              flex: math.max(1, (left / total * 1000).round()),
+              child: ColoredBox(color: leftColor),
+            ),
+            Expanded(
+              flex: math.max(1, (right / total * 1000).round()),
+              child: ColoredBox(color: rightColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MarkerMeter extends StatelessWidget {
+  const _MarkerMeter({
+    super.key,
+    required this.value,
+    required this.marker,
+    required this.color,
+  });
+
+  final double value;
+  final double marker;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = value.clamp(0.0, 1.0).toDouble();
+    final markerValue = marker.clamp(0.0, 1.0).toDouble();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SizedBox(
+          height: 28,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 9,
+                height: 12,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const ColoredBox(color: AppColors.gray200),
+                      FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: fill,
+                        child: ColoredBox(color: color),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: constraints.maxWidth * markerValue - 1,
+                top: 3,
+                width: 2,
+                height: 24,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.gray700,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              if (value > 1)
+                Positioned(
+                  right: 0,
+                  top: 2,
+                  child: Text(
+                    '+${_percentText(value - 1)}',
+                    style: const TextStyle(
+                      color: AppColors.expense,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DailyValueStrip extends StatelessWidget {
+  const _DailyValueStrip({
+    super.key,
+    required this.values,
+    required this.color,
+  });
+
+  final List<double> values;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = values.fold<double>(0, math.max);
+    return SizedBox(
+      height: 30,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < values.length; index += 1) ...[
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: values[index] <= 0 || maxValue <= 0
+                      ? AppColors.gray200
+                      : color.withValues(
+                          alpha: (.22 + values[index] / maxValue * .68)
+                              .clamp(.22, .9)
+                              .toDouble(),
+                        ),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            if (index < values.length - 1) const SizedBox(width: 2),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyCountStrip extends StatelessWidget {
+  const _DailyCountStrip({
+    super.key,
+    required this.counts,
+    this.color = const Color(0xFF06B6D4),
+  });
+
+  final List<int> counts;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = counts.fold<int>(
+      0,
+      (currentMax, value) => value > currentMax ? value : currentMax,
+    );
+    return SizedBox(
+      height: 22,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (var index = 0; index < counts.length; index += 1) ...[
+            Expanded(
+              child: FractionallySizedBox(
+                heightFactor: maxValue <= 0
+                    ? .20
+                    : (counts[index] / maxValue).clamp(.20, 1.0).toDouble(),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: counts[index] == 0 ? AppColors.gray200 : color,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (index < counts.length - 1) const SizedBox(width: 2),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RankBar extends StatelessWidget {
+  const _RankBar({
+    required this.label,
+    required this.value,
+    required this.percentage,
+    required this.total,
+    required this.color,
+  });
+
+  final String label;
+  final double value;
+  final double percentage;
+  final double total;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = total <= 0 ? 0.0 : (value / total).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray700,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                '${formatHuf(value)} · ${percentage.round()}%',
+                style: const TextStyle(
+                  color: AppColors.gray500,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: fraction,
+              color: color,
+              backgroundColor: AppColors.gray100,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeepStatsGrid extends StatelessWidget {
+  const _DeepStatsGrid({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = [
+      _StatMetric('Havi nap', stats.daysInMonth.toString()),
+      _StatMetric('Bevételi tétel', stats.incomeCount.toString()),
+      _StatMetric('Kiadási tétel', stats.expenseCount.toString()),
+      _StatMetric('Költős nap', stats.spendingDays.toString()),
+      _StatMetric('Nullás nap', stats.noSpendDays.toString()),
+      _StatMetric('Napi nettó', _signedHuf(stats.netPerDay)),
+      _StatMetric('Költős napi átlag', formatHuf(stats.averageSpendDay)),
+      _StatMetric('Átlag kiadás', formatHuf(stats.averageExpenseTransaction)),
+      _StatMetric('Medián kiadás', formatHuf(stats.medianExpense)),
+      _StatMetric('Átlag tétel', _signedHuf(stats.averageTransactionAmount)),
+      _StatMetric('Bev/Kiad arány', stats.incomeExpenseRatio),
+      _StatMetric('Hétköznap', formatHuf(stats.weekdayExpense)),
+      _StatMetric('Hétvége', formatHuf(stats.weekendExpense)),
+      _StatMetric('Kategória', stats.categoryCount.toString()),
+      _StatMetric('Kereskedő', stats.merchantCount.toString()),
+      _StatMetric('Első tétel', stats.firstTransactionDayText),
+      _StatMetric('Utolsó tétel', stats.lastTransactionDayText),
+      _StatMetric('Legjobb bevétel', stats.bestIncomeDayText),
+      _StatMetric('Legnagyobb bev.', formatHuf(stats.largestIncome ?? 0)),
+    ];
+    return GridView.count(
+      key: const ValueKey('month-deep-stats-grid'),
+      crossAxisCount: 2,
+      childAspectRatio: 2.72,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      children: [
+        for (final metric in metrics) _StatTile(metric: metric),
+      ],
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.metric});
+
+  final _StatMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.gray50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.gray200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              metric.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.gray800,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              metric.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.gray500,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MerchantStats extends StatelessWidget {
+  const _MerchantStats({required this.stats});
+
+  final _MonthStatsData stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final merchants = stats.topMerchants;
+    return Column(
+      key: const ValueKey('month-merchant-stats'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (merchants.isEmpty)
+          const Text(
+            'Nincs kereskedő adat',
+            style: TextStyle(color: AppColors.gray500, fontSize: 12),
+          )
+        else
+          for (final merchant in merchants.take(5))
+            _MerchantRow(merchant: merchant, total: stats.expense),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MerchantPill(
+              label: 'Top',
+              value: stats.topMerchantName,
+            ),
+            _MerchantPill(
+              label: 'Legnagyobb',
+              value: stats.largestExpenseMerchantName,
+            ),
+            _MerchantPill(
+              label: 'Ismétlődő',
+              value: stats.recurringCount.toString(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MerchantRow extends StatelessWidget {
+  const _MerchantRow({required this.merchant, required this.total});
+
+  final _MerchantShare merchant;
+  final double total;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = total <= 0
+        ? 0.0
+        : (merchant.amount / total).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  merchant.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray700,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                '${formatHuf(merchant.amount)} · ${merchant.count}x · '
+                '${merchant.percentage.round()}%',
+                style: const TextStyle(
+                  color: AppColors.gray500,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              minHeight: 6,
+              value: fraction,
+              color: AppColors.primary,
+              backgroundColor: AppColors.gray100,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MerchantPill extends StatelessWidget {
+  const _MerchantPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.gray50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.gray200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.gray500,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray800,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CashflowPainter extends CustomPainter {
   const _CashflowPainter(this.stats);
 
@@ -669,30 +1487,146 @@ void _drawText(
   painter.paint(canvas, center - Offset(painter.width / 2, painter.height / 2));
 }
 
+String _signedHuf(double value) {
+  return '${value >= 0 ? '+' : '-'}${formatHuf(value.abs())}';
+}
+
+String _percentText(double value) {
+  return '${(value * 100).round()}%';
+}
+
+String _merchantName(TransactionRecord record) {
+  final name = record.displayMerchant.trim();
+  return name.isEmpty ? 'Ismeretlen' : name;
+}
+
+double _median(List<double> values) {
+  if (values.isEmpty) return 0;
+  final sorted = [...values]..sort();
+  final middle = sorted.length ~/ 2;
+  if (sorted.length.isOdd) return sorted[middle];
+  return (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 class _MonthStatsData {
   const _MonthStatsData({
+    required this.daysInMonth,
     required this.income,
     required this.expense,
     required this.balance,
     required this.transactionCount,
+    required this.incomeCount,
+    required this.expenseCount,
+    required this.recurringCount,
     required this.averageDailyExpense,
+    required this.averageSpendDay,
+    required this.averageExpenseTransaction,
+    required this.averageTransactionAmount,
+    required this.medianExpense,
+    required this.netPerDay,
+    required this.spendingDays,
+    required this.noSpendDays,
+    required this.incomeDays,
+    required this.weekdayExpense,
+    required this.weekendExpense,
+    required this.categoryCount,
+    required this.merchantCount,
+    required this.firstTransactionDay,
+    required this.lastTransactionDay,
+    required this.bestIncomeDay,
+    required this.largestIncome,
     required this.mostExpensiveDay,
     required this.largestExpense,
+    required this.largestExpenseMerchantName,
     required this.dailyExpenses,
+    required this.dailyIncomes,
+    required this.dailyTransactionCounts,
     required this.weeklyTotals,
     required this.topCategories,
+    required this.topMerchants,
   });
 
+  final int daysInMonth;
   final double income;
   final double expense;
   final double balance;
   final int transactionCount;
+  final int incomeCount;
+  final int expenseCount;
+  final int recurringCount;
   final double averageDailyExpense;
+  final double averageSpendDay;
+  final double averageExpenseTransaction;
+  final double averageTransactionAmount;
+  final double medianExpense;
+  final double netPerDay;
+  final int spendingDays;
+  final int noSpendDays;
+  final int incomeDays;
+  final double weekdayExpense;
+  final double weekendExpense;
+  final int categoryCount;
+  final int merchantCount;
+  final int? firstTransactionDay;
+  final int? lastTransactionDay;
+  final int? bestIncomeDay;
+  final double? largestIncome;
   final int? mostExpensiveDay;
   final double? largestExpense;
+  final String largestExpenseMerchantName;
   final List<double> dailyExpenses;
+  final List<double> dailyIncomes;
+  final List<int> dailyTransactionCounts;
   final List<_WeekTotal> weeklyTotals;
   final List<_CategoryShare> topCategories;
+  final List<_MerchantShare> topMerchants;
+
+  String get firstTransactionDayText => firstTransactionDay == null
+      ? '-'
+      : '$firstTransactionDay.';
+
+  String get lastTransactionDayText => lastTransactionDay == null
+      ? '-'
+      : '$lastTransactionDay.';
+
+  String get bestIncomeDayText => bestIncomeDay == null ? '-' : '$bestIncomeDay.';
+
+  String get mostExpensiveDayText => mostExpensiveDay == null
+      ? '-'
+      : '$mostExpensiveDay.';
+
+  String get incomeExpenseRatio {
+    if (expense <= 0 && income <= 0) return '-';
+    if (expense <= 0) return '∞';
+    return '${(income / expense * 100).round()}%';
+  }
+
+  double get expensePressure {
+    if (income <= 0) return expense <= 0 ? 0 : 1.25;
+    return expense / income;
+  }
+
+  double get savingsRate {
+    if (income <= 0) return 0;
+    return (balance / income).clamp(-1.0, 1.0).toDouble();
+  }
+
+  double get activeDayShare {
+    if (daysInMonth <= 0) return 0;
+    return spendingDays / daysInMonth;
+  }
+
+  double get topCategoryShare =>
+      topCategories.isEmpty ? 0 : topCategories.first.percentage / 100;
+
+  double get topMerchantShare =>
+      topMerchants.isEmpty ? 0 : topMerchants.first.percentage / 100;
+
+  String get topCategoryName =>
+      topCategories.isEmpty ? '-' : topCategories.first.name;
+
+  String get topMerchantName =>
+      topMerchants.isEmpty ? '-' : topMerchants.first.name;
 
   static _MonthStatsData build({
     required int year,
@@ -708,32 +1642,76 @@ class _MonthStatsData {
         })
         .toList(growable: false);
     final dailyExpenses = List<double>.filled(daysInMonth, 0);
+    final dailyIncomes = List<double>.filled(daysInMonth, 0);
+    final dailyTransactionCounts = List<int>.filled(daysInMonth, 0);
     final weeklyTotals = List<_WeekTotal>.generate(
       5,
       (_) => const _WeekTotal(),
     );
     final categoryTotals = <int, double>{};
+    final merchantTotals = <String, _MerchantAccumulator>{};
     final categoriesById = {
       for (final category in categories)
         category.transactionCategoryID: category,
     };
     var income = 0.0;
     var expense = 0.0;
+    var incomeCount = 0;
+    var expenseCount = 0;
+    var recurringCount = 0;
+    var weekdayExpense = 0.0;
+    var weekendExpense = 0.0;
+    double? largestIncome;
     double? largestExpense;
+    var largestExpenseMerchantName = '-';
+    final expenseAmounts = <double>[];
+    final absoluteAmounts = <double>[];
+    DateTime? firstTransactionDate;
+    DateTime? lastTransactionDate;
+    int? bestIncomeDay;
+    var bestIncomeAmount = 0.0;
 
     for (final record in monthRecords) {
       final date = DateTime.tryParse(record.normalizedDate);
       if (date == null) continue;
+      dailyTransactionCounts[date.day - 1] += 1;
+      firstTransactionDate = firstTransactionDate == null ||
+              date.isBefore(firstTransactionDate)
+          ? date
+          : firstTransactionDate;
+      lastTransactionDate = lastTransactionDate == null ||
+              date.isAfter(lastTransactionDate)
+          ? date
+          : lastTransactionDate;
+      absoluteAmounts.add(record.amount.abs());
+      if (record.isRecurringGenerated) recurringCount += 1;
       final weekIndex = ((date.day - 1) ~/ 7).clamp(0, weeklyTotals.length - 1);
       if (record.amount > 0) {
+        incomeCount += 1;
         income += record.amount;
+        dailyIncomes[date.day - 1] += record.amount;
+        if (record.amount > bestIncomeAmount) {
+          bestIncomeAmount = record.amount;
+          bestIncomeDay = date.day;
+        }
+        if (largestIncome == null || record.amount > largestIncome) {
+          largestIncome = record.amount;
+        }
         weeklyTotals[weekIndex] = weeklyTotals[weekIndex].copyWith(
           income: weeklyTotals[weekIndex].income + record.amount,
         );
       } else if (record.amount < 0) {
+        expenseCount += 1;
         final absolute = record.amount.abs();
         expense += absolute;
+        expenseAmounts.add(absolute);
         dailyExpenses[date.day - 1] += absolute;
+        if (date.weekday == DateTime.saturday ||
+            date.weekday == DateTime.sunday) {
+          weekendExpense += absolute;
+        } else {
+          weekdayExpense += absolute;
+        }
         weeklyTotals[weekIndex] = weeklyTotals[weekIndex].copyWith(
           expense: weeklyTotals[weekIndex].expense + absolute,
         );
@@ -747,17 +1725,28 @@ class _MonthStatsData {
         }
         if (largestExpense == null || absolute > largestExpense) {
           largestExpense = absolute;
+          largestExpenseMerchantName = _merchantName(record);
         }
+        final merchantName = _merchantName(record);
+        merchantTotals.update(
+          merchantName,
+          (value) => value.add(absolute),
+          ifAbsent: () => _MerchantAccumulator(amount: absolute, count: 1),
+        );
       }
     }
 
     int? mostExpensiveDay;
     var mostExpensiveAmount = 0.0;
+    var spendingDays = 0;
+    var incomeDays = 0;
     for (var i = 0; i < dailyExpenses.length; i += 1) {
       if (dailyExpenses[i] > mostExpensiveAmount) {
         mostExpensiveAmount = dailyExpenses[i];
         mostExpensiveDay = i + 1;
       }
+      if (dailyExpenses[i] > 0) spendingDays += 1;
+      if (dailyIncomes[i] > 0) incomeDays += 1;
     }
 
     final topCategories = categoryTotals.entries.map((entry) {
@@ -769,18 +1758,53 @@ class _MonthStatsData {
         percentage: expense <= 0 ? 0 : (entry.value / expense) * 100,
       );
     }).toList()..sort((a, b) => b.amount.compareTo(a.amount));
+    final topMerchants = merchantTotals.entries.map((entry) {
+      return _MerchantShare(
+        name: entry.key,
+        amount: entry.value.amount,
+        count: entry.value.count,
+        percentage: expense <= 0 ? 0 : (entry.value.amount / expense) * 100,
+      );
+    }).toList()..sort((a, b) => b.amount.compareTo(a.amount));
 
     return _MonthStatsData(
+      daysInMonth: daysInMonth,
       income: income,
       expense: expense,
       balance: income - expense,
       transactionCount: monthRecords.length,
+      incomeCount: incomeCount,
+      expenseCount: expenseCount,
+      recurringCount: recurringCount,
       averageDailyExpense: daysInMonth == 0 ? 0 : expense / daysInMonth,
+      averageSpendDay: spendingDays == 0 ? 0 : expense / spendingDays,
+      averageExpenseTransaction: expenseCount == 0 ? 0 : expense / expenseCount,
+      averageTransactionAmount: absoluteAmounts.isEmpty
+          ? 0
+          : absoluteAmounts.fold<double>(0, (sum, value) => sum + value) /
+                absoluteAmounts.length,
+      medianExpense: _median(expenseAmounts),
+      netPerDay: daysInMonth == 0 ? 0 : (income - expense) / daysInMonth,
+      spendingDays: spendingDays,
+      noSpendDays: daysInMonth - spendingDays,
+      incomeDays: incomeDays,
+      weekdayExpense: weekdayExpense,
+      weekendExpense: weekendExpense,
+      categoryCount: categoryTotals.length,
+      merchantCount: merchantTotals.length,
+      firstTransactionDay: firstTransactionDate?.day,
+      lastTransactionDay: lastTransactionDate?.day,
+      bestIncomeDay: bestIncomeDay,
+      largestIncome: largestIncome,
       mostExpensiveDay: mostExpensiveDay,
       largestExpense: largestExpense,
+      largestExpenseMerchantName: largestExpenseMerchantName,
       dailyExpenses: dailyExpenses,
+      dailyIncomes: dailyIncomes,
+      dailyTransactionCounts: dailyTransactionCounts,
       weeklyTotals: weeklyTotals,
       topCategories: topCategories,
+      topMerchants: topMerchants,
     );
   }
 }
@@ -811,4 +1835,36 @@ class _CategoryShare {
   final double amount;
   final Color color;
   final double percentage;
+}
+
+class _MerchantShare {
+  const _MerchantShare({
+    required this.name,
+    required this.amount,
+    required this.count,
+    required this.percentage,
+  });
+
+  final String name;
+  final double amount;
+  final int count;
+  final double percentage;
+}
+
+class _MerchantAccumulator {
+  const _MerchantAccumulator({required this.amount, required this.count});
+
+  final double amount;
+  final int count;
+
+  _MerchantAccumulator add(double value) {
+    return _MerchantAccumulator(amount: amount + value, count: count + 1);
+  }
+}
+
+class _StatMetric {
+  const _StatMetric(this.label, this.value);
+
+  final String label;
+  final String value;
 }

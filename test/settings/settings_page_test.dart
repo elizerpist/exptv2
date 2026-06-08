@@ -247,6 +247,7 @@ void main() {
     expect(find.text('Visszajelzések'), findsOneWidget);
     expect(find.text('Információ és támogatás'), findsOneWidget);
     expect(find.text('Ismétlődő tranzakciók'), findsNothing);
+    expect(find.text('Statisztikák'), findsNothing);
   });
 
   testWidgets('opens theme and FastInfo submenus', (tester) async {

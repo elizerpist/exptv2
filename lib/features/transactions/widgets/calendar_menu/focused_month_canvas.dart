@@ -10,10 +10,16 @@ class FocusedMonthCanvas extends StatelessWidget {
     super.key,
     required this.month,
     required this.mode,
+    required this.thresholdValue,
+    required this.heatmapMinValue,
+    required this.heatmapCurrentValue,
   });
 
   final CalendarMonthRenderData month;
   final CalendarMenuMode mode;
+  final double thresholdValue;
+  final double heatmapMinValue;
+  final double heatmapCurrentValue;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +41,9 @@ class FocusedMonthCanvas extends StatelessWidget {
               ),
               mode: mode,
               layout: layout,
+              thresholdValue: thresholdValue,
+              heatmapMinValue: heatmapMinValue,
+              heatmapCurrentValue: heatmapCurrentValue,
             ),
           ),
         );

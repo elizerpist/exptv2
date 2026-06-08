@@ -99,16 +99,12 @@ class _ModeButton extends StatelessWidget {
   }
 
   Color get _baseColor => switch (mode) {
-    CalendarMenuMode.normal => AppColors.gray50,
+    CalendarMenuMode.category => const Color(0xFFF97316),
     CalendarMenuMode.summary => AppColors.income,
     CalendarMenuMode.heatmap => AppColors.white,
-    CalendarMenuMode.category => const Color(0xFFF97316),
   };
 
-  Color get _inactiveBorder => switch (mode) {
-    CalendarMenuMode.normal => const Color(0xFF9CA3AF),
-    _ => AppColors.gray200,
-  };
+  Color get _inactiveBorder => AppColors.gray200;
 }
 
 class _ModeGlyphPainter extends CustomPainter {
