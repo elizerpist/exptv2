@@ -36,31 +36,65 @@ class CalendarCanvas extends StatelessWidget {
         );
         return SingleChildScrollView(
           key: const ValueKey('calendar-canvas-scroll'),
-          child: GestureDetector(
+          child: SizedBox(
             key: const ValueKey('calendar-canvas'),
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (details) {
-              for (var i = 0; i < layout.monthRects.length; i += 1) {
-                if (layout.monthRects[i].contains(details.localPosition)) {
-                  onMonthSelected(data.year, i + 1);
-                  return;
-                }
-              }
-            },
-            child: RepaintBoundary(
-              child: CustomPaint(
-                key: const ValueKey('calendar-canvas-paint'),
-                size: layout.size,
-                painter: CalendarCanvasPainter(
-                  data: data,
-                  mode: mode,
-                  layout: layout,
+            width: layout.size.width,
+            height: layout.size.height,
+            child: Stack(
+              children: [
+                RepaintBoundary(
+                  child: CustomPaint(
+                    key: const ValueKey('calendar-canvas-paint'),
+                    size: layout.size,
+                    painter: CalendarCanvasPainter(
+                      data: data,
+                      mode: mode,
+                      layout: layout,
+                    ),
+                  ),
                 ),
-              ),
+                for (var i = 0; i < layout.monthRects.length; i += 1)
+                  _MonthHitTarget(
+                    rect: layout.monthRects[i],
+                    year: data.year,
+                    month: i + 1,
+                    onMonthSelected: onMonthSelected,
+                  ),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _MonthHitTarget extends StatelessWidget {
+  const _MonthHitTarget({
+    required this.rect,
+    required this.year,
+    required this.month,
+    required this.onMonthSelected,
+  });
+
+  final Rect rect;
+  final int year;
+  final int month;
+  final void Function(int year, int month) onMonthSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      child: GestureDetector(
+        key: ValueKey('calendar-month-hit-$month'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onMonthSelected(year, month),
+        child: const SizedBox.expand(),
+      ),
     );
   }
 }
