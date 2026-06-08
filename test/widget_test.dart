@@ -1203,7 +1203,7 @@ void main() {
     await tester.scrollUntilVisible(
       appPicker,
       90,
-      scrollable: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+      scrollable: find.byType(Scrollable),
     );
     await tester.pumpAndSettle();
 
