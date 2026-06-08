@@ -48,6 +48,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onBudgetTargetEditorClosed,
     this.onFocusedSheetDismissRequested,
     this.onAddCategoryEditorRequested,
+    this.onEditCategoryEditorRequested,
     this.budgetEditorActiveKey,
   });
 
@@ -62,6 +63,7 @@ class TransactionHomePage extends StatefulWidget {
   final VoidCallback? onBudgetTargetEditorClosed;
   final VoidCallback? onFocusedSheetDismissRequested;
   final VoidCallback? onAddCategoryEditorRequested;
+  final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -313,6 +315,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   onModify: _openModifyCategory,
                   onSelect: _selectCategory,
                   onDelete: _deleteCategory,
+                  surfaceColor: expenseTheme.logBox,
+                  cardSurfaceStyle: expenseTheme.contentSurfaceStyle,
+                  avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                 ),
               if (_categoryEditorOpen)
                 Positioned(
@@ -329,6 +334,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     onDelete: _editingCategory == null
                         ? null
                         : (category) => _deleteCategory(category),
+                    surfaceColor: expenseTheme.fieldSurface,
+                    bodySurfaceStyle: expenseTheme.contentSurfaceStyle,
+                    buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+                    selectedSurfaceStyle: expenseTheme.forcedInsetSurfaceStyle,
                   ),
                 ),
               if (budgetHostItem != null)
@@ -814,6 +823,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openModifyCategory(TransactionCategory category) {
+    final externalEditor = widget.onEditCategoryEditorRequested;
+    if (externalEditor != null) {
+      externalEditor(category);
+      return;
+    }
     setState(() {
       _categoryMode = null;
       _categoryEditorOpen = true;

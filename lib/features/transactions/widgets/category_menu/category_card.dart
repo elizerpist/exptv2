@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
 import 'category_icon_badge.dart';
 
@@ -13,6 +14,9 @@ class CategoryCard extends StatelessWidget {
     required this.onModify,
     required this.onDelete,
     this.active = false,
+    this.surfaceColor = AppColors.gray50,
+    this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final TransactionCategory category;
@@ -21,6 +25,9 @@ class CategoryCard extends StatelessWidget {
   final ValueChanged<TransactionCategory> onModify;
   final ValueChanged<TransactionCategory> onDelete;
   final bool active;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction cardSurfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
 
   bool get _hasTransactions => transactionCount > 0;
 
@@ -32,60 +39,71 @@ class CategoryCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: Material(
-              color: active
-                  ? AppColors.primaryActiveBackground
-                  : AppColors.gray50,
-              elevation: 4,
-              shadowColor: Colors.black.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                key: ValueKey(
-                  'category-card-${category.transactionCategoryID}',
-                ),
-                onTap: () => onSelect(category),
-                onLongPress: () => onModify(category),
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(12, 85, 12, 18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
+            child: ExpensePressable(
+              enabled: cardSurfaceStyle.hasPressEffect,
+              builder: (context, pressed) {
+                final radius = BorderRadius.circular(18);
+                return GestureDetector(
+                  key: ValueKey(
+                    'category-card-${category.transactionCategoryID}',
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelect(category),
+                  onLongPress: () => onModify(category),
+                  child: ExpenseSurfaceContainer(
+                    surfaceKey: ValueKey(
+                      'category-card-surface-${category.transactionCategoryID}',
+                    ),
+                    style: cardSurfaceStyle,
+                    color: active
+                        ? AppColors.primaryActiveBackground
+                        : surfaceColor,
+                    borderRadius: radius,
+                    pressed: pressed,
+                    padding: const EdgeInsets.fromLTRB(12, 85, 12, 18),
+                    neutralBorder: Border.all(
                       color: active ? AppColors.primary : AppColors.gray200,
                     ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        category.name,
-                        key: ValueKey(
-                          'category-card-title-${category.transactionCategoryID}',
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.gray800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '$transactionCount tranzakció',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.gray500,
-                        ),
+                    neutralShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        offset: const Offset(0, 2),
+                        blurRadius: 4,
                       ),
                     ],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          category.name,
+                          key: ValueKey(
+                            'category-card-title-${category.transactionCategoryID}',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.gray800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '$transactionCount tranzakció',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.gray500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
           Positioned(
@@ -100,10 +118,30 @@ class CategoryCard extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: () => onSelect(category),
                 onLongPress: () => onModify(category),
-                child: CategoryIconBadge(
-                  category: category,
-                  size: 65,
-                  iconSize: 44,
+                child: ExpensePressable(
+                  enabled: avatarSurfaceStyle.hasPressEffect,
+                  builder: (context, pressed) {
+                    return ExpenseSurfaceContainer(
+                      surfaceKey: ValueKey(
+                        'category-icon-surface-${category.transactionCategoryID}',
+                      ),
+                      style: avatarSurfaceStyle,
+                      color: category.slotColor,
+                      primary: true,
+                      primaryColor: category.slotColor,
+                      borderRadius: BorderRadius.circular(32.5),
+                      pressed: pressed,
+                      width: 65,
+                      height: 65,
+                      child: CategoryIconBadge(
+                        category: category,
+                        backgroundColor: Colors.transparent,
+                        size: 65,
+                        iconSize: 44,
+                        showShadow: false,
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
