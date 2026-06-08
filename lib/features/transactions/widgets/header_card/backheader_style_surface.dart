@@ -20,6 +20,7 @@ class BackheaderStyleSurface extends StatelessWidget {
     required this.frameProgress,
     required this.frameOverview,
     required this.activeIndex,
+    this.backgroundColor = AppColors.gray100,
   });
 
   final BackheaderStyle style;
@@ -29,6 +30,7 @@ class BackheaderStyleSurface extends StatelessWidget {
   final BudgetProgressData? frameProgress;
   final OverviewBudgetData? frameOverview;
   final int activeIndex;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +86,7 @@ class BackheaderStyleSurface extends StatelessWidget {
 
   Color _background(Color color) => switch (style) {
     BackheaderStyle.orbitBudget => color,
-    _ => AppColors.gray100,
+    _ => backgroundColor,
   };
 
   List<Color> get _segmentColors {

@@ -97,6 +97,62 @@ void main() {
     );
   });
 
+  testWidgets('backheader uses configured app background color', (
+    tester,
+  ) async {
+    const backgroundColor = Color(0xFFEFF7ED);
+    final bars = [barFixture(6, 'Food', 100, 150)];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backgroundColor: backgroundColor,
+              backheaderStyle: BackheaderStyle.classic,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final classicSurface = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('category-budget-stage-background')),
+    );
+    expect(
+      (classicSurface.decoration as BoxDecoration).color,
+      backgroundColor,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backgroundColor: backgroundColor,
+              backheaderStyle: BackheaderStyle.heroToken,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final heroSurface = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('backheader-style-heroToken')),
+    );
+    expect((heroSurface.decoration as BoxDecoration).color, backgroundColor);
+  });
+
   testWidgets('backheader colored bars use raised surfaces in neumorphism', (
     tester,
   ) async {

@@ -27,6 +27,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.categoryBars,
     this.periodLabel,
     this.backheaderStyle = BackheaderStyle.classic,
+    this.backgroundColor = AppColors.gray100,
     this.activeKey,
     this.onActiveItemChanged,
     this.onItemTap,
@@ -39,6 +40,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final List<CategoryBudgetBarData>? categoryBars;
   final String? periodLabel;
   final BackheaderStyle backheaderStyle;
+  final Color backgroundColor;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
@@ -117,8 +119,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         children: [
           Positioned.fill(
             child: DecoratedBox(
+              key: const ValueKey('category-budget-stage-background'),
               decoration: BoxDecoration(
-                color: AppColors.gray100,
+                color: widget.backgroundColor,
                 borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(24),
                 ),
@@ -186,7 +189,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 height: BudgetBarGeometry.barHeight,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: AppColors.gray100,
+                    color: widget.backgroundColor,
                     borderRadius: BorderRadius.circular(
                       BudgetBarGeometry.radius,
                     ),
@@ -296,6 +299,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   frameProgress: frameProgress,
                   frameOverview: frameOverview,
                   activeIndex: _index,
+                  backgroundColor: widget.backgroundColor,
                 ),
               ),
             ),
@@ -384,6 +388,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     return _OverviewBudgetBar(
       item: item,
       height: BudgetBarGeometry.barHeight,
+      backgroundColor: widget.backgroundColor,
       onTap: () => _tap(item),
     );
   }
@@ -539,11 +544,13 @@ class _OverviewBudgetBar extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.height,
+    required this.backgroundColor,
   });
 
   final BackheaderBudgetItem item;
   final VoidCallback onTap;
   final double height;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -582,7 +589,7 @@ class _OverviewBudgetBar extends StatelessWidget {
                 height: height,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: AppColors.gray100,
+                    color: backgroundColor,
                     borderRadius: BorderRadius.circular(height / 2),
                   ),
                 ),

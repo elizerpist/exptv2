@@ -252,6 +252,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 child: RepaintBoundary(
                   child: CategoryBudgetStage(
                     backheaderStyle: expenseTheme.settings.backheaderStyle,
+                    backgroundColor: expenseTheme.appBackground,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
                     periodLabel: widget.store.activePeriodLabel,
