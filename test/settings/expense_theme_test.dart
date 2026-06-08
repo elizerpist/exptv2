@@ -19,7 +19,7 @@ void main() {
     expect(theme.logBox, AppColors.gray100);
   });
 
-  test('resolves all selectable surface colors and interaction styles', () {
+  test('resolves colors and ignores legacy surface overrides in normal profile', () {
     final settings = AppThemeSettings.defaults().copyWith(
       cardColor: AppCardColor.darkgray,
       backgroundColor: AppBackgroundColor.darkgray,
@@ -32,24 +32,30 @@ void main() {
     expect(theme.headerCard, AppColors.gray200);
     expect(theme.appBackground, AppColors.gray200);
     expect(theme.logBox, AppColors.gray200);
-    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
-    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
+    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
     expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
     expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
   });
 
-  test('resolves primary accent from selected theme', () {
+  test('resolves primary accent from app color and legacy migration', () {
     expect(
       ExpenseTheme.fromSettings(
-        AppThemeSettings.defaults().copyWith(theme: AppTheme.pink),
+        AppThemeSettings.defaults().copyWith(appColor: AppColorMode.pink),
       ).accent,
       const Color(0xFFEC4899),
     );
     expect(
       ExpenseTheme.fromSettings(
-        AppThemeSettings.defaults().copyWith(theme: AppTheme.dark),
+        AppThemeSettings.fromMap(const <String, Object?>{'theme': 'Pink'}),
       ).accent,
-      const Color(0xFF1F2937),
+      const Color(0xFFEC4899),
+    );
+    expect(
+      ExpenseTheme.fromSettings(
+        AppThemeSettings.fromMap(const <String, Object?>{'theme': 'Sötét'}),
+      ).accent,
+      const Color(0xFF19BFDC),
     );
   });
 
@@ -84,5 +90,59 @@ void main() {
     expect(settings.designProfile, AppDesignProfile.normal);
     expect(settings.nightMode, AppNightMode.cyan);
     expect(settings.appColor, AppColorMode.turquoise);
+  });
+
+  test('pink day mode resolves pink accent family', () {
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(appColor: AppColorMode.pink),
+    );
+
+    expect(theme.accent, const Color(0xFFEC4899));
+    expect(theme.accentDark, const Color(0xFFBE185D));
+    expect(theme.accentLight, const Color(0xFFF9A8D4));
+    expect(theme.activeBackground, const Color(0x15EC4899));
+  });
+
+  test('night palettes ignore day app color', () {
+    final cyan = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        appColor: AppColorMode.pink,
+        nightMode: AppNightMode.cyan,
+      ),
+    );
+    final amber = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        appColor: AppColorMode.pink,
+        nightMode: AppNightMode.amber,
+      ),
+    );
+
+    expect(cyan.isNight, isTrue);
+    expect(cyan.accent, const Color(0xFF19BFDC));
+    expect(cyan.appBackground, const Color(0xFF0B1420));
+    expect(cyan.logBox, const Color(0xFF152231));
+    expect(amber.accent, const Color(0xFFF0A646));
+    expect(amber.appBackground, const Color(0xFF15120F));
+    expect(amber.logBox, const Color(0xFF231D17));
+  });
+
+  test('profile resolves component surface roles', () {
+    final normal = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+    final neu = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        designProfile: AppDesignProfile.neumorphism,
+      ),
+    );
+
+    expect(normal.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
+    expect(normal.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
+    expect(
+      normal.bottomNavSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(neu.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+    expect(neu.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(neu.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(neu.forcedInsetSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
   });
 }

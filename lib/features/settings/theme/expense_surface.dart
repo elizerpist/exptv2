@@ -53,6 +53,14 @@ class ExpenseSurface {
   const ExpenseSurface._();
 
   static const Duration pressDuration = Duration(milliseconds: 110);
+  static const MaterialStateProperty<Color?> transparentMaterialOverlayColor =
+      WidgetStatePropertyAll<Color?>(Colors.transparent);
+  static const WidgetStateProperty<Color?> transparentOverlayColor =
+      WidgetStatePropertyAll<Color?>(Colors.transparent);
+
+  static bool materialFeedbackEnabled(ExpenseSurfaceInteraction style) {
+    return !style.hasPressEffect;
+  }
 
   static BoxDecoration decoration({
     required ExpenseSurfaceInteraction style,

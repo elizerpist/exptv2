@@ -249,4 +249,26 @@ void main() {
     expect(logs, contains('profile=standard'));
     expect(logs, contains('innerShadows=2'));
   });
+
+  test(
+    'material feedback is disabled when neumorphic press feedback is active',
+    () {
+      expect(
+        ExpenseSurface.materialFeedbackEnabled(
+          ExpenseSurfaceInteraction.neutralNeutral,
+        ),
+        isTrue,
+      );
+      expect(
+        ExpenseSurface.materialFeedbackEnabled(
+          ExpenseSurfaceInteraction.insetInset,
+        ),
+        isFalse,
+      );
+      expect(
+        ExpenseSurface.transparentOverlayColor.resolve({WidgetState.pressed}),
+        Colors.transparent,
+      );
+    },
+  );
 }
