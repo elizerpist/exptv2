@@ -1200,10 +1200,14 @@ void main() {
       const ValueKey('notification-parser-app-picker'),
     );
     expect(appPicker, findsOneWidget);
+    final settingsScroll = find.descendant(
+      of: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+      matching: find.byType(Scrollable),
+    );
     await tester.scrollUntilVisible(
       appPicker,
       90,
-      scrollable: find.byType(Scrollable),
+      scrollable: settingsScroll,
     );
     await tester.pumpAndSettle();
 
