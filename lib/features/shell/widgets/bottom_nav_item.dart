@@ -46,14 +46,22 @@ class _BottomNavItemState extends State<BottomNavItem> {
     final tab = widget.tab;
     final active = widget.active;
     final surfaceStyle = widget.surfaceStyle;
+    final activeSurfaceStyle =
+        active && surfaceStyle == ExpenseSurfaceInteraction.neutralInset
+        ? ExpenseSurfaceInteraction.insetInset
+        : surfaceStyle;
     final surfaceColor = widget.surfaceColor;
     final badgeCount = widget.badgeCount;
     final color = active ? AppColors.primary : tab.inactiveColor;
     final radius = BorderRadius.circular(AppDimensions.navItemRadius);
     final surfaceTint =
-        active && surfaceStyle != ExpenseSurfaceInteraction.neutralNeutral
+        active &&
+        activeSurfaceStyle != ExpenseSurfaceInteraction.neutralNeutral
         ? Color.lerp(surfaceColor, AppColors.primaryLight, 0.16)!
         : surfaceColor;
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      activeSurfaceStyle,
+    );
 
     return Expanded(
       child: Padding(
@@ -61,17 +69,18 @@ class _BottomNavItemState extends State<BottomNavItem> {
           horizontal: AppDimensions.navItemHorizontalMargin,
         ),
         child: ExpensePressable(
-          enabled: surfaceStyle.hasPressEffect,
+          enabled: activeSurfaceStyle.hasPressEffect,
           forcePressed: _pressed,
           builder: (context, pressed) {
             final resolvedColor =
                 active &&
-                    surfaceStyle == ExpenseSurfaceInteraction.neutralNeutral
+                    activeSurfaceStyle ==
+                        ExpenseSurfaceInteraction.neutralNeutral
                 ? AppColors.primaryActiveBackground
                 : surfaceTint;
             return ExpenseSurfaceContainer(
               surfaceKey: ValueKey('bottom-nav-${tab.id}-surface'),
-              style: surfaceStyle,
+              style: activeSurfaceStyle,
               color: resolvedColor,
               borderRadius: radius,
               pressed: pressed,
@@ -94,7 +103,16 @@ class _BottomNavItemState extends State<BottomNavItem> {
                   child: InkWell(
                     key: ValueKey('bottom-nav-${tab.id}'),
                     borderRadius: radius,
-                    onHighlightChanged: surfaceStyle.hasPressEffect
+                    overlayColor: materialFeedback
+                        ? null
+                        : ExpenseSurface.transparentOverlayColor,
+                    splashColor: materialFeedback
+                        ? null
+                        : Colors.transparent,
+                    highlightColor: materialFeedback
+                        ? null
+                        : Colors.transparent,
+                    onHighlightChanged: activeSurfaceStyle.hasPressEffect
                         ? _handleHighlightChanged
                         : null,
                     onTap: widget.onTap,

@@ -271,7 +271,7 @@ void main() {
     expect(decoration.color, AppColors.gray200);
   });
 
-  testWidgets('search pill text wrapper uses the configured surface color', (
+  testWidgets('search pill text wrapper is transparent for inset profile', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -281,7 +281,7 @@ void main() {
           onQueryChanged: (_) {},
           filteredCount: 0,
           surfaceColor: AppColors.gray200,
-          surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+          surfaceStyle: ExpenseSurfaceInteraction.insetInset,
         ),
       ),
     );
@@ -290,10 +290,10 @@ void main() {
       find.byKey(const ValueKey('search-pill-text-wrapper')),
     );
     final decoration = wrapper.decoration! as BoxDecoration;
-    expect(decoration.color, AppColors.gray200);
+    expect(decoration.color, Colors.transparent);
     final textField = tester.widget<TextField>(find.byType(TextField));
     expect(textField.decoration?.filled, isTrue);
-    expect(textField.decoration?.fillColor, AppColors.gray200);
+    expect(textField.decoration?.fillColor, Colors.transparent);
   });
 
   testWidgets('focused search pill stays in pressed inset state', (
@@ -1130,39 +1130,39 @@ void main() {
   });
 
   testWidgets(
-    'logbox name tap opens name editor without opening transaction editor',
+    'transaction logbox merchant name opens edit transaction not rename dialog',
     (tester) async {
-      var editOpened = false;
-      String? renamedMerchant;
+      final record = sampleRecord();
+      final category = sampleCategory();
+      TransactionRecord? edited;
+      var renamed = false;
+
       await tester.pumpWidget(
         MaterialApp(
           home: TransactionLogBox(
-            record: sampleExpenseRecord(),
-            category: sampleExpenseCategory(),
-            onTap: (_) => editOpened = true,
-            onRenameMerchant: (record, value) async {
-              renamedMerchant = '${record.merchant}:$value';
-            },
-            onResetMerchantName: (_) {},
+            record: record,
+            category: category,
+            surfaceStyle: ExpenseSurfaceInteraction.insetInset,
+            avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+            onTap: (value) => edited = value,
+            onRenameMerchant: (_, __) async => renamed = true,
+            onCategoryFilter: (_) {},
           ),
         ),
       );
 
       await tester.tap(
-        find.byKey(const ValueKey('transaction-logbox-name-250909')),
+        find.byKey(ValueKey('transaction-logbox-name-${record.id}')),
+        warnIfMissed: false,
       );
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('transaction-name-editor-field')),
-        'Test Market Custom',
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('transaction-name-editor-save')),
-      );
-      await tester.pumpAndSettle();
+      await tester.pump();
 
-      expect(editOpened, isFalse);
-      expect(renamedMerchant, 'Test Store:Test Market Custom');
+      expect(edited?.id, record.id);
+      expect(renamed, isFalse);
+      expect(
+        find.byKey(const ValueKey('transaction-name-editor-field')),
+        findsNothing,
+      );
     },
   );
 

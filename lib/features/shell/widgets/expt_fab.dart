@@ -9,11 +9,13 @@ class ExptFab extends StatefulWidget {
   const ExptFab({
     super.key,
     required this.onPressed,
+    this.primaryColor = AppColors.primary,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onLongPress,
   });
 
   final VoidCallback onPressed;
+  final Color primaryColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onLongPress;
 
@@ -24,16 +26,20 @@ class ExptFab extends StatefulWidget {
 class _ExptFabState extends State<ExptFab> {
   @override
   Widget build(BuildContext context) {
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      widget.surfaceStyle,
+    );
     return ExpensePressable(
       enabled: widget.surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
         return ExpenseSurfaceContainer(
           surfaceKey: const ValueKey('expt-fab'),
           style: widget.surfaceStyle,
-          color: AppColors.primary,
+          color: widget.primaryColor,
           borderRadius: BorderRadius.circular(AppDimensions.fabSize / 2),
           pressed: pressed,
           primary: true,
+          primaryColor: widget.primaryColor,
           width: AppDimensions.fabSize,
           height: AppDimensions.fabSize,
           neutralShadow: const [
@@ -49,7 +55,13 @@ class _ExptFabState extends State<ExptFab> {
             child: InkResponse(
               containedInkWell: true,
               customBorder: const CircleBorder(),
-              highlightColor: Colors.white30,
+              overlayColor: materialFeedback
+                  ? null
+                  : ExpenseSurface.transparentOverlayColor,
+              splashColor: materialFeedback ? null : Colors.transparent,
+              highlightColor: materialFeedback
+                  ? Colors.white30
+                  : Colors.transparent,
               onTap: _handleTap,
               onLongPress: _handleLongPress,
               child: Icon(

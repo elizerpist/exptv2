@@ -402,7 +402,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         child: ExptBottomNav(
           activeTab: _activeTab,
           surfaceColor: expenseTheme.logBox,
-          surfaceStyle: expenseTheme.buttonSurfaceStyle,
+          surfaceStyle: expenseTheme.bottomNavSurfaceStyle,
           unreadNotificationCount: _notificationStore.unreadCount,
           onTabSelected: _selectTab,
         ),
@@ -413,6 +413,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         bottom: AppDimensions.fabBottom,
         child: Center(
           child: ExptFab(
+            primaryColor: expenseTheme.accent,
             surfaceStyle: expenseTheme.buttonSurfaceStyle,
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,

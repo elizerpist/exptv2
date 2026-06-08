@@ -130,6 +130,10 @@ class _SearchPillState extends State<SearchPill> {
     final hasMerchant = widget.merchantFilter != null;
     final hasCategory = widget.categoryFilter != null;
     final hasFilters = hasMerchant || hasCategory;
+    final transparentInnerField = widget.surfaceStyle.hasPressEffect;
+    final innerFillColor = transparentInnerField
+        ? Colors.transparent
+        : widget.surfaceColor;
     final capsules = <Widget>[
       if (hasMerchant)
         _FilterCapsule(
@@ -173,7 +177,7 @@ class _SearchPillState extends State<SearchPill> {
           flex: 1,
           child: Container(
             key: const ValueKey('search-pill-text-wrapper'),
-            decoration: BoxDecoration(color: widget.surfaceColor),
+            decoration: BoxDecoration(color: innerFillColor),
             child: DebugTextField(
               debugLabel: 'SearchPill.query',
               focusNode: _focusNode,
@@ -189,7 +193,7 @@ class _SearchPillState extends State<SearchPill> {
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
                 filled: true,
-                fillColor: widget.surfaceColor,
+                fillColor: innerFillColor,
                 contentPadding: EdgeInsets.zero,
                 hintText: hasFilters
                     ? '${widget.filteredCount} tranzakció találva'

@@ -230,7 +230,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       categoriesById: widget.store.categoriesById,
                       surfaceColor: expenseTheme.logBox,
                       surfaceStyle: expenseTheme.contentSurfaceStyle,
-                      avatarSurfaceStyle: expenseTheme.contentSurfaceStyle,
+                      avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                       onFastFilter: _setMerchantFastFilter,
                       onRecordTap: _editTransaction,
                       onDeleteRequested: _requestDeleteTransaction,

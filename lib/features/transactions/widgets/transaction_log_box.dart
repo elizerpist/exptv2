@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../settings/models/app_theme_settings.dart';
 import '../models/transaction_category.dart';
@@ -130,22 +129,6 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
       return;
     }
     _resetDrag();
-  }
-
-  Future<void> _openNameEditor() async {
-    final rename = widget.onRenameMerchant;
-    if (rename == null) return;
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return _TransactionNameDialog(
-          initialValue: widget.record.displayMerchant,
-        );
-      },
-    );
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) return;
-    await rename(widget.record, trimmed);
   }
 
   Future<void> _resetName() async {
@@ -341,7 +324,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
           child: GestureDetector(
             key: ValueKey('transaction-logbox-name-${widget.record.id}'),
             behavior: HitTestBehavior.opaque,
-            onTap: _openNameEditor,
+            onTap: () => widget.onTap?.call(widget.record),
             child: Text(
               widget.record.displayMerchant,
               key: ValueKey('transaction-logbox-name-text-${widget.record.id}'),
@@ -398,62 +381,6 @@ class _SwipeVisualState {
   final double dx;
   final double deleteOpacity;
   final double filterOpacity;
-}
-
-class _TransactionNameDialog extends StatefulWidget {
-  const _TransactionNameDialog({required this.initialValue});
-
-  final String initialValue;
-
-  @override
-  State<_TransactionNameDialog> createState() => _TransactionNameDialogState();
-}
-
-class _TransactionNameDialogState extends State<_TransactionNameDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Tranzakció név'),
-      content: DebugTextField(
-        fieldKey: const ValueKey('transaction-name-editor-field'),
-        debugLabel: 'TransactionNameDialog.name',
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(
-          labelText: 'Megjelenített név',
-          focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: AppColors.primary, width: 2),
-          ),
-          border: OutlineInputBorder(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Mégse'),
-        ),
-        FilledButton(
-          key: const ValueKey('transaction-name-editor-save'),
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Mentés'),
-        ),
-      ],
-    );
-  }
 }
 
 class _SwipeBorder extends StatelessWidget {

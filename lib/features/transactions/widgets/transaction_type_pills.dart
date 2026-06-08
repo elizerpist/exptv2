@@ -73,6 +73,9 @@ class _TransactionTypePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(25);
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      surfaceStyle,
+    );
     return ExpensePressable(
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
@@ -103,6 +106,11 @@ class _TransactionTypePill extends StatelessWidget {
             borderRadius: radius,
             child: InkWell(
               borderRadius: radius,
+              overlayColor: materialFeedback
+                  ? null
+                  : ExpenseSurface.transparentOverlayColor,
+              splashColor: materialFeedback ? null : Colors.transparent,
+              highlightColor: materialFeedback ? null : Colors.transparent,
               onTap: () => onTap(type),
               child: SizedBox(
                 height: TransactionMenuMetrics.typePillMinHeight,

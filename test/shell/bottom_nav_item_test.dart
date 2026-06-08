@@ -175,4 +175,32 @@ void main() {
       AppColors.primaryLight.withValues(alpha: 0.10),
     ]);
   });
+
+  testWidgets('active bottom nav item remains inset for neutral-inset nav style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: ExptBottomNav(
+            activeTab: AppTab.home,
+            surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final activeSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('bottom-nav-home-surface')),
+    );
+    final inactiveSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('bottom-nav-settings-surface')),
+    );
+    final activeDecoration = activeSurface.decoration! as BoxDecoration;
+    final inactiveDecoration = inactiveSurface.decoration! as BoxDecoration;
+
+    expect(activeDecoration.gradient, isA<LinearGradient>());
+    expect(inactiveDecoration.gradient, isNull);
+  });
 }
