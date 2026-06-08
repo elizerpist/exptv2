@@ -1196,14 +1196,18 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('App regex'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('notification-parser-app-picker')),
-      findsOneWidget,
+    final appPicker = find.byKey(
+      const ValueKey('notification-parser-app-picker'),
     );
+    expect(appPicker, findsOneWidget);
+    await tester.scrollUntilVisible(
+      appPicker,
+      90,
+      scrollable: find.byKey(const ValueKey('settings-parsed-app-scroll')),
+    );
+    await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('notification-parser-app-picker')),
-    );
+    await tester.tap(appPicker);
     await tester.pumpAndSettle();
     final pickerRect = tester.getRect(
       find.byKey(const ValueKey('installed-app-picker-sheet')),
