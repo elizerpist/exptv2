@@ -96,6 +96,26 @@ interface ExpenseTransactionDao {
     @Query("UPDATE transactions SET userAssignedName = NULL WHERE merchant = :originalMerchant")
     suspend fun resetNamesByMerchant(originalMerchant: String): Int
 
+    @Query(
+        """
+        SELECT transactionCategoryID FROM transactions
+        WHERE TRIM(merchant) = TRIM(:merchant)
+          AND transactionCategoryID IS NOT NULL
+        ORDER BY date DESC, time DESC, id DESC
+        LIMIT 1
+        """
+    )
+    suspend fun latestCategoryIdForMerchant(merchant: String): Int?
+
+    @Query(
+        """
+        UPDATE transactions
+        SET transactionCategoryID = :categoryId
+        WHERE TRIM(merchant) = TRIM(:merchant)
+        """
+    )
+    suspend fun updateCategoryByMerchant(merchant: String, categoryId: Int): Int
+
     @Query("SELECT MAX(id) FROM transactions WHERE CAST(id AS TEXT) LIKE :prefix || '%'")
     suspend fun maxIdForPrefix(prefix: String): Int?
 

@@ -128,6 +128,7 @@ class ExpenseRepository(context: Context) {
             val merchant = parsed.merchant?.takeIf { it.isNotBlank() } ?: continue
             if (parsed.error != null) continue
             val date = dateFromMillis(event.timestamp)
+            val categoryId = inheritedCategoryIdForMerchant(merchant, null)
             val signedAmount = if (profile.transactionType == "income") {
                 kotlin.math.abs(amount)
             } else {
@@ -143,13 +144,14 @@ class ExpenseRepository(context: Context) {
                 merchant = merchant,
                 amount = signedAmount,
                 userAssignedName = null,
-                transactionCategoryID = null,
+                transactionCategoryID = categoryId,
                 sourceNotificationEventId = event.id,
             )
             transactions.insert(transaction)
             pushParserDebug(
                 "auto transaction created event=${event.id} profile=${profile.id} " +
-                    "transaction=${transaction.id} merchant=$merchant amount=${transaction.amount}",
+                    "transaction=${transaction.id} merchant=$merchant " +
+                    "amount=${transaction.amount} category=$categoryId",
             )
             return transaction.toMap()
         }
@@ -726,7 +728,8 @@ class ExpenseRepository(context: Context) {
             throw ExpenseValidationException("INVALID_TRANSACTION_TYPE", "Type must be income or expense")
         }
 
-        val categoryId = optionalInt(args["transactionCategoryID"])
+        val requestedCategoryId = optionalInt(args["transactionCategoryID"])
+        val categoryId = inheritedCategoryIdForMerchant(merchant, requestedCategoryId)
         val category = categoryId?.let { id ->
             categories.byId(id)
                 ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
@@ -823,6 +826,12 @@ class ExpenseRepository(context: Context) {
                 "[Notification] transaction update limit evaluation skipped id=${row.id} reason=$reason",
             )
         }
+        if (
+            row.transactionCategoryID != null &&
+            row.transactionCategoryID != existing.transactionCategoryID
+        ) {
+            propagateCategoryForMerchant(existing.merchant, row.transactionCategoryID)
+        }
         return row.toMap()
     }
 
@@ -848,6 +857,35 @@ class ExpenseRepository(context: Context) {
         val originalMerchant = args["originalMerchant"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
             ?: throw ExpenseValidationException("INVALID_MERCHANT", "Original merchant is required")
         return transactions.resetNamesByMerchant(originalMerchant)
+    }
+
+    private suspend fun inheritedCategoryIdForMerchant(
+        merchant: String,
+        explicitCategoryId: Int?,
+    ): Int? {
+        if (explicitCategoryId != null) return explicitCategoryId
+        val key = merchant.trim()
+        if (key.isEmpty()) return null
+        val inherited = transactions.latestCategoryIdForMerchant(key)
+        Log.d(
+            "ExpenseRepository",
+            "[MerchantCategory] inherit merchant=$key category=$inherited",
+        )
+        return inherited
+    }
+
+    private suspend fun propagateCategoryForMerchant(
+        merchant: String,
+        categoryId: Int,
+    ): Int {
+        val key = merchant.trim()
+        if (key.isEmpty()) return 0
+        val count = transactions.updateCategoryByMerchant(key, categoryId)
+        Log.d(
+            "ExpenseRepository",
+            "[MerchantCategory] propagate merchant=$key category=$categoryId rows=$count",
+        )
+        return count
     }
 
 
