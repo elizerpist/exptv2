@@ -51,6 +51,42 @@ void main() {
     );
   });
 
+  testWidgets('neumorphic header keeps a drop shadow on the background', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '-100 Ft',
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+            surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          ),
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('transaction-header-surface')),
+    );
+    final decoration = surface.decoration! as BoxDecoration;
+
+    expect(
+      decoration.boxShadow,
+      contains(
+        isA<BoxShadow>()
+            .having(
+              (shadow) => shadow.color,
+              'color',
+              Colors.black.withValues(alpha: 0.15),
+            )
+            .having((shadow) => shadow.offset, 'offset', const Offset(0, 4))
+            .having((shadow) => shadow.blurRadius, 'blurRadius', 8),
+      ),
+    );
+  });
+
   testWidgets('hide balance button toggles the visible balance text', (
     tester,
   ) async {
@@ -194,7 +230,10 @@ void main() {
         find.byKey(const ValueKey('category-menu-back-button')),
         findsNothing,
       );
-      expect(find.byKey(const ValueKey('category-menu-add-button')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('category-menu-add-button')),
+        findsOneWidget,
+      );
     },
   );
 

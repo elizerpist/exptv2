@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
-import '../../../core/debug/debug_text_input.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../settings/models/app_theme_settings.dart';
+import '../../settings/theme/expense_theme.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
 import '../state/transaction_store.dart';
@@ -12,6 +13,7 @@ import 'category_scroll_picker.dart';
 import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
 import 'slide_up_panel_metrics.dart';
+import 'themed_pill_field.dart';
 import 'transaction_menu_metrics.dart';
 
 class AddTransactionSheet extends StatefulWidget {
@@ -22,6 +24,7 @@ class AddTransactionSheet extends StatefulWidget {
     this.onClose,
     this.openRequestedAt,
     this.visible = true,
+    this.expenseTheme,
   });
 
   final TransactionStore store;
@@ -29,6 +32,7 @@ class AddTransactionSheet extends StatefulWidget {
   final VoidCallback? onClose;
   final DateTime? openRequestedAt;
   final bool visible;
+  final ExpenseTheme? expenseTheme;
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -116,6 +120,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       builder: (context, _) {
         final type = widget.initialTransaction?.type ?? widget.store.activeType;
         final debugLabel = _editing ? 'EditTransaction' : 'AddTransaction';
+        final expenseTheme =
+            widget.expenseTheme ??
+            ExpenseTheme.fromSettings(AppThemeSettings.defaults());
         final categories = widget.store.categories
             .where((category) => category.normalizedType == type)
             .toList();
@@ -144,8 +151,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             child: Builder(
               builder: (context) {
                 final actionBottomInset = _categoryPickerOpen
-                    ? SlideUpPanelMetrics.transactionActionBottomInset + 2
-                    : SlideUpPanelMetrics.transactionClosedActionBottomInset;
+                    ? SlideUpPanelMetrics.transactionClosedActionBottomInset + 18
+                    : SlideUpPanelMetrics.transactionClosedActionBottomInset - 5;
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     SlideUpPanelMetrics.horizontalInset,
@@ -186,24 +193,28 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          DebugTextField(
+                          ThemedPillField(
                             debugLabel: '$debugLabel.name',
                             controller: _name,
                             focusNode: _nameFocus,
-                            decoration: transactionFieldDecoration(
-                              'Tranzakció neve',
-                            ),
+                            label: 'Tranzakció neve',
+                            surfaceColor: expenseTheme.fieldSurface,
+                            surfaceStyle: expenseTheme.contentSurfaceStyle,
                           ),
                           const SizedBox(height: 12),
                           AmountField(
                             controller: _amount,
                             focusNode: _amountFocus,
                             debugLabel: '$debugLabel.amount',
+                            surfaceColor: expenseTheme.fieldSurface,
+                            surfaceStyle: expenseTheme.contentSurfaceStyle,
                           ),
                           const SizedBox(height: 12),
                           CategorySelectorField(
                             selected: _category,
                             onTap: _openCategoryPicker,
+                            surfaceColor: expenseTheme.fieldSurface,
+                            surfaceStyle: expenseTheme.contentSurfaceStyle,
                           ),
                           if (_categoryPickerOpen) ...[
                             const SizedBox(height: 8),
@@ -218,7 +229,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           if (_categoryPickerOpen)
                             const Spacer()
                           else
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 10),
                           DateTimeFields(
                             dateController: _date,
                             timeController: _time,
@@ -227,6 +238,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             dateFocusNode: _dateFocus,
                             timeFocusNode: _timeFocus,
                             debugLabelPrefix: debugLabel,
+                            surfaceColor: expenseTheme.fieldSurface,
+                            surfaceStyle: expenseTheme.contentSurfaceStyle,
                           ),
                           if (_error != null) ...[
                             const SizedBox(height: 12),
@@ -235,16 +248,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               style: const TextStyle(color: AppColors.expense),
                             ),
                           ],
-                          const SizedBox(height: 12),
-                          FilledButton(
-                            key: const ValueKey('transaction-save-button'),
-                            onPressed: _saving ? null : _save,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: AppColors.white,
-                              minimumSize: const Size.fromHeight(50),
+                          const SizedBox(height: 0),
+                          ExpenseSurfaceButton(
+                            buttonKey: const ValueKey(
+                              'transaction-save-button',
                             ),
-                            child: Text(_saving ? 'Mentés...' : 'Mentés'),
+                            label: 'Mentés',
+                            onPressed: _saving ? null : _save,
+                            saving: _saving,
+                            surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                            color: expenseTheme.accent,
                           ),
                         ],
                       );

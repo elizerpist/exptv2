@@ -7,29 +7,63 @@ class ExpenseTheme {
   const ExpenseTheme({
     required this.settings,
     required this.accent,
+    required this.accentDark,
+    required this.accentLight,
+    required this.activeBackground,
     required this.headerCard,
     required this.appBackground,
     required this.logBox,
+    required this.fieldSurface,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.border,
     required this.buttonSurfaceStyle,
     required this.contentSurfaceStyle,
+    required this.bottomNavSurfaceStyle,
+    required this.forcedInsetSurfaceStyle,
   });
 
   final AppThemeSettings settings;
   final Color accent;
+  final Color accentDark;
+  final Color accentLight;
+  final Color activeBackground;
   final Color headerCard;
   final Color appBackground;
   final Color logBox;
+  final Color fieldSurface;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color border;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction contentSurfaceStyle;
+  final ExpenseSurfaceInteraction bottomNavSurfaceStyle;
+  final ExpenseSurfaceInteraction forcedInsetSurfaceStyle;
+
+  bool get isNeumorphism =>
+      settings.designProfile == AppDesignProfile.neumorphism;
+
+  Color resolvePrimary(Color color) {
+    if (color == AppColors.primary) return accent;
+    if (color == AppColors.primaryDark) return accentDark;
+    if (color == AppColors.primaryLight) return accentLight;
+    if (color == AppColors.primaryActiveBackground) return activeBackground;
+    return color;
+  }
 
   factory ExpenseTheme.fromSettings(AppThemeSettings settings) {
+    final neumorphism = settings.designProfile == AppDesignProfile.neumorphism;
+    final surfaceStyles = _surfaceStyles(neumorphism);
+
+    final accentFamily = _dayAccentFamily(settings);
     return ExpenseTheme(
       settings: settings,
-      accent: switch (settings.theme) {
-        AppTheme.pink => const Color(0xFFEC4899),
-        AppTheme.turquoise => AppColors.primary,
-        AppTheme.dark => const Color(0xFF1F2937),
-      },
+      accent: accentFamily.accent,
+      accentDark: accentFamily.dark,
+      accentLight: accentFamily.light,
+      activeBackground: accentFamily.activeBackground,
       headerCard: switch (settings.cardColor) {
         AppCardColor.white => AppColors.white,
         AppCardColor.lightgray => AppColors.gray100,
@@ -45,8 +79,80 @@ class ExpenseTheme {
         AppBoxColor.gray => AppColors.gray100,
         AppBoxColor.darkgray => AppColors.gray200,
       },
-      buttonSurfaceStyle: settings.buttonSurfaceStyle,
-      contentSurfaceStyle: settings.contentSurfaceStyle,
+      fieldSurface: switch (settings.boxColor) {
+        AppBoxColor.white => AppColors.white,
+        AppBoxColor.gray => AppColors.gray100,
+        AppBoxColor.darkgray => AppColors.gray200,
+      },
+      textPrimary: AppColors.gray900,
+      textSecondary: AppColors.gray600,
+      textMuted: AppColors.gray500,
+      border: AppColors.gray200,
+      buttonSurfaceStyle: surfaceStyles.button,
+      contentSurfaceStyle: surfaceStyles.content,
+      bottomNavSurfaceStyle: surfaceStyles.bottomNav,
+      forcedInsetSurfaceStyle: surfaceStyles.forcedInset,
     );
   }
+
+  static _AccentFamily _dayAccentFamily(AppThemeSettings settings) {
+    if (settings.appColor == AppColorMode.pink) {
+      return const _AccentFamily(
+        accent: Color(0xFFEC4899),
+        dark: Color(0xFFBE185D),
+        light: Color(0xFFF9A8D4),
+        activeBackground: Color(0x15EC4899),
+      );
+    }
+    return const _AccentFamily(
+      accent: AppColors.primary,
+      dark: AppColors.primaryDark,
+      light: AppColors.primaryLight,
+      activeBackground: AppColors.primaryActiveBackground,
+    );
+  }
+
+  static _SurfaceStyles _surfaceStyles(bool neumorphism) {
+    return neumorphism
+        ? const _SurfaceStyles(
+            button: ExpenseSurfaceInteraction.raisedInset,
+            content: ExpenseSurfaceInteraction.insetInset,
+            bottomNav: ExpenseSurfaceInteraction.neutralInset,
+            forcedInset: ExpenseSurfaceInteraction.insetInset,
+          )
+        : const _SurfaceStyles(
+            button: ExpenseSurfaceInteraction.neutralNeutral,
+            content: ExpenseSurfaceInteraction.neutralNeutral,
+            bottomNav: ExpenseSurfaceInteraction.neutralNeutral,
+            forcedInset: ExpenseSurfaceInteraction.neutralNeutral,
+          );
+  }
+}
+
+class _AccentFamily {
+  const _AccentFamily({
+    required this.accent,
+    required this.dark,
+    required this.light,
+    required this.activeBackground,
+  });
+
+  final Color accent;
+  final Color dark;
+  final Color light;
+  final Color activeBackground;
+}
+
+class _SurfaceStyles {
+  const _SurfaceStyles({
+    required this.button,
+    required this.content,
+    required this.bottomNav,
+    required this.forcedInset,
+  });
+
+  final ExpenseSurfaceInteraction button;
+  final ExpenseSurfaceInteraction content;
+  final ExpenseSurfaceInteraction bottomNav;
+  final ExpenseSurfaceInteraction forcedInset;
 }

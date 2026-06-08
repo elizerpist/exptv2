@@ -19,6 +19,7 @@ import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/models/backheader_budget_item.dart';
+import '../transactions/models/transaction_category.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/transaction_home_page.dart';
@@ -162,6 +163,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onAddCategoryEditorRequested: () {
         _sheetHostKey.currentState?.openCategory();
       },
+      onEditCategoryEditorRequested: (category) {
+        _sheetHostKey.currentState?.openCategory(initialCategory: category);
+      },
       budgetEditorActiveKey: _budgetEditorActiveKey,
     );
   }
@@ -245,7 +249,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
     });
-    DebugConsole.log('[ThemeSurface] shell apply ${_settingsSignature(settings)}');
+    DebugConsole.log(
+      '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
+    );
   }
 
   void _applyFastInfoConfig(FastInfoConfig config) {
@@ -438,7 +444,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         child: ExptBottomNav(
           activeTab: _activeTab,
           surfaceColor: expenseTheme.logBox,
-          surfaceStyle: expenseTheme.buttonSurfaceStyle,
+          surfaceStyle: expenseTheme.bottomNavSurfaceStyle,
+          accentColor: expenseTheme.accent,
+          accentLightColor: expenseTheme.accentLight,
+          activeBackgroundColor: expenseTheme.activeBackground,
           unreadNotificationCount: _notificationStore.unreadCount,
           onTabSelected: _selectTab,
         ),
@@ -449,6 +458,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         bottom: AppDimensions.fabBottom,
         child: Center(
           child: ExptFab(
+            primaryColor: expenseTheme.accent,
             surfaceStyle: expenseTheme.buttonSurfaceStyle,
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,
@@ -468,6 +478,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         return NotificationsPage(
           nativeBridge: widget.nativeBridge,
           store: _notificationStore,
+          expenseTheme: expenseTheme,
           active: false,
         );
       case AppTab.settings:
@@ -513,6 +524,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               store: _transactionStore,
               nativeBridge: widget.nativeBridge,
               budgetEditorActiveKey: _budgetEditorActiveKey,
+              expenseTheme: expenseTheme,
             ),
           ),
         ],
@@ -521,7 +533,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _logThemeSurfaceOnce(ExpenseTheme expenseTheme) {
-    final signature = '${_settingsSignature(expenseTheme.settings)} '
+    final signature =
+        '${_settingsSignature(expenseTheme.settings)} '
         'accent=${_hex(expenseTheme.accent)} '
         'bgColor=${_hex(expenseTheme.appBackground)} '
         'headerColor=${_hex(expenseTheme.headerCard)} '
@@ -559,11 +572,13 @@ class _ShellSheetHost extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     required this.budgetEditorActiveKey,
+    required this.expenseTheme,
   });
 
   final TransactionStore store;
   final NativeBridge nativeBridge;
   final ValueNotifier<String?> budgetEditorActiveKey;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_ShellSheetHost> createState() => _ShellSheetHostState();
@@ -590,11 +605,11 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     );
   }
 
-  void openCategory() {
+  void openCategory({TransactionCategory? initialCategory}) {
     _transactionSlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
-    _categorySlotKey.currentState?.open();
+    _categorySlotKey.currentState?.open(initialCategory: initialCategory);
   }
 
   void openRecurring() {
@@ -642,16 +657,22 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
           child: _TransactionSheetSlot(
             key: _transactionSlotKey,
             store: widget.store,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
         Positioned.fill(
-          child: _CategorySheetSlot(key: _categorySlotKey, store: widget.store),
+          child: _CategorySheetSlot(
+            key: _categorySlotKey,
+            store: widget.store,
+            expenseTheme: widget.expenseTheme,
+          ),
         ),
         Positioned.fill(
           child: _RecurringSheetSlot(
             key: _recurringSlotKey,
             store: widget.store,
             nativeBridge: widget.nativeBridge,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
         Positioned.fill(
@@ -659,6 +680,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             key: _budgetSlotKey,
             store: widget.store,
             activeKey: widget.budgetEditorActiveKey,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
       ],
@@ -667,9 +689,14 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 }
 
 class _TransactionSheetSlot extends StatefulWidget {
-  const _TransactionSheetSlot({super.key, required this.store});
+  const _TransactionSheetSlot({
+    super.key,
+    required this.store,
+    required this.expenseTheme,
+  });
 
   final TransactionStore store;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_TransactionSheetSlot> createState() => _TransactionSheetSlotState();
@@ -727,6 +754,7 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
       initialTransaction: _editingTransaction,
       openRequestedAt: _openRequestedAt,
       visible: _open,
+      expenseTheme: widget.expenseTheme,
       onClose: close,
     );
   }
@@ -738,9 +766,14 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
 }
 
 class _CategorySheetSlot extends StatefulWidget {
-  const _CategorySheetSlot({super.key, required this.store});
+  const _CategorySheetSlot({
+    super.key,
+    required this.store,
+    required this.expenseTheme,
+  });
 
   final TransactionStore store;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_CategorySheetSlot> createState() => _CategorySheetSlotState();
@@ -748,15 +781,21 @@ class _CategorySheetSlot extends StatefulWidget {
 
 class _CategorySheetSlotState extends State<_CategorySheetSlot> {
   var _open = false;
+  TransactionCategory? _initialCategory;
 
-  void open() {
-    if (_open) return;
-    setState(() => _open = true);
+  void open({TransactionCategory? initialCategory}) {
+    setState(() {
+      _open = true;
+      _initialCategory = initialCategory;
+    });
   }
 
   void close() {
-    if (!_open) return;
-    setState(() => _open = false);
+    if (!_open && _initialCategory == null) return;
+    setState(() {
+      _open = false;
+      _initialCategory = null;
+    });
   }
 
   @override
@@ -766,24 +805,49 @@ class _CategorySheetSlotState extends State<_CategorySheetSlot> {
       builder: (context, _) {
         return CategoryEditorSheet(
           activeType: widget.store.activeType,
+          initialCategory: _initialCategory,
           panelHeight: _menuPanelHeight(context),
           visible: _open,
+          surfaceColor: widget.expenseTheme.fieldSurface,
+          bodySurfaceStyle: widget.expenseTheme.contentSurfaceStyle,
+          buttonSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
+          selectedSurfaceStyle: widget.expenseTheme.forcedInsetSurfaceStyle,
+          accentColor: widget.expenseTheme.accent,
           onClose: close,
           onSave: (draft) => unawaited(_saveCategory(draft)),
+          onDelete: _initialCategory == null
+              ? null
+              : (category) => unawaited(_deleteCategory(category)),
         );
       },
     );
   }
 
   Future<void> _saveCategory(CategoryDraft draft) async {
-    await widget.store.addCategory(
-      name: draft.name,
-      type: draft.type,
-      colorSlot: draft.colorSlot,
-      iconSlot: draft.iconSlot,
-    );
+    final initial = _initialCategory;
+    if (initial == null) {
+      await widget.store.addCategory(
+        name: draft.name,
+        type: draft.type,
+        colorSlot: draft.colorSlot,
+        iconSlot: draft.iconSlot,
+      );
+    } else {
+      await widget.store.updateCategory(
+        initial,
+        name: draft.name,
+        colorSlot: draft.colorSlot,
+        iconSlot: draft.iconSlot,
+      );
+    }
     if (!mounted) return;
-    setState(() => _open = false);
+    close();
+  }
+
+  Future<void> _deleteCategory(TransactionCategory category) async {
+    await widget.store.deleteCategory(category);
+    if (!mounted) return;
+    close();
   }
 
   double _menuPanelHeight(BuildContext context) {
@@ -799,10 +863,12 @@ class _RecurringSheetSlot extends StatefulWidget {
     super.key,
     required this.store,
     required this.nativeBridge,
+    required this.expenseTheme,
   });
 
   final TransactionStore store;
   final NativeBridge nativeBridge;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_RecurringSheetSlot> createState() => _RecurringSheetSlotState();
@@ -833,6 +899,7 @@ class _RecurringSheetSlotState extends State<_RecurringSheetSlot> {
       store: widget.store,
       visible: _open,
       openRequestedAt: _openRequestedAt,
+      expenseTheme: widget.expenseTheme,
       onLoadInstalledApps: widget.nativeBridge.listInstalledApps,
       onClose: close,
     );
@@ -844,10 +911,12 @@ class _BudgetTargetSheetSlot extends StatefulWidget {
     super.key,
     required this.store,
     required this.activeKey,
+    required this.expenseTheme,
   });
 
   final TransactionStore store;
   final ValueNotifier<String?> activeKey;
+  final ExpenseTheme expenseTheme;
 
   @override
   State<_BudgetTargetSheetSlot> createState() => _BudgetTargetSheetSlotState();
@@ -902,6 +971,7 @@ class _BudgetTargetSheetSlotState extends State<_BudgetTargetSheetSlot> {
           categoryBars: widget.store.categoryBudgetBars,
           overviewItems: widget.store.overviewBudgetItems,
           periodIncome: widget.store.activePeriodIncomeTotal,
+          expenseTheme: widget.expenseTheme,
           onCancel: close,
           onActiveItemChanged: _setActiveItem,
           onSaveOverview:

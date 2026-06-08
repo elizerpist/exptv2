@@ -1,5 +1,9 @@
+import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_editor_panel.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_preview_pill.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_slot_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -153,5 +157,57 @@ void main() {
     expect(saved?.id, 6);
     expect(saved?.name, 'Q Edit');
     expect(deleted?.transactionCategoryID, 6);
+  });
+
+  testWidgets('category slots keep selected item inset in neumorphism', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategorySlotGrid.colors(
+            selectedSlot: 9,
+            surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+            selectedSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+            onSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final selected = tester.widget<Container>(
+      find.byKey(const ValueKey('color-slot-surface-9')),
+    );
+    final unselected = tester.widget<Container>(
+      find.byKey(const ValueKey('color-slot-surface-8')),
+    );
+    expect((selected.decoration! as BoxDecoration).boxShadow, isNull);
+    expect((unselected.decoration! as BoxDecoration).boxShadow, isNotNull);
+  });
+
+  testWidgets('category preview uses inset log body and raised avatar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryPreviewPill(
+          name: 'Travel',
+          colorSlot: 9,
+          iconSlot: 4,
+          surfaceColor: AppColors.gray200,
+          bodySurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('category-preview-pill-surface')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-preview-avatar-surface')),
+      findsOneWidget,
+    );
   });
 }

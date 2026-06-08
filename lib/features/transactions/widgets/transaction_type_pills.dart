@@ -12,12 +12,14 @@ class TransactionTypePills extends StatelessWidget {
     required this.onChanged,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
   });
 
   final TransactionType activeType;
   final ValueChanged<TransactionType> onChanged;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +38,7 @@ class TransactionTypePills extends StatelessWidget {
               active: activeType == TransactionType.income,
               surfaceColor: surfaceColor,
               surfaceStyle: surfaceStyle,
+              accentColor: accentColor,
               onTap: onChanged,
             ),
           ),
@@ -46,6 +49,7 @@ class TransactionTypePills extends StatelessWidget {
               active: activeType == TransactionType.expense,
               surfaceColor: surfaceColor,
               surfaceStyle: surfaceStyle,
+              accentColor: accentColor,
               onTap: onChanged,
             ),
           ),
@@ -61,6 +65,7 @@ class _TransactionTypePill extends StatelessWidget {
     required this.active,
     required this.surfaceColor,
     required this.surfaceStyle,
+    required this.accentColor,
     required this.onTap,
   });
 
@@ -68,11 +73,15 @@ class _TransactionTypePill extends StatelessWidget {
   final bool active;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final Color accentColor;
   final ValueChanged<TransactionType> onTap;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(25);
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      surfaceStyle,
+    );
     return ExpensePressable(
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
@@ -85,11 +94,12 @@ class _TransactionTypePill extends StatelessWidget {
           borderRadius: radius,
           pressed: pressed,
           primary: active,
+          primaryColor: accentColor,
           constraints: const BoxConstraints(
             minHeight: TransactionMenuMetrics.typePillMinHeight,
           ),
           neutralBorder: Border.all(
-            color: active ? AppColors.primary : AppColors.gray200,
+            color: active ? accentColor : AppColors.gray200,
           ),
           neutralShadow: [
             BoxShadow(
@@ -103,6 +113,11 @@ class _TransactionTypePill extends StatelessWidget {
             borderRadius: radius,
             child: InkWell(
               borderRadius: radius,
+              overlayColor: materialFeedback
+                  ? null
+                  : ExpenseSurface.transparentOverlayColor,
+              splashColor: materialFeedback ? null : Colors.transparent,
+              highlightColor: materialFeedback ? null : Colors.transparent,
               onTap: () => onTap(type),
               child: SizedBox(
                 height: TransactionMenuMetrics.typePillMinHeight,

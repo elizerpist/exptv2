@@ -19,6 +19,7 @@ class SearchPill extends StatefulWidget {
     this.categoryFilter,
     this.categoryFilterColor,
     this.onClearCategory,
+    this.accentColor = AppColors.primary,
   });
 
   final String query;
@@ -32,6 +33,7 @@ class SearchPill extends StatefulWidget {
   final String? categoryFilter;
   final Color? categoryFilterColor;
   final VoidCallback? onClearCategory;
+  final Color accentColor;
 
   @override
   State<SearchPill> createState() => _SearchPillState();
@@ -130,19 +132,23 @@ class _SearchPillState extends State<SearchPill> {
     final hasMerchant = widget.merchantFilter != null;
     final hasCategory = widget.categoryFilter != null;
     final hasFilters = hasMerchant || hasCategory;
+    final transparentInnerField = widget.surfaceStyle.hasPressEffect;
+    final innerFillColor = transparentInnerField
+        ? Colors.transparent
+        : widget.surfaceColor;
     final capsules = <Widget>[
       if (hasMerchant)
         _FilterCapsule(
           capsuleKey: const ValueKey('search-pill-capsule-merchant'),
           value: widget.merchantFilter!,
-          color: AppColors.primary,
+          color: widget.accentColor,
           onClear: widget.onClearMerchant,
         ),
       if (hasCategory)
         _FilterCapsule(
           capsuleKey: const ValueKey('search-pill-capsule-category'),
           value: widget.categoryFilter!,
-          color: widget.categoryFilterColor ?? AppColors.primary,
+          color: widget.categoryFilterColor ?? widget.accentColor,
           onClear: widget.onClearCategory,
         ),
     ];
@@ -173,7 +179,7 @@ class _SearchPillState extends State<SearchPill> {
           flex: 1,
           child: Container(
             key: const ValueKey('search-pill-text-wrapper'),
-            decoration: BoxDecoration(color: widget.surfaceColor),
+            decoration: BoxDecoration(color: innerFillColor),
             child: DebugTextField(
               debugLabel: 'SearchPill.query',
               focusNode: _focusNode,
@@ -189,7 +195,7 @@ class _SearchPillState extends State<SearchPill> {
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
                 filled: true,
-                fillColor: widget.surfaceColor,
+                fillColor: innerFillColor,
                 contentPadding: EdgeInsets.zero,
                 hintText: hasFilters
                     ? '${widget.filteredCount} tranzakció találva'
@@ -229,7 +235,7 @@ class _SearchPillState extends State<SearchPill> {
                       vertical: 4,
                     ),
                     neutralBorder: Border.all(
-                      color: focused ? AppColors.primary : AppColors.gray200,
+                      color: focused ? widget.accentColor : AppColors.gray200,
                       width: focused ? 1.5 : 1,
                     ),
                     neutralShadow: [

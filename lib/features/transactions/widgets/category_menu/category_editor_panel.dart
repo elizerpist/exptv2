@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/debug/debug_console.dart';
-import '../../../../core/debug/debug_text_input.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
+import '../themed_pill_field.dart';
 import 'category_preview_pill.dart';
 import 'category_slot_grid.dart';
 
@@ -34,6 +35,11 @@ class CategoryEditorPanel extends StatefulWidget {
     required this.onClose,
     this.initialCategory,
     this.onDelete,
+    this.surfaceColor = AppColors.white,
+    this.bodySurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
   });
 
   final TransactionType activeType;
@@ -41,6 +47,11 @@ class CategoryEditorPanel extends StatefulWidget {
   final ValueChanged<CategoryDraft> onSave;
   final ValueChanged<TransactionCategory>? onDelete;
   final VoidCallback onClose;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction bodySurfaceStyle;
+  final ExpenseSurfaceInteraction buttonSurfaceStyle;
+  final ExpenseSurfaceInteraction selectedSurfaceStyle;
+  final Color accentColor;
 
   @override
   State<CategoryEditorPanel> createState() => _CategoryEditorPanelState();
@@ -144,33 +155,14 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                DebugTextField(
+                ThemedPillField(
                   fieldKey: const ValueKey('category-name-input'),
                   debugLabel: 'CategoryEditor.name',
                   controller: _name,
                   focusNode: _nameFocus,
-                  decoration: InputDecoration(
-                    hintText: 'pl. Utazás, Hobbi...',
-                    hintStyle: const TextStyle(color: AppColors.gray500),
-                    filled: true,
-                    fillColor: AppColors.gray100,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 12,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(25),
-                      borderSide: const BorderSide(color: AppColors.gray200),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(25),
-                      borderSide: const BorderSide(color: AppColors.gray200),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(25),
-                      borderSide: const BorderSide(color: AppColors.primary),
-                    ),
-                  ),
+                  label: 'Kategória neve',
+                  surfaceColor: widget.surfaceColor,
+                  surfaceStyle: widget.bodySurfaceStyle,
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 28),
@@ -236,12 +228,20 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                             ? CategorySlotGrid.colors(
                                 key: const ValueKey('color-slot-grid'),
                                 selectedSlot: _colorSlot,
+                                surfaceStyle: widget.buttonSurfaceStyle,
+                                selectedSurfaceStyle:
+                                    widget.selectedSurfaceStyle,
+                                accentColor: widget.accentColor,
                                 onSelected: (slot) =>
                                     setState(() => _colorSlot = slot),
                               )
                             : CategorySlotGrid.icons(
                                 key: const ValueKey('icon-slot-grid'),
                                 selectedSlot: _iconSlot,
+                                surfaceStyle: widget.buttonSurfaceStyle,
+                                selectedSurfaceStyle:
+                                    widget.selectedSurfaceStyle,
+                                accentColor: widget.accentColor,
                                 onSelected: (slot) =>
                                     setState(() => _iconSlot = slot),
                               ),
@@ -263,6 +263,9 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                   name: _name.text,
                   colorSlot: _colorSlot,
                   iconSlot: _iconSlot,
+                  surfaceColor: widget.surfaceColor,
+                  bodySurfaceStyle: widget.bodySurfaceStyle,
+                  avatarSurfaceStyle: widget.buttonSurfaceStyle,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
@@ -272,18 +275,12 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                   ),
                 ],
                 const SizedBox(height: 18),
-                FilledButton(
-                  key: const ValueKey('category-save-button'),
+                ExpenseSurfaceButton(
+                  buttonKey: const ValueKey('category-save-button'),
+                  label: 'Mentés',
                   onPressed: _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.white,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                  ),
-                  child: const Text('Mentés'),
+                  surfaceStyle: widget.buttonSurfaceStyle,
+                  color: widget.accentColor,
                 ),
               ],
             ),

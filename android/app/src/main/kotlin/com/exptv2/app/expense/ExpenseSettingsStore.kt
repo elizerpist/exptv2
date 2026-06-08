@@ -27,25 +27,47 @@ class ExpenseSettingsStore(context: Context) {
         return mapOf(
             "magnetType" to prefs.getString(KEY_MAGNET_TYPE, "fade"),
             "cardColor" to prefs.getString(KEY_CARD_COLOR, "lightgray"),
-            "theme" to prefs.getString(KEY_THEME, "Türkiz"),
+            "theme" to legacyTheme(),
             "backgroundColor" to prefs.getString(KEY_BACKGROUND_COLOR, "gray"),
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
             "buttonSurfaceStyle" to prefs.getString(KEY_BUTTON_SURFACE_STYLE, "neutralNeutral"),
             "contentSurfaceStyle" to prefs.getString(KEY_CONTENT_SURFACE_STYLE, "neutralNeutral"),
             "backheaderStyle" to prefs.getString(KEY_BACKHEADER_STYLE, "classic"),
+            "designProfile" to (
+                prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
+                    ?: legacyDesignProfile()
+                ),
+            "appColor" to (
+                prefs.getString(KEY_APP_COLOR, null)?.takeIf { it.isNotBlank() }
+                    ?: legacyAppColor()
+                ),
         )
     }
 
     fun updateThemeSettings(args: Map<*, *>): Map<String, Any?> {
+        val theme = legacyTheme(args["theme"]?.toString())
+        val buttonSurfaceStyle = args["buttonSurfaceStyle"]?.toString() ?: "neutralNeutral"
+        val contentSurfaceStyle = args["contentSurfaceStyle"]?.toString() ?: "neutralNeutral"
+
         prefs.edit()
             .putString(KEY_MAGNET_TYPE, args["magnetType"]?.toString() ?: "fade")
             .putString(KEY_CARD_COLOR, args["cardColor"]?.toString() ?: "lightgray")
-            .putString(KEY_THEME, args["theme"]?.toString() ?: "Türkiz")
+            .putString(KEY_THEME, theme)
             .putString(KEY_BACKGROUND_COLOR, args["backgroundColor"]?.toString() ?: "gray")
             .putString(KEY_BOX_COLOR, args["boxColor"]?.toString() ?: "gray")
-            .putString(KEY_BUTTON_SURFACE_STYLE, args["buttonSurfaceStyle"]?.toString() ?: "neutralNeutral")
-            .putString(KEY_CONTENT_SURFACE_STYLE, args["contentSurfaceStyle"]?.toString() ?: "neutralNeutral")
+            .putString(KEY_BUTTON_SURFACE_STYLE, buttonSurfaceStyle)
+            .putString(KEY_CONTENT_SURFACE_STYLE, contentSurfaceStyle)
             .putString(KEY_BACKHEADER_STYLE, args["backheaderStyle"]?.toString() ?: "classic")
+            .putString(
+                KEY_DESIGN_PROFILE,
+                args["designProfile"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: legacyDesignProfile(buttonSurfaceStyle, contentSurfaceStyle)
+            )
+            .putString(
+                KEY_APP_COLOR,
+                args["appColor"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: legacyAppColor(theme)
+            )
             .apply()
         return loadThemeSettings()
     }
@@ -164,6 +186,30 @@ class ExpenseSettingsStore(context: Context) {
         }
     }
 
+    private fun legacyDesignProfile(
+        buttonSurfaceStyle: String? = prefs.getString(KEY_BUTTON_SURFACE_STYLE, null),
+        contentSurfaceStyle: String? = prefs.getString(KEY_CONTENT_SURFACE_STYLE, null),
+    ): String {
+        val buttonStyle = buttonSurfaceStyle ?: "neutralNeutral"
+        val contentStyle = contentSurfaceStyle ?: "neutralNeutral"
+        return if (
+            buttonStyle == "neutralNeutral" &&
+            contentStyle == "neutralNeutral"
+        ) {
+            "normal"
+        } else {
+            "neumorphism"
+        }
+    }
+
+    private fun legacyTheme(theme: String? = prefs.getString(KEY_THEME, null)): String {
+        return if (theme == "Pink") "Pink" else "Türkiz"
+    }
+
+    private fun legacyAppColor(theme: String? = prefs.getString(KEY_THEME, null)): String {
+        return if (theme == "Pink") "pink" else "turquoise"
+    }
+
     private fun validatePin(pin: String) {
         if (!pin.matches(Regex("\\d{4,6}"))) {
             throw ExpenseValidationException("PIN_REQUIRED", "PIN must be 4 to 6 digits")
@@ -194,6 +240,8 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BUTTON_SURFACE_STYLE = "buttonSurfaceStyle"
         private const val KEY_CONTENT_SURFACE_STYLE = "contentSurfaceStyle"
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
+        private const val KEY_DESIGN_PROFILE = "designProfile"
+        private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"
         private const val KEY_PUSH_RECURRING_CONFLICT_POLICY = "pushRecurringConflictPolicy"
         private const val KEY_SECURITY_PIN_SALT = "securityPinSalt"

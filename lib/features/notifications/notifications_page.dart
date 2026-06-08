@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../services/native_bridge.dart';
+import '../settings/models/app_theme_settings.dart';
+import '../settings/theme/expense_theme.dart';
 import 'data/notification_repository.dart';
 import 'state/notification_store.dart';
 import 'widgets/notification_log_box.dart';
@@ -14,11 +16,13 @@ class NotificationsPage extends StatefulWidget {
     super.key,
     required this.nativeBridge,
     this.store,
+    this.expenseTheme,
     this.active = true,
   });
 
   final NativeBridge nativeBridge;
   final NotificationStore? store;
+  final ExpenseTheme? expenseTheme;
   final bool active;
 
   @override
@@ -87,12 +91,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final expenseTheme =
+        widget.expenseTheme ??
+        ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     return ListenableBuilder(
       listenable: _store,
       builder: (context, _) {
         if (_store.loading) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
+          return Center(
+            child: CircularProgressIndicator(color: expenseTheme.accent),
           );
         }
         if (_store.error != null) {
@@ -139,6 +146,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           for (final card in entry.value)
                             NotificationLogBox(
                               card: card,
+                              accentColor: expenseTheme.accent,
                               onMarkRead: _store.markRead,
                               onDelete: _store.deleteCard,
                             ),

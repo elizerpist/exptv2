@@ -90,4 +90,44 @@ class ExpenseSettingsStoreSecurityTest {
 
         assertNotEquals(first, second)
     }
+
+    @Test
+    fun themeSettingsPersistProfileAndAppColor() {
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "magnetType" to "adaptive",
+                "cardColor" to "darkgray",
+                "theme" to "Türkiz",
+                "backgroundColor" to "white",
+                "boxColor" to "gray",
+                "buttonSurfaceStyle" to "neutralNeutral",
+                "contentSurfaceStyle" to "neutralNeutral",
+                "backheaderStyle" to "orbitBudget",
+                "designProfile" to "neumorphism",
+                "appColor" to "pink",
+            )
+        )
+
+        assertEquals("neumorphism", updated["designProfile"])
+        assertFalse(updated.containsKey("nightMode"))
+        assertEquals("pink", updated["appColor"])
+        assertEquals("neumorphism", store.loadThemeSettings()["designProfile"])
+    }
+
+    @Test
+    fun legacyThemeSettingsMigrateMissingProfileValues() {
+        val prefs = context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("theme", "Sötét")
+            .putString("buttonSurfaceStyle", "raisedInset")
+            .putString("contentSurfaceStyle", "neutralNeutral")
+            .commit()
+
+        val settings = store.loadThemeSettings()
+
+        assertEquals("neumorphism", settings["designProfile"])
+        assertEquals("Türkiz", settings["theme"])
+        assertFalse(settings.containsKey("nightMode"))
+        assertEquals("turquoise", settings["appColor"])
+    }
 }

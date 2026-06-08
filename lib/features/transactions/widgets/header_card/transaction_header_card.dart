@@ -215,6 +215,7 @@ class TransactionHeaderCard extends StatelessWidget {
               child: headerContentOpacity(
                 _HeaderCategoryButton(
                   surfaceStyle: buttonSurfaceStyle,
+                  primaryColor: accent,
                   onPressed: onCategoryPressed,
                 ),
               ),
@@ -270,15 +271,20 @@ class TransactionHeaderCard extends StatelessWidget {
                     enabled: buttonSurfaceStyle.hasPressEffect,
                     builder: (context, pressed) {
                       final radius = BorderRadius.circular(15);
+                      final materialFeedback =
+                          ExpenseSurface.materialFeedbackEnabled(
+                            buttonSurfaceStyle,
+                          );
                       return ExpenseSurfaceContainer(
                         surfaceKey: const ValueKey(
                           'header-expand-button-surface',
                         ),
                         style: buttonSurfaceStyle,
-                        color: AppColors.primary,
+                        color: accent,
                         borderRadius: radius,
                         pressed: pressed,
                         primary: true,
+                        primaryColor: accent,
                         width: 30,
                         height: 30,
                         clipContent: false,
@@ -296,6 +302,15 @@ class TransactionHeaderCard extends StatelessWidget {
                             key: const ValueKey('header-expand-button'),
                             onTap: onExpandPressed,
                             borderRadius: radius,
+                            overlayColor: materialFeedback
+                                ? null
+                                : ExpenseSurface.transparentOverlayColor,
+                            splashColor: materialFeedback
+                                ? null
+                                : Colors.transparent,
+                            highlightColor: materialFeedback
+                                ? null
+                                : Colors.transparent,
                             child: SizedBox(
                               width: 30,
                               height: 30,
@@ -325,25 +340,31 @@ class TransactionHeaderCard extends StatelessWidget {
 class _HeaderCategoryButton extends StatelessWidget {
   const _HeaderCategoryButton({
     required this.surfaceStyle,
+    required this.primaryColor,
     required this.onPressed,
   });
 
   final ExpenseSurfaceInteraction surfaceStyle;
+  final Color primaryColor;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(24);
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      surfaceStyle,
+    );
     return ExpensePressable(
       enabled: surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
         return ExpenseSurfaceContainer(
           surfaceKey: const ValueKey('header-category-button-surface'),
           style: surfaceStyle,
-          color: AppColors.primary,
+          color: primaryColor,
           borderRadius: radius,
           pressed: pressed,
           primary: true,
+          primaryColor: primaryColor,
           width: 48,
           height: 48,
           clipContent: false,
@@ -361,6 +382,11 @@ class _HeaderCategoryButton extends StatelessWidget {
               key: const ValueKey('header-category-button'),
               onTap: onPressed,
               borderRadius: radius,
+              overlayColor: materialFeedback
+                  ? null
+                  : ExpenseSurface.transparentOverlayColor,
+              splashColor: materialFeedback ? null : Colors.transparent,
+              highlightColor: materialFeedback ? null : Colors.transparent,
               child: SizedBox(
                 width: 48,
                 height: 48,

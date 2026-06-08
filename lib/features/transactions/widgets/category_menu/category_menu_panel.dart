@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
 import 'category_card.dart';
 
@@ -16,6 +17,11 @@ class CategoryMenuPanel extends StatelessWidget {
     required this.onDelete,
     required this.onAdd,
     required this.onClose,
+    this.surfaceColor = AppColors.white,
+    this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
+    this.activeBackgroundColor = AppColors.primaryActiveBackground,
   });
 
   final TransactionType activeType;
@@ -27,6 +33,11 @@ class CategoryMenuPanel extends StatelessWidget {
   final ValueChanged<TransactionCategory> onDelete;
   final VoidCallback onAdd;
   final VoidCallback onClose;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction cardSurfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final Color accentColor;
+  final Color activeBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +74,8 @@ class CategoryMenuPanel extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final category = filtered[index];
                   final count =
-                      categoryTransactionCounts[category.transactionCategoryID] ??
+                      categoryTransactionCounts[category
+                          .transactionCategoryID] ??
                       0;
                   return CategoryCard(
                     category: category,
@@ -74,6 +86,11 @@ class CategoryMenuPanel extends StatelessWidget {
                     onSelect: onSelect,
                     onModify: onModify,
                     onDelete: onDelete,
+                    surfaceColor: surfaceColor,
+                    cardSurfaceStyle: cardSurfaceStyle,
+                    avatarSurfaceStyle: avatarSurfaceStyle,
+                    accentColor: accentColor,
+                    activeBackgroundColor: activeBackgroundColor,
                   );
                 },
               ),
@@ -88,7 +105,7 @@ class CategoryMenuPanel extends StatelessWidget {
             heroTag: null,
             tooltip: 'Új kategória',
             onPressed: onAdd,
-            backgroundColor: AppColors.primary,
+            backgroundColor: accentColor,
             foregroundColor: AppColors.white,
             elevation: 3,
             child: const Icon(Icons.add_rounded),

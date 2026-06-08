@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
+import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
@@ -24,17 +25,19 @@ class _StatsPageState extends State<StatsPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final resolvedTheme = widget.expenseTheme ??
+        ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     return ColoredBox(
       key: const ValueKey('stats-page'),
-      color: widget.expenseTheme?.appBackground ?? AppColors.white,
+      color: resolvedTheme.appBackground,
       child: Padding(
         padding: const EdgeInsets.only(bottom: AppDimensions.bottomNavHeight),
         child: ListenableBuilder(
           listenable: widget.store,
           builder: (context, _) {
             if (widget.store.loading) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+              return Center(
+                child: CircularProgressIndicator(color: resolvedTheme.accent),
               );
             }
             if (widget.store.error != null) {

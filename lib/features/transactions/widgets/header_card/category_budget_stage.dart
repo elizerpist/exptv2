@@ -32,6 +32,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.onItemTap,
     this.bars,
     this.onBarTap,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
 
   final List<BackheaderBudgetItem>? items;
@@ -41,6 +42,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
+  final ExpenseSurfaceInteraction surfaceStyle;
 
   // Compatibility for call sites migrated in the next implementation task.
   final List<CategoryBudgetBarData>? bars;
@@ -374,6 +376,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         bar: category,
         height: BudgetBarGeometry.barHeight,
         compactIcon: true,
+        surfaceStyle: widget.surfaceStyle,
+        surfaceIndex: _index,
         onTap: () => _tap(item),
       );
     }

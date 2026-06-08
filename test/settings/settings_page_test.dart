@@ -1,6 +1,8 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/core/theme/app_dimensions.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
+import 'package:exptv2/features/settings/widgets/options/theme_options_panel.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
@@ -67,8 +69,7 @@ void main() {
                 'biometricLabel': 'Ujjlenyomat elerheto',
               };
             case 'expenseVerifySecurityPin':
-              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
-                  '1234';
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
             case 'expenseClearSecurityPin':
               return <String, Object?>{
                 'pinEnabled': false,
@@ -273,13 +274,15 @@ void main() {
     expect(find.text('Sötétebb szürke'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Neutrális -> befelé'),
+      find.text('Sötétebb szürke box'),
       160,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Neutrális -> befelé'), findsWidgets);
-    expect(find.text('Kifelé -> befelé'), findsWidgets);
+    expect(find.text('Neumorphism'), findsWidgets);
+    expect(find.text('Pink'), findsWidgets);
+    expect(find.text('Éjszakai mód'), findsNothing);
+    expect(find.text('Éjszaka Amber'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 
@@ -312,6 +315,43 @@ void main() {
     expect(fastInfoFrameBottom, 1200 - AppDimensions.bottomNavHeight);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('theme menu exposes profile and app color choices', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final updated = <AppThemeSettings>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ThemeOptionsPanel(
+          settings: AppThemeSettings.defaults(),
+          onChanged: updated.add,
+        ),
+      ),
+    );
+
+    expect(find.text('Design profil'), findsOneWidget);
+    expect(find.text('Normál (jelenlegi)'), findsOneWidget);
+    expect(find.text('Neumorphism'), findsOneWidget);
+    expect(find.text('App színe'), findsOneWidget);
+    expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
+    expect(find.text('Pink'), findsOneWidget);
+    expect(find.text('Éjszakai mód'), findsNothing);
+    expect(find.text('Kikapcsolva (jelenlegi)'), findsNothing);
+    expect(find.text('Éjszaka Cyan'), findsNothing);
+    expect(find.text('Éjszaka Amber'), findsNothing);
+    expect(find.text('Gomb design'), findsNothing);
+    expect(find.text('Logbox / search / summary design'), findsNothing);
+
+    await tester.tap(find.text('Neumorphism'));
+    expect(updated.last.designProfile, AppDesignProfile.neumorphism);
+    await tester.tap(find.text('Pink'));
+    expect(updated.last.appColor, AppColorMode.pink);
   });
 
   testWidgets('permissions menu opens Android permission actions', (

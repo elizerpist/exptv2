@@ -69,8 +69,7 @@ enum AppCardColor {
 
 enum AppTheme {
   pink('Pink'),
-  turquoise('Türkiz'),
-  dark('Sötét');
+  turquoise('Türkiz');
 
   const AppTheme(this.nativeValue);
   final String nativeValue;
@@ -80,6 +79,42 @@ enum AppTheme {
     return AppTheme.values.firstWhere(
       (item) => item.nativeValue == raw,
       orElse: () => AppTheme.turquoise,
+    );
+  }
+}
+
+enum AppDesignProfile {
+  normal('normal'),
+  neumorphism('neumorphism');
+
+  const AppDesignProfile(this.nativeValue);
+  final String nativeValue;
+
+  static AppDesignProfile fromAny(Object? value) {
+    final raw = value?.toString();
+    return AppDesignProfile.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => AppDesignProfile.normal,
+    );
+  }
+}
+
+enum AppColorMode {
+  turquoise('turquoise'),
+  pink('pink');
+
+  const AppColorMode(this.nativeValue);
+  final String nativeValue;
+
+  static AppColorMode fromAny(Object? value) {
+    final raw = value?.toString().trim();
+    if (raw == AppTheme.pink.nativeValue ||
+        raw == AppColorMode.pink.nativeValue) {
+      return AppColorMode.pink;
+    }
+    return AppColorMode.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => AppColorMode.turquoise,
     );
   }
 }
@@ -128,6 +163,8 @@ class AppThemeSettings {
     required this.buttonSurfaceStyle,
     required this.contentSurfaceStyle,
     required this.backheaderStyle,
+    required this.designProfile,
+    required this.appColor,
   });
 
   factory AppThemeSettings.defaults() {
@@ -140,6 +177,8 @@ class AppThemeSettings {
       buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
+      designProfile: AppDesignProfile.normal,
+      appColor: AppColorMode.turquoise,
     );
   }
 
@@ -157,6 +196,8 @@ class AppThemeSettings {
         map['contentSurfaceStyle'],
       ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
+      designProfile: _designProfileFromMap(map),
+      appColor: _appColorFromMap(map),
     );
   }
 
@@ -168,6 +209,8 @@ class AppThemeSettings {
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction contentSurfaceStyle;
   final BackheaderStyle backheaderStyle;
+  final AppDesignProfile designProfile;
+  final AppColorMode appColor;
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -179,6 +222,8 @@ class AppThemeSettings {
       'buttonSurfaceStyle': buttonSurfaceStyle.nativeValue,
       'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
+      'designProfile': designProfile.nativeValue,
+      'appColor': appColor.nativeValue,
     };
   }
 
@@ -191,6 +236,8 @@ class AppThemeSettings {
     ExpenseSurfaceInteraction? buttonSurfaceStyle,
     ExpenseSurfaceInteraction? contentSurfaceStyle,
     BackheaderStyle? backheaderStyle,
+    AppDesignProfile? designProfile,
+    AppColorMode? appColor,
   }) {
     return AppThemeSettings(
       magnetType: magnetType ?? this.magnetType,
@@ -201,6 +248,37 @@ class AppThemeSettings {
       buttonSurfaceStyle: buttonSurfaceStyle ?? this.buttonSurfaceStyle,
       contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
+      designProfile: designProfile ?? this.designProfile,
+      appColor: appColor ?? this.appColor,
     );
+  }
+
+  static AppDesignProfile _designProfileFromMap(Map<dynamic, dynamic> map) {
+    if (_hasValue(map['designProfile'])) {
+      return AppDesignProfile.fromAny(map['designProfile']);
+    }
+    final buttonStyle = ExpenseSurfaceInteraction.fromAny(
+      map['buttonSurfaceStyle'],
+    );
+    final contentStyle = ExpenseSurfaceInteraction.fromAny(
+      map['contentSurfaceStyle'],
+    );
+    if (buttonStyle != ExpenseSurfaceInteraction.neutralNeutral ||
+        contentStyle != ExpenseSurfaceInteraction.neutralNeutral) {
+      return AppDesignProfile.neumorphism;
+    }
+    return AppDesignProfile.normal;
+  }
+
+  static AppColorMode _appColorFromMap(Map<dynamic, dynamic> map) {
+    if (_hasValue(map['appColor'])) {
+      return AppColorMode.fromAny(map['appColor']);
+    }
+    return AppColorMode.fromAny(map['theme']);
+  }
+
+  static bool _hasValue(Object? value) {
+    final raw = value?.toString().trim();
+    return raw != null && raw.isNotEmpty;
   }
 }

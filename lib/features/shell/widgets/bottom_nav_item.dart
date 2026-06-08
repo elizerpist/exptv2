@@ -15,6 +15,9 @@ class BottomNavItem extends StatefulWidget {
     required this.onTap,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
+    this.accentLightColor = AppColors.primaryLight,
+    this.activeBackgroundColor = AppColors.primaryActiveBackground,
     this.onPointerDown,
     this.badgeCount = 0,
   });
@@ -24,6 +27,9 @@ class BottomNavItem extends StatefulWidget {
   final VoidCallback onTap;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final Color accentColor;
+  final Color accentLightColor;
+  final Color activeBackgroundColor;
   final VoidCallback? onPointerDown;
   final int badgeCount;
 
@@ -46,14 +52,21 @@ class _BottomNavItemState extends State<BottomNavItem> {
     final tab = widget.tab;
     final active = widget.active;
     final surfaceStyle = widget.surfaceStyle;
+    final activeSurfaceStyle =
+        active && surfaceStyle == ExpenseSurfaceInteraction.neutralInset
+        ? ExpenseSurfaceInteraction.insetInset
+        : surfaceStyle;
     final surfaceColor = widget.surfaceColor;
     final badgeCount = widget.badgeCount;
-    final color = active ? AppColors.primary : tab.inactiveColor;
+    final color = active ? widget.accentColor : tab.inactiveColor;
     final radius = BorderRadius.circular(AppDimensions.navItemRadius);
     final surfaceTint =
-        active && surfaceStyle != ExpenseSurfaceInteraction.neutralNeutral
-        ? Color.lerp(surfaceColor, AppColors.primaryLight, 0.16)!
+        active && activeSurfaceStyle != ExpenseSurfaceInteraction.neutralNeutral
+        ? Color.lerp(surfaceColor, widget.accentLightColor, 0.16)!
         : surfaceColor;
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      activeSurfaceStyle,
+    );
 
     return Expanded(
       child: Padding(
@@ -61,18 +74,20 @@ class _BottomNavItemState extends State<BottomNavItem> {
           horizontal: AppDimensions.navItemHorizontalMargin,
         ),
         child: ExpensePressable(
-          enabled: surfaceStyle.hasPressEffect,
+          enabled: activeSurfaceStyle.hasPressEffect,
           forcePressed: _pressed,
           builder: (context, pressed) {
             final resolvedColor =
                 active &&
-                    surfaceStyle == ExpenseSurfaceInteraction.neutralNeutral
-                ? AppColors.primaryActiveBackground
+                    activeSurfaceStyle ==
+                        ExpenseSurfaceInteraction.neutralNeutral
+                ? widget.activeBackgroundColor
                 : surfaceTint;
             return ExpenseSurfaceContainer(
               surfaceKey: ValueKey('bottom-nav-${tab.id}-surface'),
-              style: surfaceStyle,
+              style: activeSurfaceStyle,
               color: resolvedColor,
+              primaryColor: widget.accentColor,
               borderRadius: radius,
               pressed: pressed,
               neutralShadow: null,
@@ -94,7 +109,14 @@ class _BottomNavItemState extends State<BottomNavItem> {
                   child: InkWell(
                     key: ValueKey('bottom-nav-${tab.id}'),
                     borderRadius: radius,
-                    onHighlightChanged: surfaceStyle.hasPressEffect
+                    overlayColor: materialFeedback
+                        ? null
+                        : ExpenseSurface.transparentOverlayColor,
+                    splashColor: materialFeedback ? null : Colors.transparent,
+                    highlightColor: materialFeedback
+                        ? null
+                        : Colors.transparent,
+                    onHighlightChanged: activeSurfaceStyle.hasPressEffect
                         ? _handleHighlightChanged
                         : null,
                     onTap: widget.onTap,

@@ -226,6 +226,8 @@ void main() {
         buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
         contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
         backheaderStyle: BackheaderStyle.orbitBudget,
+        designProfile: AppDesignProfile.neumorphism,
+        appColor: AppColorMode.pink,
       ),
     );
 
@@ -237,6 +239,9 @@ void main() {
     expect(payload['buttonSurfaceStyle'], 'raisedInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
     expect(payload['backheaderStyle'], 'orbitBudget');
+    expect(payload['designProfile'], 'neumorphism');
+    expect(payload.containsKey('nightMode'), isFalse);
+    expect(payload['appColor'], 'pink');
   });
 
   test(
