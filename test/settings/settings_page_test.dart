@@ -564,7 +564,15 @@ void main() {
       find.byKey(const ValueKey('push-notification-log-list')),
       findsOneWidget,
     );
-    expect(find.text('Nincs hozzárendelt log'), findsOneWidget);
+    final pushLogBox = find.byKey(const ValueKey('push-logbox-77'));
+    expect(pushLogBox, findsOneWidget);
+    expect(
+      find.descendant(
+        of: pushLogBox,
+        matching: find.text('Nincs hozzárendelt log'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
