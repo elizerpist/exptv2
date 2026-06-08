@@ -266,21 +266,44 @@ void main() {
         boxColor: AppBoxColor.gray,
         buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
         contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+        ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+        ghostLogboxSettings: GhostLogboxSettings(
+          borderStyle: GhostLogboxBorderStyle.normal,
+          backgroundOpacityEnabled: false,
+          avatarOpacityEnabled: true,
+          textOpacityEnabled: true,
+          avatarBadgeEnabled: false,
+          textTone: GhostLogboxTextTone.gray,
+          expectedLabelEnabled: false,
+        ),
         backheaderStyle: BackheaderStyle.orbitBudget,
-        designProfile: AppDesignProfile.neumorphism,
         appColor: AppColorMode.pink,
       ),
     );
 
     expect(updated.magnetType, MagnetType.adaptive);
+    expect(
+      updated.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+    expect(
+      updated.ghostLogboxSettings.borderStyle,
+      GhostLogboxBorderStyle.normal,
+    );
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
     expect(payload['cardColor'], 'darkgray');
     expect(payload['buttonSurfaceStyle'], 'raisedInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
+    expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
+    expect(payload['ghostLogboxSettings'], isA<Map<String, Object?>>());
+    expect(
+      (payload['ghostLogboxSettings'] as Map<String, Object?>)['textTone'],
+      'gray',
+    );
     expect(payload['backheaderStyle'], 'orbitBudget');
-    expect(payload['designProfile'], 'neumorphism');
+    expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);
     expect(payload['appColor'], 'pink');
   });

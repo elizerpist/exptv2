@@ -68,25 +68,93 @@ void main() {
     );
   });
 
-  test('theme settings default to normal day turquoise profile', () {
+  test('theme settings default to explicit normal component surfaces', () {
     final settings = AppThemeSettings.defaults();
 
-    expect(settings.designProfile, AppDesignProfile.normal);
-    expect(settings.appColor, AppColorMode.turquoise);
-    expect(settings.toMap()['designProfile'], 'normal');
-    expect(settings.toMap().containsKey('nightMode'), isFalse);
-    expect(settings.toMap()['appColor'], 'turquoise');
+    expect(
+      settings.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(
+      settings.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(
+      settings.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(settings.toMap().containsKey('designProfile'), isFalse);
+    expect(settings.toMap()['ghostLogboxSurfaceStyle'], 'neutralNeutral');
+    expect(
+      settings.ghostLogboxSettings.borderStyle,
+      GhostLogboxBorderStyle.dashed,
+    );
+    expect(settings.ghostLogboxSettings.avatarBadgeEnabled, isTrue);
+    expect(settings.ghostLogboxSettings.expectedLabelEnabled, isTrue);
   });
 
-  test('legacy non-neutral surface values migrate to neumorphism profile', () {
+  test('legacy neumorphism profile migrates to component surfaces', () {
     final settings = AppThemeSettings.fromMap(const <String, Object?>{
-      'theme': 'Pink',
-      'buttonSurfaceStyle': 'raisedInset',
-      'contentSurfaceStyle': 'neutralNeutral',
+      'designProfile': 'neumorphism',
     });
 
-    expect(settings.designProfile, AppDesignProfile.neumorphism);
-    expect(settings.appColor, AppColorMode.pink);
+    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(settings.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+    expect(
+      settings.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+  });
+
+  test('explicit component surfaces override legacy design profile', () {
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'designProfile': 'neumorphism',
+      'buttonSurfaceStyle': 'neutralNeutral',
+      'contentSurfaceStyle': 'neutralNeutral',
+      'ghostLogboxSurfaceStyle': 'neutralNeutral',
+    });
+
+    expect(
+      settings.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(
+      settings.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(
+      settings.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+  });
+
+  test('ghost logbox settings parse and serialize visual controls', () {
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'ghostLogboxSettings': <String, Object?>{
+        'borderStyle': 'normal',
+        'backgroundOpacityEnabled': false,
+        'avatarOpacityEnabled': true,
+        'textOpacityEnabled': true,
+        'avatarBadgeEnabled': false,
+        'textTone': 'gray',
+        'expectedLabelEnabled': false,
+      },
+    });
+
+    expect(
+      settings.ghostLogboxSettings.borderStyle,
+      GhostLogboxBorderStyle.normal,
+    );
+    expect(settings.ghostLogboxSettings.backgroundOpacityEnabled, isFalse);
+    expect(settings.ghostLogboxSettings.avatarOpacityEnabled, isTrue);
+    expect(settings.ghostLogboxSettings.textOpacityEnabled, isTrue);
+    expect(settings.ghostLogboxSettings.avatarBadgeEnabled, isFalse);
+    expect(settings.ghostLogboxSettings.textTone, GhostLogboxTextTone.gray);
+    expect(settings.ghostLogboxSettings.expectedLabelEnabled, isFalse);
+    expect(
+      settings.ghostLogboxSettings.toMap(),
+      containsPair('textTone', 'gray'),
+    );
   });
 
   test('legacy dark theme no longer enables night palette', () {
@@ -96,7 +164,6 @@ void main() {
     });
     final theme = ExpenseTheme.fromSettings(settings);
 
-    expect(settings.designProfile, AppDesignProfile.normal);
     expect(settings.theme, AppTheme.turquoise);
     expect(settings.appColor, AppColorMode.turquoise);
     expect(settings.toMap()['theme'], 'Türkiz');
@@ -130,27 +197,22 @@ void main() {
     expect(theme.logBox, AppColors.gray100);
   });
 
-  test('profile resolves component surface roles', () {
-    final normal = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
-    final neu = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        designProfile: AppDesignProfile.neumorphism,
-      ),
+  test('component surface settings copy independently', () {
+    final settings = AppThemeSettings.defaults().copyWith(
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+      contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+      ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
     );
 
+    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(settings.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
     expect(
-      normal.contentSurfaceStyle,
-      ExpenseSurfaceInteraction.neutralNeutral,
+      settings.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralInset,
     );
-    expect(normal.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
-    expect(
-      normal.bottomNavSurfaceStyle,
-      ExpenseSurfaceInteraction.neutralNeutral,
-    );
-    expect(neu.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
-    expect(neu.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
-    expect(neu.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
-    expect(neu.forcedInsetSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+    expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
+    expect(settings.toMap()['contentSurfaceStyle'], 'insetInset');
+    expect(settings.toMap()['ghostLogboxSurfaceStyle'], 'neutralInset');
   });
 
   test('accent helpers resolve active background for all palettes', () {

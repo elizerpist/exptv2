@@ -153,6 +153,141 @@ enum AppBoxColor {
   }
 }
 
+enum GhostLogboxBorderStyle {
+  normal('normal'),
+  dashed('dashed');
+
+  const GhostLogboxBorderStyle(this.nativeValue);
+  final String nativeValue;
+
+  static GhostLogboxBorderStyle fromAny(Object? value) {
+    final raw = value?.toString();
+    return GhostLogboxBorderStyle.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => GhostLogboxBorderStyle.dashed,
+    );
+  }
+}
+
+enum GhostLogboxTextTone {
+  normal('normal'),
+  gray('gray');
+
+  const GhostLogboxTextTone(this.nativeValue);
+  final String nativeValue;
+
+  static GhostLogboxTextTone fromAny(Object? value) {
+    final raw = value?.toString();
+    return GhostLogboxTextTone.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => GhostLogboxTextTone.normal,
+    );
+  }
+}
+
+class GhostLogboxSettings {
+  const GhostLogboxSettings({
+    required this.borderStyle,
+    required this.backgroundOpacityEnabled,
+    required this.avatarOpacityEnabled,
+    required this.textOpacityEnabled,
+    required this.avatarBadgeEnabled,
+    required this.textTone,
+    required this.expectedLabelEnabled,
+  });
+
+  factory GhostLogboxSettings.defaults() {
+    return const GhostLogboxSettings(
+      borderStyle: GhostLogboxBorderStyle.dashed,
+      backgroundOpacityEnabled: true,
+      avatarOpacityEnabled: false,
+      textOpacityEnabled: false,
+      avatarBadgeEnabled: true,
+      textTone: GhostLogboxTextTone.normal,
+      expectedLabelEnabled: true,
+    );
+  }
+
+  factory GhostLogboxSettings.fromMap(Map<dynamic, dynamic>? map) {
+    final payload = map ?? const <dynamic, dynamic>{};
+    final defaults = GhostLogboxSettings.defaults();
+    return GhostLogboxSettings(
+      borderStyle: GhostLogboxBorderStyle.fromAny(payload['borderStyle']),
+      backgroundOpacityEnabled: _bool(
+        payload['backgroundOpacityEnabled'],
+        defaults.backgroundOpacityEnabled,
+      ),
+      avatarOpacityEnabled: _bool(
+        payload['avatarOpacityEnabled'],
+        defaults.avatarOpacityEnabled,
+      ),
+      textOpacityEnabled: _bool(
+        payload['textOpacityEnabled'],
+        defaults.textOpacityEnabled,
+      ),
+      avatarBadgeEnabled: _bool(
+        payload['avatarBadgeEnabled'],
+        defaults.avatarBadgeEnabled,
+      ),
+      textTone: GhostLogboxTextTone.fromAny(payload['textTone']),
+      expectedLabelEnabled: _bool(
+        payload['expectedLabelEnabled'],
+        defaults.expectedLabelEnabled,
+      ),
+    );
+  }
+
+  final GhostLogboxBorderStyle borderStyle;
+  final bool backgroundOpacityEnabled;
+  final bool avatarOpacityEnabled;
+  final bool textOpacityEnabled;
+  final bool avatarBadgeEnabled;
+  final GhostLogboxTextTone textTone;
+  final bool expectedLabelEnabled;
+
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'borderStyle': borderStyle.nativeValue,
+      'backgroundOpacityEnabled': backgroundOpacityEnabled,
+      'avatarOpacityEnabled': avatarOpacityEnabled,
+      'textOpacityEnabled': textOpacityEnabled,
+      'avatarBadgeEnabled': avatarBadgeEnabled,
+      'textTone': textTone.nativeValue,
+      'expectedLabelEnabled': expectedLabelEnabled,
+    };
+  }
+
+  GhostLogboxSettings copyWith({
+    GhostLogboxBorderStyle? borderStyle,
+    bool? backgroundOpacityEnabled,
+    bool? avatarOpacityEnabled,
+    bool? textOpacityEnabled,
+    bool? avatarBadgeEnabled,
+    GhostLogboxTextTone? textTone,
+    bool? expectedLabelEnabled,
+  }) {
+    return GhostLogboxSettings(
+      borderStyle: borderStyle ?? this.borderStyle,
+      backgroundOpacityEnabled:
+          backgroundOpacityEnabled ?? this.backgroundOpacityEnabled,
+      avatarOpacityEnabled: avatarOpacityEnabled ?? this.avatarOpacityEnabled,
+      textOpacityEnabled: textOpacityEnabled ?? this.textOpacityEnabled,
+      avatarBadgeEnabled: avatarBadgeEnabled ?? this.avatarBadgeEnabled,
+      textTone: textTone ?? this.textTone,
+      expectedLabelEnabled: expectedLabelEnabled ?? this.expectedLabelEnabled,
+    );
+  }
+
+  static bool _bool(Object? value, bool fallback) {
+    if (value is bool) return value;
+    if (value is num) return value.toInt() != 0;
+    if (value is String) {
+      return value == '1' || value.toLowerCase() == 'true';
+    }
+    return fallback;
+  }
+}
+
 class AppThemeSettings {
   const AppThemeSettings({
     required this.magnetType,
@@ -162,13 +297,14 @@ class AppThemeSettings {
     required this.boxColor,
     required this.buttonSurfaceStyle,
     required this.contentSurfaceStyle,
+    required this.ghostLogboxSurfaceStyle,
+    required this.ghostLogboxSettings,
     required this.backheaderStyle,
-    required this.designProfile,
     required this.appColor,
   });
 
   factory AppThemeSettings.defaults() {
-    return const AppThemeSettings(
+    return AppThemeSettings(
       magnetType: MagnetType.fade,
       cardColor: AppCardColor.lightgray,
       theme: AppTheme.turquoise,
@@ -176,27 +312,48 @@ class AppThemeSettings {
       boxColor: AppBoxColor.gray,
       buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      ghostLogboxSettings: GhostLogboxSettings.defaults(),
       backheaderStyle: BackheaderStyle.classic,
-      designProfile: AppDesignProfile.normal,
       appColor: AppColorMode.turquoise,
     );
   }
 
   factory AppThemeSettings.fromMap(Map<dynamic, dynamic> map) {
+    final legacyProfile = AppDesignProfile.fromAny(map['designProfile']);
     return AppThemeSettings(
       magnetType: MagnetType.fromAny(map['magnetType']),
       cardColor: AppCardColor.fromAny(map['cardColor']),
       theme: AppTheme.fromAny(map['theme']),
       backgroundColor: AppBackgroundColor.fromAny(map['backgroundColor']),
       boxColor: AppBoxColor.fromAny(map['boxColor']),
-      buttonSurfaceStyle: ExpenseSurfaceInteraction.fromAny(
-        map['buttonSurfaceStyle'],
+      buttonSurfaceStyle: _surfaceFromMap(
+        map,
+        'buttonSurfaceStyle',
+        legacyProfile == AppDesignProfile.neumorphism
+            ? ExpenseSurfaceInteraction.raisedInset
+            : ExpenseSurfaceInteraction.neutralNeutral,
       ),
-      contentSurfaceStyle: ExpenseSurfaceInteraction.fromAny(
-        map['contentSurfaceStyle'],
+      contentSurfaceStyle: _surfaceFromMap(
+        map,
+        'contentSurfaceStyle',
+        legacyProfile == AppDesignProfile.neumorphism
+            ? ExpenseSurfaceInteraction.insetInset
+            : ExpenseSurfaceInteraction.neutralNeutral,
+      ),
+      ghostLogboxSurfaceStyle: _surfaceFromMap(
+        map,
+        'ghostLogboxSurfaceStyle',
+        legacyProfile == AppDesignProfile.neumorphism
+            ? ExpenseSurfaceInteraction.insetInset
+            : ExpenseSurfaceInteraction.neutralNeutral,
+      ),
+      ghostLogboxSettings: GhostLogboxSettings.fromMap(
+        map['ghostLogboxSettings'] is Map
+            ? Map<dynamic, dynamic>.from(map['ghostLogboxSettings'] as Map)
+            : null,
       ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
-      designProfile: _designProfileFromMap(map),
       appColor: _appColorFromMap(map),
     );
   }
@@ -208,9 +365,12 @@ class AppThemeSettings {
   final AppBoxColor boxColor;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction contentSurfaceStyle;
+  final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
+  final GhostLogboxSettings ghostLogboxSettings;
   final BackheaderStyle backheaderStyle;
-  final AppDesignProfile designProfile;
   final AppColorMode appColor;
+
+  AppDesignProfile get designProfile => AppDesignProfile.normal;
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -221,8 +381,9 @@ class AppThemeSettings {
       'boxColor': boxColor.nativeValue,
       'buttonSurfaceStyle': buttonSurfaceStyle.nativeValue,
       'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
+      'ghostLogboxSurfaceStyle': ghostLogboxSurfaceStyle.nativeValue,
+      'ghostLogboxSettings': ghostLogboxSettings.toMap(),
       'backheaderStyle': backheaderStyle.nativeValue,
-      'designProfile': designProfile.nativeValue,
       'appColor': appColor.nativeValue,
     };
   }
@@ -235,8 +396,9 @@ class AppThemeSettings {
     AppBoxColor? boxColor,
     ExpenseSurfaceInteraction? buttonSurfaceStyle,
     ExpenseSurfaceInteraction? contentSurfaceStyle,
+    ExpenseSurfaceInteraction? ghostLogboxSurfaceStyle,
+    GhostLogboxSettings? ghostLogboxSettings,
     BackheaderStyle? backheaderStyle,
-    AppDesignProfile? designProfile,
     AppColorMode? appColor,
   }) {
     return AppThemeSettings(
@@ -247,27 +409,21 @@ class AppThemeSettings {
       boxColor: boxColor ?? this.boxColor,
       buttonSurfaceStyle: buttonSurfaceStyle ?? this.buttonSurfaceStyle,
       contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
+      ghostLogboxSurfaceStyle:
+          ghostLogboxSurfaceStyle ?? this.ghostLogboxSurfaceStyle,
+      ghostLogboxSettings: ghostLogboxSettings ?? this.ghostLogboxSettings,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
-      designProfile: designProfile ?? this.designProfile,
       appColor: appColor ?? this.appColor,
     );
   }
 
-  static AppDesignProfile _designProfileFromMap(Map<dynamic, dynamic> map) {
-    if (_hasValue(map['designProfile'])) {
-      return AppDesignProfile.fromAny(map['designProfile']);
-    }
-    final buttonStyle = ExpenseSurfaceInteraction.fromAny(
-      map['buttonSurfaceStyle'],
-    );
-    final contentStyle = ExpenseSurfaceInteraction.fromAny(
-      map['contentSurfaceStyle'],
-    );
-    if (buttonStyle != ExpenseSurfaceInteraction.neutralNeutral ||
-        contentStyle != ExpenseSurfaceInteraction.neutralNeutral) {
-      return AppDesignProfile.neumorphism;
-    }
-    return AppDesignProfile.normal;
+  static ExpenseSurfaceInteraction _surfaceFromMap(
+    Map<dynamic, dynamic> map,
+    String key,
+    ExpenseSurfaceInteraction fallback,
+  ) {
+    if (!_hasValue(map[key])) return fallback;
+    return ExpenseSurfaceInteraction.fromAny(map[key]);
   }
 
   static AppColorMode _appColorFromMap(Map<dynamic, dynamic> map) {
