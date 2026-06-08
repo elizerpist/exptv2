@@ -20,6 +20,7 @@ class ExpenseMethodChannel(
     private val scope: CoroutineScope,
 ) {
     private val repository = ExpenseRepository(context)
+    private val textFileExporter = ExpenseTextFileExporter(activity, context.applicationContext)
     private val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK
 
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
@@ -39,6 +40,13 @@ class ExpenseMethodChannel(
             }
             "expenseUpdatePushRecurringSettings" -> scope.launchResult(result) {
                 repository.updatePushRecurringSettings(call.argumentsMap())
+            }
+            "expenseSaveTextFile" -> scope.launchResult(result) {
+                textFileExporter.saveTextFile(call.argumentsMap())
+            }
+            "expenseShareTextFile" -> scope.launchResult(result) {
+                textFileExporter.shareTextFile(call.argumentsMap())
+                null
             }
             "expenseSetSecurityPin" -> scope.launchResult(result) {
                 val pin = call.argumentsMap()["pin"]?.toString()

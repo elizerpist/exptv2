@@ -133,6 +133,46 @@ void main() {
                 ),
               );
               return call.arguments;
+            case 'expenseLoadBootstrap':
+              return <String, Object?>{
+                'categories': <Map<String, Object?>>[
+                  <String, Object?>{
+                    'transactionCategoryID': 6,
+                    'name': 'Q',
+                    'type': 'kiadás',
+                    'colorSlot': 7,
+                    'iconSlot': 2,
+                    'backgroundColor': '#dc2626',
+                    'hasLimit': false,
+                    'limitAmount': 0,
+                    'alertActive': false,
+                    'isCustomIcon': true,
+                  },
+                ],
+                'transactions': <Map<String, Object?>>[],
+                'limits': <Map<String, Object?>>[],
+                'recurringGhostTransactions': <Map<String, Object?>>[],
+              };
+            case 'expenseListTransactionPage':
+              return <String, Object?>{
+                'transactions': <Map<String, Object?>>[
+                  <String, Object?>{
+                    'id': 7,
+                    'date': '2026.06.08',
+                    'time': '10:00',
+                    'merchant': 'Corner Shop',
+                    'amount': -1290,
+                    'transactionCategoryID': 6,
+                  },
+                ],
+                'totalCount': 1,
+                'limit': 500,
+                'offset': 0,
+              };
+            case 'expenseSaveTextFile':
+              return 'content://downloads/exptv2-transactions.csv';
+            case 'expenseShareTextFile':
+              return null;
             case 'expenseListCategories':
               return <Map<String, Object?>>[
                 <String, Object?>{
@@ -301,6 +341,40 @@ void main() {
     expect(updated.last.designProfile, AppDesignProfile.neumorphism);
     await tester.tap(find.text('Pink'));
     expect(updated.last.appColor, AppColorMode.pink);
+  });
+
+  testWidgets('export menu saves shares copies and shows Google placeholder', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Export adatok'),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Export adatok'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CSV mentése telefonra'), findsOneWidget);
+    expect(find.text('CSV megosztása'), findsOneWidget);
+    expect(find.text('CSV másolása vágólapra'), findsOneWidget);
+    expect(find.text('Google Sheets (később)'), findsOneWidget);
+
+    await tester.tap(find.text('CSV mentése telefonra'));
+    await tester.pumpAndSettle();
+    expect(calls, contains('expenseSaveTextFile'));
+    expect(find.text('CSV fájl mentve: 1 tranzakció'), findsOneWidget);
+
+    await tester.tap(find.text('CSV megosztása'));
+    await tester.pumpAndSettle();
+    expect(calls, contains('expenseShareTextFile'));
+    expect(find.text('CSV megosztás előkészítve'), findsOneWidget);
+
+    await tester.tap(find.text('Google Sheets (később)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Google Sheets export később érkezik'), findsOneWidget);
   });
 
   testWidgets('permissions menu opens Android permission actions', (

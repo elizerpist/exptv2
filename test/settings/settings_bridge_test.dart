@@ -78,6 +78,10 @@ void main() {
               return call.arguments;
             case 'expenseUpdatePushRecurringSettings':
               return <String, Object?>{'pushRecurringSettings': call.arguments};
+            case 'expenseSaveTextFile':
+              return 'content://downloads/export.csv';
+            case 'expenseShareTextFile':
+              return null;
             case 'expenseSetSecurityPin':
               return <String, Object?>{
                 'pinEnabled': true,
@@ -292,6 +296,32 @@ void main() {
     expect(calls.single.method, 'expenseUpdatePushRecurringSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['conflictPolicy'], 'automaticBestMatch');
+  });
+
+  test('saves and shares text files through native bridge', () async {
+    final uri = await bridge.expenseSaveTextFile(
+      fileName: 'export.csv',
+      mimeType: 'text/csv',
+      content: 'a,b\n1,2\n',
+    );
+    await bridge.expenseShareTextFile(
+      fileName: 'export.csv',
+      mimeType: 'text/csv',
+      content: 'a,b\n1,2\n',
+      chooserTitle: 'Megosztás CSV-ként',
+    );
+
+    expect(uri, 'content://downloads/export.csv');
+    expect(calls.map((call) => call.method), [
+      'expenseSaveTextFile',
+      'expenseShareTextFile',
+    ]);
+    final savePayload = calls.first.arguments as Map<dynamic, dynamic>;
+    expect(savePayload['fileName'], 'export.csv');
+    expect(savePayload['mimeType'], 'text/csv');
+    expect(savePayload['content'], 'a,b\n1,2\n');
+    final sharePayload = calls.last.arguments as Map<dynamic, dynamic>;
+    expect(sharePayload['chooserTitle'], 'Megosztás CSV-ként');
   });
 
   test('updates security pin through native bridge', () async {

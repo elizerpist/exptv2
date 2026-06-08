@@ -350,6 +350,32 @@ class NativeBridge {
     return FastInfoConfig.fromMap(row ?? config.toMap());
   }
 
+  Future<String> expenseSaveTextFile({
+    required String fileName,
+    required String mimeType,
+    required String content,
+  }) async {
+    final uri = await _methodChannel.invokeMethod<String>(
+      'expenseSaveTextFile',
+      {'fileName': fileName, 'mimeType': mimeType, 'content': content},
+    );
+    return uri ?? '';
+  }
+
+  Future<void> expenseShareTextFile({
+    required String fileName,
+    required String mimeType,
+    required String content,
+    required String chooserTitle,
+  }) {
+    return _methodChannel.invokeMethod<void>('expenseShareTextFile', {
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'content': content,
+      'chooserTitle': chooserTitle,
+    });
+  }
+
   Future<PushRecurringSettings> expenseUpdatePushRecurringSettings(
     PushRecurringSettings settings,
   ) async {

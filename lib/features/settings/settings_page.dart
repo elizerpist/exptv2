@@ -6,6 +6,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
 import '../../state/event_store.dart';
+import '../transactions/data/transaction_repository.dart';
+import '../transactions/export/transaction_export_service.dart';
 import 'data/settings_repository.dart';
 import 'models/app_theme_settings.dart';
 import 'models/fast_info_config.dart';
@@ -13,6 +15,7 @@ import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/backheader_style_options_panel.dart';
+import 'widgets/options/export_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
 import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
@@ -360,9 +363,11 @@ class _SettingsPageState extends State<SettingsPage> {
         title: 'Nyelv kiválasztása',
         children: ['English', 'Magyar'],
       ),
-      _SettingsMenu.exportData => const SimpleOptionsPanel(
-        title: 'Export formátum kiválasztása',
-        children: ['CSV', 'JSON', 'Excel'],
+      _SettingsMenu.exportData => ExportOptionsPanel(
+        exportService: TransactionExportService(
+          repository: TransactionRepository(widget.nativeBridge),
+          nativeBridge: widget.nativeBridge,
+        ),
       ),
       _SettingsMenu.importData => const SimpleOptionsPanel(
         title: 'Import formátum kiválasztása',
