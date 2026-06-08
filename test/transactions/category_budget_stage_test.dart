@@ -50,7 +50,10 @@ void main() {
 
     expect(find.text('Food'), findsOneWidget);
     expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
-    expect(find.byKey(const ValueKey('category-progress-fill')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-progress-fill')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('category-budget-dot-0')), findsOneWidget);
 
     await tester.drag(
@@ -91,6 +94,34 @@ void main() {
     expect(
       find.byKey(const ValueKey('backheader-experimental-surface')),
       findsNothing,
+    );
+  });
+
+  testWidgets('backheader colored bars use raised surfaces in neumorphism', (
+    tester,
+  ) async {
+    final bars = [barFixture(6, 'Food', 100, 150)];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 390,
+          height: 300,
+          child: CategoryBudgetStage(
+            items: bars.map(BackheaderBudgetItem.category).toList(),
+            categoryBars: bars,
+            periodLabel: 'Június',
+            activeKey: null,
+            surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+            onActiveItemChanged: (_) {},
+            onItemTap: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-bar-surface-0')),
+      findsOneWidget,
     );
   });
 
@@ -405,8 +436,12 @@ void main() {
     final decoration = fill.decoration as BoxDecoration;
     expect(decoration.color, const Color(0xffff8800));
 
-    final barRect = tester.getRect(find.byKey(const ValueKey('category-budget-bar')));
-    final fillRect = tester.getRect(find.byKey(const ValueKey('category-progress-fill')));
+    final barRect = tester.getRect(
+      find.byKey(const ValueKey('category-budget-bar')),
+    );
+    final fillRect = tester.getRect(
+      find.byKey(const ValueKey('category-progress-fill')),
+    );
     expect(fillRect.width, moreOrLessEquals(barRect.width * 0.8, epsilon: 0.5));
   });
 

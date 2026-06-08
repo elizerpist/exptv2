@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../settings/models/app_theme_settings.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../slots/category_icon_manager.dart';
 import 'budget_bar_geometry.dart';
@@ -13,12 +14,16 @@ class CategoryBudgetBar extends StatelessWidget {
     required this.onTap,
     this.compactIcon = false,
     this.height = 70,
+    this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.surfaceIndex = 0,
   });
 
   final CategoryBudgetBarData bar;
   final VoidCallback onTap;
   final bool compactIcon;
   final double height;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final int surfaceIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -55,75 +60,125 @@ class CategoryBudgetBar extends StatelessWidget {
               ),
               SizedBox(
                 width: width,
-                child: Material(
-                  key: const ValueKey('category-budget-bar'),
-                  color: Colors.transparent,
-                  elevation: 8,
-                  shadowColor: Colors.black.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(height / 2),
-                  child: InkWell(
-                    onTap: onTap,
-                    borderRadius: BorderRadius.circular(height / 2),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(height / 2),
-                      child: SizedBox(
-                        height: height,
-                        child: ColoredBox(
-                          key: const ValueKey('category-budget-remaining-fill'),
-                          color: bar.color,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Padding(
-                                  padding: EdgeInsets.only(
-                                    left: iconLeftPadding,
-                                  ),
-                                  child: Image(
-                                    image: CategoryIconManager.assetImage(
-                                      bar.iconSlot,
-                                    ),
-                                    width: compactIcon
-                                        ? iconSize
-                                        : height * 0.64,
-                                    height: compactIcon
-                                        ? iconSize
-                                        : height * 0.64,
-                                    color: AppColors.white,
-                                    errorBuilder:
-                                        (context, error, stackTrace) => Icon(
-                                          Icons.category_outlined,
-                                          color: AppColors.white,
-                                          size: compactIcon
-                                              ? iconSize
-                                              : height * 0.64,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                              if (bar.hasLimit)
-                                Positioned(
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 12,
-                                  child: CategoryProgressBar(
-                                    spent: bar.spent,
-                                    limitAmount: bar.limitAmount,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                child: _buildFill(iconSize, iconLeftPadding),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFill(double iconSize, double iconLeftPadding) {
+    final radius = BorderRadius.circular(height / 2);
+    if (surfaceStyle.hasPressEffect) {
+      return ExpensePressable(
+        enabled: true,
+        builder: (context, pressed) {
+          return GestureDetector(
+            key: const ValueKey('category-budget-bar'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: ExpenseSurfaceContainer(
+              surfaceKey: ValueKey('backheader-bar-surface-$surfaceIndex'),
+              style: surfaceStyle,
+              color: bar.color,
+              primary: true,
+              primaryColor: bar.color,
+              borderRadius: radius,
+              pressed: pressed,
+              height: height,
+              child: _BarContent(
+                bar: bar,
+                height: height,
+                compactIcon: compactIcon,
+                iconSize: iconSize,
+                iconLeftPadding: iconLeftPadding,
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return Material(
+      key: const ValueKey('category-budget-bar'),
+      color: Colors.transparent,
+      elevation: 8,
+      shadowColor: Colors.black.withValues(alpha: 0.2),
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: ClipRRect(
+          borderRadius: radius,
+          child: SizedBox(
+            height: height,
+            child: ColoredBox(
+              key: const ValueKey('category-budget-remaining-fill'),
+              color: bar.color,
+              child: _BarContent(
+                bar: bar,
+                height: height,
+                compactIcon: compactIcon,
+                iconSize: iconSize,
+                iconLeftPadding: iconLeftPadding,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BarContent extends StatelessWidget {
+  const _BarContent({
+    required this.bar,
+    required this.height,
+    required this.compactIcon,
+    required this.iconSize,
+    required this.iconLeftPadding,
+  });
+
+  final CategoryBudgetBarData bar;
+  final double height;
+  final bool compactIcon;
+  final double iconSize;
+  final double iconLeftPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: EdgeInsets.only(left: iconLeftPadding),
+            child: Image(
+              image: CategoryIconManager.assetImage(bar.iconSlot),
+              width: compactIcon ? iconSize : height * 0.64,
+              height: compactIcon ? iconSize : height * 0.64,
+              color: AppColors.white,
+              errorBuilder: (context, error, stackTrace) => Icon(
+                Icons.category_outlined,
+                color: AppColors.white,
+                size: compactIcon ? iconSize : height * 0.64,
+              ),
+            ),
+          ),
+        ),
+        if (bar.hasLimit)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 12,
+            child: CategoryProgressBar(
+              spent: bar.spent,
+              limitAmount: bar.limitAmount,
+            ),
+          ),
+      ],
     );
   }
 }

@@ -256,6 +256,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     categoryBars: widget.store.categoryBudgetBars,
                     periodLabel: widget.store.activePeriodLabel,
                     activeKey: _backheaderActiveKey,
+                    surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onItemTap: _openBudgetTargetEditor,
                   ),
