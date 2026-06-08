@@ -503,10 +503,7 @@ void main() {
 }
 
 Future<void> _tapFirstMonthCard(WidgetTester tester) async {
-  final topLeft = tester.getTopLeft(
-    find.byKey(const ValueKey('calendar-canvas')),
-  );
-  await tester.tapAt(topLeft + const Offset(84, 100));
+  await tester.tap(find.byKey(const ValueKey('calendar-month-hit-1')));
   await tester.pumpAndSettle();
 }
 
