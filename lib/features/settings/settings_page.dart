@@ -18,12 +18,14 @@ import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
 import 'widgets/options/simple_options_panel.dart';
 import 'widgets/options/theme_options_panel.dart';
+import 'widgets/push_log/push_notification_log_page.dart';
 import 'widgets/security/biometric_settings_panel.dart';
 import 'widgets/security/pin_settings_panel.dart';
 
 enum _SettingsMenu {
   root,
   parsedApp,
+  pushLog,
   permissions,
   fastInfo,
   statistics,
@@ -123,7 +125,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_activeMenu == _SettingsMenu.root) return _buildRootMenu();
     return SettingsSubmenuShell(
       title: _menuTitle(_activeMenu),
-      onBack: () => setState(() => _activeMenu = _SettingsMenu.root),
+      onBack: _backFromActiveMenu,
       child: _submenuBody(_activeMenu),
     );
   }
@@ -300,6 +302,19 @@ class _SettingsPageState extends State<SettingsPage> {
             style: TextStyle(color: AppColors.gray600),
           ),
           const SizedBox(height: 16),
+          SettingsSection(
+            title: 'PushParser napló',
+            children: [
+              SettingsOptionItem(
+                title: 'Elkapott push üzenetek',
+                subtitle:
+                    'Év, hónap, app, szöveg és log kapcsolat szerint szűrhető',
+                onTap: () => _open(_SettingsMenu.pushLog),
+                isLast: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           NotificationParserProfilesPanel(
             profiles: widget.store.notificationParserProfiles,
             selectedProfile: widget.store.selectedNotificationParserProfile,
@@ -324,6 +339,10 @@ class _SettingsPageState extends State<SettingsPage> {
             onLoadInstalledApps: widget.store.listInstalledApps,
           ),
         ],
+      ),
+      _SettingsMenu.pushLog => PushNotificationLogPage(
+        nativeBridge: widget.nativeBridge,
+        parserStore: widget.store,
       ),
       _SettingsMenu.permissions => PermissionsOptionsPanel(
         nativeBridge: widget.nativeBridge,
@@ -400,6 +419,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _menuTitle(_SettingsMenu menu) {
     return switch (menu) {
       _SettingsMenu.parsedApp => 'Megfigyelni kívánt alkalmazás',
+      _SettingsMenu.pushLog => 'Elkapott push üzenetek',
       _SettingsMenu.permissions => 'Engedélyek',
       _SettingsMenu.fastInfo => 'FastInfo',
       _SettingsMenu.statistics => 'Statisztikák',
@@ -434,5 +454,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _open(_SettingsMenu menu) {
     setState(() => _activeMenu = menu);
+  }
+
+  void _backFromActiveMenu() {
+    setState(() {
+      _activeMenu = _activeMenu == _SettingsMenu.pushLog
+          ? _SettingsMenu.parsedApp
+          : _SettingsMenu.root;
+    });
   }
 }

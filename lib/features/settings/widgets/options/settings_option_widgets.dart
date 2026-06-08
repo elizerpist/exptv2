@@ -113,12 +113,14 @@ class SettingsOptionItem extends StatelessWidget {
   const SettingsOptionItem({
     super.key,
     required this.title,
+    this.subtitle,
     this.onTap,
     this.trailing,
     this.isLast = false,
   });
 
   final String title;
+  final String? subtitle;
   final VoidCallback? onTap;
   final Widget? trailing;
   final bool isLast;
@@ -140,9 +142,28 @@ class SettingsOptionItem extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(color: Color(0xFF374151), fontSize: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF374151),
+                      fontSize: 16,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(
+                        color: AppColors.gray500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             trailing ??

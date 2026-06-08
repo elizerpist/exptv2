@@ -160,6 +160,19 @@ void main() {
                 'lastAccessibilityEvent': 0,
                 'totalEvents': 0,
               };
+            case 'loadNotificationEventPage':
+              return <String, Object?>{
+                'events': <Object?>[
+                  pushLogEventRow(
+                    id: 77,
+                    status: 'missing',
+                    statusText: 'Nincs hozzárendelt log',
+                  ),
+                ],
+                'totalCount': 1,
+                'limit': 60,
+                'offset': 0,
+              };
           }
           return null;
         });
@@ -526,6 +539,40 @@ void main() {
     },
   );
 
+  testWidgets('parsed app submenu opens captured push messages log', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PushParser napló'), findsOneWidget);
+    expect(find.text('Elkapott push üzenetek'), findsOneWidget);
+
+    await tester.tap(find.text('Elkapott push üzenetek'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Elkapott push üzenetek'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
+    expect(find.text('Nincs hozzárendelt log'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PushParser napló'), findsOneWidget);
+    expect(find.text('Profilok'), findsOneWidget);
+  });
+
   testWidgets('settings submenus stop above the bottom navigation', (
     tester,
   ) async {
@@ -547,4 +594,33 @@ void main() {
 
     expect(bottom, 1200 - AppDimensions.bottomNavHeight);
   });
+}
+
+Map<String, Object?> pushLogEventRow({
+  required int id,
+  required String status,
+  required String statusText,
+  int? linkedTransactionId,
+}) {
+  return <String, Object?>{
+    'id': id,
+    'timestamp': DateTime(2026, 6, 7, 21, 10).millisecondsSinceEpoch,
+    'source': 'notification_listener',
+    'packageName': 'hu.bank.app',
+    'appLabel': 'Bank',
+    'title': 'Vásárlás',
+    'text': 'Kártyás vásárlás: Tesco - 12 345 HUF',
+    'bigText': '',
+    'subText': '',
+    'category': '',
+    'notificationKey': 'n-$id',
+    'accessibilityEventType': '',
+    'hash': 'h-$id',
+    'isDuplicate': false,
+    'manualStatus': '',
+    'displayText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
+    'status': status,
+    'statusText': statusText,
+    'linkedTransactionId': linkedTransactionId,
+  };
 }
