@@ -73,7 +73,7 @@ class NotificationCaptureEligibilityTest {
                     id = "legacy-package",
                     packageName = "",
                     appLabel = "",
-                    appFilterText = "legacy\.bank",
+                    appFilterText = "legacy\\.bank",
                 ),
             ),
             packageName = "hu.legacy.bank",
