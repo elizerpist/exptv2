@@ -13,11 +13,17 @@ class CalendarCanvasPainter extends CustomPainter {
     required this.data,
     required this.mode,
     required this.layout,
+    required this.thresholdValue,
+    required this.heatmapMinValue,
+    required this.heatmapCurrentValue,
   });
 
   final CalendarYearRenderData data;
   final CalendarMenuMode mode;
   final CalendarCanvasLayout layout;
+  final double thresholdValue;
+  final double heatmapMinValue;
+  final double heatmapCurrentValue;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -124,16 +130,26 @@ class CalendarCanvasPainter extends CustomPainter {
       textColor = AppColors.white;
     } else if (mode == CalendarMenuMode.category &&
         day.dominantCategoryId != null &&
-        day.meetsThreshold) {
+        day.expense >= thresholdValue) {
       canvas.drawCircle(center, radius, Paint()..color = day.dominantCategoryColor);
       textColor = AppColors.white;
-    } else if (mode == CalendarMenuMode.heatmap &&
-        day.heatmapPercentage > 0) {
+    } else if (mode == CalendarMenuMode.heatmap) {
+      final percentage = _heatmapPercentage(day.expense);
+      if (percentage <= 0) {
+        _drawCenteredText(
+          canvas,
+          day.day.toString(),
+          center,
+          dayFontSize,
+          FontWeight.w600,
+          textColor,
+        );
+        return;
+      }
       final overlay = RRect.fromRectAndRadius(
         cell.deflate(2),
         const Radius.circular(3),
       );
-      final percentage = day.heatmapPercentage;
       if (percentage <= 0.15) {
         canvas.drawRRect(overlay, Paint()..color = AppColors.white);
       } else {
@@ -193,10 +209,22 @@ class CalendarCanvasPainter extends CustomPainter {
     painter.paint(canvas, center - Offset(painter.width / 2, painter.height / 2));
   }
 
+  double _heatmapPercentage(double expense) {
+    if (expense <= heatmapMinValue || heatmapCurrentValue <= heatmapMinValue) {
+      return 0;
+    }
+    final percentage =
+        (expense - heatmapMinValue) / (heatmapCurrentValue - heatmapMinValue);
+    return percentage.clamp(0, 1).toDouble();
+  }
+
   @override
   bool shouldRepaint(CalendarCanvasPainter oldDelegate) {
     return oldDelegate.data != data ||
         oldDelegate.mode != mode ||
-        oldDelegate.layout.size != layout.size;
+        oldDelegate.layout.size != layout.size ||
+        oldDelegate.thresholdValue != thresholdValue ||
+        oldDelegate.heatmapMinValue != heatmapMinValue ||
+        oldDelegate.heatmapCurrentValue != heatmapCurrentValue;
   }
 }

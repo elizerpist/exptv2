@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/calendar_render_builder.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/calendar_menu_mode.dart';
@@ -216,6 +217,75 @@ void main() {
       expect(tester.getTopLeft(panel).dy, greaterThan(raisedTop + 40));
     },
   );
+
+  testWidgets('threshold slider drag does not rebuild calendar render data', (
+    tester,
+  ) async {
+    final year = DateTime.now().year;
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarMenuOverlay(
+              fullScreen: true,
+              transactions: [
+                _record(
+                  id: 1,
+                  date: '$year-01-02',
+                  amount: -8000,
+                  categoryId: 1,
+                ),
+                _record(
+                  id: 2,
+                  date: '$year-01-03',
+                  amount: -22000,
+                  categoryId: 1,
+                ),
+              ],
+              categories: const [
+                TransactionCategory(
+                  transactionCategoryID: 1,
+                  name: 'Élelmiszer',
+                  type: 'kiadás',
+                  colorSlot: 1,
+                  iconSlot: null,
+                  backgroundColor: null,
+                  icon: null,
+                  notification: null,
+                  hasLimit: false,
+                  limitAmount: 0,
+                  alertActive: false,
+                  isCustomIcon: false,
+                  originalIcon: null,
+                ),
+              ],
+              onClose: () {},
+              onMonthSelect: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[Perf] CalendarRender build source=overlay'),
+    );
+
+    DebugConsole.clear();
+    await tester.drag(
+      find.byKey(const ValueKey('calendar-threshold-slider')),
+      const Offset(80, 0),
+    );
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      isNot(contains('[Perf] CalendarRender build source=overlay')),
+    );
+  });
 
   test('calendar canvas layout creates two columns and six rows', () {
     final layout = CalendarCanvasLayout.calculate(
