@@ -66,6 +66,58 @@ class ExpenseRepositoryMerchantCategoryTest {
     }
 
     @Test
+    fun updateTransactionPropagatesUserAssignedNameToSameOriginalMerchant() = runBlocking {
+        db.transactions().insertAll(
+            listOf(
+                transaction(id = 260101, merchant = "nyírő", categoryId = 6),
+                transaction(id = 260102, merchant = "nyírő", categoryId = null),
+                transaction(id = 260103, merchant = "másik", categoryId = null),
+            ),
+        )
+
+        repository.updateTransaction(
+            mapOf(
+                "id" to 260101,
+                "merchant" to "nyírő",
+                "amount" to 3085.0,
+                "type" to "expense",
+                "transactionCategoryID" to 6,
+                "date" to "2026-01-01",
+                "time" to "10:00",
+                "userAssignedName" to "Nyírő Étterem",
+            ),
+        )
+
+        assertEquals("Nyírő Étterem", db.transactions().byId(260101)?.userAssignedName)
+        assertEquals("Nyírő Étterem", db.transactions().byId(260102)?.userAssignedName)
+        assertNull(db.transactions().byId(260103)?.userAssignedName)
+    }
+
+    @Test
+    fun addTransactionInheritsUserAssignedNameFromSameOriginalMerchant() = runBlocking {
+        db.transactions().insert(
+            transaction(
+                id = 260101,
+                merchant = "nyírő",
+                categoryId = 7,
+                userAssignedName = "Nyírő Étterem",
+            ),
+        )
+
+        val saved = repository.addTransaction(
+            mapOf(
+                "merchant" to "nyírő",
+                "amount" to 4500.0,
+                "type" to "expense",
+                "date" to "2026-01-02",
+                "time" to "11:00",
+            ),
+        )
+
+        assertEquals("Nyírő Étterem", saved["userAssignedName"])
+    }
+
+    @Test
     fun addTransactionInheritsCategoryFromSameOriginalMerchant() = runBlocking {
         db.transactions().insert(
             transaction(id = 260101, merchant = "nyírő", categoryId = 7),
@@ -186,6 +238,7 @@ class ExpenseRepositoryMerchantCategoryTest {
         id: Int,
         merchant: String,
         categoryId: Int?,
+        userAssignedName: String? = null,
     ): ExpenseTransactionEntity = ExpenseTransactionEntity(
         id = id,
         date = "2026.01.01",
@@ -195,7 +248,7 @@ class ExpenseRepositoryMerchantCategoryTest {
         address = "Test",
         merchant = merchant,
         amount = -1000.0,
-        userAssignedName = null,
+        userAssignedName = userAssignedName,
         transactionCategoryID = categoryId,
     )
 }

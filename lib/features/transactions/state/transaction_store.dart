@@ -743,14 +743,18 @@ class TransactionStore extends ChangeNotifier {
       'oldAmount=${transaction.amount} newAmount=$amount '
       'oldCategory=${transaction.transactionCategoryID} newCategory=$categoryId',
     );
+    final originalMerchant = transaction.merchant.trim();
+    final displayMerchant = merchant.trim();
+    final assignedName = userAssignedName ??
+        (displayMerchant == originalMerchant ? null : displayMerchant);
     await _repository.updateTransaction(transaction.id, {
-      'merchant': merchant,
+      'merchant': originalMerchant,
       'amount': amount,
       'type': type.nativeValue,
       'transactionCategoryID': categoryId,
       'date': date,
       'time': time,
-      'userAssignedName': userAssignedName,
+      'userAssignedName': assignedName,
     });
     DebugConsole.log(
       '[Notification] transaction update completed id=${transaction.id}',

@@ -222,8 +222,29 @@ void main() {
     );
 
     expect(repository.updatedPayloads.single['id'], record.id);
-    expect(repository.updatedPayloads.single['merchant'], 'Edited Shop');
+    expect(repository.updatedPayloads.single['merchant'], record.merchant);
+    expect(repository.updatedPayloads.single['userAssignedName'], 'Edited Alias');
     expect(store.visibleTransactions.first.displayMerchant, 'Edited Alias');
+  });
+
+  test('store keeps original merchant key when edit name becomes alias', () async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(repository);
+    await store.start();
+
+    final record = store.visibleTransactions.first;
+    await store.updateTransaction(
+      record,
+      merchant: 'Edited Shop',
+      amount: 123,
+      type: TransactionType.expense,
+      categoryId: 6,
+      date: '2025-09-27',
+      time: '11:20',
+    );
+
+    expect(repository.updatedPayloads.single['merchant'], record.merchant);
+    expect(repository.updatedPayloads.single['userAssignedName'], 'Edited Shop');
   });
 
   test('store deletes transaction then reloads bootstrap', () async {

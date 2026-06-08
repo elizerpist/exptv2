@@ -173,7 +173,7 @@ class ExpenseRepository(context: Context) {
                 address = "Push notification",
                 merchant = merchant,
                 amount = signedAmount,
-                userAssignedName = null,
+                userAssignedName = inheritedUserAssignedNameForMerchant(merchant, null),
                 transactionCategoryID = categoryId,
                 sourceNotificationEventId = event.id,
             )
@@ -778,7 +778,10 @@ class ExpenseRepository(context: Context) {
             address = args["address"]?.toString() ?: "Unknown location",
             merchant = merchant,
             amount = signedAmount,
-            userAssignedName = args["userAssignedName"]?.toString(),
+            userAssignedName = inheritedUserAssignedNameForMerchant(
+                merchant,
+                args["userAssignedName"]?.toString(),
+            ),
             transactionCategoryID = categoryId,
             sourceNotificationEventId = sourceNotificationEventId,
         )
@@ -802,6 +805,7 @@ class ExpenseRepository(context: Context) {
             ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction id is required")
         val existing = transactions.byId(id)
             ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction does not exist")
+        val originalMerchant = existing.merchant
         val merchant = args["merchant"]?.toString()?.trim().orEmpty()
         if (merchant.isEmpty()) {
             throw ExpenseValidationException("INVALID_TRANSACTION_NAME", "Transaction name is required")
@@ -830,16 +834,17 @@ class ExpenseRepository(context: Context) {
         }
 
         val signedAmount = if (type == "income") kotlin.math.abs(rawAmount) else -kotlin.math.abs(rawAmount)
+        val requestedUserAssignedName = if (args.containsKey("userAssignedName")) {
+            args["userAssignedName"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        } else {
+            existing.userAssignedName
+        }
         val row = existing.copy(
             date = formatDate(args["date"]?.toString() ?: existing.date),
             time = args["time"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: existing.time,
             merchant = merchant,
             amount = signedAmount,
-            userAssignedName = if (args.containsKey("userAssignedName")) {
-                args["userAssignedName"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-            } else {
-                existing.userAssignedName
-            },
+            userAssignedName = requestedUserAssignedName,
             transactionCategoryID = categoryId,
         )
         transactions.insert(row)
@@ -856,11 +861,14 @@ class ExpenseRepository(context: Context) {
                 "[Notification] transaction update limit evaluation skipped id=${row.id} reason=$reason",
             )
         }
+        if (args.containsKey("userAssignedName")) {
+            propagateUserAssignedNameForMerchant(originalMerchant, row.userAssignedName)
+        }
         if (
             row.transactionCategoryID != null &&
             row.transactionCategoryID != existing.transactionCategoryID
         ) {
-            propagateCategoryForMerchant(existing.merchant, row.transactionCategoryID)
+            propagateCategoryForMerchant(originalMerchant, row.transactionCategoryID)
         }
         return row.toMap()
     }
@@ -889,6 +897,22 @@ class ExpenseRepository(context: Context) {
         return transactions.resetNamesByMerchant(originalMerchant)
     }
 
+    private suspend fun inheritedUserAssignedNameForMerchant(
+        merchant: String,
+        explicitUserAssignedName: String?,
+    ): String? {
+        val explicit = explicitUserAssignedName?.trim()?.takeIf { it.isNotEmpty() }
+        if (explicit != null) return explicit
+        val key = merchant.trim()
+        if (key.isEmpty()) return null
+        val inherited = transactions.latestUserAssignedNameForMerchant(key)
+        Log.d(
+            "ExpenseRepository",
+            "[MerchantName] inherit merchant=$key userAssignedName=${inherited.orEmpty()}",
+        )
+        return inherited
+    }
+
     private suspend fun inheritedCategoryIdForMerchant(
         merchant: String,
         explicitCategoryId: Int?,
@@ -902,6 +926,24 @@ class ExpenseRepository(context: Context) {
             "[MerchantCategory] inherit merchant=$key category=$inherited",
         )
         return inherited
+    }
+
+    private suspend fun propagateUserAssignedNameForMerchant(
+        merchant: String,
+        userAssignedName: String?,
+    ): Int {
+        val key = merchant.trim()
+        if (key.isEmpty()) return 0
+        val count = if (userAssignedName == null) {
+            transactions.resetNamesByMerchant(key)
+        } else {
+            transactions.renameByMerchant(key, userAssignedName)
+        }
+        Log.d(
+            "ExpenseRepository",
+            "[MerchantName] propagate merchant=$key userAssignedName=${userAssignedName.orEmpty()} rows=$count",
+        )
+        return count
     }
 
     private suspend fun propagateCategoryForMerchant(

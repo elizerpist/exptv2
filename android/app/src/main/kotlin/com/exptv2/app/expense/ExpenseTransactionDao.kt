@@ -93,10 +93,10 @@ interface ExpenseTransactionDao {
     @Delete
     suspend fun delete(transaction: ExpenseTransactionEntity)
 
-    @Query("UPDATE transactions SET userAssignedName = :userAssignedName WHERE merchant = :originalMerchant")
+    @Query("UPDATE transactions SET userAssignedName = :userAssignedName WHERE TRIM(merchant) = TRIM(:originalMerchant)")
     suspend fun renameByMerchant(originalMerchant: String, userAssignedName: String): Int
 
-    @Query("UPDATE transactions SET userAssignedName = NULL WHERE merchant = :originalMerchant")
+    @Query("UPDATE transactions SET userAssignedName = NULL WHERE TRIM(merchant) = TRIM(:originalMerchant)")
     suspend fun resetNamesByMerchant(originalMerchant: String): Int
 
     @Query(
@@ -109,6 +109,18 @@ interface ExpenseTransactionDao {
         """
     )
     suspend fun latestCategoryIdForMerchant(merchant: String): Int?
+
+    @Query(
+        """
+        SELECT userAssignedName FROM transactions
+        WHERE TRIM(merchant) = TRIM(:merchant)
+          AND userAssignedName IS NOT NULL
+          AND TRIM(userAssignedName) != ''
+        ORDER BY date DESC, time DESC, id DESC
+        LIMIT 1
+        """
+    )
+    suspend fun latestUserAssignedNameForMerchant(merchant: String): String?
 
     @Query(
         """

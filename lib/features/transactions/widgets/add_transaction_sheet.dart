@@ -574,14 +574,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           time: time,
         );
       } else {
+        final originalMerchant = initial.merchant.trim();
         await widget.store.updateTransaction(
           initial,
-          merchant: merchant,
+          merchant: originalMerchant,
           amount: amount,
           type: type,
           categoryId: category.transactionCategoryID,
           date: date,
           time: time,
+          userAssignedName: merchant == originalMerchant ? null : merchant,
         );
       }
       if (mounted) _close();
