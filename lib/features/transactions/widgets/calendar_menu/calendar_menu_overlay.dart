@@ -12,6 +12,8 @@ import 'calendar_value_slider_panel.dart';
 import 'focused_month_canvas.dart';
 import 'month_stats_charts.dart';
 
+const _sliderOverlayHeight = 190.0;
+
 class CalendarMenuOverlay extends StatefulWidget {
   const CalendarMenuOverlay({
     super.key,
@@ -149,6 +151,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                 left: 0,
                 right: 0,
                 bottom: 0,
+                height: _sliderOverlayHeight,
                 child: CalendarValueSliderPanel.threshold(
                   value: _thresholdValue,
                   min: data.thresholdRange.min,
@@ -170,6 +173,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                 left: 0,
                 right: 0,
                 bottom: 0,
+                height: _sliderOverlayHeight,
                 child: CalendarValueSliderPanel.heatmap(
                   value: _heatmapCurrentValue,
                   min: _heatmapMinValue,
