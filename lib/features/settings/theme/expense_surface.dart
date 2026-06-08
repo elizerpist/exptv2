@@ -101,7 +101,8 @@ class ExpenseSurface {
         gradient: activeNavGradient,
         borderRadius: borderRadius,
         border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
-        boxShadow: const <BoxShadow>[
+        boxShadow: <BoxShadow>[
+          if (profile == ExpenseSurfaceProfile.headerCard) ...?neutralShadow,
           BoxShadow(
             color: Color(0x5794A3B8),
             offset: Offset(7, 7),
