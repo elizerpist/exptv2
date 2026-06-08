@@ -158,8 +158,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                     () => _customThresholdMin = value < 0 ? 0 : value,
                   ),
                   onMaxChanged: (value) => setState(
-                    () => _customThresholdMax =
-                        value <= data.thresholdRange.min
+                    () => _customThresholdMax = value <= data.thresholdRange.min
                         ? data.thresholdRange.min + 1
                         : value,
                   ),

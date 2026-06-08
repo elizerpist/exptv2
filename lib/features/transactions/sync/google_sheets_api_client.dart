@@ -179,11 +179,7 @@ class GoogleSheetsApiGateway implements GoogleSheetsGateway {
     required String valueInputOption,
   }) async {
     await _api.spreadsheets.values.update(
-      sheets.ValueRange(
-        range: range,
-        majorDimension: 'ROWS',
-        values: values,
-      ),
+      sheets.ValueRange(range: range, majorDimension: 'ROWS', values: values),
       spreadsheetId,
       range,
       valueInputOption: valueInputOption,

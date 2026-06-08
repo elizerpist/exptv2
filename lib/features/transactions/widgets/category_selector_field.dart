@@ -29,7 +29,9 @@ class CategorySelectorField extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: ExpenseSurfaceContainer(
-          surfaceKey: ValueKey('${_selectorSurfaceKeyValue(selectorKey)}-surface'),
+          surfaceKey: ValueKey(
+            '${_selectorSurfaceKeyValue(selectorKey)}-surface',
+          ),
           style: surfaceStyle,
           color: surfaceColor,
           borderRadius: BorderRadius.circular(25),

@@ -30,7 +30,8 @@ class BackheaderBudgetItem {
 
   String get key => overview?.key ?? category!.key;
   String get title => overview?.title ?? category!.title;
-  String get amountText => overview?.displayAmount ?? _categoryAmount(category!);
+  String get amountText =>
+      overview?.displayAmount ?? _categoryAmount(category!);
 
   static String _categoryAmount(CategoryBudgetBarData bar) {
     return bar.hasLimit

@@ -22,7 +22,8 @@ class GoogleSheetsSyncController extends ChangeNotifier {
     required GoogleSheetsSyncStoreContract store,
     required TransactionRepositoryContract repository,
     DateTime Function()? clock,
-    TransactionExportRowBuilder rowBuilder = const TransactionExportRowBuilder(),
+    TransactionExportRowBuilder rowBuilder =
+        const TransactionExportRowBuilder(),
     int pageSize = 500,
   }) : _authClient = authClient,
        _apiClientFactory = apiClientFactory,
@@ -172,8 +173,8 @@ class GoogleSheetsSyncController extends ChangeNotifier {
         accountEmail: _settings.accountEmail,
         spreadsheetId: _settings.spreadsheetId,
         spreadsheetUrl: _settings.spreadsheetUrl,
-        lastSyncedAtMillis: (_clock?.call() ?? DateTime.now())
-            .millisecondsSinceEpoch,
+        lastSyncedAtMillis:
+            (_clock?.call() ?? DateTime.now()).millisecondsSinceEpoch,
         lastError: null,
       );
       await _store.save(_settings);

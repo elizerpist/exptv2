@@ -59,8 +59,7 @@ void main() {
                 'biometricLabel': 'Ujjlenyomat elerheto',
               };
             case 'expenseVerifySecurityPin':
-              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
-                  '1234';
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
             case 'expenseSetBiometricEnabled':
               return <String, Object?>{
                 'pinEnabled': true,

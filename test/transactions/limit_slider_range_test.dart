@@ -3,10 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('unconstrained slider defaults to 100000 with 1000 steps', () {
-    final range = LimitSliderRange.unconstrained(
-      amount: 0,
-      rememberedMax: 0,
-    );
+    final range = LimitSliderRange.unconstrained(amount: 0, rememberedMax: 0);
 
     expect(range.max, 100000);
     expect(range.divisions, 100);
@@ -29,16 +26,19 @@ void main() {
     expect(reduced.value, 50000);
   });
 
-  test('constrained range disables empty category when no free budget remains', () {
-    final range = LimitSliderRange.constrained(
-      amount: 0,
-      rememberedMax: 0,
-      maxAllowed: 0,
-      hasExistingLimit: false,
-    );
+  test(
+    'constrained range disables empty category when no free budget remains',
+    () {
+      final range = LimitSliderRange.constrained(
+        amount: 0,
+        rememberedMax: 0,
+        maxAllowed: 0,
+        hasExistingLimit: false,
+      );
 
-    expect(range.enabled, isFalse);
-    expect(range.max, 1);
-    expect(range.value, 0);
-  });
+      expect(range.enabled, isFalse);
+      expect(range.max, 1);
+      expect(range.value, 0);
+    },
+  );
 }

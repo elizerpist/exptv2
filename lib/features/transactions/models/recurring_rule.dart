@@ -41,9 +41,7 @@ class PushRecurringSettings {
   }
 
   Map<String, Object?> toMap() {
-    return <String, Object?>{
-      'conflictPolicy': conflictPolicy.nativeValue,
-    };
+    return <String, Object?>{'conflictPolicy': conflictPolicy.nativeValue};
   }
 }
 

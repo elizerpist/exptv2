@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../../services/recurring_alarm_service.dart';
 
-
 class _DebugConsoleNotifier extends ValueNotifier<int> {
   _DebugConsoleNotifier(super.value);
 
@@ -244,11 +243,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.alarm,
-                size: 14,
-                color: Color(0xFFF59E0B),
-              ),
+              const Icon(Icons.alarm, size: 14, color: Color(0xFFF59E0B)),
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
@@ -336,7 +331,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
           ],
           if (logs.isNotEmpty) ...[
             const SizedBox(height: 6),
-            ...logs.reversed.take(3).map(
+            ...logs.reversed
+                .take(3)
+                .map(
                   (entry) => Text(
                     entry,
                     maxLines: 1,

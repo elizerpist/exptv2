@@ -125,10 +125,13 @@ class CalendarCanvasPainter extends CustomPainter {
     } else if (mode == CalendarMenuMode.category &&
         day.dominantCategoryId != null &&
         day.meetsThreshold) {
-      canvas.drawCircle(center, radius, Paint()..color = day.dominantCategoryColor);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()..color = day.dominantCategoryColor,
+      );
       textColor = AppColors.white;
-    } else if (mode == CalendarMenuMode.heatmap &&
-        day.heatmapPercentage > 0) {
+    } else if (mode == CalendarMenuMode.heatmap && day.heatmapPercentage > 0) {
       final overlay = RRect.fromRectAndRadius(
         cell.deflate(2),
         const Radius.circular(3),
@@ -139,7 +142,8 @@ class CalendarCanvasPainter extends CustomPainter {
       } else {
         canvas.drawRRect(
           overlay,
-          Paint()..color = AppColors.primary.withValues(alpha: percentage * 0.8),
+          Paint()
+            ..color = AppColors.primary.withValues(alpha: percentage * 0.8),
         );
         canvas.drawRRect(
           overlay,
@@ -190,7 +194,10 @@ class CalendarCanvasPainter extends CustomPainter {
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
     )..layout();
-    painter.paint(canvas, center - Offset(painter.width / 2, painter.height / 2));
+    painter.paint(
+      canvas,
+      center - Offset(painter.width / 2, painter.height / 2),
+    );
   }
 
   @override

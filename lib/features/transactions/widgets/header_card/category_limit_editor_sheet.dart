@@ -39,21 +39,20 @@ class CategoryLimitEditorSheet extends StatelessWidget {
       periodIncome: 0,
       onCancel: onCancel,
       onActiveItemChanged: (_) {},
-      onSaveOverview: (
-        BudgetGoalKind kind, {
-        required double limitAmount,
-        required bool alertActive,
-      }) async {},
-      onSaveCategory: (
-        CategoryBudgetBarData categoryBar, {
-        required double limitAmount,
-        required bool alertActive,
-      }) async {
-        await onSave(
-          limitAmount: limitAmount,
-          alertActive: alertActive,
-        );
-      },
+      onSaveOverview:
+          (
+            BudgetGoalKind kind, {
+            required double limitAmount,
+            required bool alertActive,
+          }) async {},
+      onSaveCategory:
+          (
+            CategoryBudgetBarData categoryBar, {
+            required double limitAmount,
+            required bool alertActive,
+          }) async {
+            await onSave(limitAmount: limitAmount, alertActive: alertActive);
+          },
     );
   }
 }

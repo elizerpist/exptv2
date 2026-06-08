@@ -36,7 +36,18 @@ void main() {
     expect(gateway.valueInputOptions, ['RAW']);
     expect(gateway.updatedValues, [
       TransactionExportRow.headers,
-      [1, '2026.06.08', '09:15', 'expense', '-1290', 'Corner Shop', 'Kávé', 6, 'Élelmiszer', false],
+      [
+        1,
+        '2026.06.08',
+        '09:15',
+        'expense',
+        '-1290',
+        'Corner Shop',
+        'Kávé',
+        6,
+        'Élelmiszer',
+        false,
+      ],
     ]);
   });
 }

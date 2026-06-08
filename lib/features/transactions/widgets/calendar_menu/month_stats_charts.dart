@@ -465,9 +465,7 @@ class _DeepStatsGrid extends StatelessWidget {
       crossAxisSpacing: 8,
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
-      children: [
-        for (final metric in metrics) _StatTile(metric: metric),
-      ],
+      children: [for (final metric in metrics) _StatTile(metric: metric)],
     );
   }
 }
@@ -544,10 +542,7 @@ class _MerchantStats extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _MerchantPill(
-              label: 'Top',
-              value: stats.topMerchantName,
-            ),
+            _MerchantPill(label: 'Top', value: stats.topMerchantName),
             _MerchantPill(
               label: 'Legnagyobb',
               value: stats.largestExpenseMerchantName,
@@ -1004,15 +999,14 @@ class _MonthStatsData {
   final List<_CategoryShare> topCategories;
   final List<_MerchantShare> topMerchants;
 
-  String get firstTransactionDayText => firstTransactionDay == null
-      ? '-'
-      : '$firstTransactionDay.';
+  String get firstTransactionDayText =>
+      firstTransactionDay == null ? '-' : '$firstTransactionDay.';
 
-  String get lastTransactionDayText => lastTransactionDay == null
-      ? '-'
-      : '$lastTransactionDay.';
+  String get lastTransactionDayText =>
+      lastTransactionDay == null ? '-' : '$lastTransactionDay.';
 
-  String get bestIncomeDayText => bestIncomeDay == null ? '-' : '$bestIncomeDay.';
+  String get bestIncomeDayText =>
+      bestIncomeDay == null ? '-' : '$bestIncomeDay.';
 
   String get incomeExpenseRatio {
     if (expense <= 0 && income <= 0) return '-';
@@ -1067,12 +1061,12 @@ class _MonthStatsData {
     for (final record in monthRecords) {
       final date = DateTime.tryParse(record.normalizedDate);
       if (date == null) continue;
-      firstTransactionDate = firstTransactionDate == null ||
-              date.isBefore(firstTransactionDate)
+      firstTransactionDate =
+          firstTransactionDate == null || date.isBefore(firstTransactionDate)
           ? date
           : firstTransactionDate;
-      lastTransactionDate = lastTransactionDate == null ||
-              date.isAfter(lastTransactionDate)
+      lastTransactionDate =
+          lastTransactionDate == null || date.isAfter(lastTransactionDate)
           ? date
           : lastTransactionDate;
       absoluteAmounts.add(record.amount.abs());

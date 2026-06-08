@@ -66,9 +66,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   @override
   void initState() {
     super.initState();
-    _swipeVisual = ValueNotifier<_SwipeVisualState>(
-      _SwipeVisualState.idle,
-    );
+    _swipeVisual = ValueNotifier<_SwipeVisualState>(_SwipeVisualState.idle);
   }
 
   @override

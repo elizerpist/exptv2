@@ -43,7 +43,10 @@ void main() {
       find.byKey(const ValueKey('category-menu-back-button')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('category-menu-add-button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-menu-add-button')),
+      findsOneWidget,
+    );
     expect(find.text('Q'), findsOneWidget);
     expect(find.text('Salary'), findsNothing);
 
@@ -105,43 +108,44 @@ void main() {
     expect(find.text('Test Store'), findsOneWidget);
   });
 
-  testWidgets('category cards use inset body and raised avatar in neumorphism', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: CategoryMenuPanel(
-            activeType: TransactionType.expense,
-            categories: categoryFixtures,
-            categoryTransactionCounts: const {6: 3},
-            activeCategory: categoryFixtures.last,
-            surfaceColor: AppColors.gray200,
-            cardSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
-            avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-            onSelect: (_) {},
-            onModify: (_) {},
-            onDelete: (_) {},
-            onAdd: () {},
-            onClose: () {},
+  testWidgets(
+    'category cards use inset body and raised avatar in neumorphism',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CategoryMenuPanel(
+              activeType: TransactionType.expense,
+              categories: categoryFixtures,
+              categoryTransactionCounts: const {6: 3},
+              activeCategory: categoryFixtures.last,
+              surfaceColor: AppColors.gray200,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              onSelect: (_) {},
+              onModify: (_) {},
+              onDelete: (_) {},
+              onAdd: () {},
+              onClose: () {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      find.byKey(const ValueKey('category-card-surface-6')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('category-icon-surface-6')),
-      findsOneWidget,
-    );
-    final card = tester.widget<Container>(
-      find.byKey(const ValueKey('category-card-surface-6')),
-    );
-    expect((card.decoration! as BoxDecoration).boxShadow, isNull);
-  });
+      expect(
+        find.byKey(const ValueKey('category-card-surface-6')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('category-icon-surface-6')),
+        findsOneWidget,
+      );
+      final card = tester.widget<Container>(
+        find.byKey(const ValueKey('category-card-surface-6')),
+      );
+      expect((card.decoration! as BoxDecoration).boxShadow, isNull);
+    },
+  );
 }
 
 final categoryFixtures = <TransactionCategory>[

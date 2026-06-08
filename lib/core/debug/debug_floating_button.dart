@@ -27,11 +27,7 @@ class DebugFloatingButton extends StatelessWidget {
         child: IconButton(
           key: const ValueKey('debug-floating-button'),
           tooltip: 'Debug log',
-          icon: const Icon(
-            Icons.terminal,
-            size: 18,
-            color: Color(0xFF06B6D4),
-          ),
+          icon: const Icon(Icons.terminal, size: 18, color: Color(0xFF06B6D4)),
           onPressed: () => showDialog<void>(
             context: context,
             builder: (_) => DebugConsoleDialog(

@@ -44,10 +44,7 @@ class GoogleSheetsSyncStore implements GoogleSheetsSyncStoreContract {
     await _setNullableString(_accountEmailKey, settings.accountEmail);
     await _setNullableString(_spreadsheetIdKey, settings.spreadsheetId);
     await _setNullableString(_spreadsheetUrlKey, settings.spreadsheetUrl);
-    await _setNullableInt(
-      _lastSyncedAtMillisKey,
-      settings.lastSyncedAtMillis,
-    );
+    await _setNullableInt(_lastSyncedAtMillisKey, settings.lastSyncedAtMillis);
     await _setNullableString(_lastErrorKey, settings.lastError);
   }
 

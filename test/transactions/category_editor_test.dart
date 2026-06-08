@@ -36,10 +36,14 @@ void main() {
         'Travel',
       );
       await tester.tap(find.byKey(const ValueKey('color-slot-9')));
-      await tester.tap(find.byKey(const ValueKey('category-slot-toggle-button')));
+      await tester.tap(
+        find.byKey(const ValueKey('category-slot-toggle-button')),
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('icon-slot-grid')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('category-slot-toggle-button')));
+      await tester.tap(
+        find.byKey(const ValueKey('category-slot-toggle-button')),
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('color-slot-grid')), findsOneWidget);
       await tester.drag(

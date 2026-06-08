@@ -123,10 +123,11 @@ void main() {
     );
 
     final gradient = decoration.gradient! as LinearGradient;
-    expect(
-      gradient.colors,
-      [AppColors.primaryLight, AppColors.primary, AppColors.primaryDark],
-    );
+    expect(gradient.colors, [
+      AppColors.primaryLight,
+      AppColors.primary,
+      AppColors.primaryDark,
+    ]);
     expect(decoration.border, isNull);
     expect(decoration.boxShadow, hasLength(2));
     expect(decoration.boxShadow![0].color, const Color(0x570891B2));

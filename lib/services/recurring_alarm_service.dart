@@ -96,9 +96,7 @@ class RecurringAlarmService {
           'targetMillis': targetDate.millisecondsSinceEpoch,
       },
     );
-    return RecurringAlarmProcessResult.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmProcessResult.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmProcessResult> setDebugDateOverride(
@@ -113,18 +111,14 @@ class RecurringAlarmService {
       'setDebugDateOverride',
       {'targetMillis': normalizedTarget.millisecondsSinceEpoch},
     );
-    return RecurringAlarmProcessResult.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmProcessResult.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmDebugState> clearDebugDateOverride() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'clearDebugDateOverride',
     );
-    return RecurringAlarmDebugState.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmDebugState.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmDebugState> scheduleDebugTestAlarm({
@@ -134,18 +128,14 @@ class RecurringAlarmService {
       'scheduleRecurringDebugTestAlarm',
       {'delayMillis': delay.inMilliseconds},
     );
-    return RecurringAlarmDebugState.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmDebugState.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmDebugState> loadDebugState() async {
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'loadRecurringAlarmDebugState',
     );
-    return RecurringAlarmDebugState.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmDebugState.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<bool> clearDebugLog() async {

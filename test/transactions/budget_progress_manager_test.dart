@@ -32,69 +32,75 @@ void main() {
     expect(progress.segments[1].fraction, 0.25);
   });
 
-  test('income goal uses income category bars and treats full progress as success', () {
-    final bars = [
-      barFixture(
-        5,
-        'Salary',
-        600,
-        const Color(0xff06b6d4),
-        type: TransactionType.income,
-      ),
-      barFixture(
-        9,
-        'Bonus',
-        200,
-        const Color(0xffa855f7),
-        type: TransactionType.income,
-      ),
-      barFixture(
-        10,
-        'Unused',
-        0,
-        const Color(0xfff97316),
-        type: TransactionType.income,
-      ),
-    ];
+  test(
+    'income goal uses income category bars and treats full progress as success',
+    () {
+      final bars = [
+        barFixture(
+          5,
+          'Salary',
+          600,
+          const Color(0xff06b6d4),
+          type: TransactionType.income,
+        ),
+        barFixture(
+          9,
+          'Bonus',
+          200,
+          const Color(0xffa855f7),
+          type: TransactionType.income,
+        ),
+        barFixture(
+          10,
+          'Unused',
+          0,
+          const Color(0xfff97316),
+          type: TransactionType.income,
+        ),
+      ];
 
-    final progress = BudgetProgressManager.overviewProgress(
-      kind: BudgetGoalKind.incomeGoal,
-      limitAmount: 800,
-      categoryBars: bars,
-      periodIncome: 800,
-      periodExpense: 0,
-    );
+      final progress = BudgetProgressManager.overviewProgress(
+        kind: BudgetGoalKind.incomeGoal,
+        limitAmount: 800,
+        categoryBars: bars,
+        periodIncome: 800,
+        periodExpense: 0,
+      );
 
-    expect(progress.ratio, 1);
-    expect(progress.isSuccess, isTrue);
-    expect(progress.isWarning, isFalse);
-    expect(progress.isDanger, isFalse);
-    expect(progress.segments.map((segment) => segment.amount), [600, 200]);
-  });
+      expect(progress.ratio, 1);
+      expect(progress.isSuccess, isTrue);
+      expect(progress.isWarning, isFalse);
+      expect(progress.isDanger, isFalse);
+      expect(progress.segments.map((segment) => segment.amount), [600, 200]);
+    },
+  );
 
-  test('saving goal uses income minus expense and clamps negative balance to zero', () {
-    final positive = BudgetProgressManager.overviewProgress(
-      kind: BudgetGoalKind.savingGoal,
-      limitAmount: 200,
-      categoryBars: const [],
-      periodIncome: 900,
-      periodExpense: 750,
-    );
-    final negative = BudgetProgressManager.overviewProgress(
-      kind: BudgetGoalKind.savingGoal,
-      limitAmount: 200,
-      categoryBars: const [],
-      periodIncome: 100,
-      periodExpense: 150,
-    );
+  test(
+    'saving goal uses income minus expense and clamps negative balance to zero',
+    () {
+      final positive = BudgetProgressManager.overviewProgress(
+        kind: BudgetGoalKind.savingGoal,
+        limitAmount: 200,
+        categoryBars: const [],
+        periodIncome: 900,
+        periodExpense: 750,
+      );
+      final negative = BudgetProgressManager.overviewProgress(
+        kind: BudgetGoalKind.savingGoal,
+        limitAmount: 200,
+        categoryBars: const [],
+        periodIncome: 100,
+        periodExpense: 150,
+      );
 
-    expect(positive.amount, 150);
-    expect(positive.ratio, 0.75);
-    expect(positive.segments, hasLength(1));
-    expect(negative.amount, 0);
-    expect(negative.ratio, 0);
-    expect(negative.segments, isEmpty);
-  });
+      expect(positive.amount, 150);
+      expect(positive.ratio, 0.75);
+      expect(positive.segments, hasLength(1));
+      expect(negative.amount, 0);
+      expect(negative.ratio, 0);
+      expect(negative.segments, isEmpty);
+    },
+  );
 
   test('category max excludes the currently edited category', () {
     final current = barFixture(

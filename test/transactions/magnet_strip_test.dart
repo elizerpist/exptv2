@@ -73,14 +73,16 @@ void main() {
   });
 
   test('magnet strip fade uses income and expense colors', () {
-    expect(
-      MagnetStripPainter.gradientColorsFor(MagnetType.fade),
-      [AppColors.income, AppColors.expense],
-    );
-    expect(
-      MagnetStripPainter.gradientColorsFor(MagnetType.nofade),
-      [AppColors.income, AppColors.income, AppColors.expense, AppColors.expense],
-    );
+    expect(MagnetStripPainter.gradientColorsFor(MagnetType.fade), [
+      AppColors.income,
+      AppColors.expense,
+    ]);
+    expect(MagnetStripPainter.gradientColorsFor(MagnetType.nofade), [
+      AppColors.income,
+      AppColors.income,
+      AppColors.expense,
+      AppColors.expense,
+    ]);
   });
 
   testWidgets('budget magnet strip renders React-style limit progress', (
@@ -118,7 +120,10 @@ void main() {
     );
     final decoration = fill.decoration as BoxDecoration;
 
-    expect(fillRect.width, moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5));
+    expect(
+      fillRect.width,
+      moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
+    );
     expect(decoration.color, const Color(0xffff8800));
   });
 }

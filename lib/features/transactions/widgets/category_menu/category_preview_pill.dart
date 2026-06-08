@@ -34,11 +34,11 @@ class CategoryPreviewPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       neutralBorder: Border.all(color: AppColors.gray200),
       neutralShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            offset: const Offset(0, 2),
-            blurRadius: 3,
-          ),
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.1),
+          offset: const Offset(0, 2),
+          blurRadius: 3,
+        ),
       ],
       child: Row(
         children: [

@@ -28,9 +28,8 @@ class BudgetProgressManager {
     final amount = switch (kind) {
       BudgetGoalKind.expenseBudget => periodExpense,
       BudgetGoalKind.incomeGoal => periodIncome,
-      BudgetGoalKind.savingGoal => (periodIncome - periodExpense)
-          .clamp(0.0, double.infinity)
-          .toDouble(),
+      BudgetGoalKind.savingGoal =>
+        (periodIncome - periodExpense).clamp(0.0, double.infinity).toDouble(),
     };
 
     final segments = kind == BudgetGoalKind.savingGoal

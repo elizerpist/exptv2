@@ -18,9 +18,8 @@ class BudgetStripProgress {
   final double limitAmount;
 
   bool get visible => hasLimit && limitAmount > 0;
-  double get factor => visible
-      ? (spent / limitAmount).clamp(0.0, 1.0).toDouble()
-      : 0.0;
+  double get factor =>
+      visible ? (spent / limitAmount).clamp(0.0, 1.0).toDouble() : 0.0;
   Color get fillColor => LimitManager.progressColor(spent, limitAmount);
 }
 

@@ -30,10 +30,7 @@ class CalendarCanvas extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.of(context).size.width;
-        final layout = CalendarCanvasLayout.calculate(
-          width: width,
-          mode: mode,
-        );
+        final layout = CalendarCanvasLayout.calculate(width: width, mode: mode);
         return SingleChildScrollView(
           key: const ValueKey('calendar-canvas-scroll'),
           child: SizedBox(

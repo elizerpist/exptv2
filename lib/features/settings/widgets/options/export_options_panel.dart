@@ -141,8 +141,7 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
     final status = widget.googleSheetsSyncController?.status;
     if ((action == 'connect-google' &&
             status == GoogleSheetsSyncStatus.signingIn) ||
-        (action == 'sync-google' &&
-            status == GoogleSheetsSyncStatus.syncing)) {
+        (action == 'sync-google' && status == GoogleSheetsSyncStatus.syncing)) {
       return const SizedBox(
         width: 18,
         height: 18,
@@ -213,7 +212,8 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
     final controller = widget.googleSheetsSyncController;
     final status = controller?.status ?? GoogleSheetsSyncStatus.disconnected;
     return switch (status) {
-      GoogleSheetsSyncStatus.disconnected => 'Google Sheets nincs csatlakoztatva',
+      GoogleSheetsSyncStatus.disconnected =>
+        'Google Sheets nincs csatlakoztatva',
       GoogleSheetsSyncStatus.signingIn => 'Google bejelentkezés folyamatban',
       GoogleSheetsSyncStatus.syncing => 'Szinkronizálás folyamatban',
       GoogleSheetsSyncStatus.waitingForNetwork => 'Szinkron várakozik',

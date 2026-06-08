@@ -19,8 +19,13 @@ void main() {
             case 'loadRecurringAlarmDebugState':
               return <String, Object?>{
                 'overrideMillis': null,
-                'effectiveMillis': DateTime(2026, 6, 1, 0, 1)
-                    .millisecondsSinceEpoch,
+                'effectiveMillis': DateTime(
+                  2026,
+                  6,
+                  1,
+                  0,
+                  1,
+                ).millisecondsSinceEpoch,
                 'usingOverride': false,
                 'logs': <String>['[RecurringAlarm] sync start'],
               };
@@ -42,8 +47,13 @@ void main() {
               return <String, Object?>{
                 'state': <String, Object?>{
                   'overrideMillis': null,
-                  'effectiveMillis': DateTime(2026, 6, 1, 0, 1)
-                      .millisecondsSinceEpoch,
+                  'effectiveMillis': DateTime(
+                    2026,
+                    6,
+                    1,
+                    0,
+                    1,
+                  ).millisecondsSinceEpoch,
                   'usingOverride': false,
                   'logs': <String>[],
                 },

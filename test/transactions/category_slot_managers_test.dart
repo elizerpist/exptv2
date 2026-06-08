@@ -84,10 +84,6 @@ void main() {
       ).toARGB32(),
       0xff6366f1,
     );
-    expect(
-      CategoryColorResolver.findById([category], 6),
-      same(category),
-    );
+    expect(CategoryColorResolver.findById([category], 6), same(category));
   });
-
 }

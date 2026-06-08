@@ -98,8 +98,13 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     for (var i = 0; i < visible.length; i += 1) {
       final bar = visible[i];
       final limitAmount = _limitAmountFor(bar);
-      final usedAmount = math.min(bar.spent, limitAmount).clamp(0.0, limitAmount);
-      final remainingAmount = (limitAmount - usedAmount).clamp(0.0, limitAmount);
+      final usedAmount = math
+          .min(bar.spent, limitAmount)
+          .clamp(0.0, limitAmount);
+      final remainingAmount = (limitAmount - usedAmount).clamp(
+        0.0,
+        limitAmount,
+      );
       final usedWidth = (maxWidth * usedAmount / overviewLimit)
           .clamp(0.0, maxWidth - left)
           .toDouble();
@@ -179,10 +184,11 @@ class CategoryLimitPartitionBar extends StatelessWidget {
       for (var i = 0; i < partitions.length; i += 1)
         () {
           final partition = partitions[i];
-          final width = (i == partitions.length - 1
-                  ? (maxWidth - left).clamp(0.0, maxWidth)
-                  : (maxWidth * partition.fraction).clamp(0.0, maxWidth))
-              .toDouble();
+          final width =
+              (i == partitions.length - 1
+                      ? (maxWidth - left).clamp(0.0, maxWidth)
+                      : (maxWidth * partition.fraction).clamp(0.0, maxWidth))
+                  .toDouble();
           final segment = Positioned(
             left: left,
             top: 0,

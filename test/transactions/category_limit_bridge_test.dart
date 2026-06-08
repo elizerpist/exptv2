@@ -108,7 +108,6 @@ void main() {
     expect(limit.limitAmount, 100000);
     expect(calls.single.method, 'expenseUpsertCategoryLimit');
   });
-
 }
 
 Map<String, Object?> categoryLimitMap({

@@ -53,7 +53,9 @@ class LimitAllocationManager {
         );
       }
     }
-    final free = (overviewLimit - allocated).clamp(0.0, overviewLimit).toDouble();
+    final free = (overviewLimit - allocated)
+        .clamp(0.0, overviewLimit)
+        .toDouble();
     if (free > 0) {
       segments.add(
         LimitAllocationSegment(
@@ -110,7 +112,10 @@ class LimitAllocationManager {
     return math.max(1, (max / sliderStep).ceil()).toInt();
   }
 
-  static bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {
+  static bool _sameTarget(
+    CategoryBudgetBarData left,
+    CategoryBudgetBarData right,
+  ) {
     return left.targetType == right.targetType &&
         left.targetId == right.targetId &&
         left.transactionType == right.transactionType &&

@@ -34,8 +34,7 @@ void main() {
                 },
               };
             case 'expenseVerifySecurityPin':
-              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
-                  '1234';
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
             case 'expenseAuthenticateBiometric':
               return biometricResult;
           }
@@ -68,7 +67,10 @@ void main() {
     expect(find.text('Feloldás'), findsOneWidget);
     expect(find.text('Unlocked app'), findsNothing);
 
-    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('lock-pin-input')),
+      '1234',
+    );
     await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
     await tester.pumpAndSettle();
 
@@ -78,7 +80,10 @@ void main() {
   testWidgets('locks again after background resume', (tester) async {
     await tester.pumpWidget(subject());
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('lock-pin-input')),
+      '1234',
+    );
     await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
     await tester.pumpAndSettle();
     expect(find.text('Unlocked app'), findsOneWidget);
@@ -97,7 +102,10 @@ void main() {
   ) async {
     await tester.pumpWidget(subject());
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('lock-pin-input')),
+      '1234',
+    );
     await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
     await tester.pumpAndSettle();
     expect(find.text('Unlocked app'), findsOneWidget);
@@ -116,7 +124,10 @@ void main() {
   ) async {
     await tester.pumpWidget(subject());
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('lock-pin-input')),
+      '1234',
+    );
     await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
     await tester.pumpAndSettle();
 
@@ -132,7 +143,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(unlockedCount, 0);
-    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('lock-pin-input')),
+      '1234',
+    );
     await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
     await tester.pumpAndSettle();
     expect(unlockedCount, 1);
@@ -144,7 +158,10 @@ void main() {
     await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('lock-pin-input')), '1234');
+    await tester.enterText(
+      find.byKey(const ValueKey('lock-pin-input')),
+      '1234',
+    );
     await tester.tap(find.byKey(const ValueKey('lock-unlock-button')));
     await tester.pumpAndSettle();
 

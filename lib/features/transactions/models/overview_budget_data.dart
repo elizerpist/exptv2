@@ -27,7 +27,6 @@ class OverviewBudgetData {
   String get title => kind.title;
   String get formattedAmount => formatHuf(amount);
   String get formattedLimit => formatHuf(limitAmount);
-  String get displayAmount => hasLimit
-      ? '$formattedAmount / $formattedLimit'
-      : formattedAmount;
+  String get displayAmount =>
+      hasLimit ? '$formattedAmount / $formattedLimit' : formattedAmount;
 }

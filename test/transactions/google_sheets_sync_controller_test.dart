@@ -13,55 +13,67 @@ import 'package:exptv2/features/transactions/sync/google_sheets_sync_store.dart'
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('connect creates spreadsheet and syncs years grouped from local transactions', () async {
-    final api = FakeGoogleSheetsApiClient();
-    final store = FakeGoogleSheetsSyncStore();
-    final controller = buildController(api: api, store: store);
+  test(
+    'connect creates spreadsheet and syncs years grouped from local transactions',
+    () async {
+      final api = FakeGoogleSheetsApiClient();
+      final store = FakeGoogleSheetsSyncStore();
+      final controller = buildController(api: api, store: store);
 
-    await controller.connect();
+      await controller.connect();
 
-    expect(api.createdTitle, GoogleSheetsSyncConfig.spreadsheetName);
-    expect(api.rewrittenYears, [2025, 2026]);
-    expect(store.saved.last.spreadsheetId, 'sheet-id');
-    expect(store.saved.last.lastError, isNull);
-  });
+      expect(api.createdTitle, GoogleSheetsSyncConfig.spreadsheetName);
+      expect(api.rewrittenYears, [2025, 2026]);
+      expect(store.saved.last.spreadsheetId, 'sheet-id');
+      expect(store.saved.last.lastError, isNull);
+    },
+  );
 
-  test('manual sync rewrites the same yearly ranges as app-entry sync', () async {
-    final api = FakeGoogleSheetsApiClient();
-    final store = FakeGoogleSheetsSyncStore.connected();
-    final controller = buildController(api: api, store: store);
-    await controller.start();
+  test(
+    'manual sync rewrites the same yearly ranges as app-entry sync',
+    () async {
+      final api = FakeGoogleSheetsApiClient();
+      final store = FakeGoogleSheetsSyncStore.connected();
+      final controller = buildController(api: api, store: store);
+      await controller.start();
 
-    await controller.syncOnAppEntry();
-    await controller.syncNow();
+      await controller.syncOnAppEntry();
+      await controller.syncNow();
 
-    expect(api.rewrittenYears, [2025, 2026, 2025, 2026]);
-  });
+      expect(api.rewrittenYears, [2025, 2026, 2025, 2026]);
+    },
+  );
 
-  test('api failure preserves enabled settings and records last error', () async {
-    final api = FakeGoogleSheetsApiClient(failRewrites: true);
-    final store = FakeGoogleSheetsSyncStore.connected();
-    final controller = buildController(api: api, store: store);
-    await controller.start();
+  test(
+    'api failure preserves enabled settings and records last error',
+    () async {
+      final api = FakeGoogleSheetsApiClient(failRewrites: true);
+      final store = FakeGoogleSheetsSyncStore.connected();
+      final controller = buildController(api: api, store: store);
+      await controller.start();
 
-    await controller.syncNow();
+      await controller.syncNow();
 
-    expect(store.saved.last.enabled, isTrue);
-    expect(store.saved.last.spreadsheetId, 'sheet-id');
-    expect(store.saved.last.lastError, contains('sync failed'));
-  });
+      expect(store.saved.last.enabled, isTrue);
+      expect(store.saved.last.spreadsheetId, 'sheet-id');
+      expect(store.saved.last.lastError, contains('sync failed'));
+    },
+  );
 
-  test('disconnect clears metadata without touching local repository', () async {
-    final repository = FakeTransactionRepository();
-    final store = FakeGoogleSheetsSyncStore.connected();
-    final controller = buildController(repository: repository, store: store);
-    await controller.start();
+  test(
+    'disconnect clears metadata without touching local repository',
+    () async {
+      final repository = FakeTransactionRepository();
+      final store = FakeGoogleSheetsSyncStore.connected();
+      final controller = buildController(repository: repository, store: store);
+      await controller.start();
 
-    await controller.disconnect();
+      await controller.disconnect();
 
-    expect(store.cleared, isTrue);
-    expect(repository.loadBootstrapCalls, 0);
-  });
+      expect(store.cleared, isTrue);
+      expect(repository.loadBootstrapCalls, 0);
+    },
+  );
 }
 
 GoogleSheetsSyncController buildController({
@@ -184,7 +196,9 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   }
 
   @override
-  Future<TransactionPage> listTransactionPage(TransactionPageQuery query) async {
+  Future<TransactionPage> listTransactionPage(
+    TransactionPageQuery query,
+  ) async {
     final transactions = [
       _transaction(1, '2025.12.31', -1000, 1),
       _transaction(2, '2026.01.01', 5000, 2),

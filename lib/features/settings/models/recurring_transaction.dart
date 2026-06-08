@@ -99,7 +99,8 @@ bool _bool(Object? value) {
   return value?.toString() == 'true';
 }
 
-DateTime _date(Object? value) => _optionalDate(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+DateTime _date(Object? value) =>
+    _optionalDate(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
 
 DateTime? _optionalDate(Object? value) {
   if (value == null) return null;

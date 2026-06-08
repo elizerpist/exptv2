@@ -53,7 +53,9 @@ class LimitPartitionManager {
       activeBar: activeBar,
       activeLimitAmount: activeLimitAmount,
     ).fold<double>(0, (highest, amount) => math.max(highest, amount));
-    return math.max(math.max(unit * count, highestAmount), fallbackUnitAmount).toDouble();
+    return math
+        .max(math.max(unit * count, highestAmount), fallbackUnitAmount)
+        .toDouble();
   }
 
   static int sliderDivisions(

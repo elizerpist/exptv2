@@ -48,8 +48,13 @@ void main() {
             case 'loadRecurringAlarmDebugState':
               return <String, Object?>{
                 'overrideMillis': null,
-                'effectiveMillis': DateTime(2026, 5, 31, 0, 1)
-                    .millisecondsSinceEpoch,
+                'effectiveMillis': DateTime(
+                  2026,
+                  5,
+                  31,
+                  0,
+                  1,
+                ).millisecondsSinceEpoch,
                 'usingOverride': false,
                 'logs': <String>['[RecurringAlarm] sync start'],
               };
@@ -67,8 +72,13 @@ void main() {
             case 'scheduleRecurringDebugTestAlarm':
               return <String, Object?>{
                 'overrideMillis': null,
-                'effectiveMillis': DateTime(2026, 5, 31, 0, 1)
-                    .millisecondsSinceEpoch,
+                'effectiveMillis': DateTime(
+                  2026,
+                  5,
+                  31,
+                  0,
+                  1,
+                ).millisecondsSinceEpoch,
                 'usingOverride': false,
                 'logs': <String>['[RecurringAlarm] debug test alarm scheduled'],
               };

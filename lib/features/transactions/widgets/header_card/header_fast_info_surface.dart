@@ -34,9 +34,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
         surfaceKey: const ValueKey('header-fast-info-surface'),
         style: surfaceStyle,
         color: cardColor,
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(24),
-        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
         animatePress: false,
         clipContent: false,
         neutralShadow: [
@@ -48,7 +46,8 @@ class HeaderFastInfoSurface extends StatelessWidget {
         ],
         profile: ExpenseSurfaceProfile.headerCard,
         child: SizedBox(
-          height: TransactionHeaderMetrics.fastInfoHeight +
+          height:
+              TransactionHeaderMetrics.fastInfoHeight +
               TransactionHeaderMetrics.cardHeight,
           child: Stack(
             clipBehavior: Clip.none,
@@ -65,9 +64,8 @@ class HeaderFastInfoSurface extends StatelessWidget {
                   left: 0,
                   right: 0,
                   child: Opacity(
-                    opacity:
-                        (extent / TransactionHeaderMetrics.fastInfoHeight)
-                            .clamp(0.0, 1.0),
+                    opacity: (extent / TransactionHeaderMetrics.fastInfoHeight)
+                        .clamp(0.0, 1.0),
                     child: fastInfo,
                   ),
                 ),

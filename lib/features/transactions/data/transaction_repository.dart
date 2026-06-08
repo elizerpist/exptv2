@@ -90,17 +90,11 @@ abstract class TransactionRepositoryContract {
     throw UnimplementedError('addRecurringRule');
   }
 
-  Future<RecurringRule> updateRecurringRule(
-    int id,
-    RecurringRuleDraft draft,
-  ) {
+  Future<RecurringRule> updateRecurringRule(int id, RecurringRuleDraft draft) {
     throw UnimplementedError('updateRecurringRule');
   }
 
-  Future<RecurringRule> toggleRecurringRule(
-    int id,
-    bool isActive,
-  ) {
+  Future<RecurringRule> toggleRecurringRule(int id, bool isActive) {
     throw UnimplementedError('toggleRecurringRule');
   }
 
@@ -203,18 +197,12 @@ class TransactionRepository implements TransactionRepositoryContract {
   }
 
   @override
-  Future<RecurringRule> updateRecurringRule(
-    int id,
-    RecurringRuleDraft draft,
-  ) {
+  Future<RecurringRule> updateRecurringRule(int id, RecurringRuleDraft draft) {
     return _bridge.expenseUpdateRecurringRule(id, draft);
   }
 
   @override
-  Future<RecurringRule> toggleRecurringRule(
-    int id,
-    bool isActive,
-  ) {
+  Future<RecurringRule> toggleRecurringRule(int id, bool isActive) {
     return _bridge.expenseToggleRecurringRule(id, isActive);
   }
 
