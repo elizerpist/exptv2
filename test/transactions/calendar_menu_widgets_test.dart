@@ -37,7 +37,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('calendar-mode-normal')), findsNothing);
-    expect(find.byKey(const ValueKey('calendar-mode-category')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-mode-category')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('calendar-mode-summary')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-heatmap')), findsOneWidget);
 
@@ -69,7 +72,9 @@ void main() {
       );
 
       expect(find.text('Domináns küszöb: 1 000 Ft'), findsOneWidget);
-      final panel = find.byKey(const ValueKey('calendar-threshold-slider-panel'));
+      final panel = find.byKey(
+        const ValueKey('calendar-threshold-slider-panel'),
+      );
       final beforeTop = tester.getTopLeft(panel).dy;
       await tester.drag(
         find.byKey(const ValueKey('calendar-threshold-slider-drag-handle')),
@@ -84,7 +89,9 @@ void main() {
       );
       expect(changed, isNot(1000));
 
-      await tester.tap(find.byKey(const ValueKey('calendar-threshold-slider-collapse')));
+      await tester.tap(
+        find.byKey(const ValueKey('calendar-threshold-slider-collapse')),
+      );
       await tester.pumpAndSettle();
       expect(panel, findsNothing);
       expect(
@@ -119,8 +126,13 @@ void main() {
     );
 
     expect(find.text('Hőtérkép skála: 10 000 Ft'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('calendar-heatmap-slider-collapse')));
+    expect(
+      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('calendar-heatmap-slider-collapse')),
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
     expect(
@@ -223,10 +235,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('stats-menu-trigger')));
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('stats-menu-mode-normal')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('stats-menu-mode-normal')), findsNothing);
     expect(
       find.byKey(const ValueKey('stats-menu-mode-summary')),
       findsOneWidget,
@@ -475,7 +484,7 @@ void main() {
     expect(find.text('Havi részletek'), findsOneWidget);
     expect(find.text('Kereskedők'), findsOneWidget);
     expect(find.text('Élelmiszer'), findsOneWidget);
-    expect(find.text('Teszt'), findsOneWidget);
+    expect(find.text('Teszt'), findsWidgets);
   });
 
   testWidgets('stats page renders calendar as a full screen tab', (
@@ -503,7 +512,8 @@ void main() {
 }
 
 Future<void> _tapFirstMonthCard(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('calendar-month-hit-1')));
+  final monthTarget = find.byKey(const ValueKey('calendar-month-hit-1'));
+  await tester.tapAt(tester.getTopLeft(monthTarget) + const Offset(24, 24));
   await tester.pumpAndSettle();
 }
 

@@ -17,104 +17,177 @@ class ThemeOptionsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-      children: [
-        _sectionTitle('Mágnes típusa', 'A mágnescsík megjelenési módja a főmenüben:'),
-        SettingsRadioOption(
-          title: 'Átmenetes${settings.magnetType == MagnetType.fade ? ' (jelenlegi)' : ''}',
-          description: 'Fokozatos átmenet a két szín között',
-          selected: settings.magnetType == MagnetType.fade,
-          onTap: () => onChanged(settings.copyWith(magnetType: MagnetType.fade)),
-          preview: const _MagnetPreview(type: MagnetType.fade),
+    return Material(
+      color: Colors.transparent,
+      child: SingleChildScrollView(
+        key: const ValueKey('settings-theme-scroll'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sectionTitle(
+                'Mágnes típusa',
+                'A mágnescsík megjelenési módja a főmenüben:',
+              ),
+              SettingsRadioOption(
+                title:
+                    'Átmenetes${settings.magnetType == MagnetType.fade ? ' (jelenlegi)' : ''}',
+                description: 'Fokozatos átmenet a két szín között',
+                selected: settings.magnetType == MagnetType.fade,
+                onTap: () =>
+                    onChanged(settings.copyWith(magnetType: MagnetType.fade)),
+                preview: const _MagnetPreview(type: MagnetType.fade),
+              ),
+              SettingsRadioOption(
+                title:
+                    'Éles átmenet${settings.magnetType == MagnetType.nofade ? ' (jelenlegi)' : ''}',
+                description: '100% teli csík -> 0% minimális csík',
+                selected: settings.magnetType == MagnetType.nofade,
+                onTap: () =>
+                    onChanged(settings.copyWith(magnetType: MagnetType.nofade)),
+                preview: const _MagnetPreview(type: MagnetType.nofade),
+              ),
+              SettingsRadioOption(
+                title:
+                    'Budget vizualizáció${settings.magnetType == MagnetType.budget ? ' (jelenlegi)' : ''}',
+                description: 'Bal zöld, jobb piros a költségvetés alapján',
+                selected: settings.magnetType == MagnetType.budget,
+                onTap: () =>
+                    onChanged(settings.copyWith(magnetType: MagnetType.budget)),
+                preview: const _MagnetPreview(type: MagnetType.budget),
+              ),
+              SettingsRadioOption(
+                title:
+                    'Mágneskártya${settings.magnetType == MagnetType.magnetcard ? ' (jelenlegi)' : ''}',
+                description:
+                    'Felső és alsó keret, egyenes vonal az egyenleg színével',
+                selected: settings.magnetType == MagnetType.magnetcard,
+                onTap: () => onChanged(
+                  settings.copyWith(magnetType: MagnetType.magnetcard),
+                ),
+                preview: const _MagnetPreview(type: MagnetType.magnetcard),
+              ),
+              SettingsRadioOption(
+                title:
+                    'Adaptív mágnescsík${settings.magnetType == MagnetType.adaptive ? ' (jelenlegi)' : ''}',
+                description: 'Íves pill forma, türkiz színnel, dinamikus méret',
+                selected: settings.magnetType == MagnetType.adaptive,
+                onTap: () => onChanged(
+                  settings.copyWith(magnetType: MagnetType.adaptive),
+                ),
+                preview: const _MagnetPreview(type: MagnetType.adaptive),
+              ),
+              _sectionTitle('Design profil', 'Az app interakciós stílusa:'),
+              _profileOption(
+                'Normál',
+                'Eredeti app design, gyári tap visszajelzés',
+                AppDesignProfile.normal,
+              ),
+              _profileOption(
+                'Neumorphism',
+                '3D felületek, shadow-only tap animáció',
+                AppDesignProfile.neumorphism,
+              ),
+              _sectionTitle('App színe', 'Nappali módban használt fő szín:'),
+              _appColorOption(
+                'Türkiz',
+                'Jelenlegi türkiz appszín',
+                AppColorMode.turquoise,
+                AppColors.primary,
+              ),
+              _appColorOption(
+                'Pink',
+                'Pink appszín nappali módhoz',
+                AppColorMode.pink,
+                const Color(0xFFEC4899),
+              ),
+              _sectionTitle(
+                'Éjszakai mód',
+                'Saját, app színtől független éjszakai paletták:',
+              ),
+              _nightOption(
+                'Kikapcsolva',
+                'Nappali háttér és app szín',
+                AppNightMode.off,
+                AppColors.gray100,
+              ),
+              _nightOption(
+                'Éjszaka Cyan',
+                'Hideg navy-cyan éjszakai mód',
+                AppNightMode.cyan,
+                const Color(0xFF19BFDC),
+              ),
+              _nightOption(
+                'Éjszaka Amber',
+                'Meleg amber éjszakai mód',
+                AppNightMode.amber,
+                const Color(0xFFF0A646),
+              ),
+              _sectionTitle('Kártya színe', 'A főmenü kártya háttérszíne:'),
+              _cardOption(
+                'Fehér',
+                'Tiszta fehér háttér',
+                AppCardColor.white,
+                AppColors.white,
+              ),
+              _cardOption(
+                'Világosszürke',
+                'Jelenlegi alapértelmezett szín',
+                AppCardColor.lightgray,
+                AppColors.gray100,
+              ),
+              _cardOption(
+                'Sötétebb szürke',
+                'Élénkebb kontrasztú háttér',
+                AppCardColor.darkgray,
+                AppColors.gray200,
+              ),
+              _sectionTitle('Háttér színe', 'Az alkalmazás háttérszíne:'),
+              _backgroundOption(
+                'Fehér',
+                'Tiszta fehér alkalmazás háttér',
+                AppBackgroundColor.white,
+                AppColors.white,
+              ),
+              _backgroundOption(
+                'Szürke',
+                'Világosszürke alkalmazás háttér',
+                AppBackgroundColor.gray,
+                AppColors.gray100,
+              ),
+              _backgroundOption(
+                'Sötétebb szürke háttér',
+                'Erősebb szürke alkalmazás háttér',
+                AppBackgroundColor.darkgray,
+                AppColors.gray200,
+              ),
+              _sectionTitle(
+                'Box színek',
+                'Tranzakció logbox, kereső és összesítő pill kitöltőszíne:',
+              ),
+              _boxOption(
+                'Fehér',
+                'Fehér logbox háttér',
+                AppBoxColor.white,
+                AppColors.white,
+              ),
+              _boxOption(
+                'Szürke',
+                'Szürke logbox háttér',
+                AppBoxColor.gray,
+                AppColors.gray100,
+              ),
+              _boxOption(
+                'Sötétebb szürke box',
+                'Erősebb szürke logbox háttér',
+                AppBoxColor.darkgray,
+                AppColors.gray200,
+              ),
+            ],
+          ),
         ),
-        SettingsRadioOption(
-          title: 'Éles átmenet${settings.magnetType == MagnetType.nofade ? ' (jelenlegi)' : ''}',
-          description: '100% teli csík -> 0% minimális csík',
-          selected: settings.magnetType == MagnetType.nofade,
-          onTap: () => onChanged(settings.copyWith(magnetType: MagnetType.nofade)),
-          preview: const _MagnetPreview(type: MagnetType.nofade),
-        ),
-        SettingsRadioOption(
-          title: 'Budget vizualizáció${settings.magnetType == MagnetType.budget ? ' (jelenlegi)' : ''}',
-          description: 'Bal zöld, jobb piros a költségvetés alapján',
-          selected: settings.magnetType == MagnetType.budget,
-          onTap: () => onChanged(settings.copyWith(magnetType: MagnetType.budget)),
-          preview: const _MagnetPreview(type: MagnetType.budget),
-        ),
-        SettingsRadioOption(
-          title: 'Mágneskártya${settings.magnetType == MagnetType.magnetcard ? ' (jelenlegi)' : ''}',
-          description: 'Felső és alsó keret, egyenes vonal az egyenleg színével',
-          selected: settings.magnetType == MagnetType.magnetcard,
-          onTap: () => onChanged(settings.copyWith(magnetType: MagnetType.magnetcard)),
-          preview: const _MagnetPreview(type: MagnetType.magnetcard),
-        ),
-        SettingsRadioOption(
-          title: 'Adaptív mágnescsík${settings.magnetType == MagnetType.adaptive ? ' (jelenlegi)' : ''}',
-          description: 'Íves pill forma, türkiz színnel, dinamikus méret',
-          selected: settings.magnetType == MagnetType.adaptive,
-          onTap: () => onChanged(settings.copyWith(magnetType: MagnetType.adaptive)),
-          preview: const _MagnetPreview(type: MagnetType.adaptive),
-        ),
-        _sectionTitle('Design profil', 'Az app interakciós stílusa:'),
-        _profileOption(
-          'Normál',
-          'Eredeti app design, gyári tap visszajelzés',
-          AppDesignProfile.normal,
-        ),
-        _profileOption(
-          'Neumorphism',
-          '3D felületek, shadow-only tap animáció',
-          AppDesignProfile.neumorphism,
-        ),
-        _sectionTitle('App színe', 'Nappali módban használt fő szín:'),
-        _appColorOption(
-          'Türkiz',
-          'Jelenlegi türkiz appszín',
-          AppColorMode.turquoise,
-          AppColors.primary,
-        ),
-        _appColorOption(
-          'Pink',
-          'Pink appszín nappali módhoz',
-          AppColorMode.pink,
-          const Color(0xFFEC4899),
-        ),
-        _sectionTitle(
-          'Éjszakai mód',
-          'Saját, app színtől független éjszakai paletták:',
-        ),
-        _nightOption(
-          'Kikapcsolva',
-          'Nappali háttér és app szín',
-          AppNightMode.off,
-          AppColors.gray100,
-        ),
-        _nightOption(
-          'Éjszaka Cyan',
-          'Hideg navy-cyan éjszakai mód',
-          AppNightMode.cyan,
-          const Color(0xFF19BFDC),
-        ),
-        _nightOption(
-          'Éjszaka Amber',
-          'Meleg amber éjszakai mód',
-          AppNightMode.amber,
-          const Color(0xFFF0A646),
-        ),
-        _sectionTitle('Kártya színe', 'A főmenü kártya háttérszíne:'),
-        _cardOption('Fehér', 'Tiszta fehér háttér', AppCardColor.white, AppColors.white),
-        _cardOption('Világosszürke', 'Jelenlegi alapértelmezett szín', AppCardColor.lightgray, AppColors.gray100),
-        _cardOption('Sötétebb szürke', 'Élénkebb kontrasztú háttér', AppCardColor.darkgray, AppColors.gray200),
-        _sectionTitle('Háttér színe', 'Az alkalmazás háttérszíne:'),
-        _backgroundOption('Fehér', 'Tiszta fehér alkalmazás háttér', AppBackgroundColor.white, AppColors.white),
-        _backgroundOption('Szürke', 'Világosszürke alkalmazás háttér', AppBackgroundColor.gray, AppColors.gray100),
-        _backgroundOption('Sötétebb szürke', 'Erősebb szürke alkalmazás háttér', AppBackgroundColor.darkgray, AppColors.gray200),
-        _sectionTitle('Box színek', 'Tranzakció logbox, kereső és összesítő pill kitöltőszíne:'),
-        _boxOption('Fehér', 'Fehér logbox háttér', AppBoxColor.white, AppColors.white),
-        _boxOption('Szürke', 'Szürke logbox háttér', AppBoxColor.gray, AppColors.gray100),
-        _boxOption('Sötétebb szürke', 'Erősebb szürke logbox háttér', AppBoxColor.darkgray, AppColors.gray200),
-      ],
+      ),
     );
   }
 
@@ -124,9 +197,19 @@ class ThemeOptionsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.gray800)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.gray800,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(fontSize: 14, color: AppColors.gray600)),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 14, color: AppColors.gray600),
+          ),
         ],
       ),
     );
@@ -180,7 +263,12 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _cardOption(String title, String description, AppCardColor value, Color color) {
+  Widget _cardOption(
+    String title,
+    String description,
+    AppCardColor value,
+    Color color,
+  ) {
     return SettingsRadioOption(
       title: '$title${settings.cardColor == value ? ' (jelenlegi)' : ''}',
       description: description,
@@ -190,7 +278,12 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _backgroundOption(String title, String description, AppBackgroundColor value, Color color) {
+  Widget _backgroundOption(
+    String title,
+    String description,
+    AppBackgroundColor value,
+    Color color,
+  ) {
     return SettingsRadioOption(
       title: '$title${settings.backgroundColor == value ? ' (jelenlegi)' : ''}',
       description: description,
@@ -200,7 +293,12 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _boxOption(String title, String description, AppBoxColor value, Color color) {
+  Widget _boxOption(
+    String title,
+    String description,
+    AppBoxColor value,
+    Color color,
+  ) {
     return SettingsRadioOption(
       title: '$title${settings.boxColor == value ? ' (jelenlegi)' : ''}',
       description: description,
@@ -290,7 +388,8 @@ class _SurfacePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pressed = style == ExpenseSurfaceInteraction.neutralInset ||
+    final pressed =
+        style == ExpenseSurfaceInteraction.neutralInset ||
         style == ExpenseSurfaceInteraction.insetInset;
     return ExpensePressable(
       enabled: false,

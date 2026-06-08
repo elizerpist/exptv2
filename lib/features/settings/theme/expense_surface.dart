@@ -158,24 +158,24 @@ class ExpenseSurface {
       return switch (depth) {
         _SurfaceDepth.inset => <BoxShadow>[
           BoxShadow(
-            color: _accentDark(navPrimaryColor).withValues(alpha: 0.20),
+            color: navPrimaryColor.withValues(alpha: 0.20),
             offset: const Offset(4, 4),
             blurRadius: 9,
           ),
           BoxShadow(
-            color: _accentLight(navPrimaryColor).withValues(alpha: 0.88),
+            color: Colors.white.withValues(alpha: 0.88),
             offset: const Offset(-4, -4),
             blurRadius: 9,
           ),
         ],
         _SurfaceDepth.deepInset => <BoxShadow>[
           BoxShadow(
-            color: _accentDark(navPrimaryColor).withValues(alpha: 0.24),
+            color: navPrimaryColor.withValues(alpha: 0.24),
             offset: const Offset(6, 6),
             blurRadius: 12,
           ),
           BoxShadow(
-            color: _accentLight(navPrimaryColor).withValues(alpha: 0.88),
+            color: Colors.white.withValues(alpha: 0.88),
             offset: const Offset(-5, -5),
             blurRadius: 10,
           ),
