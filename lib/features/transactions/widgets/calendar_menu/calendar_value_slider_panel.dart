@@ -62,7 +62,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
       child: Transform.translate(
         offset: Offset(0, _verticalOffset),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
           child: Material(
             color: AppColors.white,
             elevation: 8,
@@ -70,7 +70,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
             borderRadius: BorderRadius.circular(20),
             child: Container(
               key: ValueKey('$sliderKey-panel'),
-              padding: const EdgeInsets.fromLTRB(15, 4, 10, 10),
+              padding: const EdgeInsets.fromLTRB(14, 2, 10, 4),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppColors.gray200),
@@ -87,7 +87,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                           behavior: HitTestBehavior.opaque,
                           onVerticalDragUpdate: _handleDragUpdate,
                           child: SizedBox(
-                            height: 20,
+                            height: 16,
                             child: Center(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
@@ -112,7 +112,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(
                           width: 36,
-                          height: 28,
+                          height: 24,
                         ),
                       ),
                     ],
@@ -121,13 +121,13 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                     '$label: ${formatHuf(widget.value)}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.gray800,
                     ),
                   ),
                   SizedBox(
-                    height: 38,
+                    height: 34,
                     child: Row(
                       children: [
                         _EditableLimitText(
@@ -262,7 +262,7 @@ class _EditableLimitTextState extends State<_EditableLimitText> {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 58,
-      height: 34,
+      height: 30,
       child: Center(
         child: DebugTextField(
           debugLabel: 'CalendarValueSlider.limit',
@@ -274,7 +274,7 @@ class _EditableLimitTextState extends State<_EditableLimitText> {
             border: InputBorder.none,
             isDense: true,
             contentPadding: EdgeInsets.zero,
-            constraints: BoxConstraints.tightFor(height: 32),
+            constraints: BoxConstraints.tightFor(height: 28),
           ),
           onSubmitted: (text) {
             final parsed = double.tryParse(text);
