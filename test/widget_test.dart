@@ -1200,7 +1200,10 @@ void main() {
       find.descendant(of: picker, matching: find.text('Notification Test')),
       findsOneWidget,
     );
-    expect(find.byType(Image), findsOneWidget);
+    expect(
+      find.descendant(of: picker, matching: find.byType(Image)),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byKey(const ValueKey('installed-app-picker-search')),
