@@ -145,7 +145,7 @@ Automatic sync starts only when all of these are true:
 - the user opens the app UI,
 - the security gate is passed and the app is usable,
 - Google sync is enabled,
-- the app has pending unsynced data or has never synced.
+- no Google sync is already running for the current UI entry.
 
 Manual sync is always available inside the app UI when Google sync is connected.
 Manual sync performs the same full reconcile as automatic app-entry sync.
