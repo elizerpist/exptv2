@@ -111,23 +111,20 @@ class CalendarCanvasPainter extends CustomPainter {
   void _drawDayCell(Canvas canvas, Rect cell, CalendarDayRenderData day) {
     final center = cell.center;
     final shortestSide = math.min(cell.width, cell.height);
-    final radius = (shortestSide * 0.38).clamp(3, 11).toDouble();
+    final focusedMonth = layout.monthRects.length == 1;
+    final radius = (shortestSide * (focusedMonth ? 0.43 : 0.38))
+        .clamp(3, focusedMonth ? 18 : 11)
+        .toDouble();
+    final dayFontSize = (shortestSide * (focusedMonth ? 0.36 : 0.34))
+        .clamp(10, focusedMonth ? 16 : 10)
+        .toDouble();
     var textColor = AppColors.gray500;
-    if ((mode == CalendarMenuMode.normal || mode == CalendarMenuMode.summary) &&
-        day.isToday) {
+    if (mode == CalendarMenuMode.summary && day.isToday) {
       canvas.drawCircle(center, radius, Paint()..color = AppColors.primary);
       textColor = AppColors.white;
-    } else if (mode == CalendarMenuMode.normal && day.meetsThreshold) {
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..color = const Color(0xFF9CA3AF),
-      );
     } else if (mode == CalendarMenuMode.category &&
-        day.dominantCategoryId != null) {
+        day.dominantCategoryId != null &&
+        day.meetsThreshold) {
       canvas.drawCircle(center, radius, Paint()..color = day.dominantCategoryColor);
       textColor = AppColors.white;
     } else if (mode == CalendarMenuMode.heatmap &&
@@ -171,7 +168,7 @@ class CalendarCanvasPainter extends CustomPainter {
       canvas,
       day.day.toString(),
       center,
-      10,
+      dayFontSize,
       FontWeight.w600,
       textColor,
     );

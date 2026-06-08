@@ -34,7 +34,7 @@ class CalendarMenuOverlay extends StatefulWidget {
 
 class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
   var _year = DateTime.now().year;
-  var _mode = CalendarMenuMode.normal;
+  var _mode = CalendarMenuMode.category;
   var _transitionLocked = false;
   var _thresholdValue = 1000.0;
   var _heatmapMinValue = 0.0;
@@ -143,7 +143,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                 ),
               ],
             ),
-            if (_mode == CalendarMenuMode.normal &&
+            if (_mode == CalendarMenuMode.category &&
                 data.thresholdRange.min != data.thresholdRange.max)
               CalendarValueSliderPanel.threshold(
                 value: _thresholdValue,

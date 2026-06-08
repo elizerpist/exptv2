@@ -132,7 +132,7 @@ void main() {
   test('calendar canvas layout creates two columns and six rows', () {
     final layout = CalendarCanvasLayout.calculate(
       width: 390,
-      mode: CalendarMenuMode.normal,
+      mode: CalendarMenuMode.category,
     );
     expect(layout.monthRects.length, 12);
     expect(layout.monthRects[0].left, 0);
@@ -176,7 +176,7 @@ void main() {
             height: 500,
             child: CalendarCanvas(
               data: renderData,
-              mode: CalendarMenuMode.normal,
+              mode: CalendarMenuMode.category,
               thresholdValue: 1000,
               heatmapMinValue: 0,
               heatmapCurrentValue: 10000,
