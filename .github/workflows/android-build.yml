@@ -45,6 +45,15 @@ jobs:
       - name: Run Flutter tests
         run: flutter test
 
+      - name: Run Android unit tests
+        run: |
+          cd android
+          if [ -x ./gradlew ]; then
+            ./gradlew testDebugUnitTest --no-daemon
+          else
+            gradle testDebugUnitTest --no-daemon
+          fi
+
       - name: Build debug APK
         run: flutter build apk --debug
 
