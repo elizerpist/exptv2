@@ -102,28 +102,6 @@ class ThemeOptionsPanel extends StatelessWidget {
                 AppColorMode.pink,
                 const Color(0xFFEC4899),
               ),
-              _sectionTitle(
-                'Éjszakai mód',
-                'Saját, app színtől független éjszakai paletták:',
-              ),
-              _nightOption(
-                'Kikapcsolva',
-                'Nappali háttér és app szín',
-                AppNightMode.off,
-                AppColors.gray100,
-              ),
-              _nightOption(
-                'Éjszaka Cyan',
-                'Hideg navy-cyan éjszakai mód',
-                AppNightMode.cyan,
-                const Color(0xFF19BFDC),
-              ),
-              _nightOption(
-                'Éjszaka Amber',
-                'Meleg amber éjszakai mód',
-                AppNightMode.amber,
-                const Color(0xFFF0A646),
-              ),
               _sectionTitle('Kártya színe', 'A főmenü kártya háttérszíne:'),
               _cardOption(
                 'Fehér',
@@ -248,21 +226,6 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _nightOption(
-    String title,
-    String description,
-    AppNightMode value,
-    Color color,
-  ) {
-    return SettingsRadioOption(
-      title: '$title${settings.nightMode == value ? ' (jelenlegi)' : ''}',
-      description: description,
-      selected: settings.nightMode == value,
-      onTap: () => onChanged(_withNightMode(value)),
-      preview: _ColorPreview(color: color),
-    );
-  }
-
   Widget _cardOption(
     String title,
     String description,
@@ -324,18 +287,7 @@ class ThemeOptionsPanel extends StatelessWidget {
   AppThemeSettings _withAppColor(AppColorMode value) {
     return settings.copyWith(
       appColor: value,
-      theme: settings.nightMode == AppNightMode.off
-          ? _legacyThemeForAppColor(value)
-          : settings.theme,
-    );
-  }
-
-  AppThemeSettings _withNightMode(AppNightMode value) {
-    return settings.copyWith(
-      nightMode: value,
-      theme: value == AppNightMode.off
-          ? _legacyThemeForAppColor(settings.appColor)
-          : AppTheme.dark,
+      theme: _legacyThemeForAppColor(value),
     );
   }
 

@@ -89,7 +89,7 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
-    fun themeSettingsPersistProfileNightModeAndAppColor() {
+    fun themeSettingsPersistProfileAndAppColor() {
         val updated = store.updateThemeSettings(
             mapOf(
                 "magnetType" to "adaptive",
@@ -101,13 +101,12 @@ class ExpenseSettingsStoreSecurityTest {
                 "contentSurfaceStyle" to "neutralNeutral",
                 "backheaderStyle" to "orbitBudget",
                 "designProfile" to "neumorphism",
-                "nightMode" to "amber",
                 "appColor" to "pink",
             )
         )
 
         assertEquals("neumorphism", updated["designProfile"])
-        assertEquals("amber", updated["nightMode"])
+        assertFalse(updated.containsKey("nightMode"))
         assertEquals("pink", updated["appColor"])
         assertEquals("neumorphism", store.loadThemeSettings()["designProfile"])
     }
@@ -124,7 +123,8 @@ class ExpenseSettingsStoreSecurityTest {
         val settings = store.loadThemeSettings()
 
         assertEquals("neumorphism", settings["designProfile"])
-        assertEquals("cyan", settings["nightMode"])
+        assertEquals("Türkiz", settings["theme"])
+        assertFalse(settings.containsKey("nightMode"))
         assertEquals("turquoise", settings["appColor"])
     }
 }

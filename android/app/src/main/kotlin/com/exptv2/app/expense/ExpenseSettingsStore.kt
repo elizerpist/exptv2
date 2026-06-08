@@ -27,7 +27,7 @@ class ExpenseSettingsStore(context: Context) {
         return mapOf(
             "magnetType" to prefs.getString(KEY_MAGNET_TYPE, "fade"),
             "cardColor" to prefs.getString(KEY_CARD_COLOR, "lightgray"),
-            "theme" to prefs.getString(KEY_THEME, "Türkiz"),
+            "theme" to legacyTheme(),
             "backgroundColor" to prefs.getString(KEY_BACKGROUND_COLOR, "gray"),
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
             "buttonSurfaceStyle" to prefs.getString(KEY_BUTTON_SURFACE_STYLE, "neutralNeutral"),
@@ -37,10 +37,6 @@ class ExpenseSettingsStore(context: Context) {
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
                     ?: legacyDesignProfile()
                 ),
-            "nightMode" to (
-                prefs.getString(KEY_NIGHT_MODE, null)?.takeIf { it.isNotBlank() }
-                    ?: legacyNightMode()
-                ),
             "appColor" to (
                 prefs.getString(KEY_APP_COLOR, null)?.takeIf { it.isNotBlank() }
                     ?: legacyAppColor()
@@ -49,7 +45,7 @@ class ExpenseSettingsStore(context: Context) {
     }
 
     fun updateThemeSettings(args: Map<*, *>): Map<String, Any?> {
-        val theme = args["theme"]?.toString() ?: "Türkiz"
+        val theme = legacyTheme(args["theme"]?.toString())
         val buttonSurfaceStyle = args["buttonSurfaceStyle"]?.toString() ?: "neutralNeutral"
         val contentSurfaceStyle = args["contentSurfaceStyle"]?.toString() ?: "neutralNeutral"
 
@@ -66,11 +62,6 @@ class ExpenseSettingsStore(context: Context) {
                 KEY_DESIGN_PROFILE,
                 args["designProfile"]?.toString()?.takeIf { it.isNotBlank() }
                     ?: legacyDesignProfile(buttonSurfaceStyle, contentSurfaceStyle)
-            )
-            .putString(
-                KEY_NIGHT_MODE,
-                args["nightMode"]?.toString()?.takeIf { it.isNotBlank() }
-                    ?: legacyNightMode(theme)
             )
             .putString(
                 KEY_APP_COLOR,
@@ -211,8 +202,8 @@ class ExpenseSettingsStore(context: Context) {
         }
     }
 
-    private fun legacyNightMode(theme: String? = prefs.getString(KEY_THEME, null)): String {
-        return if (theme == "Sötét") "cyan" else "off"
+    private fun legacyTheme(theme: String? = prefs.getString(KEY_THEME, null)): String {
+        return if (theme == "Pink") "Pink" else "Türkiz"
     }
 
     private fun legacyAppColor(theme: String? = prefs.getString(KEY_THEME, null)): String {
@@ -250,7 +241,6 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_CONTENT_SURFACE_STYLE = "contentSurfaceStyle"
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_DESIGN_PROFILE = "designProfile"
-        private const val KEY_NIGHT_MODE = "nightMode"
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"
         private const val KEY_PUSH_RECURRING_CONFLICT_POLICY = "pushRecurringConflictPolicy"

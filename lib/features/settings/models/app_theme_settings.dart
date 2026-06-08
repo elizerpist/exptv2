@@ -69,8 +69,7 @@ enum AppCardColor {
 
 enum AppTheme {
   pink('Pink'),
-  turquoise('Türkiz'),
-  dark('Sötét');
+  turquoise('Türkiz');
 
   const AppTheme(this.nativeValue);
   final String nativeValue;
@@ -100,23 +99,6 @@ enum AppDesignProfile {
   }
 }
 
-enum AppNightMode {
-  off('off'),
-  cyan('cyan'),
-  amber('amber');
-
-  const AppNightMode(this.nativeValue);
-  final String nativeValue;
-
-  static AppNightMode fromAny(Object? value) {
-    final raw = value?.toString();
-    return AppNightMode.values.firstWhere(
-      (item) => item.nativeValue == raw,
-      orElse: () => AppNightMode.off,
-    );
-  }
-}
-
 enum AppColorMode {
   turquoise('turquoise'),
   pink('pink');
@@ -126,7 +108,8 @@ enum AppColorMode {
 
   static AppColorMode fromAny(Object? value) {
     final raw = value?.toString().trim();
-    if (raw == AppTheme.pink.nativeValue || raw == AppColorMode.pink.nativeValue) {
+    if (raw == AppTheme.pink.nativeValue ||
+        raw == AppColorMode.pink.nativeValue) {
       return AppColorMode.pink;
     }
     return AppColorMode.values.firstWhere(
@@ -181,7 +164,6 @@ class AppThemeSettings {
     required this.contentSurfaceStyle,
     required this.backheaderStyle,
     required this.designProfile,
-    required this.nightMode,
     required this.appColor,
   });
 
@@ -196,7 +178,6 @@ class AppThemeSettings {
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
       designProfile: AppDesignProfile.normal,
-      nightMode: AppNightMode.off,
       appColor: AppColorMode.turquoise,
     );
   }
@@ -216,7 +197,6 @@ class AppThemeSettings {
       ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
       designProfile: _designProfileFromMap(map),
-      nightMode: _nightModeFromMap(map),
       appColor: _appColorFromMap(map),
     );
   }
@@ -230,7 +210,6 @@ class AppThemeSettings {
   final ExpenseSurfaceInteraction contentSurfaceStyle;
   final BackheaderStyle backheaderStyle;
   final AppDesignProfile designProfile;
-  final AppNightMode nightMode;
   final AppColorMode appColor;
 
   Map<String, Object?> toMap() {
@@ -244,7 +223,6 @@ class AppThemeSettings {
       'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
       'designProfile': designProfile.nativeValue,
-      'nightMode': nightMode.nativeValue,
       'appColor': appColor.nativeValue,
     };
   }
@@ -259,7 +237,6 @@ class AppThemeSettings {
     ExpenseSurfaceInteraction? contentSurfaceStyle,
     BackheaderStyle? backheaderStyle,
     AppDesignProfile? designProfile,
-    AppNightMode? nightMode,
     AppColorMode? appColor,
   }) {
     return AppThemeSettings(
@@ -272,7 +249,6 @@ class AppThemeSettings {
       contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
       designProfile: designProfile ?? this.designProfile,
-      nightMode: nightMode ?? this.nightMode,
       appColor: appColor ?? this.appColor,
     );
   }
@@ -292,15 +268,6 @@ class AppThemeSettings {
       return AppDesignProfile.neumorphism;
     }
     return AppDesignProfile.normal;
-  }
-
-  static AppNightMode _nightModeFromMap(Map<dynamic, dynamic> map) {
-    if (_hasValue(map['nightMode'])) {
-      return AppNightMode.fromAny(map['nightMode']);
-    }
-    return AppTheme.fromAny(map['theme']) == AppTheme.dark
-        ? AppNightMode.cyan
-        : AppNightMode.off;
   }
 
   static AppColorMode _appColorFromMap(Map<dynamic, dynamic> map) {

@@ -44,7 +44,6 @@ class ExpenseTheme {
 
   bool get isNeumorphism =>
       settings.designProfile == AppDesignProfile.neumorphism;
-  bool get isNight => settings.nightMode != AppNightMode.off;
 
   Color resolvePrimary(Color color) {
     if (color == AppColors.primary) return accent;
@@ -55,61 +54,8 @@ class ExpenseTheme {
   }
 
   factory ExpenseTheme.fromSettings(AppThemeSettings settings) {
-    const nightCyanAccent = Color(0xFF19BFDC);
-    const nightCyanBackground = Color(0xFF0B1420);
-    const nightCyanCard = Color(0xFF162333);
-    const nightCyanSurface = Color(0xFF152231);
-    const nightAmberAccent = Color(0xFFF0A646);
-    const nightAmberBackground = Color(0xFF15120F);
-    const nightAmberCard = Color(0xFF292118);
-    const nightAmberSurface = Color(0xFF231D17);
-
     final neumorphism = settings.designProfile == AppDesignProfile.neumorphism;
     final surfaceStyles = _surfaceStyles(neumorphism);
-
-    if (settings.nightMode == AppNightMode.cyan) {
-      return ExpenseTheme(
-        settings: settings,
-        accent: nightCyanAccent,
-        accentDark: const Color(0xFF0E7490),
-        accentLight: const Color(0xFF67E8F9),
-        activeBackground: const Color(0x2219BFDC),
-        headerCard: nightCyanCard,
-        appBackground: nightCyanBackground,
-        logBox: nightCyanSurface,
-        fieldSurface: nightCyanSurface,
-        textPrimary: const Color(0xFFE5F0F8),
-        textSecondary: const Color(0xFFB7C8D8),
-        textMuted: const Color(0xFF7F95A8),
-        border: const Color(0xFF2A3D50),
-        buttonSurfaceStyle: surfaceStyles.button,
-        contentSurfaceStyle: surfaceStyles.content,
-        bottomNavSurfaceStyle: surfaceStyles.bottomNav,
-        forcedInsetSurfaceStyle: surfaceStyles.forcedInset,
-      );
-    }
-
-    if (settings.nightMode == AppNightMode.amber) {
-      return ExpenseTheme(
-        settings: settings,
-        accent: nightAmberAccent,
-        accentDark: const Color(0xFFC27803),
-        accentLight: const Color(0xFFFCD34D),
-        activeBackground: const Color(0x22F0A646),
-        headerCard: nightAmberCard,
-        appBackground: nightAmberBackground,
-        logBox: nightAmberSurface,
-        fieldSurface: nightAmberSurface,
-        textPrimary: const Color(0xFFF4EDE3),
-        textSecondary: const Color(0xFFD7C5AF),
-        textMuted: const Color(0xFFA78E75),
-        border: const Color(0xFF3C3025),
-        buttonSurfaceStyle: surfaceStyles.button,
-        contentSurfaceStyle: surfaceStyles.content,
-        bottomNavSurfaceStyle: surfaceStyles.bottomNav,
-        forcedInsetSurfaceStyle: surfaceStyles.forcedInset,
-      );
-    }
 
     final accentFamily = _dayAccentFamily(settings);
     return ExpenseTheme(

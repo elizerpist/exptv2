@@ -69,8 +69,7 @@ void main() {
                 'biometricLabel': 'Ujjlenyomat elerheto',
               };
             case 'expenseVerifySecurityPin':
-              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
-                  '1234';
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
             case 'expenseClearSecurityPin':
               return <String, Object?>{
                 'pinEnabled': false,
@@ -224,14 +223,15 @@ void main() {
     expect(find.text('Sötétebb szürke'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Éjszaka Amber'),
+      find.text('Sötétebb szürke box'),
       160,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
     expect(find.text('Neumorphism'), findsWidgets);
     expect(find.text('Pink'), findsWidgets);
-    expect(find.text('Éjszaka Amber'), findsWidgets);
+    expect(find.text('Éjszakai mód'), findsNothing);
+    expect(find.text('Éjszaka Amber'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 
@@ -266,7 +266,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('theme menu exposes profile app color and night mode choices', (
+  testWidgets('theme menu exposes profile and app color choices', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 2600);
@@ -290,10 +290,10 @@ void main() {
     expect(find.text('App színe'), findsOneWidget);
     expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
     expect(find.text('Pink'), findsOneWidget);
-    expect(find.text('Éjszakai mód'), findsOneWidget);
-    expect(find.text('Kikapcsolva (jelenlegi)'), findsOneWidget);
-    expect(find.text('Éjszaka Cyan'), findsOneWidget);
-    expect(find.text('Éjszaka Amber'), findsOneWidget);
+    expect(find.text('Éjszakai mód'), findsNothing);
+    expect(find.text('Kikapcsolva (jelenlegi)'), findsNothing);
+    expect(find.text('Éjszaka Cyan'), findsNothing);
+    expect(find.text('Éjszaka Amber'), findsNothing);
     expect(find.text('Gomb design'), findsNothing);
     expect(find.text('Logbox / search / summary design'), findsNothing);
 
@@ -301,8 +301,6 @@ void main() {
     expect(updated.last.designProfile, AppDesignProfile.neumorphism);
     await tester.tap(find.text('Pink'));
     expect(updated.last.appColor, AppColorMode.pink);
-    await tester.tap(find.text('Éjszaka Amber'));
-    expect(updated.last.nightMode, AppNightMode.amber);
   });
 
   testWidgets('permissions menu opens Android permission actions', (

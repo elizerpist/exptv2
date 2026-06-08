@@ -64,7 +64,7 @@ void main() {
       ExpenseTheme.fromSettings(
         AppThemeSettings.fromMap(const <String, Object?>{'theme': 'Sötét'}),
       ).accent,
-      const Color(0xFF19BFDC),
+      AppColors.primary,
     );
   });
 
@@ -72,10 +72,9 @@ void main() {
     final settings = AppThemeSettings.defaults();
 
     expect(settings.designProfile, AppDesignProfile.normal);
-    expect(settings.nightMode, AppNightMode.off);
     expect(settings.appColor, AppColorMode.turquoise);
     expect(settings.toMap()['designProfile'], 'normal');
-    expect(settings.toMap()['nightMode'], 'off');
+    expect(settings.toMap().containsKey('nightMode'), isFalse);
     expect(settings.toMap()['appColor'], 'turquoise');
   });
 
@@ -87,18 +86,24 @@ void main() {
     });
 
     expect(settings.designProfile, AppDesignProfile.neumorphism);
-    expect(settings.nightMode, AppNightMode.off);
     expect(settings.appColor, AppColorMode.pink);
   });
 
-  test('legacy dark theme migrates to night cyan', () {
+  test('legacy dark theme no longer enables night palette', () {
     final settings = AppThemeSettings.fromMap(const <String, Object?>{
       'theme': 'Sötét',
+      'nightMode': 'amber',
     });
+    final theme = ExpenseTheme.fromSettings(settings);
 
     expect(settings.designProfile, AppDesignProfile.normal);
-    expect(settings.nightMode, AppNightMode.cyan);
+    expect(settings.theme, AppTheme.turquoise);
     expect(settings.appColor, AppColorMode.turquoise);
+    expect(settings.toMap()['theme'], 'Türkiz');
+    expect(settings.toMap().containsKey('nightMode'), isFalse);
+    expect(theme.accent, AppColors.primary);
+    expect(theme.appBackground, AppColors.gray100);
+    expect(theme.logBox, AppColors.gray100);
   });
 
   test('pink day mode resolves pink accent family', () {
@@ -112,27 +117,17 @@ void main() {
     expect(theme.activeBackground, const Color(0x15EC4899));
   });
 
-  test('night palettes ignore day app color', () {
-    final cyan = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        appColor: AppColorMode.pink,
-        nightMode: AppNightMode.cyan,
-      ),
-    );
-    final amber = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        appColor: AppColorMode.pink,
-        nightMode: AppNightMode.amber,
-      ),
+  test('unknown legacy night mode values do not affect day palette', () {
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.fromMap(const <String, Object?>{
+        'appColor': 'pink',
+        'nightMode': 'amber',
+      }),
     );
 
-    expect(cyan.isNight, isTrue);
-    expect(cyan.accent, const Color(0xFF19BFDC));
-    expect(cyan.appBackground, const Color(0xFF0B1420));
-    expect(cyan.logBox, const Color(0xFF152231));
-    expect(amber.accent, const Color(0xFFF0A646));
-    expect(amber.appBackground, const Color(0xFF15120F));
-    expect(amber.logBox, const Color(0xFF231D17));
+    expect(theme.accent, const Color(0xFFEC4899));
+    expect(theme.appBackground, AppColors.gray100);
+    expect(theme.logBox, AppColors.gray100);
   });
 
   test('profile resolves component surface roles', () {
@@ -163,17 +158,9 @@ void main() {
     final pink = ExpenseTheme.fromSettings(
       AppThemeSettings.defaults().copyWith(appColor: AppColorMode.pink),
     );
-    final cyan = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(nightMode: AppNightMode.cyan),
-    );
-    final amber = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(nightMode: AppNightMode.amber),
-    );
 
     expect(turquoise.resolvePrimary(AppColors.primary), AppColors.primary);
     expect(pink.resolvePrimary(AppColors.primary), pink.accent);
-    expect(cyan.resolvePrimary(AppColors.primary), cyan.accent);
-    expect(amber.resolvePrimary(AppColors.primary), amber.accent);
     expect(
       pink.resolvePrimary(AppColors.primaryActiveBackground),
       pink.activeBackground,
