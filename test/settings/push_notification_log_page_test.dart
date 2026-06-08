@@ -146,6 +146,26 @@ void main() {
 
     expect(pageQueries.map((query) => query['offset']).toList(), <int>[0, 8]);
   });
+
+  testWidgets('event sheet shows final training actions without separate create button', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('push-logbox-77')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tanítás és log létrehozása'), findsOneWidget);
+    expect(find.text('Rendszerüzenetként jelölés'), findsOneWidget);
+    expect(find.text('Bezárás'), findsOneWidget);
+    expect(find.text('Log létrehozása'), findsNothing);
+  });
 }
 
 Map<String, Object?> profilePayload() {

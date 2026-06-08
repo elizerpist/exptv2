@@ -7,6 +7,7 @@ import '../../../../services/native_bridge.dart';
 import '../../../../state/event_store.dart';
 import '../../models/push_notification_log_event.dart';
 import '../../state/push_notification_log_store.dart';
+import 'push_notification_event_sheet.dart';
 import 'push_notification_log_box.dart';
 
 class PushNotificationLogPage extends StatefulWidget {
@@ -108,7 +109,7 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
           final event = _store.events[index];
           return PushNotificationLogBox(
             event: event,
-            onTap: () => _openEvent(event),
+            onTap: () => unawaited(_openEvent(event)),
           );
         },
       ),
@@ -131,7 +132,17 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
     return _store.setFilters(status: status);
   }
 
-  void _openEvent(PushNotificationLogEvent _) {}
+  Future<void> _openEvent(PushNotificationLogEvent event) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => PushNotificationEventSheet(
+        event: event,
+        parserStore: widget.parserStore,
+        logStore: _store,
+      ),
+    );
+  }
 }
 
 class _FilterHeader extends StatelessWidget {
