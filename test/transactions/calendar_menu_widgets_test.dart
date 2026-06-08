@@ -16,10 +16,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('calendar mode selector renders four tappable mode buttons', (
+  testWidgets('calendar mode selector renders compact visual mode buttons', (
     tester,
   ) async {
-    var selected = CalendarMenuMode.normal;
+    var selected = CalendarMenuMode.category;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -36,47 +36,71 @@ void main() {
       find.byKey(const ValueKey('calendar-mode-selector')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('calendar-mode-normal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-mode-normal')), findsNothing);
+    expect(find.byKey(const ValueKey('calendar-mode-category')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-summary')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-mode-heatmap')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('calendar-mode-category')),
-      findsOneWidget,
-    );
 
     await tester.tap(find.byKey(const ValueKey('calendar-mode-heatmap')));
     expect(selected, CalendarMenuMode.heatmap);
   });
 
   testWidgets(
-    'threshold slider panel shows editable Hungarian threshold label',
+    'threshold slider panel edits collapses and drags as category filter',
     (tester) async {
       var changed = 1000.0;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: CalendarValueSliderPanel.threshold(
-              value: 1000,
-              min: 0,
-              max: 2000,
-              onChanged: (value) => changed = value,
-              onMinChanged: (_) {},
-              onMaxChanged: (_) {},
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: CalendarValueSliderPanel.threshold(
+                value: 1000,
+                min: 0,
+                max: 2000,
+                onChanged: (value) => changed = value,
+                onMinChanged: (_) {},
+                onMaxChanged: (_) {},
+              ),
             ),
           ),
         ),
       );
 
-      expect(find.text('Küszöbérték: 1 000 Ft'), findsOneWidget);
+      expect(find.text('Domináns küszöb: 1 000 Ft'), findsOneWidget);
+      final panel = find.byKey(const ValueKey('calendar-threshold-slider-panel'));
+      final beforeTop = tester.getTopLeft(panel).dy;
+      await tester.drag(
+        find.byKey(const ValueKey('calendar-threshold-slider-drag-handle')),
+        const Offset(0, -70),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(panel).dy, lessThan(beforeTop));
+
       await tester.drag(
         find.byKey(const ValueKey('calendar-threshold-slider')),
         const Offset(80, 0),
       );
       expect(changed, isNot(1000));
+
+      await tester.tap(find.byKey(const ValueKey('calendar-threshold-slider-collapse')));
+      await tester.pumpAndSettle();
+      expect(panel, findsNothing);
+      expect(
+        find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(panel, findsOneWidget);
     },
   );
 
-  testWidgets('heatmap slider panel shows editable current coloring label', (
+  testWidgets('heatmap slider panel shows editable and compact controls', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -94,9 +118,13 @@ void main() {
       ),
     );
 
-    expect(find.text('Aktuális színezés: 10 000 Ft'), findsOneWidget);
+    expect(find.text('Hőtérkép skála: 10 000 Ft'), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('calendar-heatmap-slider-collapse')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
     expect(
-      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
       findsOneWidget,
     );
   });
@@ -187,7 +215,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('calendar-mode-selector')), findsNothing);
     expect(find.byKey(const ValueKey('stats-menu-trigger')), findsOneWidget);
-    expect(find.text('Küszöbérték nézet'), findsOneWidget);
+    expect(find.text('Domináns kategória'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('calendar-threshold-slider')),
       findsOneWidget,
@@ -197,7 +225,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('stats-menu-mode-normal')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('stats-menu-mode-summary')),
@@ -259,7 +287,7 @@ void main() {
     final menuRect = tester.getRect(
       find.byKey(const ValueKey('stats-menu-trigger')),
     );
-    final titleTop = tester.getTopLeft(find.text('Küszöbérték nézet')).dy;
+    final titleTop = tester.getTopLeft(find.text('Domináns kategória')).dy;
     final yearTop = tester.getTopLeft(find.text(currentYear)).dy;
 
     expect(menuRect.left, lessThan(24));
@@ -437,12 +465,17 @@ void main() {
     );
     expect(find.byKey(const ValueKey('month-weekly-bars')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-highlight-tiles')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-deep-stats-grid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-merchant-stats')), findsOneWidget);
     expect(find.text('Cashflow'), findsOneWidget);
     expect(find.text('Napi ritmus'), findsOneWidget);
     expect(find.text('Kategóriák'), findsOneWidget);
     expect(find.text('Heti bontás'), findsOneWidget);
     expect(find.text('Kiemelések'), findsOneWidget);
+    expect(find.text('Havi részletek'), findsOneWidget);
+    expect(find.text('Kereskedők'), findsOneWidget);
     expect(find.text('Élelmiszer'), findsOneWidget);
+    expect(find.text('Teszt'), findsOneWidget);
   });
 
   testWidgets('stats page renders calendar as a full screen tab', (
@@ -465,7 +498,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
-    expect(find.text('Küszöbérték nézet'), findsOneWidget);
+    expect(find.text('Domináns kategória'), findsOneWidget);
   });
 }
 
