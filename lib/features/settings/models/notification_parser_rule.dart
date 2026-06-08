@@ -492,9 +492,7 @@ class NotificationParserPreview {
 
       final amountCapture = _capture(amountMatch, 'amount');
       final amountValue = _parseAmount(amountCapture);
-      final amountText = amountCapture == null
-          ? null
-          : normalizeText(amountCapture);
+      final amountText = _amountTextFromMatch(amountMatch, amountCapture);
       final merchant = _capture(merchantMatch, 'merchant')?.trim();
 
       if (amountMatch == null || amountValue == null) {
@@ -560,6 +558,23 @@ class NotificationParserPreview {
     }
     if (match.groupCount >= 1) return match.group(1);
     return match.group(0);
+  }
+
+  static String? _amountTextFromMatch(RegExpMatch? match, String? capture) {
+    if (capture == null) return null;
+    final normalizedCapture = normalizeText(capture);
+    final full = normalizeText(match?.group(0) ?? normalizedCapture);
+    final start = full.toLowerCase().lastIndexOf(
+      normalizedCapture.toLowerCase(),
+    );
+    if (start < 0) return normalizedCapture;
+
+    final suffix = full.substring(start);
+    final amountWithCurrency = RegExp(
+      r'^\d[\d\s.,]*(?:\s*(?:Ft|HUF))?',
+      caseSensitive: false,
+    ).firstMatch(suffix);
+    return normalizeText(amountWithCurrency?.group(0) ?? normalizedCapture);
   }
 
   static double? _parseAmount(String? raw) {
