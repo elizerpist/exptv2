@@ -51,6 +51,20 @@ class NotificationEventRepository(context: Context) {
                 "[RecurringPush] event=${saved.id} processing failed: ${error.message}",
             )
         }
+        runCatching {
+            expenseRepository.processNotificationEventForParserProfiles(
+                event = saved,
+                profiles = parserRuleStore.activeParserProfiles(),
+            )
+        }.onFailure { error ->
+            Log.d(
+                "ExpenseNotification",
+                "[PushParser] event=${saved.id} auto processing failed: ${error.message}",
+            )
+            EventBroadcaster.publishDebugLog(
+                "[PushParser] event=${saved.id} auto processing failed: ${error.message}",
+            )
+        }
         return saved
     }
 

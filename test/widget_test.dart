@@ -174,10 +174,10 @@ void main() {
         );
   });
 
-  Widget buildApp() {
-    final bridge = NativeBridge();
+  Widget buildApp({NativeBridge? nativeBridge, EventStore? store}) {
+    final bridge = nativeBridge ?? NativeBridge();
     return Exptv2App(
-      store: EventStore(bridge, realtimeEnabled: false),
+      store: store ?? EventStore(bridge, realtimeEnabled: false),
       nativeBridge: bridge,
     );
   }
@@ -1152,7 +1152,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
-    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.tap(find.text('Push import'));
     await tester.pumpAndSettle();
 
     expect(find.text('Profilok'), findsOneWidget);
@@ -1230,6 +1230,73 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Notification Test'), findsWidgets);
+  });
+
+  testWidgets('settings resets submenu after active bottom nav switch', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Push import'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Elkapott push üzenetek'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Főoldal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alkalmazás beállítások'), findsOneWidget);
+    expect(find.text('Push import'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('settings submenu survives shell recreation with same store', (
+    tester,
+  ) async {
+    final bridge = NativeBridge();
+    final store = EventStore(bridge, realtimeEnabled: false);
+
+    await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Push import'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Elkapott push üzenetek'));
+    await tester.pumpAndSettle();
+
+    expect(store.shellActiveTabKey, 'settings');
+    expect(store.settingsActiveMenuKey, 'pushLog');
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beállítások'), findsWidgets);
+    expect(find.text('Elkapott push üzenetek'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
   });
 }
 

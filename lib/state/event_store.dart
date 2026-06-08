@@ -27,6 +27,7 @@ class EventStore extends ChangeNotifier {
       NotificationParserConfig.defaults();
   String? selectedNotificationParserProfileId;
   String settingsActiveMenuKey = 'root';
+  String shellActiveTabKey = 'home';
   bool loading = false;
 
   List<NotificationParserProfile> get notificationParserProfiles =>
@@ -235,6 +236,13 @@ class EventStore extends ChangeNotifier {
     if (settingsActiveMenuKey == key) return;
     settingsActiveMenuKey = key;
     DebugConsole.log('[Settings] active menu saved key=$key');
+    notifyListeners();
+  }
+
+  void setShellActiveTabKey(String key) {
+    if (shellActiveTabKey == key) return;
+    shellActiveTabKey = key;
+    DebugConsole.log('[Shell] active tab saved key=$key');
     notifyListeners();
   }
 

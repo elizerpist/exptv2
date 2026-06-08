@@ -43,7 +43,7 @@ class ExptShell extends StatefulWidget {
 }
 
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
-  AppTab _activeTab = AppTab.home;
+  late AppTab _activeTab;
   late final TransactionStore _transactionStore;
   late final NotificationStore _notificationStore;
   late final RecurringAlarmService _recurringAlarmService;
@@ -62,6 +62,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     DebugConsole.log('[Shell] start');
+    _activeTab = _tabFromStoreKey(widget.store.shellActiveTabKey);
     _pageController = PageController(initialPage: appTabs.indexOf(_activeTab));
     _recurringAlarmService = RecurringAlarmService();
     _notificationStore = NotificationStore(
@@ -263,10 +264,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       '[Perf] BottomNav close sheets issued from=${previous.id} to=${tab.id} '
       'elapsed=${_elapsedMs(requestedAt)}ms',
     );
+    if (previous == AppTab.settings && tab != AppTab.settings) {
+      widget.store.setSettingsActiveMenuKey('root');
+      DebugConsole.log(
+        '[Settings] active menu reset reason=bottom_nav_leave target=${tab.id}',
+      );
+    }
     setState(() {
       _activeTab = tab;
       _homeBlockingOverlayOpen = false;
     });
+    widget.store.setShellActiveTabKey(tab.id);
     DebugConsole.log(
       '[Perf] BottomNav shell state queued from=${previous.id} to=${tab.id} '
       'elapsed=${_elapsedMs(requestedAt)}ms',
@@ -507,6 +515,13 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   String _hex(Color color) {
     return '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}';
+  }
+
+  AppTab _tabFromStoreKey(String key) {
+    for (final tab in appTabs) {
+      if (tab.id == key) return tab;
+    }
+    return AppTab.home;
   }
 }
 

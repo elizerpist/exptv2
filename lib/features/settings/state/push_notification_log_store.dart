@@ -102,13 +102,14 @@ class PushNotificationLogStore extends ChangeNotifier {
     required PushNotificationLogEvent event,
     required NotificationParserProfile trainedProfile,
   }) async {
-    final preview = trainedProfile.preview;
+    final profile = _profileForEvent(event, trainedProfile);
+    final preview = profile.preview;
     if (!preview.isReady ||
         preview.amountValue == null ||
         preview.merchant == null) {
       throw StateError(preview.errorText ?? 'Érvénytelen parser előnézet');
     }
-    await _parserStore.saveTrainedNotificationParserProfile(trainedProfile);
+    await _parserStore.saveTrainedNotificationParserProfile(profile);
     await _bridge.expenseAddTransaction(<String, Object?>{
       'merchant': preview.merchant,
       'amount': preview.amountValue,
@@ -120,6 +121,23 @@ class PushNotificationLogStore extends ChangeNotifier {
       'sourceNotificationEventId': event.id,
     });
     await loadFirstPage();
+  }
+
+  NotificationParserProfile _profileForEvent(
+    PushNotificationLogEvent event,
+    NotificationParserProfile trainedProfile,
+  ) {
+    final appLabel = event.appLabel.trim();
+    final displayName = appLabel.isEmpty ? event.packageName : appLabel;
+    return trainedProfile.copyWith(
+      id: 'push-log-${event.id}',
+      name: '$displayName minta',
+      enabled: true,
+      appFilterText: displayName,
+      packageName: event.packageName,
+      appLabel: appLabel,
+      sampleText: event.fullText,
+    );
   }
 }
 

@@ -195,6 +195,18 @@ void main() {
       expect(createdTransactions.single['time'], '21:10');
       expect(createdTransactions.single['sourceNotificationEventId'], 77);
       expect(savedProfiles, hasLength(1));
+      final profiles = savedProfiles.single['profiles'] as List<dynamic>;
+      expect(profiles, hasLength(2));
+      final learned = profiles.last as Map<dynamic, dynamic>;
+      expect(learned['id'], 'push-log-77');
+      expect(learned['name'], 'Bank minta');
+      expect(learned['enabled'], isTrue);
+      expect(learned['appFilterText'], 'Bank');
+      expect(learned['packageName'], 'hu.bank.app');
+      expect(learned['appLabel'], 'Bank');
+      expect(learned['sampleText'], event.fullText);
+      expect(learned['amountSelection'], '12 345 HUF');
+      expect(learned['merchantSelection'], 'Tesco');
       expect(store.events.single.status, PushNotificationLogStatus.linked);
 
       harness.dispose();

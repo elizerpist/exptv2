@@ -109,7 +109,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _onStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final storeMenu = _menuFromKey(widget.store.settingsActiveMenuKey);
+    setState(() {
+      _activeMenu = storeMenu;
+    });
   }
 
   @override
@@ -165,7 +169,7 @@ class _SettingsPageState extends State<SettingsPage> {
               title: 'Alkalmazás beállítások',
               children: [
                 SettingsOptionItem(
-                  title: 'Megfigyelni kívánt alkalmazás',
+                  title: 'Push import',
                   onTap: () => _open(_SettingsMenu.parsedApp),
                 ),
                 SettingsOptionItem(
@@ -383,8 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
         onRefreshAvailability: _settingsStore.refreshBiometricAvailability,
         onAuthenticate: widget.nativeBridge.expenseAuthenticateBiometric,
         onSetEnabled: _settingsStore.setBiometricEnabled,
-        onOpenPinSettings: () =>
-            setState(() => _activeMenu = _SettingsMenu.pinSecurity),
+        onOpenPinSettings: () => _open(_SettingsMenu.pinSecurity),
       ),
       _SettingsMenu.currency => const SimpleOptionsPanel(
         title: 'Pénznem kiválasztása',
@@ -428,7 +431,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _menuTitle(_SettingsMenu menu) {
     return switch (menu) {
-      _SettingsMenu.parsedApp => 'Megfigyelni kívánt alkalmazás',
+      _SettingsMenu.parsedApp => 'Push import',
       _SettingsMenu.pushLog => 'Elkapott push üzenetek',
       _SettingsMenu.permissions => 'Engedélyek',
       _SettingsMenu.fastInfo => 'FastInfo',

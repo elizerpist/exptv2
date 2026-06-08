@@ -4,7 +4,10 @@ import android.content.Context
 import android.util.Log
 import androidx.room.withTransaction
 import com.exptv2.app.EventBroadcaster
+import com.exptv2.app.NotificationCaptureEligibility
+import com.exptv2.app.NotificationCaptureProfile
 import com.exptv2.app.NotificationEventEntity
+import com.exptv2.app.NotificationParserProfileRule
 import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
 import com.exptv2.app.expense.recurring.RecurringDebugClockStore
 import java.util.Calendar
@@ -63,6 +66,95 @@ class ExpenseRepository(context: Context) {
         return transactions.bySourceNotificationEventIds(eventIds)
             .mapNotNull { row -> row.sourceNotificationEventId?.let { it to row } }
             .toMap()
+    }
+
+    suspend fun processNotificationEventForParserProfiles(
+        event: NotificationEventEntity,
+        profiles: List<NotificationParserProfileRule>,
+    ): Map<String, Any?>? {
+        seedIfEmpty()
+        pushParserDebug(
+            "auto process start event=${event.id} package=${event.packageName} " +
+                "label=${event.appLabel} duplicate=${event.isDuplicate} profiles=${profiles.size}",
+        )
+        if (event.isDuplicate) {
+            pushParserDebug("auto skip event=${event.id} reason=duplicate")
+            return null
+        }
+        if (transactions.bySourceNotificationEventId(event.id) != null) {
+            pushParserDebug("auto skip event=${event.id} reason=already_linked")
+            return null
+        }
+        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) {
+            pushParserDebug("auto skip event=${event.id} reason=recurring_already_activated")
+            return null
+        }
+
+        val text = notificationText(event)
+        for (profile in profiles) {
+            val eligibility = NotificationCaptureEligibility.evaluate(
+                profiles = listOf(
+                    NotificationCaptureProfile(
+                        id = profile.id,
+                        name = profile.name,
+                        enabled = profile.enabled,
+                        packageName = profile.packageName,
+                        appLabel = profile.appLabel,
+                        appFilterText = profile.appFilterText,
+                    ),
+                ),
+                packageName = event.packageName,
+                appLabel = event.appLabel,
+            )
+            if (!eligibility.allowed) {
+                pushParserDebug(
+                    "auto profile skip event=${event.id} profile=${profile.id} " +
+                        "reason=${eligibility.reason}",
+                )
+                continue
+            }
+            val parsed = PushRecurringParser.parse(
+                text = text,
+                amountPattern = profile.amountPattern,
+                merchantPattern = profile.merchantPattern,
+                includeKeyword = profile.includeKeyword,
+            )
+            pushParserDebug(
+                "auto parse event=${event.id} profile=${profile.id} " +
+                    "amount=${parsed.amount} merchant=${parsed.merchant.orEmpty()} " +
+                    "error=${parsed.error.orEmpty()}",
+            )
+            val amount = parsed.amount ?: continue
+            val merchant = parsed.merchant?.takeIf { it.isNotBlank() } ?: continue
+            if (parsed.error != null) continue
+            val date = dateFromMillis(event.timestamp)
+            val signedAmount = if (profile.transactionType == "income") {
+                kotlin.math.abs(amount)
+            } else {
+                -kotlin.math.abs(amount)
+            }
+            val transaction = ExpenseTransactionEntity(
+                id = nextId(date),
+                date = date,
+                time = timeFromMillis(event.timestamp),
+                latitude = null,
+                longitude = null,
+                address = "Push notification",
+                merchant = merchant,
+                amount = signedAmount,
+                userAssignedName = null,
+                transactionCategoryID = null,
+                sourceNotificationEventId = event.id,
+            )
+            transactions.insert(transaction)
+            pushParserDebug(
+                "auto transaction created event=${event.id} profile=${profile.id} " +
+                    "transaction=${transaction.id} merchant=$merchant amount=${transaction.amount}",
+            )
+            return transaction.toMap()
+        }
+        pushParserDebug("auto skip event=${event.id} reason=no_parser_profile_match")
+        return null
     }
 
 

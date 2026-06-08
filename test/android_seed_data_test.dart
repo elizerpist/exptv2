@@ -8,10 +8,11 @@ void main() {
       'android/app/src/main/kotlin/com/exptv2/app/expense/ExpenseSeedData.kt',
     ).readAsStringSync();
 
-    expect(source, contains('const val version = 2026060301'));
+    expect(source, contains('const val version = 2026060801'));
     expect(source, contains('private const val seedStartYear = 2021'));
     expect(source, contains('private const val seedStartMonth = 6'));
     expect(source, contains('private const val seedMonthCount = 61'));
     expect(source, contains('while (monthOffset < seedMonthCount)'));
+    expect(source, contains('if (year == 2026 && month == 6)'));
   });
 }

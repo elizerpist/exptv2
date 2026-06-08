@@ -431,7 +431,7 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+      await tester.tap(find.text('Push import'));
       await tester.pumpAndSettle();
 
       expect(find.text('Profilok'), findsOneWidget);
@@ -597,7 +597,7 @@ void main() {
     await tester.pumpWidget(buildSubject());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.tap(find.text('Push import'));
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -634,7 +634,7 @@ void main() {
     await tester.pumpWidget(buildSubjectWith(bridge: bridge, store: store));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.tap(find.text('Push import'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Elkapott push üzenetek'));
     await tester.pumpAndSettle();
@@ -668,7 +668,7 @@ void main() {
     await tester.pumpWidget(buildSubject());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.tap(find.text('Push import'));
     await tester.pumpAndSettle();
 
     expect(find.text('PushParser napló'), findsOneWidget);

@@ -173,9 +173,14 @@ class NotificationParserProfile {
 
   NotificationParserProfile learnAmountFromSelection(String selection) {
     final normalized = NotificationParserPreview.normalizeText(selection);
+    final sample = NotificationParserPreview.normalizeText(sampleText);
+    final selectedMatch = _selectedAmountMatch(sample, normalized);
+    final amountPattern = selectedMatch == null
+        ? _amountCorePattern
+        : _contextualAmountPattern(sample, selectedMatch);
     return copyWith(
       amountSelection: normalized,
-      amountPattern: r'(?<amount>\d[\d\s.,]*)(?:\s*(?:Ft|HUF))',
+      amountPattern: amountPattern,
     );
   }
 
@@ -217,6 +222,78 @@ class NotificationParserProfile {
     if (text == null) return fallback;
     return text;
   }
+
+  static const _amountCorePattern =
+      r'(?<amount>\d[\d\s.,]*)(?:\s*(?:Ft|HUF))';
+
+  static RegExpMatch? _selectedAmountMatch(String sample, String selection) {
+    for (final match in RegExp(
+      r'\d[\d\s.,]*(?:\s*(?:Ft|HUF))',
+      caseSensitive: false,
+    ).allMatches(sample)) {
+      final text = NotificationParserPreview.normalizeText(
+        match.group(0) ?? '',
+      );
+      if (text == selection) return match;
+    }
+    return null;
+  }
+
+  static String _contextualAmountPattern(String sample, RegExpMatch match) {
+    final after = sample.substring(match.end).trimLeft();
+    final afterWords = _contextWords(after, fromStart: true);
+    if (afterWords.isNotEmpty) {
+      return '$_amountCorePattern(?=\\s+${_wordsPattern(afterWords)})';
+    }
+
+    final before = sample.substring(0, match.start).trimRight();
+    final separator = RegExp(r'[-:]+$').firstMatch(before)?.group(0);
+    if (separator != null && separator.isNotEmpty) {
+      return '${_literalPattern(separator)}\\s*$_amountCorePattern';
+    }
+
+    final beforeWords = _contextWords(before, fromStart: false);
+    if (beforeWords.isNotEmpty) {
+      return '${_wordsPattern(beforeWords)}\\s+$_amountCorePattern';
+    }
+    return _amountCorePattern;
+  }
+
+  static List<String> _contextWords(String value, {required bool fromStart}) {
+    final words = value
+        .split(RegExp(r'\s+'))
+        .map(_cleanToken)
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return const [];
+    return fromStart
+        ? words.take(2).toList(growable: false)
+        : words.skip(words.length > 2 ? words.length - 2 : 0).toList();
+  }
+
+  static String _wordsPattern(List<String> words) {
+    return words.map(_literalPattern).join(r'\s+');
+  }
+
+  static String _literalPattern(String value) {
+    final buffer = StringBuffer();
+    for (final codePoint in value.runes) {
+      final char = String.fromCharCode(codePoint);
+      if (r'\^$.*+?()[]{}|'.contains(char)) {
+        buffer.write('\\$char');
+      } else {
+        buffer.write(char);
+      }
+    }
+    return buffer.toString();
+  }
+
+  static String _cleanToken(String value) {
+    return value.replaceAll(
+      RegExp(r'^[\s:;,.!?()\[\]{}]+|[\s:;,.!?()\[\]{}]+$'),
+      '',
+    );
+  }
 }
 
 class NotificationTrainingToken {
@@ -252,7 +329,12 @@ class NotificationTrainingToken {
       add(match.group(1) ?? '');
     }
     for (final part in normalized.split(RegExp(r'\s+'))) {
-      if (!part.contains(':') && !RegExp(r'^\d').hasMatch(part)) add(part);
+      final cleaned = NotificationParserProfile._cleanToken(part);
+      if (cleaned.isEmpty) continue;
+      if (!RegExp(r'^\d').hasMatch(cleaned) &&
+          RegExp(r'[A-Za-z0-9À-ž]').hasMatch(cleaned)) {
+        add(cleaned);
+      }
     }
     return values.map(NotificationTrainingToken.new).toList(growable: false);
   }
@@ -410,9 +492,9 @@ class NotificationParserPreview {
 
       final amountCapture = _capture(amountMatch, 'amount');
       final amountValue = _parseAmount(amountCapture);
-      final amountText = amountMatch == null
+      final amountText = amountCapture == null
           ? null
-          : normalizeText(amountMatch.group(0) ?? '');
+          : normalizeText(amountCapture);
       final merchant = _capture(merchantMatch, 'merchant')?.trim();
 
       if (amountMatch == null || amountValue == null) {

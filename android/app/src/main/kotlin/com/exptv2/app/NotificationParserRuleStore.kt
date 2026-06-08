@@ -4,6 +4,22 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+data class NotificationParserProfileRule(
+    val id: String,
+    val name: String,
+    val enabled: Boolean,
+    val appFilterText: String,
+    val packageName: String,
+    val appLabel: String,
+    val sampleText: String,
+    val includeKeyword: String,
+    val amountPattern: String,
+    val merchantPattern: String,
+    val amountSelection: String,
+    val merchantSelection: String,
+    val transactionType: String,
+)
+
 class NotificationParserRuleStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(
         "pushparser_settings",
@@ -25,6 +41,27 @@ class NotificationParserRuleStore(context: Context) {
                 appFilterText = row["appFilterText"].orEmptyString(),
             )
         }
+
+    fun activeParserProfiles(): List<NotificationParserProfileRule> =
+        normalizedProfileRows()
+            .filter { row -> row["enabled"].isEnabled() }
+            .map { row ->
+                NotificationParserProfileRule(
+                    id = row["id"].orEmptyString(),
+                    name = row["name"].orEmptyString(),
+                    enabled = row["enabled"].isEnabled(),
+                    appFilterText = row["appFilterText"].orEmptyString(),
+                    packageName = row["packageName"].orEmptyString(),
+                    appLabel = row["appLabel"].orEmptyString(),
+                    sampleText = row["sampleText"].orEmptyString(),
+                    includeKeyword = row["includeKeyword"].orEmptyString(),
+                    amountPattern = row["amountPattern"].orEmptyString(),
+                    merchantPattern = row["merchantPattern"].orEmptyString(),
+                    amountSelection = row["amountSelection"].orEmptyString(),
+                    merchantSelection = row["merchantSelection"].orEmptyString(),
+                    transactionType = row["transactionType"].orExpenseType(),
+                )
+            }
 
     fun saveProfiles(args: Map<*, *>): Map<String, Any?> {
         val rows = args["profiles"] as? List<*> ?: emptyList<Any?>()
