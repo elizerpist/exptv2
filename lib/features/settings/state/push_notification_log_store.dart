@@ -127,14 +127,15 @@ class PushNotificationLogStore extends ChangeNotifier {
     PushNotificationLogEvent event,
     NotificationParserProfile trainedProfile,
   ) {
-    final appLabel = event.appLabel.trim();
-    final displayName = appLabel.isEmpty ? event.packageName : appLabel;
+    final appLabel = event.base.appLabel.trim();
+    final packageName = event.base.packageName;
+    final displayName = appLabel.isEmpty ? packageName : appLabel;
     return trainedProfile.copyWith(
       id: 'push-log-${event.id}',
       name: '$displayName minta',
       enabled: true,
       appFilterText: displayName,
-      packageName: event.packageName,
+      packageName: packageName,
       appLabel: appLabel,
       sampleText: event.fullText,
     );
