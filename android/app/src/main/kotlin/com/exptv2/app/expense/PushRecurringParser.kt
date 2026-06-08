@@ -22,8 +22,11 @@ object PushRecurringParser {
             .getOrElse { return PushRecurringParseResult(null, null, "amount_regex_invalid") }
         val merchantRegex = runCatching { Regex(merchantPattern, RegexOption.IGNORE_CASE) }
             .getOrElse { return PushRecurringParseResult(null, null, "merchant_regex_invalid") }
-        val amountText = capture(amountRegex.find(normalized), "amount")
-        val merchant = capture(merchantRegex.find(normalized), "merchant")?.trim()
+        val amountMatch = amountRegex.find(normalized)
+        val merchantMatch = merchantRegex.find(normalized)
+        val amountText = capture(amountMatch, "amount")
+        val merchant = capture(merchantMatch, "merchant")?.trim()
+            ?: inferPrefixMerchant(normalized, amountMatch)
         val amount = parseAmount(amountText)
         return when {
             amount == null -> PushRecurringParseResult(null, merchant, "amount_missing")
@@ -44,6 +47,17 @@ object PushRecurringParser {
         return named
             ?: if (match.groups.size > 1) match.groups[1]?.value else null
             ?: match.value
+    }
+
+    private fun inferPrefixMerchant(text: String, amountMatch: MatchResult?): String? {
+        if (amountMatch == null) return null
+        val beforeAmount = text.substring(0, amountMatch.range.first).trim()
+        val colon = beforeAmount.lastIndexOf(':')
+        if (colon <= 0) return null
+        val candidate = beforeAmount.substring(0, colon).trim(' ', ':', '.', ',', ';')
+        if (candidate.isBlank() || candidate.length > 80) return null
+        if (!candidate.any { it.isLetterOrDigit() }) return null
+        return candidate
     }
 
     private fun parseAmount(raw: String?): Double? {

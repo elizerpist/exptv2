@@ -189,7 +189,9 @@ class NotificationParserProfile {
     final sample = NotificationParserPreview.normalizeText(sampleText);
     final escaped = RegExp.escape(normalized);
     var pattern = '(?<merchant>$escaped)';
-    if (RegExp('itt:\\s*$escaped', caseSensitive: false).hasMatch(sample)) {
+    if (RegExp('^\\s*$escaped\\s*:', caseSensitive: false).hasMatch(sample)) {
+      pattern = r'^(?<merchant>[^:]{1,80}):\s*';
+    } else if (RegExp('itt:\\s*$escaped', caseSensitive: false).hasMatch(sample)) {
       pattern = r'itt:\s*(?<merchant>.+?)(?:\.|$)';
     } else if (RegExp(
       ':\\s*$escaped\\s*-',
@@ -493,7 +495,10 @@ class NotificationParserPreview {
       final amountCapture = _capture(amountMatch, 'amount');
       final amountValue = _parseAmount(amountCapture);
       final amountText = _amountTextFromMatch(amountMatch, amountCapture);
-      final merchant = _capture(merchantMatch, 'merchant')?.trim();
+      final rawMerchant = _capture(merchantMatch, 'merchant')?.trim();
+      final merchant = rawMerchant?.isNotEmpty == true
+          ? rawMerchant
+          : _inferPrefixMerchant(normalized, amountMatch);
 
       if (amountMatch == null || amountValue == null) {
         return NotificationParserPreview(
@@ -530,6 +535,17 @@ class NotificationParserPreview {
         errorText: error.message,
       );
     }
+  }
+
+  static String? _inferPrefixMerchant(String text, RegExpMatch? amountMatch) {
+    if (amountMatch == null) return null;
+    final beforeAmount = text.substring(0, amountMatch.start).trim();
+    final colon = beforeAmount.lastIndexOf(':');
+    if (colon <= 0) return null;
+    final candidate = beforeAmount.substring(0, colon).trim();
+    if (candidate.isEmpty || candidate.length > 80) return null;
+    if (!RegExp(r'[A-Za-z0-9À-ž]').hasMatch(candidate)) return null;
+    return candidate.replaceAll(RegExp(r'^[\s:;,.]+|[\s:;,.]+$'), '');
   }
 
   static RegExp _compile(String pattern, String label) {

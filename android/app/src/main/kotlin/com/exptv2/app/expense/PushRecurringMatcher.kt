@@ -82,6 +82,7 @@ object PushRecurringMatcher {
         .replace('\u202F', ' ')
         .replace(Regex("\\s+"), " ")
         .trim()
+        .trim(' ', ':', '.', ',', ';')
         .lowercase(Locale.ROOT)
 
     private fun parseDateMillis(date: String): Long {

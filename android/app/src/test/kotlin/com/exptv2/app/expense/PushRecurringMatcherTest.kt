@@ -101,4 +101,36 @@ class PushRecurringMatcherTest {
         assertEquals(false, score.matches)
         assertEquals(0.0, score.confidence, 0.0)
     }
+
+    @Test
+    fun merchantMatchIgnoresCaseAndTrailingColonForm() {
+        val rule = PushRecurringMatchRule(
+            ruleId = 1,
+            instanceId = 10,
+            estimatedDate = "2026.06.08",
+            estimatedAmount = 80000.0,
+            transactionType = "expense",
+            appFilterText = "^Notification Test$",
+            packageName = "com.test.notification",
+            appLabel = "Notification Test",
+            dateToleranceDays = 5,
+            amountTolerancePercent = 20.0,
+            amountToleranceMin = 5000.0,
+            merchantSelection = "hitel",
+        )
+        val event = PushRecurringMatchEvent(
+            notificationEventId = 77,
+            appLabel = "Notification Test",
+            packageName = "com.test.notification",
+            date = "2026.06.08",
+            amount = 80000.0,
+            merchant = "Hitel:",
+            transactionType = "expense",
+        )
+
+        val score = PushRecurringMatcher.score(rule, event)
+
+        assertTrue(score.matches)
+    }
+
 }

@@ -113,6 +113,22 @@ void main() {
     },
   );
 
+
+  test('learns merchant before colon in prefix amount messages', () {
+    final profile = NotificationParserProfile.defaults().copyWith(
+      sampleText: 'Hitel: 80000 Ft',
+      includeKeyword: '',
+    );
+
+    final learned = profile
+        .learnAmountFromSelection('80000 Ft')
+        .learnMerchantFromSelection('Hitel');
+
+    expect(learned.preview.amountValue, 80000);
+    expect(learned.preview.merchant, 'Hitel');
+    expect(learned.merchantPattern, r'^(?<merchant>[^:]{1,80}):\s*');
+  });
+
   test(
     'builds one-tap training tokens from amount and merchant candidates',
     () {

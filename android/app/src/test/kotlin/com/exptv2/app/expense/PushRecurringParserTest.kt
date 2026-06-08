@@ -48,4 +48,20 @@ class PushRecurringParserTest {
         assertEquals("nyírő", result.merchant)
         assertNull(result.error)
     }
+
+    @Test
+    fun infersPrefixMerchantWhenMerchantRegexMisses() {
+        val result = PushRecurringParser.parse(
+            text = "Hitel: 80000 Ft",
+            amountPattern = "(?<amount>\\d[\\d\\s.,]*)(?:\\s*(?:Ft|HUF))",
+            merchantPattern = "itt:\\s*(?<merchant>.+?)(?:\\.|$)",
+            includeKeyword = "",
+        )
+
+        assertNotNull(result.amount)
+        assertEquals(80000.0, result.amount!!, 0.0)
+        assertEquals("Hitel", result.merchant)
+        assertNull(result.error)
+    }
+
 }
