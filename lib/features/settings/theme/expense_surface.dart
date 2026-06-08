@@ -53,7 +53,7 @@ class ExpenseSurface {
   const ExpenseSurface._();
 
   static const Duration pressDuration = Duration(milliseconds: 110);
-  static const MaterialStateProperty<Color?> transparentMaterialOverlayColor =
+  static const WidgetStateProperty<Color?> transparentMaterialOverlayColor =
       WidgetStatePropertyAll<Color?>(Colors.transparent);
   static const WidgetStateProperty<Color?> transparentOverlayColor =
       WidgetStatePropertyAll<Color?>(Colors.transparent);
@@ -565,8 +565,9 @@ class ExpenseSurfaceContainer extends StatelessWidget {
           ? ClipRRect(borderRadius: borderRadius, child: content)
           : content,
     );
-    if (!animatePress)
+    if (!animatePress) {
       return Transform.translate(offset: offset, child: surface);
+    }
     return TweenAnimationBuilder<Offset>(
       tween: Tween<Offset>(begin: Offset.zero, end: offset),
       duration: ExpenseSurface.pressDuration,

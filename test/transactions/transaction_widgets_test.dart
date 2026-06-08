@@ -707,7 +707,9 @@ void main() {
     final rowDecoration =
         tester
                 .widget<Container>(
-                  find.byKey(ValueKey('transaction-logbox-content-${record.id}')),
+                  find.byKey(
+                    ValueKey('transaction-logbox-content-${record.id}'),
+                  ),
                 )
                 .decoration!
             as BoxDecoration;
@@ -1173,7 +1175,7 @@ void main() {
             surfaceStyle: ExpenseSurfaceInteraction.insetInset,
             avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
             onTap: (value) => edited = value,
-            onRenameMerchant: (_, __) async => renamed = true,
+            onRenameMerchant: (_, _) async => renamed = true,
             onCategoryFilter: (_) {},
           ),
         ),
