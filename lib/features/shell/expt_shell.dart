@@ -15,6 +15,8 @@ import '../notifications/state/notification_store.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/models/fast_info_config.dart';
 import '../settings/settings_page.dart';
+import '../settings/state/push_notification_log_store.dart';
+import '../settings/widgets/push_log/push_notification_event_sheet.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -395,6 +397,84 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _openTransactionFromPushLog(int transactionId) async {
+    final requestedAt = DateTime.now();
+    DebugConsole.log(
+      '[PushLink] open transaction requested source=push_log '
+      'transaction=$transactionId',
+    );
+    final transaction = await widget.nativeBridge.expenseGetTransaction(
+      transactionId,
+    );
+    if (!mounted) return;
+    if (transaction == null) {
+      DebugConsole.log(
+        '[PushLink] open transaction failed reason=missing transaction=$transactionId',
+      );
+      return;
+    }
+    _sheetHostKey.currentState?.closeAll();
+    setState(() {
+      _activeTab = AppTab.home;
+      _homeBlockingOverlayOpen = false;
+    });
+    widget.store.setShellActiveTabKey(AppTab.home.id);
+    widget.store.setSettingsActiveMenuKey('root');
+    _jumpToTabPage(AppTab.home, requestedAt);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _sheetHostKey.currentState?.openTransaction(
+        requestedAt: requestedAt,
+        source: 'push_log',
+        transaction: transaction,
+      );
+      DebugConsole.log(
+        '[PushLink] transaction opened source=push_log '
+        'transaction=${transaction.id} elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+    });
+  }
+
+  Future<void> _openNotificationEventFromTransaction(int eventId) async {
+    final requestedAt = DateTime.now();
+    DebugConsole.log(
+      '[PushLink] open notification requested source=edit_transaction '
+      'event=$eventId',
+    );
+    final logStore = PushNotificationLogStore(
+      bridge: widget.nativeBridge,
+      parserStore: widget.store,
+    );
+    try {
+      final event = await logStore.loadEvent(eventId);
+      if (!mounted) return;
+      if (event == null) {
+        DebugConsole.log(
+          '[PushLink] open notification failed reason=missing event=$eventId',
+        );
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: false,
+        backgroundColor: Colors.transparent,
+        builder: (context) => PushNotificationEventSheet(
+          event: event,
+          parserStore: widget.store,
+          logStore: logStore,
+          onOpenTransaction: _openTransactionFromPushLog,
+        ),
+      );
+      DebugConsole.log(
+        '[PushLink] notification sheet closed event=$eventId '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+    } finally {
+      logStore.dispose();
+    }
+  }
+
   void _setHomeBlockingOverlay(bool open) {
     if (_homeBlockingOverlayOpen == open) return;
     setState(() => _homeBlockingOverlayOpen = open);
@@ -488,6 +568,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           expenseTheme: expenseTheme,
           onThemeSettingsChanged: _applyThemeSettings,
           onFastInfoConfigChanged: _applyFastInfoConfig,
+          onOpenTransaction: _openTransactionFromPushLog,
         );
     }
   }
@@ -525,6 +606,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               nativeBridge: widget.nativeBridge,
               budgetEditorActiveKey: _budgetEditorActiveKey,
               expenseTheme: expenseTheme,
+              resolveNotificationEventId:
+                  widget.nativeBridge.expenseNotificationEventIdForTransaction,
+              onOpenNotificationEvent: _openNotificationEventFromTransaction,
             ),
           ),
         ],
@@ -573,12 +657,16 @@ class _ShellSheetHost extends StatefulWidget {
     required this.nativeBridge,
     required this.budgetEditorActiveKey,
     required this.expenseTheme,
+    required this.resolveNotificationEventId,
+    required this.onOpenNotificationEvent,
   });
 
   final TransactionStore store;
   final NativeBridge nativeBridge;
   final ValueNotifier<String?> budgetEditorActiveKey;
   final ExpenseTheme expenseTheme;
+  final Future<int?> Function(int transactionId) resolveNotificationEventId;
+  final Future<void> Function(int eventId) onOpenNotificationEvent;
 
   @override
   State<_ShellSheetHost> createState() => _ShellSheetHostState();
@@ -658,6 +746,8 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             key: _transactionSlotKey,
             store: widget.store,
             expenseTheme: widget.expenseTheme,
+            resolveNotificationEventId: widget.resolveNotificationEventId,
+            onOpenNotificationEvent: widget.onOpenNotificationEvent,
           ),
         ),
         Positioned.fill(
@@ -693,10 +783,14 @@ class _TransactionSheetSlot extends StatefulWidget {
     super.key,
     required this.store,
     required this.expenseTheme,
+    required this.resolveNotificationEventId,
+    required this.onOpenNotificationEvent,
   });
 
   final TransactionStore store;
   final ExpenseTheme expenseTheme;
+  final Future<int?> Function(int transactionId) resolveNotificationEventId;
+  final Future<void> Function(int eventId) onOpenNotificationEvent;
 
   @override
   State<_TransactionSheetSlot> createState() => _TransactionSheetSlotState();
@@ -755,6 +849,8 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
       openRequestedAt: _openRequestedAt,
       visible: _open,
       expenseTheme: widget.expenseTheme,
+      resolveNotificationEventId: widget.resolveNotificationEventId,
+      onOpenNotificationEvent: widget.onOpenNotificationEvent,
       onClose: close,
     );
   }

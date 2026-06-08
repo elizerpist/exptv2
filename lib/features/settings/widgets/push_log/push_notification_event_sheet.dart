@@ -16,11 +16,13 @@ class PushNotificationEventSheet extends StatefulWidget {
     required this.event,
     required this.parserStore,
     required this.logStore,
+    this.onOpenTransaction,
   });
 
   final PushNotificationLogEvent event;
   final EventStore parserStore;
   final PushNotificationLogStore logStore;
+  final Future<void> Function(int transactionId)? onOpenTransaction;
 
   @override
   State<PushNotificationEventSheet> createState() =>
@@ -194,6 +196,17 @@ class _PushNotificationEventSheetState
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (widget.onOpenTransaction != null) ...[
+                        const SizedBox(height: 10),
+                        FilledButton.icon(
+                          key: const ValueKey(
+                            'push-event-open-transaction',
+                          ),
+                          onPressed: _saving ? null : _openLinkedTransaction,
+                          icon: const Icon(Icons.receipt_long, size: 18),
+                          label: const Text('Ugrás a tranzakcióhoz'),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 8),
                     TextButton(
@@ -222,6 +235,14 @@ class _PushNotificationEventSheetState
       };
       _errorText = null;
     });
+  }
+
+  Future<void> _openLinkedTransaction() async {
+    final transactionId = widget.event.linkedTransactionId;
+    final onOpenTransaction = widget.onOpenTransaction;
+    if (transactionId == null || onOpenTransaction == null) return;
+    Navigator.of(context).pop();
+    await onOpenTransaction(transactionId);
   }
 
   Future<void> _trainAndCreate() async {

@@ -93,7 +93,9 @@ void main() {
         .setMockMethodCallHandler(methodChannel, null);
   });
 
-  Widget buildSubject() {
+  Widget buildSubject({
+    Future<void> Function(int transactionId)? onOpenTransaction,
+  }) {
     final bridge = NativeBridge(
       methodChannel: methodChannel,
       eventChannel: eventChannel,
@@ -103,6 +105,7 @@ void main() {
         body: PushNotificationLogPage(
           nativeBridge: bridge,
           parserStore: EventStore(bridge, realtimeEnabled: false),
+          onOpenTransaction: onOpenTransaction,
         ),
       ),
     );
@@ -168,6 +171,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(pageQueries.map((query) => query['offset']).toList(), <int>[0, 8]);
+  });
+
+  testWidgets('linked event sheet opens the linked transaction', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    int? openedTransactionId;
+
+    await tester.pumpWidget(
+      buildSubject(
+        onOpenTransaction: (transactionId) async {
+          openedTransactionId = transactionId;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('push-logbox-90')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ugrás a tranzakcióhoz'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('push-event-open-transaction')));
+    await tester.pumpAndSettle();
+
+    expect(openedTransactionId, 26060702);
+    expect(find.byKey(const ValueKey('push-event-sheet')), findsNothing);
   });
 
   testWidgets('event sheet shows final training actions without separate create button', (

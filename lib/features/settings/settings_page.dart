@@ -51,6 +51,7 @@ class SettingsPage extends StatefulWidget {
     this.expenseTheme,
     this.onThemeSettingsChanged,
     this.onFastInfoConfigChanged,
+    this.onOpenTransaction,
   });
 
   final EventStore store;
@@ -58,6 +59,7 @@ class SettingsPage extends StatefulWidget {
   final ExpenseTheme? expenseTheme;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final ValueChanged<FastInfoConfig>? onFastInfoConfigChanged;
+  final Future<void> Function(int transactionId)? onOpenTransaction;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -372,6 +374,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.pushLog => PushNotificationLogPage(
         nativeBridge: widget.nativeBridge,
         parserStore: widget.store,
+        onOpenTransaction: widget.onOpenTransaction,
       ),
       _SettingsMenu.permissions => PermissionsOptionsPanel(
         nativeBridge: widget.nativeBridge,

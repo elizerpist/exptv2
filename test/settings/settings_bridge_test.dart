@@ -177,6 +177,13 @@ void main() {
               return <Map<String, Object?>>[
                 recurringRow(id: 7, lastProcessedPeriodKey: '2026-05'),
               ];
+            case 'loadNotificationEvent':
+              return pushLogEventRow(
+                id: 77,
+                status: 'linked',
+                statusText: 'Van tranzakció',
+                linkedTransactionId: 26060702,
+              );
             case 'loadNotificationEventPage':
               return <String, Object?>{
                 'events': <Object?>[
@@ -192,6 +199,24 @@ void main() {
               };
             case 'markNotificationEventSystem':
               return true;
+            case 'expenseGetTransaction':
+              return <String, Object?>{
+                'id': 26060702,
+                'date': '2026.06.08',
+                'time': '19:36',
+                'latitude': null,
+                'longitude': null,
+                'address': 'Push notification',
+                'merchant': 'Hitel',
+                'amount': -80000.0,
+                'userAssignedName': 'hitel',
+                'transactionCategoryID': null,
+                'recurringRuleId': 11,
+                'recurringInstanceId': 22,
+                'sourceNotificationEventId': 77,
+              };
+            case 'expenseNotificationEventIdForTransaction':
+              return 77;
           }
           return null;
         });
@@ -471,6 +496,36 @@ void main() {
     expect(calls.single.method, 'markNotificationEventSystem');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['id'], 77);
+  });
+
+  test('loads one push notification event through native bridge', () async {
+    final event = await bridge.loadNotificationEvent(77);
+
+    expect(event, isNotNull);
+    expect(event!.id, 77);
+    expect(event.linkedTransactionId, 26060702);
+    expect(calls.single.method, 'loadNotificationEvent');
+    final payload = calls.single.arguments as Map<dynamic, dynamic>;
+    expect(payload['id'], 77);
+  });
+
+  test('opens transaction and notification links through native bridge', () async {
+    final transaction = await bridge.expenseGetTransaction(26060702);
+    final eventId = await bridge.expenseNotificationEventIdForTransaction(
+      26060702,
+    );
+
+    expect(transaction, isNotNull);
+    expect(transaction!.id, 26060702);
+    expect(transaction.sourceNotificationEventId, 77);
+    expect(eventId, 77);
+    expect(
+      calls.map((call) => call.method),
+      <String>[
+        'expenseGetTransaction',
+        'expenseNotificationEventIdForTransaction',
+      ],
+    );
   });
 
   test(

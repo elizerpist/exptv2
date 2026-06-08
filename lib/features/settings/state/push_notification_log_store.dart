@@ -92,6 +92,17 @@ class PushNotificationLogStore extends ChangeNotifier {
     await loadFirstPage();
   }
 
+  Future<PushNotificationLogEvent?> loadEvent(int id) async {
+    final event = await _bridge.loadNotificationEvent(id);
+    if (event == null) return null;
+    final index = _events.indexWhere((row) => row.id == id);
+    if (index >= 0) {
+      _events[index] = event;
+      notifyListeners();
+    }
+    return event;
+  }
+
   Future<void> markSystem(PushNotificationLogEvent event) async {
     final updated = await _bridge.markNotificationEventSystem(event.id);
     if (!updated) return;

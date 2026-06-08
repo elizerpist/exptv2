@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/installed_app.dart';
@@ -17,10 +16,12 @@ class PushNotificationLogPage extends StatefulWidget {
     super.key,
     required this.nativeBridge,
     required this.parserStore,
+    this.onOpenTransaction,
   });
 
   final NativeBridge nativeBridge;
   final EventStore parserStore;
+  final Future<void> Function(int transactionId)? onOpenTransaction;
 
   @override
   State<PushNotificationLogPage> createState() =>
@@ -102,7 +103,7 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
       },
       child: ListView.builder(
         key: const ValueKey('push-notification-log-list'),
-        scrollCacheExtent: const ScrollCacheExtent.pixels(360),
+        cacheExtent: 360,
         itemExtent: 102,
         padding: const EdgeInsets.only(bottom: 96),
         itemCount: _store.events.length + (_store.loadingMore ? 1 : 0),
@@ -161,6 +162,7 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
         event: event,
         parserStore: widget.parserStore,
         logStore: _store,
+        onOpenTransaction: widget.onOpenTransaction,
       ),
     );
   }

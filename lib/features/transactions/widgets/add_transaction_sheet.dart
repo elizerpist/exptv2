@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
@@ -25,6 +27,8 @@ class AddTransactionSheet extends StatefulWidget {
     this.openRequestedAt,
     this.visible = true,
     this.expenseTheme,
+    this.resolveNotificationEventId,
+    this.onOpenNotificationEvent,
   });
 
   final TransactionStore store;
@@ -33,6 +37,8 @@ class AddTransactionSheet extends StatefulWidget {
   final DateTime? openRequestedAt;
   final bool visible;
   final ExpenseTheme? expenseTheme;
+  final Future<int?> Function(int transactionId)? resolveNotificationEventId;
+  final Future<void> Function(int eventId)? onOpenNotificationEvent;
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -60,6 +66,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   String? _focusedField;
   DateTime? _focusStartedAt;
   var _firstBuildLogged = false;
+  int? _linkedNotificationEventId;
+  var _notificationLinkLoading = false;
 
   bool get _editing => widget.initialTransaction != null;
 
@@ -71,6 +79,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _dateFocus.addListener(() => _handleFocusChanged('date', _dateFocus));
     _timeFocus.addListener(() => _handleFocusChanged('time', _timeFocus));
     _resetFields();
+    unawaited(_resolveNotificationLink());
     if (widget.visible) _logSheetInit();
   }
 
@@ -86,6 +95,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _lastLoggedPanelHeight = null;
       _lastLoggedContentHeight = null;
       _lastLoggedKeyboardInset = null;
+      _linkedNotificationEventId = null;
+      unawaited(_resolveNotificationLink());
     }
     if (!oldWidget.visible && widget.visible) {
       _logSheetInit();
@@ -192,6 +203,33 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               color: AppColors.gray800,
                             ),
                           ),
+                          if (_editing && _linkedNotificationEventId != null) ...[
+                            const SizedBox(height: 6),
+                            Center(
+                              child: TextButton.icon(
+                                key: const ValueKey(
+                                  'transaction-open-notification-event',
+                                ),
+                                onPressed: _saving
+                                    ? null
+                                    : _openLinkedNotificationEvent,
+                                icon: const Icon(
+                                  Icons.notifications_active_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('Ugrás az üzenethez'),
+                              ),
+                            ),
+                          ] else if (_editing && _notificationLinkLoading) ...[
+                            const SizedBox(height: 6),
+                            const Center(
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           ThemedPillField(
                             debugLabel: '$debugLabel.name',
@@ -365,6 +403,45 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         'focus=${_focusedField ?? 'none'} focusElapsed=${_elapsedMs(_focusStartedAt)}ms',
       );
     });
+  }
+
+  Future<void> _resolveNotificationLink() async {
+    final transaction = widget.initialTransaction;
+    final resolver = widget.resolveNotificationEventId;
+    if (transaction == null || resolver == null) {
+      _linkedNotificationEventId = null;
+      _notificationLinkLoading = false;
+      return;
+    }
+    if (mounted) setState(() => _notificationLinkLoading = true);
+    try {
+      final eventId = await resolver(transaction.id);
+      if (!mounted || widget.initialTransaction?.id != transaction.id) return;
+      setState(() {
+        _linkedNotificationEventId = eventId;
+        _notificationLinkLoading = false;
+      });
+      DebugConsole.log(
+        '[PushLink] transaction=${transaction.id} notificationEvent=$eventId',
+      );
+    } catch (error) {
+      if (!mounted || widget.initialTransaction?.id != transaction.id) return;
+      setState(() {
+        _linkedNotificationEventId = null;
+        _notificationLinkLoading = false;
+      });
+      DebugConsole.log(
+        '[PushLink] transaction=${transaction.id} notification lookup failed: $error',
+      );
+    }
+  }
+
+  Future<void> _openLinkedNotificationEvent() async {
+    final eventId = _linkedNotificationEventId;
+    final opener = widget.onOpenNotificationEvent;
+    if (eventId == null || opener == null) return;
+    _close();
+    await opener(eventId);
   }
 
   void _resetFields() {
