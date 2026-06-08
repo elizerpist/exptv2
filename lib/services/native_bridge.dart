@@ -6,6 +6,7 @@ import '../features/notifications/models/expense_notification_card.dart';
 import '../features/settings/models/app_theme_settings.dart';
 import '../features/settings/models/fast_info_config.dart';
 import '../features/settings/models/notification_parser_rule.dart';
+import '../features/settings/models/notification_settings.dart';
 import '../features/settings/models/push_notification_log_event.dart';
 import '../features/settings/models/recurring_transaction.dart';
 import '../features/settings/models/security_settings.dart';
@@ -23,12 +24,14 @@ class ExpenseSettingsPayload {
     required this.themeSettings,
     required this.fastInfoConfig,
     required this.pushRecurringSettings,
+    required this.notificationSettings,
     required this.securitySettings,
   });
 
   final AppThemeSettings themeSettings;
   final FastInfoConfig fastInfoConfig;
   final PushRecurringSettings pushRecurringSettings;
+  final NotificationSettings notificationSettings;
   final SecuritySettings securitySettings;
 }
 
@@ -380,6 +383,7 @@ class NativeBridge {
     final theme = payload['themeSettings'];
     final fastInfo = payload['fastInfoConfig'];
     final pushRecurring = payload['pushRecurringSettings'];
+    final notificationSettings = payload['notificationSettings'];
     final security = payload['securitySettings'];
     return ExpenseSettingsPayload(
       themeSettings: theme is Map<dynamic, dynamic>
@@ -391,6 +395,9 @@ class NativeBridge {
       pushRecurringSettings: pushRecurring is Map<dynamic, dynamic>
           ? PushRecurringSettings.fromMap(pushRecurring)
           : PushRecurringSettings.defaults(),
+      notificationSettings: notificationSettings is Map<dynamic, dynamic>
+          ? NotificationSettings.fromMap(notificationSettings)
+          : NotificationSettings.defaults(),
       securitySettings: security is Map<dynamic, dynamic>
           ? SecuritySettings.fromMap(security)
           : SecuritySettings.defaults(),
@@ -428,6 +435,19 @@ class NativeBridge {
     return payload is Map<dynamic, dynamic>
         ? PushRecurringSettings.fromMap(payload)
         : PushRecurringSettings.fromMap(row ?? settings.toMap());
+  }
+
+  Future<NotificationSettings> expenseUpdateNotificationSettings(
+    NotificationSettings settings,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpdateNotificationSettings',
+      settings.toMap(),
+    );
+    final payload = row?['notificationSettings'];
+    return payload is Map<dynamic, dynamic>
+        ? NotificationSettings.fromMap(payload)
+        : NotificationSettings.fromMap(row ?? settings.toMap());
   }
 
   Future<SecuritySettings> expenseSetSecurityPin(String pin) async {

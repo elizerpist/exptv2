@@ -71,6 +71,7 @@ class ExpenseNotificationCardFactoryTest {
             targetType = "overview",
             targetId = 0,
             triggerDate = "2026-05",
+            periodLabel = "összlimit",
         )
 
         val card = ExpenseNotificationCardFactory.limitAlert(alert, now)
@@ -81,6 +82,7 @@ class ExpenseNotificationCardFactoryTest {
         assertEquals(null, card.transactionId)
         assertEquals(12000.0, card.amount!!, 0.0)
         assertEquals("2026-05", card.triggerDate)
+        assertTrue(card.message.contains("összlimit Kiadási budget"))
         assertTrue(card.message.contains("2000 Ft-tal túllépted"))
     }
 
@@ -96,6 +98,7 @@ class ExpenseNotificationCardFactoryTest {
             spentAmount = 7600.0,
             remainingAmount = 2400.0,
             usageRatio = 0.76,
+            periodLabel = "2026 májusi",
         )
         val over = remaining.copy(
             type = "limit_100",
@@ -109,6 +112,7 @@ class ExpenseNotificationCardFactoryTest {
         val overCard = ExpenseNotificationCardFactory.limitAlert(over, now)
 
         assertEquals("limit_75", remainingCard.type)
+        assertTrue(remainingCard.message.contains("2026 májusi Élelmiszer"))
         assertTrue(remainingCard.message.contains("2400 Ft maradt"))
         assertEquals("warning", remainingCard.priority)
         assertEquals("limit_100", overCard.type)

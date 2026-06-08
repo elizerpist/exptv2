@@ -15,19 +15,36 @@ import com.exptv2.app.R
 
 class ExpenseNotificationEmitter(context: Context) {
     private val appContext = context.applicationContext
+    private val settingsStore = ExpenseSettingsStore(appContext)
 
     suspend fun emit(
         card: NotificationCardEntity,
         cards: NotificationCardDao,
     ): NotificationCardEntity {
         val startedAt = System.currentTimeMillis()
-        val id = cards.insert(card).toInt()
-        val saved = card.copy(id = id)
-        Log.d(TAG, "[Notification] card inserted id=$id type=${card.type}")
-        notifyAndroid(saved)
+        val settings = settingsStore.loadNotificationSettings()
+        if (!typeEnabled(card, settings)) {
+            Log.d(TAG, "[Notification] emit skipped type=${card.type} reason=type_disabled")
+            return card
+        }
+        val inAppEnabled = settings["inAppCardsEnabled"] as? Boolean ?: true
+        val androidEnabled = settings["androidPushEnabled"] as? Boolean ?: true
+        val saved = if (inAppEnabled) {
+            val id = cards.insert(card).toInt()
+            Log.d(TAG, "[Notification] card inserted id=$id type=${card.type}")
+            card.copy(id = id)
+        } else {
+            Log.d(TAG, "[Notification] card insert skipped type=${card.type} reason=in_app_disabled")
+            card
+        }
+        if (androidEnabled) {
+            notifyAndroid(saved)
+        } else {
+            Log.d(TAG, "[Notification] android skipped type=${card.type} reason=setting_disabled")
+        }
         Log.d(
             TAG,
-            "[Perf] notification emit type=${card.type} id=$id elapsed=${System.currentTimeMillis() - startedAt}ms",
+            "[Perf] notification emit type=${card.type} id=${saved.id} elapsed=${System.currentTimeMillis() - startedAt}ms",
         )
         return saved
     }
@@ -75,6 +92,15 @@ class ExpenseNotificationEmitter(context: Context) {
         manager.createNotificationChannel(channel)
     }
 
+    private fun typeEnabled(card: NotificationCardEntity, settings: Map<String, Any?>): Boolean {
+        return when (card.type) {
+            "limit_75", "limit_100" -> settings["limitAlertsEnabled"] as? Boolean ?: true
+            "recurring_transaction_alert" -> settings["recurringAlertsEnabled"] as? Boolean ?: true
+            "transaction_created" -> settings["transactionAlertsEnabled"] as? Boolean ?: true
+            else -> true
+        }
+    }
+
     private fun priorityFor(priority: String): Int {
         return when (priority) {
             "critical" -> NotificationCompat.PRIORITY_HIGH
@@ -83,7 +109,10 @@ class ExpenseNotificationEmitter(context: Context) {
         }
     }
 
-    private fun notificationId(card: NotificationCardEntity): Int = 12000 + card.id
+    private fun notificationId(card: NotificationCardEntity): Int {
+        val seed = if (card.id > 0) card.id else (card.timestamp % 100000L).toInt().coerceAtLeast(0)
+        return 12000 + seed
+    }
 
     companion object {
         private const val TAG = "ExpenseNotification"

@@ -206,6 +206,8 @@ class ExpenseRepository(context: Context) {
 
     fun updatePushRecurringSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updatePushRecurringSettings(args)
 
+    fun updateNotificationSettings(args: Map<*, *>): Map<String, Any?> = settingsStore.updateNotificationSettings(args)
+
     fun setSecurityPin(pin: String): Map<String, Any?> = settingsStore.setSecurityPin(pin)
 
     fun changeSecurityPin(currentPin: String, newPin: String): Map<String, Any?> =
@@ -852,15 +854,10 @@ class ExpenseRepository(context: Context) {
             "ExpenseNotification",
             "[Notification] transaction update saved id=${row.id} oldAmount=${existing.amount} newAmount=${row.amount} oldCategory=${existing.transactionCategoryID} newCategory=${row.transactionCategoryID} oldDate=${existing.date} newDate=${row.date}",
         )
-        if (row.amount < 0 && category != null) {
-            emitLimitAlertsForTransaction(row, category)
-        } else {
-            val reason = if (row.amount >= 0) "non_expense" else "missing_category"
-            Log.d(
-                "ExpenseNotification",
-                "[Notification] transaction update limit evaluation skipped id=${row.id} reason=$reason",
-            )
-        }
+        Log.d(
+            "ExpenseNotification",
+            "[Notification] transaction update limit evaluation skipped id=${row.id} reason=edit_existing",
+        )
         if (args.containsKey("userAssignedName")) {
             propagateUserAssignedNameForMerchant(originalMerchant, row.userAssignedName)
         }

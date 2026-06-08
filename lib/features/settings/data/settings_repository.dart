@@ -2,6 +2,7 @@ import '../../../services/native_bridge.dart';
 import '../../transactions/models/transaction_category.dart';
 import '../models/app_theme_settings.dart';
 import '../models/fast_info_config.dart';
+import '../models/notification_settings.dart';
 import '../models/security_settings.dart';
 
 class SettingsBootstrap {
@@ -9,12 +10,14 @@ class SettingsBootstrap {
     required this.themeSettings,
     required this.fastInfoConfig,
     required this.securitySettings,
+    required this.notificationSettings,
     required this.categories,
   });
 
   final AppThemeSettings themeSettings;
   final FastInfoConfig fastInfoConfig;
   final SecuritySettings securitySettings;
+  final NotificationSettings notificationSettings;
   final List<TransactionCategory> categories;
 }
 
@@ -30,6 +33,7 @@ class SettingsRepository {
       themeSettings: settings.themeSettings,
       fastInfoConfig: settings.fastInfoConfig,
       securitySettings: settings.securitySettings,
+      notificationSettings: settings.notificationSettings,
       categories: categories,
     );
   }
@@ -40,6 +44,12 @@ class SettingsRepository {
 
   Future<FastInfoConfig> updateFastInfoConfig(FastInfoConfig config) {
     return _bridge.expenseUpdateFastInfoConfig(config);
+  }
+
+  Future<NotificationSettings> updateNotificationSettings(
+    NotificationSettings settings,
+  ) {
+    return _bridge.expenseUpdateNotificationSettings(settings);
   }
 
   Future<SecuritySettings> setSecurityPin(String pin) {

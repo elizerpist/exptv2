@@ -17,6 +17,7 @@ class ExpenseSettingsStore(context: Context) {
         "themeSettings" to loadThemeSettings(),
         "fastInfoConfig" to loadFastInfoConfig(),
         "pushRecurringSettings" to loadPushRecurringSettings(),
+        "notificationSettings" to loadNotificationSettings(),
         "securitySettings" to loadSecuritySettings(
             biometricAvailable = biometricAvailable,
             biometricLabel = biometricLabel,
@@ -97,6 +98,25 @@ class ExpenseSettingsStore(context: Context) {
         return loadSettings()
     }
 
+    fun loadNotificationSettings(): Map<String, Any?> = mapOf(
+        "androidPushEnabled" to prefs.getBoolean(KEY_NOTIFICATION_ANDROID_PUSH_ENABLED, true),
+        "inAppCardsEnabled" to prefs.getBoolean(KEY_NOTIFICATION_IN_APP_CARDS_ENABLED, true),
+        "limitAlertsEnabled" to prefs.getBoolean(KEY_NOTIFICATION_LIMIT_ALERTS_ENABLED, true),
+        "recurringAlertsEnabled" to prefs.getBoolean(KEY_NOTIFICATION_RECURRING_ALERTS_ENABLED, true),
+        "transactionAlertsEnabled" to prefs.getBoolean(KEY_NOTIFICATION_TRANSACTION_ALERTS_ENABLED, true),
+    )
+
+    fun updateNotificationSettings(args: Map<*, *>): Map<String, Any?> {
+        prefs.edit()
+            .putBoolean(KEY_NOTIFICATION_ANDROID_PUSH_ENABLED, boolArg(args["androidPushEnabled"], true))
+            .putBoolean(KEY_NOTIFICATION_IN_APP_CARDS_ENABLED, boolArg(args["inAppCardsEnabled"], true))
+            .putBoolean(KEY_NOTIFICATION_LIMIT_ALERTS_ENABLED, boolArg(args["limitAlertsEnabled"], true))
+            .putBoolean(KEY_NOTIFICATION_RECURRING_ALERTS_ENABLED, boolArg(args["recurringAlertsEnabled"], true))
+            .putBoolean(KEY_NOTIFICATION_TRANSACTION_ALERTS_ENABLED, boolArg(args["transactionAlertsEnabled"], true))
+            .apply()
+        return loadSettings()
+    }
+
     fun loadSecuritySettings(
         biometricAvailable: Boolean = false,
         biometricLabel: String = "Nem elerheto",
@@ -163,6 +183,13 @@ class ExpenseSettingsStore(context: Context) {
     }
 
     private fun defaultFastInfoConfig(): Map<String, Any?> = ExpenseFastInfoConfigNormalizer.defaultConfig()
+
+    private fun boolArg(value: Any?, default: Boolean): Boolean = when (value) {
+        is Boolean -> value
+        is Number -> value.toInt() != 0
+        is String -> value.equals("true", ignoreCase = true) || value == "1"
+        else -> default
+    }
 
     private fun jsonObjectToMap(json: JSONObject): Map<String, Any?> {
         return json.keys().asSequence().associateWith { key -> jsonValue(json.get(key)) }
@@ -244,6 +271,11 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"
         private const val KEY_PUSH_RECURRING_CONFLICT_POLICY = "pushRecurringConflictPolicy"
+        private const val KEY_NOTIFICATION_ANDROID_PUSH_ENABLED = "notificationAndroidPushEnabled"
+        private const val KEY_NOTIFICATION_IN_APP_CARDS_ENABLED = "notificationInAppCardsEnabled"
+        private const val KEY_NOTIFICATION_LIMIT_ALERTS_ENABLED = "notificationLimitAlertsEnabled"
+        private const val KEY_NOTIFICATION_RECURRING_ALERTS_ENABLED = "notificationRecurringAlertsEnabled"
+        private const val KEY_NOTIFICATION_TRANSACTION_ALERTS_ENABLED = "notificationTransactionAlertsEnabled"
         private const val KEY_SECURITY_PIN_SALT = "securityPinSalt"
         private const val KEY_SECURITY_PIN_HASH = "securityPinHash"
         private const val KEY_SECURITY_BIOMETRIC_ENABLED = "securityBiometricEnabled"

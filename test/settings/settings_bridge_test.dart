@@ -1,6 +1,7 @@
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/models/notification_parser_rule.dart';
+import 'package:exptv2/features/settings/models/notification_settings.dart';
 import 'package:exptv2/features/settings/models/push_notification_log_event.dart';
 import 'package:exptv2/features/settings/models/recurring_transaction.dart';
 import 'package:exptv2/features/transactions/models/recurring_rule.dart';
@@ -79,6 +80,8 @@ void main() {
               return call.arguments;
             case 'expenseUpdatePushRecurringSettings':
               return <String, Object?>{'pushRecurringSettings': call.arguments};
+            case 'expenseUpdateNotificationSettings':
+              return <String, Object?>{'notificationSettings': call.arguments};
             case 'expenseSetSecurityPin':
               return <String, Object?>{
                 'pinEnabled': true,
@@ -225,6 +228,15 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  test('updates notification settings through native bridge', () async {
+    final saved = await bridge.expenseUpdateNotificationSettings(
+      NotificationSettings.defaults().copyWith(androidPushEnabled: false),
+    );
+
+    expect(saved.androidPushEnabled, isFalse);
+    expect(calls.single.method, 'expenseUpdateNotificationSettings');
   });
 
   test('loads app theme and FastInfo settings', () async {

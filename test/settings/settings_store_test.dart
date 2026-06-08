@@ -26,6 +26,7 @@ void main() {
                 'themeSettings': <String, Object?>{},
                 'fastInfoConfig': <String, Object?>{},
                 'pushRecurringSettings': <String, Object?>{},
+                'notificationSettings': <String, Object?>{},
                 'securitySettings': <String, Object?>{
                   'pinEnabled': false,
                   'biometricEnabled': false,

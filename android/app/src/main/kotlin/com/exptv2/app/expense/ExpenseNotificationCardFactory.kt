@@ -17,6 +17,7 @@ data class ExpenseLimitAlert(
     val targetType: String = "category",
     val targetId: Int = 0,
     val triggerDate: String? = null,
+    val periodLabel: String = "",
 )
 
 object ExpenseNotificationCardFactory {
@@ -114,13 +115,17 @@ object ExpenseNotificationCardFactory {
             alert.targetType == "category" && alert.targetId > 0 -> alert.targetId
             else -> null
         }
+        val prefix = listOf(alert.periodLabel, alert.targetLabel)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
         val message = when {
             alert.remainingAmount > 0.0 ->
-                "${alert.targetLabel}: ${formatHuf(alert.remainingAmount)} Ft maradt a limitből."
+                "$prefix: ${formatHuf(alert.remainingAmount)} Ft maradt a limitből."
             alert.remainingAmount == 0.0 ->
-                "${alert.targetLabel}: Elérted a limitet, 0 Ft maradt."
+                "$prefix: Elérted a limitet, 0 Ft maradt."
             else ->
-                "${alert.targetLabel}: ${formatHuf(abs(alert.remainingAmount))} Ft-tal túllépted a limitet."
+                "$prefix: ${formatHuf(abs(alert.remainingAmount))} Ft-tal túllépted a limitet."
         }
         return NotificationCardEntity(
             type = alert.type,

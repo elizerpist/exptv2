@@ -40,6 +40,9 @@ class ExpenseMethodChannel(
             "expenseUpdatePushRecurringSettings" -> scope.launchResult(result) {
                 repository.updatePushRecurringSettings(call.argumentsMap())
             }
+            "expenseUpdateNotificationSettings" -> scope.launchResult(result) {
+                repository.updateNotificationSettings(call.argumentsMap())
+            }
             "expenseSetSecurityPin" -> scope.launchResult(result) {
                 val pin = call.argumentsMap()["pin"]?.toString()
                     ?: throw ExpenseValidationException("PIN_REQUIRED", "PIN is required")

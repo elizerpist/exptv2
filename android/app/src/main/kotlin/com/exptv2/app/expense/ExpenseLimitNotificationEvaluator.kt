@@ -63,6 +63,37 @@ object ExpenseLimitNotificationEvaluator {
             targetType = limit.targetType,
             targetId = limit.targetId,
             triggerDate = triggerDate,
+            periodLabel = periodLabel(limit),
         )
+    }
+
+    private fun periodLabel(limit: CategoryLimitEntity): String {
+        return when (limit.window) {
+            "monthly" -> monthlyLabel(limit.periodKey)
+            "yearly" -> "${limit.periodKey} évi"
+            else -> "összlimit"
+        }
+    }
+
+    private fun monthlyLabel(periodKey: String): String {
+        val parts = periodKey.split("-")
+        val year = parts.getOrNull(0)?.toIntOrNull() ?: return "havi"
+        val month = parts.getOrNull(1)?.toIntOrNull() ?: return "${year} havi"
+        val monthName = when (month) {
+            1 -> "januári"
+            2 -> "februári"
+            3 -> "márciusi"
+            4 -> "áprilisi"
+            5 -> "májusi"
+            6 -> "júniusi"
+            7 -> "júliusi"
+            8 -> "augusztusi"
+            9 -> "szeptemberi"
+            10 -> "októberi"
+            11 -> "novemberi"
+            12 -> "decemberi"
+            else -> "havi"
+        }
+        return "$year $monthName"
     }
 }

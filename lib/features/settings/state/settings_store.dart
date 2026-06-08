@@ -5,6 +5,7 @@ import '../../transactions/models/transaction_category.dart';
 import '../data/settings_repository.dart';
 import '../models/app_theme_settings.dart';
 import '../models/fast_info_config.dart';
+import '../models/notification_settings.dart';
 import '../models/security_settings.dart';
 
 class SettingsStore extends ChangeNotifier {
@@ -16,6 +17,7 @@ class SettingsStore extends ChangeNotifier {
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   SecuritySettings _securitySettings = SecuritySettings.defaults();
+  NotificationSettings _notificationSettings = NotificationSettings.defaults();
   List<TransactionCategory> _categories = [];
 
   bool get loading => _loading;
@@ -23,6 +25,7 @@ class SettingsStore extends ChangeNotifier {
   AppThemeSettings get themeSettings => _themeSettings;
   FastInfoConfig get fastInfoConfig => _fastInfoConfig;
   SecuritySettings get securitySettings => _securitySettings;
+  NotificationSettings get notificationSettings => _notificationSettings;
   List<TransactionCategory> get categories => List.unmodifiable(_categories);
   List<TransactionCategory> get expenseCategories =>
       categoriesFor(TransactionType.expense);
@@ -41,6 +44,7 @@ class SettingsStore extends ChangeNotifier {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
       _securitySettings = payload.securitySettings;
+      _notificationSettings = payload.notificationSettings;
       _categories = payload.categories;
       DebugConsole.log('[ThemeSurface] settings load ${_themeSignature()}');
     } catch (error) {
@@ -59,6 +63,11 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> updateFastInfoConfig(FastInfoConfig config) async {
     _fastInfoConfig = await _repository.updateFastInfoConfig(config);
+    notifyListeners();
+  }
+
+  Future<void> updateNotificationSettings(NotificationSettings settings) async {
+    _notificationSettings = await _repository.updateNotificationSettings(settings);
     notifyListeners();
   }
 

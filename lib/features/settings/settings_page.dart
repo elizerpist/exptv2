@@ -15,6 +15,7 @@ import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/backheader_style_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
+import 'widgets/options/notification_settings_panel.dart';
 import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
 import 'widgets/options/simple_options_panel.dart';
@@ -28,6 +29,7 @@ enum _SettingsMenu {
   parsedApp,
   pushLog,
   permissions,
+  notificationSettings,
   fastInfo,
   currency,
   language,
@@ -224,12 +226,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SettingsOptionItem(title: 'Adatok törlése', isLast: true),
               ],
             ),
-            const SettingsSection(
+            SettingsSection(
               title: 'Értesítési beállítások',
               children: [
-                SettingsOptionItem(title: 'Napi emlékeztetők'),
-                SettingsOptionItem(title: 'Költségvetési riasztások'),
-                SettingsOptionItem(title: 'Havi összefoglalók', isLast: true),
+                SettingsOptionItem(
+                  title: 'Részletes értesítési beállítások',
+                  subtitle: 'Android push, appon belüli kártyák és típusok',
+                  onTap: () => _open(_SettingsMenu.notificationSettings),
+                  isLast: true,
+                ),
               ],
             ),
             SettingsSection(
@@ -379,6 +384,12 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.permissions => PermissionsOptionsPanel(
         nativeBridge: widget.nativeBridge,
       ),
+      _SettingsMenu.notificationSettings => NotificationSettingsPanel(
+        settings: _settingsStore.notificationSettings,
+        onChanged: (settings) {
+          unawaited(_settingsStore.updateNotificationSettings(settings));
+        },
+      ),
       _SettingsMenu.fastInfo => FastInfoOptionsPanel(
         config: _settingsStore.fastInfoConfig,
         onChanged: _updateFastInfoConfig,
@@ -448,6 +459,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.parsedApp => 'Push import',
       _SettingsMenu.pushLog => 'Elkapott push üzenetek',
       _SettingsMenu.permissions => 'Engedélyek',
+      _SettingsMenu.notificationSettings => 'Értesítések',
       _SettingsMenu.fastInfo => 'FastInfo',
       _SettingsMenu.currency => 'Pénznem Beállítások',
       _SettingsMenu.language => 'Nyelv Beállítások',
