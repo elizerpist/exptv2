@@ -1,4 +1,3 @@
-import 'package:exptv2/features/settings/models/notification_parser_rule.dart';
 import 'package:exptv2/features/settings/models/push_notification_log_event.dart';
 import 'package:exptv2/features/settings/state/push_notification_log_store.dart';
 import 'package:exptv2/services/native_bridge.dart';
@@ -10,7 +9,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const methodChannel = MethodChannel('test/push_log_methods');
-  const eventChannel = EventChannel('test/push_log_events');
 
   final pageQueries = <Map<dynamic, dynamic>>[];
   final createdTransactions = <Map<dynamic, dynamic>>[];
@@ -119,7 +117,7 @@ void main() {
   });
 
   test('loads first page and appends additional push log events', () async {
-    final harness = await startHarness();
+    final harness = await _startHarness();
     final store = harness.logStore;
 
     await store.loadFirstPage();
@@ -135,7 +133,7 @@ void main() {
   });
 
   test('filters reset paging and reload the first page', () async {
-    final harness = await startHarness();
+    final harness = await _startHarness();
     final store = harness.logStore;
 
     await store.setFilters(
@@ -156,7 +154,7 @@ void main() {
   });
 
   test('marks a push log event as system and reloads', () async {
-    final harness = await startHarness();
+    final harness = await _startHarness();
     final store = harness.logStore;
 
     await store.loadFirstPage();
@@ -171,7 +169,7 @@ void main() {
   test(
     'valid training creates uncategorized transaction linked to event',
     () async {
-      final harness = await startHarness();
+      final harness = await _startHarness();
       final store = harness.logStore;
 
       await store.loadFirstPage();
@@ -204,7 +202,7 @@ void main() {
   );
 }
 
-Future<_Harness> startHarness() async {
+Future<_Harness> _startHarness() async {
   final bridge = NativeBridge(
     methodChannel: const MethodChannel('test/push_log_methods'),
     eventChannel: const EventChannel('test/push_log_events'),
