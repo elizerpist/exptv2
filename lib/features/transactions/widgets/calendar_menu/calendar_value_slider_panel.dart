@@ -57,12 +57,13 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
     final effectiveValue = widget.value
         .clamp(widget.min, effectiveMax)
         .toDouble();
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Transform.translate(
-        offset: Offset(0, _verticalOffset),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: -_verticalOffset,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onVerticalDragUpdate: _handleDragUpdate,
@@ -176,7 +177,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 

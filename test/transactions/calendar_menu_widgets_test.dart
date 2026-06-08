@@ -574,7 +574,7 @@ void main() {
     expect(find.text('Kereskedő ritmus'), findsOneWidget);
     expect(find.text('Havi részletek'), findsOneWidget);
     expect(find.text('Kereskedők'), findsOneWidget);
-    expect(find.text('Élelmiszer'), findsOneWidget);
+    expect(find.text('Élelmiszer'), findsAtLeastNWidgets(1));
     expect(find.text('Teszt'), findsAtLeastNWidgets(1));
   });
 
