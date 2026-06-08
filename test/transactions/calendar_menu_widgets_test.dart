@@ -158,6 +158,7 @@ void main() {
               width: 390,
               height: 780,
               child: CalendarMenuOverlay(
+                fullScreen: true,
                 transactions: [
                   _record(
                     id: 1,
