@@ -63,111 +63,115 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
         offset: Offset(0, _verticalOffset),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-          child: Material(
-            color: AppColors.white,
-            elevation: 8,
-            shadowColor: Colors.black.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              key: ValueKey('$sliderKey-panel'),
-              padding: const EdgeInsets.fromLTRB(14, 2, 10, 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.gray200),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      const SizedBox(width: 36),
-                      Expanded(
-                        child: GestureDetector(
-                          key: ValueKey('$sliderKey-drag-handle'),
-                          behavior: HitTestBehavior.opaque,
-                          onVerticalDragUpdate: _handleDragUpdate,
-                          child: SizedBox(
-                            height: 16,
-                            child: Center(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: AppColors.gray300,
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                child: const SizedBox(width: 46, height: 4),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        key: ValueKey('$sliderKey-collapse'),
-                        onPressed: _collapse,
-                        tooltip: 'Kicsinyítés',
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: AppColors.gray600,
-                        ),
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 36,
-                          height: 24,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '$label: ${formatHuf(widget.value)}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.gray800,
-                    ),
-                  ),
-                  SizedBox(
-                    height: 34,
-                    child: Row(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: _handleDragUpdate,
+            child: Material(
+              color: AppColors.white,
+              elevation: 8,
+              shadowColor: Colors.black.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                key: ValueKey('$sliderKey-panel'),
+                padding: const EdgeInsets.fromLTRB(14, 2, 10, 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.gray200),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                       children: [
-                        _EditableLimitText(
-                          value: widget.min,
-                          onSubmitted: widget.onMinChanged,
-                        ),
+                        const SizedBox(width: 36),
                         Expanded(
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: AppColors.primary,
-                              inactiveTrackColor: AppColors.gray200,
-                              thumbColor: AppColors.primary,
-                              thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 10,
+                          child: GestureDetector(
+                            key: ValueKey('$sliderKey-drag-handle'),
+                            behavior: HitTestBehavior.opaque,
+                            onVerticalDragUpdate: _handleDragUpdate,
+                            child: SizedBox(
+                              height: 16,
+                              child: Center(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.gray300,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                  child: const SizedBox(width: 46, height: 4),
+                                ),
                               ),
-                            ),
-                            child: Slider(
-                              key: ValueKey(sliderKey),
-                              value: effectiveValue,
-                              min: widget.min,
-                              max: effectiveMax,
-                              divisions:
-                                  widget.kind == CalendarSliderKind.heatmap
-                                  ? ((effectiveMax - widget.min) / 100)
-                                        .round()
-                                        .clamp(1, 1000)
-                                        .toInt()
-                                  : null,
-                              onChanged: widget.onChanged,
                             ),
                           ),
                         ),
-                        _EditableLimitText(
-                          value: effectiveMax,
-                          onSubmitted: widget.onMaxChanged,
+                        IconButton(
+                          key: ValueKey('$sliderKey-collapse'),
+                          onPressed: _collapse,
+                          tooltip: 'Kicsinyítés',
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: AppColors.gray600,
+                          ),
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 36,
+                            height: 24,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    Text(
+                      '$label: ${formatHuf(widget.value)}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.gray800,
+                      ),
+                    ),
+                    SizedBox(
+                      height: 34,
+                      child: Row(
+                        children: [
+                          _EditableLimitText(
+                            value: widget.min,
+                            onSubmitted: widget.onMinChanged,
+                          ),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: AppColors.primary,
+                                inactiveTrackColor: AppColors.gray200,
+                                thumbColor: AppColors.primary,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 10,
+                                ),
+                              ),
+                              child: Slider(
+                                key: ValueKey(sliderKey),
+                                value: effectiveValue,
+                                min: widget.min,
+                                max: effectiveMax,
+                                divisions:
+                                    widget.kind == CalendarSliderKind.heatmap
+                                    ? ((effectiveMax - widget.min) / 100)
+                                          .round()
+                                          .clamp(1, 1000)
+                                          .toInt()
+                                    : null,
+                                onChanged: widget.onChanged,
+                              ),
+                            ),
+                          ),
+                          _EditableLimitText(
+                            value: effectiveMax,
+                            onSubmitted: widget.onMaxChanged,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -202,9 +206,9 @@ class _MiniButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Align(
-      alignment: Alignment.bottomLeft,
+      alignment: Alignment.bottomRight,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 0, 112),
+        padding: const EdgeInsets.fromLTRB(0, 0, 20, 112),
         child: Material(
           color: AppColors.gray800,
           elevation: 7,

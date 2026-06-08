@@ -91,6 +91,16 @@ void main() {
         find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
         findsOneWidget,
       );
+      expect(
+        tester
+            .getCenter(
+              find.byKey(
+                const ValueKey('calendar-threshold-slider-mini-button'),
+              ),
+            )
+            .dx,
+        greaterThan(320),
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
@@ -127,7 +137,84 @@ void main() {
       find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
       findsOneWidget,
     );
+    expect(
+      tester
+          .getCenter(
+            find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
+          )
+          .dx,
+      greaterThan(320),
+    );
   });
+
+  testWidgets(
+    'calendar overlay slider card stays draggable after leaving bottom area',
+    (tester) async {
+      final year = DateTime.now().year;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: CalendarMenuOverlay(
+                transactions: [
+                  _record(
+                    id: 1,
+                    date: '$year-01-02',
+                    amount: -8000,
+                    categoryId: 1,
+                  ),
+                  _record(
+                    id: 2,
+                    date: '$year-01-03',
+                    amount: -22000,
+                    categoryId: 1,
+                  ),
+                ],
+                categories: const [
+                  TransactionCategory(
+                    transactionCategoryID: 1,
+                    name: 'Élelmiszer',
+                    type: 'kiadás',
+                    colorSlot: 1,
+                    iconSlot: null,
+                    backgroundColor: null,
+                    icon: null,
+                    notification: null,
+                    hasLimit: false,
+                    limitAmount: 0,
+                    alertActive: false,
+                    isCustomIcon: false,
+                    originalIcon: null,
+                  ),
+                ],
+                onClose: () {},
+                onMonthSelect: (_, _) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final panel = find.byKey(
+        const ValueKey('calendar-threshold-slider-panel'),
+      );
+      final handle = find.byKey(
+        const ValueKey('calendar-threshold-slider-drag-handle'),
+      );
+
+      final initialTop = tester.getTopLeft(panel).dy;
+      await tester.drag(handle, const Offset(0, -260));
+      await tester.pumpAndSettle();
+      final raisedTop = tester.getTopLeft(panel).dy;
+      expect(raisedTop, lessThan(initialTop - 180));
+
+      await tester.drag(handle, const Offset(0, 80));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(panel).dy, greaterThan(raisedTop + 40));
+    },
+  );
 
   test('calendar canvas layout creates two columns and six rows', () {
     final layout = CalendarCanvasLayout.calculate(
@@ -465,6 +552,13 @@ void main() {
     );
     expect(find.byKey(const ValueKey('month-weekly-bars')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-highlight-tiles')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-spend-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-ratio-split')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-velocity-meter')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-weekpart-split')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-density-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-category-rank-bars')), findsOneWidget);
+    expect(find.byKey(const ValueKey('month-merchant-days-strip')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-deep-stats-grid')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-merchant-stats')), findsOneWidget);
     expect(find.text('Cashflow'), findsOneWidget);
@@ -472,6 +566,12 @@ void main() {
     expect(find.text('Kategóriák'), findsOneWidget);
     expect(find.text('Heti bontás'), findsOneWidget);
     expect(find.text('Kiemelések'), findsOneWidget);
+    expect(find.text('Költési térkép'), findsOneWidget);
+    expect(find.text('Bevétel / kiadás'), findsOneWidget);
+    expect(find.text('Tempó és limit'), findsOneWidget);
+    expect(find.text('Napok eloszlása'), findsOneWidget);
+    expect(find.text('Kategória rangsor'), findsOneWidget);
+    expect(find.text('Kereskedő ritmus'), findsOneWidget);
     expect(find.text('Havi részletek'), findsOneWidget);
     expect(find.text('Kereskedők'), findsOneWidget);
     expect(find.text('Élelmiszer'), findsOneWidget);
