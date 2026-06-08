@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecurringRuleInstanceEntity::class,
         NotificationCardEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
@@ -404,6 +404,54 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("PRAGMA foreign_keys=OFF")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS transactions_new (
+                        id INTEGER PRIMARY KEY NOT NULL,
+                        date TEXT NOT NULL,
+                        time TEXT NOT NULL,
+                        merchant TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        userAssignedName TEXT,
+                        transactionCategoryID INTEGER NOT NULL,
+                        recurringTransactionId INTEGER,
+                        recurringRuleId INTEGER,
+                        recurringInstanceId INTEGER,
+                        FOREIGN KEY(transactionCategoryID) REFERENCES transaction_categories(transactionCategoryID) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO transactions_new (
+                        id, date, time, merchant, amount, userAssignedName,
+                        transactionCategoryID, recurringTransactionId,
+                        recurringRuleId, recurringInstanceId
+                    )
+                    SELECT id, date, time, merchant, amount, userAssignedName,
+                        transactionCategoryID, recurringTransactionId, recurringRuleId, recurringInstanceId
+                    FROM transactions
+                    """.trimIndent(),
+                )
+                db.execSQL("DROP TABLE transactions")
+                db.execSQL("ALTER TABLE transactions_new RENAME TO transactions")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_transactionCategoryID ON transactions(transactionCategoryID)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_date ON transactions(date)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_merchant ON transactions(merchant)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_amount ON transactions(amount)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_recurringTransactionId ON transactions(recurringTransactionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_recurringRuleId ON transactions(recurringRuleId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_recurringInstanceId ON transactions(recurringInstanceId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_date_time_id ON transactions(date, time, id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_amount_date_time_id ON transactions(amount, date, time, id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_transactionCategoryID_date_time_id ON transactions(transactionCategoryID, date, time, id)")
+                db.execSQL("PRAGMA foreign_keys=ON")
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -418,6 +466,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
+                        MIGRATION_8_9,
                     )
                     .build().also { instance = it }
             }
