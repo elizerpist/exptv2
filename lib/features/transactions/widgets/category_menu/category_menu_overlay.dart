@@ -26,6 +26,8 @@ class CategoryMenuOverlay extends StatelessWidget {
     this.surfaceColor = AppColors.white,
     this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
+    this.activeBackgroundColor = AppColors.primaryActiveBackground,
   });
 
   final TransactionStore store;
@@ -41,6 +43,8 @@ class CategoryMenuOverlay extends StatelessWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final Color accentColor;
+  final Color activeBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +77,8 @@ class CategoryMenuOverlay extends StatelessWidget {
             surfaceColor: surfaceColor,
             cardSurfaceStyle: cardSurfaceStyle,
             avatarSurfaceStyle: avatarSurfaceStyle,
+            accentColor: accentColor,
+            activeBackgroundColor: activeBackgroundColor,
           ),
         ),
       ),

@@ -144,8 +144,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         builder: (context, _) {
           final homeBuildStartedAt = DateTime.now();
           if (widget.store.loading) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
+            return Center(
+              child: CircularProgressIndicator(color: expenseTheme.accent),
             );
           }
           if (widget.store.error != null) {
@@ -192,6 +192,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     activeType: widget.store.activeType,
                     surfaceColor: expenseTheme.logBox,
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                    accentColor: expenseTheme.accent,
                     onChanged: _setActiveType,
                   ),
                   SummaryPill(
@@ -219,6 +220,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     merchantFilter: widget.store.merchantFilter,
                     categoryFilter: widget.store.activeCategory?.name,
                     categoryFilterColor: widget.store.activeCategory?.slotColor,
+                    accentColor: expenseTheme.accent,
                     filteredCount: visibleTransactions.length,
                     onClearMerchant: widget.store.clearMerchantFilter,
                     onClearCategory: widget.store.clearCategoryFilter,
@@ -318,6 +320,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   surfaceColor: expenseTheme.logBox,
                   cardSurfaceStyle: expenseTheme.contentSurfaceStyle,
                   avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+                  accentColor: expenseTheme.accent,
+                  activeBackgroundColor: expenseTheme.activeBackground,
                 ),
               if (_categoryEditorOpen)
                 Positioned(
@@ -338,6 +342,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     bodySurfaceStyle: expenseTheme.contentSurfaceStyle,
                     buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                     selectedSurfaceStyle: expenseTheme.forcedInsetSurfaceStyle,
+                    accentColor: expenseTheme.accent,
                   ),
                 ),
               if (budgetHostItem != null)
@@ -392,7 +397,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _logThemeSurfaceOnce(ExpenseTheme expenseTheme) {
-    final signature = 'typePills=${expenseTheme.buttonSurfaceStyle.nativeValue} '
+    final signature =
+        'typePills=${expenseTheme.buttonSurfaceStyle.nativeValue} '
         'headerButtons=${expenseTheme.buttonSurfaceStyle.nativeValue} '
         'summary=${expenseTheme.contentSurfaceStyle.nativeValue} '
         'search=${expenseTheme.contentSurfaceStyle.nativeValue} '

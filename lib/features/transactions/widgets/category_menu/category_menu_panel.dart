@@ -20,6 +20,8 @@ class CategoryMenuPanel extends StatelessWidget {
     this.surfaceColor = AppColors.white,
     this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
+    this.activeBackgroundColor = AppColors.primaryActiveBackground,
   });
 
   final TransactionType activeType;
@@ -34,6 +36,8 @@ class CategoryMenuPanel extends StatelessWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final Color accentColor;
+  final Color activeBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +74,8 @@ class CategoryMenuPanel extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final category = filtered[index];
                   final count =
-                      categoryTransactionCounts[category.transactionCategoryID] ??
+                      categoryTransactionCounts[category
+                          .transactionCategoryID] ??
                       0;
                   return CategoryCard(
                     category: category,
@@ -84,6 +89,8 @@ class CategoryMenuPanel extends StatelessWidget {
                     surfaceColor: surfaceColor,
                     cardSurfaceStyle: cardSurfaceStyle,
                     avatarSurfaceStyle: avatarSurfaceStyle,
+                    accentColor: accentColor,
+                    activeBackgroundColor: activeBackgroundColor,
                   );
                 },
               ),
@@ -98,7 +105,7 @@ class CategoryMenuPanel extends StatelessWidget {
             heroTag: null,
             tooltip: 'Új kategória',
             onPressed: onAdd,
-            backgroundColor: AppColors.primary,
+            backgroundColor: accentColor,
             foregroundColor: AppColors.white,
             elevation: 3,
             child: const Icon(Icons.add_rounded),

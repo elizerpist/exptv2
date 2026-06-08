@@ -237,7 +237,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _themeSettings = settings;
       _transactionHomePage = _buildTransactionHomePage();
     });
-    DebugConsole.log('[ThemeSurface] shell apply ${_settingsSignature(settings)}');
+    DebugConsole.log(
+      '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
+    );
   }
 
   void _applyFastInfoConfig(FastInfoConfig config) {
@@ -407,6 +409,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           activeTab: _activeTab,
           surfaceColor: expenseTheme.logBox,
           surfaceStyle: expenseTheme.bottomNavSurfaceStyle,
+          accentColor: expenseTheme.accent,
+          accentLightColor: expenseTheme.accentLight,
+          activeBackgroundColor: expenseTheme.activeBackground,
           unreadNotificationCount: _notificationStore.unreadCount,
           onTabSelected: _selectTab,
         ),
@@ -437,6 +442,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         return NotificationsPage(
           nativeBridge: widget.nativeBridge,
           store: _notificationStore,
+          expenseTheme: expenseTheme,
           active: false,
         );
       case AppTab.settings:
@@ -491,7 +497,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _logThemeSurfaceOnce(ExpenseTheme expenseTheme) {
-    final signature = '${_settingsSignature(expenseTheme.settings)} '
+    final signature =
+        '${_settingsSignature(expenseTheme.settings)} '
         'accent=${_hex(expenseTheme.accent)} '
         'bgColor=${_hex(expenseTheme.appBackground)} '
         'headerColor=${_hex(expenseTheme.headerCard)} '
@@ -762,6 +769,7 @@ class _CategorySheetSlotState extends State<_CategorySheetSlot> {
           bodySurfaceStyle: widget.expenseTheme.contentSurfaceStyle,
           buttonSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
           selectedSurfaceStyle: widget.expenseTheme.forcedInsetSurfaceStyle,
+          accentColor: widget.expenseTheme.accent,
           onClose: close,
           onSave: (draft) => unawaited(_saveCategory(draft)),
           onDelete: _initialCategory == null

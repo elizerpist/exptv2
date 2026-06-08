@@ -151,8 +151,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             child: Builder(
               builder: (context) {
                 final actionBottomInset = _categoryPickerOpen
-                    ? SlideUpPanelMetrics.transactionActionBottomInset + 2
-                    : SlideUpPanelMetrics.transactionClosedActionBottomInset;
+                    ? SlideUpPanelMetrics.transactionClosedActionBottomInset + 18
+                    : SlideUpPanelMetrics.transactionClosedActionBottomInset - 5;
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     SlideUpPanelMetrics.horizontalInset,
@@ -229,7 +229,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           if (_categoryPickerOpen)
                             const Spacer()
                           else
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 10),
                           DateTimeFields(
                             dateController: _date,
                             timeController: _time,
@@ -248,7 +248,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               style: const TextStyle(color: AppColors.expense),
                             ),
                           ],
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 0),
                           ExpenseSurfaceButton(
                             buttonKey: const ValueKey(
                               'transaction-save-button',

@@ -164,6 +164,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                         children: [
                           _TriggerSelector(
                             selected: _triggerType,
+                            accentColor: expenseTheme.accent,
                             onChanged: (value) {
                               setState(() => _triggerType = value);
                             },
@@ -210,13 +211,11 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                               amountSelection: _amountSelection,
                               merchantSelection: _merchantSelection,
                               advancedOpen: _advancedOpen,
-                              onAdvancedChanged: (value) => setState(
-                                () => _advancedOpen = value,
-                              ),
+                              onAdvancedChanged: (value) =>
+                                  setState(() => _advancedOpen = value),
                               onChanged: () => setState(() {}),
-                              onTrainingModeChanged: (value) => setState(
-                                () => _trainingMode = value,
-                              ),
+                              onTrainingModeChanged: (value) =>
+                                  setState(() => _trainingMode = value),
                               onTokenSelected: _selectTrainingToken,
                             ),
                           ],
@@ -233,9 +232,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                           ],
                           const SizedBox(height: 14),
                           ExpenseSurfaceButton(
-                            buttonKey: const ValueKey(
-                              'recurring-manager-save',
-                            ),
+                            buttonKey: const ValueKey('recurring-manager-save'),
                             onPressed: _saving ? null : _save,
                             icon: _editing == null
                                 ? Icons.add_rounded
@@ -250,7 +247,9 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                           if (_editing != null) ...[
                             const SizedBox(height: 8),
                             TextButton(
-                              key: const ValueKey('recurring-manager-cancel-edit'),
+                              key: const ValueKey(
+                                'recurring-manager-cancel-edit',
+                              ),
                               onPressed: _resetForm,
                               child: const Text('Szerkesztés megszakítása'),
                             ),
@@ -259,6 +258,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                           _RuleCollection(
                             rules: widget.store.recurringRules,
                             categories: widget.store.categories,
+                            accentColor: expenseTheme.accent,
                             onEdit: _editRule,
                             onToggle: widget.store.toggleRecurringRule,
                             onDelete: widget.store.deleteRecurringRule,
@@ -306,7 +306,8 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     if (categories.isEmpty) return null;
     final selected = _category;
     if (selected != null &&
-        selected.normalizedType == (_editing?.transactionType ?? widget.store.activeType) &&
+        selected.normalizedType ==
+            (_editing?.transactionType ?? widget.store.activeType) &&
         categories.any(
           (category) =>
               category.transactionCategoryID == selected.transactionCategoryID,
@@ -385,9 +386,13 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
         appFilterText: _triggerType == RecurringTriggerType.push
             ? _appFilterText.trim()
             : '',
-        packageName: _triggerType == RecurringTriggerType.push ? _packageName : '',
+        packageName: _triggerType == RecurringTriggerType.push
+            ? _packageName
+            : '',
         appLabel: _triggerType == RecurringTriggerType.push ? _appLabel : '',
-        sampleText: _triggerType == RecurringTriggerType.push ? _sample.text : '',
+        sampleText: _triggerType == RecurringTriggerType.push
+            ? _sample.text
+            : '',
         includeKeyword: _triggerType == RecurringTriggerType.push
             ? _keyword.text
             : '',
@@ -481,9 +486,8 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       _amountSelection = rule.amountSelection;
       _merchantSelection = rule.merchantSelection;
       _dateTolerance.text = rule.dateToleranceDays.toString();
-      _amountTolerancePercent.text = rule.amountTolerancePercent.toStringAsFixed(
-        0,
-      );
+      _amountTolerancePercent.text = rule.amountTolerancePercent
+          .toStringAsFixed(0);
       _amountToleranceMin.text = rule.amountToleranceMin.toStringAsFixed(0);
       _categoryPickerOpen = false;
       _error = null;
@@ -612,9 +616,14 @@ class _TitleBar extends StatelessWidget {
 }
 
 class _TriggerSelector extends StatelessWidget {
-  const _TriggerSelector({required this.selected, required this.onChanged});
+  const _TriggerSelector({
+    required this.selected,
+    required this.accentColor,
+    required this.onChanged,
+  });
 
   final RecurringTriggerType selected;
+  final Color accentColor;
   final ValueChanged<RecurringTriggerType> onChanged;
 
   @override
@@ -626,10 +635,12 @@ class _TriggerSelector extends StatelessWidget {
             child: _TriggerChoice(
               triggerType: type,
               selected: selected == type,
+              accentColor: accentColor,
               onTap: () => onChanged(type),
             ),
           ),
-          if (type != RecurringTriggerType.values.last) const SizedBox(width: 10),
+          if (type != RecurringTriggerType.values.last)
+            const SizedBox(width: 10),
         ],
       ],
     );
@@ -640,16 +651,17 @@ class _TriggerChoice extends StatelessWidget {
   const _TriggerChoice({
     required this.triggerType,
     required this.selected,
+    required this.accentColor,
     required this.onTap,
   });
 
   final RecurringTriggerType triggerType;
   final bool selected;
+  final Color accentColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    const color = AppColors.primary;
     return InkWell(
       key: ValueKey('recurring-trigger-${triggerType.nativeValue}'),
       borderRadius: BorderRadius.circular(999),
@@ -659,14 +671,16 @@ class _TriggerChoice extends StatelessWidget {
         height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.12) : AppColors.gray100,
+          color: selected
+              ? accentColor.withValues(alpha: 0.12)
+              : AppColors.gray100,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? color : AppColors.gray200),
+          border: Border.all(color: selected ? accentColor : AppColors.gray200),
         ),
         child: Text(
           triggerType.label,
           style: TextStyle(
-            color: selected ? color : AppColors.gray600,
+            color: selected ? accentColor : AppColors.gray600,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -849,13 +863,15 @@ class _PushTrainingForm extends StatelessWidget {
                   key: const ValueKey('recurring-training-amount'),
                   label: const Text('Összeg'),
                   selected: trainingMode == _TrainingMode.amount,
-                  onSelected: (_) => onTrainingModeChanged(_TrainingMode.amount),
+                  onSelected: (_) =>
+                      onTrainingModeChanged(_TrainingMode.amount),
                 ),
                 ChoiceChip(
                   key: const ValueKey('recurring-training-merchant'),
                   label: const Text('Bolt'),
                   selected: trainingMode == _TrainingMode.merchant,
-                  onSelected: (_) => onTrainingModeChanged(_TrainingMode.merchant),
+                  onSelected: (_) =>
+                      onTrainingModeChanged(_TrainingMode.merchant),
                 ),
               ],
             ),
@@ -911,7 +927,9 @@ class _PushTrainingForm extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     DebugTextField(
-                      fieldKey: const ValueKey('recurring-rule-merchant-pattern'),
+                      fieldKey: const ValueKey(
+                        'recurring-rule-merchant-pattern',
+                      ),
                       debugLabel: 'RecurringRule.merchantPattern',
                       controller: merchantPattern,
                       decoration: transactionFieldDecoration('Bolt regex'),
@@ -925,7 +943,9 @@ class _PushTrainingForm extends StatelessWidget {
                             debugLabel: 'RecurringRule.dateTolerance',
                             controller: dateTolerance,
                             keyboardType: TextInputType.number,
-                            decoration: transactionFieldDecoration('Nap szórás'),
+                            decoration: transactionFieldDecoration(
+                              'Nap szórás',
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -944,7 +964,9 @@ class _PushTrainingForm extends StatelessWidget {
                       debugLabel: 'RecurringRule.amountToleranceMin',
                       controller: amountToleranceMin,
                       keyboardType: TextInputType.number,
-                      decoration: transactionFieldDecoration('Minimum Ft szórás'),
+                      decoration: transactionFieldDecoration(
+                        'Minimum Ft szórás',
+                      ),
                     ),
                   ],
                 ),
@@ -993,7 +1015,10 @@ class _TrainingChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? color.withValues(alpha: 0.08) : AppColors.white,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color, width: selectedForActiveMode ? 2 : 1),
+          border: Border.all(
+            color: color,
+            width: selectedForActiveMode ? 2 : 1,
+          ),
         ),
         child: Text(
           token.text,
@@ -1019,10 +1044,14 @@ class _RecurringParserPreview extends StatelessWidget {
     final error = preview.errorText;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: error == null ? const Color(0xFFF0FDFA) : const Color(0xFFFEF2F2),
+        color: error == null
+            ? const Color(0xFFF0FDFA)
+            : const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: error == null ? const Color(0xFF99F6E4) : const Color(0xFFFECACA),
+          color: error == null
+              ? const Color(0xFF99F6E4)
+              : const Color(0xFFFECACA),
         ),
       ),
       child: Padding(
@@ -1087,6 +1116,7 @@ class _RuleCollection extends StatelessWidget {
   const _RuleCollection({
     required this.rules,
     required this.categories,
+    required this.accentColor,
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
@@ -1094,6 +1124,7 @@ class _RuleCollection extends StatelessWidget {
 
   final List<RecurringRule> rules;
   final List<TransactionCategory> categories;
+  final Color accentColor;
   final ValueChanged<RecurringRule> onEdit;
   final ValueChanged<RecurringRule> onToggle;
   final ValueChanged<RecurringRule> onDelete;
@@ -1119,7 +1150,11 @@ class _RuleCollection extends StatelessWidget {
           for (final rule in rules.where((row) => row.triggerType == trigger))
             _RuleCard(
               rule: rule,
-              category: CategoryColorResolver.findById(categories, rule.categoryId),
+              category: CategoryColorResolver.findById(
+                categories,
+                rule.categoryId,
+              ),
+              accentColor: accentColor,
               onEdit: () => onEdit(rule),
               onToggle: () => onToggle(rule),
               onDelete: () => onDelete(rule),
@@ -1164,6 +1199,7 @@ class _RuleCard extends StatelessWidget {
   const _RuleCard({
     required this.rule,
     required this.category,
+    required this.accentColor,
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
@@ -1171,6 +1207,7 @@ class _RuleCard extends StatelessWidget {
 
   final RecurringRule rule;
   final TransactionCategory? category;
+  final Color accentColor;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
@@ -1216,12 +1253,17 @@ class _RuleCard extends StatelessWidget {
                   '${rule.transactionType.label} · ${rule.estimatedAmount.toStringAsFixed(0)} Ft · hó ${rule.expectedDayOfMonth}.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.gray500, fontSize: 12),
+                  style: const TextStyle(
+                    color: AppColors.gray500,
+                    fontSize: 12,
+                  ),
                 ),
                 if (rule.triggerType == RecurringTriggerType.push &&
                     (rule.appLabel.isNotEmpty || rule.appFilterText.isNotEmpty))
                   Text(
-                    rule.appLabel.isNotEmpty ? rule.appLabel : rule.appFilterText,
+                    rule.appLabel.isNotEmpty
+                        ? rule.appLabel
+                        : rule.appFilterText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1238,7 +1280,7 @@ class _RuleCard extends StatelessWidget {
             onPressed: onToggle,
             icon: Icon(
               rule.isActive ? Icons.toggle_on : Icons.toggle_off_outlined,
-              color: rule.isActive ? AppColors.primary : AppColors.gray400,
+              color: rule.isActive ? accentColor : AppColors.gray400,
             ),
           ),
           IconButton(

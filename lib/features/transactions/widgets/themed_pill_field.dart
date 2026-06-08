@@ -51,10 +51,7 @@ class ThemedPillField extends StatelessWidget {
         decoration: transactionFieldDecoration(
           label,
           fillColor: surfaceColor,
-        ).copyWith(
-          suffixText: suffixText,
-          suffixIcon: suffixIcon,
-        ),
+        ).copyWith(suffixText: suffixText, suffixIcon: suffixIcon),
       );
     }
     final radius = BorderRadius.circular(25);
@@ -65,28 +62,31 @@ class ThemedPillField extends StatelessWidget {
       borderRadius: radius,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
       neutralBorder: Border.all(color: AppColors.gray200),
-      child: DebugTextField(
-        fieldKey: fieldKey,
-        debugLabel: debugLabel,
-        controller: controller,
-        focusNode: focusNode,
-        keyboardType: keyboardType,
-        minLines: minLines,
-        maxLines: maxLines,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          filled: true,
-          fillColor: Colors.transparent,
-          suffixText: suffixText,
-          suffixIcon: suffixIcon,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          disabledBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: DebugTextField(
+          fieldKey: fieldKey,
+          debugLabel: debugLabel,
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: keyboardType,
+          minLines: minLines,
+          maxLines: maxLines,
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            labelText: label,
+            filled: true,
+            fillColor: Colors.transparent,
+            suffixText: suffixText,
+            suffixIcon: suffixIcon,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            contentPadding: EdgeInsets.zero,
+          ),
         ),
       ),
     );

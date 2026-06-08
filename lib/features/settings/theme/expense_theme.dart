@@ -46,6 +46,14 @@ class ExpenseTheme {
       settings.designProfile == AppDesignProfile.neumorphism;
   bool get isNight => settings.nightMode != AppNightMode.off;
 
+  Color resolvePrimary(Color color) {
+    if (color == AppColors.primary) return accent;
+    if (color == AppColors.primaryDark) return accentDark;
+    if (color == AppColors.primaryLight) return accentLight;
+    if (color == AppColors.primaryActiveBackground) return activeBackground;
+    return color;
+  }
+
   factory ExpenseTheme.fromSettings(AppThemeSettings settings) {
     const nightCyanAccent = Color(0xFF19BFDC);
     const nightCyanBackground = Color(0xFF0B1420);
@@ -56,8 +64,7 @@ class ExpenseTheme {
     const nightAmberCard = Color(0xFF292118);
     const nightAmberSurface = Color(0xFF231D17);
 
-    final neumorphism =
-        settings.designProfile == AppDesignProfile.neumorphism;
+    final neumorphism = settings.designProfile == AppDesignProfile.neumorphism;
     final surfaceStyles = _surfaceStyles(neumorphism);
 
     if (settings.nightMode == AppNightMode.cyan) {

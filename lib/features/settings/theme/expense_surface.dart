@@ -84,7 +84,11 @@ class ExpenseSurface {
         neutralShadow: neutralShadow,
       );
     }
-    final activeNavGradient = _activeNavGradient(profile, depth);
+    final activeNavGradient = _activeNavGradient(
+      profile,
+      depth,
+      primaryColor ?? AppColors.primary,
+    );
     return switch (depth) {
       _SurfaceDepth.neutral => BoxDecoration(
         color: color,
@@ -150,27 +154,28 @@ class ExpenseSurface {
     final depth = _depthFor(style, pressed);
     if (depth == _SurfaceDepth.neutral) return const <BoxShadow>[];
     if (profile == ExpenseSurfaceProfile.activeNavItem && !primary) {
+      final navPrimaryColor = primaryColor ?? AppColors.primary;
       return switch (depth) {
         _SurfaceDepth.inset => <BoxShadow>[
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.20),
+            color: _accentDark(navPrimaryColor).withValues(alpha: 0.20),
             offset: const Offset(4, 4),
             blurRadius: 9,
           ),
           BoxShadow(
-            color: Colors.white.withValues(alpha: 0.88),
+            color: _accentLight(navPrimaryColor).withValues(alpha: 0.88),
             offset: const Offset(-4, -4),
             blurRadius: 9,
           ),
         ],
         _SurfaceDepth.deepInset => <BoxShadow>[
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.24),
+            color: _accentDark(navPrimaryColor).withValues(alpha: 0.24),
             offset: const Offset(6, 6),
             blurRadius: 12,
           ),
           BoxShadow(
-            color: Colors.white.withValues(alpha: 0.88),
+            color: _accentLight(navPrimaryColor).withValues(alpha: 0.88),
             offset: const Offset(-5, -5),
             blurRadius: 10,
           ),
@@ -286,21 +291,13 @@ class ExpenseSurface {
           ? LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[
-                light,
-                color,
-                dark,
-              ],
+              colors: <Color>[light, color, dark],
               stops: const [0, 0.46, 1],
             )
           : LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[
-                dark,
-                color,
-                light,
-              ],
+              colors: <Color>[dark, color, light],
               stops: inset ? const [0, 0.52, 1] : const [0, 0.5, 1],
             ),
       borderRadius: borderRadius,
@@ -318,8 +315,7 @@ class ExpenseSurface {
                 blurRadius: 16,
               ),
             ]
-          : pressed &&
-                style != ExpenseSurfaceInteraction.insetInset
+          : pressed && style != ExpenseSurfaceInteraction.insetInset
           ? const <BoxShadow>[
               BoxShadow(
                 color: Color(0x2406B6D4),
@@ -390,7 +386,9 @@ class ExpenseSurface {
         blurRadius: 10,
       ),
       BoxShadow(
-        color: ExpenseSurface._accentLight(primaryColor).withValues(alpha: 0.36),
+        color: ExpenseSurface._accentLight(
+          primaryColor,
+        ).withValues(alpha: 0.36),
         offset: const Offset(-4, -4),
         blurRadius: 9,
       ),
@@ -400,6 +398,7 @@ class ExpenseSurface {
   static LinearGradient? _activeNavGradient(
     ExpenseSurfaceProfile profile,
     _SurfaceDepth depth,
+    Color primaryColor,
   ) {
     if (profile != ExpenseSurfaceProfile.activeNavItem) return null;
     if (depth != _SurfaceDepth.inset && depth != _SurfaceDepth.deepInset) {
@@ -409,8 +408,8 @@ class ExpenseSurface {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: <Color>[
-        AppColors.primaryDark.withValues(alpha: 0.16),
-        AppColors.primaryLight.withValues(alpha: 0.10),
+        _accentDark(primaryColor).withValues(alpha: 0.16),
+        _accentLight(primaryColor).withValues(alpha: 0.10),
       ],
     );
   }
@@ -426,15 +425,12 @@ class ExpenseSurface {
   ) {
     return switch (style) {
       ExpenseSurfaceInteraction.neutralNeutral => _SurfaceDepth.neutral,
-      ExpenseSurfaceInteraction.neutralInset => pressed
-          ? _SurfaceDepth.inset
-          : _SurfaceDepth.neutral,
-      ExpenseSurfaceInteraction.insetInset => pressed
-          ? _SurfaceDepth.deepInset
-          : _SurfaceDepth.inset,
-      ExpenseSurfaceInteraction.raisedInset => pressed
-          ? _SurfaceDepth.inset
-          : _SurfaceDepth.raised,
+      ExpenseSurfaceInteraction.neutralInset =>
+        pressed ? _SurfaceDepth.inset : _SurfaceDepth.neutral,
+      ExpenseSurfaceInteraction.insetInset =>
+        pressed ? _SurfaceDepth.deepInset : _SurfaceDepth.inset,
+      ExpenseSurfaceInteraction.raisedInset =>
+        pressed ? _SurfaceDepth.inset : _SurfaceDepth.raised,
     };
   }
 
@@ -569,7 +565,8 @@ class ExpenseSurfaceContainer extends StatelessWidget {
           ? ClipRRect(borderRadius: borderRadius, child: content)
           : content,
     );
-    if (!animatePress) return Transform.translate(offset: offset, child: surface);
+    if (!animatePress)
+      return Transform.translate(offset: offset, child: surface);
     return TweenAnimationBuilder<Offset>(
       tween: Tween<Offset>(begin: Offset.zero, end: offset),
       duration: ExpenseSurface.pressDuration,
@@ -747,7 +744,8 @@ void _logExpenseSurfaceDebug({
 }) {
   final label = _surfaceDebugLabel(key);
   if (label == null || !_shouldLogSurface(label)) return;
-  final message = '[ThemeSurface] surface key=$label '
+  final message =
+      '[ThemeSurface] surface key=$label '
       'style=${style.nativeValue} profile=${profile.name} '
       'color=${_hex(color)} primary=$primary pressed=$pressed '
       'offset=${offset.dx.toStringAsFixed(0)},${offset.dy.toStringAsFixed(0)} '

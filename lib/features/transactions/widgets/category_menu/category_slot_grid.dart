@@ -12,6 +12,7 @@ class CategorySlotGrid extends StatelessWidget {
     required this.onSelected,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
   }) : mode = CategorySlotGridMode.colors;
 
   const CategorySlotGrid.icons({
@@ -20,6 +21,7 @@ class CategorySlotGrid extends StatelessWidget {
     required this.onSelected,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
   }) : mode = CategorySlotGridMode.icons;
 
   final CategorySlotGridMode mode;
@@ -27,6 +29,7 @@ class CategorySlotGrid extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction selectedSurfaceStyle;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -59,12 +62,14 @@ class CategorySlotGrid extends StatelessWidget {
                   selected: selected,
                   surfaceStyle: surfaceStyle,
                   selectedSurfaceStyle: selectedSurfaceStyle,
+                  accentColor: accentColor,
                 )
               : _IconSlot(
                   slot: slot,
                   selected: selected,
                   surfaceStyle: surfaceStyle,
                   selectedSurfaceStyle: selectedSurfaceStyle,
+                  accentColor: accentColor,
                 ),
         );
       },
@@ -80,12 +85,14 @@ class _ColorSlot extends StatelessWidget {
     required this.selected,
     required this.surfaceStyle,
     required this.selectedSurfaceStyle,
+    required this.accentColor,
   });
 
   final int slot;
   final bool selected;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction selectedSurfaceStyle;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -106,9 +113,7 @@ class _ColorSlot extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: selected
-            ? Border.all(color: AppColors.primary, width: 3)
-            : null,
+        border: selected ? Border.all(color: accentColor, width: 3) : null,
       ),
       padding: EdgeInsets.all(selected ? 2 : 0),
       child: DecoratedBox(
@@ -134,12 +139,14 @@ class _IconSlot extends StatelessWidget {
     required this.selected,
     required this.surfaceStyle,
     required this.selectedSurfaceStyle,
+    required this.accentColor,
   });
 
   final int slot;
   final bool selected;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction selectedSurfaceStyle;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -150,11 +157,11 @@ class _IconSlot extends StatelessWidget {
       return ExpenseSurfaceContainer(
         surfaceKey: ValueKey('icon-slot-surface-$slot'),
         style: style,
-        color: selected ? AppColors.primary : AppColors.gray100,
+        color: selected ? accentColor : AppColors.gray100,
         borderRadius: BorderRadius.circular(25),
         pressed: false,
         primary: selected,
-        primaryColor: AppColors.primary,
+        primaryColor: accentColor,
         child: Center(
           child: ImageIcon(
             CategoryIconManager.assetImage(slot),
@@ -166,10 +173,10 @@ class _IconSlot extends StatelessWidget {
     }
     return Container(
       decoration: BoxDecoration(
-        color: selected ? AppColors.primary : AppColors.gray100,
+        color: selected ? accentColor : AppColors.gray100,
         borderRadius: BorderRadius.circular(25),
         border: Border.all(
-          color: selected ? AppColors.primary : AppColors.gray200,
+          color: selected ? accentColor : AppColors.gray200,
           width: selected ? 3 : 1,
         ),
         boxShadow: [

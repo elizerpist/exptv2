@@ -19,6 +19,7 @@ class SearchPill extends StatefulWidget {
     this.categoryFilter,
     this.categoryFilterColor,
     this.onClearCategory,
+    this.accentColor = AppColors.primary,
   });
 
   final String query;
@@ -32,6 +33,7 @@ class SearchPill extends StatefulWidget {
   final String? categoryFilter;
   final Color? categoryFilterColor;
   final VoidCallback? onClearCategory;
+  final Color accentColor;
 
   @override
   State<SearchPill> createState() => _SearchPillState();
@@ -139,14 +141,14 @@ class _SearchPillState extends State<SearchPill> {
         _FilterCapsule(
           capsuleKey: const ValueKey('search-pill-capsule-merchant'),
           value: widget.merchantFilter!,
-          color: AppColors.primary,
+          color: widget.accentColor,
           onClear: widget.onClearMerchant,
         ),
       if (hasCategory)
         _FilterCapsule(
           capsuleKey: const ValueKey('search-pill-capsule-category'),
           value: widget.categoryFilter!,
-          color: widget.categoryFilterColor ?? AppColors.primary,
+          color: widget.categoryFilterColor ?? widget.accentColor,
           onClear: widget.onClearCategory,
         ),
     ];
@@ -233,7 +235,7 @@ class _SearchPillState extends State<SearchPill> {
                       vertical: 4,
                     ),
                     neutralBorder: Border.all(
-                      color: focused ? AppColors.primary : AppColors.gray200,
+                      color: focused ? widget.accentColor : AppColors.gray200,
                       width: focused ? 1.5 : 1,
                     ),
                     neutralShadow: [

@@ -14,6 +14,9 @@ class ExptBottomNav extends StatefulWidget {
     required this.onTabSelected,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
+    this.accentLightColor = AppColors.primaryLight,
+    this.activeBackgroundColor = AppColors.primaryActiveBackground,
     this.unreadNotificationCount = 0,
   });
 
@@ -21,6 +24,9 @@ class ExptBottomNav extends StatefulWidget {
   final ValueChanged<AppTab> onTabSelected;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final Color accentColor;
+  final Color accentLightColor;
+  final Color activeBackgroundColor;
   final int unreadNotificationCount;
 
   @override
@@ -102,6 +108,9 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
       active: _optimisticActiveTab == tab,
       surfaceColor: widget.surfaceColor,
       surfaceStyle: widget.surfaceStyle,
+      accentColor: widget.accentColor,
+      accentLightColor: widget.accentLightColor,
+      activeBackgroundColor: widget.activeBackgroundColor,
       badgeCount: badgeCount,
       onPointerDown: () => _handlePointerDown(tab),
       onTap: () => _handleTap(tab),

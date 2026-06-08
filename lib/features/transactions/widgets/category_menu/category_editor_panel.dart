@@ -39,6 +39,7 @@ class CategoryEditorPanel extends StatefulWidget {
     this.bodySurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
   });
 
   final TransactionType activeType;
@@ -50,6 +51,7 @@ class CategoryEditorPanel extends StatefulWidget {
   final ExpenseSurfaceInteraction bodySurfaceStyle;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction selectedSurfaceStyle;
+  final Color accentColor;
 
   @override
   State<CategoryEditorPanel> createState() => _CategoryEditorPanelState();
@@ -229,6 +231,7 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                                 surfaceStyle: widget.buttonSurfaceStyle,
                                 selectedSurfaceStyle:
                                     widget.selectedSurfaceStyle,
+                                accentColor: widget.accentColor,
                                 onSelected: (slot) =>
                                     setState(() => _colorSlot = slot),
                               )
@@ -238,6 +241,7 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                                 surfaceStyle: widget.buttonSurfaceStyle,
                                 selectedSurfaceStyle:
                                     widget.selectedSurfaceStyle,
+                                accentColor: widget.accentColor,
                                 onSelected: (slot) =>
                                     setState(() => _iconSlot = slot),
                               ),
@@ -276,6 +280,7 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                   label: 'Mentés',
                   onPressed: _save,
                   surfaceStyle: widget.buttonSurfaceStyle,
+                  color: widget.accentColor,
                 ),
               ],
             ),

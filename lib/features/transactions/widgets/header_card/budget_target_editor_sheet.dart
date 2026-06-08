@@ -167,7 +167,8 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                             amountController: _controller,
                             amountFocusNode: _amountFocus,
                             inputLabel: _inputLabel,
-                            activeColor: _activeColor,
+                            activeColor: _activeColor(expenseTheme),
+                            progressColor: expenseTheme.accent,
                             sliderValue: _sliderRange.value,
                             sliderMax: _sliderRange.max,
                             sliderEnabled: _sliderRange.enabled,
@@ -331,15 +332,15 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     };
   }
 
-  Color get _activeColor {
+  Color _activeColor(ExpenseTheme expenseTheme) {
     final category = _activeItem.category;
     if (category != null) return category.color;
     final overview = _activeItem.overview;
     return switch (overview?.kind) {
-      BudgetGoalKind.expenseBudget => AppColors.primary,
+      BudgetGoalKind.expenseBudget => expenseTheme.accent,
       BudgetGoalKind.incomeGoal => AppColors.income,
       BudgetGoalKind.savingGoal => BudgetProgressManager.savingColor,
-      null => AppColors.primary,
+      null => expenseTheme.accent,
     };
   }
 
@@ -619,6 +620,7 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.amountFocusNode,
     required this.inputLabel,
     required this.activeColor,
+    required this.progressColor,
     required this.sliderValue,
     required this.sliderMax,
     required this.sliderEnabled,
@@ -644,6 +646,7 @@ class _BudgetLimitCard extends StatelessWidget {
   final FocusNode amountFocusNode;
   final String inputLabel;
   final Color activeColor;
+  final Color progressColor;
   final double sliderValue;
   final double sliderMax;
   final bool sliderEnabled;
@@ -757,9 +760,9 @@ class _BudgetLimitCard extends StatelessWidget {
           onChangeEnd: onSliderChangeEnd,
         ),
         if (saving)
-          const SizedBox(
+          SizedBox(
             height: 2,
-            child: LinearProgressIndicator(color: AppColors.primary),
+            child: LinearProgressIndicator(color: progressColor),
           )
         else
           const SizedBox(height: 2),

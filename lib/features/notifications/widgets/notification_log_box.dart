@@ -10,11 +10,13 @@ class NotificationLogBox extends StatefulWidget {
     required this.card,
     required this.onMarkRead,
     required this.onDelete,
+    this.accentColor = AppColors.primary,
   });
 
   final ExpenseNotificationCard card;
   final ValueChanged<int> onMarkRead;
   final ValueChanged<int> onDelete;
+  final Color accentColor;
 
   @override
   State<NotificationLogBox> createState() => _NotificationLogBoxState();
@@ -90,7 +92,7 @@ class _NotificationLogBoxState extends State<NotificationLogBox> {
   Widget build(BuildContext context) {
     final categoryColor = CategoryColorResolver.color(
       snapshotHex: widget.card.categoryColor,
-      fallback: AppColors.primary,
+      fallback: widget.accentColor,
     );
     return Align(
       alignment: Alignment.topCenter,
@@ -224,10 +226,10 @@ class _NotificationLogBoxState extends State<NotificationLogBox> {
                                 widget.card.isRead
                                     ? 'Elolvasva'
                                     : 'Új értesítés',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
+                                  color: widget.accentColor,
                                 ),
                               ),
                             ),

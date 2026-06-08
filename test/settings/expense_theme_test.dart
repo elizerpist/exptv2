@@ -19,24 +19,33 @@ void main() {
     expect(theme.logBox, AppColors.gray100);
   });
 
-  test('resolves colors and ignores legacy surface overrides in normal profile', () {
-    final settings = AppThemeSettings.defaults().copyWith(
-      cardColor: AppCardColor.darkgray,
-      backgroundColor: AppBackgroundColor.darkgray,
-      boxColor: AppBoxColor.darkgray,
-      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-      contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
-    );
-    final theme = ExpenseTheme.fromSettings(settings);
+  test(
+    'resolves colors and ignores legacy surface overrides in normal profile',
+    () {
+      final settings = AppThemeSettings.defaults().copyWith(
+        cardColor: AppCardColor.darkgray,
+        backgroundColor: AppBackgroundColor.darkgray,
+        boxColor: AppBoxColor.darkgray,
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+        contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+      );
+      final theme = ExpenseTheme.fromSettings(settings);
 
-    expect(theme.headerCard, AppColors.gray200);
-    expect(theme.appBackground, AppColors.gray200);
-    expect(theme.logBox, AppColors.gray200);
-    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
-    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
-    expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
-    expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
-  });
+      expect(theme.headerCard, AppColors.gray200);
+      expect(theme.appBackground, AppColors.gray200);
+      expect(theme.logBox, AppColors.gray200);
+      expect(
+        theme.buttonSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralNeutral,
+      );
+      expect(
+        theme.contentSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralNeutral,
+      );
+      expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
+      expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
+    },
+  );
 
   test('resolves primary accent from app color and legacy migration', () {
     expect(
@@ -134,7 +143,10 @@ void main() {
       ),
     );
 
-    expect(normal.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
+    expect(
+      normal.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
     expect(normal.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
     expect(
       normal.bottomNavSurfaceStyle,
@@ -144,5 +156,27 @@ void main() {
     expect(neu.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
     expect(neu.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
     expect(neu.forcedInsetSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+  });
+
+  test('accent helpers resolve active background for all palettes', () {
+    final turquoise = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+    final pink = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(appColor: AppColorMode.pink),
+    );
+    final cyan = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(nightMode: AppNightMode.cyan),
+    );
+    final amber = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(nightMode: AppNightMode.amber),
+    );
+
+    expect(turquoise.resolvePrimary(AppColors.primary), AppColors.primary);
+    expect(pink.resolvePrimary(AppColors.primary), pink.accent);
+    expect(cyan.resolvePrimary(AppColors.primary), cyan.accent);
+    expect(amber.resolvePrimary(AppColors.primary), amber.accent);
+    expect(
+      pink.resolvePrimary(AppColors.primaryActiveBackground),
+      pink.activeBackground,
+    );
   });
 }

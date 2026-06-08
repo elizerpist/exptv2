@@ -20,6 +20,7 @@ class CategoryEditorSheet extends StatelessWidget {
     this.bodySurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.accentColor = AppColors.primary,
   });
 
   final TransactionType activeType;
@@ -30,6 +31,7 @@ class CategoryEditorSheet extends StatelessWidget {
   final ExpenseSurfaceInteraction bodySurfaceStyle;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction selectedSurfaceStyle;
+  final Color accentColor;
   final ValueChanged<CategoryDraft> onSave;
   final ValueChanged<TransactionCategory>? onDelete;
   final VoidCallback onClose;
@@ -56,6 +58,7 @@ class CategoryEditorSheet extends StatelessWidget {
           bodySurfaceStyle: bodySurfaceStyle,
           buttonSurfaceStyle: buttonSurfaceStyle,
           selectedSurfaceStyle: selectedSurfaceStyle,
+          accentColor: accentColor,
         ),
       ),
     );
