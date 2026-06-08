@@ -52,4 +52,37 @@ void main() {
       const Color(0xFF1F2937),
     );
   });
+
+  test('theme settings default to normal day turquoise profile', () {
+    final settings = AppThemeSettings.defaults();
+
+    expect(settings.designProfile, AppDesignProfile.normal);
+    expect(settings.nightMode, AppNightMode.off);
+    expect(settings.appColor, AppColorMode.turquoise);
+    expect(settings.toMap()['designProfile'], 'normal');
+    expect(settings.toMap()['nightMode'], 'off');
+    expect(settings.toMap()['appColor'], 'turquoise');
+  });
+
+  test('legacy non-neutral surface values migrate to neumorphism profile', () {
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'theme': 'Pink',
+      'buttonSurfaceStyle': 'raisedInset',
+      'contentSurfaceStyle': 'neutralNeutral',
+    });
+
+    expect(settings.designProfile, AppDesignProfile.neumorphism);
+    expect(settings.nightMode, AppNightMode.off);
+    expect(settings.appColor, AppColorMode.pink);
+  });
+
+  test('legacy dark theme migrates to night cyan', () {
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'theme': 'Sötét',
+    });
+
+    expect(settings.designProfile, AppDesignProfile.normal);
+    expect(settings.nightMode, AppNightMode.cyan);
+    expect(settings.appColor, AppColorMode.turquoise);
+  });
 }
