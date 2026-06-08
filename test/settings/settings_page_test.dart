@@ -1,6 +1,8 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/core/theme/app_dimensions.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
+import 'package:exptv2/features/settings/widgets/options/theme_options_panel.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
@@ -222,13 +224,14 @@ void main() {
     expect(find.text('Sötétebb szürke'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Neutrális -> befelé'),
+      find.text('Éjszaka Amber'),
       160,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Neutrális -> befelé'), findsWidgets);
-    expect(find.text('Kifelé -> befelé'), findsWidgets);
+    expect(find.text('Neumorphism'), findsWidgets);
+    expect(find.text('Pink'), findsWidgets);
+    expect(find.text('Éjszaka Amber'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
 
@@ -261,6 +264,45 @@ void main() {
     expect(fastInfoFrameBottom, 1200 - AppDimensions.bottomNavHeight);
     await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('theme menu exposes profile app color and night mode choices', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final updated = <AppThemeSettings>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ThemeOptionsPanel(
+          settings: AppThemeSettings.defaults(),
+          onChanged: updated.add,
+        ),
+      ),
+    );
+
+    expect(find.text('Design profil'), findsOneWidget);
+    expect(find.text('Normál (jelenlegi)'), findsOneWidget);
+    expect(find.text('Neumorphism'), findsOneWidget);
+    expect(find.text('App színe'), findsOneWidget);
+    expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
+    expect(find.text('Pink'), findsOneWidget);
+    expect(find.text('Éjszakai mód'), findsOneWidget);
+    expect(find.text('Kikapcsolva (jelenlegi)'), findsOneWidget);
+    expect(find.text('Éjszaka Cyan'), findsOneWidget);
+    expect(find.text('Éjszaka Amber'), findsOneWidget);
+    expect(find.text('Gomb design'), findsNothing);
+    expect(find.text('Logbox / search / summary design'), findsNothing);
+
+    await tester.tap(find.text('Neumorphism'));
+    expect(updated.last.designProfile, AppDesignProfile.neumorphism);
+    await tester.tap(find.text('Pink'));
+    expect(updated.last.appColor, AppColorMode.pink);
+    await tester.tap(find.text('Éjszaka Amber'));
+    expect(updated.last.nightMode, AppNightMode.amber);
   });
 
   testWidgets('permissions menu opens Android permission actions', (

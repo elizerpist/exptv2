@@ -56,10 +56,52 @@ class ThemeOptionsPanel extends StatelessWidget {
           onTap: () => onChanged(settings.copyWith(magnetType: MagnetType.adaptive)),
           preview: const _MagnetPreview(type: MagnetType.adaptive),
         ),
-        _sectionTitle('Témaszín', 'Az alkalmazás fő színe:'),
-        _colorOption('Pink', 'Elegáns rózsaszín színvilág', AppTheme.pink, const Color(0xFFEC4899)),
-        _colorOption('Türkiz', 'Jelenlegi alapértelmezett téma', AppTheme.turquoise, AppColors.primary),
-        _colorOption('Sötét üzemmód', 'Szemkímélő sötét háttér', AppTheme.dark, const Color(0xFF1F2937)),
+        _sectionTitle('Design profil', 'Az app interakciós stílusa:'),
+        _profileOption(
+          'Normál',
+          'Eredeti app design, gyári tap visszajelzés',
+          AppDesignProfile.normal,
+        ),
+        _profileOption(
+          'Neumorphism',
+          '3D felületek, shadow-only tap animáció',
+          AppDesignProfile.neumorphism,
+        ),
+        _sectionTitle('App színe', 'Nappali módban használt fő szín:'),
+        _appColorOption(
+          'Türkiz',
+          'Jelenlegi türkiz appszín',
+          AppColorMode.turquoise,
+          AppColors.primary,
+        ),
+        _appColorOption(
+          'Pink',
+          'Pink appszín nappali módhoz',
+          AppColorMode.pink,
+          const Color(0xFFEC4899),
+        ),
+        _sectionTitle(
+          'Éjszakai mód',
+          'Saját, app színtől független éjszakai paletták:',
+        ),
+        _nightOption(
+          'Kikapcsolva',
+          'Nappali háttér és app szín',
+          AppNightMode.off,
+          AppColors.gray100,
+        ),
+        _nightOption(
+          'Éjszaka Cyan',
+          'Hideg navy-cyan éjszakai mód',
+          AppNightMode.cyan,
+          const Color(0xFF19BFDC),
+        ),
+        _nightOption(
+          'Éjszaka Amber',
+          'Meleg amber éjszakai mód',
+          AppNightMode.amber,
+          const Color(0xFFF0A646),
+        ),
         _sectionTitle('Kártya színe', 'A főmenü kártya háttérszíne:'),
         _cardOption('Fehér', 'Tiszta fehér háttér', AppCardColor.white, AppColors.white),
         _cardOption('Világosszürke', 'Jelenlegi alapértelmezett szín', AppCardColor.lightgray, AppColors.gray100),
@@ -72,48 +114,6 @@ class ThemeOptionsPanel extends StatelessWidget {
         _boxOption('Fehér', 'Fehér logbox háttér', AppBoxColor.white, AppColors.white),
         _boxOption('Szürke', 'Szürke logbox háttér', AppBoxColor.gray, AppColors.gray100),
         _boxOption('Sötétebb szürke', 'Erősebb szürke logbox háttér', AppBoxColor.darkgray, AppColors.gray200),
-        _sectionTitle('Gomb design', 'Type pill, category, FAB és bottom nav interakció:'),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.neutralNeutral,
-          selected: settings.buttonSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
-        ),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.neutralInset,
-          selected: settings.buttonSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
-        ),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.insetInset,
-          selected: settings.buttonSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
-        ),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.raisedInset,
-          selected: settings.buttonSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(buttonSurfaceStyle: value)),
-        ),
-        _sectionTitle('Logbox / search / summary design', 'Tranzakció logbox, avatar, kereső és összesítő interakció:'),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.neutralNeutral,
-          selected: settings.contentSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
-        ),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.neutralInset,
-          selected: settings.contentSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
-        ),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.insetInset,
-          selected: settings.contentSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
-        ),
-        _surfaceOption(
-          value: ExpenseSurfaceInteraction.raisedInset,
-          selected: settings.contentSurfaceStyle,
-          onSelect: (value) => onChanged(settings.copyWith(contentSurfaceStyle: value)),
-        ),
       ],
     );
   }
@@ -132,12 +132,50 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _colorOption(String title, String description, AppTheme value, Color color) {
+  Widget _profileOption(
+    String title,
+    String description,
+    AppDesignProfile value,
+  ) {
     return SettingsRadioOption(
-      title: '$title${settings.theme == value ? ' (jelenlegi)' : ''}',
+      title: '$title${settings.designProfile == value ? ' (jelenlegi)' : ''}',
       description: description,
-      selected: settings.theme == value,
-      onTap: () => onChanged(settings.copyWith(theme: value)),
+      selected: settings.designProfile == value,
+      onTap: () => onChanged(_withDesignProfile(value)),
+      preview: _SurfacePreview(
+        style: value == AppDesignProfile.neumorphism
+            ? ExpenseSurfaceInteraction.raisedInset
+            : ExpenseSurfaceInteraction.neutralNeutral,
+      ),
+    );
+  }
+
+  Widget _appColorOption(
+    String title,
+    String description,
+    AppColorMode value,
+    Color color,
+  ) {
+    return SettingsRadioOption(
+      title: '$title${settings.appColor == value ? ' (jelenlegi)' : ''}',
+      description: description,
+      selected: settings.appColor == value,
+      onTap: () => onChanged(_withAppColor(value)),
+      preview: _ColorPreview(color: color),
+    );
+  }
+
+  Widget _nightOption(
+    String title,
+    String description,
+    AppNightMode value,
+    Color color,
+  ) {
+    return SettingsRadioOption(
+      title: '$title${settings.nightMode == value ? ' (jelenlegi)' : ''}',
+      description: description,
+      selected: settings.nightMode == value,
+      onTap: () => onChanged(_withNightMode(value)),
       preview: _ColorPreview(color: color),
     );
   }
@@ -172,18 +210,39 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _surfaceOption({
-    required ExpenseSurfaceInteraction value,
-    required ExpenseSurfaceInteraction selected,
-    required ValueChanged<ExpenseSurfaceInteraction> onSelect,
-  }) {
-    return SettingsRadioOption(
-      title: '${value.displayTitle}${selected == value ? ' (jelenlegi)' : ''}',
-      description: value.description,
-      selected: selected == value,
-      onTap: () => onSelect(value),
-      preview: _SurfacePreview(style: value),
+  AppThemeSettings _withDesignProfile(AppDesignProfile value) {
+    final neumorphism = value == AppDesignProfile.neumorphism;
+    return settings.copyWith(
+      designProfile: value,
+      buttonSurfaceStyle: neumorphism
+          ? ExpenseSurfaceInteraction.raisedInset
+          : ExpenseSurfaceInteraction.neutralNeutral,
+      contentSurfaceStyle: neumorphism
+          ? ExpenseSurfaceInteraction.insetInset
+          : ExpenseSurfaceInteraction.neutralNeutral,
     );
+  }
+
+  AppThemeSettings _withAppColor(AppColorMode value) {
+    return settings.copyWith(
+      appColor: value,
+      theme: settings.nightMode == AppNightMode.off
+          ? _legacyThemeForAppColor(value)
+          : settings.theme,
+    );
+  }
+
+  AppThemeSettings _withNightMode(AppNightMode value) {
+    return settings.copyWith(
+      nightMode: value,
+      theme: value == AppNightMode.off
+          ? _legacyThemeForAppColor(settings.appColor)
+          : AppTheme.dark,
+    );
+  }
+
+  AppTheme _legacyThemeForAppColor(AppColorMode value) {
+    return value == AppColorMode.pink ? AppTheme.pink : AppTheme.turquoise;
   }
 }
 
