@@ -13,11 +13,13 @@ void main() {
   final savedParserRules = <Map<dynamic, dynamic>>[];
   final savedParserProfiles = <Map<dynamic, dynamic>>[];
   var firstProfileEnabled = true;
+  var installedAppsLoadCount = 0;
 
   setUp(() {
     savedParserRules.clear();
     savedParserProfiles.clear();
     firstProfileEnabled = true;
+    installedAppsLoadCount = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(methodChannel, (call) async {
           if (call.method == 'loadEvents') {
@@ -38,6 +40,8 @@ void main() {
                   'name': 'Bank A',
                   'enabled': firstProfileEnabled,
                   'appFilterText': r'^Bank A$',
+                  'packageName': 'hu.bank.a',
+                  'appLabel': 'Bank A',
                   'sampleText': 'Paid 999 Ft at Corner Shop',
                   'includeKeyword': 'Paid',
                   'amountPattern': r'(?<amount>\d+)\s*Ft',
@@ -48,6 +52,8 @@ void main() {
                   'name': 'Bank B',
                   'enabled': !firstProfileEnabled,
                   'appFilterText': r'^Bank B$',
+                  'packageName': 'hu.bank.b',
+                  'appLabel': 'Bank B',
                   'sampleText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
                   'includeKeyword': '',
                   'amountPattern': r'(?<amount>\d[\d\s]*)\s*HUF',
@@ -63,6 +69,21 @@ void main() {
               ),
             );
             return call.arguments;
+          }
+          if (call.method == 'listInstalledApps') {
+            installedAppsLoadCount += 1;
+            return <Map<String, Object?>>[
+              <String, Object?>{
+                'packageName': 'hu.bank.a',
+                'label': 'Bank A',
+                'iconBase64': 'YmFuay1h',
+              },
+              <String, Object?>{
+                'packageName': 'hu.bank.b',
+                'label': 'Bank B',
+                'iconBase64': 'YmFuay1i',
+              },
+            ];
           }
           if (call.method == 'loadNotificationParserRule') {
             return <String, Object?>{
@@ -164,6 +185,73 @@ void main() {
 
     expect(store.notificationParserProfiles, hasLength(3));
     expect(store.selectedNotificationParserProfile.name, 'Profil 3');
+    expect(savedParserProfiles, hasLength(1));
+  });
+
+  test('caches installed app list after startup preload', () async {
+    final store = EventStore(
+      NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+      realtimeEnabled: false,
+    );
+
+    await store.start();
+    final first = await store.listInstalledApps();
+    final second = await store.listInstalledApps();
+
+    expect(first.map((app) => app.packageName), <String>[
+      'hu.bank.a',
+      'hu.bank.b',
+    ]);
+    expect(second, same(first));
+    expect(installedAppsLoadCount, 1);
+  });
+
+  test('can force refresh the installed app cache', () async {
+    final store = EventStore(
+      NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+      realtimeEnabled: false,
+    );
+
+    await store.start();
+    await store.listInstalledApps();
+    await store.listInstalledApps(forceRefresh: true);
+
+    expect(installedAppsLoadCount, 2);
+  });
+
+  test('deletes selected notification parser profile and selects fallback', () async {
+    final store = EventStore(
+      NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+      realtimeEnabled: false,
+    );
+
+    await store.start();
+    store.selectNotificationParserProfile('bank-a');
+    await store.deleteNotificationParserProfile('bank-a');
+
+    expect(store.notificationParserProfiles.map((profile) => profile.id), [
+      'bank-b',
+    ]);
+    expect(store.selectedNotificationParserProfile.id, 'bank-b');
+    expect(savedParserProfiles, hasLength(1));
+    final savedRows = savedParserProfiles.single['profiles'] as List<dynamic>;
+    expect(savedRows, hasLength(1));
+    expect((savedRows.single as Map<dynamic, dynamic>)['id'], 'bank-b');
+  });
+
+  test('deletes a non-selected notification parser profile', () async {
+    final store = EventStore(
+      NativeBridge(methodChannel: methodChannel, eventChannel: eventChannel),
+      realtimeEnabled: false,
+    );
+
+    await store.start();
+    await store.deleteNotificationParserProfile('bank-b');
+
+    expect(store.notificationParserProfiles.map((profile) => profile.id), [
+      'bank-a',
+    ]);
+    expect(store.selectedNotificationParserProfile.id, 'bank-a');
     expect(savedParserProfiles, hasLength(1));
   });
 
