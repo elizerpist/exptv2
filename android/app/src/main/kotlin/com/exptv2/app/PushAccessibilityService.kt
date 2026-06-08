@@ -38,7 +38,7 @@ class PushAccessibilityService : AccessibilityService() {
         scope.launch {
             val saved = NotificationEventRepository(this@PushAccessibilityService)
                 .insertDraft(draft)
-            EventBroadcaster.publish(saved)
+            if (saved != null) EventBroadcaster.publish(saved)
         }
     }
 

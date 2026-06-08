@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/debug/debug_console.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -65,15 +66,20 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late SettingsStore _settingsStore;
-  var _activeMenu = _SettingsMenu.root;
+  late _SettingsMenu _activeMenu;
   var _hapticFeedback = true;
   var _soundEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    _activeMenu = _menuFromKey(widget.store.settingsActiveMenuKey);
+    DebugConsole.log(
+      '[Settings] active menu restore key=${widget.store.settingsActiveMenuKey}',
+    );
     widget.store.addListener(_onStoreChanged);
     unawaited(widget.store.loadNotificationParserRule());
+    unawaited(widget.store.preloadInstalledApps());
     _settingsStore = SettingsStore(SettingsRepository(widget.nativeBridge));
     _settingsStore.addListener(_onStoreChanged);
     _settingsStore.start();
@@ -319,9 +325,13 @@ class _SettingsPageState extends State<SettingsPage> {
             profiles: widget.store.notificationParserProfiles,
             selectedProfile: widget.store.selectedNotificationParserProfile,
             preview: widget.store.notificationParserPreview,
+            installedApps: widget.store.installedApps,
             onProfileSelected: widget.store.selectNotificationParserProfile,
             onAddProfile: () {
               unawaited(widget.store.addNotificationParserProfile());
+            },
+            onDeleteProfile: (id) {
+              unawaited(widget.store.deleteNotificationParserProfile(id));
             },
             onProfileEnabledChanged: (id, enabled) {
               unawaited(
@@ -453,14 +463,26 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _open(_SettingsMenu menu) {
+    widget.store.setSettingsActiveMenuKey(_menuKey(menu));
     setState(() => _activeMenu = menu);
   }
 
   void _backFromActiveMenu() {
+    final next = _activeMenu == _SettingsMenu.pushLog
+        ? _SettingsMenu.parsedApp
+        : _SettingsMenu.root;
+    widget.store.setSettingsActiveMenuKey(_menuKey(next));
     setState(() {
-      _activeMenu = _activeMenu == _SettingsMenu.pushLog
-          ? _SettingsMenu.parsedApp
-          : _SettingsMenu.root;
+      _activeMenu = next;
     });
+  }
+
+  String _menuKey(_SettingsMenu menu) => menu.name;
+
+  _SettingsMenu _menuFromKey(String key) {
+    for (final menu in _SettingsMenu.values) {
+      if (menu.name == key) return menu;
+    }
+    return _SettingsMenu.root;
   }
 }

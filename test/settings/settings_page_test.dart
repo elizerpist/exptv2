@@ -102,7 +102,22 @@ void main() {
                     'name': 'Bank A profil',
                     'enabled': true,
                     'appFilterText': r'^Bank A$',
+                    'packageName': 'hu.bank.a',
+                    'appLabel': 'Bank A',
                     'sampleText': 'Paid 999 Ft at Corner Shop',
+                    'includeKeyword': 'Paid',
+                    'amountPattern': r'(?<amount>\d+)\s*Ft',
+                    'merchantPattern': r'at\s+(?<merchant>.+)',
+                    'transactionType': 'expense',
+                  },
+                  <String, Object?>{
+                    'id': 'bank-b',
+                    'name': 'Bank B profil',
+                    'enabled': true,
+                    'appFilterText': r'^Bank B$',
+                    'packageName': 'hu.bank.b',
+                    'appLabel': 'Bank B',
+                    'sampleText': 'Paid 1000 Ft at Backup Shop',
                     'includeKeyword': 'Paid',
                     'amountPattern': r'(?<amount>\d+)\s*Ft',
                     'merchantPattern': r'at\s+(?<merchant>.+)',
@@ -148,7 +163,20 @@ void main() {
                 },
               ];
             case 'listInstalledApps':
-              return <Map<String, Object?>>[];
+              return <Map<String, Object?>>[
+                <String, Object?>{
+                  'packageName': 'hu.bank.a',
+                  'label': 'Bank A',
+                  'iconBase64':
+                      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+                },
+                <String, Object?>{
+                  'packageName': 'hu.bank.b',
+                  'label': 'Bank B',
+                  'iconBase64':
+                      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+                },
+              ];
             case 'getStatus':
               return <String, Object?>{
                 'captureMode': 'both',
@@ -193,6 +221,16 @@ void main() {
         store: EventStore(bridge, realtimeEnabled: false),
         nativeBridge: bridge,
       ),
+    );
+  }
+
+  Widget buildSubjectWith({
+    required NativeBridge bridge,
+    required EventStore store,
+    Key? key,
+  }) {
+    return MaterialApp(
+      home: SettingsPage(key: key, store: store, nativeBridge: bridge),
     );
   }
 
@@ -402,6 +440,15 @@ void main() {
         find.byKey(const ValueKey('notification-parser-add-profile')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('notification-parser-profile-icon-bank-a')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('notification-parser-delete-profile-bank-b')),
+        findsOneWidget,
+      );
+      expect(find.text('App regex'), findsNothing);
       expect(find.text('Tanító mód'), findsOneWidget);
       expect(find.text('Haladó beállítások'), findsOneWidget);
       expect(find.text('Összeg regex'), findsNothing);
@@ -538,6 +585,77 @@ void main() {
       expect(first['transactionType'], 'income');
     },
   );
+
+  testWidgets('observed app settings can delete parser profiles', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-parser-delete-profile-bank-b')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profil törlése'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-delete-profile')));
+    await tester.pumpAndSettle();
+
+    expect(savedParserRules, isNotEmpty);
+    final profiles = savedParserRules.last['profiles'] as List<dynamic>;
+    expect(
+      profiles.map((row) => (row as Map<dynamic, dynamic>)['id']),
+      isNot(contains('bank-b')),
+    );
+  });
+
+  testWidgets('settings submenu survives page recreation with same store', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final bridge = NativeBridge(
+      methodChannel: channel,
+      eventChannel: const EventChannel('test/settings_page_events'),
+    );
+    final store = EventStore(bridge, realtimeEnabled: false);
+
+    await tester.pumpWidget(buildSubjectWith(bridge: bridge, store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Elkapott push üzenetek'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Elkapott push üzenetek'), findsWidgets);
+
+    await tester.pumpWidget(
+      buildSubjectWith(
+        key: UniqueKey(),
+        bridge: bridge,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Elkapott push üzenetek'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('parsed app submenu opens captured push messages log', (
     tester,

@@ -1,4 +1,5 @@
 import 'package:exptv2/features/settings/widgets/push_log/push_notification_log_page.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
@@ -32,6 +33,15 @@ void main() {
               };
             case 'loadNotificationParserProfiles':
               return profilePayload();
+            case 'listInstalledApps':
+              return <Map<String, Object?>>[
+                <String, Object?>{
+                  'packageName': 'hu.bank.app',
+                  'label': 'Bank',
+                  'iconBase64':
+                      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+                },
+              ];
             case 'loadNotificationEventPage':
               final args = Map<dynamic, dynamic>.from(
                 call.arguments as Map<dynamic, dynamic>,
@@ -45,7 +55,9 @@ void main() {
                       id: 77 + index,
                       appLabel: index == 0 ? 'Bank' : 'Bank $index',
                       text: index == 0
-                          ? 'Kártyás vásárlás: Tesco - 12 345 HUF'
+                          ? 'Kártyás vásárlás: Tesco - 12 345 HUF. '
+                                'Ez egy hosszabb értesítés, ami nem növelheti '
+                                'meg a logbox magasságát.'
                           : 'Kártyás vásárlás: Bolt $index - 1 000 HUF',
                       status: 'missing',
                       statusText: 'Nincs hozzárendelt log',
@@ -113,6 +125,17 @@ void main() {
     );
     expect(find.text('Bank'), findsOneWidget);
     expect(find.text('Nincs hozzárendelt log'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('push-logbox-77')),
+        matching: find.byType(Image),
+      ),
+      findsOneWidget,
+    );
+    final firstBox = tester.getRect(
+      find.byKey(const ValueKey('push-logbox-77')),
+    );
+    expect(firstBox.height, 102);
     expect(find.text('Összes'), findsOneWidget);
     expect(find.text('Van tranzakció'), findsOneWidget);
     expect(find.text('Rendszer'), findsOneWidget);
@@ -161,10 +184,32 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('push-logbox-77')));
     await tester.pumpAndSettle();
 
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('push-event-sheet')),
+    );
+    expect(
+      sheetRect.height,
+      moreOrLessEquals(
+        SlideUpPanelMetrics.fullHeightForScreen(1200),
+        epsilon: 1,
+      ),
+    );
+    expect(
+      find.byKey(const ValueKey('push-event-sheet-drag-handle')),
+      findsOneWidget,
+    );
     expect(find.text('Tanítás és log létrehozása'), findsOneWidget);
     expect(find.text('Rendszerüzenetként jelölés'), findsOneWidget);
     expect(find.text('Bezárás'), findsOneWidget);
     expect(find.text('Log létrehozása'), findsNothing);
+
+    await tester.drag(
+      find.byKey(const ValueKey('push-event-sheet-drag-handle')),
+      const Offset(0, 420),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('push-event-sheet')), findsNothing);
   });
 }
 
@@ -176,6 +221,8 @@ Map<String, Object?> profilePayload() {
         'name': 'Bank A',
         'enabled': true,
         'appFilterText': r'^Bank A$',
+        'packageName': 'hu.bank.app',
+        'appLabel': 'Bank',
         'sampleText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
         'includeKeyword': '',
         'amountPattern': r'(?<amount>\d[\d\s]*)\s*HUF',

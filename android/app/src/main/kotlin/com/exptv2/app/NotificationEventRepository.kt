@@ -11,15 +11,25 @@ class NotificationEventRepository(context: Context) {
     private val appContext = context.applicationContext
     private val dao = PushParserDatabase.get(appContext).events()
     private val expenseRepository = ExpenseRepository(appContext)
+    private val parserRuleStore = NotificationParserRuleStore(appContext)
 
-    suspend fun insertDraft(draft: EventDraft): NotificationEventEntity {
+    suspend fun insertDraft(draft: EventDraft): NotificationEventEntity? {
+        val appLabel = draft.appLabel.ifBlank { resolveAppLabel(draft.packageName) }
+        val eligibility = NotificationCaptureEligibility.evaluate(
+            profiles = parserRuleStore.activeCaptureProfiles(),
+            packageName = draft.packageName,
+            appLabel = appLabel,
+        )
+        logCaptureDecision(draft, appLabel, eligibility)
+        if (!eligibility.allowed) return null
+
         val hash = stableHash(draft.packageName, draft.title, draft.text, draft.bigText)
         val duplicate = dao.countByHash(hash) > 0
         val entity = NotificationEventEntity(
             timestamp = draft.timestamp,
             source = draft.source,
             packageName = draft.packageName,
-            appLabel = draft.appLabel.ifBlank { resolveAppLabel(draft.packageName) },
+            appLabel = appLabel,
             title = draft.title,
             text = draft.text,
             bigText = draft.bigText,
@@ -42,6 +52,21 @@ class NotificationEventRepository(context: Context) {
             )
         }
         return saved
+    }
+
+    private fun logCaptureDecision(
+        draft: EventDraft,
+        appLabel: String,
+        eligibility: NotificationCaptureEligibilityResult,
+    ) {
+        val decision = if (eligibility.allowed) "accepted" else "skipped"
+        val profile = eligibility.profileId.takeIf { it.isNotBlank() }
+            ?.let { " profile=$it" }
+            .orEmpty()
+        val message = "[PushParser] capture $decision source=${draft.source} " +
+            "package=${draft.packageName} label=$appLabel reason=${eligibility.reason}$profile"
+        Log.d("ExpenseNotification", message)
+        EventBroadcaster.publishDebugLog(message)
     }
 
     suspend fun allEvents(): List<NotificationEventEntity> = dao.allEvents()

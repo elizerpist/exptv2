@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../models/installed_app.dart';
 import '../../../../services/native_bridge.dart';
 import '../../../../state/event_store.dart';
 import '../../models/push_notification_log_event.dart';
@@ -29,6 +30,7 @@ class PushNotificationLogPage extends StatefulWidget {
 class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
   late final PushNotificationLogStore _store;
   late final TextEditingController _searchController;
+  List<InstalledApp> _installedApps = const <InstalledApp>[];
 
   @override
   void initState() {
@@ -39,6 +41,7 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
     );
     _searchController = TextEditingController();
     unawaited(_store.loadFirstPage());
+    unawaited(_loadInstalledApps());
   }
 
   @override
@@ -110,11 +113,26 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
           final event = _store.events[index];
           return PushNotificationLogBox(
             event: event,
+            app: _appFor(event.base.packageName),
             onTap: () => unawaited(_openEvent(event)),
           );
         },
       ),
     );
+  }
+
+  Future<void> _loadInstalledApps() async {
+    final apps = await widget.parserStore.listInstalledApps();
+    if (!mounted) return;
+    setState(() => _installedApps = apps);
+  }
+
+  InstalledApp? _appFor(String packageName) {
+    if (packageName.isEmpty) return null;
+    for (final app in _installedApps) {
+      if (app.packageName == packageName) return app;
+    }
+    return null;
   }
 
   Future<void> _setYear(int? year) {
@@ -137,6 +155,8 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (context) => PushNotificationEventSheet(
         event: event,
         parserStore: widget.parserStore,

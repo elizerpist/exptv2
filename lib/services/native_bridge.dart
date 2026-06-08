@@ -706,9 +706,15 @@ class NativeBridge {
     await _methodChannel.invokeMethod<void>('clearDatabase');
   }
 
-  Stream<NotificationEvent> watchEvents() {
-    return _eventChannel.receiveBroadcastStream().map((payload) {
-      return NotificationEvent.fromMap(payload as Map<dynamic, dynamic>);
+  Stream<NotificationEvent> watchEvents({void Function(String)? onDebugLog}) {
+    return _eventChannel.receiveBroadcastStream().asyncExpand((payload) {
+      final map = payload as Map<dynamic, dynamic>;
+      if (map['type'] == 'debug_log') {
+        final message = map['message']?.toString();
+        if (message != null && message.isNotEmpty) onDebugLog?.call(message);
+        return Stream<NotificationEvent>.empty();
+      }
+      return Stream<NotificationEvent>.value(NotificationEvent.fromMap(map));
     });
   }
 }

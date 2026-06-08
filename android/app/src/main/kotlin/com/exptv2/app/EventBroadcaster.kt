@@ -20,4 +20,12 @@ object EventBroadcaster {
         val payload = event.toMap()
         mainHandler.post { sink?.success(payload) }
     }
+
+    fun publishDebugLog(message: String) {
+        val payload = mapOf(
+            "type" to "debug_log",
+            "message" to message,
+        )
+        mainHandler.post { sink?.success(payload) }
+    }
 }

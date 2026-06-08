@@ -14,6 +14,18 @@ class NotificationParserRuleStore(context: Context) {
         "profiles" to normalizedProfileRows(),
     )
 
+    fun activeCaptureProfiles(): List<NotificationCaptureProfile> =
+        normalizedProfileRows().map { row ->
+            NotificationCaptureProfile(
+                id = row["id"].orEmptyString(),
+                name = row["name"].orEmptyString(),
+                enabled = row["enabled"].isEnabled(),
+                packageName = row["packageName"].orEmptyString(),
+                appLabel = row["appLabel"].orEmptyString(),
+                appFilterText = row["appFilterText"].orEmptyString(),
+            )
+        }
+
     fun saveProfiles(args: Map<*, *>): Map<String, Any?> {
         val rows = args["profiles"] as? List<*> ?: emptyList<Any?>()
         val normalizedRows = ensureAtLeastOneProfileEnabled(

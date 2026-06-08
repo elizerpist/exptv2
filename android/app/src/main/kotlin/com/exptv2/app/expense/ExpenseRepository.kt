@@ -3,6 +3,7 @@ package com.exptv2.app.expense
 import android.content.Context
 import android.util.Log
 import androidx.room.withTransaction
+import com.exptv2.app.EventBroadcaster
 import com.exptv2.app.NotificationEventEntity
 import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
 import com.exptv2.app.expense.recurring.RecurringDebugClockStore
@@ -275,15 +276,31 @@ class ExpenseRepository(context: Context) {
 
     suspend fun processNotificationEventForRecurring(event: NotificationEventEntity): Map<String, Any?>? {
         seedIfEmpty()
-        if (event.isDuplicate) return null
-        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) return null
+        pushParserDebug(
+            "process start event=${event.id} package=${event.packageName} " +
+                "label=${event.appLabel} duplicate=${event.isDuplicate}",
+        )
+        if (event.isDuplicate) {
+            pushParserDebug("process skip event=${event.id} reason=duplicate")
+            return null
+        }
+        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) {
+            pushParserDebug("process skip event=${event.id} reason=already_activated")
+            return null
+        }
         val targetMillis = event.timestamp
         ensureRecurringRuleInstancesForPeriod(targetMillis)
         val periodKey = RecurringRuleInstancePlanner.plan(targetMillis, 1, 0.0).periodKey
         val activePushRules = recurringRules.active()
             .filter { RecurringTriggerType.normalize(it.triggerType) == RecurringTriggerType.PUSH }
             .associateBy { it.id }
-        if (activePushRules.isEmpty()) return null
+        pushParserDebug(
+            "process rules event=${event.id} activePushRules=${activePushRules.size} period=$periodKey",
+        )
+        if (activePushRules.isEmpty()) {
+            pushParserDebug("process skip event=${event.id} reason=no_active_push_rules")
+            return null
+        }
         val notificationText = notificationText(event)
         val eventDate = dateFromMillis(targetMillis)
         val candidates = mutableListOf<PushRecurringCandidate>()
@@ -295,6 +312,11 @@ class ExpenseRepository(context: Context) {
                 amountPattern = rule.amountPattern,
                 merchantPattern = rule.merchantPattern,
                 includeKeyword = rule.includeKeyword,
+            )
+            pushParserDebug(
+                "parse event=${event.id} rule=${rule.id} instance=${instance.id} " +
+                    "amount=${parsed.amount} merchant=${parsed.merchant.orEmpty()} " +
+                    "error=${parsed.error.orEmpty()}",
             )
             val amount = parsed.amount ?: continue
             val merchant = parsed.merchant?.takeIf { it.isNotBlank() } ?: continue
@@ -324,19 +346,29 @@ class ExpenseRepository(context: Context) {
                     transactionType = rule.transactionType,
                 ),
             )
+            pushParserDebug(
+                "score event=${event.id} rule=${rule.id} instance=${instance.id} " +
+                    "matches=${score.matches} confidence=${"%.3f".format(score.confidence)}",
+            )
             if (score.matches) {
                 candidates.add(PushRecurringCandidate(rule, instance, parsed, score))
             }
         }
-        if (candidates.isEmpty()) return null
+        if (candidates.isEmpty()) {
+            pushParserDebug("process skip event=${event.id} reason=no_candidates")
+            return null
+        }
         if (settingsStore.loadPushRecurringConflictPolicy() == ExpenseSettingsStore.PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE && candidates.size > 1) {
-            Log.d(
-                "ExpenseNotification",
-                "[RecurringPush] ambiguous notification=${event.id} matches=${candidates.map { it.instance.id }}",
+            pushParserDebug(
+                "process ambiguous event=${event.id} matches=${candidates.map { it.instance.id }}",
             )
             return mapOf("status" to "ambiguous", "matchCount" to candidates.size)
         }
         val selected = candidates.maxByOrNull { it.score.confidence } ?: return null
+        pushParserDebug(
+            "process selected event=${event.id} rule=${selected.rule.id} " +
+                "instance=${selected.instance.id} confidence=${"%.3f".format(selected.score.confidence)}",
+        )
         return activatePushRecurringCandidate(selected, event).toMap()
     }
 
@@ -1350,6 +1382,12 @@ class ExpenseRepository(context: Context) {
     private fun notificationText(event: NotificationEventEntity): String = listOf(event.title, event.text, event.bigText, event.subText)
         .filter { it.isNotBlank() }
         .joinToString("\n")
+
+    private fun pushParserDebug(message: String) {
+        val row = "[PushParser] $message"
+        Log.d("ExpenseNotification", row)
+        EventBroadcaster.publishDebugLog(row)
+    }
 
     private suspend fun seedIfEmpty() {
         val currentVersion = seedPrefs.getInt("demo_seed_version", 0)

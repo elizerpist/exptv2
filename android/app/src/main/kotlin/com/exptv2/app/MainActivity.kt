@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Base64
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import com.exptv2.app.expense.ExpenseMethodChannel
 import com.exptv2.app.expense.recurring.RecurringAlarmMethodChannel
@@ -214,8 +215,13 @@ class MainActivity : FlutterFragmentActivity() {
             pm.getInstalledApplications(flags)
         }
 
-        return applications
-            .filter { app -> app.packageName.isNotBlank() }
+        val filtered = applications
+            .filter { app -> InstalledAppFilter.shouldShow(app.packageName, app.flags) }
+        val message = "[AppPicker] installed apps raw=${applications.size} filtered=${filtered.size}"
+        Log.d("ExpenseNotification", message)
+        EventBroadcaster.publishDebugLog(message)
+
+        return filtered
             .map { app ->
                 mapOf(
                     "packageName" to app.packageName,

@@ -9,6 +9,7 @@ void main() {
 
   const methodChannel = MethodChannel('test/methods');
   const eventChannel = EventChannel('test/events');
+  const eventMethodChannel = MethodChannel('test/events');
 
   final savedParserRules = <Map<dynamic, dynamic>>[];
   final savedParserProfiles = <Map<dynamic, dynamic>>[];
@@ -121,6 +122,8 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(methodChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(eventMethodChannel, null);
   });
 
   test('filters by app label or package only', () async {
@@ -297,6 +300,41 @@ void main() {
     expect(store.filterError, isNotNull);
     expect(store.events, hasLength(1));
     expect(store.events.single.appLabel, 'Signal');
+  });
+
+  test('watchEvents routes native debug payloads away from event parsing', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(eventMethodChannel, (call) async => null);
+    final bridge = NativeBridge(
+      methodChannel: methodChannel,
+      eventChannel: eventChannel,
+    );
+    final events = <Object>[];
+    final debugLogs = <String>[];
+
+    final subscription = bridge
+        .watchEvents(onDebugLog: debugLogs.add)
+        .listen(events.add);
+    await Future<void>.delayed(Duration.zero);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'test/events',
+          const StandardMethodCodec().encodeSuccessEnvelope(<String, Object?>{
+            'type': 'debug_log',
+            'message':
+                '[PushParser] capture skipped package=org.kustom.widget',
+          }),
+          (_) {},
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(events, isEmpty);
+    expect(debugLogs, <String>[
+      '[PushParser] capture skipped package=org.kustom.widget',
+    ]);
+
+    await subscription.cancel();
   });
 }
 

@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../models/installed_app.dart';
 import '../../models/push_notification_log_event.dart';
+import '../installed_app_icon.dart';
 
 class PushNotificationLogBox extends StatelessWidget {
   const PushNotificationLogBox({
     super.key,
     required this.event,
+    required this.app,
     required this.onTap,
   });
 
   final PushNotificationLogEvent event;
+  final InstalledApp? app;
   final VoidCallback onTap;
 
   @override
@@ -29,9 +33,9 @@ class PushNotificationLogBox extends StatelessWidget {
           border: Border.all(color: AppColors.gray200),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _SourceBadge(label: event.sourceBadge),
+            _AppBadge(app: app, label: event.sourceBadge),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -60,10 +64,10 @@ class PushNotificationLogBox extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     event.fullText,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.gray700,
@@ -71,7 +75,7 @@ class PushNotificationLogBox extends StatelessWidget {
                       height: 1.25,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: _StatusPill(
@@ -89,16 +93,25 @@ class PushNotificationLogBox extends StatelessWidget {
   }
 }
 
-class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.label});
+class _AppBadge extends StatelessWidget {
+  const _AppBadge({required this.app, required this.label});
 
+  final InstalledApp? app;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    final selectedApp = app;
+    if (selectedApp != null && selectedApp.hasIcon) {
+      return SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(child: InstalledAppIcon(app: selectedApp)),
+      );
+    }
     return Container(
-      width: 34,
-      height: 34,
+      width: 40,
+      height: 40,
       alignment: Alignment.center,
       decoration: const BoxDecoration(
         color: AppColors.gray800,
@@ -108,7 +121,7 @@ class _SourceBadge extends StatelessWidget {
         label,
         style: const TextStyle(
           color: AppColors.white,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -138,6 +151,8 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: color,
           fontSize: 11,

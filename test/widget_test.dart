@@ -1164,10 +1164,15 @@ void main() {
       find.byKey(const ValueKey('notification-parser-sample')),
       findsOneWidget,
     );
-    expect(find.text('App regex'), findsOneWidget);
-    expect(find.byTooltip('Pick installed app'), findsOneWidget);
+    expect(find.text('App regex'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('notification-parser-app-picker')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('Pick installed app'));
+    await tester.tap(
+      find.byKey(const ValueKey('notification-parser-app-picker')),
+    );
     await tester.pumpAndSettle();
     final pickerRect = tester.getRect(
       find.byKey(const ValueKey('installed-app-picker-sheet')),
@@ -1186,8 +1191,26 @@ void main() {
         epsilon: 1,
       ),
     );
+    expect(
+      find.byKey(const ValueKey('installed-app-picker-search')),
+      findsOneWidget,
+    );
     expect(find.text('Notification Test'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('installed-app-picker-search')),
+      'missing',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Notification Test'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('installed-app-picker-search')),
+      'notification',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Notification Test'), findsOneWidget);
 
     await tester.tap(find.text('Notification Test'));
     await tester.pumpAndSettle();
@@ -1201,8 +1224,8 @@ Map<String, Object?> notificationParserProfilePayload() {
     'name': 'Profil',
     'enabled': true,
     'appFilterText': '',
-    'packageName': '',
-    'appLabel': '',
+    'packageName': 'com.mand.notitest',
+    'appLabel': 'Notification Test',
     'sampleText': 'Paid 999 Ft at Corner Shop',
     'includeKeyword': '',
     'amountPattern': r'(?<amount>\d+)\s*Ft',

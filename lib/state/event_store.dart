@@ -26,10 +26,14 @@ class EventStore extends ChangeNotifier {
   NotificationParserConfig notificationParserConfig =
       NotificationParserConfig.defaults();
   String? selectedNotificationParserProfileId;
+  String settingsActiveMenuKey = 'root';
   bool loading = false;
 
   List<NotificationParserProfile> get notificationParserProfiles =>
       notificationParserConfig.profiles;
+
+  List<InstalledApp> get installedApps =>
+      _installedAppsCache ?? const <InstalledApp>[];
 
   NotificationParserProfile get selectedNotificationParserProfile =>
       notificationParserConfig.selected(selectedNotificationParserProfileId);
@@ -61,7 +65,9 @@ class EventStore extends ChangeNotifier {
     loading = false;
     notifyListeners();
     if (realtimeEnabled) {
-      _subscription ??= _bridge.watchEvents().listen((event) {
+      _subscription ??= _bridge
+          .watchEvents(onDebugLog: DebugConsole.log)
+          .listen((event) {
         _events.add(event);
         notifyListeners();
       });
@@ -104,6 +110,7 @@ class EventStore extends ChangeNotifier {
       '[AppPicker] installed apps load complete count=${apps.length} '
       'elapsed=${DateTime.now().difference(startedAt).inMilliseconds}ms',
     );
+    notifyListeners();
     return apps;
   }
 
@@ -221,6 +228,13 @@ class EventStore extends ChangeNotifier {
       '^${RegExp.escape(appName)}\$',
       caseSensitive: false,
     );
+    notifyListeners();
+  }
+
+  void setSettingsActiveMenuKey(String key) {
+    if (settingsActiveMenuKey == key) return;
+    settingsActiveMenuKey = key;
+    DebugConsole.log('[Settings] active menu saved key=$key');
     notifyListeners();
   }
 
