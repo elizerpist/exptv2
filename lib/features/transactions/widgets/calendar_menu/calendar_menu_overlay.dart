@@ -145,42 +145,54 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
             ),
             if (_mode == CalendarMenuMode.category &&
                 data.thresholdRange.min != data.thresholdRange.max)
-              CalendarValueSliderPanel.threshold(
-                value: _thresholdValue,
-                min: data.thresholdRange.min,
-                max: data.thresholdRange.max,
-                onChanged: (value) => setState(() => _thresholdValue = value),
-                onMinChanged: (value) =>
-                    setState(() => _customThresholdMin = value < 0 ? 0 : value),
-                onMaxChanged: (value) => setState(
-                  () => _customThresholdMax = value <= data.thresholdRange.min
-                      ? data.thresholdRange.min + 1
-                      : value,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: CalendarValueSliderPanel.threshold(
+                  value: _thresholdValue,
+                  min: data.thresholdRange.min,
+                  max: data.thresholdRange.max,
+                  onChanged: (value) => setState(() => _thresholdValue = value),
+                  onMinChanged: (value) => setState(
+                    () => _customThresholdMin = value < 0 ? 0 : value,
+                  ),
+                  onMaxChanged: (value) => setState(
+                    () => _customThresholdMax =
+                        value <= data.thresholdRange.min
+                        ? data.thresholdRange.min + 1
+                        : value,
+                  ),
                 ),
               ),
             if (_mode == CalendarMenuMode.heatmap)
-              CalendarValueSliderPanel.heatmap(
-                value: _heatmapCurrentValue,
-                min: _heatmapMinValue,
-                max: _heatmapMaxValue,
-                onChanged: (value) {
-                  setState(() => _heatmapCurrentValue = value);
-                },
-                onMinChanged: (value) {
-                  setState(() {
-                    _heatmapMinValue = value < 0 ? 0 : value;
-                    if (_heatmapCurrentValue <= _heatmapMinValue) {
-                      _heatmapCurrentValue = _heatmapMinValue + 100;
-                    }
-                  });
-                },
-                onMaxChanged: (value) {
-                  setState(() {
-                    _heatmapMaxValue = value <= _heatmapMinValue
-                        ? _heatmapMinValue + 1000
-                        : value;
-                  });
-                },
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: CalendarValueSliderPanel.heatmap(
+                  value: _heatmapCurrentValue,
+                  min: _heatmapMinValue,
+                  max: _heatmapMaxValue,
+                  onChanged: (value) {
+                    setState(() => _heatmapCurrentValue = value);
+                  },
+                  onMinChanged: (value) {
+                    setState(() {
+                      _heatmapMinValue = value < 0 ? 0 : value;
+                      if (_heatmapCurrentValue <= _heatmapMinValue) {
+                        _heatmapCurrentValue = _heatmapMinValue + 100;
+                      }
+                    });
+                  },
+                  onMaxChanged: (value) {
+                    setState(() {
+                      _heatmapMaxValue = value <= _heatmapMinValue
+                          ? _heatmapMinValue + 1000
+                          : value;
+                    });
+                  },
+                ),
               ),
           ],
         ),
