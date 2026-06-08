@@ -38,6 +38,7 @@ class CalendarCanvas extends StatelessWidget {
           key: const ValueKey('calendar-canvas-scroll'),
           child: GestureDetector(
             key: const ValueKey('calendar-canvas'),
+            behavior: HitTestBehavior.opaque,
             onTapUp: (details) {
               for (var i = 0; i < layout.monthRects.length; i += 1) {
                 if (layout.monthRects[i].contains(details.localPosition)) {
