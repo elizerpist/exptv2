@@ -71,11 +71,14 @@ class _InstalledAppPickerSheetState extends State<InstalledAppPickerSheet> {
                         const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final app = apps[index];
-                      return ListTile(
-                        leading: InstalledAppIcon(app: app),
-                        title: Text(app.displayName),
-                        subtitle: Text(app.packageName),
-                        onTap: () => Navigator.of(context).pop(app),
+                      return Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          leading: InstalledAppIcon(app: app),
+                          title: Text(app.displayName),
+                          subtitle: Text(app.packageName),
+                          onTap: () => Navigator.of(context).pop(app),
+                        ),
                       );
                     },
                   );

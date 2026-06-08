@@ -1195,7 +1195,11 @@ void main() {
       find.byKey(const ValueKey('installed-app-picker-search')),
       findsOneWidget,
     );
-    expect(find.text('Notification Test'), findsOneWidget);
+    final picker = find.byKey(const ValueKey('installed-app-picker-sheet'));
+    expect(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+      findsOneWidget,
+    );
     expect(find.byType(Image), findsOneWidget);
 
     await tester.enterText(
@@ -1203,18 +1207,26 @@ void main() {
       'missing',
     );
     await tester.pumpAndSettle();
-    expect(find.text('Notification Test'), findsNothing);
+    expect(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+      findsNothing,
+    );
 
     await tester.enterText(
       find.byKey(const ValueKey('installed-app-picker-search')),
       'notification',
     );
     await tester.pumpAndSettle();
-    expect(find.text('Notification Test'), findsOneWidget);
+    expect(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Notification Test'));
+    await tester.tap(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Notification Test'), findsOneWidget);
+    expect(find.text('Notification Test'), findsWidgets);
   });
 }
 

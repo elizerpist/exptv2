@@ -26,7 +26,7 @@ class PushNotificationLogBox extends StatelessWidget {
       child: Container(
         height: 92,
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(8),
