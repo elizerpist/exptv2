@@ -5,6 +5,11 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 
+data class RecurringNotificationTransactionLink(
+    val matchedNotificationEventId: Long,
+    val activatedTransactionId: Int,
+)
+
 @Dao
 interface RecurringRuleInstanceDao {
     @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' ORDER BY estimatedDate DESC, id DESC")
@@ -24,6 +29,32 @@ interface RecurringRuleInstanceDao {
 
     @Query("SELECT COUNT(*) FROM recurring_rule_instances WHERE matchedNotificationEventId = :eventId AND status = 'activated'")
     suspend fun activatedCountForNotificationEvent(eventId: Long): Int
+
+    @Query(
+        """
+        SELECT matchedNotificationEventId, activatedTransactionId
+        FROM recurring_rule_instances
+        WHERE status = 'activated'
+          AND matchedNotificationEventId IN (:eventIds)
+          AND activatedTransactionId IS NOT NULL
+        """
+    )
+    suspend fun activatedTransactionLinksForNotificationEvents(
+        eventIds: List<Long>,
+    ): List<RecurringNotificationTransactionLink>
+
+    @Query(
+        """
+        SELECT matchedNotificationEventId
+        FROM recurring_rule_instances
+        WHERE status = 'activated'
+          AND activatedTransactionId = :transactionId
+          AND matchedNotificationEventId IS NOT NULL
+        ORDER BY activatedAt DESC, id DESC
+        LIMIT 1
+        """
+    )
+    suspend fun notificationEventIdForActivatedTransaction(transactionId: Int): Long?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(row: RecurringRuleInstanceEntity): Long

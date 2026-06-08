@@ -119,7 +119,7 @@ class NotificationEventRepository(context: Context) {
                 offset = candidateOffset,
             )
             if (candidates.isEmpty()) break
-            val linked = expenseRepository.transactionsBySourceNotificationEventIds(candidates.map { it.id })
+            val linked = expenseRepository.transactionsByNotificationEventIds(candidates.map { it.id })
             for (event in candidates) {
                 val transaction = linked[event.id]
                 val status = NotificationEventStatus.forEvent(event.manualStatus, transaction?.id)
@@ -136,6 +136,13 @@ class NotificationEventRepository(context: Context) {
             candidateOffset += candidates.size
         }
         return NotificationEventPage(rows, total, pageQuery.limit, pageQuery.offset)
+    }
+
+    suspend fun eventById(id: Long): NotificationEventPageRow? {
+        val event = dao.byId(id) ?: return null
+        val transaction = expenseRepository.transactionsByNotificationEventIds(listOf(id))[id]
+        val status = NotificationEventStatus.forEvent(event.manualStatus, transaction?.id)
+        return NotificationEventPageRow(event, status, transaction?.id)
     }
 
     suspend fun markSystem(id: Long): Boolean {

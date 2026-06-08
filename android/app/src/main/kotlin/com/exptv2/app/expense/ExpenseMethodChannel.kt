@@ -145,6 +145,18 @@ class ExpenseMethodChannel(
             "expenseListTransactionPage" -> scope.launchResult(result) {
                 repository.listTransactionPage(call.argumentsMap())
             }
+            "expenseGetTransaction" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: call.argumentsMap()["id"]?.toString()?.toIntOrNull()
+                    ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction id is required")
+                repository.transactionById(id)
+            }
+            "expenseNotificationEventIdForTransaction" -> scope.launchResult(result) {
+                val id = (call.argumentsMap()["id"] as? Number)?.toInt()
+                    ?: call.argumentsMap()["id"]?.toString()?.toIntOrNull()
+                    ?: throw ExpenseValidationException("INVALID_TRANSACTION_ID", "Transaction id is required")
+                repository.notificationEventIdForTransaction(id)
+            }
             "expenseListCategories" -> scope.launchResult(result) {
                 repository.listCategories(call.argumentsMap()["type"]?.toString())
             }

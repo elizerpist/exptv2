@@ -66,6 +66,9 @@ interface ExpenseTransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun byId(id: Int): ExpenseTransactionEntity?
 
+    @Query("SELECT * FROM transactions WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<Int>): List<ExpenseTransactionEntity>
+
     @Query(
         """
         SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions

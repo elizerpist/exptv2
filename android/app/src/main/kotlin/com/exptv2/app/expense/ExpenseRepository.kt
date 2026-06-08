@@ -60,12 +60,42 @@ class ExpenseRepository(context: Context) {
         return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
     }
 
-    suspend fun transactionsBySourceNotificationEventIds(eventIds: List<Long>): Map<Long, ExpenseTransactionEntity> {
+    suspend fun transactionsBySourceNotificationEventIds(eventIds: List<Long>): Map<Long, ExpenseTransactionEntity> =
+        transactionsByNotificationEventIds(eventIds)
+
+    suspend fun transactionsByNotificationEventIds(eventIds: List<Long>): Map<Long, ExpenseTransactionEntity> {
         seedIfEmpty()
         if (eventIds.isEmpty()) return emptyMap()
-        return transactions.bySourceNotificationEventIds(eventIds)
+        val linked = transactions.bySourceNotificationEventIds(eventIds)
             .mapNotNull { row -> row.sourceNotificationEventId?.let { it to row } }
             .toMap()
+            .toMutableMap()
+        val missingEventIds = eventIds.filterNot { linked.containsKey(it) }
+        if (missingEventIds.isEmpty()) return linked
+        val recurringLinks = recurringRuleInstances
+            .activatedTransactionLinksForNotificationEvents(missingEventIds)
+        if (recurringLinks.isEmpty()) return linked
+        val transactionsById = transactions.byIds(
+            recurringLinks.map { it.activatedTransactionId }.distinct(),
+        ).associateBy { it.id }
+        for (link in recurringLinks) {
+            if (linked.containsKey(link.matchedNotificationEventId)) continue
+            val transaction = transactionsById[link.activatedTransactionId] ?: continue
+            linked[link.matchedNotificationEventId] = transaction
+        }
+        return linked
+    }
+
+    suspend fun transactionById(id: Int): Map<String, Any?>? {
+        seedIfEmpty()
+        return transactions.byId(id)?.toMap()
+    }
+
+    suspend fun notificationEventIdForTransaction(id: Int): Long? {
+        seedIfEmpty()
+        val transaction = transactions.byId(id) ?: return null
+        return transaction.sourceNotificationEventId
+            ?: recurringRuleInstances.notificationEventIdForActivatedTransaction(id)
     }
 
     suspend fun processNotificationEventForParserProfiles(
@@ -1143,6 +1173,7 @@ class ExpenseRepository(context: Context) {
             recurringTransactionId = rule.id,
             recurringRuleId = rule.id,
             recurringInstanceId = instance.id,
+            sourceNotificationEventId = event.id,
         )
         transactions.insert(transaction)
         val now = System.currentTimeMillis()

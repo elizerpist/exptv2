@@ -32,6 +32,13 @@ class ExpenseSettingsPayload {
   final SecuritySettings securitySettings;
 }
 
+int? _nullableNativeInt(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
+}
+
 class ExpenseBootstrapPayload {
   const ExpenseBootstrapPayload({
     required this.categories,
@@ -102,6 +109,14 @@ class NativeBridge {
       limit: readInt('limit'),
       offset: readInt('offset'),
     );
+  }
+
+  Future<PushNotificationLogEvent?> loadNotificationEvent(int id) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'loadNotificationEvent',
+      {'id': id},
+    );
+    return row == null ? null : PushNotificationLogEvent.fromMap(row);
   }
 
   Future<bool> markNotificationEventSystem(int id) async {
@@ -198,6 +213,22 @@ class NativeBridge {
       limit: readInt('limit'),
       offset: readInt('offset'),
     );
+  }
+
+  Future<TransactionRecord?> expenseGetTransaction(int id) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseGetTransaction',
+      {'id': id},
+    );
+    return row == null ? null : TransactionRecord.fromMap(row);
+  }
+
+  Future<int?> expenseNotificationEventIdForTransaction(int id) async {
+    final value = await _methodChannel.invokeMethod<Object?>(
+      'expenseNotificationEventIdForTransaction',
+      {'id': id},
+    );
+    return _nullableNativeInt(value);
   }
 
   Future<List<TransactionCategory>> expenseListCategories({
