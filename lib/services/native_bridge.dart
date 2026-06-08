@@ -667,6 +667,21 @@ class NativeBridge {
     return NotificationParserRule.fromMap(map ?? rule.toMap());
   }
 
+  Future<bool> loadAutomaticPushParserEnabled() async {
+    final enabled = await _methodChannel.invokeMethod<bool>(
+      'loadAutomaticPushParserEnabled',
+    );
+    return enabled ?? true;
+  }
+
+  Future<bool> saveAutomaticPushParserEnabled(bool enabled) async {
+    final saved = await _methodChannel.invokeMethod<bool>(
+      'saveAutomaticPushParserEnabled',
+      enabled,
+    );
+    return saved ?? enabled;
+  }
+
   Future<void> setCaptureMode(CaptureMode mode) async {
     await _methodChannel.invokeMethod<void>('setCaptureMode', mode.nativeValue);
   }

@@ -25,6 +25,7 @@ class EventStore extends ChangeNotifier {
   ServiceStatus? status;
   NotificationParserConfig notificationParserConfig =
       NotificationParserConfig.defaults();
+  bool automaticPushParserEnabled = true;
   String? selectedNotificationParserProfileId;
   String settingsActiveMenuKey = 'root';
   String shellActiveTabKey = 'home';
@@ -60,6 +61,7 @@ class EventStore extends ChangeNotifier {
       ..clear()
       ..addAll(await _bridge.loadEvents());
     notificationParserConfig = await _bridge.loadNotificationParserProfiles();
+    automaticPushParserEnabled = await _bridge.loadAutomaticPushParserEnabled();
     selectedNotificationParserProfileId = _firstProfileId();
     await preloadInstalledApps();
     status = await _bridge.getStatus();
@@ -119,7 +121,17 @@ class EventStore extends ChangeNotifier {
 
   Future<void> loadNotificationParserProfiles() async {
     notificationParserConfig = await _bridge.loadNotificationParserProfiles();
+    automaticPushParserEnabled = await _bridge.loadAutomaticPushParserEnabled();
     selectedNotificationParserProfileId = _firstProfileId();
+    notifyListeners();
+  }
+
+  Future<void> setAutomaticPushParserEnabled(bool enabled) async {
+    automaticPushParserEnabled = enabled;
+    notifyListeners();
+    automaticPushParserEnabled = await _bridge.saveAutomaticPushParserEnabled(
+      enabled,
+    );
     notifyListeners();
   }
 

@@ -2,6 +2,7 @@ package com.exptv2.app
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -25,7 +26,7 @@ class NotificationParserRuleStoreTest {
     }
 
     @Test
-    fun saveProfilesKeepsAtLeastOneProfileEnabled() {
+    fun saveProfilesPreservesDisabledProfiles() {
         val saved = store.saveProfiles(
             mapOf(
                 "profiles" to listOf(
@@ -39,12 +40,12 @@ class NotificationParserRuleStoreTest {
         val first = profiles.first() as Map<*, *>
         val second = profiles[1] as Map<*, *>
 
-        assertEquals(true, first["enabled"])
+        assertEquals(false, first["enabled"])
         assertEquals(false, second["enabled"])
     }
 
     @Test
-    fun loadProfilesRepairsStoredDisabledProfiles() {
+    fun loadProfilesPreservesStoredDisabledProfiles() {
         context.getSharedPreferences("pushparser_settings", Context.MODE_PRIVATE)
             .edit()
             .putString(
@@ -63,8 +64,22 @@ class NotificationParserRuleStoreTest {
             (row as Map<*, *>)["enabled"] == true
         }
 
-        assertEquals(1, enabledCount)
-        assertTrue((loaded.first() as Map<*, *>)["enabled"] == true)
+        assertEquals(0, enabledCount)
+        assertFalse((loaded.first() as Map<*, *>)["enabled"] == true)
+    }
+
+    @Test
+    fun automaticPushParserProcessingDefaultsToEnabled() {
+        assertTrue(store.automaticPushParserEnabled())
+    }
+
+    @Test
+    fun automaticPushParserProcessingPersistsDisabledState() {
+        store.setAutomaticPushParserEnabled(false)
+
+        val reloaded = NotificationParserRuleStore(context)
+
+        assertFalse(reloaded.automaticPushParserEnabled())
     }
 }
 

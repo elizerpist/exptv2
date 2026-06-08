@@ -157,6 +157,10 @@ void main() {
               };
             case 'saveNotificationParserRule':
               return call.arguments;
+            case 'loadAutomaticPushParserEnabled':
+              return true;
+            case 'saveAutomaticPushParserEnabled':
+              return call.arguments;
             case 'expenseListRecurringTransactions':
               return <Map<String, Object?>>[
                 recurringRow(id: 7, isActive: true),
@@ -409,6 +413,23 @@ void main() {
       final payload = calls.last.arguments as Map<dynamic, dynamic>;
       expect(payload['amountPattern'], r'(?<amount>\d+)\s*HUF');
       expect(payload['merchantPattern'], r'bolt:\s*(?<merchant>.+)');
+    },
+  );
+
+  test(
+    'loads and saves automatic push parser toggle through native bridge',
+    () async {
+      final loaded = await bridge.loadAutomaticPushParserEnabled();
+
+      expect(loaded, isTrue);
+
+      final saved = await bridge.saveAutomaticPushParserEnabled(false);
+
+      expect(saved, isFalse);
+      expect(calls.map((call) => call.method), containsAll(<String>[
+        'loadAutomaticPushParserEnabled',
+        'saveAutomaticPushParserEnabled',
+      ]));
     },
   );
 

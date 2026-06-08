@@ -30,6 +30,13 @@ class NotificationParserRuleStore(context: Context) {
         "profiles" to normalizedProfileRows(),
     )
 
+    fun automaticPushParserEnabled(): Boolean =
+        prefs.getBoolean(KEY_AUTOMATIC_PUSH_PARSER_ENABLED, true)
+
+    fun setAutomaticPushParserEnabled(enabled: Boolean): Boolean = enabled.also {
+        prefs.edit().putBoolean(KEY_AUTOMATIC_PUSH_PARSER_ENABLED, enabled).apply()
+    }
+
     fun activeCaptureProfiles(): List<NotificationCaptureProfile> =
         normalizedProfileRows().map { row ->
             NotificationCaptureProfile(
@@ -65,11 +72,9 @@ class NotificationParserRuleStore(context: Context) {
 
     fun saveProfiles(args: Map<*, *>): Map<String, Any?> {
         val rows = args["profiles"] as? List<*> ?: emptyList<Any?>()
-        val normalizedRows = ensureAtLeastOneProfileEnabled(
-            rows.mapNotNull { row ->
-                if (row is Map<*, *>) row.toStringMap() else null
-            },
-        )
+        val normalizedRows = rows.mapNotNull { row ->
+            if (row is Map<*, *>) row.toStringMap() else null
+        }.ifEmpty { listOf(defaultProfile()) }
         val json = JSONArray()
         normalizedRows.forEach { row -> json.put(JSONObject(row)) }
         prefs.edit().putString(KEY_PROFILES_JSON, json.toString()).apply()
@@ -118,16 +123,7 @@ class NotificationParserRuleStore(context: Context) {
     }
 
     private fun normalizedProfileRows(): List<Map<String, Any?>> =
-        ensureAtLeastOneProfileEnabled(loadProfileRows())
-
-    private fun ensureAtLeastOneProfileEnabled(rows: List<Map<String, Any?>>): List<Map<String, Any?>> {
-        val baseRows = rows.ifEmpty { listOf(defaultProfile()) }
-        if (baseRows.any { row -> row["enabled"].isEnabled() }) return baseRows
-        return baseRows.mapIndexed { index, row ->
-            if (index != 0) return@mapIndexed row
-            row.toMutableMap().apply { put("enabled", true) }
-        }
-    }
+        loadProfileRows().ifEmpty { listOf(defaultProfile()) }
 
     private fun defaultProfile(): Map<String, Any?> = mapOf(
         "id" to "profile-1",
@@ -178,6 +174,7 @@ class NotificationParserRuleStore(context: Context) {
     companion object {
         private const val KEY_PROFILES_JSON = "parser_profiles_json"
         private const val KEY_ENABLED = "parser_enabled"
+        private const val KEY_AUTOMATIC_PUSH_PARSER_ENABLED = "automatic_push_parser_enabled"
         private const val KEY_SAMPLE_TEXT = "parser_sample_text"
         private const val KEY_INCLUDE_KEYWORD = "parser_include_keyword"
         private const val KEY_AMOUNT_PATTERN = "parser_amount_pattern"

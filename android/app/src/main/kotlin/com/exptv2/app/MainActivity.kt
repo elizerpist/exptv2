@@ -147,6 +147,19 @@ class MainActivity : FlutterFragmentActivity() {
                         val rule = withContext(Dispatchers.IO) { parserRuleStore.save(args) }
                         result.success(rule)
                     }
+                    "loadAutomaticPushParserEnabled" -> scope.launch {
+                        val enabled = withContext(Dispatchers.IO) {
+                            parserRuleStore.automaticPushParserEnabled()
+                        }
+                        result.success(enabled)
+                    }
+                    "saveAutomaticPushParserEnabled" -> scope.launch {
+                        val enabled = call.arguments as? Boolean ?: true
+                        val saved = withContext(Dispatchers.IO) {
+                            parserRuleStore.setAutomaticPushParserEnabled(enabled)
+                        }
+                        result.success(saved)
+                    }
                     else -> {
                         if (!expenseChannel.handle(call, result)) {
                             result.notImplemented()

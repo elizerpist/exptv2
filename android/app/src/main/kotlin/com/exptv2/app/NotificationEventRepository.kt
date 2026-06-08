@@ -15,6 +15,10 @@ class NotificationEventRepository(context: Context) {
 
     suspend fun insertDraft(draft: EventDraft): NotificationEventEntity? {
         val appLabel = draft.appLabel.ifBlank { resolveAppLabel(draft.packageName) }
+        if (!parserRuleStore.automaticPushParserEnabled()) {
+            logCaptureSkip(draft, appLabel, "global_disabled")
+            return null
+        }
         val eligibility = NotificationCaptureEligibility.evaluate(
             profiles = parserRuleStore.activeCaptureProfiles(),
             packageName = draft.packageName,
@@ -66,6 +70,17 @@ class NotificationEventRepository(context: Context) {
             )
         }
         return saved
+    }
+
+    private fun logCaptureSkip(
+        draft: EventDraft,
+        appLabel: String,
+        reason: String,
+    ) {
+        val message = "[PushParser] capture skipped source=${draft.source} " +
+            "package=${draft.packageName} label=$appLabel reason=$reason"
+        Log.d("ExpenseNotification", message)
+        EventBroadcaster.publishDebugLog(message)
     }
 
     private fun logCaptureDecision(

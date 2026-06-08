@@ -73,7 +73,7 @@ class NotificationCaptureEligibilityTest {
                     id = "legacy-package",
                     packageName = "",
                     appLabel = "",
-                    appFilterText = "legacy\\.bank",
+                    appFilterText = "legacy\.bank",
                 ),
             ),
             packageName = "hu.legacy.bank",
@@ -86,7 +86,7 @@ class NotificationCaptureEligibilityTest {
     }
 
     @Test
-    fun ignoresDisabledProfiles() {
+    fun reportsDisabledProfileWhenOnlyProfileIsDisabled() {
         val result = NotificationCaptureEligibility.evaluate(
             profiles = listOf(
                 captureProfile(
@@ -102,7 +102,64 @@ class NotificationCaptureEligibilityTest {
         )
 
         assertFalse(result.allowed)
-        assertEquals("no_enabled_profiles", result.reason)
+        assertEquals("profile_disabled", result.reason)
+        assertEquals("bank-a", result.profileId)
+    }
+
+    @Test
+    fun reportsDisabledProfileWhenOnlyMatchingProfileIsDisabled() {
+        val result = NotificationCaptureEligibility.evaluate(
+            profiles = listOf(
+                captureProfile(
+                    id = "erste",
+                    enabled = false,
+                    packageName = "hu.erste.bank",
+                    appLabel = "Erste",
+                    appFilterText = "^Erste$",
+                ),
+                captureProfile(
+                    id = "revolut",
+                    enabled = true,
+                    packageName = "com.revolut.revolut",
+                    appLabel = "Revolut",
+                    appFilterText = "^Revolut$",
+                ),
+            ),
+            packageName = "hu.erste.bank",
+            appLabel = "Erste",
+        )
+
+        assertFalse(result.allowed)
+        assertEquals("profile_disabled", result.reason)
+        assertEquals("erste", result.profileId)
+    }
+
+    @Test
+    fun disabledDifferentProfileDoesNotBlockEnabledProfile() {
+        val result = NotificationCaptureEligibility.evaluate(
+            profiles = listOf(
+                captureProfile(
+                    id = "erste",
+                    enabled = false,
+                    packageName = "hu.erste.bank",
+                    appLabel = "Erste",
+                    appFilterText = "^Erste$",
+                ),
+                captureProfile(
+                    id = "revolut",
+                    enabled = true,
+                    packageName = "com.revolut.revolut",
+                    appLabel = "Revolut",
+                    appFilterText = "^Revolut$",
+                ),
+            ),
+            packageName = "com.revolut.revolut",
+            appLabel = "Revolut",
+        )
+
+        assertTrue(result.allowed)
+        assertEquals("package", result.reason)
+        assertEquals("revolut", result.profileId)
     }
 }
 

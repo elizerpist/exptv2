@@ -23,50 +23,76 @@ object NotificationCaptureEligibility {
         appLabel: String,
     ): NotificationCaptureEligibilityResult {
         val enabledProfiles = profiles.filter { it.enabled }
-        if (enabledProfiles.isEmpty()) {
-            return NotificationCaptureEligibilityResult(false, "no_enabled_profiles")
-        }
-
-        var configuredProfileCount = 0
+        var configuredEnabledProfileCount = 0
         for (profile in enabledProfiles) {
-            val configuredPackage = profile.packageName.trim()
-            if (configuredPackage.isNotEmpty()) {
-                configuredProfileCount += 1
-                if (configuredPackage == packageName) {
-                    return NotificationCaptureEligibilityResult(
-                        allowed = true,
-                        reason = "package",
-                        profileId = profile.id,
-                        profileName = profile.name,
-                    )
-                }
-                continue
-            }
-
-            val filter = profile.appFilterText.trim()
-            if (filter.isEmpty()) continue
-            configuredProfileCount += 1
-            val matches = runCatching {
-                val regex = Regex(filter, RegexOption.IGNORE_CASE)
-                regex.containsMatchIn(appLabel) || regex.containsMatchIn(packageName)
-            }.getOrDefault(false)
-            if (matches) {
+            val match = matchProfile(profile, packageName, appLabel)
+            if (match.configured) configuredEnabledProfileCount += 1
+            if (match.matches) {
                 return NotificationCaptureEligibilityResult(
                     allowed = true,
-                    reason = "app_filter",
+                    reason = match.reason,
                     profileId = profile.id,
                     profileName = profile.name,
                 )
             }
         }
 
+        for (profile in profiles.filterNot { it.enabled }) {
+            val match = matchProfile(profile, packageName, appLabel)
+            if (match.matches) {
+                return NotificationCaptureEligibilityResult(
+                    allowed = false,
+                    reason = "profile_disabled",
+                    profileId = profile.id,
+                    profileName = profile.name,
+                )
+            }
+        }
+
+        if (enabledProfiles.isEmpty()) {
+            return NotificationCaptureEligibilityResult(false, "no_enabled_profiles")
+        }
+
         return NotificationCaptureEligibilityResult(
             allowed = false,
-            reason = if (configuredProfileCount == 0) {
+            reason = if (configuredEnabledProfileCount == 0) {
                 "no_profile_app"
             } else {
                 "no_profile_match"
             },
         )
     }
+
+    private fun matchProfile(
+        profile: NotificationCaptureProfile,
+        packageName: String,
+        appLabel: String,
+    ): ProfileMatch {
+        val configuredPackage = profile.packageName.trim()
+        if (configuredPackage.isNotEmpty()) {
+            return ProfileMatch(
+                configured = true,
+                matches = configuredPackage == packageName,
+                reason = "package",
+            )
+        }
+
+        val filter = profile.appFilterText.trim()
+        if (filter.isEmpty()) return ProfileMatch(configured = false)
+        val matches = runCatching {
+            val regex = Regex(filter, RegexOption.IGNORE_CASE)
+            regex.containsMatchIn(appLabel) || regex.containsMatchIn(packageName)
+        }.getOrDefault(false)
+        return ProfileMatch(
+            configured = true,
+            matches = matches,
+            reason = "app_filter",
+        )
+    }
+
+    private data class ProfileMatch(
+        val configured: Boolean,
+        val matches: Boolean = false,
+        val reason: String = "",
+    )
 }

@@ -308,6 +308,26 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 16),
           SettingsSection(
+            title: 'Automatikus push import',
+            children: [
+              SettingsOptionItem(
+                title: 'Háttérben figyelés',
+                subtitle:
+                    'Bekapcsolva csak az aktív app-profilok értesítéseiből készül tranzakció',
+                trailing: Switch(
+                  value: widget.store.automaticPushParserEnabled,
+                  onChanged: (value) {
+                    unawaited(
+                      widget.store.setAutomaticPushParserEnabled(value),
+                    );
+                  },
+                ),
+                isLast: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SettingsSection(
             title: 'PushParser napló',
             children: [
               SettingsOptionItem(
