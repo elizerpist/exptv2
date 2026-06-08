@@ -1,9 +1,17 @@
 package com.exptv2.app
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "notification_events")
+@Entity(
+    tableName = "notification_events",
+    indices = [
+        Index(value = ["timestamp", "id"]),
+        Index("packageName"),
+        Index("manualStatus"),
+    ],
+)
 data class NotificationEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val timestamp: Long,
@@ -19,6 +27,7 @@ data class NotificationEventEntity(
     val accessibilityEventType: String,
     val hash: String,
     val isDuplicate: Boolean,
+    val manualStatus: String = "",
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "id" to id,
@@ -35,5 +44,6 @@ data class NotificationEventEntity(
         "accessibilityEventType" to accessibilityEventType,
         "hash" to hash,
         "isDuplicate" to isDuplicate,
+        "manualStatus" to manualStatus,
     )
 }

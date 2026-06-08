@@ -125,6 +125,60 @@ void main() {
     },
   );
 
+  test(
+    'builds tokens for all words and amounts in two-amount wallet messages',
+    () {
+      final tokens = NotificationTrainingToken.fromSample(
+        "🍽️ 3\u00A0085\u00A0Ft összeget fizettél itt: nyírő.\n"
+        "A(z) HUF Zseb egyenlege: 71\u00A0795,87\u00A0Ft.",
+      ).map((token) => token.text).toList();
+
+      expect(tokens, contains('3 085 Ft'));
+      expect(tokens, contains('71 795,87 Ft'));
+      expect(tokens, contains('itt'));
+      expect(tokens, contains('nyírő'));
+    },
+  );
+
+  test(
+    'learns selected paid amount instead of wallet balance from user sample',
+    () {
+      final profile = NotificationParserProfile.defaults().copyWith(
+        sampleText:
+            "🍽️ 3\u00A0085\u00A0Ft összeget fizettél itt: nyírő.\n"
+            "A(z) HUF Zseb egyenlege: 71\u00A0795,87\u00A0Ft.",
+        includeKeyword: 'fizettél',
+      );
+
+      final trained = profile
+          .learnAmountFromSelection('3 085 Ft')
+          .learnMerchantFromSelection('nyírő');
+
+      expect(trained.preview.isReady, isTrue);
+      expect(trained.preview.amountText, '3 085 Ft');
+      expect(trained.preview.amountValue, 3085);
+      expect(trained.preview.merchant, 'nyírő');
+    },
+  );
+
+  test('can learn the second amount when the user selects it', () {
+    final profile = NotificationParserProfile.defaults().copyWith(
+      sampleText:
+          "🍽️ 3\u00A0085\u00A0Ft összeget fizettél itt: nyírő.\n"
+          "A(z) HUF Zseb egyenlege: 71\u00A0795,87\u00A0Ft.",
+      includeKeyword: 'fizettél',
+    );
+
+    final trained = profile
+        .learnAmountFromSelection('71 795,87 Ft')
+        .learnMerchantFromSelection('nyírő');
+
+    expect(trained.preview.isReady, isTrue);
+    expect(trained.preview.amountText, '71 795,87 Ft');
+    expect(trained.preview.amountValue, 71795.87);
+    expect(trained.preview.merchant, 'nyírő');
+  });
+
   test('reports invalid regex without throwing', () {
     final rule = NotificationParserRule.defaults().copyWith(amountPattern: '[');
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/debug/debug_console.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -18,12 +19,14 @@ import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
 import 'widgets/options/simple_options_panel.dart';
 import 'widgets/options/theme_options_panel.dart';
+import 'widgets/push_log/push_notification_log_page.dart';
 import 'widgets/security/biometric_settings_panel.dart';
 import 'widgets/security/pin_settings_panel.dart';
 
 enum _SettingsMenu {
   root,
   parsedApp,
+  pushLog,
   permissions,
   fastInfo,
   statistics,
@@ -63,15 +66,20 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late SettingsStore _settingsStore;
-  var _activeMenu = _SettingsMenu.root;
+  late _SettingsMenu _activeMenu;
   var _hapticFeedback = true;
   var _soundEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    _activeMenu = _menuFromKey(widget.store.settingsActiveMenuKey);
+    DebugConsole.log(
+      '[Settings] active menu restore key=${widget.store.settingsActiveMenuKey}',
+    );
     widget.store.addListener(_onStoreChanged);
     unawaited(widget.store.loadNotificationParserRule());
+    unawaited(widget.store.preloadInstalledApps());
     _settingsStore = SettingsStore(SettingsRepository(widget.nativeBridge));
     _settingsStore.addListener(_onStoreChanged);
     _settingsStore.start();
@@ -101,7 +109,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _onStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final storeMenu = _menuFromKey(widget.store.settingsActiveMenuKey);
+    setState(() {
+      _activeMenu = storeMenu;
+    });
   }
 
   @override
@@ -123,7 +135,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_activeMenu == _SettingsMenu.root) return _buildRootMenu();
     return SettingsSubmenuShell(
       title: _menuTitle(_activeMenu),
-      onBack: () => setState(() => _activeMenu = _SettingsMenu.root),
+      onBack: _backFromActiveMenu,
       child: _submenuBody(_activeMenu),
     );
   }
@@ -157,7 +169,7 @@ class _SettingsPageState extends State<SettingsPage> {
               title: 'Alkalmazás beállítások',
               children: [
                 SettingsOptionItem(
-                  title: 'Megfigyelni kívánt alkalmazás',
+                  title: 'Push import',
                   onTap: () => _open(_SettingsMenu.parsedApp),
                 ),
                 SettingsOptionItem(
@@ -300,13 +312,30 @@ class _SettingsPageState extends State<SettingsPage> {
             style: TextStyle(color: AppColors.gray600),
           ),
           const SizedBox(height: 16),
+          SettingsSection(
+            title: 'PushParser napló',
+            children: [
+              SettingsOptionItem(
+                title: 'Elkapott push üzenetek',
+                subtitle:
+                    'Év, hónap, app, szöveg és log kapcsolat szerint szűrhető',
+                onTap: () => _open(_SettingsMenu.pushLog),
+                isLast: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           NotificationParserProfilesPanel(
             profiles: widget.store.notificationParserProfiles,
             selectedProfile: widget.store.selectedNotificationParserProfile,
             preview: widget.store.notificationParserPreview,
+            installedApps: widget.store.installedApps,
             onProfileSelected: widget.store.selectNotificationParserProfile,
             onAddProfile: () {
               unawaited(widget.store.addNotificationParserProfile());
+            },
+            onDeleteProfile: (id) {
+              unawaited(widget.store.deleteNotificationParserProfile(id));
             },
             onProfileEnabledChanged: (id, enabled) {
               unawaited(
@@ -324,6 +353,10 @@ class _SettingsPageState extends State<SettingsPage> {
             onLoadInstalledApps: widget.store.listInstalledApps,
           ),
         ],
+      ),
+      _SettingsMenu.pushLog => PushNotificationLogPage(
+        nativeBridge: widget.nativeBridge,
+        parserStore: widget.store,
       ),
       _SettingsMenu.permissions => PermissionsOptionsPanel(
         nativeBridge: widget.nativeBridge,
@@ -354,8 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
         onRefreshAvailability: _settingsStore.refreshBiometricAvailability,
         onAuthenticate: widget.nativeBridge.expenseAuthenticateBiometric,
         onSetEnabled: _settingsStore.setBiometricEnabled,
-        onOpenPinSettings: () =>
-            setState(() => _activeMenu = _SettingsMenu.pinSecurity),
+        onOpenPinSettings: () => _open(_SettingsMenu.pinSecurity),
       ),
       _SettingsMenu.currency => const SimpleOptionsPanel(
         title: 'Pénznem kiválasztása',
@@ -399,7 +431,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _menuTitle(_SettingsMenu menu) {
     return switch (menu) {
-      _SettingsMenu.parsedApp => 'Megfigyelni kívánt alkalmazás',
+      _SettingsMenu.parsedApp => 'Push import',
+      _SettingsMenu.pushLog => 'Elkapott push üzenetek',
       _SettingsMenu.permissions => 'Engedélyek',
       _SettingsMenu.fastInfo => 'FastInfo',
       _SettingsMenu.statistics => 'Statisztikák',
@@ -433,6 +466,26 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _open(_SettingsMenu menu) {
+    widget.store.setSettingsActiveMenuKey(_menuKey(menu));
     setState(() => _activeMenu = menu);
+  }
+
+  void _backFromActiveMenu() {
+    final next = _activeMenu == _SettingsMenu.pushLog
+        ? _SettingsMenu.parsedApp
+        : _SettingsMenu.root;
+    widget.store.setSettingsActiveMenuKey(_menuKey(next));
+    setState(() {
+      _activeMenu = next;
+    });
+  }
+
+  String _menuKey(_SettingsMenu menu) => menu.name;
+
+  _SettingsMenu _menuFromKey(String key) {
+    for (final menu in _SettingsMenu.values) {
+      if (menu.name == key) return menu;
+    }
+    return _SettingsMenu.root;
   }
 }

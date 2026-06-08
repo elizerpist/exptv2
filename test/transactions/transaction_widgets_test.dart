@@ -650,6 +650,56 @@ void main() {
     expect(badge.showShadow, isFalse);
   });
 
+  testWidgets('log list renders uncategorized transaction question avatar', (
+    tester,
+  ) async {
+    final record = TransactionRecord.fromMap({
+      'id': 26060701,
+      'date': '2026.06.07',
+      'time': '21:10',
+      'merchant': 'Tesco',
+      'amount': -12345,
+      'userAssignedName': null,
+      'transactionCategoryID': null,
+      'sourceNotificationEventId': 77,
+    });
+    var categoryTapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 220,
+          child: TransactionLogList(
+            entries: [
+              TransactionLogEntry.header(record.date),
+              TransactionLogEntry.record(record),
+            ],
+            categories: [sampleExpenseCategory()],
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (_) => categoryTapped = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.question_mark), findsOneWidget);
+    final question = tester.widget<Icon>(find.byIcon(Icons.question_mark));
+    expect(question.color, AppColors.white);
+
+    final avatarSurface = tester.widget<Container>(
+      find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
+    );
+    final decoration = avatarSurface.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.gray500);
+
+    await tester.tap(
+      find.byKey(ValueKey('transaction-logbox-avatar-${record.id}')),
+    );
+    expect(categoryTapped, isFalse);
+  });
+
   testWidgets('avatar press does not press the whole logbox surface', (
     tester,
   ) async {
@@ -679,7 +729,9 @@ void main() {
     final rowDecoration =
         tester
                 .widget<Container>(
-                  find.byKey(ValueKey('transaction-logbox-content-${record.id}')),
+                  find.byKey(
+                    ValueKey('transaction-logbox-content-${record.id}'),
+                  ),
                 )
                 .decoration!
             as BoxDecoration;

@@ -37,8 +37,10 @@ class CategoryDonutChart extends StatelessWidget {
       if (date == null || date.year != year || transaction.amount >= 0) {
         continue;
       }
+      final categoryId = transaction.transactionCategoryID;
+      if (categoryId == null) continue;
       totals.update(
-        transaction.transactionCategoryID,
+        categoryId,
         (value) => value + transaction.amount.abs(),
         ifAbsent: () => transaction.amount.abs(),
       );

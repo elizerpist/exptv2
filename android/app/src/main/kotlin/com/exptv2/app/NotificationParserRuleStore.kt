@@ -4,6 +4,22 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+data class NotificationParserProfileRule(
+    val id: String,
+    val name: String,
+    val enabled: Boolean,
+    val appFilterText: String,
+    val packageName: String,
+    val appLabel: String,
+    val sampleText: String,
+    val includeKeyword: String,
+    val amountPattern: String,
+    val merchantPattern: String,
+    val amountSelection: String,
+    val merchantSelection: String,
+    val transactionType: String,
+)
+
 class NotificationParserRuleStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(
         "pushparser_settings",
@@ -11,22 +27,58 @@ class NotificationParserRuleStore(context: Context) {
     )
 
     fun loadProfiles(): Map<String, Any?> = mapOf(
-        "profiles" to loadProfileRows(),
+        "profiles" to normalizedProfileRows(),
     )
+
+    fun activeCaptureProfiles(): List<NotificationCaptureProfile> =
+        normalizedProfileRows().map { row ->
+            NotificationCaptureProfile(
+                id = row["id"].orEmptyString(),
+                name = row["name"].orEmptyString(),
+                enabled = row["enabled"].isEnabled(),
+                packageName = row["packageName"].orEmptyString(),
+                appLabel = row["appLabel"].orEmptyString(),
+                appFilterText = row["appFilterText"].orEmptyString(),
+            )
+        }
+
+    fun activeParserProfiles(): List<NotificationParserProfileRule> =
+        normalizedProfileRows()
+            .filter { row -> row["enabled"].isEnabled() }
+            .map { row ->
+                NotificationParserProfileRule(
+                    id = row["id"].orEmptyString(),
+                    name = row["name"].orEmptyString(),
+                    enabled = row["enabled"].isEnabled(),
+                    appFilterText = row["appFilterText"].orEmptyString(),
+                    packageName = row["packageName"].orEmptyString(),
+                    appLabel = row["appLabel"].orEmptyString(),
+                    sampleText = row["sampleText"].orEmptyString(),
+                    includeKeyword = row["includeKeyword"].orEmptyString(),
+                    amountPattern = row["amountPattern"].orEmptyString(),
+                    merchantPattern = row["merchantPattern"].orEmptyString(),
+                    amountSelection = row["amountSelection"].orEmptyString(),
+                    merchantSelection = row["merchantSelection"].orEmptyString(),
+                    transactionType = row["transactionType"].orExpenseType(),
+                )
+            }
 
     fun saveProfiles(args: Map<*, *>): Map<String, Any?> {
         val rows = args["profiles"] as? List<*> ?: emptyList<Any?>()
+        val normalizedRows = ensureAtLeastOneProfileEnabled(
+            rows.mapNotNull { row ->
+                if (row is Map<*, *>) row.toStringMap() else null
+            },
+        )
         val json = JSONArray()
-        rows.forEach { row ->
-            if (row is Map<*, *>) json.put(JSONObject(row.toStringMap()))
-        }
+        normalizedRows.forEach { row -> json.put(JSONObject(row)) }
         prefs.edit().putString(KEY_PROFILES_JSON, json.toString()).apply()
         return loadProfiles()
     }
 
-    fun load(): Map<String, Any?> = loadProfileRows().firstOrNull()?.let { row ->
+    fun load(): Map<String, Any?> = normalizedProfileRows().firstOrNull()?.let { row ->
         mapOf(
-            "enabled" to (row["enabled"] as? Boolean ?: true),
+            "enabled" to row["enabled"].isEnabled(),
             "sampleText" to row["sampleText"].orEmptyString(),
             "includeKeyword" to row["includeKeyword"].orEmptyString(),
             "amountPattern" to row["amountPattern"].orEmptyString(),
@@ -38,9 +90,9 @@ class NotificationParserRuleStore(context: Context) {
     } ?: defaultProfile()
 
     fun save(args: Map<*, *>): Map<String, Any?> {
-        val current = loadProfileRows().firstOrNull() ?: defaultProfile()
+        val current = normalizedProfileRows().firstOrNull() ?: defaultProfile()
         val row = current.toMutableMap().apply {
-            put("enabled", args["enabled"] as? Boolean ?: current["enabled"] as Boolean)
+            put("enabled", args["enabled"]?.isEnabled() ?: current["enabled"].isEnabled())
             put("sampleText", args["sampleText"]?.toString() ?: current["sampleText"].orEmptyString())
             put("includeKeyword", args["includeKeyword"]?.toString() ?: current["includeKeyword"].orEmptyString())
             put("amountPattern", args["amountPattern"]?.toString() ?: current["amountPattern"].orEmptyString())
@@ -63,6 +115,18 @@ class NotificationParserRuleStore(context: Context) {
             }.getOrDefault(listOf(defaultProfile()))
         }
         return listOf(defaultProfile())
+    }
+
+    private fun normalizedProfileRows(): List<Map<String, Any?>> =
+        ensureAtLeastOneProfileEnabled(loadProfileRows())
+
+    private fun ensureAtLeastOneProfileEnabled(rows: List<Map<String, Any?>>): List<Map<String, Any?>> {
+        val baseRows = rows.ifEmpty { listOf(defaultProfile()) }
+        if (baseRows.any { row -> row["enabled"].isEnabled() }) return baseRows
+        return baseRows.mapIndexed { index, row ->
+            if (index != 0) return@mapIndexed row
+            row.toMutableMap().apply { put("enabled", true) }
+        }
     }
 
     private fun defaultProfile(): Map<String, Any?> = mapOf(
@@ -99,6 +163,12 @@ class NotificationParserRuleStore(context: Context) {
     private fun Any?.orEmptyString(): String = this?.toString().orEmpty()
 
     private fun Any?.orExpenseType(): String = this?.toString().toExpenseType()
+
+    private fun Any?.isEnabled(): Boolean = when (this) {
+        is Boolean -> this
+        is String -> equals("true", ignoreCase = true)
+        else -> false
+    }
 
     private fun String?.toExpenseType(): String = when (this?.trim()?.lowercase()) {
         "income", "bevétel" -> "income"

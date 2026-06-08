@@ -3,7 +3,11 @@ package com.exptv2.app.expense
 import android.content.Context
 import android.util.Log
 import androidx.room.withTransaction
+import com.exptv2.app.EventBroadcaster
+import com.exptv2.app.NotificationCaptureEligibility
+import com.exptv2.app.NotificationCaptureProfile
 import com.exptv2.app.NotificationEventEntity
+import com.exptv2.app.NotificationParserProfileRule
 import com.exptv2.app.expense.recurring.RecurringAlarmScheduler
 import com.exptv2.app.expense.recurring.RecurringDebugClockStore
 import java.util.Calendar
@@ -54,6 +58,105 @@ class ExpenseRepository(context: Context) {
     suspend fun categoryCounts(): Map<Int, Int> {
         seedIfEmpty()
         return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
+    }
+
+    suspend fun transactionsBySourceNotificationEventIds(eventIds: List<Long>): Map<Long, ExpenseTransactionEntity> {
+        seedIfEmpty()
+        if (eventIds.isEmpty()) return emptyMap()
+        return transactions.bySourceNotificationEventIds(eventIds)
+            .mapNotNull { row -> row.sourceNotificationEventId?.let { it to row } }
+            .toMap()
+    }
+
+    suspend fun processNotificationEventForParserProfiles(
+        event: NotificationEventEntity,
+        profiles: List<NotificationParserProfileRule>,
+    ): Map<String, Any?>? {
+        seedIfEmpty()
+        pushParserDebug(
+            "auto process start event=${event.id} package=${event.packageName} " +
+                "label=${event.appLabel} duplicate=${event.isDuplicate} profiles=${profiles.size}",
+        )
+        if (event.isDuplicate) {
+            pushParserDebug("auto skip event=${event.id} reason=duplicate")
+            return null
+        }
+        if (transactions.bySourceNotificationEventId(event.id) != null) {
+            pushParserDebug("auto skip event=${event.id} reason=already_linked")
+            return null
+        }
+        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) {
+            pushParserDebug("auto skip event=${event.id} reason=recurring_already_activated")
+            return null
+        }
+
+        val text = notificationText(event)
+        for (profile in profiles) {
+            val eligibility = NotificationCaptureEligibility.evaluate(
+                profiles = listOf(
+                    NotificationCaptureProfile(
+                        id = profile.id,
+                        name = profile.name,
+                        enabled = profile.enabled,
+                        packageName = profile.packageName,
+                        appLabel = profile.appLabel,
+                        appFilterText = profile.appFilterText,
+                    ),
+                ),
+                packageName = event.packageName,
+                appLabel = event.appLabel,
+            )
+            if (!eligibility.allowed) {
+                pushParserDebug(
+                    "auto profile skip event=${event.id} profile=${profile.id} " +
+                        "reason=${eligibility.reason}",
+                )
+                continue
+            }
+            val parsed = PushRecurringParser.parse(
+                text = text,
+                amountPattern = profile.amountPattern,
+                merchantPattern = profile.merchantPattern,
+                includeKeyword = profile.includeKeyword,
+            )
+            pushParserDebug(
+                "auto parse event=${event.id} profile=${profile.id} " +
+                    "amount=${parsed.amount} merchant=${parsed.merchant.orEmpty()} " +
+                    "error=${parsed.error.orEmpty()}",
+            )
+            val amount = parsed.amount ?: continue
+            val merchant = parsed.merchant?.takeIf { it.isNotBlank() } ?: continue
+            if (parsed.error != null) continue
+            val date = dateFromMillis(event.timestamp)
+            val categoryId = inheritedCategoryIdForMerchant(merchant, null)
+            val signedAmount = if (profile.transactionType == "income") {
+                kotlin.math.abs(amount)
+            } else {
+                -kotlin.math.abs(amount)
+            }
+            val transaction = ExpenseTransactionEntity(
+                id = nextId(date),
+                date = date,
+                time = timeFromMillis(event.timestamp),
+                latitude = null,
+                longitude = null,
+                address = "Push notification",
+                merchant = merchant,
+                amount = signedAmount,
+                userAssignedName = null,
+                transactionCategoryID = categoryId,
+                sourceNotificationEventId = event.id,
+            )
+            transactions.insert(transaction)
+            pushParserDebug(
+                "auto transaction created event=${event.id} profile=${profile.id} " +
+                    "transaction=${transaction.id} merchant=$merchant " +
+                    "amount=${transaction.amount} category=$categoryId",
+            )
+            return transaction.toMap()
+        }
+        pushParserDebug("auto skip event=${event.id} reason=no_parser_profile_match")
+        return null
     }
 
 
@@ -267,15 +370,31 @@ class ExpenseRepository(context: Context) {
 
     suspend fun processNotificationEventForRecurring(event: NotificationEventEntity): Map<String, Any?>? {
         seedIfEmpty()
-        if (event.isDuplicate) return null
-        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) return null
+        pushParserDebug(
+            "process start event=${event.id} package=${event.packageName} " +
+                "label=${event.appLabel} duplicate=${event.isDuplicate}",
+        )
+        if (event.isDuplicate) {
+            pushParserDebug("process skip event=${event.id} reason=duplicate")
+            return null
+        }
+        if (recurringRuleInstances.activatedCountForNotificationEvent(event.id) > 0) {
+            pushParserDebug("process skip event=${event.id} reason=already_activated")
+            return null
+        }
         val targetMillis = event.timestamp
         ensureRecurringRuleInstancesForPeriod(targetMillis)
         val periodKey = RecurringRuleInstancePlanner.plan(targetMillis, 1, 0.0).periodKey
         val activePushRules = recurringRules.active()
             .filter { RecurringTriggerType.normalize(it.triggerType) == RecurringTriggerType.PUSH }
             .associateBy { it.id }
-        if (activePushRules.isEmpty()) return null
+        pushParserDebug(
+            "process rules event=${event.id} activePushRules=${activePushRules.size} period=$periodKey",
+        )
+        if (activePushRules.isEmpty()) {
+            pushParserDebug("process skip event=${event.id} reason=no_active_push_rules")
+            return null
+        }
         val notificationText = notificationText(event)
         val eventDate = dateFromMillis(targetMillis)
         val candidates = mutableListOf<PushRecurringCandidate>()
@@ -287,6 +406,11 @@ class ExpenseRepository(context: Context) {
                 amountPattern = rule.amountPattern,
                 merchantPattern = rule.merchantPattern,
                 includeKeyword = rule.includeKeyword,
+            )
+            pushParserDebug(
+                "parse event=${event.id} rule=${rule.id} instance=${instance.id} " +
+                    "amount=${parsed.amount} merchant=${parsed.merchant.orEmpty()} " +
+                    "error=${parsed.error.orEmpty()}",
             )
             val amount = parsed.amount ?: continue
             val merchant = parsed.merchant?.takeIf { it.isNotBlank() } ?: continue
@@ -316,19 +440,29 @@ class ExpenseRepository(context: Context) {
                     transactionType = rule.transactionType,
                 ),
             )
+            pushParserDebug(
+                "score event=${event.id} rule=${rule.id} instance=${instance.id} " +
+                    "matches=${score.matches} confidence=${"%.3f".format(score.confidence)}",
+            )
             if (score.matches) {
                 candidates.add(PushRecurringCandidate(rule, instance, parsed, score))
             }
         }
-        if (candidates.isEmpty()) return null
+        if (candidates.isEmpty()) {
+            pushParserDebug("process skip event=${event.id} reason=no_candidates")
+            return null
+        }
         if (settingsStore.loadPushRecurringConflictPolicy() == ExpenseSettingsStore.PUSH_RECURRING_POLICY_ASK_ON_MULTIPLE && candidates.size > 1) {
-            Log.d(
-                "ExpenseNotification",
-                "[RecurringPush] ambiguous notification=${event.id} matches=${candidates.map { it.instance.id }}",
+            pushParserDebug(
+                "process ambiguous event=${event.id} matches=${candidates.map { it.instance.id }}",
             )
             return mapOf("status" to "ambiguous", "matchCount" to candidates.size)
         }
         val selected = candidates.maxByOrNull { it.score.confidence } ?: return null
+        pushParserDebug(
+            "process selected event=${event.id} rule=${selected.rule.id} " +
+                "instance=${selected.instance.id} confidence=${"%.3f".format(selected.score.confidence)}",
+        )
         return activatePushRecurringCandidate(selected, event).toMap()
     }
 
@@ -594,11 +728,13 @@ class ExpenseRepository(context: Context) {
             throw ExpenseValidationException("INVALID_TRANSACTION_TYPE", "Type must be income or expense")
         }
 
-        val categoryId = (args["transactionCategoryID"] as? Number)?.toInt()
-            ?: args["transactionCategoryID"]?.toString()?.toIntOrNull()
-            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category is required")
-        val category = categories.byId(categoryId)
-            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val requestedCategoryId = optionalInt(args["transactionCategoryID"])
+        val categoryId = inheritedCategoryIdForMerchant(merchant, requestedCategoryId)
+        val category = categoryId?.let { id ->
+            categories.byId(id)
+                ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        }
+        val sourceNotificationEventId = optionalLong(args["sourceNotificationEventId"])
 
         val date = formatDate(args["date"]?.toString())
         val time = args["time"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: "00:00"
@@ -614,16 +750,18 @@ class ExpenseRepository(context: Context) {
             amount = signedAmount,
             userAssignedName = args["userAssignedName"]?.toString(),
             transactionCategoryID = categoryId,
+            sourceNotificationEventId = sourceNotificationEventId,
         )
         transactions.insert(row)
         Log.d(
             "ExpenseNotification",
             "[Notification] transaction saved id=${row.id} amount=${row.amount} category=${row.transactionCategoryID}",
         )
-        if (row.amount < 0) {
+        if (row.amount < 0 && category != null) {
             emitLimitAlertsForTransaction(row, category)
         } else {
-            Log.d("ExpenseNotification", "[Notification] transaction limit evaluation skipped id=${row.id} reason=non_expense")
+            val reason = if (row.amount >= 0) "non_expense" else "missing_category"
+            Log.d("ExpenseNotification", "[Notification] transaction limit evaluation skipped id=${row.id} reason=$reason")
         }
         return row.toMap()
     }
@@ -651,9 +789,15 @@ class ExpenseRepository(context: Context) {
             throw ExpenseValidationException("INVALID_TRANSACTION_TYPE", "Type must be income or expense")
         }
 
-        val categoryId = optionalInt(args["transactionCategoryID"]) ?: existing.transactionCategoryID
-        val category = categories.byId(categoryId)
-            ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        val categoryId = if (args.containsKey("transactionCategoryID")) {
+            optionalInt(args["transactionCategoryID"])
+        } else {
+            existing.transactionCategoryID
+        }
+        val category = categoryId?.let { id ->
+            categories.byId(id)
+                ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category does not exist")
+        }
 
         val signedAmount = if (type == "income") kotlin.math.abs(rawAmount) else -kotlin.math.abs(rawAmount)
         val row = existing.copy(
@@ -673,13 +817,20 @@ class ExpenseRepository(context: Context) {
             "ExpenseNotification",
             "[Notification] transaction update saved id=${row.id} oldAmount=${existing.amount} newAmount=${row.amount} oldCategory=${existing.transactionCategoryID} newCategory=${row.transactionCategoryID} oldDate=${existing.date} newDate=${row.date}",
         )
-        if (row.amount < 0) {
+        if (row.amount < 0 && category != null) {
             emitLimitAlertsForTransaction(row, category)
         } else {
+            val reason = if (row.amount >= 0) "non_expense" else "missing_category"
             Log.d(
                 "ExpenseNotification",
-                "[Notification] transaction update limit evaluation skipped id=${row.id} reason=non_expense",
+                "[Notification] transaction update limit evaluation skipped id=${row.id} reason=$reason",
             )
+        }
+        if (
+            row.transactionCategoryID != null &&
+            row.transactionCategoryID != existing.transactionCategoryID
+        ) {
+            propagateCategoryForMerchant(existing.merchant, row.transactionCategoryID)
         }
         return row.toMap()
     }
@@ -706,6 +857,35 @@ class ExpenseRepository(context: Context) {
         val originalMerchant = args["originalMerchant"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
             ?: throw ExpenseValidationException("INVALID_MERCHANT", "Original merchant is required")
         return transactions.resetNamesByMerchant(originalMerchant)
+    }
+
+    private suspend fun inheritedCategoryIdForMerchant(
+        merchant: String,
+        explicitCategoryId: Int?,
+    ): Int? {
+        if (explicitCategoryId != null) return explicitCategoryId
+        val key = merchant.trim()
+        if (key.isEmpty()) return null
+        val inherited = transactions.latestCategoryIdForMerchant(key)
+        Log.d(
+            "ExpenseRepository",
+            "[MerchantCategory] inherit merchant=$key category=$inherited",
+        )
+        return inherited
+    }
+
+    private suspend fun propagateCategoryForMerchant(
+        merchant: String,
+        categoryId: Int,
+    ): Int {
+        val key = merchant.trim()
+        if (key.isEmpty()) return 0
+        val count = transactions.updateCategoryByMerchant(key, categoryId)
+        Log.d(
+            "ExpenseRepository",
+            "[MerchantCategory] propagate merchant=$key category=$categoryId rows=$count",
+        )
+        return count
     }
 
 
@@ -784,7 +964,7 @@ class ExpenseRepository(context: Context) {
         val startedAt = System.currentTimeMillis()
         val periods = ExpenseLimitNotificationEvaluator.periodsFor(transaction.date)
         val limits = categoryLimits.activeExpenseLimitsForTransaction(
-            categoryId = transaction.transactionCategoryID,
+            categoryId = transactionCategory.transactionCategoryID,
             monthKey = periods.monthKey,
             yearKey = periods.yearKey,
         )
@@ -929,7 +1109,7 @@ class ExpenseRepository(context: Context) {
                 ),
                 notificationCards,
             )
-            categories.byId(transaction.transactionCategoryID)?.let { emitLimitAlertsForTransaction(transaction, it) }
+            categoryFor(transaction)?.let { category -> emitLimitAlertsForTransaction(transaction, category) }
             processed.add(rule.copy(updatedAt = now))
         }
         return processed
@@ -982,7 +1162,7 @@ class ExpenseRepository(context: Context) {
             ),
             notificationCards,
         )
-        categories.byId(transaction.transactionCategoryID)?.let { emitLimitAlertsForTransaction(transaction, it) }
+        categoryFor(transaction)?.let { category -> emitLimitAlertsForTransaction(transaction, category) }
         return transaction
     }
 
@@ -1090,7 +1270,7 @@ class ExpenseRepository(context: Context) {
                 notificationCards,
             )
             if (transaction.amount < 0) {
-                val category = categories.byId(transaction.transactionCategoryID)
+                val category = categoryFor(transaction)
                 if (category != null) {
                     emitLimitAlertsForTransaction(transaction, category)
                 } else {
@@ -1333,6 +1513,12 @@ class ExpenseRepository(context: Context) {
         .filter { it.isNotBlank() }
         .joinToString("\n")
 
+    private fun pushParserDebug(message: String) {
+        val row = "[PushParser] $message"
+        Log.d("ExpenseNotification", row)
+        EventBroadcaster.publishDebugLog(row)
+    }
+
     private suspend fun seedIfEmpty() {
         val currentVersion = seedPrefs.getInt("demo_seed_version", 0)
         if (currentVersion < ExpenseSeedData.version) {
@@ -1455,6 +1641,16 @@ class ExpenseRepository(context: Context) {
 
     private fun optionalInt(value: Any?): Int? {
         return (value as? Number)?.toInt() ?: value?.toString()?.toIntOrNull()
+    }
+
+    private fun optionalLong(value: Any?): Long? = when (value) {
+        is Number -> value.toLong()
+        null -> null
+        else -> value.toString().toLongOrNull()
+    }
+
+    private suspend fun categoryFor(transaction: ExpenseTransactionEntity): TransactionCategoryEntity? {
+        return transaction.transactionCategoryID?.let { categoryId -> categories.byId(categoryId) }
     }
 
     private fun doubleArg(value: Any?, fallback: Double): Double {

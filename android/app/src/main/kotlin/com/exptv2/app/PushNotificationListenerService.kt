@@ -31,7 +31,7 @@ class PushNotificationListenerService : NotificationListenerService() {
         scope.launch {
             val saved = NotificationEventRepository(this@PushNotificationListenerService)
                 .insertDraft(draft)
-            EventBroadcaster.publish(saved)
+            if (saved != null) EventBroadcaster.publish(saved)
         }
     }
 }

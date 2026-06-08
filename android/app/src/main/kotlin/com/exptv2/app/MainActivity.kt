@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Base64
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import com.exptv2.app.expense.ExpenseMethodChannel
 import com.exptv2.app.expense.recurring.RecurringAlarmMethodChannel
@@ -52,6 +53,19 @@ class MainActivity : FlutterFragmentActivity() {
                             repository.allEvents().map { it.toMap() }
                         }
                         result.success(events)
+                    }
+                    "loadNotificationEventPage" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val page = withContext(Dispatchers.IO) { repository.listPage(args).toMap() }
+                        result.success(page)
+                    }
+                    "markNotificationEventSystem" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val id = (args["id"] as? Number)?.toLong()
+                            ?: args["id"]?.toString()?.toLongOrNull()
+                            ?: 0L
+                        val updated = withContext(Dispatchers.IO) { repository.markSystem(id) }
+                        result.success(updated)
                     }
                     "listInstalledApps" -> scope.launch {
                         val apps = withContext(Dispatchers.IO) { installedApps() }
@@ -201,8 +215,13 @@ class MainActivity : FlutterFragmentActivity() {
             pm.getInstalledApplications(flags)
         }
 
-        return applications
-            .filter { app -> app.packageName.isNotBlank() }
+        val filtered = applications
+            .filter { app -> InstalledAppFilter.shouldShow(app.packageName, app.flags) }
+        val message = "[AppPicker] installed apps raw=${applications.size} filtered=${filtered.size}"
+        Log.d("ExpenseNotification", message)
+        EventBroadcaster.publishDebugLog(message)
+
+        return filtered
             .map { app ->
                 mapOf(
                     "packageName" to app.packageName,

@@ -7,6 +7,7 @@ import '../../../models/installed_app.dart';
 import '../../transactions/models/transaction_category.dart';
 import '../models/notification_parser_rule.dart';
 import 'app_filter_control.dart';
+import 'installed_app_icon.dart';
 
 enum _TrainingMode { amount, merchant }
 
@@ -18,8 +19,10 @@ class NotificationParserProfilesPanel extends StatelessWidget {
     required this.profiles,
     required this.selectedProfile,
     required this.preview,
+    required this.installedApps,
     required this.onProfileSelected,
     required this.onAddProfile,
+    required this.onDeleteProfile,
     required this.onProfileEnabledChanged,
     required this.onProfileChanged,
     required this.onSaveProfile,
@@ -29,8 +32,10 @@ class NotificationParserProfilesPanel extends StatelessWidget {
   final List<NotificationParserProfile> profiles;
   final NotificationParserProfile selectedProfile;
   final NotificationParserPreview preview;
+  final List<InstalledApp> installedApps;
   final ValueChanged<String> onProfileSelected;
   final VoidCallback onAddProfile;
+  final ValueChanged<String> onDeleteProfile;
   final void Function(String id, bool enabled) onProfileEnabledChanged;
   final ValueChanged<NotificationParserProfile> onProfileChanged;
   final VoidCallback onSaveProfile;
@@ -65,8 +70,10 @@ class NotificationParserProfilesPanel extends StatelessWidget {
         for (final profile in profiles) ...[
           _ProfileListTile(
             profile: profile,
+            app: _appFor(profile),
             selected: profile.id == selectedProfile.id,
             onTap: () => onProfileSelected(profile.id),
+            onDelete: () => _confirmDelete(context, profile),
             onEnabledChanged: (enabled) =>
                 onProfileEnabledChanged(profile.id, enabled),
           ),
@@ -83,19 +90,56 @@ class NotificationParserProfilesPanel extends StatelessWidget {
       ],
     );
   }
+
+  InstalledApp? _appFor(NotificationParserProfile profile) {
+    if (profile.packageName.isEmpty) return null;
+    for (final app in installedApps) {
+      if (app.packageName == profile.packageName) return app;
+    }
+    return null;
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    NotificationParserProfile profile,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Profil törlése'),
+        content: Text('Törlöd ezt a profilt? ${profile.name}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-delete-profile'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Törlés'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) onDeleteProfile(profile.id);
+  }
 }
 
 class _ProfileListTile extends StatelessWidget {
   const _ProfileListTile({
     required this.profile,
+    required this.app,
     required this.selected,
     required this.onTap,
+    required this.onDelete,
     required this.onEnabledChanged,
   });
 
   final NotificationParserProfile profile;
+  final InstalledApp? app;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
   final ValueChanged<bool> onEnabledChanged;
 
   @override
@@ -116,6 +160,20 @@ class _ProfileListTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
+              SizedBox(
+                key: ValueKey('notification-parser-profile-icon-${profile.id}'),
+                width: 42,
+                child: Center(
+                  child: app == null
+                      ? const Icon(
+                          Icons.apps,
+                          color: AppColors.gray500,
+                          size: 28,
+                        )
+                      : InstalledAppIcon(app: app!),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,6 +206,12 @@ class _ProfileListTile extends StatelessWidget {
                 ),
                 value: profile.enabled,
                 onChanged: onEnabledChanged,
+              ),
+              IconButton(
+                key: ValueKey('notification-parser-delete-profile-${profile.id}'),
+                tooltip: 'Profil törlése',
+                icon: const Icon(Icons.delete_outline, size: 20),
+                onPressed: onDelete,
               ),
             ],
           ),
@@ -185,7 +249,6 @@ class _NotificationParserRuleEditorState
   late final TextEditingController _keywordController;
   late final TextEditingController _amountController;
   late final TextEditingController _merchantController;
-  late final TextEditingController _appController;
   var _trainingMode = _TrainingMode.amount;
 
   @override
@@ -202,7 +265,6 @@ class _NotificationParserRuleEditorState
     _merchantController = TextEditingController(
       text: widget.profile.merchantPattern,
     );
-    _appController = TextEditingController(text: widget.profile.appFilterText);
   }
 
   @override
@@ -213,7 +275,6 @@ class _NotificationParserRuleEditorState
     _syncController(_keywordController, widget.profile.includeKeyword);
     _syncController(_amountController, widget.profile.amountPattern);
     _syncController(_merchantController, widget.profile.merchantPattern);
-    _syncController(_appController, widget.profile.appFilterText);
   }
 
   @override
@@ -223,7 +284,6 @@ class _NotificationParserRuleEditorState
     _keywordController.dispose();
     _amountController.dispose();
     _merchantController.dispose();
-    _appController.dispose();
     super.dispose();
   }
 
@@ -278,21 +338,33 @@ class _NotificationParserRuleEditorState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DebugTextFormField(
-              fieldKey: const ValueKey('notification-parser-profile-name'),
-              debugLabel: 'NotificationParser.profileName',
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Profil neve'),
-              onChanged: (value) => _emit(widget.profile.copyWith(name: value)),
-            ),
-            const SizedBox(height: 10),
-            AppFilterControl(
-              value: widget.profile.appFilterText,
-              errorText: null,
-              onTextChanged: (value) =>
-                  _emit(widget.profile.copyWith(appFilterText: value)),
-              onLoadInstalledApps: widget.onLoadInstalledApps,
-              onAppSelected: _selectInstalledApp,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DebugTextFormField(
+                    fieldKey: const ValueKey(
+                      'notification-parser-profile-name',
+                    ),
+                    debugLabel: 'NotificationParser.profileName',
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Profil neve'),
+                    onChanged: (value) =>
+                        _emit(widget.profile.copyWith(name: value)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: AppFilterControl(
+                    value: widget.profile.appFilterText,
+                    errorText: null,
+                    onTextChanged: (_) {},
+                    onLoadInstalledApps: widget.onLoadInstalledApps,
+                    onAppSelected: _selectInstalledApp,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 14),
             const Text(

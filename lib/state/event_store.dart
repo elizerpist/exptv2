@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/debug/debug_console.dart';
 import '../features/settings/models/notification_parser_rule.dart';
 import '../models/installed_app.dart';
 import '../models/notification_event.dart';
@@ -15,6 +16,7 @@ class EventStore extends ChangeNotifier {
   final bool realtimeEnabled;
   final List<NotificationEvent> _events = <NotificationEvent>[];
   StreamSubscription<NotificationEvent>? _subscription;
+  List<InstalledApp>? _installedAppsCache;
 
   bool filterEnabled = false;
   String filterText = '';
@@ -24,10 +26,15 @@ class EventStore extends ChangeNotifier {
   NotificationParserConfig notificationParserConfig =
       NotificationParserConfig.defaults();
   String? selectedNotificationParserProfileId;
+  String settingsActiveMenuKey = 'root';
+  String shellActiveTabKey = 'home';
   bool loading = false;
 
   List<NotificationParserProfile> get notificationParserProfiles =>
       notificationParserConfig.profiles;
+
+  List<InstalledApp> get installedApps =>
+      _installedAppsCache ?? const <InstalledApp>[];
 
   NotificationParserProfile get selectedNotificationParserProfile =>
       notificationParserConfig.selected(selectedNotificationParserProfileId);
@@ -54,11 +61,14 @@ class EventStore extends ChangeNotifier {
       ..addAll(await _bridge.loadEvents());
     notificationParserConfig = await _bridge.loadNotificationParserProfiles();
     selectedNotificationParserProfileId = _firstProfileId();
+    await preloadInstalledApps();
     status = await _bridge.getStatus();
     loading = false;
     notifyListeners();
     if (realtimeEnabled) {
-      _subscription ??= _bridge.watchEvents().listen((event) {
+      _subscription ??= _bridge
+          .watchEvents(onDebugLog: DebugConsole.log)
+          .listen((event) {
         _events.add(event);
         notifyListeners();
       });
@@ -75,7 +85,35 @@ class EventStore extends ChangeNotifier {
     await refreshStatus();
   }
 
-  Future<List<InstalledApp>> listInstalledApps() => _bridge.listInstalledApps();
+  Future<void> preloadInstalledApps() async {
+    await listInstalledApps();
+  }
+
+  Future<List<InstalledApp>> listInstalledApps({
+    bool forceRefresh = false,
+  }) async {
+    final cached = _installedAppsCache;
+    if (!forceRefresh && cached != null) {
+      DebugConsole.log(
+        '[AppPicker] installed apps cache hit count=${cached.length}',
+      );
+      return cached;
+    }
+    final startedAt = DateTime.now();
+    DebugConsole.log(
+      '[AppPicker] installed apps load start forceRefresh=$forceRefresh',
+    );
+    final apps = List<InstalledApp>.unmodifiable(
+      await _bridge.listInstalledApps(),
+    );
+    _installedAppsCache = apps;
+    DebugConsole.log(
+      '[AppPicker] installed apps load complete count=${apps.length} '
+      'elapsed=${DateTime.now().difference(startedAt).inMilliseconds}ms',
+    );
+    notifyListeners();
+    return apps;
+  }
 
   Future<void> loadNotificationParserRule() => loadNotificationParserProfiles();
 
@@ -110,6 +148,18 @@ class EventStore extends ChangeNotifier {
     await _saveNotificationParserProfiles();
   }
 
+  Future<void> deleteNotificationParserProfile(String id) async {
+    notificationParserConfig = notificationParserConfig.remove(id);
+    final selectedExists = notificationParserProfiles.any(
+      (profile) => profile.id == selectedNotificationParserProfileId,
+    );
+    selectedNotificationParserProfileId = selectedExists
+        ? selectedNotificationParserProfileId
+        : _firstProfileId();
+    notifyListeners();
+    await _saveNotificationParserProfiles();
+  }
+
   Future<void> setNotificationParserProfileEnabled(
     String id,
     bool enabled,
@@ -133,6 +183,16 @@ class EventStore extends ChangeNotifier {
     await _saveNotificationParserProfiles();
   }
 
+  Future<void> saveTrainedNotificationParserProfile(
+    NotificationParserProfile profile,
+  ) async {
+    final enabledProfile = profile.copyWith(enabled: true);
+    notificationParserConfig = notificationParserConfig.upsert(enabledProfile);
+    selectedNotificationParserProfileId = enabledProfile.id;
+    notifyListeners();
+    await _saveNotificationParserProfiles();
+  }
+
   Future<void> saveSelectedNotificationParserProfile() async {
     if (!selectedNotificationParserProfile.preview.isReady) return;
     await _saveNotificationParserProfiles();
@@ -152,6 +212,9 @@ class EventStore extends ChangeNotifier {
   }
 
   String? _firstProfileId() {
+    for (final profile in notificationParserProfiles) {
+      if (profile.enabled) return profile.id;
+    }
     return notificationParserProfiles.isEmpty
         ? null
         : notificationParserProfiles.first.id;
@@ -166,6 +229,20 @@ class EventStore extends ChangeNotifier {
       '^${RegExp.escape(appName)}\$',
       caseSensitive: false,
     );
+    notifyListeners();
+  }
+
+  void setSettingsActiveMenuKey(String key) {
+    if (settingsActiveMenuKey == key) return;
+    settingsActiveMenuKey = key;
+    DebugConsole.log('[Settings] active menu saved key=$key');
+    notifyListeners();
+  }
+
+  void setShellActiveTabKey(String key) {
+    if (shellActiveTabKey == key) return;
+    shellActiveTabKey = key;
+    DebugConsole.log('[Shell] active tab saved key=$key');
     notifyListeners();
   }
 

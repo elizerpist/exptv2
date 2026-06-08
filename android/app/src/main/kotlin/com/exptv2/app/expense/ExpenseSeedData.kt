@@ -5,7 +5,7 @@ import java.util.GregorianCalendar
 import java.util.Random
 
 object ExpenseSeedData {
-    const val version = 2026060301
+    const val version = 2026060801
 
     private const val seedStartYear = 2021
     private const val seedStartMonth = 6
@@ -70,6 +70,10 @@ object ExpenseSeedData {
             val month = ((absoluteMonth - 1) % 12) + 1
             val days = daysInMonth(year, month)
             val idBase = ((year % 100) * 100000) + (month * 1000)
+            if (year == 2026 && month == 6) {
+                monthOffset += 1
+                continue
+            }
             val expenseCount = 225 + random.nextInt(36)
             for (index in 1..expenseCount) {
                 val template = weighted[random.nextInt(weighted.size)]

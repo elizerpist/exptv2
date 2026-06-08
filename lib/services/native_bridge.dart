@@ -6,6 +6,7 @@ import '../features/notifications/models/expense_notification_card.dart';
 import '../features/settings/models/app_theme_settings.dart';
 import '../features/settings/models/fast_info_config.dart';
 import '../features/settings/models/notification_parser_rule.dart';
+import '../features/settings/models/push_notification_log_event.dart';
 import '../features/settings/models/recurring_transaction.dart';
 import '../features/settings/models/security_settings.dart';
 import '../features/transactions/models/category_limit.dart';
@@ -74,6 +75,41 @@ class NativeBridge {
         .cast<Map<dynamic, dynamic>>()
         .map(NotificationEvent.fromMap)
         .toList();
+  }
+
+  Future<PushNotificationLogPage> loadNotificationEventPage(
+    PushNotificationLogQuery query,
+  ) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'loadNotificationEventPage',
+      query.toMap(),
+    );
+    final payload = map ?? <dynamic, dynamic>{};
+    final rows = (payload['events'] as List<dynamic>? ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(PushNotificationLogEvent.fromMap)
+        .toList();
+    int readInt(String key) {
+      final value = payload[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return PushNotificationLogPage(
+      events: rows,
+      totalCount: readInt('totalCount'),
+      limit: readInt('limit'),
+      offset: readInt('offset'),
+    );
+  }
+
+  Future<bool> markNotificationEventSystem(int id) async {
+    final updated = await _methodChannel.invokeMethod<bool>(
+      'markNotificationEventSystem',
+      {'id': id},
+    );
+    return updated ?? false;
   }
 
   Future<ServiceStatus> getStatus() async {
@@ -670,9 +706,15 @@ class NativeBridge {
     await _methodChannel.invokeMethod<void>('clearDatabase');
   }
 
-  Stream<NotificationEvent> watchEvents() {
-    return _eventChannel.receiveBroadcastStream().map((payload) {
-      return NotificationEvent.fromMap(payload as Map<dynamic, dynamic>);
+  Stream<NotificationEvent> watchEvents({void Function(String)? onDebugLog}) {
+    return _eventChannel.receiveBroadcastStream().asyncExpand((payload) {
+      final map = payload as Map<dynamic, dynamic>;
+      if (map['type'] == 'debug_log') {
+        final message = map['message']?.toString();
+        if (message != null && message.isNotEmpty) onDebugLog?.call(message);
+        return Stream<NotificationEvent>.empty();
+      }
+      return Stream<NotificationEvent>.value(NotificationEvent.fromMap(map));
     });
   }
 }

@@ -391,7 +391,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     return categories.isEmpty ? null : categories.first;
   }
 
-  TransactionCategory? _categoryById(int id) {
+  TransactionCategory? _categoryById(int? id) {
+    if (id == null) return null;
     for (final category in widget.store.categories) {
       if (category.transactionCategoryID == id) return category;
     }

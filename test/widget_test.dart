@@ -174,10 +174,10 @@ void main() {
         );
   });
 
-  Widget buildApp() {
-    final bridge = NativeBridge();
+  Widget buildApp({NativeBridge? nativeBridge, EventStore? store}) {
+    final bridge = nativeBridge ?? NativeBridge();
     return Exptv2App(
-      store: EventStore(bridge, realtimeEnabled: false),
+      store: store ?? EventStore(bridge, realtimeEnabled: false),
       nativeBridge: bridge,
     );
   }
@@ -1152,7 +1152,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
-    await tester.tap(find.text('Megfigyelni kívánt alkalmazás'));
+    await tester.tap(find.text('Push import'));
     await tester.pumpAndSettle();
 
     expect(find.text('Profilok'), findsOneWidget);
@@ -1164,10 +1164,15 @@ void main() {
       find.byKey(const ValueKey('notification-parser-sample')),
       findsOneWidget,
     );
-    expect(find.text('App regex'), findsOneWidget);
-    expect(find.byTooltip('Pick installed app'), findsOneWidget);
+    expect(find.text('App regex'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('notification-parser-app-picker')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byTooltip('Pick installed app'));
+    await tester.tap(
+      find.byKey(const ValueKey('notification-parser-app-picker')),
+    );
     await tester.pumpAndSettle();
     final pickerRect = tester.getRect(
       find.byKey(const ValueKey('installed-app-picker-sheet')),
@@ -1186,12 +1191,112 @@ void main() {
         epsilon: 1,
       ),
     );
-    expect(find.text('Notification Test'), findsOneWidget);
-    expect(find.byType(Image), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('installed-app-picker-search')),
+      findsOneWidget,
+    );
+    final picker = find.byKey(const ValueKey('installed-app-picker-sheet'));
+    expect(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: picker, matching: find.byType(Image)),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Notification Test'));
+    await tester.enterText(
+      find.byKey(const ValueKey('installed-app-picker-search')),
+      'missing',
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Notification Test'), findsOneWidget);
+    expect(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('installed-app-picker-search')),
+      'notification',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.descendant(of: picker, matching: find.text('Notification Test')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Notification Test'), findsWidgets);
+  });
+
+  testWidgets('settings resets submenu after active bottom nav switch', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Push import'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Elkapott push üzenetek'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Főoldal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alkalmazás beállítások'), findsOneWidget);
+    expect(find.text('Push import'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('settings submenu survives shell recreation with same store', (
+    tester,
+  ) async {
+    final bridge = NativeBridge();
+    final store = EventStore(bridge, realtimeEnabled: false);
+
+    await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Push import'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Elkapott push üzenetek'));
+    await tester.pumpAndSettle();
+
+    expect(store.shellActiveTabKey, 'settings');
+    expect(store.settingsActiveMenuKey, 'pushLog');
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beállítások'), findsWidgets);
+    expect(find.text('Elkapott push üzenetek'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('push-notification-log-list')),
+      findsOneWidget,
+    );
   });
 }
 
@@ -1201,8 +1306,8 @@ Map<String, Object?> notificationParserProfilePayload() {
     'name': 'Profil',
     'enabled': true,
     'appFilterText': '',
-    'packageName': '',
-    'appLabel': '',
+    'packageName': 'com.mand.notitest',
+    'appLabel': 'Notification Test',
     'sampleText': 'Paid 999 Ft at Corner Shop',
     'includeKeyword': '',
     'amountPattern': r'(?<amount>\d+)\s*Ft',

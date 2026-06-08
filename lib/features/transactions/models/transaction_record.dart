@@ -15,6 +15,7 @@ class TransactionRecord {
     this.recurringTransactionId,
     this.recurringRuleId,
     this.recurringInstanceId,
+    this.sourceNotificationEventId,
   });
 
   final int id;
@@ -26,10 +27,11 @@ class TransactionRecord {
   final String merchant;
   final double amount;
   final String? userAssignedName;
-  final int transactionCategoryID;
+  final int? transactionCategoryID;
   final int? recurringTransactionId;
   final int? recurringRuleId;
   final int? recurringInstanceId;
+  final int? sourceNotificationEventId;
 
   TransactionType get type =>
       amount > 0 ? TransactionType.income : TransactionType.expense;
@@ -73,8 +75,9 @@ class TransactionRecord {
       recurringRuleId: _nullableInt(map['recurringRuleId']),
       recurringInstanceId: _nullableInt(map['recurringInstanceId']),
       userAssignedName: map['userAssignedName']?.toString(),
-      transactionCategoryID: _int(map['transactionCategoryID']),
+      transactionCategoryID: _nullableInt(map['transactionCategoryID']),
       recurringTransactionId: _nullableInt(map['recurringTransactionId']),
+      sourceNotificationEventId: _nullableInt(map['sourceNotificationEventId']),
     );
   }
 
@@ -95,6 +98,8 @@ class TransactionRecord {
       'transactionCategoryID': transactionCategoryID,
       if (recurringTransactionId != null)
         'recurringTransactionId': recurringTransactionId,
+      if (sourceNotificationEventId != null)
+        'sourceNotificationEventId': sourceNotificationEventId,
     };
   }
 }

@@ -1033,11 +1033,9 @@ class TransactionStore extends ChangeNotifier {
     });
     final counts = <int, int>{};
     for (final transaction in _transactions) {
-      counts.update(
-        transaction.transactionCategoryID,
-        (value) => value + 1,
-        ifAbsent: () => 1,
-      );
+      final categoryId = transaction.transactionCategoryID;
+      if (categoryId == null) continue;
+      counts.update(categoryId, (value) => value + 1, ifAbsent: () => 1);
     }
     _categoryTransactionCounts = Map.unmodifiable(counts);
   }

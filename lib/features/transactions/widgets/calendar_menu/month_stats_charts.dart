@@ -737,11 +737,14 @@ class _MonthStatsData {
         weeklyTotals[weekIndex] = weeklyTotals[weekIndex].copyWith(
           expense: weeklyTotals[weekIndex].expense + absolute,
         );
-        categoryTotals.update(
-          record.transactionCategoryID,
-          (value) => value + absolute,
-          ifAbsent: () => absolute,
-        );
+        final categoryId = record.transactionCategoryID;
+        if (categoryId != null) {
+          categoryTotals.update(
+            categoryId,
+            (value) => value + absolute,
+            ifAbsent: () => absolute,
+          );
+        }
         if (largestExpense == null || absolute > largestExpense) {
           largestExpense = absolute;
         }

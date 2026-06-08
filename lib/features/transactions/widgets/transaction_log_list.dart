@@ -357,7 +357,8 @@ class _TransactionLogListState extends State<TransactionLogList> {
     return entries;
   }
 
-  TransactionCategory? _categoryForId(int id) {
+  TransactionCategory? _categoryForId(int? id) {
+    if (id == null) return null;
     final indexed = widget.categoriesById[id];
     if (indexed != null) return indexed;
     for (final category in widget.categories) {

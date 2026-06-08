@@ -15,6 +15,7 @@ class CategoryIconBadge extends StatelessWidget {
     this.iconSize = 28,
     this.backgroundColor,
     this.showShadow = true,
+    this.showQuestionMark = false,
   });
 
   final TransactionCategory? category;
@@ -24,6 +25,7 @@ class CategoryIconBadge extends StatelessWidget {
   final double iconSize;
   final Color? backgroundColor;
   final bool showShadow;
+  final bool showQuestionMark;
 
   @override
   Widget build(BuildContext context) {
@@ -49,11 +51,13 @@ class CategoryIconBadge extends StatelessWidget {
             : null,
       ),
       alignment: Alignment.center,
-      child: ImageIcon(
-        CategoryIconManager.assetImage(resolvedIconSlot),
-        color: AppColors.white,
-        size: iconSize,
-      ),
+      child: showQuestionMark
+          ? Icon(Icons.question_mark, color: AppColors.white, size: iconSize)
+          : ImageIcon(
+              CategoryIconManager.assetImage(resolvedIconSlot),
+              color: AppColors.white,
+              size: iconSize,
+            ),
     );
   }
 }

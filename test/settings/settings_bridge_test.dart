@@ -1,6 +1,7 @@
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/models/notification_parser_rule.dart';
+import 'package:exptv2/features/settings/models/push_notification_log_event.dart';
 import 'package:exptv2/features/settings/models/recurring_transaction.dart';
 import 'package:exptv2/features/transactions/models/recurring_rule.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
@@ -172,6 +173,21 @@ void main() {
               return <Map<String, Object?>>[
                 recurringRow(id: 7, lastProcessedPeriodKey: '2026-05'),
               ];
+            case 'loadNotificationEventPage':
+              return <String, Object?>{
+                'events': <Object?>[
+                  pushLogEventRow(
+                    id: 77,
+                    status: 'missing',
+                    statusText: 'Nincs hozzárendelt log',
+                  ),
+                ],
+                'totalCount': 8,
+                'limit': 2,
+                'offset': 4,
+              };
+            case 'markNotificationEventSystem':
+              return true;
           }
           return null;
         });
@@ -397,6 +413,40 @@ void main() {
     expect(calls.single.method, 'openAppNotificationSettings');
   });
 
+  test('loads paged push notification log events', () async {
+    final page = await bridge.loadNotificationEventPage(
+      const PushNotificationLogQuery(
+        limit: 2,
+        offset: 4,
+        year: 2026,
+        month: 6,
+        query: 'tesco',
+        status: PushNotificationLogStatus.missing,
+      ),
+    );
+
+    expect(page.limit, 2);
+    expect(page.offset, 4);
+    expect(page.totalCount, 8);
+    expect(page.events.single.statusText, 'Nincs hozzárendelt log');
+    expect(page.events.single.fullText, contains('Tesco'));
+    expect(calls.single.method, 'loadNotificationEventPage');
+    final payload = calls.single.arguments as Map<dynamic, dynamic>;
+    expect(payload['year'], 2026);
+    expect(payload['month'], 6);
+    expect(payload['query'], 'tesco');
+    expect(payload['status'], 'missing');
+  });
+
+  test('marks a push notification event as system through native bridge', () async {
+    final updated = await bridge.markNotificationEventSystem(77);
+
+    expect(updated, isTrue);
+    expect(calls.single.method, 'markNotificationEventSystem');
+    final payload = calls.single.arguments as Map<dynamic, dynamic>;
+    expect(payload['id'], 77);
+  });
+
   test(
     'requests post notifications once on first launch through native bridge',
     () async {
@@ -446,6 +496,35 @@ void main() {
     final deleted = await bridge.expenseDeleteRecurringTransaction(7);
     expect(deleted, isTrue);
   });
+}
+
+Map<String, Object?> pushLogEventRow({
+  required int id,
+  required String status,
+  required String statusText,
+  int? linkedTransactionId,
+}) {
+  return <String, Object?>{
+    'id': id,
+    'timestamp': DateTime(2026, 6, 7, 21, 10).millisecondsSinceEpoch,
+    'source': 'notification_listener',
+    'packageName': 'hu.bank.app',
+    'appLabel': 'Bank',
+    'title': 'Vásárlás',
+    'text': 'Kártyás vásárlás: Tesco - 12 345 HUF',
+    'bigText': '',
+    'subText': '',
+    'category': '',
+    'notificationKey': 'n-$id',
+    'accessibilityEventType': '',
+    'hash': 'h-$id',
+    'isDuplicate': false,
+    'manualStatus': '',
+    'displayText': 'Kártyás vásárlás: Tesco - 12 345 HUF',
+    'status': status,
+    'statusText': statusText,
+    'linkedTransactionId': linkedTransactionId,
+  };
 }
 
 Map<String, Object?> recurringRow({
