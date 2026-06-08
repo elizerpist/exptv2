@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/installed_app.dart';
@@ -103,7 +104,7 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
       },
       child: ListView.builder(
         key: const ValueKey('push-notification-log-list'),
-        cacheExtent: 360,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(360),
         itemExtent: 102,
         padding: const EdgeInsets.only(bottom: 96),
         itemCount: _store.events.length + (_store.loadingMore ? 1 : 0),
