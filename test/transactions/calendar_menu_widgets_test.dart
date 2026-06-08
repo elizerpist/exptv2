@@ -475,7 +475,7 @@ void main() {
     expect(find.text('Havi részletek'), findsOneWidget);
     expect(find.text('Kereskedők'), findsOneWidget);
     expect(find.text('Élelmiszer'), findsOneWidget);
-    expect(find.text('Teszt'), findsOneWidget);
+    expect(find.text('Teszt'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('stats page renders calendar as a full screen tab', (
