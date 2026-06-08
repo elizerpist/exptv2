@@ -2,7 +2,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'google_sheets_sync_models.dart';
 
-class GoogleSheetsSyncStore {
+abstract class GoogleSheetsSyncStoreContract {
+  Future<GoogleSheetsSyncSettings> load();
+  Future<void> save(GoogleSheetsSyncSettings settings);
+  Future<void> clear();
+}
+
+class GoogleSheetsSyncStore implements GoogleSheetsSyncStoreContract {
   const GoogleSheetsSyncStore(this._preferences);
 
   static const _prefix = 'googleSheetsSync.';
@@ -15,6 +21,7 @@ class GoogleSheetsSyncStore {
 
   final SharedPreferences _preferences;
 
+  @override
   Future<GoogleSheetsSyncSettings> load() async {
     final enabled = _preferences.getBool(_enabledKey) ?? false;
     if (!enabled) {
@@ -31,6 +38,7 @@ class GoogleSheetsSyncStore {
     );
   }
 
+  @override
   Future<void> save(GoogleSheetsSyncSettings settings) async {
     await _preferences.setBool(_enabledKey, settings.enabled);
     await _setNullableString(_accountEmailKey, settings.accountEmail);
@@ -43,6 +51,7 @@ class GoogleSheetsSyncStore {
     await _setNullableString(_lastErrorKey, settings.lastError);
   }
 
+  @override
   Future<void> clear() async {
     await _preferences.remove(_enabledKey);
     await _preferences.remove(_accountEmailKey);

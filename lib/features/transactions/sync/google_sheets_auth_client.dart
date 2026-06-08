@@ -12,7 +12,13 @@ class GoogleSheetsSignedInAccount {
   final Map<String, String> authHeaders;
 }
 
-class GoogleSheetsAuthClient {
+abstract class GoogleSheetsAuthClientContract {
+  Future<GoogleSheetsSignedInAccount?> restore();
+  Future<GoogleSheetsSignedInAccount> signIn();
+  Future<void> disconnect();
+}
+
+class GoogleSheetsAuthClient implements GoogleSheetsAuthClientContract {
   GoogleSheetsAuthClient({
     GoogleSignIn? googleSignIn,
     List<String> scopes = const [GoogleSheetsSyncConfig.driveFileScope],
@@ -32,6 +38,7 @@ class GoogleSheetsAuthClient {
     _initialized = true;
   }
 
+  @override
   Future<GoogleSheetsSignedInAccount?> restore() async {
     await initialize();
     final future = _googleSignIn.attemptLightweightAuthentication();
@@ -48,6 +55,7 @@ class GoogleSheetsAuthClient {
     );
   }
 
+  @override
   Future<GoogleSheetsSignedInAccount> signIn() async {
     await initialize();
     final account = await _googleSignIn.authenticate(scopeHint: _scopes);
@@ -65,6 +73,7 @@ class GoogleSheetsAuthClient {
     );
   }
 
+  @override
   Future<void> disconnect() async {
     await initialize();
     await _googleSignIn.disconnect();

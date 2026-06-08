@@ -33,7 +33,22 @@ abstract class GoogleSheetsGateway {
   });
 }
 
-class GoogleSheetsApiClient {
+abstract class GoogleSheetsApiClientContract {
+  Future<GoogleSpreadsheetRef> createSpreadsheet(String title);
+
+  Future<void> ensureYearSheets({
+    required String spreadsheetId,
+    required Set<int> years,
+  });
+
+  Future<void> rewriteYear({
+    required String spreadsheetId,
+    required int year,
+    required List<TransactionExportRow> rows,
+  });
+}
+
+class GoogleSheetsApiClient implements GoogleSheetsApiClientContract {
   GoogleSheetsApiClient(http.Client client)
     : this.gateway(GoogleSheetsApiGateway(sheets.SheetsApi(client)));
 
@@ -48,10 +63,12 @@ class GoogleSheetsApiClient {
     return "'$escapedTitle'!A1:J";
   }
 
+  @override
   Future<GoogleSpreadsheetRef> createSpreadsheet(String title) {
     return _gateway.createSpreadsheet(title);
   }
 
+  @override
   Future<void> ensureYearSheets({
     required String spreadsheetId,
     required Set<int> years,
@@ -66,6 +83,7 @@ class GoogleSheetsApiClient {
     );
   }
 
+  @override
   Future<void> rewriteYear({
     required String spreadsheetId,
     required int year,
