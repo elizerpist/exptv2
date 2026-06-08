@@ -82,10 +82,6 @@ class TransactionExportService {
     return bundle;
   }
 
-  Future<TransactionCsvBundle> clipboardCsv() {
-    return buildCsvBundle();
-  }
-
   Future<List<TransactionRecord>> _loadAllTransactions() async {
     final rows = <TransactionRecord>[];
     var offset = 0;

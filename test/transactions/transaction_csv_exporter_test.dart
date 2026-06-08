@@ -15,9 +15,6 @@ void main() {
           'amount': -1290,
           'userAssignedName': 'Kávé',
           'transactionCategoryID': 6,
-          'address': 'Budapest',
-          'latitude': 47.5,
-          'longitude': 19.1,
         }),
       ],
       categories: [_category(id: 6, name: 'Élelmiszer')],
@@ -25,8 +22,8 @@ void main() {
 
     expect(
       csv,
-      'id,date,time,type,amount,merchant,userAssignedName,categoryId,category,address,latitude,longitude,recurring\n'
-      '1,2026.06.08,09:15,expense,-1290,Corner Shop,Kávé,6,Élelmiszer,Budapest,47.5,19.1,false\n',
+      'id,date,time,type,amount,merchant,userAssignedName,categoryId,category,recurring\n'
+      '1,2026.06.08,09:15,expense,-1290,Corner Shop,Kávé,6,Élelmiszer,false\n',
     );
   });
 
@@ -50,7 +47,7 @@ void main() {
     expect(
       csv,
       contains(
-        '2,2026.06.08,10:00,income,5000,"Bolt, ""Market""","Line\nBreak",7,"Fizetés, bónusz",,,,true',
+        '2,2026.06.08,10:00,income,5000,"Bolt, ""Market""","Line\nBreak",7,"Fizetés, bónusz",true',
       ),
     );
   });

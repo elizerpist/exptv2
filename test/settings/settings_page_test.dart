@@ -343,7 +343,7 @@ void main() {
     expect(updated.last.appColor, AppColorMode.pink);
   });
 
-  testWidgets('export menu saves shares copies and shows Google placeholder', (
+  testWidgets('export menu saves shares and omits clipboard copy', (
     tester,
   ) async {
     await tester.pumpWidget(buildSubject());
@@ -359,7 +359,7 @@ void main() {
 
     expect(find.text('CSV mentése telefonra'), findsOneWidget);
     expect(find.text('CSV megosztása'), findsOneWidget);
-    expect(find.text('CSV másolása vágólapra'), findsOneWidget);
+    expect(find.text('CSV másolása vágólapra'), findsNothing);
     expect(find.text('Google Sheets (később)'), findsOneWidget);
 
     await tester.tap(find.text('CSV mentése telefonra'));

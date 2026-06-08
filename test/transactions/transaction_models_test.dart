@@ -49,9 +49,6 @@ void main() {
         'id': 250905,
         'date': '2025.09.24',
         'time': '21:56',
-        'latitude': null,
-        'longitude': null,
-        'address': 'Unknown location',
         'merchant': 'Rrteeaawwq',
         'amount': 5555,
         'userAssignedName': 'Gguu',
@@ -63,6 +60,9 @@ void main() {
       expect(record.displayAmount, '+5 555 Ft');
       expect(record.displayTime, '21:56');
       expect(record.yearMonthKey, '2025-09');
+      expect(record.toMap().containsKey('latitude'), isFalse);
+      expect(record.toMap().containsKey('longitude'), isFalse);
+      expect(record.toMap().containsKey('address'), isFalse);
     },
   );
 

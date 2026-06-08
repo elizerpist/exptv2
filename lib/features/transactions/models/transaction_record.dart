@@ -5,9 +5,6 @@ class TransactionRecord {
     required this.id,
     required this.date,
     required this.time,
-    required this.latitude,
-    required this.longitude,
-    required this.address,
     required this.merchant,
     required this.amount,
     required this.userAssignedName,
@@ -20,9 +17,6 @@ class TransactionRecord {
   final int id;
   final String date;
   final String time;
-  final double? latitude;
-  final double? longitude;
-  final String? address;
   final String merchant;
   final double amount;
   final String? userAssignedName;
@@ -65,9 +59,6 @@ class TransactionRecord {
       id: _int(map['id']),
       date: map['date']?.toString() ?? '',
       time: map['time']?.toString() ?? '',
-      latitude: _nullableDouble(map['latitude']),
-      longitude: _nullableDouble(map['longitude']),
-      address: map['address']?.toString(),
       merchant: map['merchant']?.toString() ?? '',
       amount: _double(map['amount']),
       recurringRuleId: _nullableInt(map['recurringRuleId']),
@@ -83,9 +74,6 @@ class TransactionRecord {
       'id': id,
       'date': date,
       'time': time,
-      'latitude': latitude,
-      'longitude': longitude,
-      'address': address,
       'merchant': merchant,
       'amount': amount,
       if (recurringRuleId != null) 'recurringRuleId': recurringRuleId,
@@ -113,6 +101,5 @@ String formatHuf(num amount) {
 int _int(Object? value) => value is int ? value : int.parse(value.toString());
 double _double(Object? value) =>
     value is num ? value.toDouble() : double.parse(value.toString());
-double? _nullableDouble(Object? value) => value == null ? null : _double(value);
 int? _nullableInt(Object? value) => value == null ? null : _int(value);
 bool _positiveId(int? value) => value != null && value > 0;

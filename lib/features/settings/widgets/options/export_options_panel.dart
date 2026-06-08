@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../transactions/export/transaction_export_service.dart';
@@ -35,11 +34,6 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
               title: 'CSV megosztása',
               onTap: () => _run('share', _shareCsv),
               trailing: _trailing('share'),
-            ),
-            SettingsOptionItem(
-              title: 'CSV másolása vágólapra',
-              onTap: () => _run('copy', _copyCsv),
-              trailing: _trailing('copy'),
             ),
             SettingsOptionItem(
               title: 'Google Sheets (később)',
@@ -102,14 +96,6 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
   Future<void> _shareCsv() async {
     await widget.exportService.shareCsvFile();
     _showMessage('CSV megosztás előkészítve');
-  }
-
-  Future<void> _copyCsv() async {
-    final bundle = await widget.exportService.clipboardCsv();
-    await Clipboard.setData(ClipboardData(text: bundle.csv));
-    _showMessage(
-      'CSV vágólapra másolva: ${bundle.transactionCount} tranzakció',
-    );
   }
 
   void _showGooglePlaceholder() {
