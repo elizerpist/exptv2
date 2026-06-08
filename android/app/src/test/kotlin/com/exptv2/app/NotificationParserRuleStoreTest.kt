@@ -6,7 +6,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class NotificationParserRuleStoreTest {
     private lateinit var context: Context
     private lateinit var store: NotificationParserRuleStore
