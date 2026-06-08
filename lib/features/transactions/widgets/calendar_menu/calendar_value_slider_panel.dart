@@ -62,7 +62,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
       child: Transform.translate(
         offset: Offset(0, _verticalOffset),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
           child: Material(
             color: AppColors.white,
             elevation: 8,
@@ -87,7 +87,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                           behavior: HitTestBehavior.opaque,
                           onVerticalDragUpdate: _handleDragUpdate,
                           child: SizedBox(
-                            height: 26,
+                            height: 20,
                             child: Center(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
@@ -112,7 +112,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(
                           width: 36,
-                          height: 32,
+                          height: 28,
                         ),
                       ),
                     ],
@@ -126,42 +126,46 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                       color: AppColors.gray800,
                     ),
                   ),
-                  Row(
-                    children: [
-                      _EditableLimitText(
-                        value: widget.min,
-                        onSubmitted: widget.onMinChanged,
-                      ),
-                      Expanded(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: AppColors.primary,
-                            inactiveTrackColor: AppColors.gray200,
-                            thumbColor: AppColors.primary,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 10,
+                  SizedBox(
+                    height: 38,
+                    child: Row(
+                      children: [
+                        _EditableLimitText(
+                          value: widget.min,
+                          onSubmitted: widget.onMinChanged,
+                        ),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: AppColors.primary,
+                              inactiveTrackColor: AppColors.gray200,
+                              thumbColor: AppColors.primary,
+                              thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 10,
+                              ),
+                            ),
+                            child: Slider(
+                              key: ValueKey(sliderKey),
+                              value: effectiveValue,
+                              min: widget.min,
+                              max: effectiveMax,
+                              divisions:
+                                  widget.kind == CalendarSliderKind.heatmap
+                                  ? ((effectiveMax - widget.min) / 100)
+                                        .round()
+                                        .clamp(1, 1000)
+                                        .toInt()
+                                  : null,
+                              onChanged: widget.onChanged,
                             ),
                           ),
-                          child: Slider(
-                            key: ValueKey(sliderKey),
-                            value: effectiveValue,
-                            min: widget.min,
-                            max: effectiveMax,
-                            divisions: widget.kind == CalendarSliderKind.heatmap
-                                ? ((effectiveMax - widget.min) / 100)
-                                      .round()
-                                      .clamp(1, 1000)
-                                      .toInt()
-                                : null,
-                            onChanged: widget.onChanged,
-                          ),
                         ),
-                      ),
-                      _EditableLimitText(
-                        value: effectiveMax,
-                        onSubmitted: widget.onMaxChanged,
-                      ),
-                    ],
+                        _EditableLimitText(
+                          value: effectiveMax,
+                          onSubmitted: widget.onMaxChanged,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -258,20 +262,25 @@ class _EditableLimitTextState extends State<_EditableLimitText> {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 58,
-      child: DebugTextField(
-        debugLabel: 'CalendarValueSlider.limit',
-        controller: _controller,
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11, color: AppColors.gray500),
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          isDense: true,
+      height: 34,
+      child: Center(
+        child: DebugTextField(
+          debugLabel: 'CalendarValueSlider.limit',
+          controller: _controller,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 11, color: AppColors.gray500),
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(height: 32),
+          ),
+          onSubmitted: (text) {
+            final parsed = double.tryParse(text);
+            widget.onSubmitted(parsed ?? widget.value);
+          },
         ),
-        onSubmitted: (text) {
-          final parsed = double.tryParse(text);
-          widget.onSubmitted(parsed ?? widget.value);
-        },
       ),
     );
   }
