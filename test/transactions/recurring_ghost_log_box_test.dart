@@ -62,7 +62,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          child: RecurringGhostLogBox(
+          body: RecurringGhostLogBox(
             ghost: ghostFixture(triggerType: 'push'),
             category: categoryFixture(),
           ),

@@ -14,7 +14,6 @@ import 'calendar_value_slider_panel.dart';
 import 'focused_month_canvas.dart';
 import 'month_stats_charts.dart';
 
-
 class CalendarMenuOverlay extends StatefulWidget {
   const CalendarMenuOverlay({
     super.key,
@@ -44,13 +43,9 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
   late final ValueNotifier<double> _heatmapCurrentValue;
   late final ValueNotifier<double> _heatmapMaxValue;
   int? _focusedMonth;
-  double? _customThresholdMin;
-  double? _customThresholdMax;
   int? _cachedDataYear;
   List<TransactionRecord>? _cachedDataTransactions;
   List<TransactionCategory>? _cachedDataCategories;
-  double? _cachedDataCustomThresholdMin;
-  double? _cachedDataCustomThresholdMax;
   CalendarYearRenderData? _cachedData;
 
   @override
@@ -196,31 +191,9 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                   builder: (context, threshold, _) {
                     return CalendarValueSliderPanel.threshold(
                       value: threshold,
-                      min: data.thresholdRange.min,
-                      max: data.thresholdRange.max,
+                      observedMax: data.thresholdRange.max,
+                      fallbackMax: 50000,
                       onChanged: (value) => _thresholdValue.value = value,
-                      onMinChanged: (value) {
-                        final next = value < 0 ? 0.0 : value;
-                        setState(() {
-                          _customThresholdMin = next;
-                          if (_thresholdValue.value < next) {
-                            _thresholdValue.value = next;
-                          }
-                          _clearCalendarDataCache();
-                        });
-                      },
-                      onMaxChanged: (value) {
-                        final next = value <= data.thresholdRange.min
-                            ? data.thresholdRange.min + 1
-                            : value;
-                        setState(() {
-                          _customThresholdMax = next;
-                          if (_thresholdValue.value > next) {
-                            _thresholdValue.value = next;
-                          }
-                          _clearCalendarDataCache();
-                        });
-                      },
                     );
                   },
                 ),
@@ -232,36 +205,16 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
                   heatmapMinValue: _heatmapMinValue,
                   heatmapCurrentValue: _heatmapCurrentValue,
                   heatmapMaxValue: _heatmapMaxValue,
-                  builder:
-                      (context, _, heatmapMin, heatmapCurrent, heatmapMax) {
-                        return CalendarValueSliderPanel.heatmap(
-                          value: heatmapCurrent,
-                          min: heatmapMin,
-                          max: heatmapMax,
-                          onChanged: (value) {
-                            _heatmapCurrentValue.value = value;
-                          },
-                          onMinChanged: (value) {
-                            final next = value < 0 ? 0.0 : value;
-                            _heatmapMinValue.value = next;
-                            if (_heatmapCurrentValue.value <= next) {
-                              _heatmapCurrentValue.value = next + 100;
-                            }
-                            if (_heatmapMaxValue.value <= next) {
-                              _heatmapMaxValue.value = next + 1000;
-                            }
-                          },
-                          onMaxChanged: (value) {
-                            final next = value <= heatmapMin
-                                ? heatmapMin + 1000
-                                : value;
-                            _heatmapMaxValue.value = next;
-                            if (_heatmapCurrentValue.value > next) {
-                              _heatmapCurrentValue.value = next;
-                            }
-                          },
-                        );
+                  builder: (context, _, _, heatmapCurrent, heatmapMax) {
+                    return CalendarValueSliderPanel.heatmap(
+                      value: heatmapCurrent,
+                      observedMax: _observedMaxExpense(data),
+                      fallbackMax: heatmapMax,
+                      onChanged: (value) {
+                        _heatmapCurrentValue.value = value;
                       },
+                    );
+                  },
                 ),
               ),
           ],
@@ -275,9 +228,7 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
     if (cached != null &&
         _cachedDataYear == _year &&
         identical(_cachedDataTransactions, widget.transactions) &&
-        identical(_cachedDataCategories, widget.categories) &&
-        _cachedDataCustomThresholdMin == _customThresholdMin &&
-        _cachedDataCustomThresholdMax == _customThresholdMax) {
+        identical(_cachedDataCategories, widget.categories)) {
       return cached;
     }
 
@@ -289,15 +240,11 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
       thresholdValue: _thresholdValue.value,
       heatmapMinValue: _heatmapMinValue.value,
       heatmapCurrentValue: _heatmapCurrentValue.value,
-      customThresholdMin: _customThresholdMin,
-      customThresholdMax: _customThresholdMax,
     );
     _cachedData = data;
     _cachedDataYear = _year;
     _cachedDataTransactions = widget.transactions;
     _cachedDataCategories = widget.categories;
-    _cachedDataCustomThresholdMin = _customThresholdMin;
-    _cachedDataCustomThresholdMax = _customThresholdMax;
     DebugConsole.log(
       '[Perf] CalendarRender build source=overlay year=$_year '
       'transactions=${widget.transactions.length} '
@@ -317,6 +264,16 @@ class _CalendarMenuOverlayState extends State<CalendarMenuOverlay> {
       _year = year;
       _focusedMonth = month;
     });
+  }
+
+  double _observedMaxExpense(CalendarYearRenderData data) {
+    var maxExpense = 0.0;
+    for (final month in data.months) {
+      for (final day in month.days) {
+        if (day.expense > maxExpense) maxExpense = day.expense;
+      }
+    }
+    return maxExpense;
   }
 
   void _handleMenuAction(_StatsMenuAction action) {
