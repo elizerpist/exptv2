@@ -24,6 +24,8 @@ class CategoryMenuOverlay extends StatelessWidget {
     this.activeType,
     this.activeCategory,
     this.surfaceColor = AppColors.white,
+    this.menuSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.cardSurfaceColor = AppColors.white,
     this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
@@ -41,6 +43,8 @@ class CategoryMenuOverlay extends StatelessWidget {
   final TransactionType? activeType;
   final TransactionCategory? activeCategory;
   final Color surfaceColor;
+  final ExpenseSurfaceInteraction menuSurfaceStyle;
+  final Color cardSurfaceColor;
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
@@ -53,16 +57,17 @@ class CategoryMenuOverlay extends StatelessWidget {
       left: 0,
       right: 0,
       bottom: bottom,
-      child: Material(
-        key: const ValueKey('category-menu-overlay'),
+      child: ExpenseSurfaceContainer(
+        surfaceKey: const ValueKey('category-menu-overlay-surface'),
+        style: menuSurfaceStyle,
         color: surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        clipBehavior: Clip.antiAlias,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border.all(color: AppColors.gray200),
-          ),
+        neutralBorder: Border.all(color: AppColors.gray200),
+        child: Material(
+          key: const ValueKey('category-menu-overlay'),
+          color: Colors.transparent,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          clipBehavior: Clip.antiAlias,
           child: CategoryMenuPanel(
             key: const ValueKey('category-picker-panel'),
             activeType: activeType ?? store.activeType,
@@ -75,6 +80,7 @@ class CategoryMenuOverlay extends StatelessWidget {
             onAdd: onAdd,
             onClose: onClose,
             surfaceColor: surfaceColor,
+            cardSurfaceColor: cardSurfaceColor,
             cardSurfaceStyle: cardSurfaceStyle,
             avatarSurfaceStyle: avatarSurfaceStyle,
             accentColor: accentColor,

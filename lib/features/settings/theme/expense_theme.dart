@@ -23,6 +23,10 @@ class ExpenseTheme {
     required this.bottomNavSurfaceStyle,
     required this.forcedInsetSurfaceStyle,
     required this.ghostLogboxSurfaceStyle,
+    required this.categoryMenu,
+    required this.categoryCard,
+    required this.categoryMenuSurfaceStyle,
+    required this.categoryCardSurfaceStyle,
   });
 
   final AppThemeSettings settings;
@@ -43,6 +47,10 @@ class ExpenseTheme {
   final ExpenseSurfaceInteraction bottomNavSurfaceStyle;
   final ExpenseSurfaceInteraction forcedInsetSurfaceStyle;
   final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
+  final Color categoryMenu;
+  final Color categoryCard;
+  final ExpenseSurfaceInteraction categoryMenuSurfaceStyle;
+  final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
 
   Color resolvePrimary(Color color) {
     if (color == AppColors.primary) return accent;
@@ -92,7 +100,19 @@ class ExpenseTheme {
           ? ExpenseSurfaceInteraction.neutralNeutral
           : ExpenseSurfaceInteraction.insetInset,
       ghostLogboxSurfaceStyle: settings.ghostLogboxSurfaceStyle,
+      categoryMenu: _boxColor(settings.categoryMenuColor),
+      categoryCard: _boxColor(settings.categoryCardColor),
+      categoryMenuSurfaceStyle: settings.categoryMenuSurfaceStyle,
+      categoryCardSurfaceStyle: settings.categoryCardSurfaceStyle,
     );
+  }
+
+  static Color _boxColor(AppBoxColor color) {
+    return switch (color) {
+      AppBoxColor.white => AppColors.white,
+      AppBoxColor.gray => AppColors.gray100,
+      AppBoxColor.darkgray => AppColors.gray200,
+    };
   }
 
   static _AccentFamily _dayAccentFamily(AppThemeSettings settings) {

@@ -328,6 +328,10 @@ void main() {
           textTone: GhostLogboxTextTone.gray,
           expectedLabelEnabled: false,
         ),
+        categoryMenuColor: AppBoxColor.darkgray,
+        categoryMenuSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+        categoryCardColor: AppBoxColor.white,
+        categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
         backheaderStyle: BackheaderStyle.orbitBudget,
         appColor: AppColorMode.pink,
       ),
@@ -351,6 +355,10 @@ void main() {
     expect(payload['buttonSurfaceStyle'], 'raisedInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
     expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
+    expect(payload['categoryMenuColor'], 'darkgray');
+    expect(payload['categoryMenuSurfaceStyle'], 'insetInset');
+    expect(payload['categoryCardColor'], 'white');
+    expect(payload['categoryCardSurfaceStyle'], 'raisedInset');
     expect(payload['ghostLogboxSettings'], isA<Map>());
     final ghostPayload = Map<dynamic, dynamic>.from(
       payload['ghostLogboxSettings'] as Map,

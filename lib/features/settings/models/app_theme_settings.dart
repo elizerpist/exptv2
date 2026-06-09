@@ -299,6 +299,10 @@ class AppThemeSettings {
     required this.contentSurfaceStyle,
     required this.ghostLogboxSurfaceStyle,
     required this.ghostLogboxSettings,
+    required this.categoryMenuColor,
+    required this.categoryMenuSurfaceStyle,
+    required this.categoryCardColor,
+    required this.categoryCardSurfaceStyle,
     required this.backheaderStyle,
     required this.appColor,
   });
@@ -314,6 +318,10 @@ class AppThemeSettings {
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSettings: GhostLogboxSettings.defaults(),
+      categoryMenuColor: AppBoxColor.gray,
+      categoryMenuSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      categoryCardColor: AppBoxColor.gray,
+      categoryCardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
       appColor: AppColorMode.turquoise,
     );
@@ -353,6 +361,18 @@ class AppThemeSettings {
             ? Map<dynamic, dynamic>.from(map['ghostLogboxSettings'] as Map)
             : null,
       ),
+      categoryMenuColor: AppBoxColor.fromAny(map['categoryMenuColor']),
+      categoryMenuSurfaceStyle: _surfaceFromMap(
+        map,
+        'categoryMenuSurfaceStyle',
+        ExpenseSurfaceInteraction.neutralNeutral,
+      ),
+      categoryCardColor: AppBoxColor.fromAny(map['categoryCardColor']),
+      categoryCardSurfaceStyle: _surfaceFromMap(
+        map,
+        'categoryCardSurfaceStyle',
+        ExpenseSurfaceInteraction.neutralNeutral,
+      ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
       appColor: _appColorFromMap(map),
     );
@@ -367,6 +387,10 @@ class AppThemeSettings {
   final ExpenseSurfaceInteraction contentSurfaceStyle;
   final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
   final GhostLogboxSettings ghostLogboxSettings;
+  final AppBoxColor categoryMenuColor;
+  final ExpenseSurfaceInteraction categoryMenuSurfaceStyle;
+  final AppBoxColor categoryCardColor;
+  final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
   final BackheaderStyle backheaderStyle;
   final AppColorMode appColor;
 
@@ -391,6 +415,10 @@ class AppThemeSettings {
       'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
       'ghostLogboxSurfaceStyle': ghostLogboxSurfaceStyle.nativeValue,
       'ghostLogboxSettings': ghostLogboxSettings.toMap(),
+      'categoryMenuColor': categoryMenuColor.nativeValue,
+      'categoryMenuSurfaceStyle': categoryMenuSurfaceStyle.nativeValue,
+      'categoryCardColor': categoryCardColor.nativeValue,
+      'categoryCardSurfaceStyle': categoryCardSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
       'appColor': appColor.nativeValue,
     };
@@ -406,6 +434,10 @@ class AppThemeSettings {
     ExpenseSurfaceInteraction? contentSurfaceStyle,
     ExpenseSurfaceInteraction? ghostLogboxSurfaceStyle,
     GhostLogboxSettings? ghostLogboxSettings,
+    AppBoxColor? categoryMenuColor,
+    ExpenseSurfaceInteraction? categoryMenuSurfaceStyle,
+    AppBoxColor? categoryCardColor,
+    ExpenseSurfaceInteraction? categoryCardSurfaceStyle,
     BackheaderStyle? backheaderStyle,
     AppColorMode? appColor,
   }) {
@@ -420,6 +452,12 @@ class AppThemeSettings {
       ghostLogboxSurfaceStyle:
           ghostLogboxSurfaceStyle ?? this.ghostLogboxSurfaceStyle,
       ghostLogboxSettings: ghostLogboxSettings ?? this.ghostLogboxSettings,
+      categoryMenuColor: categoryMenuColor ?? this.categoryMenuColor,
+      categoryMenuSurfaceStyle:
+          categoryMenuSurfaceStyle ?? this.categoryMenuSurfaceStyle,
+      categoryCardColor: categoryCardColor ?? this.categoryCardColor,
+      categoryCardSurfaceStyle:
+          categoryCardSurfaceStyle ?? this.categoryCardSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
       appColor: appColor ?? this.appColor,
     );

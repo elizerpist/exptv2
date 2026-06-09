@@ -378,6 +378,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('App színe'), findsOneWidget);
+    expect(find.text('Kategória menü felülete'), findsOneWidget);
+    expect(find.text('Kategória kártyák felülete'), findsOneWidget);
     expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
     expect(find.text('Pink'), findsOneWidget);
     expect(find.text('Éjszakai mód'), findsNothing);
@@ -425,6 +427,32 @@ void main() {
       updated.last.ghostLogboxSurfaceStyle,
       ExpenseSurfaceInteraction.neutralNeutral,
     );
+    await tester.tap(
+      find.byKey(const ValueKey('theme-category-menu-surface-neumorph')),
+    );
+    expect(
+      updated.last.categoryMenuSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-category-card-surface-neumorph')),
+    );
+    expect(
+      updated.last.categoryCardSurfaceStyle,
+      ExpenseSurfaceInteraction.raisedInset,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
+    );
+    expect(updated.last.categoryMenuColor, AppBoxColor.darkgray);
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-category-card-color-white')),
+    );
+    expect(updated.last.categoryCardColor, AppBoxColor.white);
+
     await tester.tap(find.text('Pink'));
     expect(updated.last.appColor, AppColorMode.pink);
   });

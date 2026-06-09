@@ -100,20 +100,22 @@ class ExpenseSurface {
         color: color,
         gradient: activeNavGradient,
         borderRadius: borderRadius,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
-        boxShadow: <BoxShadow>[
-          if (profile == ExpenseSurfaceProfile.headerCard) ...?neutralShadow,
-          BoxShadow(
-            color: Color(0x5794A3B8),
-            offset: Offset(7, 7),
-            blurRadius: 15,
-          ),
-          BoxShadow(
-            color: Color(0xEBFFFFFF),
-            offset: Offset(-7, -7),
-            blurRadius: 15,
-          ),
-        ],
+        border: neutralShadow == null
+            ? Border.all(color: Colors.white.withValues(alpha: 0.72))
+            : null,
+        boxShadow: neutralShadow ??
+            const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x5794A3B8),
+                offset: Offset(7, 7),
+                blurRadius: 15,
+              ),
+              BoxShadow(
+                color: Color(0xEBFFFFFF),
+                offset: Offset(-7, -7),
+                blurRadius: 15,
+              ),
+            ],
       ),
       _SurfaceDepth.inset => BoxDecoration(
         color: color,

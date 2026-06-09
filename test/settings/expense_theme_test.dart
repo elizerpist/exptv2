@@ -242,6 +242,10 @@ void main() {
       buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
       contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+      categoryMenuSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+      categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+      categoryMenuColor: AppBoxColor.darkgray,
+      categoryCardColor: AppBoxColor.white,
     );
 
     expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
@@ -253,6 +257,10 @@ void main() {
     expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
     expect(settings.toMap()['contentSurfaceStyle'], 'insetInset');
     expect(settings.toMap()['ghostLogboxSurfaceStyle'], 'neutralInset');
+    expect(settings.toMap()['categoryMenuSurfaceStyle'], 'insetInset');
+    expect(settings.toMap()['categoryCardSurfaceStyle'], 'raisedInset');
+    expect(settings.toMap()['categoryMenuColor'], 'darkgray');
+    expect(settings.toMap()['categoryCardColor'], 'white');
   });
 
   test('accent helpers resolve active background for all palettes', () {

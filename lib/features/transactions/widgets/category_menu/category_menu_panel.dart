@@ -18,6 +18,7 @@ class CategoryMenuPanel extends StatelessWidget {
     required this.onAdd,
     required this.onClose,
     this.surfaceColor = AppColors.white,
+    this.cardSurfaceColor = AppColors.white,
     this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
@@ -34,6 +35,7 @@ class CategoryMenuPanel extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback onClose;
   final Color surfaceColor;
+  final Color cardSurfaceColor;
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
@@ -86,7 +88,7 @@ class CategoryMenuPanel extends StatelessWidget {
                     onSelect: onSelect,
                     onModify: onModify,
                     onDelete: onDelete,
-                    surfaceColor: surfaceColor,
+                    surfaceColor: cardSurfaceColor,
                     cardSurfaceStyle: cardSurfaceStyle,
                     avatarSurfaceStyle: avatarSurfaceStyle,
                     accentColor: accentColor,

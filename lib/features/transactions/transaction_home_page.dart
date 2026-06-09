@@ -322,8 +322,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   onModify: _openModifyCategory,
                   onSelect: _selectCategory,
                   onDelete: _deleteCategory,
-                  surfaceColor: expenseTheme.logBox,
-                  cardSurfaceStyle: expenseTheme.contentSurfaceStyle,
+                  surfaceColor: expenseTheme.categoryMenu,
+                  menuSurfaceStyle: expenseTheme.categoryMenuSurfaceStyle,
+                  cardSurfaceColor: expenseTheme.categoryCard,
+                  cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
                   avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                   accentColor: expenseTheme.accent,
                   activeBackgroundColor: expenseTheme.activeBackground,
@@ -635,7 +637,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _handleHeaderDragUpdate(DragUpdateDetails details) {
-    if (_headerExpanded || _categoryMode != null || _categoryEditorOpen) {
+    if (_headerExpanded || _categoryEditorOpen) {
       return;
     }
     _headerPullController.stop();

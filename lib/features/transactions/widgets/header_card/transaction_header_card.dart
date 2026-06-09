@@ -363,7 +363,7 @@ class _HeaderCategoryButton extends StatelessWidget {
           color: primaryColor,
           borderRadius: radius,
           pressed: pressed,
-          primary: true,
+          primary: false,
           primaryColor: primaryColor,
           width: 48,
           height: 48,

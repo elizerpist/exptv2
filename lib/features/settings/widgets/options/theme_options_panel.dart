@@ -153,6 +153,106 @@ class ThemeOptionsPanel extends StatelessWidget {
                   ),
                 ),
               ),
+              _sectionTitle(
+                'Kategória menü felülete',
+                'A kategória overlay háttérfelülete:',
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-category-menu-surface-normal'),
+                title: 'Normál',
+                description: 'Sík kategória menü háttér',
+                selected: settings.categoryMenuSurfaceStyle ==
+                    ExpenseSurfaceInteraction.neutralNeutral,
+                previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    categoryMenuSurfaceStyle:
+                        ExpenseSurfaceInteraction.neutralNeutral,
+                  ),
+                ),
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-category-menu-surface-neumorph'),
+                title: 'Neumorph',
+                description: 'Mélységet kapó kategória menü háttér',
+                selected: settings.categoryMenuSurfaceStyle ==
+                    ExpenseSurfaceInteraction.insetInset,
+                previewStyle: ExpenseSurfaceInteraction.insetInset,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    categoryMenuSurfaceStyle:
+                        ExpenseSurfaceInteraction.insetInset,
+                  ),
+                ),
+              ),
+              _categoryMenuColorOption(
+                'Fehér',
+                'Fehér kategória menü háttér',
+                AppBoxColor.white,
+                AppColors.white,
+              ),
+              _categoryMenuColorOption(
+                'Szürke',
+                'Szürke kategória menü háttér',
+                AppBoxColor.gray,
+                AppColors.gray100,
+              ),
+              _categoryMenuColorOption(
+                'Sötétebb szürke',
+                'Erősebb szürke kategória menü háttér',
+                AppBoxColor.darkgray,
+                AppColors.gray200,
+              ),
+              _sectionTitle(
+                'Kategória kártyák felülete',
+                'A kategória cardok háttérszíne és mélysége:',
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-category-card-surface-normal'),
+                title: 'Normál',
+                description: 'Sík kategória kártyák',
+                selected: settings.categoryCardSurfaceStyle ==
+                    ExpenseSurfaceInteraction.neutralNeutral,
+                previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    categoryCardSurfaceStyle:
+                        ExpenseSurfaceInteraction.neutralNeutral,
+                  ),
+                ),
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-category-card-surface-neumorph'),
+                title: 'Neumorph',
+                description: 'Kiemelt kategória kártyák',
+                selected: settings.categoryCardSurfaceStyle ==
+                    ExpenseSurfaceInteraction.raisedInset,
+                previewStyle: ExpenseSurfaceInteraction.raisedInset,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    categoryCardSurfaceStyle:
+                        ExpenseSurfaceInteraction.raisedInset,
+                  ),
+                ),
+              ),
+              _categoryCardColorOption(
+                'Fehér',
+                'Fehér kategória kártyák',
+                AppBoxColor.white,
+                AppColors.white,
+              ),
+              _categoryCardColorOption(
+                'Szürke',
+                'Szürke kategória kártyák',
+                AppBoxColor.gray,
+                AppColors.gray100,
+              ),
+              _categoryCardColorOption(
+                'Sötétebb szürke',
+                'Erősebb szürke kategória kártyák',
+                AppBoxColor.darkgray,
+                AppColors.gray200,
+              ),
               _sectionTitle('App színe', 'Nappali módban használt fő szín:'),
               _appColorOption(
                 'Türkiz',
@@ -331,6 +431,40 @@ class ThemeOptionsPanel extends StatelessWidget {
       description: description,
       selected: settings.boxColor == value,
       onTap: () => onChanged(settings.copyWith(boxColor: value)),
+      preview: _ColorPreview(color: color),
+    );
+  }
+
+  Widget _categoryMenuColorOption(
+    String title,
+    String description,
+    AppBoxColor value,
+    Color color,
+  ) {
+    return SettingsRadioOption(
+      key: ValueKey('theme-category-menu-color-${value.nativeValue}'),
+      title:
+          '$title${settings.categoryMenuColor == value ? ' (jelenlegi)' : ''}',
+      description: description,
+      selected: settings.categoryMenuColor == value,
+      onTap: () => onChanged(settings.copyWith(categoryMenuColor: value)),
+      preview: _ColorPreview(color: color),
+    );
+  }
+
+  Widget _categoryCardColorOption(
+    String title,
+    String description,
+    AppBoxColor value,
+    Color color,
+  ) {
+    return SettingsRadioOption(
+      key: ValueKey('theme-category-card-color-${value.nativeValue}'),
+      title:
+          '$title${settings.categoryCardColor == value ? ' (jelenlegi)' : ''}',
+      description: description,
+      selected: settings.categoryCardColor == value,
+      onTap: () => onChanged(settings.copyWith(categoryCardColor: value)),
       preview: _ColorPreview(color: color),
     );
   }
