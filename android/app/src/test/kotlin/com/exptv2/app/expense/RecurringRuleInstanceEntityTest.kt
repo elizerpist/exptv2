@@ -13,6 +13,7 @@ class RecurringRuleInstanceEntityTest {
             periodKey = "2026-06",
             status = RecurringRuleInstanceStatus.PENDING,
             estimatedDate = "2026.06.18",
+            estimatedTime = "20:15",
             estimatedAmount = 28500.0,
             triggerTypeSnapshot = RecurringTriggerType.PUSH,
             transactionTypeSnapshot = "expense",
@@ -36,9 +37,11 @@ class RecurringRuleInstanceEntityTest {
         assertEquals("2026-06", map["periodKey"])
         assertEquals("Gázszámla", map["name"])
         assertEquals(28500.0, map["amount"])
+        assertEquals(RecurringTriggerType.PUSH, map["triggerTypeSnapshot"])
         assertEquals("expense", map["transactionType"])
         assertEquals("2026.06.18", map["date"])
-        assertEquals("00:00", map["time"])
+        assertEquals("20:15", map["estimatedTime"])
+        assertEquals("20:15", map["time"])
         assertEquals(6, map["categoryId"])
         assertEquals(false, map["isActivated"])
         assertTrue((map["triggerMillis"] as Long) > 0L)

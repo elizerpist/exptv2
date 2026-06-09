@@ -11,6 +11,10 @@ class DateTimeFields extends StatelessWidget {
     required this.timeController,
     this.onPickDate,
     this.onPickTime,
+    this.dateFieldKey,
+    this.timeFieldKey,
+    this.datePickerKey = const ValueKey('transaction-date-picker-button'),
+    this.timePickerKey = const ValueKey('transaction-time-picker-button'),
     this.dateFocusNode,
     this.timeFocusNode,
     this.debugLabelPrefix = 'DateTimeFields',
@@ -22,6 +26,10 @@ class DateTimeFields extends StatelessWidget {
   final TextEditingController timeController;
   final VoidCallback? onPickDate;
   final VoidCallback? onPickTime;
+  final Key? dateFieldKey;
+  final Key? timeFieldKey;
+  final Key datePickerKey;
+  final Key timePickerKey;
   final FocusNode? dateFocusNode;
   final FocusNode? timeFocusNode;
   final String debugLabelPrefix;
@@ -34,6 +42,7 @@ class DateTimeFields extends StatelessWidget {
       children: [
         Expanded(
           child: ThemedPillField(
+            fieldKey: dateFieldKey,
             debugLabel: '$debugLabelPrefix.date',
             controller: dateController,
             focusNode: dateFocusNode,
@@ -42,7 +51,7 @@ class DateTimeFields extends StatelessWidget {
             surfaceColor: surfaceColor,
             surfaceStyle: surfaceStyle,
             suffixIcon: IconButton(
-              key: const ValueKey('transaction-date-picker-button'),
+              key: datePickerKey,
               onPressed: onPickDate ?? () => _pickDate(context),
               icon: const Icon(Icons.calendar_month_outlined, size: 20),
               color: AppColors.gray500,
@@ -53,6 +62,7 @@ class DateTimeFields extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: ThemedPillField(
+            fieldKey: timeFieldKey,
             debugLabel: '$debugLabelPrefix.time',
             controller: timeController,
             focusNode: timeFocusNode,
@@ -61,7 +71,7 @@ class DateTimeFields extends StatelessWidget {
             surfaceColor: surfaceColor,
             surfaceStyle: surfaceStyle,
             suffixIcon: IconButton(
-              key: const ValueKey('transaction-time-picker-button'),
+              key: timePickerKey,
               onPressed: onPickTime ?? () => _pickTime(context),
               icon: const Icon(Icons.schedule_outlined, size: 20),
               color: AppColors.gray500,

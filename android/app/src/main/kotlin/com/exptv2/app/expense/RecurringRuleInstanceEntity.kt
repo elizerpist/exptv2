@@ -27,6 +27,7 @@ object RecurringRuleInstanceStatus {
         Index("status"),
         Index("periodKey"),
         Index("estimatedDate"),
+        Index(value = ["estimatedDate", "estimatedTime"]),
         Index("matchedNotificationEventId"),
     ],
 )
@@ -36,6 +37,7 @@ data class RecurringRuleInstanceEntity(
     val periodKey: String,
     val status: String,
     val estimatedDate: String,
+    val estimatedTime: String = "00:00",
     val estimatedAmount: Double,
     val triggerTypeSnapshot: String,
     val transactionTypeSnapshot: String,
@@ -57,6 +59,7 @@ data class RecurringRuleInstanceEntity(
         "periodKey" to periodKey,
         "status" to status,
         "estimatedDate" to estimatedDate,
+        "estimatedTime" to estimatedTime,
         "estimatedAmount" to estimatedAmount,
         "triggerTypeSnapshot" to triggerTypeSnapshot,
         "transactionTypeSnapshot" to transactionTypeSnapshot,
@@ -82,12 +85,13 @@ data class RecurringRuleInstanceEntity(
         "triggerTypeSnapshot" to triggerTypeSnapshot,
         "transactionType" to transactionTypeSnapshot,
         "date" to estimatedDate,
-        "time" to "00:00",
+        "estimatedTime" to estimatedTime,
+        "time" to estimatedTime,
         "categoryId" to categoryIdSnapshot,
         "categoryName" to categoryNameSnapshot,
         "categoryColor" to categoryColorSnapshot,
         "categoryIconSlot" to categoryIconSlotSnapshot,
-        "triggerMillis" to triggerMillisForDate(estimatedDate),
+        "triggerMillis" to triggerMillisForDateTime(estimatedDate, estimatedTime),
         "isActivated" to (status == RecurringRuleInstanceStatus.ACTIVATED),
         "activatedTransactionId" to activatedTransactionId,
         "createdAt" to createdAt,
@@ -95,18 +99,21 @@ data class RecurringRuleInstanceEntity(
     )
 }
 
-private fun triggerMillisForDate(value: String): Long {
-    val parts = value.trim().replace('.', '-').split("-")
+private fun triggerMillisForDateTime(date: String, time: String): Long {
+    val parts = date.trim().replace('.', '-').split("-")
     if (parts.size != 3) return 0L
     val year = parts[0].toIntOrNull() ?: return 0L
     val month = parts[1].toIntOrNull() ?: return 0L
     val day = parts[2].toIntOrNull() ?: return 0L
+    val timeParts = time.trim().split(":")
+    val hour = timeParts.getOrNull(0)?.toIntOrNull() ?: 0
+    val minute = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
     return Calendar.getInstance().apply {
         set(Calendar.YEAR, year)
         set(Calendar.MONTH, month - 1)
         set(Calendar.DAY_OF_MONTH, day)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
+        set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+        set(Calendar.MINUTE, minute.coerceIn(0, 59))
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis

@@ -70,6 +70,7 @@ class RecurringRule {
     required this.name,
     required this.estimatedAmount,
     required this.expectedDayOfMonth,
+    this.expectedTime = '00:00',
     required this.categoryId,
     required this.categoryName,
     required this.categoryColor,
@@ -99,6 +100,7 @@ class RecurringRule {
       name: map['name']?.toString() ?? '',
       estimatedAmount: _double(map['estimatedAmount']),
       expectedDayOfMonth: _int(map['expectedDayOfMonth']),
+      expectedTime: map['expectedTime']?.toString() ?? '00:00',
       categoryId: _int(map['categoryId']),
       categoryName: map['categoryName']?.toString() ?? '',
       categoryColor: map['categoryColor']?.toString() ?? '#64748b',
@@ -127,6 +129,7 @@ class RecurringRule {
   final String name;
   final double estimatedAmount;
   final int expectedDayOfMonth;
+  final String expectedTime;
   final int categoryId;
   final String categoryName;
   final String categoryColor;
@@ -155,6 +158,7 @@ class RecurringRuleDraft {
     required this.name,
     required this.estimatedAmount,
     required this.expectedDayOfMonth,
+    this.expectedTime = '00:00',
     required this.categoryId,
     this.isActive = true,
     this.appFilterText = '',
@@ -176,6 +180,7 @@ class RecurringRuleDraft {
   final String name;
   final double estimatedAmount;
   final int expectedDayOfMonth;
+  final String expectedTime;
   final int categoryId;
   final bool isActive;
   final String appFilterText;
@@ -198,6 +203,7 @@ class RecurringRuleDraft {
       'name': name,
       'estimatedAmount': estimatedAmount,
       'expectedDayOfMonth': expectedDayOfMonth,
+      'expectedTime': expectedTime,
       'categoryId': categoryId,
       'isActive': isActive,
       'appFilterText': appFilterText,

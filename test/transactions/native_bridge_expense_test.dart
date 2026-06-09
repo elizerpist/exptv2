@@ -284,6 +284,7 @@ void main() {
       name: 'Hitel',
       estimatedAmount: 150000,
       expectedDayOfMonth: 5,
+      expectedTime: '20:15',
       categoryId: 6,
       appFilterText: r'^Bank$',
       packageName: 'hu.bank.app',
@@ -304,6 +305,7 @@ void main() {
     final addPayload = calls.last.arguments as Map<dynamic, dynamic>;
     expect(addPayload['triggerType'], 'push');
     expect(addPayload['transactionType'], 'expense');
+    expect(addPayload['expectedTime'], '20:15');
     expect(addPayload['amountToleranceMin'], 10000);
 
     final updated = await bridge.expenseUpdateRecurringRule(7, draft);
@@ -331,6 +333,7 @@ Map<String, Object?> recurringRuleRow({
     'name': name,
     'estimatedAmount': 150000,
     'expectedDayOfMonth': 5,
+    'expectedTime': '20:15',
     'categoryId': 6,
     'categoryName': 'Lakhatás',
     'categoryColor': '#dc2626',

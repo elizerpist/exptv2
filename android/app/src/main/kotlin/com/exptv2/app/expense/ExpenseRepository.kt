@@ -511,8 +511,9 @@ class ExpenseRepository(context: Context) {
 
     private suspend fun nextPendingRuleTriggerAtOrAfter(targetMillis: Long): Long? {
         val date = dateFromMillis(targetMillis)
-        return recurringRuleInstances.nextDateTriggeredAtOrAfter(date)
-            ?.let { triggerMillisFromDate(it.estimatedDate) }
+        val time = timeFromMillis(targetMillis)
+        return recurringRuleInstances.nextDateTriggeredAtOrAfter(date, time)
+            ?.let { triggerMillisFromDateTime(it.estimatedDate, it.estimatedTime) }
             ?.let { if (it < targetMillis) targetMillis else it }
     }
 
@@ -1108,6 +1109,7 @@ class ExpenseRepository(context: Context) {
                     periodKey = plan.periodKey,
                     status = RecurringRuleInstanceStatus.PENDING,
                     estimatedDate = plan.estimatedDate,
+                    estimatedTime = rule.expectedTime,
                     estimatedAmount = plan.estimatedAmount,
                     triggerTypeSnapshot = rule.triggerType,
                     transactionTypeSnapshot = rule.transactionType,
@@ -1130,7 +1132,10 @@ class ExpenseRepository(context: Context) {
     private suspend fun activateDueDateTriggeredRuleInstances(targetMillis: Long): List<RecurringRuleEntity> {
         val processed = mutableListOf<RecurringRuleEntity>()
         val now = System.currentTimeMillis()
-        for (instance in recurringRuleInstances.dueDateTriggered(dateFromMillis(targetMillis))) {
+        for (instance in recurringRuleInstances.dueDateTriggered(
+            dateFromMillis(targetMillis),
+            timeFromMillis(targetMillis),
+        )) {
             val rule = recurringRules.byId(instance.ruleId) ?: continue
             if (!rule.isActive) {
                 recurringRuleInstances.updateStatus(instance.id, RecurringRuleInstanceStatus.EXPIRED, now)
@@ -1145,7 +1150,7 @@ class ExpenseRepository(context: Context) {
             val transaction = ExpenseTransactionEntity(
                 id = nextId(instance.estimatedDate),
                 date = instance.estimatedDate,
-                time = recurringTime(targetMillis),
+                time = instance.estimatedTime,
                 latitude = null,
                 longitude = null,
                 address = "Recurring rule transaction",
@@ -1374,6 +1379,7 @@ class ExpenseRepository(context: Context) {
         if (expectedDay !in 1..31) {
             throw ExpenseValidationException("INVALID_RECURRING_RULE_DAY", "Expected day must be between 1 and 31")
         }
+        val expectedTime = normalizeRecurringExpectedTime(args["expectedTime"]?.toString() ?: existing?.expectedTime)
         val categoryId = optionalInt(args["categoryId"]) ?: existing?.categoryId
             ?: throw ExpenseValidationException("INVALID_CATEGORY", "Category is required")
         val category = categories.byId(categoryId)
@@ -1413,6 +1419,7 @@ class ExpenseRepository(context: Context) {
             name = name,
             estimatedAmount = kotlin.math.abs(estimatedAmount),
             expectedDayOfMonth = expectedDay,
+            expectedTime = expectedTime,
             categoryId = category.transactionCategoryID,
             categoryName = category.name,
             categoryColor = category.backgroundColor ?: colorForSlot(category.colorSlot ?: 4),
@@ -1540,6 +1547,13 @@ class ExpenseRepository(context: Context) {
         )
     }
 
+    private fun normalizeRecurringExpectedTime(value: String?): String {
+        val parts = value?.trim()?.split(":") ?: return "00:00"
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: return "00:00"
+        val minute = parts.getOrNull(1)?.toIntOrNull() ?: return "00:00"
+        return "%02d:%02d".format(hour.coerceIn(0, 23), minute.coerceIn(0, 59))
+    }
+
     private fun dateFromMillis(targetMillis: Long): String {
         val calendar = Calendar.getInstance().apply { timeInMillis = targetMillis }
         return "%04d.%02d.%02d".format(
@@ -1562,18 +1576,21 @@ class ExpenseRepository(context: Context) {
         return "%02d:%02d".format(calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE))
     }
 
-    private fun triggerMillisFromDate(value: String): Long {
+    private fun triggerMillisFromDateTime(value: String, time: String = "00:00"): Long {
         val parts = value.trim().replace('.', '-').split("-")
         if (parts.size != 3) return 0L
         val year = parts[0].toIntOrNull() ?: return 0L
         val month = parts[1].toIntOrNull() ?: return 0L
         val day = parts[2].toIntOrNull() ?: return 0L
+        val triggerTimeParts = time.trim().split(":")
+        val hour = triggerTimeParts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minute = triggerTimeParts.getOrNull(1)?.toIntOrNull() ?: 0
         return Calendar.getInstance().apply {
             set(Calendar.YEAR, year)
             set(Calendar.MONTH, month - 1)
             set(Calendar.DAY_OF_MONTH, day)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
+            set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+            set(Calendar.MINUTE, minute.coerceIn(0, 59))
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis

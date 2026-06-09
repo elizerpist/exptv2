@@ -73,7 +73,7 @@ class RecurringGhostRecord {
       triggerType: map['triggerTypeSnapshot']?.toString() ?? 'date',
       transactionType: map['transactionType']?.toString() ?? 'expense',
       date: map['date']?.toString() ?? '',
-      time: map['time']?.toString() ?? '',
+      time: map['time']?.toString() ?? map['estimatedTime']?.toString() ?? '',
       categoryId: _int(map['categoryId']),
       categoryName: map['categoryName']?.toString() ?? '',
       categoryColor: map['categoryColor']?.toString() ?? '',

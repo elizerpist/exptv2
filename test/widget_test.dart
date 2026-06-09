@@ -362,6 +362,9 @@ void main() {
     );
     expect(find.byKey(const ValueKey('recurring-trigger-date')), findsOneWidget);
     expect(find.byKey(const ValueKey('recurring-trigger-push')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-rule-date')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-rule-time')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-rule-day')), findsNothing);
     expect(
       find.byKey(const ValueKey('category-editor-slide-card')),
       findsNothing,
@@ -387,6 +390,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('recurring-trigger-push')));
     await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('recurring-push-date')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-push-app-pill')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-rule-time')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('recurring-push-app-pill')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Notification Test'));
+    await tester.pumpAndSettle();
+    expect(find.text('Notification Test'), findsWidgets);
 
     await tester.enterText(
       find.byKey(const ValueKey('recurring-rule-sample')),
@@ -510,6 +523,7 @@ void main() {
         'name': 'Hitel',
         'estimatedAmount': 123456,
         'expectedDayOfMonth': 5,
+        'expectedTime': '20:15',
         'categoryId': 1,
         'isActive': true,
         'appFilterText': '',

@@ -15,14 +15,31 @@ interface RecurringRuleInstanceDao {
     @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' ORDER BY estimatedDate DESC, id DESC")
     suspend fun pending(): List<RecurringRuleInstanceEntity>
 
-    @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' AND periodKey = :periodKey ORDER BY estimatedDate ASC, id ASC")
+    @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' AND periodKey = :periodKey ORDER BY estimatedDate ASC, estimatedTime ASC, id ASC")
     suspend fun pendingForPeriod(periodKey: String): List<RecurringRuleInstanceEntity>
 
-    @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' AND triggerTypeSnapshot = 'date' AND estimatedDate <= :date ORDER BY estimatedDate ASC, id ASC")
-    suspend fun dueDateTriggered(date: String): List<RecurringRuleInstanceEntity>
+    @Query(
+        """
+        SELECT * FROM recurring_rule_instances
+        WHERE status = 'pending'
+          AND triggerTypeSnapshot = 'date'
+          AND (estimatedDate < :date OR (estimatedDate = :date AND estimatedTime <= :time))
+        ORDER BY estimatedDate ASC, estimatedTime ASC, id ASC
+        """
+    )
+    suspend fun dueDateTriggered(date: String, time: String): List<RecurringRuleInstanceEntity>
 
-    @Query("SELECT * FROM recurring_rule_instances WHERE status = 'pending' AND triggerTypeSnapshot = 'date' AND estimatedDate >= :date ORDER BY estimatedDate ASC, id ASC LIMIT 1")
-    suspend fun nextDateTriggeredAtOrAfter(date: String): RecurringRuleInstanceEntity?
+    @Query(
+        """
+        SELECT * FROM recurring_rule_instances
+        WHERE status = 'pending'
+          AND triggerTypeSnapshot = 'date'
+          AND (estimatedDate > :date OR (estimatedDate = :date AND estimatedTime >= :time))
+        ORDER BY estimatedDate ASC, estimatedTime ASC, id ASC
+        LIMIT 1
+        """
+    )
+    suspend fun nextDateTriggeredAtOrAfter(date: String, time: String): RecurringRuleInstanceEntity?
 
     @Query("SELECT * FROM recurring_rule_instances WHERE ruleId = :ruleId AND periodKey = :periodKey LIMIT 1")
     suspend fun byRuleAndPeriod(ruleId: Int, periodKey: String): RecurringRuleInstanceEntity?

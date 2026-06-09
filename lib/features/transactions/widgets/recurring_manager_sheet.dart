@@ -8,7 +8,8 @@ import '../../../models/installed_app.dart';
 import '../../settings/models/app_theme_settings.dart';
 import '../../settings/models/notification_parser_rule.dart';
 import '../../settings/theme/expense_theme.dart';
-import '../../settings/widgets/app_filter_control.dart';
+import '../../settings/widgets/installed_app_icon.dart';
+import '../../settings/widgets/installed_app_picker_sheet.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_category.dart';
 import '../state/transaction_store.dart';
@@ -16,6 +17,7 @@ import '../slots/category_color_resolver.dart';
 import 'amount_field.dart';
 import 'category_scroll_picker.dart';
 import 'category_selector_field.dart';
+import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
 import 'slide_up_panel_metrics.dart';
 import 'themed_pill_field.dart';
@@ -49,7 +51,8 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
   final _bodyScrollController = ScrollController();
   final _name = TextEditingController();
   final _amount = TextEditingController();
-  final _day = TextEditingController(text: '1');
+  final _date = TextEditingController();
+  final _time = TextEditingController();
   final _sample = TextEditingController();
   final _keyword = TextEditingController();
   final _amountPattern = TextEditingController(
@@ -71,6 +74,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
   String _appFilterText = '';
   String _packageName = '';
   String _appLabel = '';
+  InstalledApp? _selectedApp;
   String _amountSelection = '';
   String _merchantSelection = '';
   String? _error;
@@ -78,6 +82,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
   @override
   void initState() {
     super.initState();
+    _resetDateTimeFields();
     if (widget.visible) unawaited(widget.store.loadRecurringRules());
   }
 
@@ -95,7 +100,8 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     _bodyScrollController.dispose();
     _name.dispose();
     _amount.dispose();
-    _day.dispose();
+    _date.dispose();
+    _time.dispose();
     _sample.dispose();
     _keyword.dispose();
     _amountPattern.dispose();
@@ -173,7 +179,6 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                           _CommonForm(
                             name: _name,
                             amount: _amount,
-                            day: _day,
                             category: _category,
                             categoryPickerOpen: _categoryPickerOpen,
                             categories: categories,
@@ -187,18 +192,44 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                               _categoryPickerOpen = false;
                             }),
                           ),
+                          const SizedBox(height: 12),
+                          if (_triggerType == RecurringTriggerType.date)
+                            DateTimeFields(
+                              dateController: _date,
+                              timeController: _time,
+                              dateFieldKey: const ValueKey(
+                                'recurring-rule-date',
+                              ),
+                              timeFieldKey: const ValueKey(
+                                'recurring-rule-time',
+                              ),
+                              datePickerKey: const ValueKey(
+                                'recurring-rule-date-picker-button',
+                              ),
+                              timePickerKey: const ValueKey(
+                                'recurring-rule-time-picker-button',
+                              ),
+                              debugLabelPrefix: 'RecurringRule',
+                              surfaceColor: expenseTheme.fieldSurface,
+                              surfaceStyle: expenseTheme.contentSurfaceStyle,
+                            )
+                          else
+                            _PushScheduleRow(
+                              date: _date,
+                              app: _selectedApp,
+                              appLabel: _appLabel,
+                              appFilterText: _appFilterText,
+                              errorText: _error == _appError
+                                  ? 'App kiválasztása szükséges'
+                                  : null,
+                              surfaceColor: expenseTheme.fieldSurface,
+                              surfaceStyle: expenseTheme.contentSurfaceStyle,
+                              onLoadInstalledApps: widget.onLoadInstalledApps,
+                              onAppSelected: _selectInstalledApp,
+                            ),
                           if (_triggerType == RecurringTriggerType.push) ...[
                             const SizedBox(height: 12),
                             _PushTrainingForm(
-                              appFilterText: _appFilterText,
-                              appErrorText: _error == _appError
-                                  ? 'App kiválasztása szükséges'
-                                  : null,
-                              onAppTextChanged: (value) => setState(() {
-                                _appFilterText = value;
-                              }),
-                              onAppSelected: _selectInstalledApp,
-                              onLoadInstalledApps: widget.onLoadInstalledApps,
                               sample: _sample,
                               keyword: _keyword,
                               amountPattern: _amountPattern,
@@ -322,16 +353,20 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     final amount = double.tryParse(
       _amount.text.trim().replaceAll(' ', '').replaceAll(',', '.'),
     );
-    final day = int.tryParse(_day.text.trim());
+    final selectedDate = _parseDate(_date.text);
+    final selectedTime = _triggerType == RecurringTriggerType.date
+        ? _normalizeTime(_time.text)
+        : '00:00';
     final category = _category;
-    if (name.isEmpty || amount == null || day == null || category == null) {
+    if (name.isEmpty ||
+        amount == null ||
+        selectedDate == null ||
+        selectedTime == null ||
+        category == null) {
       setState(() => _error = 'Hiányzó vagy hibás alapadat');
       return;
     }
-    if (day < 1 || day > 31) {
-      setState(() => _error = 'A nap 1 és 31 közé essen');
-      return;
-    }
+    final day = selectedDate.day;
     final dateTolerance = int.tryParse(_dateTolerance.text.trim());
     final amountTolerancePercent = double.tryParse(
       _amountTolerancePercent.text.trim().replaceAll(',', '.'),
@@ -381,6 +416,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
         name: name,
         estimatedAmount: amount,
         expectedDayOfMonth: day,
+        expectedTime: selectedTime,
         categoryId: category.transactionCategoryID,
         isActive: _editing?.isActive ?? true,
         appFilterText: _triggerType == RecurringTriggerType.push
@@ -440,6 +476,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       _appLabel = app.displayName;
       _packageName = app.packageName;
       _appFilterText = '^${RegExp.escape(app.displayName)}\$';
+      _selectedApp = app;
     });
   }
 
@@ -470,11 +507,19 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       _triggerType = rule.triggerType;
       _name.text = rule.name;
       _amount.text = rule.estimatedAmount.toStringAsFixed(0);
-      _day.text = rule.expectedDayOfMonth.toString();
+      _date.text = _dateForDay(rule.expectedDayOfMonth);
+      _time.text = _normalizeTime(rule.expectedTime) ?? '00:00';
       _category = _categoryById(rule.categoryId);
       _appFilterText = rule.appFilterText;
       _packageName = rule.packageName;
       _appLabel = rule.appLabel;
+      _selectedApp = rule.packageName.isEmpty && rule.appLabel.isEmpty
+          ? null
+          : InstalledApp(
+              packageName: rule.packageName,
+              label: rule.appLabel,
+              iconBase64: '',
+            );
       _sample.text = rule.sampleText;
       _keyword.text = rule.includeKeyword;
       _amountPattern.text = rule.amountPattern.isEmpty
@@ -503,6 +548,57 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     }
   }
 
+  void _resetDateTimeFields() {
+    final now = DateTime.now();
+    _date.text = _formatDate(now);
+    _time.text = _formatTimeOfDay(TimeOfDay.now());
+  }
+
+  String _dateForDay(int day) {
+    final now = DateTime.now();
+    final safeDay = day
+        .clamp(1, DateUtils.getDaysInMonth(now.year, now.month))
+        .toInt();
+    return _formatDate(DateTime(now.year, now.month, safeDay));
+  }
+
+  DateTime? _parseDate(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[./]'), '-');
+    final parts = normalized.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+
+  String? _normalizeTime(String value) {
+    final parts = value.trim().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDate(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
+
+  String _formatTimeOfDay(TimeOfDay value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   TransactionCategory? _categoryById(int id) {
     for (final category in widget.store.categories) {
       if (category.transactionCategoryID == id) return category;
@@ -516,7 +612,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       _triggerType = RecurringTriggerType.date;
       _name.clear();
       _amount.clear();
-      _day.text = '1';
+      _resetDateTimeFields();
       _category = null;
       _categoryPickerOpen = false;
       _sample.clear();
@@ -529,6 +625,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       _appFilterText = '';
       _packageName = '';
       _appLabel = '';
+      _selectedApp = null;
       _amountSelection = '';
       _merchantSelection = '';
       _trainingMode = _TrainingMode.amount;
@@ -693,7 +790,6 @@ class _CommonForm extends StatelessWidget {
   const _CommonForm({
     required this.name,
     required this.amount,
-    required this.day,
     required this.category,
     required this.categoryPickerOpen,
     required this.categories,
@@ -705,7 +801,6 @@ class _CommonForm extends StatelessWidget {
 
   final TextEditingController name;
   final TextEditingController amount;
-  final TextEditingController day;
   final TransactionCategory? category;
   final bool categoryPickerOpen;
   final List<TransactionCategory> categories;
@@ -751,28 +846,232 @@ class _CommonForm extends StatelessWidget {
             onSelected: onCategorySelected,
           ),
         ],
-        const SizedBox(height: 12),
-        ThemedPillField(
-          fieldKey: const ValueKey('recurring-rule-day'),
-          debugLabel: 'RecurringRule.expectedDay',
-          controller: day,
-          keyboardType: TextInputType.number,
-          label: 'Várt nap a hónapban',
-          surfaceColor: surfaceColor,
-          surfaceStyle: surfaceStyle,
-        ),
+
       ],
     );
   }
 }
 
+class _PushScheduleRow extends StatelessWidget {
+  const _PushScheduleRow({
+    required this.date,
+    required this.app,
+    required this.appLabel,
+    required this.appFilterText,
+    required this.errorText,
+    required this.surfaceColor,
+    required this.surfaceStyle,
+    required this.onLoadInstalledApps,
+    required this.onAppSelected,
+  });
+
+  final TextEditingController date;
+  final InstalledApp? app;
+  final String appLabel;
+  final String appFilterText;
+  final String? errorText;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final Future<List<InstalledApp>> Function() onLoadInstalledApps;
+  final ValueChanged<InstalledApp> onAppSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: ThemedPillField(
+            fieldKey: const ValueKey('recurring-push-date'),
+            debugLabel: 'RecurringRule.pushDate',
+            controller: date,
+            keyboardType: TextInputType.datetime,
+            label: 'Várható dátum',
+            surfaceColor: surfaceColor,
+            surfaceStyle: surfaceStyle,
+            suffixIcon: IconButton(
+              key: const ValueKey('recurring-push-date-picker-button'),
+              onPressed: () => _pickDate(context),
+              icon: const Icon(Icons.calendar_month_outlined, size: 20),
+              color: AppColors.gray500,
+              tooltip: 'Dátum választása',
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _RecurringAppPickerPill(
+            app: app,
+            appLabel: appLabel,
+            appFilterText: appFilterText,
+            errorText: errorText,
+            surfaceColor: surfaceColor,
+            surfaceStyle: surfaceStyle,
+            onLoadInstalledApps: onLoadInstalledApps,
+            onAppSelected: onAppSelected,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    final initialDate = _parseDate(date.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    date.text = _formatDate(picked);
+  }
+
+  DateTime? _parseDate(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[./]'), '-');
+    final parts = normalized.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    final parsed = DateTime(year, month, day);
+    return parsed.year == year && parsed.month == month && parsed.day == day
+        ? parsed
+        : null;
+  }
+
+  String _formatDate(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
+}
+
+class _RecurringAppPickerPill extends StatelessWidget {
+  const _RecurringAppPickerPill({
+    required this.app,
+    required this.appLabel,
+    required this.appFilterText,
+    required this.errorText,
+    required this.surfaceColor,
+    required this.surfaceStyle,
+    required this.onLoadInstalledApps,
+    required this.onAppSelected,
+  });
+
+  final InstalledApp? app;
+  final String appLabel;
+  final String appFilterText;
+  final String? errorText;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final Future<List<InstalledApp>> Function() onLoadInstalledApps;
+  final ValueChanged<InstalledApp> onAppSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Row(
+      children: [
+        if (app != null) ...[
+          SizedBox.square(dimension: 28, child: InstalledAppIcon(app: app!)),
+          const SizedBox(width: 8),
+        ] else ...[
+          const Icon(Icons.apps, size: 20, color: AppColors.gray500),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: Text(
+            _label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.gray800,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const Icon(Icons.expand_more, size: 18, color: AppColors.gray500),
+      ],
+    );
+    final child = surfaceStyle.hasPressEffect
+        ? ExpenseSurfaceContainer(
+            style: surfaceStyle,
+            color: surfaceColor,
+            borderRadius: BorderRadius.circular(25),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            neutralBorder: Border.all(color: AppColors.gray200),
+            child: content,
+          )
+        : DecoratedBox(
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(
+                color: errorText == null ? AppColors.gray200 : AppColors.expense,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: content,
+            ),
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: const ValueKey('recurring-push-app-pill'),
+            borderRadius: BorderRadius.circular(25),
+            onTap: () => _openAppPicker(context),
+            child: child,
+          ),
+        ),
+        if (errorText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            errorText!,
+            style: const TextStyle(
+              color: AppColors.expense,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String get _label {
+    if (app != null) return app!.displayName;
+    if (appLabel.isNotEmpty) return appLabel;
+    if (appFilterText.isNotEmpty) return appFilterText;
+    return 'App';
+  }
+
+  Future<void> _openAppPicker(BuildContext context) async {
+    final panelHeight = SlideUpPanelMetrics.fullHeight(context);
+    final selected = await showModalBottomSheet<InstalledApp>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      constraints: BoxConstraints(maxHeight: panelHeight),
+      builder: (context) {
+        return InstalledAppPickerSheet(
+          appsFuture: onLoadInstalledApps(),
+          height: panelHeight,
+        );
+      },
+    );
+    if (selected != null) onAppSelected(selected);
+  }
+}
+
 class _PushTrainingForm extends StatelessWidget {
   const _PushTrainingForm({
-    required this.appFilterText,
-    required this.appErrorText,
-    required this.onAppTextChanged,
-    required this.onAppSelected,
-    required this.onLoadInstalledApps,
     required this.sample,
     required this.keyword,
     required this.amountPattern,
@@ -791,11 +1090,6 @@ class _PushTrainingForm extends StatelessWidget {
     required this.onTokenSelected,
   });
 
-  final String appFilterText;
-  final String? appErrorText;
-  final ValueChanged<String> onAppTextChanged;
-  final ValueChanged<InstalledApp> onAppSelected;
-  final Future<List<InstalledApp>> Function() onLoadInstalledApps;
   final TextEditingController sample;
   final TextEditingController keyword;
   final TextEditingController amountPattern;
@@ -837,14 +1131,7 @@ class _PushTrainingForm extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AppFilterControl(
-              value: appFilterText,
-              errorText: appErrorText,
-              onTextChanged: onAppTextChanged,
-              onLoadInstalledApps: onLoadInstalledApps,
-              onAppSelected: onAppSelected,
-            ),
-            const SizedBox(height: 12),
+
             DebugTextField(
               fieldKey: const ValueKey('recurring-rule-sample'),
               debugLabel: 'RecurringRule.sample',
@@ -1212,6 +1499,15 @@ class _RuleCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onDelete;
 
+  String get _subtitle {
+    final amount = rule.estimatedAmount.toStringAsFixed(0);
+    final dateText = 'hó ${rule.expectedDayOfMonth}.';
+    final schedule = rule.triggerType == RecurringTriggerType.date
+        ? '$dateText · ${rule.expectedTime}'
+        : dateText;
+    return '${rule.transactionType.label} · $amount Ft · $schedule';
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = CategoryColorResolver.color(
@@ -1250,7 +1546,7 @@ class _RuleCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${rule.transactionType.label} · ${rule.estimatedAmount.toStringAsFixed(0)} Ft · hó ${rule.expectedDayOfMonth}.',
+                  _subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
