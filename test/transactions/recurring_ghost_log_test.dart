@@ -71,12 +71,14 @@ void main() {
       expect(store.visibleLogEntries.first.isGhost, isTrue);
 
       final displayEntries = store.visibleDisplayLogEntries;
-      expect(displayEntries, hasLength(3));
-      expect(displayEntries[0].isGhost, isTrue);
-      expect(displayEntries[0].ghost?.periodKey, '2026-05');
-      expect(displayEntries[1].isHeader, isTrue);
-      expect(displayEntries[1].header, '2026.05.10');
-      expect(displayEntries[2].record?.displayMerchant, 'Real Shop');
+      expect(displayEntries, hasLength(4));
+      expect(displayEntries[0].isHeader, isTrue);
+      expect(displayEntries[0].header, '2026.05.01');
+      expect(displayEntries[1].isGhost, isTrue);
+      expect(displayEntries[1].ghost?.periodKey, '2026-05');
+      expect(displayEntries[2].isHeader, isTrue);
+      expect(displayEntries[2].header, '2026.05.10');
+      expect(displayEntries[3].record?.displayMerchant, 'Real Shop');
       expect(store.visibleDisplayLogEntryTotalCount, displayEntries.length);
     },
   );
@@ -232,7 +234,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Rent'), findsOneWidget);
-    expect(find.text('Várható · ismétlődő'), findsOneWidget);
+    expect(find.text('Várható · idő'), findsOneWidget);
   });
 }
 
@@ -403,6 +405,7 @@ RecurringGhostRecord ghostFixture({
     'periodKey': periodKey,
     'name': name,
     'amount': amount,
+    'triggerTypeSnapshot': 'date',
     'transactionType': transactionType,
     'date': date,
     'time': '00:00',

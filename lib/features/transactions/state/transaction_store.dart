@@ -357,15 +357,20 @@ class TransactionStore extends ChangeNotifier {
     if (cached != null) return cached;
     final stopwatch = Stopwatch()..start();
     final entries = <TransactionLogEntry>[];
-    String? previousDate;
+    String? previousGhostDate;
+    String? previousRecordDate;
     for (final row in _visibleLogEntriesFor(filter)) {
       if (row.isGhost) {
+        if (row.date != previousGhostDate) {
+          entries.add(TransactionLogEntry.header(row.date));
+          previousGhostDate = row.date;
+        }
         entries.add(row);
         continue;
       }
-      if (row.date != previousDate) {
+      if (row.date != previousRecordDate) {
         entries.add(TransactionLogEntry.header(row.date));
-        previousDate = row.date;
+        previousRecordDate = row.date;
       }
       entries.add(row);
     }
@@ -377,15 +382,20 @@ class TransactionStore extends ChangeNotifier {
 
   int _visibleDisplayLogEntryTotalCountFor(TransactionFilter filter) {
     var total = 0;
-    String? previousDate;
+    String? previousGhostDate;
+    String? previousRecordDate;
     for (final row in _visibleLogEntriesFor(filter)) {
       if (row.isGhost) {
+        if (row.date != previousGhostDate) {
+          total += 1;
+          previousGhostDate = row.date;
+        }
         total += 1;
         continue;
       }
-      if (row.date != previousDate) {
+      if (row.date != previousRecordDate) {
         total += 1;
-        previousDate = row.date;
+        previousRecordDate = row.date;
       }
       total += 1;
     }

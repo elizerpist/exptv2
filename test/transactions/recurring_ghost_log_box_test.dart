@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('default ghost logbox renders expected ghost visuals', (
+  testWidgets('default ghost logbox renders fixed expected ghost visuals', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -26,11 +26,16 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(GhostBadge), findsOneWidget);
-    expect(find.text('Várható · ismétlődő'), findsOneWidget);
+    expect(find.text('Várható · idő'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-ghost-trigger-icon-1')),
+      findsOneWidget,
+    );
     expect(find.text('Ghost'), findsNothing);
+    expect(find.byType(Opacity), findsWidgets);
   });
 
-  testWidgets('normal border and hidden labels omit ghost visuals', (
+  testWidgets('neumorph ghost surface omits dashed border but keeps fixed visuals', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -39,15 +44,7 @@ void main() {
           child: RecurringGhostLogBox(
             ghost: ghostFixture(),
             category: categoryFixture(),
-            settings: const GhostLogboxSettings(
-              borderStyle: GhostLogboxBorderStyle.normal,
-              backgroundOpacityEnabled: true,
-              avatarOpacityEnabled: false,
-              textOpacityEnabled: false,
-              avatarBadgeEnabled: false,
-              textTone: GhostLogboxTextTone.normal,
-              expectedLabelEnabled: false,
-            ),
+            surfaceStyle: ExpenseSurfaceInteraction.insetInset,
           ),
         ),
       ),
@@ -57,8 +54,27 @@ void main() {
       find.byKey(const ValueKey('recurring-ghost-dashed-border-1')),
       findsNothing,
     );
-    expect(find.byType(GhostBadge), findsNothing);
-    expect(find.text('Várható · ismétlődő'), findsNothing);
+    expect(find.byType(GhostBadge), findsOneWidget);
+    expect(find.text('Várható · idő'), findsOneWidget);
+  });
+
+  testWidgets('push ghost logbox renders push trigger marker', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          child: RecurringGhostLogBox(
+            ghost: ghostFixture(triggerType: 'push'),
+            category: categoryFixture(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Várható · push'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-ghost-trigger-icon-1')),
+      findsOneWidget,
+    );
   });
 }
 
@@ -70,6 +86,7 @@ RecurringGhostRecord ghostFixture({
   int recurringId = 9,
   String name = 'Rent',
   double amount = 500,
+  String triggerType = 'date',
   String transactionType = 'expense',
   String categoryName = 'Q',
   String categoryColor = '#dc2626',
@@ -86,6 +103,7 @@ RecurringGhostRecord ghostFixture({
     'periodKey': periodKey,
     'name': name,
     'amount': amount,
+    'triggerTypeSnapshot': triggerType,
     'transactionType': transactionType,
     'date': date,
     'time': '00:00',

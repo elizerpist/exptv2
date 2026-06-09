@@ -15,6 +15,7 @@ class RecurringGhostLogBox extends StatelessWidget {
     required this.category,
     this.surfaceColor = AppColors.gray100,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.settings = const GhostLogboxSettings(
       borderStyle: GhostLogboxBorderStyle.dashed,
       backgroundOpacityEnabled: true,
@@ -34,6 +35,7 @@ class RecurringGhostLogBox extends StatelessWidget {
   final TransactionCategory? category;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final GhostLogboxSettings settings;
 
   @override
@@ -43,7 +45,9 @@ class RecurringGhostLogBox extends StatelessWidget {
       style: surfaceStyle,
       color: _surfaceColor,
       borderRadius: borderRadius,
-      neutralBorder: Border.all(color: _solidBorderColor),
+      neutralBorder: _usesDashedBorder
+          ? Border.all(color: Colors.transparent)
+          : null,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
@@ -55,7 +59,7 @@ class RecurringGhostLogBox extends StatelessWidget {
         ],
       ),
     );
-    final styledContent = settings.borderStyle == GhostLogboxBorderStyle.dashed
+    final styledContent = _usesDashedBorder
         ? DashedRoundedBorder(
             key: ValueKey('recurring-ghost-dashed-border-${ghost.id}'),
             borderRadius: borderRadius,
@@ -71,29 +75,14 @@ class RecurringGhostLogBox extends StatelessWidget {
     );
   }
 
-  Color get _surfaceColor {
-    if (!settings.backgroundOpacityEnabled) return surfaceColor;
-    return surfaceColor.withValues(alpha: _ghostBackgroundOpacity);
-  }
+  bool get _usesDashedBorder => !surfaceStyle.hasPressEffect;
 
-  Color get _solidBorderColor {
-    if (settings.borderStyle == GhostLogboxBorderStyle.dashed) {
-      return Colors.transparent;
-    }
-    return AppColors.gray300;
-  }
+  Color get _surfaceColor =>
+      surfaceColor.withValues(alpha: _ghostBackgroundOpacity);
 
-  Color get _merchantColor {
-    if (settings.textTone == GhostLogboxTextTone.gray) return AppColors.gray600;
-    return AppColors.gray800;
-  }
+  Color get _merchantColor => AppColors.gray600;
 
-  Color get _amountColor {
-    if (settings.textTone == GhostLogboxTextTone.gray) return AppColors.gray600;
-    return ghost.type == TransactionType.income
-        ? AppColors.income
-        : AppColors.expense;
-  }
+  Color get _amountColor => AppColors.gray600;
 
   Widget _avatar() {
     final avatar = CategoryIconBadge(
@@ -112,11 +101,8 @@ class RecurringGhostLogBox extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          settings.avatarOpacityEnabled
-              ? Opacity(opacity: _ghostAvatarOpacity, child: avatar)
-              : avatar,
-          if (settings.avatarBadgeEnabled)
-            const Positioned(right: -1, bottom: -1, child: GhostBadge()),
+          Opacity(opacity: _ghostAvatarOpacity, child: avatar),
+          Positioned(right: -1, bottom: -1, child: _ghostBadge()),
         ],
       ),
     );
@@ -137,20 +123,31 @@ class RecurringGhostLogBox extends StatelessWidget {
             color: _merchantColor,
           ),
         ),
-        if (settings.expectedLabelEnabled) ...[
-          const SizedBox(height: 3),
-          const Text(
-            'Várható · ismétlődő',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+        const SizedBox(height: 3),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              ghost.isPushTriggered
+                  ? Icons.notifications_outlined
+                  : Icons.schedule_outlined,
+              key: ValueKey('recurring-ghost-trigger-icon-${ghost.id}'),
+              size: 12,
               color: AppColors.gray500,
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Text(
+              ghost.isPushTriggered ? 'Várható · push' : 'Várható · idő',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gray500,
+              ),
+            ),
+          ],
+        ),
       ],
     );
-    if (!settings.textOpacityEnabled) return column;
     return Opacity(opacity: _ghostTextOpacity, child: column);
   }
 
@@ -178,7 +175,22 @@ class RecurringGhostLogBox extends StatelessWidget {
         ),
       ],
     );
-    if (!settings.textOpacityEnabled) return column;
     return Opacity(opacity: _ghostTextOpacity, child: column);
+  }
+
+  Widget _ghostBadge() {
+    if (!avatarSurfaceStyle.hasPressEffect) return const GhostBadge();
+    return ExpenseSurfaceContainer(
+      style: avatarSurfaceStyle,
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(9),
+      width: 18,
+      height: 18,
+      primaryColor: AppColors.gray500,
+      child: const GhostBadge(
+        backgroundColor: Colors.transparent,
+        strokeColor: Colors.transparent,
+      ),
+    );
   }
 }

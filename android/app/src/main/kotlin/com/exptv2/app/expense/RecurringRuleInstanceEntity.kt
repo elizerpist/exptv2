@@ -79,6 +79,7 @@ data class RecurringRuleInstanceEntity(
         "periodKey" to periodKey,
         "name" to nameSnapshot,
         "amount" to estimatedAmount,
+        "triggerTypeSnapshot" to triggerTypeSnapshot,
         "transactionType" to transactionTypeSnapshot,
         "date" to estimatedDate,
         "time" to "00:00",

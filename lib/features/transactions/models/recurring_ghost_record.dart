@@ -8,6 +8,7 @@ class RecurringGhostRecord {
     required this.periodKey,
     required this.name,
     required this.amount,
+    this.triggerType = 'date',
     required this.transactionType,
     required this.date,
     required this.time,
@@ -27,6 +28,7 @@ class RecurringGhostRecord {
   final String periodKey;
   final String name;
   final double amount;
+  final String triggerType;
   final String transactionType;
   final String date;
   final String time;
@@ -41,6 +43,8 @@ class RecurringGhostRecord {
   final int updatedAt;
 
   TransactionType get type => TransactionTypeX.fromAny(transactionType);
+
+  bool get isPushTriggered => triggerType == 'push';
 
   String get displayAmount =>
       '${type == TransactionType.income ? '+' : '-'}${formatHuf(amount.abs())}';
@@ -66,6 +70,7 @@ class RecurringGhostRecord {
       periodKey: map['periodKey']?.toString() ?? '',
       name: map['name']?.toString() ?? '',
       amount: _double(map['amount']),
+      triggerType: map['triggerTypeSnapshot']?.toString() ?? 'date',
       transactionType: map['transactionType']?.toString() ?? 'expense',
       date: map['date']?.toString() ?? '',
       time: map['time']?.toString() ?? '',

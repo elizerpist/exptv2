@@ -133,6 +133,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
               category: _categoryForId(ghost.categoryId),
               surfaceColor: widget.surfaceColor,
               surfaceStyle: widget.ghostSurfaceStyle,
+              avatarSurfaceStyle: widget.avatarSurfaceStyle,
               settings: widget.ghostLogboxSettings,
             );
           }

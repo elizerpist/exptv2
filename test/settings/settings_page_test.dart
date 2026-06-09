@@ -247,7 +247,7 @@ void main() {
     expect(find.text('Adatvédelem és biztonság'), findsOneWidget);
     expect(find.text('Visszajelzések'), findsOneWidget);
     expect(find.text('Információ és támogatás'), findsOneWidget);
-    expect(find.text('Ghost logbox'), findsOneWidget);
+    expect(find.text('Ghost logbox'), findsNothing);
     expect(find.text('Ismétlődő tranzakciók'), findsNothing);
     expect(find.text('Statisztikák'), findsNothing);
   });
@@ -321,7 +321,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('opens Ghost logbox submenu from the root menu', (tester) async {
+  testWidgets('root settings does not expose detailed Ghost logbox submenu', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -330,27 +332,8 @@ void main() {
     await tester.pumpWidget(buildSubject());
     await tester.pumpAndSettle();
 
-    expect(find.text('Ghost logbox'), findsOneWidget);
-
-    await tester.tap(find.text('Téma'));
-    await tester.pumpAndSettle();
-    expect(find.text('Gombok felülete'), findsOneWidget);
-    expect(find.text('Logboxok felülete'), findsOneWidget);
-    expect(find.text('Design profil'), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Ghost logbox'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Ghost logbox'), findsOneWidget);
-    expect(find.text('Szegély'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('ghost-logbox-border-dashed')),
-      findsOneWidget,
-    );
-    expect(find.text('Várható felirat'), findsOneWidget);
+    expect(find.text('Ghost logbox'), findsNothing);
+    expect(find.text('Várható felirat'), findsNothing);
   });
 
   testWidgets('theme menu exposes component surface and app color choices', (

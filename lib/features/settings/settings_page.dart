@@ -15,7 +15,6 @@ import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
 import 'widgets/options/backheader_style_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
-import 'widgets/options/ghost_logbox_options_panel.dart';
 import 'widgets/options/notification_settings_panel.dart';
 import 'widgets/options/permissions_options_panel.dart';
 import 'widgets/options/settings_option_widgets.dart';
@@ -36,7 +35,6 @@ enum _SettingsMenu {
   language,
   backheader,
   theme,
-  ghostLogbox,
   exportData,
   importData,
   backup,
@@ -206,11 +204,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 SettingsOptionItem(
                   title: 'Téma',
                   onTap: () => _open(_SettingsMenu.theme),
-                ),
-                SettingsOptionItem(
-                  title: 'Ghost logbox',
-                  subtitle: 'Várható ismétlődő sorok megjelenése',
-                  onTap: () => _open(_SettingsMenu.ghostLogbox),
                   isLast: true,
                 ),
               ],
@@ -405,10 +398,6 @@ class _SettingsPageState extends State<SettingsPage> {
         settings: _settingsStore.themeSettings,
         onChanged: _updateThemeSettings,
       ),
-      _SettingsMenu.ghostLogbox => GhostLogboxOptionsPanel(
-        settings: _settingsStore.themeSettings,
-        onChanged: _updateThemeSettings,
-      ),
       _SettingsMenu.backheader => BackheaderStyleOptionsPanel(
         settings: _settingsStore.themeSettings,
         onChanged: _updateThemeSettings,
@@ -476,7 +465,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.language => 'Nyelv Beállítások',
       _SettingsMenu.backheader => 'Backheader',
       _SettingsMenu.theme => 'Téma Beállítások',
-      _SettingsMenu.ghostLogbox => 'Ghost logbox',
       _SettingsMenu.exportData => 'Adatok Exportálása',
       _SettingsMenu.importData => 'Adatok Importálása',
       _SettingsMenu.backup => 'Biztonsági mentés',
