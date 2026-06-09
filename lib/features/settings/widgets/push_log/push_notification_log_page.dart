@@ -103,7 +103,6 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
       },
       child: ListView.builder(
         key: const ValueKey('push-notification-log-list'),
-        cacheExtent: 360,
         itemExtent: 102,
         padding: const EdgeInsets.only(bottom: 96),
         itemCount: _store.events.length + (_store.loadingMore ? 1 : 0),
