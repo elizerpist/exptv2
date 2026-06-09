@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../models/category_budget_bar_data.dart';
-import '../../slots/category_icon_manager.dart';
+import '../category_slot_icon.dart';
 import 'budget_bar_geometry.dart';
 import 'category_progress_bar.dart';
 
@@ -155,16 +155,10 @@ class _BarContent extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: Padding(
             padding: EdgeInsets.only(left: iconLeftPadding),
-            child: Image(
-              image: CategoryIconManager.assetImage(bar.iconSlot),
-              width: compactIcon ? iconSize : height * 0.64,
-              height: compactIcon ? iconSize : height * 0.64,
+            child: CategorySlotIcon(
+              slot: bar.iconSlot,
               color: AppColors.white,
-              errorBuilder: (context, error, stackTrace) => Icon(
-                Icons.category_outlined,
-                color: AppColors.white,
-                size: compactIcon ? iconSize : height * 0.64,
-              ),
+              size: compactIcon ? iconSize : height * 0.64,
             ),
           ),
         ),

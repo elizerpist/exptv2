@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../slots/category_color_manager.dart';
 import '../../slots/category_icon_manager.dart';
+import '../category_slot_icon.dart';
 
 class CategorySlotGrid extends StatelessWidget {
   const CategorySlotGrid.colors({
@@ -13,6 +17,7 @@ class CategorySlotGrid extends StatelessWidget {
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
+    this.onLongPressed,
   }) : mode = CategorySlotGridMode.colors;
 
   const CategorySlotGrid.icons({
@@ -22,6 +27,7 @@ class CategorySlotGrid extends StatelessWidget {
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.selectedSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
+    this.onLongPressed,
   }) : mode = CategorySlotGridMode.icons;
 
   final CategorySlotGridMode mode;
@@ -30,6 +36,7 @@ class CategorySlotGrid extends StatelessWidget {
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction selectedSurfaceStyle;
   final Color accentColor;
+  final ValueChanged<int>? onLongPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +63,13 @@ class CategorySlotGrid extends StatelessWidget {
                 : 'icon-slot-$slot',
           ),
           onTap: () => onSelected(slot),
+          onLongPress:
+              mode == CategorySlotGridMode.icons && onLongPressed != null
+              ? () {
+                  unawaited(HapticFeedback.selectionClick());
+                  onLongPressed!(slot);
+                }
+              : null,
           child: mode == CategorySlotGridMode.colors
               ? _ColorSlot(
                   slot: slot,
@@ -163,8 +177,8 @@ class _IconSlot extends StatelessWidget {
         primary: selected,
         primaryColor: accentColor,
         child: Center(
-          child: ImageIcon(
-            CategoryIconManager.assetImage(slot),
+          child: CategorySlotIcon(
+            slot: slot,
             color: selected ? AppColors.white : AppColors.gray500,
             size: 32,
           ),
@@ -188,8 +202,8 @@ class _IconSlot extends StatelessWidget {
         ],
       ),
       alignment: Alignment.center,
-      child: ImageIcon(
-        CategoryIconManager.assetImage(slot),
+      child: CategorySlotIcon(
+        slot: slot,
         color: selected ? AppColors.white : AppColors.gray500,
         size: 32,
       ),

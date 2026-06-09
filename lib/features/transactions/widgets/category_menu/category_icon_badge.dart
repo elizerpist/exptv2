@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/transaction_category.dart';
 import '../../slots/category_color_manager.dart';
-import '../../slots/category_icon_manager.dart';
+import '../category_slot_icon.dart';
 
 class CategoryIconBadge extends StatelessWidget {
   const CategoryIconBadge({
@@ -53,8 +53,8 @@ class CategoryIconBadge extends StatelessWidget {
       alignment: Alignment.center,
       child: showQuestionMark
           ? Icon(Icons.question_mark, color: AppColors.white, size: iconSize)
-          : ImageIcon(
-              CategoryIconManager.assetImage(resolvedIconSlot),
+          : CategorySlotIcon(
+              slot: resolvedIconSlot,
               color: AppColors.white,
               size: iconSize,
             ),

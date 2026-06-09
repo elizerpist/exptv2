@@ -12,6 +12,7 @@ import 'features/transactions/sync/google_sheets_api_client.dart';
 import 'features/transactions/sync/google_sheets_auth_client.dart';
 import 'features/transactions/sync/google_sheets_sync_controller.dart';
 import 'features/transactions/sync/google_sheets_sync_store.dart';
+import 'features/transactions/slots/category_icon_manager.dart';
 import 'services/native_bridge.dart';
 import 'state/event_store.dart';
 
@@ -31,6 +32,7 @@ class _Exptv2AppState extends State<Exptv2App> {
   @override
   void initState() {
     super.initState();
+    unawaited(_initCategoryIconSlots());
     unawaited(_initGoogleSheetsSync());
   }
 
@@ -38,6 +40,11 @@ class _Exptv2AppState extends State<Exptv2App> {
   void dispose() {
     _googleSheetsSyncController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _initCategoryIconSlots() async {
+    final preferences = await SharedPreferences.getInstance();
+    await CategoryIconManager.load(preferences: preferences);
   }
 
   Future<void> _initGoogleSheetsSync() async {

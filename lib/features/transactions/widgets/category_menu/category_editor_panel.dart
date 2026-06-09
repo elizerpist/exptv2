@@ -7,9 +7,11 @@ import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
+import '../../slots/category_icon_manager.dart';
 import '../themed_pill_field.dart';
 import 'category_preview_pill.dart';
 import 'category_slot_grid.dart';
+import 'icon_selector_sheet.dart';
 
 class CategoryDraft {
   const CategoryDraft({
@@ -244,6 +246,7 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
                                 accentColor: widget.accentColor,
                                 onSelected: (slot) =>
                                     setState(() => _iconSlot = slot),
+                                onLongPressed: _openIconSelector,
                               ),
                       ),
                     ),
@@ -350,6 +353,39 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
       _visualDx = 0;
       _slotPageDragging = false;
     });
+  }
+
+  void _openIconSelector(int slot) {
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.24),
+        builder: (sheetContext) {
+          return IconSelectorSheet(
+            selectedIconName: CategoryIconManager.iconNameForSlot(slot),
+            accentColor: widget.accentColor,
+            onSelected: (iconName) {
+              unawaited(_applyIconSelection(sheetContext, slot, iconName));
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _applyIconSelection(
+    BuildContext sheetContext,
+    int slot,
+    String iconName,
+  ) async {
+    await CategoryIconManager.assignIconToSlot(slot, iconName);
+    if (sheetContext.mounted) {
+      Navigator.of(sheetContext).pop();
+    }
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _save() {

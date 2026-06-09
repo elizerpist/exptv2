@@ -1,14 +1,23 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/slots/category_icon_manager.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_editor_panel.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_preview_pill.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_slot_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    CategoryIconManager.resetForTests();
+  });
+
+  tearDown(CategoryIconManager.resetForTests);
+
   testWidgets(
     'category editor creates category draft from name color and icon slots',
     (tester) async {
@@ -36,10 +45,14 @@ void main() {
         'Travel',
       );
       await tester.tap(find.byKey(const ValueKey('color-slot-9')));
-      await tester.tap(find.byKey(const ValueKey('category-slot-toggle-button')));
+      await tester.tap(
+        find.byKey(const ValueKey('category-slot-toggle-button')),
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('icon-slot-grid')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('category-slot-toggle-button')));
+      await tester.tap(
+        find.byKey(const ValueKey('category-slot-toggle-button')),
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('color-slot-grid')), findsOneWidget);
       await tester.drag(
@@ -54,6 +67,57 @@ void main() {
       expect(saved?.type, TransactionType.expense);
       expect(saved?.colorSlot, 9);
       expect(saved?.iconSlot, 4);
+    },
+  );
+
+  testWidgets(
+    'long press on an icon slot opens five-column selector and changes slot icon',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CategoryEditorPanel(
+              activeType: TransactionType.expense,
+              onSave: (_) {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('category-slot-toggle-button')),
+      );
+      await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const ValueKey('icon-slot-0')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('icon-selector-sheet')), findsOneWidget);
+      final firstRow =
+          ['shirt', 'shopping-cart', 'handbag', 'ambulance', 'beer'].map(
+            (name) => tester
+                .getTopLeft(find.byKey(ValueKey('icon-selector-option-$name')))
+                .dy,
+          );
+      expect(firstRow.every((dy) => (dy - firstRow.first).abs() < 1), isTrue);
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(
+                const ValueKey('icon-selector-option-briefcase-business'),
+              ),
+            )
+            .dy,
+        greaterThan(firstRow.first + 20),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('icon-selector-option-briefcase-business')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(CategoryIconManager.iconNameForSlot(0), 'briefcase-business');
+      expect(find.byKey(const ValueKey('icon-selector-sheet')), findsNothing);
     },
   );
 

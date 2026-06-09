@@ -3,8 +3,16 @@ import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:exptv2/features/transactions/slots/category_color_resolver.dart';
 import 'package:exptv2/features/transactions/slots/category_icon_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    CategoryIconManager.resetForTests();
+  });
+
+  tearDown(CategoryIconManager.resetForTests);
+
   test('category color manager exposes the expt0926 slot colors', () {
     expect(CategoryColorManager.hexes, {
       0: '#ef4444',
@@ -33,18 +41,40 @@ void main() {
     expect(CategoryColorManager.hex(99), '#64748b');
   });
 
-  test('category icon manager exposes 21 asset-backed slot icons', () {
-    expect(CategoryIconManager.slots, List<int>.generate(21, (index) => index));
-    expect(
-      CategoryIconManager.assetPath(0),
-      'assets/category_icons/slot_00.png',
-    );
-    expect(
-      CategoryIconManager.assetPath(20),
-      'assets/category_icons/slot_20.png',
-    );
-    expect(CategoryIconManager.assetPath(99), CategoryIconManager.assetPath(0));
-  });
+  test(
+    'category icon manager exposes local lucide bank and mutable slots',
+    () async {
+      final preferences = await SharedPreferences.getInstance();
+
+      expect(
+        CategoryIconManager.slots,
+        List<int>.generate(21, (index) => index),
+      );
+      expect(CategoryIconManager.iconOptions, hasLength(60));
+      expect(CategoryIconManager.iconOptions.first.name, 'shirt');
+      expect(CategoryIconManager.assetPath(0), 'assets/icons/lucide/shirt.svg');
+      expect(
+        CategoryIconManager.assetPath(20),
+        'assets/icons/lucide/drama.svg',
+      );
+      expect(
+        CategoryIconManager.assetPath(99),
+        CategoryIconManager.assetPath(0),
+      );
+
+      await CategoryIconManager.assignIconToSlot(
+        4,
+        'pizza',
+        preferences: preferences,
+      );
+      expect(CategoryIconManager.iconNameForSlot(4), 'pizza');
+      expect(CategoryIconManager.assetPath(4), 'assets/icons/lucide/pizza.svg');
+
+      CategoryIconManager.resetForTests();
+      await CategoryIconManager.load(preferences: preferences);
+      expect(CategoryIconManager.iconNameForSlot(4), 'pizza');
+    },
+  );
 
   test('transaction category reads slot colors through the manager', () {
     final category = TransactionCategory.fromMap({
@@ -84,10 +114,6 @@ void main() {
       ).toARGB32(),
       0xff6366f1,
     );
-    expect(
-      CategoryColorResolver.findById([category], 6),
-      same(category),
-    );
+    expect(CategoryColorResolver.findById([category], 6), same(category));
   });
-
 }

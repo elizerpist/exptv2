@@ -14,7 +14,7 @@ import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
-import '../../slots/category_icon_manager.dart';
+import '../category_slot_icon.dart';
 import '../slide_up_menu_card.dart';
 import '../slide_up_panel_metrics.dart';
 import '../themed_pill_field.dart';
@@ -857,16 +857,10 @@ class _LimitAvatar extends StatelessWidget {
       alignment: Alignment.center,
       child: category == null
           ? Icon(icon, color: AppColors.white, size: 27)
-          : Image(
-              image: CategoryIconManager.assetImage(category.iconSlot),
-              width: 29,
-              height: 29,
+          : CategorySlotIcon(
+              slot: category.iconSlot,
               color: AppColors.white,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.category_outlined,
-                color: AppColors.white,
-                size: 27,
-              ),
+              size: 29,
             ),
     );
   }
