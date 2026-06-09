@@ -379,6 +379,10 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.byKey(const ValueKey('theme-button-surface-neutral-inset')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('theme-button-surface-neumorph')),
       findsOneWidget,
     );
@@ -398,6 +402,14 @@ void main() {
     expect(find.text('Éjszaka Cyan'), findsNothing);
     expect(find.text('Éjszaka Amber'), findsNothing);
     expect(find.text('Neumorphism'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-button-surface-neutral-inset')),
+    );
+    expect(
+      updated.last.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralInset,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('theme-button-surface-neumorph')),

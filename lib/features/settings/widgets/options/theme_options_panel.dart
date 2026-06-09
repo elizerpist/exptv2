@@ -97,6 +97,19 @@ class ThemeOptionsPanel extends StatelessWidget {
                 ),
               ),
               _surfaceOption(
+                key: const ValueKey('theme-button-surface-neutral-inset'),
+                title: 'Neutrális-befelé',
+                description: 'Sík gomb, érintéskor benyomott hatással',
+                selected: settings.buttonSurfaceStyle ==
+                    ExpenseSurfaceInteraction.neutralInset,
+                previewStyle: ExpenseSurfaceInteraction.neutralInset,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+                  ),
+                ),
+              ),
+              _surfaceOption(
                 key: const ValueKey('theme-button-surface-neumorph'),
                 title: 'Neumorph',
                 description: 'Kiemelt gombfelület benyomott érintési állapottal',

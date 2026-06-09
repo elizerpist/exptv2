@@ -86,7 +86,7 @@ class ExpenseTheme {
       border: AppColors.gray200,
       buttonSurfaceStyle: settings.buttonSurfaceStyle,
       contentSurfaceStyle: settings.contentSurfaceStyle,
-      bottomNavSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      bottomNavSurfaceStyle: settings.buttonSurfaceStyle,
       forcedInsetSurfaceStyle: settings.contentSurfaceStyle ==
               ExpenseSurfaceInteraction.neutralNeutral
           ? ExpenseSurfaceInteraction.neutralNeutral

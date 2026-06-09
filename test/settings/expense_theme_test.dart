@@ -205,10 +205,7 @@ void main() {
     expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
     expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
     expect(theme.ghostLogboxSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
-    expect(
-      theme.bottomNavSurfaceStyle,
-      ExpenseSurfaceInteraction.neutralNeutral,
-    );
+    expect(theme.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
   });
 
   test(
@@ -226,6 +223,19 @@ void main() {
       expect(neumorph.toMap().containsKey('designProfile'), isFalse);
     },
   );
+
+  test('button neutral inset can be selected independently', () {
+    final settings = AppThemeSettings.defaults().copyWith(
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+      contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    final theme = ExpenseTheme.fromSettings(settings);
+
+    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(theme.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(settings.toMap()['buttonSurfaceStyle'], 'neutralInset');
+  });
 
   test('component surface settings copy independently', () {
     final settings = AppThemeSettings.defaults().copyWith(

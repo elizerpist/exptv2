@@ -142,6 +142,7 @@ class _SearchPillState extends State<SearchPill> {
           capsuleKey: const ValueKey('search-pill-capsule-merchant'),
           value: widget.merchantFilter!,
           color: widget.accentColor,
+          surfaceStyle: widget.surfaceStyle,
           onClear: widget.onClearMerchant,
         ),
       if (hasCategory)
@@ -149,6 +150,7 @@ class _SearchPillState extends State<SearchPill> {
           capsuleKey: const ValueKey('search-pill-capsule-category'),
           value: widget.categoryFilter!,
           color: widget.categoryFilterColor ?? widget.accentColor,
+          surfaceStyle: widget.surfaceStyle,
           onClear: widget.onClearCategory,
         ),
     ];
@@ -262,47 +264,64 @@ class _FilterCapsule extends StatelessWidget {
     required this.capsuleKey,
     required this.value,
     required this.color,
+    required this.surfaceStyle,
     required this.onClear,
   });
 
   final Key capsuleKey;
   final String value;
   final Color color;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      key: capsuleKey,
+    final radius = BorderRadius.circular(15);
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 64),
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        IconButton(
+          onPressed: onClear,
+          icon: const Icon(Icons.close, size: 14, color: AppColors.white),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+        ),
+      ],
+    );
+    if (!surfaceStyle.hasPressEffect) {
+      return Container(
+        key: capsuleKey,
+        height: 30,
+        padding: const EdgeInsets.only(left: 12),
+        decoration: BoxDecoration(color: color, borderRadius: radius),
+        child: content,
+      );
+    }
+    final rawKey = capsuleKey;
+    return ExpenseSurfaceContainer(
+      surfaceKey: rawKey is ValueKey
+          ? ValueKey('${rawKey.value}-surface')
+          : null,
+      style: surfaceStyle,
+      color: color,
+      primary: true,
+      primaryColor: color,
+      borderRadius: radius,
       height: 30,
       padding: const EdgeInsets.only(left: 12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 64),
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            onPressed: onClear,
-            icon: const Icon(Icons.close, size: 14, color: AppColors.white),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-          ),
-        ],
-      ),
+      child: content,
     );
   }
 }

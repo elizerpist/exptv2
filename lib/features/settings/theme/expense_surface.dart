@@ -306,7 +306,7 @@ class ExpenseSurface {
       boxShadow: raised
           ? const <BoxShadow>[
               BoxShadow(
-                color: Color(0x570891B2),
+                color: Color(0x33000000),
                 offset: Offset(8, 8),
                 blurRadius: 17,
               ),
@@ -319,7 +319,7 @@ class ExpenseSurface {
           : pressed && style != ExpenseSurfaceInteraction.insetInset
           ? const <BoxShadow>[
               BoxShadow(
-                color: Color(0x2406B6D4),
+                color: Color(0x22000000),
                 offset: Offset(0, 2),
                 blurRadius: 7,
               ),
@@ -416,8 +416,7 @@ class ExpenseSurface {
   }
 
   static Color _primaryShadowDark(Color color) {
-    if (color == AppColors.primary) return const Color(0xFF0E7490);
-    return Color.lerp(color, Colors.black, 0.32)!;
+    return Color.lerp(color, Colors.black, 0.55)!;
   }
 
   static _SurfaceDepth _depthFor(
