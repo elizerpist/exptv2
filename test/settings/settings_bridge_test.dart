@@ -352,10 +352,9 @@ void main() {
     expect(payload['contentSurfaceStyle'], 'neutralInset');
     expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
     expect(payload['ghostLogboxSettings'], isA<Map<String, Object?>>());
-    expect(
-      (payload['ghostLogboxSettings'] as Map<String, Object?>)['textTone'],
-      'gray',
-    );
+    final ghostPayload = payload['ghostLogboxSettings'] as Map<String, Object?>;
+    expect(ghostPayload['textTone'], 'gray');
+    expect(ghostPayload['expectedLabelEnabled'], isFalse);
     expect(payload['backheaderStyle'], 'orbitBudget');
     expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);
