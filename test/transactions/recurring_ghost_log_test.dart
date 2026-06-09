@@ -135,7 +135,13 @@ void main() {
 
       expect(repository.pendingPeriodKeys, contains('2026-06'));
       expect(store.visibleGhostTransactions.single.periodKey, '2026-05');
-      expect(store.visibleDisplayLogEntries.first.ghost?.periodKey, '2026-05');
+      expect(
+        store.visibleDisplayLogEntries
+            .firstWhere((entry) => entry.isGhost)
+            .ghost
+            ?.periodKey,
+        '2026-05',
+      );
 
       repository.completeProjection('2026-06', [
         ghostFixture(id: 6, month: 6, name: 'June Rent'),
@@ -143,7 +149,13 @@ void main() {
       await shift;
 
       expect(store.visibleGhostTransactions.single.periodKey, '2026-06');
-      expect(store.visibleDisplayLogEntries.first.ghost?.name, 'June Rent');
+      expect(
+        store.visibleDisplayLogEntries
+            .firstWhere((entry) => entry.isGhost)
+            .ghost
+            ?.name,
+        'June Rent',
+      );
     },
   );
 

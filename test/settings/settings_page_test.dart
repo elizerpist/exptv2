@@ -270,17 +270,17 @@ void main() {
     expect(find.text('Design profil'), findsNothing);
 
     await tester.scrollUntilVisible(
-      find.text('Sötétebb szürke'),
+      find.text('Sötétebb szürke').first,
       120,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _themeSettingsScrollable(),
     );
     await tester.pumpAndSettle();
     expect(find.text('Sötétebb szürke'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Sötétebb szürke box'),
+      find.text('Sötétebb szürke box').first,
       160,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _themeSettingsScrollable(),
     );
     await tester.pumpAndSettle();
     expect(find.text('Neumorph'), findsWidgets);
@@ -864,6 +864,13 @@ void main() {
 
     expect(bottom, 1200 - AppDimensions.bottomNavHeight);
   });
+}
+
+Finder _themeSettingsScrollable() {
+  return find.descendant(
+    of: find.byKey(const ValueKey('settings-theme-scroll')),
+    matching: find.byType(Scrollable),
+  ).first;
 }
 
 Map<String, Object?> pushLogEventRow({

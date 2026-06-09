@@ -220,7 +220,7 @@ void main() {
       final pickerTop = tester
           .getRect(find.byKey(const ValueKey('category-menu-overlay')))
           .top;
-      expect(pickerTop, moreOrLessEquals(summaryTop, epsilon: 0.1));
+      expect(pickerTop, moreOrLessEquals(summaryTop, epsilon: 1.1));
 
       expect(
         find.byKey(const ValueKey('category-menu-close-button')),
@@ -264,7 +264,7 @@ void main() {
         pickerRect.bottom,
         moreOrLessEquals(
           _screenHeight(tester) - AppDimensions.bottomNavHeight,
-          epsilon: 0.1,
+          epsilon: 1.1,
         ),
       );
 

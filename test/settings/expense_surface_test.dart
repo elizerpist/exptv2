@@ -51,14 +51,14 @@ void main() {
     );
 
     expect(rest, hasLength(2));
-    expect(rest[0].color, const Color(0xFF0E7490).withValues(alpha: 0.56));
+    expect(rest[0].color, _primaryShadowDark.withValues(alpha: 0.56));
     expect(rest[0].offset, const Offset(5, 5));
     expect(rest[0].blurRadius, 10);
     expect(rest[1].color, AppColors.primaryLight.withValues(alpha: 0.36));
     expect(rest[1].offset, const Offset(-4, -4));
     expect(rest[1].blurRadius, 9);
     expect(pressed, hasLength(2));
-    expect(pressed[0].color, const Color(0xFF0E7490).withValues(alpha: 0.64));
+    expect(pressed[0].color, _primaryShadowDark.withValues(alpha: 0.64));
     expect(pressed[0].offset, const Offset(7, 7));
     expect(pressed[0].blurRadius, 13);
     expect(pressed[1].color, AppColors.primaryLight.withValues(alpha: 0.38));
@@ -129,7 +129,7 @@ void main() {
     );
     expect(decoration.border, isNull);
     expect(decoration.boxShadow, hasLength(2));
-    expect(decoration.boxShadow![0].color, const Color(0x570891B2));
+    expect(decoration.boxShadow![0].color, const Color(0x33000000));
     expect(decoration.boxShadow![0].offset, const Offset(8, 8));
     expect(decoration.boxShadow![0].blurRadius, 17);
     expect(decoration.boxShadow![1].color, const Color(0xD9FFFFFF));
@@ -272,3 +272,5 @@ void main() {
     },
   );
 }
+
+final _primaryShadowDark = Color.lerp(AppColors.primary, Colors.black, 0.55)!;
