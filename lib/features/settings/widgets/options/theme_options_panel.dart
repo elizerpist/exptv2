@@ -78,16 +78,67 @@ class ThemeOptionsPanel extends StatelessWidget {
                 ),
                 preview: const _MagnetPreview(type: MagnetType.adaptive),
               ),
-              _sectionTitle('Design profil', 'Az app interakciós stílusa:'),
-              _profileOption(
-                'Normál',
-                'Eredeti app design, gyári tap visszajelzés',
-                AppDesignProfile.normal,
+              _sectionTitle(
+                'Gombok felülete',
+                'A gombok és ikon gombok nyomási stílusa:',
               ),
-              _profileOption(
-                'Neumorphism',
-                '3D felületek, shadow-only tap animáció',
-                AppDesignProfile.neumorphism,
+              _surfaceOption(
+                key: const ValueKey('theme-button-surface-normal'),
+                title: 'Normál',
+                description: 'Eredeti sík gombfelület',
+                selected: settings.buttonSurfaceStyle ==
+                    ExpenseSurfaceInteraction.neutralNeutral,
+                previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    buttonSurfaceStyle:
+                        ExpenseSurfaceInteraction.neutralNeutral,
+                  ),
+                ),
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-button-surface-neumorph'),
+                title: 'Neumorph',
+                description: 'Kiemelt gombfelület benyomott érintési állapottal',
+                selected: settings.buttonSurfaceStyle ==
+                    ExpenseSurfaceInteraction.raisedInset,
+                previewStyle: ExpenseSurfaceInteraction.raisedInset,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+                  ),
+                ),
+              ),
+              _sectionTitle(
+                'Logboxok felülete',
+                'A tartalmi kártyák és tranzakció logboxok stílusa:',
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-logbox-surface-normal'),
+                title: 'Normál',
+                description: 'Eredeti sík logbox felület',
+                selected: settings.contentSurfaceStyle ==
+                    ExpenseSurfaceInteraction.neutralNeutral,
+                previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    contentSurfaceStyle:
+                        ExpenseSurfaceInteraction.neutralNeutral,
+                  ),
+                ),
+              ),
+              _surfaceOption(
+                key: const ValueKey('theme-logbox-surface-neumorph'),
+                title: 'Neumorph',
+                description: 'Befelé mélyített logbox felület',
+                selected: settings.contentSurfaceStyle ==
+                    ExpenseSurfaceInteraction.insetInset,
+                previewStyle: ExpenseSurfaceInteraction.insetInset,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+                  ),
+                ),
               ),
               _sectionTitle('App színe', 'Nappali módban használt fő szín:'),
               _appColorOption(
@@ -193,21 +244,21 @@ class ThemeOptionsPanel extends StatelessWidget {
     );
   }
 
-  Widget _profileOption(
-    String title,
-    String description,
-    AppDesignProfile value,
-  ) {
+  Widget _surfaceOption({
+    required ValueKey<String> key,
+    required String title,
+    required String description,
+    required bool selected,
+    required ExpenseSurfaceInteraction previewStyle,
+    required VoidCallback onTap,
+  }) {
     return SettingsRadioOption(
-      title: '$title${settings.designProfile == value ? ' (jelenlegi)' : ''}',
+      key: key,
+      title: '$title${selected ? ' (jelenlegi)' : ''}',
       description: description,
-      selected: settings.designProfile == value,
-      onTap: () => onChanged(_withDesignProfile(value)),
-      preview: _SurfacePreview(
-        style: value == AppDesignProfile.neumorphism
-            ? ExpenseSurfaceInteraction.raisedInset
-            : ExpenseSurfaceInteraction.neutralNeutral,
-      ),
+      selected: selected,
+      onTap: onTap,
+      preview: _SurfacePreview(style: previewStyle),
     );
   }
 
@@ -268,21 +319,6 @@ class ThemeOptionsPanel extends StatelessWidget {
       selected: settings.boxColor == value,
       onTap: () => onChanged(settings.copyWith(boxColor: value)),
       preview: _ColorPreview(color: color),
-    );
-  }
-
-  AppThemeSettings _withDesignProfile(AppDesignProfile value) {
-    final neumorphism = value == AppDesignProfile.neumorphism;
-    return settings.copyWith(
-      buttonSurfaceStyle: neumorphism
-          ? ExpenseSurfaceInteraction.raisedInset
-          : ExpenseSurfaceInteraction.neutralNeutral,
-      contentSurfaceStyle: neumorphism
-          ? ExpenseSurfaceInteraction.insetInset
-          : ExpenseSurfaceInteraction.neutralNeutral,
-      ghostLogboxSurfaceStyle: neumorphism
-          ? ExpenseSurfaceInteraction.insetInset
-          : ExpenseSurfaceInteraction.neutralNeutral,
     );
   }
 

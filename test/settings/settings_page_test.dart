@@ -247,6 +247,7 @@ void main() {
     expect(find.text('Adatvédelem és biztonság'), findsOneWidget);
     expect(find.text('Visszajelzések'), findsOneWidget);
     expect(find.text('Információ és támogatás'), findsOneWidget);
+    expect(find.text('Ghost logbox'), findsOneWidget);
     expect(find.text('Ismétlődő tranzakciók'), findsNothing);
     expect(find.text('Statisztikák'), findsNothing);
   });
@@ -264,6 +265,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Téma Beállítások'), findsOneWidget);
     expect(find.text('Mágneskártya'), findsOneWidget);
+    expect(find.text('Gombok felülete'), findsOneWidget);
+    expect(find.text('Logboxok felülete'), findsOneWidget);
+    expect(find.text('Design profil'), findsNothing);
 
     await tester.scrollUntilVisible(
       find.text('Sötétebb szürke'),
@@ -279,7 +283,7 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Neumorphism'), findsWidgets);
+    expect(find.text('Neumorph'), findsWidgets);
     expect(find.text('Pink'), findsWidgets);
     expect(find.text('Éjszakai mód'), findsNothing);
     expect(find.text('Éjszaka Amber'), findsNothing);
@@ -317,7 +321,36 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('theme menu exposes profile and app color choices', (
+  testWidgets('opens Ghost logbox submenu from the root menu', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ghost logbox'), findsOneWidget);
+
+    await tester.tap(find.text('Téma'));
+    await tester.pumpAndSettle();
+    expect(find.text('Gombok felülete'), findsOneWidget);
+    expect(find.text('Logboxok felülete'), findsOneWidget);
+    expect(find.text('Design profil'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('settings-submenu-back')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ghost logbox'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ghost logbox'), findsOneWidget);
+    expect(find.text('Szegély'), findsOneWidget);
+    expect(find.text('Szaggatott'), findsOneWidget);
+    expect(find.text('Várható felirat'), findsOneWidget);
+  });
+
+  testWidgets('theme menu exposes component surface and app color choices', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 2600);
@@ -335,9 +368,25 @@ void main() {
       ),
     );
 
-    expect(find.text('Design profil'), findsOneWidget);
-    expect(find.text('Normál (jelenlegi)'), findsOneWidget);
-    expect(find.text('Neumorphism'), findsOneWidget);
+    expect(find.text('Design profil'), findsNothing);
+    expect(find.text('Gombok felülete'), findsOneWidget);
+    expect(find.text('Logboxok felülete'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('theme-button-surface-normal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-button-surface-neumorph')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-logbox-surface-normal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-logbox-surface-neumorph')),
+      findsOneWidget,
+    );
     expect(find.text('App színe'), findsOneWidget);
     expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
     expect(find.text('Pink'), findsOneWidget);
@@ -345,13 +394,30 @@ void main() {
     expect(find.text('Kikapcsolva (jelenlegi)'), findsNothing);
     expect(find.text('Éjszaka Cyan'), findsNothing);
     expect(find.text('Éjszaka Amber'), findsNothing);
-    expect(find.text('Gomb design'), findsNothing);
-    expect(find.text('Logbox / search / summary design'), findsNothing);
+    expect(find.text('Neumorphism'), findsNothing);
 
-    await tester.tap(find.text('Neumorphism'));
+    await tester.tap(
+      find.byKey(const ValueKey('theme-button-surface-neumorph')),
+    );
     expect(
       updated.last.buttonSurfaceStyle,
       ExpenseSurfaceInteraction.raisedInset,
+    );
+    expect(
+      updated.last.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(
+      updated.last.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-logbox-surface-neumorph')),
+    );
+    expect(
+      updated.last.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
     );
     expect(
       updated.last.contentSurfaceStyle,
@@ -359,7 +425,7 @@ void main() {
     );
     expect(
       updated.last.ghostLogboxSurfaceStyle,
-      ExpenseSurfaceInteraction.insetInset,
+      ExpenseSurfaceInteraction.neutralNeutral,
     );
     await tester.tap(find.text('Pink'));
     expect(updated.last.appColor, AppColorMode.pink);
