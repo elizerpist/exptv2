@@ -49,9 +49,9 @@ jobs:
         run: |
           cd android
           if [ -x ./gradlew ]; then
-            ./gradlew testDebugUnitTest --no-daemon
+            ./gradlew :app:testDebugUnitTest --no-daemon
           else
-            gradle testDebugUnitTest --no-daemon
+            gradle :app:testDebugUnitTest --no-daemon
           fi
 
       - name: Build debug APK

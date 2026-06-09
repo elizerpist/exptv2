@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../transactions/export/transaction_export_service.dart';
+import '../../../transactions/sync/google_sheets_auth_client.dart';
 import '../../../transactions/sync/google_sheets_sync_controller.dart';
 import '../../../transactions/sync/google_sheets_sync_models.dart';
 import 'settings_option_widgets.dart';
@@ -161,7 +162,9 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
     try {
       await callback();
     } catch (error) {
-      _showMessage('Export sikertelen: $error');
+      _showMessage(
+        googleSheetsAuthUserMessage(error) ?? 'Export sikertelen: $error',
+      );
     } finally {
       if (mounted) setState(() => _busyAction = null);
     }
@@ -184,6 +187,14 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
       return;
     }
     await controller.connect();
+    if (controller.status == GoogleSheetsSyncStatus.failed ||
+        controller.status == GoogleSheetsSyncStatus.waitingForNetwork ||
+        controller.lastError != null) {
+      _showMessage(
+        controller.lastError ?? 'Google Sheets csatlakoztatása sikertelen',
+      );
+      return;
+    }
     _showMessage('Google Sheets csatlakoztatva');
   }
 
@@ -221,7 +232,8 @@ class _ExportOptionsPanelState extends State<ExportOptionsPanel> {
       GoogleSheetsSyncStatus.signingIn => 'Google bejelentkezés folyamatban',
       GoogleSheetsSyncStatus.syncing => 'Szinkronizálás folyamatban',
       GoogleSheetsSyncStatus.waitingForNetwork => 'Szinkron várakozik',
-      GoogleSheetsSyncStatus.failed => controller?.lastError ?? 'Szinkron sikertelen',
+      GoogleSheetsSyncStatus.failed =>
+        controller?.lastError ?? 'Szinkron sikertelen',
       GoogleSheetsSyncStatus.idle => _lastSyncText(controller),
     };
   }
@@ -274,26 +286,31 @@ class _GoogleMarkPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.square;
+      ..strokeCap = StrokeCap.round;
 
     void arc(Color color, double start, double sweep) {
       paint.color = color;
       canvas.drawArc(rect, start, sweep, false, paint);
     }
 
-    arc(const Color(0xFF4285F4), -0.02 * math.pi, 0.52 * math.pi);
-    arc(const Color(0xFF34A853), 0.50 * math.pi, 0.43 * math.pi);
-    arc(const Color(0xFFFBBC05), 0.93 * math.pi, 0.45 * math.pi);
-    arc(const Color(0xFFEA4335), 1.38 * math.pi, 0.56 * math.pi);
+    arc(const Color(0xFF4285F4), -0.08 * math.pi, 0.52 * math.pi);
+    arc(const Color(0xFF34A853), 0.47 * math.pi, 0.42 * math.pi);
+    arc(const Color(0xFFFBBC05), 0.92 * math.pi, 0.43 * math.pi);
+    arc(const Color(0xFFEA4335), 1.38 * math.pi, 0.50 * math.pi);
 
     final barPaint = Paint()
       ..color = const Color(0xFF4285F4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.square;
+      ..strokeCap = StrokeCap.round;
     canvas.drawLine(
       Offset(center.dx, center.dy),
-      Offset(center.dx + radius * 0.95, center.dy),
+      Offset(center.dx + radius * 0.98, center.dy),
+      barPaint,
+    );
+    canvas.drawLine(
+      Offset(center.dx + radius * 0.98, center.dy),
+      Offset(center.dx + radius * 0.98, center.dy + radius * 0.36),
       barPaint,
     );
   }

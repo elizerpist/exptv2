@@ -2,6 +2,27 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'google_sheets_sync_config.dart';
 
+String? googleSheetsAuthUserMessage(Object error) {
+  if (error is! GoogleSignInException) return null;
+
+  final code = error.code;
+  if (code == GoogleSignInExceptionCode.clientConfigurationError ||
+      code == GoogleSignInExceptionCode.providerConfigurationError) {
+    return 'Google bejelentkezés konfigurációs hiba. Ellenőrizd az OAuth kliens beállításait.';
+  }
+  if (code == GoogleSignInExceptionCode.canceled) {
+    return 'Google bejelentkezés sikertelen. Próbáld újra, vagy ellenőrizd az app Google OAuth beállításait.';
+  }
+  if (code == GoogleSignInExceptionCode.uiUnavailable) {
+    return 'Google bejelentkezés nem indítható erről a képernyőről. Próbáld újra az app előtérben.';
+  }
+  if (code == GoogleSignInExceptionCode.interrupted) {
+    return 'Google bejelentkezés megszakadt. Próbáld újra.';
+  }
+
+  return 'Google bejelentkezés sikertelen. Próbáld újra.';
+}
+
 class GoogleSheetsSignedInAccount {
   const GoogleSheetsSignedInAccount({
     required this.email,
@@ -59,13 +80,15 @@ class GoogleSheetsAuthClient implements GoogleSheetsAuthClientContract {
   Future<GoogleSheetsSignedInAccount> signIn() async {
     await initialize();
     final account = await _googleSignIn.authenticate(scopeHint: _scopes);
-    await account.authorizationClient.authorizationForScopes(_scopes);
-    final headers = await account.authorizationClient.authorizationHeaders(
-      _scopes,
-      promptIfNecessary: true,
-    );
+    final authorizationClient = account.authorizationClient;
+    await authorizationClient.authorizationForScopes(_scopes) ??
+        await authorizationClient.authorizeScopes(_scopes);
+    final headers = await authorizationClient.authorizationHeaders(_scopes);
     if (headers == null) {
-      throw StateError('Google Sheets authorization was not granted.');
+      throw const GoogleSignInException(
+        code: GoogleSignInExceptionCode.unknownError,
+        description: 'Google Sheets authorization was not granted.',
+      );
     }
     return GoogleSheetsSignedInAccount(
       email: account.email,

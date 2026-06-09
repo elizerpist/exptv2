@@ -60,23 +60,34 @@ class GoogleSheetsSyncController extends ChangeNotifier {
 
   Future<void> connect() async {
     _setStatus(GoogleSheetsSyncStatus.signingIn);
-    final account = await _authClient.signIn();
-    final api = _apiClientFactory(account.authHeaders);
-    _apiClient = api;
-    final spreadsheet = await api.createSpreadsheet(
-      GoogleSheetsSyncConfig.spreadsheetName,
-    );
-    _settings = GoogleSheetsSyncSettings(
-      enabled: true,
-      accountEmail: account.email,
-      spreadsheetId: spreadsheet.id,
-      spreadsheetUrl: spreadsheet.url,
-      lastSyncedAtMillis: null,
-      lastError: null,
-    );
-    await _store.save(_settings);
-    notifyListeners();
-    await _sync(api);
+    try {
+      final account = await _authClient.signIn();
+      final api = _apiClientFactory(account.authHeaders);
+      _apiClient = api;
+      final spreadsheet = await api.createSpreadsheet(
+        GoogleSheetsSyncConfig.spreadsheetName,
+      );
+      _settings = GoogleSheetsSyncSettings(
+        enabled: true,
+        accountEmail: account.email,
+        spreadsheetId: spreadsheet.id,
+        spreadsheetUrl: spreadsheet.url,
+        lastSyncedAtMillis: null,
+        lastError: null,
+      );
+      await _store.save(_settings);
+      notifyListeners();
+      await _sync(api);
+    } catch (error) {
+      final failedStatus = error is SocketException
+          ? GoogleSheetsSyncStatus.waitingForNetwork
+          : GoogleSheetsSyncStatus.failed;
+      await _recordFailure(
+        error,
+        failedStatus,
+        userMessage: googleSheetsAuthUserMessage(error),
+      );
+    }
   }
 
   Future<void> syncOnAppEntry() async {
@@ -113,13 +124,24 @@ class GoogleSheetsSyncController extends ChangeNotifier {
     final cached = _apiClient;
     if (cached != null) return cached;
 
-    final account = interactive
-        ? await _authClient.signIn()
-        : await _authClient.restore();
+    GoogleSheetsSignedInAccount? account;
+    try {
+      account = interactive
+          ? await _authClient.signIn()
+          : await _authClient.restore();
+    } catch (error) {
+      await _recordFailure(
+        error,
+        GoogleSheetsSyncStatus.failed,
+        userMessage: googleSheetsAuthUserMessage(error),
+      );
+      return null;
+    }
     if (account == null) {
       await _recordFailure(
         StateError('Google sign-in required.'),
         GoogleSheetsSyncStatus.failed,
+        userMessage: 'Google bejelentkezés szükséges a szinkronhoz.',
       );
       return null;
     }
@@ -217,15 +239,16 @@ class GoogleSheetsSyncController extends ChangeNotifier {
 
   Future<void> _recordFailure(
     Object error,
-    GoogleSheetsSyncStatus failedStatus,
-  ) async {
+    GoogleSheetsSyncStatus failedStatus, {
+    String? userMessage,
+  }) async {
     _settings = GoogleSheetsSyncSettings(
       enabled: _settings.enabled,
       accountEmail: _settings.accountEmail,
       spreadsheetId: _settings.spreadsheetId,
       spreadsheetUrl: _settings.spreadsheetUrl,
       lastSyncedAtMillis: _settings.lastSyncedAtMillis,
-      lastError: 'sync failed: $error',
+      lastError: userMessage ?? 'sync failed: $error',
     );
     await _store.save(_settings);
     _setStatus(failedStatus);

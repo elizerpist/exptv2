@@ -5,13 +5,19 @@ import 'package:exptv2/features/transactions/models/recurring_rule.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/export/transaction_export_row.dart';
+import 'package:exptv2/features/transactions/export/transaction_export_service.dart';
 import 'package:exptv2/features/transactions/sync/google_sheets_api_client.dart';
 import 'package:exptv2/features/transactions/sync/google_sheets_auth_client.dart';
 import 'package:exptv2/features/transactions/sync/google_sheets_sync_config.dart';
 import 'package:exptv2/features/transactions/sync/google_sheets_sync_controller.dart';
 import 'package:exptv2/features/transactions/sync/google_sheets_sync_models.dart';
 import 'package:exptv2/features/transactions/sync/google_sheets_sync_store.dart';
+import 'package:exptv2/features/settings/widgets/options/export_options_panel.dart';
+import 'package:exptv2/services/native_bridge.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 void main() {
   test(
@@ -75,16 +81,85 @@ void main() {
       expect(repository.loadBootstrapCalls, 0);
     },
   );
+
+  test(
+    'connect records google sign-in cancellation as user-facing error',
+    () async {
+      final store = FakeGoogleSheetsSyncStore();
+      final controller = buildController(
+        authClient: FailingGoogleSheetsAuthClient(
+          const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
+            description: '[16] Account reauth failed.',
+          ),
+        ),
+        store: store,
+      );
+
+      await controller.connect();
+
+      expect(controller.status, GoogleSheetsSyncStatus.failed);
+      expect(controller.lastError, contains('Google bejelentkezés sikertelen'));
+      expect(controller.lastError, isNot(contains('GoogleSignInException')));
+      expect(controller.lastError, isNot(contains('Account reauth failed')));
+      expect(store.saved.last.lastError, controller.lastError);
+    },
+  );
+
+  testWidgets(
+    'export panel shows readable google sign-in errors without raw exception',
+    (tester) async {
+      final controller = buildController(
+        authClient: FailingGoogleSheetsAuthClient(
+          const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
+            description: '[16] Account reauth failed.',
+          ),
+        ),
+      );
+      await controller.start();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ExportOptionsPanel(
+              exportService: TransactionExportService(
+                repository: FakeTransactionRepository(),
+                nativeBridge: NativeBridge(
+                  methodChannel: const MethodChannel(
+                    'exptv2/export-options-test',
+                  ),
+                ),
+              ),
+              googleSheetsSyncController: controller,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Google Sheets csatlakoztatása'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.textContaining('Google bejelentkezés sikertelen'),
+        findsWidgets,
+      );
+      expect(find.textContaining('GoogleSignInException'), findsNothing);
+      expect(find.textContaining('Account reauth failed'), findsNothing);
+    },
+  );
 }
 
 GoogleSheetsSyncController buildController({
   FakeGoogleSheetsApiClient? api,
+  GoogleSheetsAuthClientContract? authClient,
   FakeGoogleSheetsSyncStore? store,
   FakeTransactionRepository? repository,
 }) {
   final resolvedApi = api ?? FakeGoogleSheetsApiClient();
   return GoogleSheetsSyncController(
-    authClient: FakeGoogleSheetsAuthClient(),
+    authClient: authClient ?? FakeGoogleSheetsAuthClient(),
     apiClientFactory: (_) => resolvedApi,
     store: store ?? FakeGoogleSheetsSyncStore(),
     repository: repository ?? FakeTransactionRepository(),
@@ -110,6 +185,25 @@ class FakeGoogleSheetsAuthClient implements GoogleSheetsAuthClientContract {
       email: 'user@example.com',
       authHeaders: {'Authorization': 'Bearer token'},
     );
+  }
+}
+
+class FailingGoogleSheetsAuthClient implements GoogleSheetsAuthClientContract {
+  const FailingGoogleSheetsAuthClient(this.error);
+
+  final Object error;
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
+  Future<GoogleSheetsSignedInAccount?> restore() async {
+    throw error;
+  }
+
+  @override
+  Future<GoogleSheetsSignedInAccount> signIn() async {
+    throw error;
   }
 }
 

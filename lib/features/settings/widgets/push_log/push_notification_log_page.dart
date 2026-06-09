@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/installed_app.dart';
@@ -104,7 +103,6 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
       },
       child: ListView.builder(
         key: const ValueKey('push-notification-log-list'),
-        scrollCacheExtent: const ScrollCacheExtent.pixels(360),
         itemExtent: 102,
         padding: const EdgeInsets.only(bottom: 96),
         itemCount: _store.events.length + (_store.loadingMore ? 1 : 0),
@@ -339,12 +337,14 @@ class _FilterDropdown<T extends Object> extends StatelessWidget {
           value: value,
           isExpanded: true,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          items: items.map((item) {
-            return DropdownMenuItem<T>(
-              value: item,
-              child: Text(labelFor(item), overflow: TextOverflow.ellipsis),
-            );
-          }).toList(growable: false),
+          items: items
+              .map((item) {
+                return DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(labelFor(item), overflow: TextOverflow.ellipsis),
+                );
+              })
+              .toList(growable: false),
           onChanged: onChanged,
         ),
       ),
@@ -377,9 +377,7 @@ class _StatusChip extends StatelessWidget {
         fontSize: 12,
         fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
       ),
-      side: BorderSide(
-        color: selected ? AppColors.primary : AppColors.gray200,
-      ),
+      side: BorderSide(color: selected ? AppColors.primary : AppColors.gray200),
     );
   }
 }

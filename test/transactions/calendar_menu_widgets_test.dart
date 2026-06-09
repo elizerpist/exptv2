@@ -13,7 +13,9 @@ import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_canv
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_mode_selector.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_value_slider_panel.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -49,186 +51,258 @@ void main() {
     expect(selected, CalendarMenuMode.heatmap);
   });
 
-  testWidgets(
-    'threshold slider panel edits collapses and drags as category filter',
-    (tester) async {
-      var changed = 1000.0;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 390,
-              height: 780,
-              child: CalendarValueSliderPanel.threshold(
-                value: 1000,
-                min: 0,
-                max: 2000,
-                onChanged: (value) => changed = value,
-                onMinChanged: (_) {},
-                onMaxChanged: (_) {},
-              ),
-            ),
-          ),
-        ),
-      );
-
-      expect(find.text('Domináns küszöb: 1 000 Ft'), findsOneWidget);
-      final panel = find.byKey(
-        const ValueKey('calendar-threshold-slider-panel'),
-      );
-      final beforeTop = tester.getTopLeft(panel).dy;
-      await tester.drag(
-        find.byKey(const ValueKey('calendar-threshold-slider-drag-handle')),
-        const Offset(0, -70),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.getTopLeft(panel).dy, lessThan(beforeTop));
-
-      await tester.drag(
-        find.byKey(const ValueKey('calendar-threshold-slider')),
-        const Offset(80, 0),
-      );
-      expect(changed, isNot(1000));
-
-      await tester.tap(
-        find.byKey(const ValueKey('calendar-threshold-slider-collapse')),
-      );
-      await tester.pumpAndSettle();
-      expect(panel, findsNothing);
-      expect(
-        find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
-        findsOneWidget,
-      );
-      expect(
-        tester
-            .getCenter(
-              find.byKey(
-                const ValueKey('calendar-threshold-slider-mini-button'),
-              ),
-            )
-            .dx,
-        greaterThan(320),
-      );
-
-      await tester.tap(
-        find.byKey(const ValueKey('calendar-threshold-slider-mini-button')),
-      );
-      await tester.pumpAndSettle();
-      expect(panel, findsOneWidget);
-    },
-  );
-
-  testWidgets('heatmap slider panel shows editable and compact controls', (
+  testWidgets('threshold joystick long press shows floating value card', (
     tester,
   ) async {
+    var changed = 1000.0;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: CalendarValueSliderPanel.heatmap(
-            value: 10000,
-            min: 0,
-            max: 50000,
-            onChanged: (_) {},
-            onMinChanged: (_) {},
-            onMaxChanged: (_) {},
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarValueSliderPanel.threshold(
+              value: 1000,
+              observedMax: 22000,
+              fallbackMax: 50000,
+              onChanged: (value) => changed = value,
+            ),
           ),
         ),
       ),
     );
 
-    expect(find.text('Hőtérkép skála: 10 000 Ft'), findsOneWidget);
+    final trigger = find.byKey(
+      const ValueKey('calendar-threshold-joystick-trigger'),
+    );
+    expect(trigger, findsOneWidget);
     expect(
-      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      find.byKey(const ValueKey('calendar-threshold-joystick-value-card')),
+      findsNothing,
+    );
+
+    final gesture = await tester.startGesture(tester.getCenter(trigger));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 60));
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-joystick-value-card')),
       findsOneWidget,
     );
-    await tester.tap(
-      find.byKey(const ValueKey('calendar-heatmap-slider-collapse')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('calendar-heatmap-slider')), findsNothing);
+    expect(find.text('1 000 Ft'), findsOneWidget);
+
+    await gesture.moveBy(const Offset(0, -120));
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(changed, greaterThan(1000));
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 700));
     expect(
-      find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .getCenter(
-            find.byKey(const ValueKey('calendar-heatmap-slider-mini-button')),
-          )
-          .dx,
-      greaterThan(320),
+      find.byKey(const ValueKey('calendar-threshold-joystick-value-card')),
+      findsNothing,
     );
   });
 
-  testWidgets(
-    'calendar overlay slider card stays draggable after leaving bottom area',
-    (tester) async {
-      final year = DateTime.now().year;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 390,
-              height: 780,
-              child: CalendarMenuOverlay(
-                fullScreen: true,
-                transactions: [
-                  _record(
-                    id: 1,
-                    date: '$year-01-02',
-                    amount: -8000,
-                    categoryId: 1,
-                  ),
-                  _record(
-                    id: 2,
-                    date: '$year-01-03',
-                    amount: -22000,
-                    categoryId: 1,
-                  ),
-                ],
-                categories: const [
-                  TransactionCategory(
-                    transactionCategoryID: 1,
-                    name: 'Élelmiszer',
-                    type: 'kiadás',
-                    colorSlot: 1,
-                    iconSlot: null,
-                    backgroundColor: null,
-                    icon: null,
-                    notification: null,
-                    hasLimit: false,
-                    limitAmount: 0,
-                    alertActive: false,
-                    isCustomIcon: false,
-                    originalIcon: null,
-                  ),
-                ],
-                onClose: () {},
-                onMonthSelect: (_, _) {},
-              ),
+  testWidgets('joystick visual cues show direction and speed bands', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarValueSliderPanel.threshold(
+              value: 1000,
+              observedMax: 22000,
+              fallbackMax: 50000,
+              onChanged: (_) {},
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      final panel = find.byKey(
-        const ValueKey('calendar-threshold-slider-panel'),
-      );
-      final handle = find.byKey(
-        const ValueKey('calendar-threshold-slider-drag-handle'),
-      );
+    final trigger = find.byKey(
+      const ValueKey('calendar-threshold-joystick-trigger'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(trigger));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, -28));
+    await tester.pump(const Duration(milliseconds: 120));
 
-      final initialTop = tester.getTopLeft(panel).dy;
-      await tester.drag(handle, const Offset(0, -260));
-      await tester.pumpAndSettle();
-      final raisedTop = tester.getTopLeft(panel).dy;
-      expect(raisedTop, lessThan(initialTop - 180));
+    double indicatorOpacity(String key) {
+      return tester
+          .widget<AnimatedOpacity>(
+            find.descendant(
+              of: find.byKey(ValueKey(key)),
+              matching: find.byType(AnimatedOpacity),
+            ),
+          )
+          .opacity;
+    }
 
-      await tester.drag(handle, const Offset(0, 80));
-      await tester.pumpAndSettle();
-      expect(tester.getTopLeft(panel).dy, greaterThan(raisedTop + 40));
-    },
-  );
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-joystick-plus-indicator')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-joystick-minus-indicator')),
+      findsOneWidget,
+    );
+    expect(
+      indicatorOpacity('calendar-threshold-joystick-plus-indicator'),
+      greaterThan(
+        indicatorOpacity('calendar-threshold-joystick-minus-indicator'),
+      ),
+    );
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-joystick-speed-slow')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-joystick-speed-fast')),
+      findsNothing,
+    );
+
+    await gesture.moveBy(const Offset(0, -150));
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      find.byKey(const ValueKey('calendar-threshold-joystick-speed-fast')),
+      findsOneWidget,
+    );
+
+    await gesture.moveBy(const Offset(0, 210));
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      indicatorOpacity('calendar-threshold-joystick-minus-indicator'),
+      greaterThan(
+        indicatorOpacity('calendar-threshold-joystick-plus-indicator'),
+      ),
+    );
+
+    await gesture.up();
+  });
+
+  testWidgets('heatmap joystick supports downward drag and boundary label', (
+    tester,
+  ) async {
+    var changed = 10000.0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarValueSliderPanel.heatmap(
+              value: 10000,
+              observedMax: 50000,
+              fallbackMax: 50000,
+              onChanged: (value) => changed = value,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final trigger = find.byKey(
+      const ValueKey('calendar-heatmap-joystick-trigger'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(trigger));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, 180));
+    await tester.pump(const Duration(milliseconds: 900));
+
+    expect(changed, 0);
+    expect(find.text('Min 0 Ft'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 700));
+  });
+
+  testWidgets('joystick dead zone prevents accidental value changes', (
+    tester,
+  ) async {
+    var changed = 1000.0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarValueSliderPanel.threshold(
+              value: 1000,
+              observedMax: 22000,
+              fallbackMax: 50000,
+              onChanged: (value) => changed = value,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final trigger = find.byKey(
+      const ValueKey('calendar-threshold-joystick-trigger'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(trigger));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, -6));
+    await tester.pump(const Duration(milliseconds: 240));
+
+    expect(changed, 1000);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('joystick haptics activate and tick without frame spam', (
+    tester,
+  ) async {
+    final hapticCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'HapticFeedback.vibrate') hapticCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: CalendarValueSliderPanel.threshold(
+              value: 1000,
+              observedMax: 22000,
+              fallbackMax: 50000,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final trigger = find.byKey(
+      const ValueKey('calendar-threshold-joystick-trigger'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(trigger));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, -120));
+    await tester.pump(const Duration(milliseconds: 260));
+    await gesture.up();
+
+    expect(
+      hapticCalls.map((call) => call.arguments),
+      contains('HapticFeedbackType.mediumImpact'),
+    );
+    expect(
+      hapticCalls.map((call) => call.arguments),
+      contains('HapticFeedbackType.selectionClick'),
+    );
+    expect(hapticCalls.length, lessThan(8));
+  });
 
   testWidgets('threshold slider drag does not rebuild calendar render data', (
     tester,
@@ -287,11 +361,14 @@ void main() {
     );
 
     DebugConsole.clear();
-    await tester.drag(
-      find.byKey(const ValueKey('calendar-threshold-slider')),
-      const Offset(80, 0),
+    final trigger = find.byKey(
+      const ValueKey('calendar-threshold-joystick-trigger'),
     );
-    await tester.pump();
+    final gesture = await tester.startGesture(tester.getCenter(trigger));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 60));
+    await gesture.moveBy(const Offset(0, -120));
+    await tester.pump(const Duration(milliseconds: 220));
+    await gesture.up();
 
     expect(
       DebugConsole.allText,
@@ -387,7 +464,7 @@ void main() {
     expect(find.byKey(const ValueKey('stats-menu-trigger')), findsOneWidget);
     expect(find.text('Domináns kategória'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('calendar-threshold-slider')),
+      find.byKey(const ValueKey('calendar-threshold-joystick-trigger')),
       findsOneWidget,
     );
 
@@ -413,7 +490,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Hőtérkép'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      find.byKey(const ValueKey('calendar-heatmap-joystick-trigger')),
       findsOneWidget,
     );
 
@@ -540,7 +617,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('calendar-heatmap-slider')),
+      find.byKey(const ValueKey('calendar-heatmap-joystick-trigger')),
       findsOneWidget,
     );
   });
@@ -637,8 +714,14 @@ void main() {
     expect(find.byKey(const ValueKey('month-velocity-meter')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-weekpart-split')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-density-strip')), findsOneWidget);
-    expect(find.byKey(const ValueKey('month-category-rank-bars')), findsOneWidget);
-    expect(find.byKey(const ValueKey('month-merchant-days-strip')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('month-category-rank-bars')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('month-merchant-days-strip')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('month-deep-stats-grid')), findsOneWidget);
     expect(find.byKey(const ValueKey('month-merchant-stats')), findsOneWidget);
     expect(find.text('Cashflow'), findsOneWidget);
