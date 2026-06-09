@@ -232,7 +232,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Rent'), findsOneWidget);
-    expect(find.text('Ghost'), findsOneWidget);
+    expect(find.text('Várható · ismétlődő'), findsOneWidget);
   });
 }
 

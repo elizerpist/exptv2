@@ -235,6 +235,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       surfaceColor: expenseTheme.logBox,
                       surfaceStyle: expenseTheme.contentSurfaceStyle,
                       avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+                      ghostSurfaceStyle: expenseTheme.ghostLogboxSurfaceStyle,
+                      ghostLogboxSettings:
+                          expenseTheme.settings.ghostLogboxSettings,
                       onFastFilter: _setMerchantFastFilter,
                       onRecordTap: _editTransaction,
                       onDeleteRequested: _requestDeleteTransaction,

@@ -21,6 +21,16 @@ class TransactionLogList extends StatefulWidget {
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.ghostSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.ghostLogboxSettings = const GhostLogboxSettings(
+      borderStyle: GhostLogboxBorderStyle.dashed,
+      backgroundOpacityEnabled: true,
+      avatarOpacityEnabled: false,
+      textOpacityEnabled: false,
+      avatarBadgeEnabled: true,
+      textTone: GhostLogboxTextTone.normal,
+      expectedLabelEnabled: true,
+    ),
     required this.onFastFilter,
     required this.onRecordTap,
     required this.onDeleteRequested,
@@ -39,6 +49,8 @@ class TransactionLogList extends StatefulWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final ExpenseSurfaceInteraction ghostSurfaceStyle;
+  final GhostLogboxSettings ghostLogboxSettings;
   final TransactionLogContextCallback onFastFilter;
   final ValueChanged<TransactionRecord> onRecordTap;
   final TransactionDeleteRequest onDeleteRequested;
@@ -120,7 +132,8 @@ class _TransactionLogListState extends State<TransactionLogList> {
               ghost: ghost,
               category: _categoryForId(ghost.categoryId),
               surfaceColor: widget.surfaceColor,
-              surfaceStyle: widget.surfaceStyle,
+              surfaceStyle: widget.ghostSurfaceStyle,
+              settings: widget.ghostLogboxSettings,
             );
           }
           final record = entry.record!;
