@@ -270,7 +270,7 @@ void main() {
     expect(find.text('Design profil'), findsNothing);
 
     await tester.scrollUntilVisible(
-      find.text('Sötétebb szürke'),
+      find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
       120,
       scrollable: find.byType(Scrollable).last,
     );
