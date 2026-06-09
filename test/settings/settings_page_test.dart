@@ -349,7 +349,18 @@ void main() {
     expect(find.text('Logbox / search / summary design'), findsNothing);
 
     await tester.tap(find.text('Neumorphism'));
-    expect(updated.last.designProfile, AppDesignProfile.neumorphism);
+    expect(
+      updated.last.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.raisedInset,
+    );
+    expect(
+      updated.last.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+    expect(
+      updated.last.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
     await tester.tap(find.text('Pink'));
     expect(updated.last.appColor, AppColorMode.pink);
   });

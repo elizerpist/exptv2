@@ -151,10 +151,15 @@ void main() {
     expect(settings.ghostLogboxSettings.avatarBadgeEnabled, isFalse);
     expect(settings.ghostLogboxSettings.textTone, GhostLogboxTextTone.gray);
     expect(settings.ghostLogboxSettings.expectedLabelEnabled, isFalse);
-    expect(
-      settings.ghostLogboxSettings.toMap(),
-      containsPair('textTone', 'gray'),
-    );
+    expect(settings.ghostLogboxSettings.toMap(), <String, Object?>{
+      'borderStyle': 'normal',
+      'backgroundOpacityEnabled': false,
+      'avatarOpacityEnabled': true,
+      'textOpacityEnabled': true,
+      'avatarBadgeEnabled': false,
+      'textTone': 'gray',
+      'expectedLabelEnabled': false,
+    });
   });
 
   test('legacy dark theme no longer enables night palette', () {

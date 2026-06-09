@@ -274,11 +274,13 @@ class ThemeOptionsPanel extends StatelessWidget {
   AppThemeSettings _withDesignProfile(AppDesignProfile value) {
     final neumorphism = value == AppDesignProfile.neumorphism;
     return settings.copyWith(
-      designProfile: value,
       buttonSurfaceStyle: neumorphism
           ? ExpenseSurfaceInteraction.raisedInset
           : ExpenseSurfaceInteraction.neutralNeutral,
       contentSurfaceStyle: neumorphism
+          ? ExpenseSurfaceInteraction.insetInset
+          : ExpenseSurfaceInteraction.neutralNeutral,
+      ghostLogboxSurfaceStyle: neumorphism
           ? ExpenseSurfaceInteraction.insetInset
           : ExpenseSurfaceInteraction.neutralNeutral,
     );
