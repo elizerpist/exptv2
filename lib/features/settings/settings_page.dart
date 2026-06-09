@@ -13,7 +13,11 @@ import 'models/fast_info_config.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
+import '../transactions/data/transaction_repository.dart';
+import '../transactions/export/transaction_export_service.dart';
+import '../transactions/sync/google_sheets_sync_controller.dart';
 import 'widgets/options/backheader_style_options_panel.dart';
+import 'widgets/options/export_options_panel.dart';
 import 'widgets/options/fast_info_options_panel.dart';
 import 'widgets/options/notification_settings_panel.dart';
 import 'widgets/options/permissions_options_panel.dart';
@@ -51,6 +55,7 @@ class SettingsPage extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     this.expenseTheme,
+    this.googleSheetsSyncController,
     this.onThemeSettingsChanged,
     this.onFastInfoConfigChanged,
     this.onOpenTransaction,
@@ -59,6 +64,7 @@ class SettingsPage extends StatefulWidget {
   final EventStore store;
   final NativeBridge nativeBridge;
   final ExpenseTheme? expenseTheme;
+  final GoogleSheetsSyncController? googleSheetsSyncController;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final ValueChanged<FastInfoConfig>? onFastInfoConfigChanged;
   final Future<void> Function(int transactionId)? onOpenTransaction;
@@ -426,9 +432,12 @@ class _SettingsPageState extends State<SettingsPage> {
         title: 'Nyelv kiválasztása',
         children: ['English', 'Magyar'],
       ),
-      _SettingsMenu.exportData => const SimpleOptionsPanel(
-        title: 'Export formátum kiválasztása',
-        children: ['CSV', 'JSON', 'Excel'],
+      _SettingsMenu.exportData => ExportOptionsPanel(
+        exportService: TransactionExportService(
+          repository: TransactionRepository(widget.nativeBridge),
+          nativeBridge: widget.nativeBridge,
+        ),
+        googleSheetsSyncController: widget.googleSheetsSyncController,
       ),
       _SettingsMenu.importData => const SimpleOptionsPanel(
         title: 'Import formátum kiválasztása',

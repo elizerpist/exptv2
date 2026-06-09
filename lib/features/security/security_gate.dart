@@ -12,10 +12,12 @@ class SecurityGate extends StatefulWidget {
     super.key,
     required this.nativeBridge,
     required this.child,
+    this.onUnlocked,
   });
 
   final NativeBridge nativeBridge;
   final Widget child;
+  final VoidCallback? onUnlocked;
 
   @override
   State<SecurityGate> createState() => _SecurityGateState();
@@ -26,6 +28,7 @@ class _SecurityGateState extends State<SecurityGate>
   late SecurityController _controller;
   final _pinController = TextEditingController();
   var _wasBackgrounded = false;
+  var _reportedUnlocked = false;
 
   @override
   void initState() {
@@ -65,6 +68,7 @@ class _SecurityGateState extends State<SecurityGate>
     }
     if (state == AppLifecycleState.resumed && _wasBackgrounded) {
       _wasBackgrounded = false;
+      _reportedUnlocked = false;
       unawaited(_controller.lockForResume());
     }
   }
@@ -81,7 +85,11 @@ class _SecurityGateState extends State<SecurityGate>
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (!_controller.locked) return widget.child;
+    if (!_controller.locked) {
+      _reportUnlockedOnce();
+      return widget.child;
+    }
+    _reportedUnlocked = false;
     return _LockScreen(
       controller: _pinController,
       error: _controller.error,
@@ -95,6 +103,15 @@ class _SecurityGateState extends State<SecurityGate>
   Future<void> _unlock() async {
     await _controller.unlockWithPin(_pinController.text);
     if (!_controller.locked) _pinController.clear();
+  }
+
+  void _reportUnlockedOnce() {
+    if (_reportedUnlocked || widget.onUnlocked == null) return;
+    _reportedUnlocked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _controller.loading || _controller.locked) return;
+      widget.onUnlocked?.call();
+    });
   }
 }
 
