@@ -33,6 +33,11 @@ class ExpenseSettingsStore(context: Context) {
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
             "buttonSurfaceStyle" to prefs.getString(KEY_BUTTON_SURFACE_STYLE, "neutralNeutral"),
             "contentSurfaceStyle" to prefs.getString(KEY_CONTENT_SURFACE_STYLE, "neutralNeutral"),
+            "ghostLogboxSurfaceStyle" to (
+                prefs.getString(KEY_GHOST_LOGBOX_SURFACE_STYLE, null)?.takeIf { it.isNotBlank() }
+                    ?: legacyGhostLogboxSurfaceStyle()
+                ),
+            "ghostLogboxSettings" to loadGhostLogboxSettings(),
             "backheaderStyle" to prefs.getString(KEY_BACKHEADER_STYLE, "classic"),
             "designProfile" to (
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
@@ -49,6 +54,9 @@ class ExpenseSettingsStore(context: Context) {
         val theme = legacyTheme(args["theme"]?.toString())
         val buttonSurfaceStyle = args["buttonSurfaceStyle"]?.toString() ?: "neutralNeutral"
         val contentSurfaceStyle = args["contentSurfaceStyle"]?.toString() ?: "neutralNeutral"
+        val ghostLogboxSurfaceStyle = args["ghostLogboxSurfaceStyle"]?.toString()?.takeIf { it.isNotBlank() }
+            ?: legacyGhostLogboxSurfaceStyle(legacyDesignProfile(buttonSurfaceStyle, contentSurfaceStyle))
+        val ghostLogboxSettings = args["ghostLogboxSettings"] as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
         prefs.edit()
             .putString(KEY_MAGNET_TYPE, args["magnetType"]?.toString() ?: "fade")
@@ -58,12 +66,37 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_BOX_COLOR, args["boxColor"]?.toString() ?: "gray")
             .putString(KEY_BUTTON_SURFACE_STYLE, buttonSurfaceStyle)
             .putString(KEY_CONTENT_SURFACE_STYLE, contentSurfaceStyle)
-            .putString(KEY_BACKHEADER_STYLE, args["backheaderStyle"]?.toString() ?: "classic")
+            .putString(KEY_GHOST_LOGBOX_SURFACE_STYLE, ghostLogboxSurfaceStyle)
             .putString(
-                KEY_DESIGN_PROFILE,
-                args["designProfile"]?.toString()?.takeIf { it.isNotBlank() }
-                    ?: legacyDesignProfile(buttonSurfaceStyle, contentSurfaceStyle)
+                KEY_GHOST_LOGBOX_BORDER_STYLE,
+                ghostLogboxSettings["borderStyle"]?.toString() ?: "dashed"
             )
+            .putBoolean(
+                KEY_GHOST_LOGBOX_BACKGROUND_OPACITY_ENABLED,
+                boolArg(ghostLogboxSettings["backgroundOpacityEnabled"], true)
+            )
+            .putBoolean(
+                KEY_GHOST_LOGBOX_AVATAR_OPACITY_ENABLED,
+                boolArg(ghostLogboxSettings["avatarOpacityEnabled"], false)
+            )
+            .putBoolean(
+                KEY_GHOST_LOGBOX_TEXT_OPACITY_ENABLED,
+                boolArg(ghostLogboxSettings["textOpacityEnabled"], false)
+            )
+            .putBoolean(
+                KEY_GHOST_LOGBOX_AVATAR_BADGE_ENABLED,
+                boolArg(ghostLogboxSettings["avatarBadgeEnabled"], true)
+            )
+            .putString(
+                KEY_GHOST_LOGBOX_TEXT_TONE,
+                ghostLogboxSettings["textTone"]?.toString() ?: "normal"
+            )
+            .putBoolean(
+                KEY_GHOST_LOGBOX_EXPECTED_LABEL_ENABLED,
+                boolArg(ghostLogboxSettings["expectedLabelEnabled"], true)
+            )
+            .putString(KEY_BACKHEADER_STYLE, args["backheaderStyle"]?.toString() ?: "classic")
+            .remove(KEY_DESIGN_PROFILE)
             .putString(
                 KEY_APP_COLOR,
                 args["appColor"]?.toString()?.takeIf { it.isNotBlank() }
@@ -184,6 +217,16 @@ class ExpenseSettingsStore(context: Context) {
 
     private fun defaultFastInfoConfig(): Map<String, Any?> = ExpenseFastInfoConfigNormalizer.defaultConfig()
 
+    private fun loadGhostLogboxSettings(): Map<String, Any?> = mapOf(
+        "borderStyle" to prefs.getString(KEY_GHOST_LOGBOX_BORDER_STYLE, "dashed"),
+        "backgroundOpacityEnabled" to prefs.getBoolean(KEY_GHOST_LOGBOX_BACKGROUND_OPACITY_ENABLED, true),
+        "avatarOpacityEnabled" to prefs.getBoolean(KEY_GHOST_LOGBOX_AVATAR_OPACITY_ENABLED, false),
+        "textOpacityEnabled" to prefs.getBoolean(KEY_GHOST_LOGBOX_TEXT_OPACITY_ENABLED, false),
+        "avatarBadgeEnabled" to prefs.getBoolean(KEY_GHOST_LOGBOX_AVATAR_BADGE_ENABLED, true),
+        "textTone" to prefs.getString(KEY_GHOST_LOGBOX_TEXT_TONE, "normal"),
+        "expectedLabelEnabled" to prefs.getBoolean(KEY_GHOST_LOGBOX_EXPECTED_LABEL_ENABLED, true),
+    )
+
     private fun boolArg(value: Any?, default: Boolean): Boolean = when (value) {
         is Boolean -> value
         is Number -> value.toInt() != 0
@@ -229,6 +272,13 @@ class ExpenseSettingsStore(context: Context) {
         }
     }
 
+    private fun legacyGhostLogboxSurfaceStyle(
+        legacyProfile: String = prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
+            ?: legacyDesignProfile(),
+    ): String {
+        return if (legacyProfile == "neumorphism") "insetInset" else "neutralNeutral"
+    }
+
     private fun legacyTheme(theme: String? = prefs.getString(KEY_THEME, null)): String {
         return if (theme == "Pink") "Pink" else "Türkiz"
     }
@@ -266,6 +316,14 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BOX_COLOR = "boxColor"
         private const val KEY_BUTTON_SURFACE_STYLE = "buttonSurfaceStyle"
         private const val KEY_CONTENT_SURFACE_STYLE = "contentSurfaceStyle"
+        private const val KEY_GHOST_LOGBOX_SURFACE_STYLE = "ghostLogboxSurfaceStyle"
+        private const val KEY_GHOST_LOGBOX_BORDER_STYLE = "ghostLogboxBorderStyle"
+        private const val KEY_GHOST_LOGBOX_BACKGROUND_OPACITY_ENABLED = "ghostLogboxBackgroundOpacityEnabled"
+        private const val KEY_GHOST_LOGBOX_AVATAR_OPACITY_ENABLED = "ghostLogboxAvatarOpacityEnabled"
+        private const val KEY_GHOST_LOGBOX_TEXT_OPACITY_ENABLED = "ghostLogboxTextOpacityEnabled"
+        private const val KEY_GHOST_LOGBOX_AVATAR_BADGE_ENABLED = "ghostLogboxAvatarBadgeEnabled"
+        private const val KEY_GHOST_LOGBOX_TEXT_TONE = "ghostLogboxTextTone"
+        private const val KEY_GHOST_LOGBOX_EXPECTED_LABEL_ENABLED = "ghostLogboxExpectedLabelEnabled"
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_DESIGN_PROFILE = "designProfile"
         private const val KEY_APP_COLOR = "appColor"

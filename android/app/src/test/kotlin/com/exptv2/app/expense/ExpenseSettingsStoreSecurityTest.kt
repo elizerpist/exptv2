@@ -92,7 +92,7 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
-    fun themeSettingsPersistProfileAndAppColor() {
+    fun themeSettingsPersistAppColorAndKeepProfileLegacyOnly() {
         val updated = store.updateThemeSettings(
             mapOf(
                 "magnetType" to "adaptive",
@@ -108,10 +108,51 @@ class ExpenseSettingsStoreSecurityTest {
             )
         )
 
-        assertEquals("neumorphism", updated["designProfile"])
+        assertEquals("normal", updated["designProfile"])
         assertFalse(updated.containsKey("nightMode"))
         assertEquals("pink", updated["appColor"])
-        assertEquals("neumorphism", store.loadThemeSettings()["designProfile"])
+        assertEquals("normal", store.loadThemeSettings()["designProfile"])
+        assertEquals(
+            null,
+            context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
+                .getString("designProfile", null)
+        )
+    }
+
+    @Test
+    fun themeSettingsPersistGhostLogboxControls() {
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "buttonSurfaceStyle" to "raisedInset",
+                "contentSurfaceStyle" to "insetInset",
+                "ghostLogboxSurfaceStyle" to "insetInset",
+                "ghostLogboxSettings" to mapOf(
+                    "borderStyle" to "normal",
+                    "backgroundOpacityEnabled" to false,
+                    "avatarOpacityEnabled" to true,
+                    "textOpacityEnabled" to true,
+                    "avatarBadgeEnabled" to false,
+                    "textTone" to "gray",
+                    "expectedLabelEnabled" to false,
+                ),
+            )
+        )
+
+        val nested = updated["ghostLogboxSettings"] as Map<*, *>
+        assertEquals("insetInset", updated["ghostLogboxSurfaceStyle"])
+        assertEquals("normal", nested["borderStyle"])
+        assertEquals(false, nested["backgroundOpacityEnabled"])
+        assertEquals(true, nested["avatarOpacityEnabled"])
+        assertEquals(true, nested["textOpacityEnabled"])
+        assertEquals(false, nested["avatarBadgeEnabled"])
+        assertEquals("gray", nested["textTone"])
+        assertEquals(false, nested["expectedLabelEnabled"])
+
+        val loaded = store.loadThemeSettings()
+        val loadedNested = loaded["ghostLogboxSettings"] as Map<*, *>
+        assertEquals("insetInset", loaded["ghostLogboxSurfaceStyle"])
+        assertEquals("gray", loadedNested["textTone"])
+        assertEquals(false, loadedNested["expectedLabelEnabled"])
     }
 
     @Test

@@ -34,6 +34,18 @@ void main() {
                   'theme': 'Türkiz',
                   'backgroundColor': 'gray',
                   'boxColor': 'white',
+                  'buttonSurfaceStyle': 'raisedInset',
+                  'contentSurfaceStyle': 'insetInset',
+                  'ghostLogboxSurfaceStyle': 'insetInset',
+                  'ghostLogboxSettings': <String, Object?>{
+                    'borderStyle': 'dashed',
+                    'backgroundOpacityEnabled': true,
+                    'avatarOpacityEnabled': false,
+                    'textOpacityEnabled': false,
+                    'avatarBadgeEnabled': true,
+                    'textTone': 'normal',
+                    'expectedLabelEnabled': true,
+                  },
                   'backheaderStyle': 'heroToken',
                 },
                 'fastInfoConfig': <String, Object?>{
@@ -244,6 +256,46 @@ void main() {
 
     expect(settings.themeSettings.magnetType, MagnetType.magnetcard);
     expect(settings.themeSettings.cardColor, AppCardColor.lightgray);
+    expect(
+      settings.themeSettings.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.raisedInset,
+    );
+    expect(
+      settings.themeSettings.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.borderStyle,
+      GhostLogboxBorderStyle.dashed,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.backgroundOpacityEnabled,
+      isTrue,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.avatarOpacityEnabled,
+      isFalse,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.textOpacityEnabled,
+      isFalse,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.avatarBadgeEnabled,
+      isTrue,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.textTone,
+      GhostLogboxTextTone.normal,
+    );
+    expect(
+      settings.themeSettings.ghostLogboxSettings.expectedLabelEnabled,
+      isTrue,
+    );
     expect(settings.themeSettings.backheaderStyle, BackheaderStyle.heroToken);
     expect(settings.fastInfoConfig.pills.first?.label, 'Megtakarítás');
     expect(settings.fastInfoConfig.pills[1]?.id, 'havi_koltes');
@@ -290,6 +342,8 @@ void main() {
       updated.ghostLogboxSettings.borderStyle,
       GhostLogboxBorderStyle.normal,
     );
+    expect(updated.ghostLogboxSettings.textTone, GhostLogboxTextTone.gray);
+    expect(updated.ghostLogboxSettings.expectedLabelEnabled, isFalse);
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
