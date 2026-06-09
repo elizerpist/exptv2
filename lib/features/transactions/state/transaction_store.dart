@@ -45,6 +45,9 @@ class TransactionStore extends ChangeNotifier {
   List<TransactionCategory> _categories = [];
   List<TransactionRecord> _transactions = [];
   List<RecurringGhostRecord> _recurringGhostTransactions = [];
+  List<RecurringGhostRecord> _stableRecurringGhostTransactions = const [];
+  String? _stableGhostPeriodKey;
+  var _ghostProjectionInFlight = false;
   List<RecurringRule> _recurringRules = const [];
   List<CategoryLimit> _limits = [];
   List<TransactionCategory> _categoriesView = const [];
@@ -223,6 +226,8 @@ class TransactionStore extends ChangeNotifier {
   String get _activePeriodKey =>
       LimitManager.periodKeyFor(_summaryWindow, _periodReferenceDate);
 
+  String get _activeMonthlyPeriodKey => _monthPeriodKey(_periodReferenceDate);
+
   String _windowCacheKey(TransactionType type) =>
       '${type.name}|${_summaryWindow.name}|$_activePeriodKey';
 
@@ -292,14 +297,22 @@ class TransactionStore extends ChangeNotifier {
     final key = _filterCacheKey(filter);
     final cached = _visibleGhostTransactionsCache[key];
     if (cached != null) return cached;
+    final periodKey = _activeGhostPeriodKey;
+    if (periodKey == null) {
+      final rows = List<RecurringGhostRecord>.unmodifiable(
+        const <RecurringGhostRecord>[],
+      );
+      _visibleGhostTransactionsCache[key] = rows;
+      return rows;
+    }
     final query = filter.searchQuery.trim().toLowerCase();
     final merchant = filter.merchant?.trim();
     final rows = List<RecurringGhostRecord>.unmodifiable(
-      _recurringGhostTransactions.where((ghost) {
+      _activeGhostSource.where((ghost) {
         if (ghost.isActivated) return false;
         if (_ghostIsBeforeCurrentMonth(ghost)) return false;
         if (ghost.type != filter.type) return false;
-        if (!_ghostInActiveWindow(ghost)) return false;
+        if (!_ghostInActiveWindow(ghost, periodKey: periodKey)) return false;
         if (filter.categoryId != null &&
             ghost.categoryId != filter.categoryId) {
           return false;
@@ -319,13 +332,18 @@ class TransactionStore extends ChangeNotifier {
     final key = _filterCacheKey(filter);
     final cached = _visibleLogEntriesCache[key];
     if (cached != null) return cached;
-    final entries = <TransactionLogEntry>[
+    final records = <TransactionLogEntry>[
       for (final record in _visibleTransactionsFor(filter))
         TransactionLogEntry.record(record),
-      for (final ghost in _visibleGhostTransactionsFor(filter))
-        TransactionLogEntry.ghost(ghost),
     ];
-    entries.sort(_compareLogEntries);
+    records.sort(_compareLogEntries);
+    final entries = _summaryWindow == SummaryWindow.monthly
+        ? <TransactionLogEntry>[
+            for (final ghost in _visibleGhostTransactionsFor(filter))
+              TransactionLogEntry.ghost(ghost),
+            ...records,
+          ]
+        : records;
     final rows = List<TransactionLogEntry>.unmodifiable(entries);
     _visibleLogEntriesCache[key] = rows;
     return rows;
@@ -341,6 +359,10 @@ class TransactionStore extends ChangeNotifier {
     final entries = <TransactionLogEntry>[];
     String? previousDate;
     for (final row in _visibleLogEntriesFor(filter)) {
+      if (row.isGhost) {
+        entries.add(row);
+        continue;
+      }
       if (row.date != previousDate) {
         entries.add(TransactionLogEntry.header(row.date));
         previousDate = row.date;
@@ -357,6 +379,10 @@ class TransactionStore extends ChangeNotifier {
     var total = 0;
     String? previousDate;
     for (final row in _visibleLogEntriesFor(filter)) {
+      if (row.isGhost) {
+        total += 1;
+        continue;
+      }
       if (row.date != previousDate) {
         total += 1;
         previousDate = row.date;
@@ -576,9 +602,7 @@ class TransactionStore extends ChangeNotifier {
       final payload = await _repository.loadBootstrap();
       _categories = payload.categories;
       _transactions = _sort(payload.transactions);
-      _recurringGhostTransactions = _sortGhosts(
-        payload.recurringGhostTransactions,
-      );
+      _replaceRecurringGhostTransactions(payload.recurringGhostTransactions);
       DebugConsole.log(
         '[Recurring] loaded ${_recurringGhostTransactions.length} pending ghosts',
       );
@@ -670,6 +694,7 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.yearly => SummaryWindow.allTime,
       SummaryWindow.allTime => SummaryWindow.monthly,
     };
+    _prepareGhostProjectionForActiveWindow();
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
     notifyListeners();
@@ -686,6 +711,7 @@ class TransactionStore extends ChangeNotifier {
       SummaryWindow.yearly => DateTime(_periodReferenceDate.year + direction),
       SummaryWindow.allTime => _periodReferenceDate,
     };
+    _prepareGhostProjectionForActiveWindow();
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
     notifyListeners();
@@ -695,6 +721,7 @@ class TransactionStore extends ChangeNotifier {
   Future<void> resetSummaryToCurrentMonth() async {
     _summaryWindow = SummaryWindow.monthly;
     _periodReferenceDate = _monthStart(_clock());
+    _prepareGhostProjectionForActiveWindow();
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
     notifyListeners();
@@ -964,27 +991,42 @@ class TransactionStore extends ChangeNotifier {
   }
 
   Future<void> _projectRecurringGhostsForActiveWindow({int? generation}) async {
-    if (_summaryWindow == SummaryWindow.allTime) return;
-    final targetDate = DateTime(
-      _periodReferenceDate.year,
-      _periodReferenceDate.month,
-    );
-    final periodKey =
-        '${targetDate.year.toString().padLeft(4, '0')}-${targetDate.month.toString().padLeft(2, '0')}';
-    DebugConsole.log('[Recurring] ensuring ghosts for $periodKey');
-    final ghosts = await _repository.ensureRecurringGhostTransactions(
-      targetDate: targetDate,
-    );
-    if (generation != null && generation != _summaryChangeGeneration) return;
-    _recurringGhostTransactions = _sortGhosts(ghosts);
-    _rebuildPublicViews();
+    if (_summaryWindow != SummaryWindow.monthly) {
+      if (generation == null || generation == _summaryChangeGeneration) {
+        _ghostProjectionInFlight = false;
+        _invalidateViewCaches();
+      }
+      return;
+    }
+    final targetDate = _monthStart(_periodReferenceDate);
+    final periodKey = _monthPeriodKey(targetDate);
+    _ghostProjectionInFlight = true;
     _invalidateViewCaches();
-    _invalidateFastInfoMetrics();
-    _prewarmCriticalCaches('recurring-ghosts');
-    DebugConsole.log(
-      '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
-    );
-    notifyListeners();
+    DebugConsole.log('[Recurring] ensuring ghosts for $periodKey');
+    try {
+      final ghosts = await _repository.ensureRecurringGhostTransactions(
+        targetDate: targetDate,
+      );
+      if (generation != null && generation != _summaryChangeGeneration) {
+        return;
+      }
+      _replaceRecurringGhostTransactions(ghosts, stablePeriodKey: periodKey);
+      _rebuildPublicViews();
+      _invalidateViewCaches();
+      _invalidateFastInfoMetrics();
+      _prewarmCriticalCaches('recurring-ghosts');
+      DebugConsole.log(
+        '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
+      );
+      notifyListeners();
+    } finally {
+      if ((generation == null || generation == _summaryChangeGeneration) &&
+          _ghostProjectionInFlight) {
+        _ghostProjectionInFlight = false;
+        _invalidateViewCaches();
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> _reloadRecurringRuleState() async {
@@ -1009,9 +1051,7 @@ class TransactionStore extends ChangeNotifier {
     final payload = await _repository.loadBootstrap();
     _categories = payload.categories;
     _transactions = _sort(payload.transactions);
-    _recurringGhostTransactions = _sortGhosts(
-      payload.recurringGhostTransactions,
-    );
+    _replaceRecurringGhostTransactions(payload.recurringGhostTransactions);
     _limits = payload.limits;
     _rebuildPublicViews();
     _rebuildDerivedIndexes();
@@ -1019,6 +1059,45 @@ class TransactionStore extends ChangeNotifier {
     _invalidateFastInfoMetrics();
     _prewarmCriticalCaches('reload');
     notifyListeners();
+  }
+
+  void _prepareGhostProjectionForActiveWindow() {
+    _ghostProjectionInFlight = _summaryWindow == SummaryWindow.monthly;
+  }
+
+  List<RecurringGhostRecord> get _activeGhostSource {
+    if (_ghostProjectionInFlight && _stableGhostPeriodKey != null) {
+      return _stableRecurringGhostTransactions;
+    }
+    return _recurringGhostTransactions;
+  }
+
+  String? get _activeGhostPeriodKey {
+    if (_summaryWindow != SummaryWindow.monthly) return null;
+    if (_ghostProjectionInFlight && _stableGhostPeriodKey != null) {
+      return _stableGhostPeriodKey;
+    }
+    return _activeMonthlyPeriodKey;
+  }
+
+  void _replaceRecurringGhostTransactions(
+    List<RecurringGhostRecord> records, {
+    String? stablePeriodKey,
+  }) {
+    final sorted = _sortGhosts(records);
+    _recurringGhostTransactions = sorted;
+    _stableRecurringGhostTransactions = sorted;
+    _stableGhostPeriodKey = stablePeriodKey ?? _stablePeriodKeyFor(sorted);
+    _ghostProjectionInFlight = false;
+  }
+
+  String _stablePeriodKeyFor(List<RecurringGhostRecord> records) {
+    final activePeriodKey = _activeMonthlyPeriodKey;
+    for (final ghost in records) {
+      if (ghost.yearMonthKey == activePeriodKey) return activePeriodKey;
+    }
+    if (records.isNotEmpty) return records.first.yearMonthKey;
+    return activePeriodKey;
   }
 
   void _rebuildPublicViews() {
@@ -1053,15 +1132,15 @@ class TransactionStore extends ChangeNotifier {
     ).isBefore(_monthStart(_clock()));
   }
 
-  bool _ghostInActiveWindow(RecurringGhostRecord ghost) {
+  bool _ghostInActiveWindow(
+    RecurringGhostRecord ghost, {
+    String? periodKey,
+  }) {
     return switch (_summaryWindow) {
-      SummaryWindow.allTime => false,
       SummaryWindow.monthly =>
-        ghost.yearMonthKey ==
-            '${_periodReferenceDate.year.toString().padLeft(4, '0')}-${_periodReferenceDate.month.toString().padLeft(2, '0')}',
-      SummaryWindow.yearly => ghost.normalizedDate.startsWith(
-        _periodReferenceDate.year.toString(),
-      ),
+        ghost.yearMonthKey == (periodKey ?? _activeMonthlyPeriodKey),
+      SummaryWindow.yearly => false,
+      SummaryWindow.allTime => false,
     };
   }
 
@@ -1093,6 +1172,9 @@ int _compareLogEntries(TransactionLogEntry left, TransactionLogEntry right) {
 }
 
 DateTime _monthStart(DateTime value) => DateTime(value.year, value.month);
+
+String _monthPeriodKey(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}';
 
 String _hungarianMonth(int month) {
   const months = <int, String>{

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
+import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
@@ -48,6 +51,97 @@ void main() {
       await store.shiftSummaryPeriod(-2);
       expect(repository.ensureTargets.last, DateTime(2026, 4));
       expect(store.visibleGhostTransactions, isEmpty);
+    },
+  );
+
+  test(
+    'monthly display pins ghosts above normal date headers',
+    () async {
+      final repository = GhostRepository(
+        projectedGhosts: [ghostFixture(day: 1)],
+      );
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 10),
+      );
+      await store.start();
+      await store.cycleSummaryWindow();
+
+      expect(store.summaryWindow, SummaryWindow.monthly);
+      expect(store.visibleLogEntries.first.isGhost, isTrue);
+
+      final displayEntries = store.visibleDisplayLogEntries;
+      expect(displayEntries, hasLength(3));
+      expect(displayEntries[0].isGhost, isTrue);
+      expect(displayEntries[0].ghost?.periodKey, '2026-05');
+      expect(displayEntries[1].isHeader, isTrue);
+      expect(displayEntries[1].header, '2026.05.10');
+      expect(displayEntries[2].record?.displayMerchant, 'Real Shop');
+      expect(store.visibleDisplayLogEntryTotalCount, displayEntries.length);
+    },
+  );
+
+  test('yearly and all-time display do not include ghost rows', () async {
+    final repository = GhostRepository(
+      bootstrapGhosts: [ghostFixture()],
+      projectedGhosts: [ghostFixture()],
+    );
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 10),
+    );
+    await store.start();
+
+    expect(store.summaryWindow, SummaryWindow.allTime);
+    expect(store.visibleGhostTransactions, isEmpty);
+    expect(store.visibleLogEntries.any((entry) => entry.isGhost), isFalse);
+
+    await store.cycleSummaryWindow();
+    expect(store.summaryWindow, SummaryWindow.monthly);
+    expect(store.visibleGhostTransactions, isNotEmpty);
+
+    await store.cycleSummaryWindow();
+    expect(store.summaryWindow, SummaryWindow.yearly);
+    expect(store.visibleGhostTransactions, isEmpty);
+    expect(store.visibleLogEntries.any((entry) => entry.isGhost), isFalse);
+
+    await store.cycleSummaryWindow();
+    expect(store.summaryWindow, SummaryWindow.allTime);
+    expect(store.visibleGhostTransactions, isEmpty);
+    expect(store.visibleLogEntries.any((entry) => entry.isGhost), isFalse);
+  });
+
+  test(
+    'delayed projection keeps previous ghost rows until projection completes',
+    () async {
+      final repository = DelayedGhostRepository(
+        immediateProjections: {
+          '2026-05': [ghostFixture(id: 5, day: 1)],
+        },
+      );
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2026, 5, 10),
+      );
+      await store.start();
+      await store.cycleSummaryWindow();
+
+      expect(store.visibleGhostTransactions.single.periodKey, '2026-05');
+
+      final shift = store.shiftSummaryPeriod(1);
+      await pumpEventQueue(times: 3);
+
+      expect(repository.pendingPeriodKeys, contains('2026-06'));
+      expect(store.visibleGhostTransactions.single.periodKey, '2026-05');
+      expect(store.visibleDisplayLogEntries.first.ghost?.periodKey, '2026-05');
+
+      repository.completeProjection('2026-06', [
+        ghostFixture(id: 6, month: 6, name: 'June Rent'),
+      ]);
+      await shift;
+
+      expect(store.visibleGhostTransactions.single.periodKey, '2026-06');
+      expect(store.visibleDisplayLogEntries.first.ghost?.name, 'June Rent');
     },
   );
 
@@ -249,9 +343,46 @@ class GhostRepository extends TransactionRepositoryContract {
   ) async => throw UnimplementedError();
 }
 
+class DelayedGhostRepository extends GhostRepository {
+  DelayedGhostRepository({
+    required this.immediateProjections,
+  }) : super(bootstrapGhosts: immediateProjections.values.first);
+
+  final Map<String, List<RecurringGhostRecord>> immediateProjections;
+  final _pendingProjections =
+      <String, Completer<List<RecurringGhostRecord>>>{};
+
+  List<String> get pendingPeriodKeys => _pendingProjections.keys.toList();
+
+  void completeProjection(String periodKey, List<RecurringGhostRecord> ghosts) {
+    final pending = _pendingProjections.remove(periodKey);
+    if (pending == null) {
+      throw StateError('No pending projection for $periodKey');
+    }
+    pending.complete(ghosts);
+  }
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) {
+    final target = targetDate ?? DateTime(2026, 5);
+    final month = DateTime(target.year, target.month);
+    ensureTargets.add(month);
+    final periodKey =
+        '${month.year.toString().padLeft(4, '0')}-${month.month.toString().padLeft(2, '0')}';
+    final immediate = immediateProjections[periodKey];
+    if (immediate != null) return Future.value(immediate);
+    final pending = Completer<List<RecurringGhostRecord>>();
+    _pendingProjections[periodKey] = pending;
+    return pending.future;
+  }
+}
+
 RecurringGhostRecord ghostFixture({
   int year = 2026,
   int month = 5,
+  int day = 15,
   int id = 1,
   int recurringId = 9,
   String name = 'Rent',
@@ -265,7 +396,7 @@ RecurringGhostRecord ghostFixture({
   final periodKey =
       '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}';
   final date =
-      '${year.toString().padLeft(4, '0')}.${month.toString().padLeft(2, '0')}.15';
+      '${year.toString().padLeft(4, '0')}.${month.toString().padLeft(2, '0')}.${day.toString().padLeft(2, '0')}';
   return RecurringGhostRecord.fromMap({
     'id': id,
     'recurringTransactionId': recurringId,
