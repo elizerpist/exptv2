@@ -19,6 +19,7 @@ class SettingsStore extends ChangeNotifier {
   SecuritySettings _securitySettings = SecuritySettings.defaults();
   NotificationSettings _notificationSettings = NotificationSettings.defaults();
   List<TransactionCategory> _categories = [];
+  var _themeUpdateGeneration = 0;
 
   bool get loading => _loading;
   String? get error => _error;
@@ -56,9 +57,27 @@ class SettingsStore extends ChangeNotifier {
   }
 
   Future<void> updateThemeSettings(AppThemeSettings settings) async {
-    _themeSettings = await _repository.updateThemeSettings(settings);
-    DebugConsole.log('[ThemeSurface] settings update ${_themeSignature()}');
+    final generation = ++_themeUpdateGeneration;
+    final previous = _themeSettings;
+    _themeSettings = settings;
+    _error = null;
+    DebugConsole.log('[ThemeSurface] settings optimistic ${_themeSignature()}');
     notifyListeners();
+
+    try {
+      final confirmed = await _repository.updateThemeSettings(settings);
+      if (generation != _themeUpdateGeneration) return;
+      _themeSettings = confirmed;
+      DebugConsole.log('[ThemeSurface] settings update ${_themeSignature()}');
+      notifyListeners();
+    } catch (error) {
+      if (generation == _themeUpdateGeneration) {
+        _themeSettings = previous;
+        _error = error.toString();
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateFastInfoConfig(FastInfoConfig config) async {

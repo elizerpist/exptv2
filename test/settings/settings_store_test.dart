@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:exptv2/features/settings/data/settings_repository.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/state/settings_store.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:flutter/services.dart';
@@ -9,9 +12,11 @@ void main() {
   const channel = MethodChannel('test/settings_store_methods');
   late SettingsStore store;
   late List<String> methods;
+  late List<Completer<Map<String, Object?>>> themeUpdateResponses;
 
   setUp(() {
     methods = <String>[];
+    themeUpdateResponses = <Completer<Map<String, Object?>>>[];
     final bridge = NativeBridge(
       methodChannel: channel,
       eventChannel: const EventChannel('test/settings_store_events'),
@@ -78,6 +83,12 @@ void main() {
                 'biometricAvailable': true,
                 'biometricLabel': 'Ujjlenyomat elerheto',
               };
+            case 'expenseUpdateThemeSettings':
+              final args = Map<String, Object?>.from(
+                call.arguments as Map<dynamic, dynamic>,
+              );
+              if (themeUpdateResponses.isEmpty) return args;
+              return themeUpdateResponses.removeAt(0).future;
           }
           return null;
         });
@@ -126,6 +137,54 @@ void main() {
     expect(methods, contains('expenseVerifySecurityPin'));
     expect(methods, contains('expenseSetBiometricEnabled'));
     expect(methods, contains('expenseClearSecurityPin'));
+  });
+
+  test('theme updates are optimistic and ignore stale native responses', () async {
+    await store.start();
+
+    final firstResponse = Completer<Map<String, Object?>>();
+    final secondResponse = Completer<Map<String, Object?>>();
+    themeUpdateResponses.addAll([firstResponse, secondResponse]);
+
+    final firstSettings = store.themeSettings.copyWith(
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+    );
+    final firstFuture = store.updateThemeSettings(firstSettings);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      store.themeSettings.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.raisedInset,
+    );
+
+    final secondSettings = store.themeSettings.copyWith(
+      contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+    );
+    final secondFuture = store.updateThemeSettings(secondSettings);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      store.themeSettings.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.raisedInset,
+    );
+    expect(
+      store.themeSettings.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
+
+    secondResponse.complete(secondSettings.toMap());
+    await secondFuture;
+    firstResponse.complete(firstSettings.toMap());
+    await firstFuture;
+
+    expect(
+      store.themeSettings.buttonSurfaceStyle,
+      ExpenseSurfaceInteraction.raisedInset,
+    );
+    expect(
+      store.themeSettings.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.insetInset,
+    );
   });
 }
 
