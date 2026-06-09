@@ -351,8 +351,10 @@ void main() {
     expect(payload['buttonSurfaceStyle'], 'raisedInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
     expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
-    expect(payload['ghostLogboxSettings'], isA<Map<String, Object?>>());
-    final ghostPayload = payload['ghostLogboxSettings'] as Map<String, Object?>;
+    expect(payload['ghostLogboxSettings'], isA<Map>());
+    final ghostPayload = Map<dynamic, dynamic>.from(
+      payload['ghostLogboxSettings'] as Map,
+    );
     expect(ghostPayload['textTone'], 'gray');
     expect(ghostPayload['expectedLabelEnabled'], isFalse);
     expect(payload['backheaderStyle'], 'orbitBudget');

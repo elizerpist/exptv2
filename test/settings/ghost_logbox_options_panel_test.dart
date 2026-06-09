@@ -43,6 +43,10 @@ void main() {
       ),
     );
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('ghost-logbox-text-gray')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('ghost-logbox-text-gray')));
     await tester.pumpAndSettle();
 

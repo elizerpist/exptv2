@@ -346,7 +346,10 @@ void main() {
 
     expect(find.text('Ghost logbox'), findsOneWidget);
     expect(find.text('Szegély'), findsOneWidget);
-    expect(find.text('Szaggatott'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ghost-logbox-border-dashed')),
+      findsOneWidget,
+    );
     expect(find.text('Várható felirat'), findsOneWidget);
   });
 
