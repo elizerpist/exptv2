@@ -115,6 +115,7 @@ class SettingsOptionItem extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.onTap,
+    this.leading,
     this.trailing,
     this.isLast = false,
   });
@@ -122,6 +123,7 @@ class SettingsOptionItem extends StatelessWidget {
   final String title;
   final String? subtitle;
   final VoidCallback? onTap;
+  final Widget? leading;
   final Widget? trailing;
   final bool isLast;
 
@@ -141,6 +143,10 @@ class SettingsOptionItem extends StatelessWidget {
         ),
         child: Row(
           children: [
+            if (leading != null) ...[
+              leading!,
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

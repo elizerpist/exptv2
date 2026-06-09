@@ -20,6 +20,7 @@ import '../settings/widgets/push_log/push_notification_event_sheet.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
+import '../transactions/sync/google_sheets_sync_controller.dart';
 import '../transactions/models/backheader_budget_item.dart';
 import '../transactions/models/transaction_category.dart';
 import '../transactions/models/transaction_record.dart';
@@ -36,10 +37,16 @@ import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
 
 class ExptShell extends StatefulWidget {
-  const ExptShell({super.key, required this.store, required this.nativeBridge});
+  const ExptShell({
+    super.key,
+    required this.store,
+    required this.nativeBridge,
+    this.googleSheetsSyncController,
+  });
 
   final EventStore store;
   final NativeBridge nativeBridge;
+  final GoogleSheetsSyncController? googleSheetsSyncController;
 
   @override
   State<ExptShell> createState() => _ExptShellState();
@@ -565,6 +572,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         return SettingsPage(
           store: widget.store,
           nativeBridge: widget.nativeBridge,
+          googleSheetsSyncController: widget.googleSheetsSyncController,
           expenseTheme: expenseTheme,
           onThemeSettingsChanged: _applyThemeSettings,
           onFastInfoConfigChanged: _applyFastInfoConfig,
