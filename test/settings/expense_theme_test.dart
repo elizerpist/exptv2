@@ -19,33 +19,24 @@ void main() {
     expect(theme.logBox, AppColors.gray100);
   });
 
-  test(
-    'resolves colors and ignores legacy surface overrides in normal profile',
-    () {
-      final settings = AppThemeSettings.defaults().copyWith(
-        cardColor: AppCardColor.darkgray,
-        backgroundColor: AppBackgroundColor.darkgray,
-        boxColor: AppBoxColor.darkgray,
-        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-        contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
-      );
-      final theme = ExpenseTheme.fromSettings(settings);
+  test('resolves colors alongside component surface overrides', () {
+    final settings = AppThemeSettings.defaults().copyWith(
+      cardColor: AppCardColor.darkgray,
+      backgroundColor: AppBackgroundColor.darkgray,
+      boxColor: AppBoxColor.darkgray,
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+      contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+    );
+    final theme = ExpenseTheme.fromSettings(settings);
 
-      expect(theme.headerCard, AppColors.gray200);
-      expect(theme.appBackground, AppColors.gray200);
-      expect(theme.logBox, AppColors.gray200);
-      expect(
-        theme.buttonSurfaceStyle,
-        ExpenseSurfaceInteraction.neutralNeutral,
-      );
-      expect(
-        theme.contentSurfaceStyle,
-        ExpenseSurfaceInteraction.neutralNeutral,
-      );
-      expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
-      expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
-    },
-  );
+    expect(theme.headerCard, AppColors.gray200);
+    expect(theme.appBackground, AppColors.gray200);
+    expect(theme.logBox, AppColors.gray200);
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
+    expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
+  });
 
   test('resolves primary accent from app color and legacy migration', () {
     expect(
@@ -201,6 +192,40 @@ void main() {
     expect(theme.appBackground, AppColors.gray100);
     expect(theme.logBox, AppColors.gray100);
   });
+
+  test('component surfaces resolve independently', () {
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+        contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+        ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+      ),
+    );
+
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+    expect(theme.ghostLogboxSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+    expect(
+      theme.bottomNavSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+  });
+
+  test(
+    'legacy design profile getter reflects component surface compatibility only',
+    () {
+      final neumorph = AppThemeSettings.defaults().copyWith(
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+        contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+        ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+      );
+      final normal = AppThemeSettings.defaults();
+
+      expect(neumorph.designProfile, AppDesignProfile.neumorphism);
+      expect(normal.designProfile, AppDesignProfile.normal);
+      expect(neumorph.toMap().containsKey('designProfile'), isFalse);
+    },
+  );
 
   test('component surface settings copy independently', () {
     final settings = AppThemeSettings.defaults().copyWith(

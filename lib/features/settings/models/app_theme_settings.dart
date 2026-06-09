@@ -370,7 +370,15 @@ class AppThemeSettings {
   final BackheaderStyle backheaderStyle;
   final AppColorMode appColor;
 
-  AppDesignProfile get designProfile => AppDesignProfile.normal;
+  AppDesignProfile get designProfile {
+    final looksNeumorphic =
+        buttonSurfaceStyle == ExpenseSurfaceInteraction.raisedInset &&
+        contentSurfaceStyle == ExpenseSurfaceInteraction.insetInset &&
+        ghostLogboxSurfaceStyle == ExpenseSurfaceInteraction.insetInset;
+    return looksNeumorphic
+        ? AppDesignProfile.neumorphism
+        : AppDesignProfile.normal;
+  }
 
   Map<String, Object?> toMap() {
     return <String, Object?>{

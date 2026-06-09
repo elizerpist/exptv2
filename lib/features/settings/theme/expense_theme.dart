@@ -22,6 +22,7 @@ class ExpenseTheme {
     required this.contentSurfaceStyle,
     required this.bottomNavSurfaceStyle,
     required this.forcedInsetSurfaceStyle,
+    required this.ghostLogboxSurfaceStyle,
   });
 
   final AppThemeSettings settings;
@@ -41,9 +42,7 @@ class ExpenseTheme {
   final ExpenseSurfaceInteraction contentSurfaceStyle;
   final ExpenseSurfaceInteraction bottomNavSurfaceStyle;
   final ExpenseSurfaceInteraction forcedInsetSurfaceStyle;
-
-  bool get isNeumorphism =>
-      settings.designProfile == AppDesignProfile.neumorphism;
+  final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
 
   Color resolvePrimary(Color color) {
     if (color == AppColors.primary) return accent;
@@ -54,9 +53,6 @@ class ExpenseTheme {
   }
 
   factory ExpenseTheme.fromSettings(AppThemeSettings settings) {
-    final neumorphism = settings.designProfile == AppDesignProfile.neumorphism;
-    final surfaceStyles = _surfaceStyles(neumorphism);
-
     final accentFamily = _dayAccentFamily(settings);
     return ExpenseTheme(
       settings: settings,
@@ -88,10 +84,14 @@ class ExpenseTheme {
       textSecondary: AppColors.gray600,
       textMuted: AppColors.gray500,
       border: AppColors.gray200,
-      buttonSurfaceStyle: surfaceStyles.button,
-      contentSurfaceStyle: surfaceStyles.content,
-      bottomNavSurfaceStyle: surfaceStyles.bottomNav,
-      forcedInsetSurfaceStyle: surfaceStyles.forcedInset,
+      buttonSurfaceStyle: settings.buttonSurfaceStyle,
+      contentSurfaceStyle: settings.contentSurfaceStyle,
+      bottomNavSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      forcedInsetSurfaceStyle: settings.contentSurfaceStyle ==
+              ExpenseSurfaceInteraction.neutralNeutral
+          ? ExpenseSurfaceInteraction.neutralNeutral
+          : ExpenseSurfaceInteraction.insetInset,
+      ghostLogboxSurfaceStyle: settings.ghostLogboxSurfaceStyle,
     );
   }
 
@@ -111,22 +111,6 @@ class ExpenseTheme {
       activeBackground: AppColors.primaryActiveBackground,
     );
   }
-
-  static _SurfaceStyles _surfaceStyles(bool neumorphism) {
-    return neumorphism
-        ? const _SurfaceStyles(
-            button: ExpenseSurfaceInteraction.raisedInset,
-            content: ExpenseSurfaceInteraction.insetInset,
-            bottomNav: ExpenseSurfaceInteraction.neutralInset,
-            forcedInset: ExpenseSurfaceInteraction.insetInset,
-          )
-        : const _SurfaceStyles(
-            button: ExpenseSurfaceInteraction.neutralNeutral,
-            content: ExpenseSurfaceInteraction.neutralNeutral,
-            bottomNav: ExpenseSurfaceInteraction.neutralNeutral,
-            forcedInset: ExpenseSurfaceInteraction.neutralNeutral,
-          );
-  }
 }
 
 class _AccentFamily {
@@ -141,18 +125,4 @@ class _AccentFamily {
   final Color dark;
   final Color light;
   final Color activeBackground;
-}
-
-class _SurfaceStyles {
-  const _SurfaceStyles({
-    required this.button,
-    required this.content,
-    required this.bottomNav,
-    required this.forcedInset,
-  });
-
-  final ExpenseSurfaceInteraction button;
-  final ExpenseSurfaceInteraction content;
-  final ExpenseSurfaceInteraction bottomNav;
-  final ExpenseSurfaceInteraction forcedInset;
 }
