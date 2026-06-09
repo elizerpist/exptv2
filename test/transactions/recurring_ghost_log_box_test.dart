@@ -27,8 +27,7 @@ void main() {
     );
     expect(find.byType(GhostBadge), findsOneWidget);
     expect(find.text('Várható · ismétlődő'), findsOneWidget);
-    final legacyLabel = ['Gh', 'ost'].join();
-    expect(find.text(legacyLabel), findsNothing);
+    expect(find.text('Ghost'), findsNothing);
   });
 
   testWidgets('normal border and hidden labels omit ghost visuals', (

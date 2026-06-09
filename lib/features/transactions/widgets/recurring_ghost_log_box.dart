@@ -155,7 +155,7 @@ class RecurringGhostLogBox extends StatelessWidget {
   }
 
   Widget _amountColumn() {
-    return Column(
+    final column = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -178,5 +178,7 @@ class RecurringGhostLogBox extends StatelessWidget {
         ),
       ],
     );
+    if (!settings.textOpacityEnabled) return column;
+    return Opacity(opacity: _ghostTextOpacity, child: column);
   }
 }
