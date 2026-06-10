@@ -304,10 +304,7 @@ void main() {
     logs = DebugConsole.allText;
     expect(logs, contains('[Perf] BottomNav pointer dispatch tab=stats'));
     expect(logs, contains('[Perf] BottomNav page jump deferred tab=stats'));
-    expect(
-      logs,
-      isNot(contains('[Perf] CalendarRender build source=overlay')),
-    );
+    expect(logs, isNot(contains('[Perf] CalendarRender build source=overlay')));
   });
 
   testWidgets('first launch requests Android notification permission once', (
@@ -360,11 +357,21 @@ void main() {
       find.byKey(const ValueKey('recurring-manager-card')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('recurring-trigger-date')), findsOneWidget);
-    expect(find.byKey(const ValueKey('recurring-trigger-push')), findsOneWidget);
-    expect(find.byKey(const ValueKey('recurring-rule-date')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-trigger-date')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('recurring-trigger-push')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('recurring-rule-day')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-rule-date')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('recurring-rule-date-picker-button')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('recurring-rule-time')), findsOneWidget);
-    expect(find.byKey(const ValueKey('recurring-rule-day')), findsNothing);
     expect(
       find.byKey(const ValueKey('category-editor-slide-card')),
       findsNothing,
@@ -391,8 +398,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('recurring-trigger-push')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('recurring-push-date')), findsOneWidget);
-    expect(find.byKey(const ValueKey('recurring-push-app-pill')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recurring-push-day')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-push-date-picker-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('recurring-push-app-pill')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('recurring-rule-time')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('recurring-push-app-pill')));
@@ -413,7 +427,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('recurring-training-merchant')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('recurring-manager-card')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('recurring-training-token-Tesco')),
@@ -424,7 +441,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('recurring-manager-card')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
     expect(find.text('Tesco'), findsWidgets);
 
     await tester.tapAt(const Offset(12, 12));
@@ -484,9 +504,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('recurring-push-advanced')));
     await tester.pumpAndSettle();
 
-    final scrollFinder = find.byKey(
-      const ValueKey('recurring-manager-scroll'),
-    );
+    final scrollFinder = find.byKey(const ValueKey('recurring-manager-scroll'));
     await tester.drag(scrollFinder, const Offset(0, -520));
     await tester.pumpAndSettle();
 
@@ -502,7 +520,10 @@ void main() {
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('recurring-manager-card')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('recurring-manager-drag-handle')),
@@ -515,33 +536,31 @@ void main() {
   testWidgets('recurring rule cards use main logbox corner radius', (
     tester,
   ) async {
-    recurringRulesPayload.add(
-      <String, Object?>{
-        'id': 7,
-        'triggerType': 'date',
-        'transactionType': 'expense',
-        'name': 'Hitel',
-        'estimatedAmount': 123456,
-        'expectedDayOfMonth': 5,
-        'expectedTime': '20:15',
-        'categoryId': 1,
-        'isActive': true,
-        'appFilterText': '',
-        'packageName': '',
-        'appLabel': '',
-        'sampleText': '',
-        'includeKeyword': '',
-        'amountPattern': '',
-        'amountSelection': '',
-        'merchantPattern': '',
-        'merchantSelection': '',
-        'dateToleranceDays': 5,
-        'amountTolerancePercent': 20,
-        'amountToleranceMin': 5000,
-        'createdAt': '2026-06-01T10:00:00.000',
-        'updatedAt': '2026-06-01T10:00:00.000',
-      },
-    );
+    recurringRulesPayload.add(<String, Object?>{
+      'id': 7,
+      'triggerType': 'date',
+      'transactionType': 'expense',
+      'name': 'Hitel',
+      'estimatedAmount': 123456,
+      'expectedDayOfMonth': 5,
+      'expectedTime': '20:15',
+      'categoryId': 1,
+      'isActive': true,
+      'appFilterText': '',
+      'packageName': '',
+      'appLabel': '',
+      'sampleText': '',
+      'includeKeyword': '',
+      'amountPattern': '',
+      'amountSelection': '',
+      'merchantPattern': '',
+      'merchantSelection': '',
+      'dateToleranceDays': 5,
+      'amountTolerancePercent': 20,
+      'amountToleranceMin': 5000,
+      'createdAt': '2026-06-01T10:00:00.000',
+      'updatedAt': '2026-06-01T10:00:00.000',
+    });
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -925,7 +944,10 @@ void main() {
       find.byKey(const ValueKey('category-menu-back-button')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('category-menu-add-button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-menu-add-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('add category sheet keeps the picker behind and covers nav', (

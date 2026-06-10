@@ -87,6 +87,17 @@ class NativeBridge {
         .toList();
   }
 
+  Future<List<NotificationEvent>> loadEventsAfterId(int afterId) async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'loadEventsAfterId',
+      {'afterId': afterId},
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(NotificationEvent.fromMap)
+        .toList();
+  }
+
   Future<PushNotificationLogPage> loadNotificationEventPage(
     PushNotificationLogQuery query,
   ) async {
@@ -232,6 +243,20 @@ class NativeBridge {
       {'id': id},
     );
     return _nullableNativeInt(value);
+  }
+
+  Future<List<TransactionRecord>> expenseTransactionsForNotificationEvents(
+    List<int> eventIds,
+  ) async {
+    if (eventIds.isEmpty) return const <TransactionRecord>[];
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseTransactionsForNotificationEvents',
+      {'eventIds': eventIds},
+    );
+    return (rows ?? <dynamic>[])
+        .cast<Map<dynamic, dynamic>>()
+        .map(TransactionRecord.fromMap)
+        .toList();
   }
 
   Future<List<TransactionCategory>> expenseListCategories({
@@ -583,7 +608,7 @@ class NativeBridge {
     return deleted ?? false;
   }
 
-  Future<List<RecurringTransaction>> expenseProcessRecurringTransactions({
+  Future<List<TransactionRecord>> expenseProcessRecurringTransactions({
     DateTime? targetDate,
   }) async {
     final rows = await _methodChannel.invokeListMethod<dynamic>(
@@ -595,7 +620,7 @@ class NativeBridge {
     );
     return (rows ?? <dynamic>[])
         .cast<Map<dynamic, dynamic>>()
-        .map(RecurringTransaction.fromMap)
+        .map(TransactionRecord.fromMap)
         .toList();
   }
 

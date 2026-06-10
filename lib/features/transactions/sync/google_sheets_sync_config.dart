@@ -3,8 +3,6 @@ class GoogleSheetsSyncConfig {
 
   static const serverClientId =
       '881674880679-ndqgunmnbq49nkdd4oikelnhu88ip13l.apps.googleusercontent.com';
-  static const androidClientId =
-      '881674880679-h7abq4ipc3igqt65r870h4b5m34kghc7.apps.googleusercontent.com';
   static const driveFileScope = 'https://www.googleapis.com/auth/drive.file';
   static const spreadsheetName = 'Exptv2 Transactions';
 }

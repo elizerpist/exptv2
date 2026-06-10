@@ -707,7 +707,9 @@ class TransactionStore extends ChangeNotifier {
     _prepareGhostProjectionForActiveWindow();
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
-    notifyListeners();
+    if (_summaryWindow != SummaryWindow.monthly) {
+      notifyListeners();
+    }
     await _finishSummaryChange('summary-window', generation);
   }
 
@@ -724,7 +726,9 @@ class TransactionStore extends ChangeNotifier {
     _prepareGhostProjectionForActiveWindow();
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
-    notifyListeners();
+    if (_summaryWindow != SummaryWindow.monthly) {
+      notifyListeners();
+    }
     await _finishSummaryChange('summary-period', generation);
   }
 
@@ -734,7 +738,6 @@ class TransactionStore extends ChangeNotifier {
     _prepareGhostProjectionForActiveWindow();
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
-    notifyListeners();
     await _finishSummaryChange('summary-reset', generation);
   }
 
@@ -761,8 +764,55 @@ class TransactionStore extends ChangeNotifier {
       'date': date,
       'time': time,
     });
-    await _reload();
+    await _reload(notify: false);
+    await _projectRecurringGhostsForActiveWindow(notify: false);
+    notifyListeners();
     _scheduleNotificationRefresh();
+  }
+
+  Future<void> mergeTransactionsForNotificationEvents(
+    Iterable<int> eventIds,
+  ) async {
+    final ids = eventIds.where((id) => id > 0).toSet();
+    if (ids.isEmpty) return;
+    final rows = await _repository.transactionsForNotificationEvents(ids);
+    if (rows.isEmpty) return;
+    mergeExternalTransactions(rows);
+  }
+
+  void mergeExternalTransactions(Iterable<TransactionRecord> records) {
+    var changed = false;
+    for (final record in records) {
+      final index = _transactions.indexWhere((row) => row.id == record.id);
+      if (index == -1) {
+        _transactions.add(record);
+        changed = true;
+        continue;
+      }
+      if (!_sameTransactionRecord(_transactions[index], record)) {
+        _transactions[index] = record;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    _transactions = _sort(_transactions);
+    _rebuildPublicViews();
+    _rebuildDerivedIndexes();
+    _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
+    _prewarmCriticalCaches('external-transactions');
+    notifyListeners();
+    _scheduleNotificationRefresh();
+  }
+
+  bool _sameTransactionRecord(TransactionRecord left, TransactionRecord right) {
+    final leftMap = left.toMap();
+    final rightMap = right.toMap();
+    if (leftMap.length != rightMap.length) return false;
+    for (final entry in leftMap.entries) {
+      if (rightMap[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 
   Future<void> updateTransaction(
@@ -782,7 +832,8 @@ class TransactionStore extends ChangeNotifier {
     );
     final originalMerchant = transaction.merchant.trim();
     final displayMerchant = merchant.trim();
-    final assignedName = userAssignedName ??
+    final assignedName =
+        userAssignedName ??
         (displayMerchant == originalMerchant ? null : displayMerchant);
     await _repository.updateTransaction(transaction.id, {
       'merchant': originalMerchant,
@@ -1002,7 +1053,10 @@ class TransactionStore extends ChangeNotifier {
     _scheduleNotificationRefresh();
   }
 
-  Future<void> _projectRecurringGhostsForActiveWindow({int? generation}) async {
+  Future<void> _projectRecurringGhostsForActiveWindow({
+    int? generation,
+    bool notify = true,
+  }) async {
     if (_summaryWindow != SummaryWindow.monthly) {
       if (generation == null || generation == _summaryChangeGeneration) {
         _ghostProjectionInFlight = false;
@@ -1030,13 +1084,13 @@ class TransactionStore extends ChangeNotifier {
       DebugConsole.log(
         '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
       );
-      notifyListeners();
+      if (notify) notifyListeners();
     } finally {
       if ((generation == null || generation == _summaryChangeGeneration) &&
           _ghostProjectionInFlight) {
         _ghostProjectionInFlight = false;
         _invalidateViewCaches();
-        notifyListeners();
+        if (notify) notifyListeners();
       }
     }
   }
@@ -1059,7 +1113,7 @@ class TransactionStore extends ChangeNotifier {
     );
   }
 
-  Future<void> _reload() async {
+  Future<void> _reload({bool notify = true}) async {
     final payload = await _repository.loadBootstrap();
     _categories = payload.categories;
     _transactions = _sort(payload.transactions);
@@ -1070,7 +1124,7 @@ class TransactionStore extends ChangeNotifier {
     _invalidateViewCaches();
     _invalidateFastInfoMetrics();
     _prewarmCriticalCaches('reload');
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   void _prepareGhostProjectionForActiveWindow() {
@@ -1144,10 +1198,7 @@ class TransactionStore extends ChangeNotifier {
     ).isBefore(_monthStart(_clock()));
   }
 
-  bool _ghostInActiveWindow(
-    RecurringGhostRecord ghost, {
-    String? periodKey,
-  }) {
+  bool _ghostInActiveWindow(RecurringGhostRecord ghost, {String? periodKey}) {
     return switch (_summaryWindow) {
       SummaryWindow.monthly =>
         ghost.yearMonthKey == (periodKey ?? _activeMonthlyPeriodKey),

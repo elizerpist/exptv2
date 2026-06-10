@@ -156,6 +156,29 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
+    fun themeSettingsPersistCategorySurfaceControls() {
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "categoryMenuColor" to "darkgray",
+                "categoryMenuSurfaceStyle" to "insetInset",
+                "categoryCardColor" to "white",
+                "categoryCardSurfaceStyle" to "raisedInset",
+            )
+        )
+
+        assertEquals("darkgray", updated["categoryMenuColor"])
+        assertEquals("insetInset", updated["categoryMenuSurfaceStyle"])
+        assertEquals("white", updated["categoryCardColor"])
+        assertEquals("raisedInset", updated["categoryCardSurfaceStyle"])
+
+        val loaded = store.loadThemeSettings()
+        assertEquals("darkgray", loaded["categoryMenuColor"])
+        assertEquals("insetInset", loaded["categoryMenuSurfaceStyle"])
+        assertEquals("white", loaded["categoryCardColor"])
+        assertEquals("raisedInset", loaded["categoryCardSurfaceStyle"])
+    }
+
+    @Test
     fun legacyThemeSettingsMigrateMissingProfileValues() {
         val prefs = context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
         prefs.edit()

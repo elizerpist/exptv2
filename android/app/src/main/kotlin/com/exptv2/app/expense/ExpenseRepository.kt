@@ -86,6 +86,11 @@ class ExpenseRepository(context: Context) {
         return linked
     }
 
+    suspend fun transactionRowsForNotificationEventIds(eventIds: List<Long>): List<Map<String, Any?>> {
+        val linked = transactionsByNotificationEventIds(eventIds)
+        return eventIds.mapNotNull { linked[it]?.toMap() }
+    }
+
     suspend fun transactionById(id: Int): Map<String, Any?>? {
         seedIfEmpty()
         return transactions.byId(id)?.toMap()
@@ -1129,8 +1134,8 @@ class ExpenseRepository(context: Context) {
         }
     }
 
-    private suspend fun activateDueDateTriggeredRuleInstances(targetMillis: Long): List<RecurringRuleEntity> {
-        val processed = mutableListOf<RecurringRuleEntity>()
+    private suspend fun activateDueDateTriggeredRuleInstances(targetMillis: Long): List<ExpenseTransactionEntity> {
+        val processed = mutableListOf<ExpenseTransactionEntity>()
         val now = System.currentTimeMillis()
         for (instance in recurringRuleInstances.dueDateTriggered(
             dateFromMillis(targetMillis),
@@ -1184,7 +1189,7 @@ class ExpenseRepository(context: Context) {
                 notificationCards,
             )
             categoryFor(transaction)?.let { category -> emitLimitAlertsForTransaction(transaction, category) }
-            processed.add(rule.copy(updatedAt = now))
+            processed.add(transaction)
         }
         return processed
     }

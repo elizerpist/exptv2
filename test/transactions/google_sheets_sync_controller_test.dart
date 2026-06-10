@@ -315,6 +315,13 @@ class FakeTransactionRepository implements TransactionRepositoryContract {
   }
 
   @override
+  Future<List<TransactionRecord>> transactionsForNotificationEvents(
+    Iterable<int> eventIds,
+  ) async {
+    return const <TransactionRecord>[];
+  }
+
+  @override
   Future<TransactionRecord> addTransaction(Map<String, Object?> payload) {
     throw UnimplementedError();
   }

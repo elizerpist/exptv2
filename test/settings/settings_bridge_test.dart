@@ -190,7 +190,7 @@ void main() {
               return true;
             case 'expenseProcessRecurringTransactions':
               return <Map<String, Object?>>[
-                recurringRow(id: 7, lastProcessedPeriodKey: '2026-05'),
+                transactionRow(id: 26050101, merchant: 'Lakbér'),
               ];
             case 'loadNotificationEvent':
               return pushLogEventRow(
@@ -549,10 +549,13 @@ void main() {
       final saved = await bridge.saveAutomaticPushParserEnabled(false);
 
       expect(saved, isFalse);
-      expect(calls.map((call) => call.method), containsAll(<String>[
-        'loadAutomaticPushParserEnabled',
-        'saveAutomaticPushParserEnabled',
-      ]));
+      expect(
+        calls.map((call) => call.method),
+        containsAll(<String>[
+          'loadAutomaticPushParserEnabled',
+          'saveAutomaticPushParserEnabled',
+        ]),
+      );
     },
   );
 
@@ -587,14 +590,17 @@ void main() {
     expect(payload['status'], 'missing');
   });
 
-  test('marks a push notification event as system through native bridge', () async {
-    final updated = await bridge.markNotificationEventSystem(77);
+  test(
+    'marks a push notification event as system through native bridge',
+    () async {
+      final updated = await bridge.markNotificationEventSystem(77);
 
-    expect(updated, isTrue);
-    expect(calls.single.method, 'markNotificationEventSystem');
-    final payload = calls.single.arguments as Map<dynamic, dynamic>;
-    expect(payload['id'], 77);
-  });
+      expect(updated, isTrue);
+      expect(calls.single.method, 'markNotificationEventSystem');
+      final payload = calls.single.arguments as Map<dynamic, dynamic>;
+      expect(payload['id'], 77);
+    },
+  );
 
   test('loads one push notification event through native bridge', () async {
     final event = await bridge.loadNotificationEvent(77);
@@ -607,24 +613,24 @@ void main() {
     expect(payload['id'], 77);
   });
 
-  test('opens transaction and notification links through native bridge', () async {
-    final transaction = await bridge.expenseGetTransaction(26060702);
-    final eventId = await bridge.expenseNotificationEventIdForTransaction(
-      26060702,
-    );
+  test(
+    'opens transaction and notification links through native bridge',
+    () async {
+      final transaction = await bridge.expenseGetTransaction(26060702);
+      final eventId = await bridge.expenseNotificationEventIdForTransaction(
+        26060702,
+      );
 
-    expect(transaction, isNotNull);
-    expect(transaction!.id, 26060702);
-    expect(transaction.sourceNotificationEventId, 77);
-    expect(eventId, 77);
-    expect(
-      calls.map((call) => call.method),
-      <String>[
+      expect(transaction, isNotNull);
+      expect(transaction!.id, 26060702);
+      expect(transaction.sourceNotificationEventId, 77);
+      expect(eventId, 77);
+      expect(calls.map((call) => call.method), <String>[
         'expenseGetTransaction',
         'expenseNotificationEventIdForTransaction',
-      ],
-    );
-  });
+      ]);
+    },
+  );
 
   test(
     'requests post notifications once on first launch through native bridge',
@@ -670,7 +676,8 @@ void main() {
     final processed = await bridge.expenseProcessRecurringTransactions(
       targetDate: DateTime(2026, 5, 1),
     );
-    expect(processed.single.lastProcessedPeriodKey, '2026-05');
+    expect(processed.single.id, 26050101);
+    expect(processed.single.merchant, 'Lakbér');
 
     final deleted = await bridge.expenseDeleteRecurringTransaction(7);
     expect(deleted, isTrue);
@@ -728,5 +735,27 @@ Map<String, Object?> recurringRow({
     'lastProcessedAt': lastProcessedPeriodKey == null ? null : 1777593600000,
     'createdAt': 1777593600000,
     'updatedAt': 1777593600000,
+  };
+}
+
+Map<String, Object?> transactionRow({
+  required int id,
+  String merchant = 'Hitel',
+  double amount = -80000.0,
+}) {
+  return <String, Object?>{
+    'id': id,
+    'date': '2026.05.01',
+    'time': '08:00',
+    'latitude': null,
+    'longitude': null,
+    'address': 'Recurring rule transaction',
+    'merchant': merchant,
+    'amount': amount,
+    'userAssignedName': merchant,
+    'transactionCategoryID': 6,
+    'recurringRuleId': 7,
+    'recurringInstanceId': 70,
+    'sourceNotificationEventId': null,
   };
 }

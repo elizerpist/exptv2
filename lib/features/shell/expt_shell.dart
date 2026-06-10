@@ -108,6 +108,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    unawaited(_refreshBackgroundTransactionsOnResume());
     unawaited(_processRecurringOnResume());
   }
 
@@ -223,9 +224,29 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         '[RecurringAlarm] resume processed ${result.processedCount} recurring rows',
       );
       if (!mounted) return;
-      await _transactionStore.refreshAfterRecurringProcessing();
+      if (result.processedCount == 0) return;
+      final processedTransactions = result.processed
+          .map(TransactionRecord.fromMap)
+          .toList();
+      if (processedTransactions.isNotEmpty) {
+        _transactionStore.mergeExternalTransactions(processedTransactions);
+      } else {
+        await _transactionStore.refreshAfterRecurringProcessing();
+      }
     } catch (error) {
       DebugConsole.log('[RecurringAlarm] resume processing failed: $error');
+    }
+  }
+
+  Future<void> _refreshBackgroundTransactionsOnResume() async {
+    try {
+      final events = await widget.store.refreshNewEvents();
+      if (!mounted || events.isEmpty) return;
+      await _transactionStore.mergeTransactionsForNotificationEvents(
+        events.map((event) => event.id),
+      );
+    } catch (error) {
+      DebugConsole.log('[PushParser] resume event refresh failed: $error');
     }
   }
 
@@ -242,6 +263,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _handleNotificationStoreChanged() {
     if (!mounted) return;
+    unawaited(
+      _transactionStore.mergeTransactionsForNotificationEvents(
+        widget.store.allEvents.map((event) => event.id),
+      ),
+    );
     setState(() {});
   }
 

@@ -1,6 +1,5 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../transactions/export/transaction_export_service.dart';
@@ -266,55 +265,10 @@ class _GoogleMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    return SizedBox(
       width: 24,
       height: 24,
-      child: CustomPaint(painter: _GoogleMarkPainter()),
+      child: SvgPicture.asset('assets/brand/google_g.svg'),
     );
   }
-}
-
-class _GoogleMarkPainter extends CustomPainter {
-  const _GoogleMarkPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide * 0.34;
-    final strokeWidth = size.shortestSide * 0.14;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    void arc(Color color, double start, double sweep) {
-      paint.color = color;
-      canvas.drawArc(rect, start, sweep, false, paint);
-    }
-
-    arc(const Color(0xFF4285F4), -0.08 * math.pi, 0.52 * math.pi);
-    arc(const Color(0xFF34A853), 0.47 * math.pi, 0.42 * math.pi);
-    arc(const Color(0xFFFBBC05), 0.92 * math.pi, 0.43 * math.pi);
-    arc(const Color(0xFFEA4335), 1.38 * math.pi, 0.50 * math.pi);
-
-    final barPaint = Paint()
-      ..color = const Color(0xFF4285F4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-      Offset(center.dx, center.dy),
-      Offset(center.dx + radius * 0.98, center.dy),
-      barPaint,
-    );
-    canvas.drawLine(
-      Offset(center.dx + radius * 0.98, center.dy),
-      Offset(center.dx + radius * 0.98, center.dy + radius * 0.36),
-      barPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _GoogleMarkPainter oldDelegate) => false;
 }

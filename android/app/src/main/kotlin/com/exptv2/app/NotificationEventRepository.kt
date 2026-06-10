@@ -100,6 +100,9 @@ class NotificationEventRepository(context: Context) {
 
     suspend fun allEvents(): List<NotificationEventEntity> = dao.allEvents()
 
+    suspend fun eventsAfterId(afterId: Long): List<NotificationEventEntity> =
+        dao.eventsAfterId(afterId)
+
     suspend fun listPage(args: Map<*, *>): NotificationEventPage {
         val pageQuery = pageQuery(args)
         val scanLimit = maxOf(pageQuery.limit * 4, 64).coerceAtMost(500)

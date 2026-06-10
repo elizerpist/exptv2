@@ -66,21 +66,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           APK_PATH: build/release/exptv2-debug.apk
-          APK_NAME: exptv2-debug.apk
         run: |
-          git tag -f debug-latest "$GITHUB_SHA"
-          git push origin refs/tags/debug-latest --force
+          SAFE_REF="$(printf '%s' "$GITHUB_REF_NAME" | tr '/_' '--' | tr -cd '[:alnum:]-')"
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            RELEASE_TAG="debug-latest"
+            APK_NAME="exptv2-debug.apk"
+            RELEASE_TITLE="Latest debug APK"
+          else
+            RELEASE_TAG="debug-latest-${SAFE_REF}"
+            APK_NAME="exptv2-debug-${SAFE_REF}.apk"
+            RELEASE_TITLE="Latest debug APK (${GITHUB_REF_NAME})"
+          fi
+          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/${RELEASE_TAG}" --force
           NOTES="Latest debug APK built from ${GITHUB_REF_NAME} commit ${GITHUB_SHA}."
-          if gh release view debug-latest >/dev/null 2>&1; then
-            gh release delete-asset debug-latest "$APK_NAME" --yes >/dev/null 2>&1 || true
-            gh release upload debug-latest "$APK_PATH" --clobber
-            gh release edit debug-latest \
-              --title "Latest debug APK" \
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release delete-asset "$RELEASE_TAG" "$APK_NAME" --yes >/dev/null 2>&1 || true
+            gh release upload "$RELEASE_TAG" "$APK_PATH#$APK_NAME" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
               --notes "$NOTES"
           else
-            gh release create debug-latest "$APK_PATH" \
+            gh release create "$RELEASE_TAG" "$APK_PATH#$APK_NAME" \
               --prerelease \
-              --title "Latest debug APK" \
+              --title "$RELEASE_TITLE" \
               --notes "$NOTES"
           fi
-          echo "Direct APK link: https://github.com/${GITHUB_REPOSITORY}/releases/download/debug-latest/${APK_NAME}"
+          echo "Direct APK link: https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK_NAME}"

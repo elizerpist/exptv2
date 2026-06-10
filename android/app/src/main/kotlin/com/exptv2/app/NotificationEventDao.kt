@@ -12,6 +12,9 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events ORDER BY timestamp ASC, id ASC")
     suspend fun allEvents(): List<NotificationEventEntity>
 
+    @Query("SELECT * FROM notification_events WHERE id > :afterId ORDER BY timestamp ASC, id ASC")
+    suspend fun eventsAfterId(afterId: Long): List<NotificationEventEntity>
+
     @Query("DELETE FROM notification_events")
     suspend fun clear()
 

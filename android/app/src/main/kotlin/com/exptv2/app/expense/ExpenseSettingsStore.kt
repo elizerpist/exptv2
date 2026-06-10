@@ -33,6 +33,10 @@ class ExpenseSettingsStore(context: Context) {
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
             "buttonSurfaceStyle" to prefs.getString(KEY_BUTTON_SURFACE_STYLE, "neutralNeutral"),
             "contentSurfaceStyle" to prefs.getString(KEY_CONTENT_SURFACE_STYLE, "neutralNeutral"),
+            "categoryMenuColor" to prefs.getString(KEY_CATEGORY_MENU_COLOR, "lightgray"),
+            "categoryMenuSurfaceStyle" to prefs.getString(KEY_CATEGORY_MENU_SURFACE_STYLE, "neutralNeutral"),
+            "categoryCardColor" to prefs.getString(KEY_CATEGORY_CARD_COLOR, "lightgray"),
+            "categoryCardSurfaceStyle" to prefs.getString(KEY_CATEGORY_CARD_SURFACE_STYLE, "neutralNeutral"),
             "ghostLogboxSurfaceStyle" to (
                 prefs.getString(KEY_GHOST_LOGBOX_SURFACE_STYLE, null)?.takeIf { it.isNotBlank() }
                     ?: legacyGhostLogboxSurfaceStyle()
@@ -66,6 +70,10 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_BOX_COLOR, args["boxColor"]?.toString() ?: "gray")
             .putString(KEY_BUTTON_SURFACE_STYLE, buttonSurfaceStyle)
             .putString(KEY_CONTENT_SURFACE_STYLE, contentSurfaceStyle)
+            .putString(KEY_CATEGORY_MENU_COLOR, args["categoryMenuColor"]?.toString() ?: "lightgray")
+            .putString(KEY_CATEGORY_MENU_SURFACE_STYLE, args["categoryMenuSurfaceStyle"]?.toString() ?: "neutralNeutral")
+            .putString(KEY_CATEGORY_CARD_COLOR, args["categoryCardColor"]?.toString() ?: "lightgray")
+            .putString(KEY_CATEGORY_CARD_SURFACE_STYLE, args["categoryCardSurfaceStyle"]?.toString() ?: "neutralNeutral")
             .putString(KEY_GHOST_LOGBOX_SURFACE_STYLE, ghostLogboxSurfaceStyle)
             .putString(
                 KEY_GHOST_LOGBOX_BORDER_STYLE,
@@ -316,6 +324,10 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BOX_COLOR = "boxColor"
         private const val KEY_BUTTON_SURFACE_STYLE = "buttonSurfaceStyle"
         private const val KEY_CONTENT_SURFACE_STYLE = "contentSurfaceStyle"
+        private const val KEY_CATEGORY_MENU_COLOR = "categoryMenuColor"
+        private const val KEY_CATEGORY_MENU_SURFACE_STYLE = "categoryMenuSurfaceStyle"
+        private const val KEY_CATEGORY_CARD_COLOR = "categoryCardColor"
+        private const val KEY_CATEGORY_CARD_SURFACE_STYLE = "categoryCardSurfaceStyle"
         private const val KEY_GHOST_LOGBOX_SURFACE_STYLE = "ghostLogboxSurfaceStyle"
         private const val KEY_GHOST_LOGBOX_BORDER_STYLE = "ghostLogboxBorderStyle"
         private const val KEY_GHOST_LOGBOX_BACKGROUND_OPACITY_ENABLED = "ghostLogboxBackgroundOpacityEnabled"

@@ -54,6 +54,16 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(events)
                     }
+                    "loadEventsAfterId" -> scope.launch {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        val afterId = (args["afterId"] as? Number)?.toLong()
+                            ?: args["afterId"]?.toString()?.toLongOrNull()
+                            ?: 0L
+                        val events = withContext(Dispatchers.IO) {
+                            repository.eventsAfterId(afterId).map { it.toMap() }
+                        }
+                        result.success(events)
+                    }
                     "loadNotificationEventPage" -> scope.launch {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val page = withContext(Dispatchers.IO) { repository.listPage(args).toMap() }

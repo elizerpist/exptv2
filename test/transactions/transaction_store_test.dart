@@ -73,6 +73,47 @@ void main() {
   });
 
   test(
+    'store merges notification-linked transactions without full reload',
+    () async {
+      final repository = FakeTransactionRepository();
+      final store = TransactionStore(repository);
+      await store.start();
+      final initialLoadCount = repository.loadCount;
+
+      repository.notificationTransactions[101] = TransactionRecord.fromMap({
+        'id': 250915,
+        'date': '2025.09.26',
+        'time': '11:30',
+        'merchant': 'Background Push',
+        'amount': -1990,
+        'userAssignedName': null,
+        'transactionCategoryID': 6,
+        'sourceNotificationEventId': 101,
+      });
+
+      await store.mergeTransactionsForNotificationEvents([101]);
+
+      expect(repository.loadCount, initialLoadCount);
+      expect(
+        store.visibleTransactions.any(
+          (transaction) => transaction.merchant == 'Background Push',
+        ),
+        isTrue,
+      );
+
+      await store.mergeTransactionsForNotificationEvents([101]);
+
+      expect(repository.loadCount, initialLoadCount);
+      expect(
+        store.visibleTransactions
+            .where((transaction) => transaction.merchant == 'Background Push')
+            .length,
+        1,
+      );
+    },
+  );
+
+  test(
     'store reuses expensive visible and budget lists until filters change',
     () async {
       final store = TransactionStore(FakeTransactionRepository());
@@ -223,29 +264,38 @@ void main() {
 
     expect(repository.updatedPayloads.single['id'], record.id);
     expect(repository.updatedPayloads.single['merchant'], record.merchant);
-    expect(repository.updatedPayloads.single['userAssignedName'], 'Edited Alias');
+    expect(
+      repository.updatedPayloads.single['userAssignedName'],
+      'Edited Alias',
+    );
     expect(store.visibleTransactions.first.displayMerchant, 'Edited Alias');
   });
 
-  test('store keeps original merchant key when edit name becomes alias', () async {
-    final repository = FakeTransactionRepository();
-    final store = TransactionStore(repository);
-    await store.start();
+  test(
+    'store keeps original merchant key when edit name becomes alias',
+    () async {
+      final repository = FakeTransactionRepository();
+      final store = TransactionStore(repository);
+      await store.start();
 
-    final record = store.visibleTransactions.first;
-    await store.updateTransaction(
-      record,
-      merchant: 'Edited Shop',
-      amount: 123,
-      type: TransactionType.expense,
-      categoryId: 6,
-      date: '2025-09-27',
-      time: '11:20',
-    );
+      final record = store.visibleTransactions.first;
+      await store.updateTransaction(
+        record,
+        merchant: 'Edited Shop',
+        amount: 123,
+        type: TransactionType.expense,
+        categoryId: 6,
+        date: '2025-09-27',
+        time: '11:20',
+      );
 
-    expect(repository.updatedPayloads.single['merchant'], record.merchant);
-    expect(repository.updatedPayloads.single['userAssignedName'], 'Edited Shop');
-  });
+      expect(repository.updatedPayloads.single['merchant'], record.merchant);
+      expect(
+        repository.updatedPayloads.single['userAssignedName'],
+        'Edited Shop',
+      );
+    },
+  );
 
   test('store deletes transaction then reloads bootstrap', () async {
     final repository = FakeTransactionRepository();
@@ -469,6 +519,7 @@ class FakeTransactionRepository extends TransactionRepositoryContract {
   final updatedCategories = <Map<String, Object?>>[];
   final deletedCategoryIds = <int>[];
   final deletedTransactionIds = <int>[];
+  final notificationTransactions = <int, TransactionRecord>{};
   final renameArgs = <String>[];
   String? resetMerchant;
   var loadCount = 0;
@@ -586,6 +637,16 @@ class FakeTransactionRepository extends TransactionRepositoryContract {
       limit: query.limit,
       offset: query.offset,
     );
+  }
+
+  @override
+  Future<List<TransactionRecord>> transactionsForNotificationEvents(
+    Iterable<int> eventIds,
+  ) async {
+    return [
+      for (final id in eventIds)
+        if (notificationTransactions[id] != null) notificationTransactions[id]!,
+    ];
   }
 
   @override

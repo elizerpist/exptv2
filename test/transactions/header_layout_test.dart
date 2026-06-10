@@ -240,6 +240,11 @@ void main() {
   testWidgets(
     'header category button toggles the full height category picker',
     (tester) async {
+      final previousFatalHitTest = WidgetController.hitTestWarningShouldBeFatal;
+      WidgetController.hitTestWarningShouldBeFatal = true;
+      addTearDown(() {
+        WidgetController.hitTestWarningShouldBeFatal = previousFatalHitTest;
+      });
       final store = TransactionStore(HeaderLayoutRepository());
       await tester.pumpWidget(
         MaterialApp(
@@ -260,6 +265,14 @@ void main() {
       final pickerRect = tester.getRect(
         find.byKey(const ValueKey('category-menu-overlay')),
       );
+      final widgets = tester.allWidgets.toList();
+      final pickerPaintIndex = widgets.indexWhere(
+        (widget) => widget.key == const ValueKey('category-menu-overlay'),
+      );
+      final headerPaintIndex = widgets.indexWhere(
+        (widget) => widget.key == const ValueKey('transaction-header-card'),
+      );
+      expect(headerPaintIndex, greaterThan(pickerPaintIndex));
       expect(
         pickerRect.bottom,
         moreOrLessEquals(

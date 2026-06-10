@@ -54,34 +54,29 @@ void main() {
     },
   );
 
-  test(
-    'monthly display pins ghosts above normal date headers',
-    () async {
-      final repository = GhostRepository(
-        projectedGhosts: [ghostFixture(day: 1)],
-      );
-      final store = TransactionStore(
-        repository,
-        clock: () => DateTime(2026, 5, 10),
-      );
-      await store.start();
-      await store.cycleSummaryWindow();
+  test('monthly display pins ghosts above normal date headers', () async {
+    final repository = GhostRepository(projectedGhosts: [ghostFixture(day: 1)]);
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 10),
+    );
+    await store.start();
+    await store.cycleSummaryWindow();
 
-      expect(store.summaryWindow, SummaryWindow.monthly);
-      expect(store.visibleLogEntries.first.isGhost, isTrue);
+    expect(store.summaryWindow, SummaryWindow.monthly);
+    expect(store.visibleLogEntries.first.isGhost, isTrue);
 
-      final displayEntries = store.visibleDisplayLogEntries;
-      expect(displayEntries, hasLength(4));
-      expect(displayEntries[0].isHeader, isTrue);
-      expect(displayEntries[0].header, '2026.05.01');
-      expect(displayEntries[1].isGhost, isTrue);
-      expect(displayEntries[1].ghost?.periodKey, '2026-05');
-      expect(displayEntries[2].isHeader, isTrue);
-      expect(displayEntries[2].header, '2026.05.10');
-      expect(displayEntries[3].record?.displayMerchant, 'Real Shop');
-      expect(store.visibleDisplayLogEntryTotalCount, displayEntries.length);
-    },
-  );
+    final displayEntries = store.visibleDisplayLogEntries;
+    expect(displayEntries, hasLength(4));
+    expect(displayEntries[0].isHeader, isTrue);
+    expect(displayEntries[0].header, '2026.05.01');
+    expect(displayEntries[1].isGhost, isTrue);
+    expect(displayEntries[1].ghost?.periodKey, '2026-05');
+    expect(displayEntries[2].isHeader, isTrue);
+    expect(displayEntries[2].header, '2026.05.10');
+    expect(displayEntries[3].record?.displayMerchant, 'Real Shop');
+    expect(store.visibleDisplayLogEntryTotalCount, displayEntries.length);
+  });
 
   test('yearly and all-time display do not include ghost rows', () async {
     final repository = GhostRepository(
@@ -114,7 +109,7 @@ void main() {
   });
 
   test(
-    'delayed projection keeps previous ghost rows until projection completes',
+    'delayed projection notifies the shifted month only after ghosts are ready',
     () async {
       final repository = DelayedGhostRepository(
         immediateProjections: {
@@ -129,22 +124,27 @@ void main() {
       await store.cycleSummaryWindow();
 
       expect(store.visibleGhostTransactions.single.periodKey, '2026-05');
+      final notifiedTitles = <String>[];
+      store.addListener(() => notifiedTitles.add(store.activeSummaryTitle));
 
       final shift = store.shiftSummaryPeriod(1);
       await pumpEventQueue(times: 3);
 
       expect(repository.pendingPeriodKeys, contains('2026-06'));
-      expect(store.visibleGhostTransactions.single.periodKey, '2026-05');
-      final pendingGhostEntry = store.visibleDisplayLogEntries.firstWhere(
-        (entry) => entry.isGhost,
+      expect(
+        notifiedTitles.where((title) => title.contains('Június 2026')),
+        isEmpty,
       );
-      expect(pendingGhostEntry.ghost?.periodKey, '2026-05');
 
       repository.completeProjection('2026-06', [
         ghostFixture(id: 6, month: 6, name: 'June Rent'),
       ]);
       await shift;
 
+      expect(
+        notifiedTitles.where((title) => title.contains('Június 2026')),
+        isNotEmpty,
+      );
       expect(store.visibleGhostTransactions.single.periodKey, '2026-06');
       final projectedGhostEntry = store.visibleDisplayLogEntries.firstWhere(
         (entry) => entry.isGhost,
@@ -352,13 +352,11 @@ class GhostRepository extends TransactionRepositoryContract {
 }
 
 class DelayedGhostRepository extends GhostRepository {
-  DelayedGhostRepository({
-    required this.immediateProjections,
-  }) : super(bootstrapGhosts: immediateProjections.values.first);
+  DelayedGhostRepository({required this.immediateProjections})
+    : super(bootstrapGhosts: immediateProjections.values.first);
 
   final Map<String, List<RecurringGhostRecord>> immediateProjections;
-  final _pendingProjections =
-      <String, Completer<List<RecurringGhostRecord>>>{};
+  final _pendingProjections = <String, Completer<List<RecurringGhostRecord>>>{};
 
   List<String> get pendingPeriodKeys => _pendingProjections.keys.toList();
 

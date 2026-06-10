@@ -17,7 +17,6 @@ import '../slots/category_color_resolver.dart';
 import 'amount_field.dart';
 import 'category_scroll_picker.dart';
 import 'category_selector_field.dart';
-import 'date_time_fields.dart';
 import 'slide_up_menu_card.dart';
 import 'slide_up_panel_metrics.dart';
 import 'themed_pill_field.dart';
@@ -51,7 +50,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
   final _bodyScrollController = ScrollController();
   final _name = TextEditingController();
   final _amount = TextEditingController();
-  final _date = TextEditingController();
+  final _day = TextEditingController();
   final _time = TextEditingController();
   final _sample = TextEditingController();
   final _keyword = TextEditingController();
@@ -100,7 +99,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     _bodyScrollController.dispose();
     _name.dispose();
     _amount.dispose();
-    _date.dispose();
+    _day.dispose();
     _time.dispose();
     _sample.dispose();
     _keyword.dispose();
@@ -194,28 +193,15 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                           ),
                           const SizedBox(height: 12),
                           if (_triggerType == RecurringTriggerType.date)
-                            DateTimeFields(
-                              dateController: _date,
+                            _DateScheduleRow(
+                              dayController: _day,
                               timeController: _time,
-                              dateFieldKey: const ValueKey(
-                                'recurring-rule-date',
-                              ),
-                              timeFieldKey: const ValueKey(
-                                'recurring-rule-time',
-                              ),
-                              datePickerKey: const ValueKey(
-                                'recurring-rule-date-picker-button',
-                              ),
-                              timePickerKey: const ValueKey(
-                                'recurring-rule-time-picker-button',
-                              ),
-                              debugLabelPrefix: 'RecurringRule',
                               surfaceColor: expenseTheme.fieldSurface,
                               surfaceStyle: expenseTheme.contentSurfaceStyle,
                             )
                           else
                             _PushScheduleRow(
-                              date: _date,
+                              day: _day,
                               app: _selectedApp,
                               appLabel: _appLabel,
                               appFilterText: _appFilterText,
@@ -353,20 +339,19 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     final amount = double.tryParse(
       _amount.text.trim().replaceAll(' ', '').replaceAll(',', '.'),
     );
-    final selectedDate = _parseDate(_date.text);
+    final selectedDay = _parseDay(_day.text);
     final selectedTime = _triggerType == RecurringTriggerType.date
         ? _normalizeTime(_time.text)
         : '00:00';
     final category = _category;
     if (name.isEmpty ||
         amount == null ||
-        selectedDate == null ||
+        selectedDay == null ||
         selectedTime == null ||
         category == null) {
       setState(() => _error = 'Hiányzó vagy hibás alapadat');
       return;
     }
-    final day = selectedDate.day;
     final dateTolerance = int.tryParse(_dateTolerance.text.trim());
     final amountTolerancePercent = double.tryParse(
       _amountTolerancePercent.text.trim().replaceAll(',', '.'),
@@ -415,7 +400,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
         transactionType: _editing?.transactionType,
         name: name,
         estimatedAmount: amount,
-        expectedDayOfMonth: day,
+        expectedDayOfMonth: selectedDay,
         expectedTime: selectedTime,
         categoryId: category.transactionCategoryID,
         isActive: _editing?.isActive ?? true,
@@ -507,7 +492,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
       _triggerType = rule.triggerType;
       _name.text = rule.name;
       _amount.text = rule.estimatedAmount.toStringAsFixed(0);
-      _date.text = _dateForDay(rule.expectedDayOfMonth);
+      _day.text = rule.expectedDayOfMonth.toString();
       _time.text = _normalizeTime(rule.expectedTime) ?? '00:00';
       _category = _categoryById(rule.categoryId);
       _appFilterText = rule.appFilterText;
@@ -550,31 +535,14 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
 
   void _resetDateTimeFields() {
     final now = DateTime.now();
-    _date.text = _formatDate(now);
+    _day.text = now.day.toString();
     _time.text = _formatTimeOfDay(TimeOfDay.now());
   }
 
-  String _dateForDay(int day) {
-    final now = DateTime.now();
-    final safeDay = day
-        .clamp(1, DateUtils.getDaysInMonth(now.year, now.month))
-        .toInt();
-    return _formatDate(DateTime(now.year, now.month, safeDay));
-  }
-
-  DateTime? _parseDate(String value) {
-    final normalized = value.trim().replaceAll(RegExp(r'[./]'), '-');
-    final parts = normalized.split('-');
-    if (parts.length != 3) return null;
-    final year = int.tryParse(parts[0]);
-    final month = int.tryParse(parts[1]);
-    final day = int.tryParse(parts[2]);
-    if (year == null || month == null || day == null) return null;
-    final parsed = DateTime(year, month, day);
-    if (parsed.year != year || parsed.month != month || parsed.day != day) {
-      return null;
-    }
-    return parsed;
+  int? _parseDay(String value) {
+    final day = int.tryParse(value.trim());
+    if (day == null || day < 1 || day > 31) return null;
+    return day;
   }
 
   String? _normalizeTime(String value) {
@@ -585,12 +553,6 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
     if (hour == null || minute == null) return null;
     if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-  }
-
-  String _formatDate(DateTime value) {
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    return '${value.year}-$month-$day';
   }
 
   String _formatTimeOfDay(TimeOfDay value) {
@@ -846,15 +808,88 @@ class _CommonForm extends StatelessWidget {
             onSelected: onCategorySelected,
           ),
         ],
-
       ],
     );
   }
 }
 
+class _DateScheduleRow extends StatelessWidget {
+  const _DateScheduleRow({
+    required this.dayController,
+    required this.timeController,
+    required this.surfaceColor,
+    required this.surfaceStyle,
+  });
+
+  final TextEditingController dayController;
+  final TextEditingController timeController;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: ThemedPillField(
+            fieldKey: const ValueKey('recurring-rule-day'),
+            debugLabel: 'RecurringRule.day',
+            controller: dayController,
+            keyboardType: TextInputType.number,
+            label: 'Hónap napja',
+            surfaceColor: surfaceColor,
+            surfaceStyle: surfaceStyle,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ThemedPillField(
+            fieldKey: const ValueKey('recurring-rule-time'),
+            debugLabel: 'RecurringRule.time',
+            controller: timeController,
+            keyboardType: TextInputType.datetime,
+            label: 'Idő',
+            surfaceColor: surfaceColor,
+            surfaceStyle: surfaceStyle,
+            suffixIcon: IconButton(
+              key: const ValueKey('recurring-rule-time-picker-button'),
+              onPressed: () => _pickTime(context),
+              icon: const Icon(Icons.schedule_outlined, size: 20),
+              color: AppColors.gray500,
+              tooltip: 'Idő választása',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final initialTime = _parseTime(timeController.text) ?? TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (picked == null) return;
+    final hour = picked.hour.toString().padLeft(2, '0');
+    final minute = picked.minute.toString().padLeft(2, '0');
+    timeController.text = '$hour:$minute';
+  }
+
+  TimeOfDay? _parseTime(String value) {
+    final parts = value.trim().split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+}
+
 class _PushScheduleRow extends StatelessWidget {
   const _PushScheduleRow({
-    required this.date,
+    required this.day,
     required this.app,
     required this.appLabel,
     required this.appFilterText,
@@ -865,7 +900,7 @@ class _PushScheduleRow extends StatelessWidget {
     required this.onAppSelected,
   });
 
-  final TextEditingController date;
+  final TextEditingController day;
   final InstalledApp? app;
   final String appLabel;
   final String appFilterText;
@@ -882,20 +917,13 @@ class _PushScheduleRow extends StatelessWidget {
       children: [
         Expanded(
           child: ThemedPillField(
-            fieldKey: const ValueKey('recurring-push-date'),
-            debugLabel: 'RecurringRule.pushDate',
-            controller: date,
-            keyboardType: TextInputType.datetime,
-            label: 'Várható dátum',
+            fieldKey: const ValueKey('recurring-push-day'),
+            debugLabel: 'RecurringRule.pushDay',
+            controller: day,
+            keyboardType: TextInputType.number,
+            label: 'Hónap napja',
             surfaceColor: surfaceColor,
             surfaceStyle: surfaceStyle,
-            suffixIcon: IconButton(
-              key: const ValueKey('recurring-push-date-picker-button'),
-              onPressed: () => _pickDate(context),
-              icon: const Icon(Icons.calendar_month_outlined, size: 20),
-              color: AppColors.gray500,
-              tooltip: 'Dátum választása',
-            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -913,38 +941,6 @@ class _PushScheduleRow extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Future<void> _pickDate(BuildContext context) async {
-    final initialDate = _parseDate(date.text) ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked == null) return;
-    date.text = _formatDate(picked);
-  }
-
-  DateTime? _parseDate(String value) {
-    final normalized = value.trim().replaceAll(RegExp(r'[./]'), '-');
-    final parts = normalized.split('-');
-    if (parts.length != 3) return null;
-    final year = int.tryParse(parts[0]);
-    final month = int.tryParse(parts[1]);
-    final day = int.tryParse(parts[2]);
-    if (year == null || month == null || day == null) return null;
-    final parsed = DateTime(year, month, day);
-    return parsed.year == year && parsed.month == month && parsed.day == day
-        ? parsed
-        : null;
-  }
-
-  String _formatDate(DateTime value) {
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    return '${value.year}-$month-$day';
   }
 }
 
@@ -1009,7 +1005,9 @@ class _RecurringAppPickerPill extends StatelessWidget {
               color: surfaceColor,
               borderRadius: BorderRadius.circular(25),
               border: Border.all(
-                color: errorText == null ? AppColors.gray200 : AppColors.expense,
+                color: errorText == null
+                    ? AppColors.gray200
+                    : AppColors.expense,
               ),
             ),
             child: Padding(
@@ -1131,7 +1129,6 @@ class _PushTrainingForm extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-
             DebugTextField(
               fieldKey: const ValueKey('recurring-rule-sample'),
               debugLabel: 'RecurringRule.sample',

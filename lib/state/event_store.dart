@@ -54,6 +54,9 @@ class EventStore extends ChangeNotifier {
     );
   }
 
+  List<NotificationEvent> get allEvents =>
+      List<NotificationEvent>.unmodifiable(_events);
+
   Future<void> start() async {
     loading = true;
     notifyListeners();
@@ -71,10 +74,38 @@ class EventStore extends ChangeNotifier {
       _subscription ??= _bridge
           .watchEvents(onDebugLog: DebugConsole.log)
           .listen((event) {
-        _events.add(event);
-        notifyListeners();
+            if (_mergeEvents([event]).isNotEmpty) notifyListeners();
+          });
+    }
+  }
+
+  Future<List<NotificationEvent>> refreshNewEvents() async {
+    final lastId = _events.fold<int>(
+      0,
+      (maxId, event) => event.id > maxId ? event.id : maxId,
+    );
+    final rows = await _bridge.loadEventsAfterId(lastId);
+    final added = _mergeEvents(rows);
+    if (added.isNotEmpty) notifyListeners();
+    return added;
+  }
+
+  List<NotificationEvent> _mergeEvents(Iterable<NotificationEvent> events) {
+    final existingIds = _events.map((event) => event.id).toSet();
+    final added = <NotificationEvent>[];
+    for (final event in events) {
+      if (!existingIds.add(event.id)) continue;
+      _events.add(event);
+      added.add(event);
+    }
+    if (added.isNotEmpty) {
+      _events.sort((left, right) {
+        final byTime = left.timestamp.compareTo(right.timestamp);
+        if (byTime != 0) return byTime;
+        return left.id.compareTo(right.id);
       });
     }
+    return added;
   }
 
   Future<void> refreshStatus() async {

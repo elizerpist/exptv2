@@ -53,7 +53,6 @@ class GoogleSheetsAuthClient implements GoogleSheetsAuthClientContract {
   Future<void> initialize() async {
     if (_initialized) return;
     await _googleSignIn.initialize(
-      clientId: GoogleSheetsSyncConfig.androidClientId,
       serverClientId: GoogleSheetsSyncConfig.serverClientId,
     );
     _initialized = true;

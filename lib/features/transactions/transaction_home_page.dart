@@ -250,6 +250,22 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   ),
                 ],
               ),
+              if (_categoryMode != null)
+                CategoryMenuOverlay(
+                  store: widget.store,
+                  onClose: _closeCategoryMenu,
+                  onAdd: _openAddCategory,
+                  onModify: _openModifyCategory,
+                  onSelect: _selectCategory,
+                  onDelete: _deleteCategory,
+                  surfaceColor: expenseTheme.categoryMenu,
+                  menuSurfaceStyle: expenseTheme.categoryMenuSurfaceStyle,
+                  cardSurfaceColor: expenseTheme.categoryCard,
+                  cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
+                  avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+                  accentColor: expenseTheme.accent,
+                  activeBackgroundColor: expenseTheme.activeBackground,
+                ),
               AnimatedBuilder(
                 animation: _headerSlideController,
                 child: RepaintBoundary(
@@ -314,22 +330,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   );
                 },
               ),
-              if (_categoryMode != null)
-                CategoryMenuOverlay(
-                  store: widget.store,
-                  onClose: _closeCategoryMenu,
-                  onAdd: _openAddCategory,
-                  onModify: _openModifyCategory,
-                  onSelect: _selectCategory,
-                  onDelete: _deleteCategory,
-                  surfaceColor: expenseTheme.categoryMenu,
-                  menuSurfaceStyle: expenseTheme.categoryMenuSurfaceStyle,
-                  cardSurfaceColor: expenseTheme.categoryCard,
-                  cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
-                  avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
-                  accentColor: expenseTheme.accent,
-                  activeBackgroundColor: expenseTheme.activeBackground,
-                ),
               if (_categoryEditorOpen)
                 Positioned(
                   top: 0,
