@@ -52,6 +52,28 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest --no-daemon
 
+      - name: Configure Android signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.EXPTV2_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.EXPTV2_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.EXPTV2_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.EXPTV2_ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && \
+             [ -n "$KEYSTORE_PASSWORD" ] && \
+             [ -n "$KEY_ALIAS" ] && \
+             [ -n "$KEY_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/exptv2-debug.keystore
+            cat > android/key.properties <<EOF
+          storeFile=app/exptv2-debug.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          else
+            echo "Android signing secrets are not fully configured; using default debug signing."
+          fi
+
       - name: Build debug APK
         run: flutter build apk --debug
 

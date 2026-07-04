@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,6 +7,18 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = project.file("../key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+val hasExptv2Signing = listOf(
+    "storeFile",
+    "storePassword",
+    "keyAlias",
+    "keyPassword",
+).all { !keystoreProperties.getProperty(it).isNullOrBlank() }
 
 android {
     namespace = "com.exptv2.app"
@@ -28,9 +42,31 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasExptv2Signing) {
+            create("exptv2Debug") {
+                storeFile = rootProject.file(
+                    keystoreProperties.getProperty("storeFile"),
+                )
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (hasExptv2Signing) {
+                signingConfig = signingConfigs.getByName("exptv2Debug")
+            }
+        }
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasExptv2Signing) {
+                signingConfigs.getByName("exptv2Debug")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
