@@ -19,6 +19,7 @@ class CategoryCard extends StatelessWidget {
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
     this.activeBackgroundColor = AppColors.primaryActiveBackground,
+    this.shadowEnabled = true,
   });
 
   final TransactionCategory category;
@@ -32,6 +33,7 @@ class CategoryCard extends StatelessWidget {
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
   final Color activeBackgroundColor;
+  final bool shadowEnabled;
 
   bool get _hasTransactions => transactionCount > 0;
 
@@ -66,13 +68,15 @@ class CategoryCard extends StatelessWidget {
                     neutralBorder: Border.all(
                       color: active ? accentColor : AppColors.gray200,
                     ),
-                    neutralShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        offset: const Offset(0, 2),
-                        blurRadius: 4,
-                      ),
-                    ],
+                    neutralShadow: shadowEnabled
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              offset: const Offset(0, 2),
+                              blurRadius: 4,
+                            ),
+                          ]
+                        : null,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -140,6 +144,7 @@ class CategoryCard extends StatelessWidget {
                         backgroundColor: Colors.transparent,
                         size: 65,
                         iconSize: 44,
+                        iconStrokeWidth: 1.35,
                         showShadow: false,
                       ),
                     );

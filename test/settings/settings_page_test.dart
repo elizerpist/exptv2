@@ -378,8 +378,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('App színe'), findsOneWidget);
+    expect(find.text('Kategória menü mód'), findsOneWidget);
     expect(find.text('Kategória menü felülete'), findsOneWidget);
     expect(find.text('Kategória kártyák felülete'), findsOneWidget);
+    expect(find.text('Árnyékok'), findsOneWidget);
     expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
     expect(find.text('Pink'), findsOneWidget);
     expect(find.text('Éjszakai mód'), findsNothing);
@@ -434,6 +436,57 @@ void main() {
       updated.last.categoryMenuSurfaceStyle,
       ExpenseSurfaceInteraction.insetInset,
     );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-category-menu-presentation-slide')),
+    );
+    expect(
+      updated.last.categoryMenuPresentation,
+      CategoryMenuPresentation.slideUpSheet,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-category-card-shadow-off')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-category-card-shadow-off')),
+    );
+    expect(updated.last.categoryCardShadowEnabled, isFalse);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-logbox-shadow-off')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('theme-logbox-shadow-off')));
+    expect(updated.last.logboxShadowEnabled, isFalse);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-header-pill-shadow-off')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-header-pill-shadow-off')),
+    );
+    expect(updated.last.headerPillShadowEnabled, isFalse);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-summary-pill-shadow-off')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-summary-pill-shadow-off')),
+    );
+    expect(updated.last.summaryPillShadowEnabled, isFalse);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-search-pill-shadow-off')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-search-pill-shadow-off')),
+    );
+    expect(updated.last.searchPillShadowEnabled, isFalse);
 
     await tester.tap(
       find.byKey(const ValueKey('theme-category-card-surface-neumorph')),
@@ -786,11 +839,7 @@ void main() {
     expect(find.text('Elkapott push üzenetek'), findsWidgets);
 
     await tester.pumpWidget(
-      buildSubjectWith(
-        key: UniqueKey(),
-        bridge: bridge,
-        store: store,
-      ),
+      buildSubjectWith(key: UniqueKey(), bridge: bridge, store: store),
     );
     await tester.pumpAndSettle();
 

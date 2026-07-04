@@ -86,7 +86,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-button-surface-normal'),
                 title: 'Normál',
                 description: 'Eredeti sík gombfelület',
-                selected: settings.buttonSurfaceStyle ==
+                selected:
+                    settings.buttonSurfaceStyle ==
                     ExpenseSurfaceInteraction.neutralNeutral,
                 previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
                 onTap: () => onChanged(
@@ -100,7 +101,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-button-surface-neutral-inset'),
                 title: 'Neutrális-befelé',
                 description: 'Sík gomb, érintéskor benyomott hatással',
-                selected: settings.buttonSurfaceStyle ==
+                selected:
+                    settings.buttonSurfaceStyle ==
                     ExpenseSurfaceInteraction.neutralInset,
                 previewStyle: ExpenseSurfaceInteraction.neutralInset,
                 onTap: () => onChanged(
@@ -112,8 +114,10 @@ class ThemeOptionsPanel extends StatelessWidget {
               _surfaceOption(
                 key: const ValueKey('theme-button-surface-neumorph'),
                 title: 'Neumorph',
-                description: 'Kiemelt gombfelület benyomott érintési állapottal',
-                selected: settings.buttonSurfaceStyle ==
+                description:
+                    'Kiemelt gombfelület benyomott érintési állapottal',
+                selected:
+                    settings.buttonSurfaceStyle ==
                     ExpenseSurfaceInteraction.raisedInset,
                 previewStyle: ExpenseSurfaceInteraction.raisedInset,
                 onTap: () => onChanged(
@@ -130,7 +134,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-logbox-surface-normal'),
                 title: 'Normál',
                 description: 'Eredeti sík logbox felület',
-                selected: settings.contentSurfaceStyle ==
+                selected:
+                    settings.contentSurfaceStyle ==
                     ExpenseSurfaceInteraction.neutralNeutral,
                 previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
                 onTap: () => onChanged(
@@ -144,13 +149,55 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-logbox-surface-neumorph'),
                 title: 'Neumorph',
                 description: 'Befelé mélyített logbox felület',
-                selected: settings.contentSurfaceStyle ==
+                selected:
+                    settings.contentSurfaceStyle ==
                     ExpenseSurfaceInteraction.insetInset,
                 previewStyle: ExpenseSurfaceInteraction.insetInset,
                 onTap: () => onChanged(
                   settings.copyWith(
                     contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
                   ),
+                ),
+              ),
+              _sectionTitle(
+                'Kategória menü mód',
+                'A kategória választó megnyitási módja:',
+              ),
+              SettingsRadioOption(
+                key: const ValueKey('theme-category-menu-presentation-inline'),
+                title:
+                    'Inline${settings.categoryMenuPresentation == CategoryMenuPresentation.inline ? ' (jelenlegi)' : ''}',
+                description: 'A jelenlegi beúszó overlay a főképernyőn',
+                selected:
+                    settings.categoryMenuPresentation ==
+                    CategoryMenuPresentation.inline,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    categoryMenuPresentation: CategoryMenuPresentation.inline,
+                  ),
+                ),
+                preview: const Icon(
+                  Icons.vertical_align_top_rounded,
+                  color: AppColors.gray500,
+                ),
+              ),
+              SettingsRadioOption(
+                key: const ValueKey('theme-category-menu-presentation-slide'),
+                title:
+                    'Slide-up sheet${settings.categoryMenuPresentation == CategoryMenuPresentation.slideUpSheet ? ' (jelenlegi)' : ''}',
+                description: 'Fókuszált alsó sheet, mint az új kategória panel',
+                selected:
+                    settings.categoryMenuPresentation ==
+                    CategoryMenuPresentation.slideUpSheet,
+                onTap: () => onChanged(
+                  settings.copyWith(
+                    categoryMenuPresentation:
+                        CategoryMenuPresentation.slideUpSheet,
+                  ),
+                ),
+                preview: const Icon(
+                  Icons.vertical_align_bottom_rounded,
+                  color: AppColors.gray500,
                 ),
               ),
               _sectionTitle(
@@ -161,7 +208,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-category-menu-surface-normal'),
                 title: 'Normál',
                 description: 'Sík kategória menü háttér',
-                selected: settings.categoryMenuSurfaceStyle ==
+                selected:
+                    settings.categoryMenuSurfaceStyle ==
                     ExpenseSurfaceInteraction.neutralNeutral,
                 previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
                 onTap: () => onChanged(
@@ -175,7 +223,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-category-menu-surface-neumorph'),
                 title: 'Neumorph',
                 description: 'Mélységet kapó kategória menü háttér',
-                selected: settings.categoryMenuSurfaceStyle ==
+                selected:
+                    settings.categoryMenuSurfaceStyle ==
                     ExpenseSurfaceInteraction.insetInset,
                 previewStyle: ExpenseSurfaceInteraction.insetInset,
                 onTap: () => onChanged(
@@ -211,7 +260,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-category-card-surface-normal'),
                 title: 'Normál',
                 description: 'Sík kategória kártyák',
-                selected: settings.categoryCardSurfaceStyle ==
+                selected:
+                    settings.categoryCardSurfaceStyle ==
                     ExpenseSurfaceInteraction.neutralNeutral,
                 previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
                 onTap: () => onChanged(
@@ -225,7 +275,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 key: const ValueKey('theme-category-card-surface-neumorph'),
                 title: 'Neumorph',
                 description: 'Kiemelt kategória kártyák',
-                selected: settings.categoryCardSurfaceStyle ==
+                selected:
+                    settings.categoryCardSurfaceStyle ==
                     ExpenseSurfaceInteraction.raisedInset,
                 previewStyle: ExpenseSurfaceInteraction.raisedInset,
                 onTap: () => onChanged(
@@ -252,6 +303,49 @@ class ThemeOptionsPanel extends StatelessWidget {
                 'Erősebb szürke kategória kártyák',
                 AppBoxColor.darkgray,
                 AppColors.gray200,
+              ),
+              _sectionTitle(
+                'Árnyékok',
+                'Normál felületek külső árnyékainak kapcsolása:',
+              ),
+              _shadowOption(
+                keyBase: 'theme-category-card-shadow',
+                title: 'Kategória kártyák',
+                enabled: settings.categoryCardShadowEnabled,
+                onChanged: (enabled) => onChanged(
+                  settings.copyWith(categoryCardShadowEnabled: enabled),
+                ),
+              ),
+              _shadowOption(
+                keyBase: 'theme-logbox-shadow',
+                title: 'Logboxok',
+                enabled: settings.logboxShadowEnabled,
+                onChanged: (enabled) =>
+                    onChanged(settings.copyWith(logboxShadowEnabled: enabled)),
+              ),
+              _shadowOption(
+                keyBase: 'theme-header-pill-shadow',
+                title: 'Bevétel/kiadás gombok',
+                enabled: settings.headerPillShadowEnabled,
+                onChanged: (enabled) => onChanged(
+                  settings.copyWith(headerPillShadowEnabled: enabled),
+                ),
+              ),
+              _shadowOption(
+                keyBase: 'theme-summary-pill-shadow',
+                title: 'Summary pill',
+                enabled: settings.summaryPillShadowEnabled,
+                onChanged: (enabled) => onChanged(
+                  settings.copyWith(summaryPillShadowEnabled: enabled),
+                ),
+              ),
+              _shadowOption(
+                keyBase: 'theme-search-pill-shadow',
+                title: 'Search pill',
+                enabled: settings.searchPillShadowEnabled,
+                onChanged: (enabled) => onChanged(
+                  settings.copyWith(searchPillShadowEnabled: enabled),
+                ),
               ),
               _sectionTitle('App színe', 'Nappali módban használt fő szín:'),
               _appColorOption(
@@ -466,6 +560,44 @@ class ThemeOptionsPanel extends StatelessWidget {
       selected: settings.categoryCardColor == value,
       onTap: () => onChanged(settings.copyWith(categoryCardColor: value)),
       preview: _ColorPreview(color: color),
+    );
+  }
+
+  Widget _shadowOption({
+    required String keyBase,
+    required String title,
+    required bool enabled,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: SettingsRadioOption(
+            key: ValueKey('$keyBase-on'),
+            title: 'Van árnyék${enabled ? ' (jelenlegi)' : ''}',
+            description: title,
+            selected: enabled,
+            onTap: () => onChanged(true),
+            preview: const _SurfacePreview(
+              style: ExpenseSurfaceInteraction.neutralNeutral,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SettingsRadioOption(
+            key: ValueKey('$keyBase-off'),
+            title: 'Nincs árnyék${!enabled ? ' (jelenlegi)' : ''}',
+            description: title,
+            selected: !enabled,
+            onTap: () => onChanged(false),
+            preview: const Icon(
+              Icons.layers_clear_outlined,
+              color: AppColors.gray500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

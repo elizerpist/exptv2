@@ -153,6 +153,22 @@ enum AppBoxColor {
   }
 }
 
+enum CategoryMenuPresentation {
+  inline('inline'),
+  slideUpSheet('slideUpSheet');
+
+  const CategoryMenuPresentation(this.nativeValue);
+  final String nativeValue;
+
+  static CategoryMenuPresentation fromAny(Object? value) {
+    final raw = value?.toString();
+    return CategoryMenuPresentation.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => CategoryMenuPresentation.inline,
+    );
+  }
+}
+
 enum GhostLogboxBorderStyle {
   normal('normal'),
   dashed('dashed');
@@ -305,6 +321,12 @@ class AppThemeSettings {
     required this.categoryCardSurfaceStyle,
     required this.backheaderStyle,
     required this.appColor,
+    this.categoryMenuPresentation = CategoryMenuPresentation.inline,
+    this.categoryCardShadowEnabled = true,
+    this.logboxShadowEnabled = false,
+    this.headerPillShadowEnabled = true,
+    this.summaryPillShadowEnabled = true,
+    this.searchPillShadowEnabled = true,
   });
 
   factory AppThemeSettings.defaults() {
@@ -324,6 +346,12 @@ class AppThemeSettings {
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
       appColor: AppColorMode.turquoise,
+      categoryMenuPresentation: CategoryMenuPresentation.inline,
+      categoryCardShadowEnabled: true,
+      logboxShadowEnabled: false,
+      headerPillShadowEnabled: true,
+      summaryPillShadowEnabled: true,
+      searchPillShadowEnabled: true,
     );
   }
 
@@ -375,6 +403,14 @@ class AppThemeSettings {
       ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
       appColor: _appColorFromMap(map),
+      categoryMenuPresentation: CategoryMenuPresentation.fromAny(
+        map['categoryMenuPresentation'],
+      ),
+      categoryCardShadowEnabled: _bool(map['categoryCardShadowEnabled'], true),
+      logboxShadowEnabled: _bool(map['logboxShadowEnabled'], false),
+      headerPillShadowEnabled: _bool(map['headerPillShadowEnabled'], true),
+      summaryPillShadowEnabled: _bool(map['summaryPillShadowEnabled'], true),
+      searchPillShadowEnabled: _bool(map['searchPillShadowEnabled'], true),
     );
   }
 
@@ -393,6 +429,12 @@ class AppThemeSettings {
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
   final BackheaderStyle backheaderStyle;
   final AppColorMode appColor;
+  final CategoryMenuPresentation categoryMenuPresentation;
+  final bool categoryCardShadowEnabled;
+  final bool logboxShadowEnabled;
+  final bool headerPillShadowEnabled;
+  final bool summaryPillShadowEnabled;
+  final bool searchPillShadowEnabled;
 
   AppDesignProfile get designProfile {
     final looksNeumorphic =
@@ -421,6 +463,12 @@ class AppThemeSettings {
       'categoryCardSurfaceStyle': categoryCardSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
       'appColor': appColor.nativeValue,
+      'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
+      'categoryCardShadowEnabled': categoryCardShadowEnabled,
+      'logboxShadowEnabled': logboxShadowEnabled,
+      'headerPillShadowEnabled': headerPillShadowEnabled,
+      'summaryPillShadowEnabled': summaryPillShadowEnabled,
+      'searchPillShadowEnabled': searchPillShadowEnabled,
     };
   }
 
@@ -440,6 +488,12 @@ class AppThemeSettings {
     ExpenseSurfaceInteraction? categoryCardSurfaceStyle,
     BackheaderStyle? backheaderStyle,
     AppColorMode? appColor,
+    CategoryMenuPresentation? categoryMenuPresentation,
+    bool? categoryCardShadowEnabled,
+    bool? logboxShadowEnabled,
+    bool? headerPillShadowEnabled,
+    bool? summaryPillShadowEnabled,
+    bool? searchPillShadowEnabled,
   }) {
     return AppThemeSettings(
       magnetType: magnetType ?? this.magnetType,
@@ -460,6 +514,17 @@ class AppThemeSettings {
           categoryCardSurfaceStyle ?? this.categoryCardSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
       appColor: appColor ?? this.appColor,
+      categoryMenuPresentation:
+          categoryMenuPresentation ?? this.categoryMenuPresentation,
+      categoryCardShadowEnabled:
+          categoryCardShadowEnabled ?? this.categoryCardShadowEnabled,
+      logboxShadowEnabled: logboxShadowEnabled ?? this.logboxShadowEnabled,
+      headerPillShadowEnabled:
+          headerPillShadowEnabled ?? this.headerPillShadowEnabled,
+      summaryPillShadowEnabled:
+          summaryPillShadowEnabled ?? this.summaryPillShadowEnabled,
+      searchPillShadowEnabled:
+          searchPillShadowEnabled ?? this.searchPillShadowEnabled,
     );
   }
 
@@ -482,5 +547,15 @@ class AppThemeSettings {
   static bool _hasValue(Object? value) {
     final raw = value?.toString().trim();
     return raw != null && raw.isNotEmpty;
+  }
+
+  static bool _bool(Object? value, bool fallback) {
+    if (value is bool) return value;
+    if (value is num) return value.toInt() != 0;
+    if (value is String) {
+      final normalized = value.toLowerCase().trim();
+      return normalized == '1' || normalized == 'true';
+    }
+    return fallback;
   }
 }

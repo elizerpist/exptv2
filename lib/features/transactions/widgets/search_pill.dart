@@ -20,6 +20,7 @@ class SearchPill extends StatefulWidget {
     this.categoryFilterColor,
     this.onClearCategory,
     this.accentColor = AppColors.primary,
+    this.shadowEnabled = true,
   });
 
   final String query;
@@ -34,6 +35,7 @@ class SearchPill extends StatefulWidget {
   final Color? categoryFilterColor;
   final VoidCallback? onClearCategory;
   final Color accentColor;
+  final bool shadowEnabled;
 
   @override
   State<SearchPill> createState() => _SearchPillState();
@@ -240,13 +242,15 @@ class _SearchPillState extends State<SearchPill> {
                       color: focused ? widget.accentColor : AppColors.gray200,
                       width: focused ? 1.5 : 1,
                     ),
-                    neutralShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        offset: const Offset(0, 2),
-                        blurRadius: 3,
-                      ),
-                    ],
+                    neutralShadow: widget.shadowEnabled
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              offset: const Offset(0, 2),
+                              blurRadius: 3,
+                            ),
+                          ]
+                        : null,
                     child: child ?? const SizedBox.shrink(),
                   );
                 },

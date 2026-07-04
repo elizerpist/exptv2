@@ -35,6 +35,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.openRequestedAt,
     this.deferEntryAnimation = false,
     this.keyboardAvoidance = true,
+    this.dismissOnVeilTap = true,
   });
 
   final Key cardKey;
@@ -55,6 +56,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final DateTime? openRequestedAt;
   final bool deferEntryAnimation;
   final bool keyboardAvoidance;
+  final bool dismissOnVeilTap;
 
   @override
   State<SlideUpMenuCard> createState() => _SlideUpMenuCardState();
@@ -68,6 +70,9 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   static const _horizontalAxisBias = 1.2;
   static const _snapBackDuration = Duration(milliseconds: 170);
   static const _dismissDuration = Duration(milliseconds: 180);
+  static const _fastDismissDy = 56.0;
+  static const _fastDismissThresholdFactor = 0.85;
+  static const _fastDismissMaxElapsed = 180;
 
   late final AnimationController _entry;
   late final AnimationController _snapBackController;
@@ -92,6 +97,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   double? _lastLoggedKeyboardInset;
   DateTime? _openStartedAt;
   DateTime? _dragStartedAt;
+  Duration? _dragStartTimeStamp;
   int _openGeneration = 0;
   DateTime? _snapStartedAt;
   DateTime? _dismissStartedAt;
@@ -201,7 +207,9 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                     ),
                   ),
                 ),
-              if (widget.showFocusVeil && focusVeilTapTop < availableHeight)
+              if (widget.showFocusVeil &&
+                  widget.dismissOnVeilTap &&
+                  focusVeilTapTop < availableHeight)
                 Positioned(
                   top: focusVeilTapTop,
                   left: 0,
@@ -334,6 +342,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     _snapEndDy = 0;
     _openStartedAt = null;
     _dragStartedAt = null;
+    _dragStartTimeStamp = null;
     _snapStartedAt = null;
     _dismissStartedAt = null;
     _openGeneration++;
@@ -462,6 +471,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     _dragStartGlobalPosition = event.position;
     _snapBackController.stop();
     _dragStartedAt = DateTime.now();
+    _dragStartTimeStamp = event.timeStamp;
     _lastLoggedDragOffset = _dragDy.value;
   }
 
@@ -519,21 +529,33 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       return;
     }
     final dragOffset = _dragDy.value;
+    final elapsed = _dragElapsedMs(event.timeStamp);
+    final fastDismissOffset = math.max(
+      _fastDismissDy,
+      widget.dismissThreshold * _fastDismissThresholdFactor,
+    );
+    final fastDismiss =
+        dragOffset >= fastDismissOffset &&
+        _gestureDy > 0 &&
+        elapsed <= _fastDismissMaxElapsed;
     _dragActive = false;
     if (!_dragMoved) {
       _dragStartedAt = null;
+      _dragStartTimeStamp = null;
       _lastLoggedDragOffset = null;
       _resetPointerGestureState();
       return;
     }
-    final decision = dragOffset > widget.dismissThreshold ? 'dismiss' : 'snap';
+    final dismiss = dragOffset > widget.dismissThreshold || fastDismiss;
+    final decision = dismiss ? 'dismiss' : 'snap';
     DebugConsole.log(
       '[SlideUpMenu] $_debugLabel drag end offset=${dragOffset.toStringAsFixed(1)} threshold=${widget.dismissThreshold.toStringAsFixed(1)} max=${_dragMaxOffset.toStringAsFixed(1)} elapsed=${_elapsedMs(_dragStartedAt)}ms decision=$decision',
     );
     _dragStartedAt = null;
+    _dragStartTimeStamp = null;
     _lastLoggedDragOffset = null;
     _resetPointerGestureState();
-    if (dragOffset > widget.dismissThreshold) {
+    if (dismiss) {
       _dismiss();
       return;
     }
@@ -547,6 +569,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       return;
     }
     _resetPointerGestureState();
+    _dragStartTimeStamp = null;
     _snapBack(reason: 'cancel');
   }
 
@@ -635,5 +658,11 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
+  int _dragElapsedMs(Duration endTimeStamp) {
+    final started = _dragStartTimeStamp;
+    if (started == null) return _elapsedMs(_dragStartedAt);
+    return (endTimeStamp - started).inMilliseconds;
   }
 }

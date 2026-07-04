@@ -25,6 +25,7 @@ class TransactionLogBox extends StatefulWidget {
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.shadowEnabled = false,
     this.onFastFilter,
     this.onTap,
     this.onDeleteRequested,
@@ -38,6 +39,7 @@ class TransactionLogBox extends StatefulWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final bool shadowEnabled;
   final TransactionLogContextCallback? onFastFilter;
   final ValueChanged<TransactionRecord>? onTap;
   final TransactionDeleteRequest? onDeleteRequested;
@@ -213,6 +215,15 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                         vertical: 12,
                       ),
                       neutralBorder: Border.all(color: AppColors.gray200),
+                      neutralShadow: widget.shadowEnabled
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                offset: const Offset(0, 2),
+                                blurRadius: 3,
+                              ),
+                            ]
+                          : null,
                       child: Row(
                         children: [
                           GestureDetector(
@@ -253,6 +264,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                     backgroundColor: Colors.transparent,
                                     size: 46,
                                     iconSize: 28,
+                                    iconStrokeWidth: 1.35,
                                     showShadow: false,
                                     showQuestionMark: uncategorized,
                                   ),

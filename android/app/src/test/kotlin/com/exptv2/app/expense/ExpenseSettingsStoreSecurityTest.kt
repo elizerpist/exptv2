@@ -179,6 +179,35 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
+    fun themeSettingsPersistCategoryPresentationAndShadowControls() {
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "categoryMenuPresentation" to "slideUpSheet",
+                "categoryCardShadowEnabled" to false,
+                "logboxShadowEnabled" to true,
+                "headerPillShadowEnabled" to false,
+                "summaryPillShadowEnabled" to false,
+                "searchPillShadowEnabled" to false,
+            )
+        )
+
+        assertEquals("slideUpSheet", updated["categoryMenuPresentation"])
+        assertEquals(false, updated["categoryCardShadowEnabled"])
+        assertEquals(true, updated["logboxShadowEnabled"])
+        assertEquals(false, updated["headerPillShadowEnabled"])
+        assertEquals(false, updated["summaryPillShadowEnabled"])
+        assertEquals(false, updated["searchPillShadowEnabled"])
+
+        val loaded = store.loadThemeSettings()
+        assertEquals("slideUpSheet", loaded["categoryMenuPresentation"])
+        assertEquals(false, loaded["categoryCardShadowEnabled"])
+        assertEquals(true, loaded["logboxShadowEnabled"])
+        assertEquals(false, loaded["headerPillShadowEnabled"])
+        assertEquals(false, loaded["summaryPillShadowEnabled"])
+        assertEquals(false, loaded["searchPillShadowEnabled"])
+    }
+
+    @Test
     fun legacyThemeSettingsMigrateMissingProfileValues() {
         val prefs = context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
         prefs.edit()

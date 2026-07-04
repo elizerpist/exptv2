@@ -23,6 +23,8 @@ class CategoryMenuPanel extends StatelessWidget {
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
     this.activeBackgroundColor = AppColors.primaryActiveBackground,
+    this.addButtonPlacement = CategoryMenuAddButtonPlacement.topFab,
+    this.cardShadowEnabled = true,
   });
 
   final TransactionType activeType;
@@ -40,16 +42,33 @@ class CategoryMenuPanel extends StatelessWidget {
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
   final Color activeBackgroundColor;
+  final CategoryMenuAddButtonPlacement addButtonPlacement;
+  final bool cardShadowEnabled;
 
   @override
   Widget build(BuildContext context) {
     final filtered = categories
         .where((category) => category.normalizedType == activeType)
         .toList();
+    final bottomAddButton =
+        addButtonPlacement == CategoryMenuAddButtonPlacement.bottomPill;
     return Stack(
       children: [
         Column(
           children: [
+            if (bottomAddButton) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.gray200,
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(
               height: 54,
               child: Center(
@@ -65,7 +84,12 @@ class CategoryMenuPanel extends StatelessWidget {
             ),
             Expanded(
               child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  10,
+                  20,
+                  bottomAddButton ? 96 : 20,
+                ),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   mainAxisSpacing: 15,
@@ -93,27 +117,46 @@ class CategoryMenuPanel extends StatelessWidget {
                     avatarSurfaceStyle: avatarSurfaceStyle,
                     accentColor: accentColor,
                     activeBackgroundColor: activeBackgroundColor,
+                    shadowEnabled: cardShadowEnabled,
                   );
                 },
               ),
             ),
           ],
         ),
-        Positioned(
-          top: 8,
-          right: 16,
-          child: FloatingActionButton.small(
-            key: const ValueKey('category-menu-add-button'),
-            heroTag: null,
-            tooltip: 'Új kategória',
-            onPressed: onAdd,
-            backgroundColor: accentColor,
-            foregroundColor: AppColors.white,
-            elevation: 3,
-            child: const Icon(Icons.add_rounded),
+        if (!bottomAddButton)
+          Positioned(
+            top: 8,
+            right: 16,
+            child: FloatingActionButton.small(
+              key: const ValueKey('category-menu-add-button'),
+              heroTag: null,
+              tooltip: 'Új kategória',
+              onPressed: onAdd,
+              backgroundColor: accentColor,
+              foregroundColor: AppColors.white,
+              elevation: 3,
+              child: const Icon(Icons.add_rounded),
+            ),
+          )
+        else
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 22,
+            child: ExpenseSurfaceButton(
+              buttonKey: const ValueKey('category-menu-add-pill'),
+              label: 'Új kategória',
+              icon: Icons.add_rounded,
+              onPressed: onAdd,
+              surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              color: accentColor,
+              foregroundColor: AppColors.white,
+            ),
           ),
-        ),
       ],
     );
   }
 }
+
+enum CategoryMenuAddButtonPlacement { topFab, bottomPill }

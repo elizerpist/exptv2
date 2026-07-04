@@ -15,12 +15,14 @@ class SummaryPill extends StatefulWidget {
     required this.onResetToCurrentMonth,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.shadowEnabled = true,
   });
 
   final String title;
   final String value;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final bool shadowEnabled;
   final VoidCallback onIntervalSwipe;
   final ValueChanged<int> onPeriodSwipe;
   final VoidCallback onResetToCurrentMonth;
@@ -201,13 +203,15 @@ class _SummaryPillBody extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 70),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       neutralBorder: Border.all(color: AppColors.gray200),
-      neutralShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.1),
-          offset: const Offset(0, 2),
-          blurRadius: 3,
-        ),
-      ],
+      neutralShadow: widget.shadowEnabled
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                offset: const Offset(0, 2),
+                blurRadius: 3,
+              ),
+            ]
+          : null,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

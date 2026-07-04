@@ -37,6 +37,12 @@ void main() {
                   'buttonSurfaceStyle': 'raisedInset',
                   'contentSurfaceStyle': 'insetInset',
                   'ghostLogboxSurfaceStyle': 'insetInset',
+                  'categoryMenuPresentation': 'slideUpSheet',
+                  'categoryCardShadowEnabled': false,
+                  'logboxShadowEnabled': false,
+                  'headerPillShadowEnabled': false,
+                  'summaryPillShadowEnabled': false,
+                  'searchPillShadowEnabled': false,
                   'ghostLogboxSettings': <String, Object?>{
                     'borderStyle': 'dashed',
                     'backgroundOpacityEnabled': true,
@@ -297,6 +303,15 @@ void main() {
       isTrue,
     );
     expect(settings.themeSettings.backheaderStyle, BackheaderStyle.heroToken);
+    expect(
+      settings.themeSettings.categoryMenuPresentation,
+      CategoryMenuPresentation.slideUpSheet,
+    );
+    expect(settings.themeSettings.categoryCardShadowEnabled, isFalse);
+    expect(settings.themeSettings.logboxShadowEnabled, isFalse);
+    expect(settings.themeSettings.headerPillShadowEnabled, isFalse);
+    expect(settings.themeSettings.summaryPillShadowEnabled, isFalse);
+    expect(settings.themeSettings.searchPillShadowEnabled, isFalse);
     expect(settings.fastInfoConfig.pills.first?.label, 'Megtakarítás');
     expect(settings.fastInfoConfig.pills[1]?.id, 'havi_koltes');
     expect(settings.fastInfoConfig.boxes.first, isNull);
@@ -334,6 +349,12 @@ void main() {
         categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
         backheaderStyle: BackheaderStyle.orbitBudget,
         appColor: AppColorMode.pink,
+        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
+        categoryCardShadowEnabled: false,
+        logboxShadowEnabled: false,
+        headerPillShadowEnabled: false,
+        summaryPillShadowEnabled: false,
+        searchPillShadowEnabled: false,
       ),
     );
 
@@ -359,6 +380,12 @@ void main() {
     expect(payload['categoryMenuSurfaceStyle'], 'insetInset');
     expect(payload['categoryCardColor'], 'white');
     expect(payload['categoryCardSurfaceStyle'], 'raisedInset');
+    expect(payload['categoryMenuPresentation'], 'slideUpSheet');
+    expect(payload['categoryCardShadowEnabled'], isFalse);
+    expect(payload['logboxShadowEnabled'], isFalse);
+    expect(payload['headerPillShadowEnabled'], isFalse);
+    expect(payload['summaryPillShadowEnabled'], isFalse);
+    expect(payload['searchPillShadowEnabled'], isFalse);
     expect(payload['ghostLogboxSettings'], isA<Map>());
     final ghostPayload = Map<dynamic, dynamic>.from(
       payload['ghostLogboxSettings'] as Map,

@@ -7,6 +7,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
+import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
 import 'package:exptv2/features/transactions/widgets/themed_pill_field.dart';
@@ -31,6 +32,24 @@ void main() {
 
     await tester.tap(find.text('Bevétel'));
     expect(selected, TransactionType.income);
+  });
+
+  testWidgets('type pills can disable neutral shadows', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionTypePills(
+          activeType: TransactionType.expense,
+          onChanged: (_) {},
+          shadowEnabled: false,
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('transaction-type-pill-expense-surface')),
+    );
+    final decoration = surface.decoration! as BoxDecoration;
+    expect(decoration.boxShadow, isNull);
   });
 
   testWidgets('summary pill vertical swipe cycles interval', (tester) async {
@@ -235,6 +254,27 @@ void main() {
     expect(decoration.boxShadow, isNotNull);
   });
 
+  testWidgets('summary pill can disable neutral shadow', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPill(
+          title: 'Május 2026',
+          value: '-66 Ft',
+          shadowEnabled: false,
+          onIntervalSwipe: () {},
+          onPeriodSwipe: (_) {},
+          onResetToCurrentMonth: () {},
+        ),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('summary-pill-container')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.boxShadow, isNull);
+  });
+
   testWidgets('search pill shows merchant filter capsule', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -270,6 +310,25 @@ void main() {
     );
     final decoration = container.decoration! as BoxDecoration;
     expect(decoration.color, AppColors.gray200);
+  });
+
+  testWidgets('search pill can disable neutral shadow', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(
+          query: '',
+          onQueryChanged: (_) {},
+          filteredCount: 0,
+          shadowEnabled: false,
+        ),
+      ),
+    );
+
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('search-pill-container')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    expect(decoration.boxShadow, isNull);
   });
 
   testWidgets('search pill text wrapper is transparent for inset profile', (
@@ -596,6 +655,29 @@ void main() {
     expect(badgeDecoration.boxShadow, isNull);
   });
 
+  testWidgets('transaction log rows can opt into neutral shadows', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: record,
+          category: category,
+          shadowEnabled: true,
+        ),
+      ),
+    );
+
+    final rowContainer = tester.widget<Container>(
+      find.byKey(ValueKey('transaction-logbox-content-${record.id}')),
+    );
+    final rowDecoration = rowContainer.decoration! as BoxDecoration;
+    expect(rowDecoration.boxShadow, isNotNull);
+  });
+
   testWidgets('themed pill field renders inset surface in neumorphism', (
     tester,
   ) async {
@@ -676,6 +758,18 @@ void main() {
     );
     expect(badge.backgroundColor, Colors.transparent);
     expect(badge.showShadow, isFalse);
+    expect(badge.iconStrokeWidth, 1.35);
+  });
+
+  test('category slot icon rewrites stroke width without changing size', () {
+    const svg =
+        '<svg width="24" height="24" stroke-width="2"><path d="M0 0"/></svg>';
+
+    final rewritten = rewriteCategoryIconStrokeWidth(svg, 1.35);
+
+    expect(rewritten, contains('width="24"'));
+    expect(rewritten, contains('height="24"'));
+    expect(rewritten, contains('stroke-width="1.35"'));
   });
 
   testWidgets('log list renders uncategorized transaction question avatar', (

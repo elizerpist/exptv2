@@ -16,6 +16,7 @@ class RecurringGhostLogBox extends StatelessWidget {
     this.surfaceColor = AppColors.gray100,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.shadowEnabled = false,
     this.settings = const GhostLogboxSettings(
       borderStyle: GhostLogboxBorderStyle.dashed,
       backgroundOpacityEnabled: true,
@@ -36,6 +37,7 @@ class RecurringGhostLogBox extends StatelessWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final bool shadowEnabled;
   final GhostLogboxSettings settings;
 
   @override
@@ -47,6 +49,15 @@ class RecurringGhostLogBox extends StatelessWidget {
       borderRadius: borderRadius,
       neutralBorder: _usesDashedBorder
           ? Border.all(color: Colors.transparent)
+          : null,
+      neutralShadow: shadowEnabled
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                offset: const Offset(0, 2),
+                blurRadius: 3,
+              ),
+            ]
           : null,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -94,6 +105,7 @@ class RecurringGhostLogBox extends StatelessWidget {
       ),
       size: 46,
       iconSize: 28,
+      iconStrokeWidth: 1.35,
       showShadow: false,
     );
     return SizedBox.square(

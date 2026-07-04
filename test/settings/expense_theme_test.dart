@@ -263,6 +263,32 @@ void main() {
     expect(settings.toMap()['categoryCardColor'], 'white');
   });
 
+  test('category menu presentation and shadow toggles parse and serialize', () {
+    final defaults = AppThemeSettings.defaults();
+    expect(defaults.toMap()['categoryMenuPresentation'], 'inline');
+    expect(defaults.toMap()['categoryCardShadowEnabled'], isTrue);
+    expect(defaults.toMap()['logboxShadowEnabled'], isFalse);
+    expect(defaults.toMap()['headerPillShadowEnabled'], isTrue);
+    expect(defaults.toMap()['summaryPillShadowEnabled'], isTrue);
+    expect(defaults.toMap()['searchPillShadowEnabled'], isTrue);
+
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'categoryMenuPresentation': 'slideUpSheet',
+      'categoryCardShadowEnabled': false,
+      'logboxShadowEnabled': false,
+      'headerPillShadowEnabled': false,
+      'summaryPillShadowEnabled': false,
+      'searchPillShadowEnabled': false,
+    });
+
+    expect(settings.toMap()['categoryMenuPresentation'], 'slideUpSheet');
+    expect(settings.toMap()['categoryCardShadowEnabled'], isFalse);
+    expect(settings.toMap()['logboxShadowEnabled'], isFalse);
+    expect(settings.toMap()['headerPillShadowEnabled'], isFalse);
+    expect(settings.toMap()['summaryPillShadowEnabled'], isFalse);
+    expect(settings.toMap()['searchPillShadowEnabled'], isFalse);
+  });
+
   test('accent helpers resolve active background for all palettes', () {
     final turquoise = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     final pink = ExpenseTheme.fromSettings(

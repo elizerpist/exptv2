@@ -13,6 +13,7 @@ class TransactionTypePills extends StatelessWidget {
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
+    this.shadowEnabled = true,
   });
 
   final TransactionType activeType;
@@ -20,6 +21,7 @@ class TransactionTypePills extends StatelessWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final Color accentColor;
+  final bool shadowEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,7 @@ class TransactionTypePills extends StatelessWidget {
               surfaceColor: surfaceColor,
               surfaceStyle: surfaceStyle,
               accentColor: accentColor,
+              shadowEnabled: shadowEnabled,
               onTap: onChanged,
             ),
           ),
@@ -50,6 +53,7 @@ class TransactionTypePills extends StatelessWidget {
               surfaceColor: surfaceColor,
               surfaceStyle: surfaceStyle,
               accentColor: accentColor,
+              shadowEnabled: shadowEnabled,
               onTap: onChanged,
             ),
           ),
@@ -66,6 +70,7 @@ class _TransactionTypePill extends StatelessWidget {
     required this.surfaceColor,
     required this.surfaceStyle,
     required this.accentColor,
+    required this.shadowEnabled,
     required this.onTap,
   });
 
@@ -74,6 +79,7 @@ class _TransactionTypePill extends StatelessWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final Color accentColor;
+  final bool shadowEnabled;
   final ValueChanged<TransactionType> onTap;
 
   @override
@@ -101,13 +107,15 @@ class _TransactionTypePill extends StatelessWidget {
           neutralBorder: Border.all(
             color: active ? accentColor : AppColors.gray200,
           ),
-          neutralShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: active ? 0.1 : 0.08),
-              offset: const Offset(0, 2),
-              blurRadius: active ? 3 : 4,
-            ),
-          ],
+          neutralShadow: shadowEnabled
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: active ? 0.1 : 0.08),
+                    offset: const Offset(0, 2),
+                    blurRadius: active ? 3 : 4,
+                  ),
+                ]
+              : null,
           child: Material(
             color: Colors.transparent,
             borderRadius: radius,
