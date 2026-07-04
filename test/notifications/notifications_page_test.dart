@@ -1,4 +1,6 @@
 import 'package:exptv2/features/notifications/notifications_page.dart';
+import 'package:exptv2/features/notifications/data/notification_repository.dart';
+import 'package:exptv2/features/notifications/state/notification_store.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,9 +44,20 @@ void main() {
       methodChannel: channel,
       eventChannel: const EventChannel('test/notifications_page_events'),
     );
+    final store = NotificationStore(
+      NotificationRepository(bridge),
+      clock: () => DateTime(2026, 6, 3),
+    );
+    addTearDown(store.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: true)),
+      MaterialApp(
+        home: NotificationsPage(
+          nativeBridge: bridge,
+          store: store,
+          active: true,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -52,11 +65,23 @@ void main() {
     expect(find.text('Nincsenek értesítések'), findsOneWidget);
 
     await tester.pumpWidget(
-      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: false)),
+      MaterialApp(
+        home: NotificationsPage(
+          nativeBridge: bridge,
+          store: store,
+          active: false,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.pumpWidget(
-      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: true)),
+      MaterialApp(
+        home: NotificationsPage(
+          nativeBridge: bridge,
+          store: store,
+          active: true,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -96,16 +121,33 @@ void main() {
       methodChannel: channel,
       eventChannel: const EventChannel('test/notifications_page_events'),
     );
+    final store = NotificationStore(
+      NotificationRepository(bridge),
+      clock: () => DateTime(2026, 6, 3),
+    );
+    addTearDown(store.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: false)),
+      MaterialApp(
+        home: NotificationsPage(
+          nativeBridge: bridge,
+          store: store,
+          active: false,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(readIds, isEmpty);
 
     await tester.pumpWidget(
-      MaterialApp(home: NotificationsPage(nativeBridge: bridge, active: true)),
+      MaterialApp(
+        home: NotificationsPage(
+          nativeBridge: bridge,
+          store: store,
+          active: true,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
