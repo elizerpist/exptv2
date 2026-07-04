@@ -48,11 +48,8 @@ jobs:
       - name: Run Android unit tests
         run: |
           cd android
-          if [ -x ./gradlew ]; then
-            ./gradlew :app:testDebugUnitTest --no-daemon
-          else
-            gradle :app:testDebugUnitTest --no-daemon
-          fi
+          chmod +x ./gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon
 
       - name: Build debug APK
         run: flutter build apk --debug
