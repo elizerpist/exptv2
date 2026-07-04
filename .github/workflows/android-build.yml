@@ -59,20 +59,31 @@ jobs:
 
       - name: Prepare debug APK release file
         run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          APK_NAME="exptv2-debug-${SHORT_SHA}.apk"
+          APK_PATH="build/release/${APK_NAME}"
           mkdir -p build/release
-          cp build/app/outputs/flutter-apk/app-debug.apk build/release/exptv2-debug.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk "$APK_PATH"
+          {
+            echo "APK_NAME=$APK_NAME"
+            echo "APK_PATH=$APK_PATH"
+          } >> "$GITHUB_ENV"
 
       - name: Publish latest debug APK release
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_PATH: build/release/exptv2-debug.apk
-          APK_NAME: exptv2-debug.apk
         run: |
           git tag -f debug-latest "$GITHUB_SHA"
           git push origin refs/tags/debug-latest --force
           NOTES="Latest debug APK built from ${GITHUB_REF_NAME} commit ${GITHUB_SHA}."
           if gh release view debug-latest >/dev/null 2>&1; then
-            gh release delete-asset debug-latest "$APK_NAME" --yes >/dev/null 2>&1 || true
+            while IFS= read -r ASSET_NAME; do
+              case "$ASSET_NAME" in
+                exptv2-debug*.apk)
+                  gh release delete-asset debug-latest "$ASSET_NAME" --yes >/dev/null 2>&1 || true
+                  ;;
+              esac
+            done < <(gh release view debug-latest --json assets --jq '.assets[].name')
             gh release upload debug-latest "$APK_PATH" --clobber
             gh release edit debug-latest \
               --title "Latest debug APK" \
