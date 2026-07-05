@@ -23,11 +23,13 @@
 ## File Structure
 
 - Modify `test/transactions/category_menu_test.dart`: add widget tests for handler-only drag, content scroll isolation, diagonal no-op, and bottom pill visibility in slide-up category mode.
+- Modify `test/transactions/category_menu_test.dart`: add a slide-up sheet layout regression proving the category scroll body ends above the fixed bottom add pill with a persistent gap matching `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260705-045048.png`.
 - Modify `test/widget_test.dart`: add shell-level widget test proving slide-up category sheet foreground state hides/blocks bottom nav and FAB.
 - Modify `lib/features/transactions/widgets/slide_up_menu_card.dart`: add an opt-in handler-only drag gate for sheets that should not drag from content.
 - Modify `lib/features/transactions/transaction_home_page.dart`: report category slide picker as a blocking overlay, pass handler-only drag options, and route orbitBudget budget editing inline.
 - Modify `lib/features/shell/expt_shell.dart`: hide shell navigation/FAB while the home page reports a blocking foreground overlay.
 - Modify `test/transactions/category_budget_stage_test.dart`: add orbitBudget layout, partition, ring, gesture, no external tap, and inline save tests.
+- Modify `test/transactions/category_budget_stage_test.dart`: add orbitBudget inline editor regressions for smooth serialized/debounced persistence, amount input, reset/delete, previous/next, max, explicit jump-to-overview/income, and top content +10px layout.
 - Modify `test/transactions/transaction_home_limits_test.dart`: add home-level orbitBudget regression tests proving no separate sheet opens and slider save is immediate.
 - Modify `lib/features/transactions/widgets/header_card/backheader_style_surface.dart`: replace orbitBudget’s old orbit chart/avatar with icon/name/amount/partition/ring layout.
 - Modify `lib/features/transactions/widgets/header_card/category_budget_stage.dart`: add orbitBudget inline expansion state, drag thresholds, slider persistence, partition/ring preview data, and axis-safe gestures.
@@ -431,3 +433,139 @@ Do not run local APK build. If all checklist rows are `DONE`, push branch and us
 - Spec coverage: CS1-CS4 covered in Tasks 1-2; OB1-OB5 in Tasks 3-4; OB6-OB11 in Tasks 5-6; final verification/checklist in Task 7.
 - No partial build claim: plan ends with verification and checklist before any APK/build status.
 - Type consistency: new `CategoryBudgetStage` callbacks match `BudgetTargetEditorSheet` save callback shapes and existing `TransactionStore` methods.
+
+---
+
+## Addendum Task 8: Category Sheet Scroll Body Gap
+
+**Files:**
+- Modify: `test/transactions/category_menu_test.dart`
+- Modify: `lib/features/transactions/widgets/category_menu/category_menu_panel.dart`
+
+**Interfaces:**
+- Consumes existing keys: `category-menu-add-pill` and the slide-up category body/grid key currently used by `CategoryMenuPanel`.
+- Produces a stable scroll body bottom gap above `category-menu-add-pill` in slide-up sheet mode.
+
+- [ ] **Step 1: Write failing layout test**
+
+Add a slide-up category menu test that opens the sheet and asserts:
+
+```dart
+final body = tester.getRect(find.byKey(const ValueKey('category-menu-scroll-body')));
+final addPill = tester.getRect(find.byKey(const ValueKey('category-menu-add-pill')));
+expect(body.bottom, lessThan(addPill.top));
+expect(addPill.top - body.bottom, greaterThanOrEqualTo(20));
+```
+
+The body key may be added in the implementation if it does not exist yet; the RED failure should be either missing key or insufficient gap.
+
+- [ ] **Step 2: Run RED**
+
+```bash
+proot-distro login ubuntu --user flutteruser -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter test test/transactions/category_menu_test.dart --plain-name "slide-up category"'
+```
+
+Expected: FAIL because the body key/gap is not implemented.
+
+- [ ] **Step 3: Implement fixed body/add-pill layout**
+
+In `CategoryMenuPanel`, when `addButtonPlacement == CategoryMenuAddButtonPlacement.bottomPill`, keep the add pill outside the scroll body and give the scroll body a bounded `Expanded` area ending above the pill. Add `ValueKey('category-menu-scroll-body')` to that bounded body. Preserve inline mode behavior.
+
+- [ ] **Step 4: Run GREEN**
+
+Run the same command. Expected: PASS for the new gap test and existing slide-up category tests.
+
+## Addendum Task 9: Orbit Inline Editor Controls And Smooth Persistence
+
+**Files:**
+- Modify: `test/transactions/category_budget_stage_test.dart`
+- Modify: `lib/features/transactions/widgets/header_card/category_budget_stage.dart`
+- Modify: `lib/features/transactions/widgets/header_card/backheader_style_surface.dart`
+
+**Interfaces:**
+- Consumes `CategoryLimitSlider`, `CategoryLimitPartitionBar`, `LimitSliderRange`, `LimitAllocationManager`, and sheet control keys (`limit-amount-input`, `limit-reset-inline-button`, `limit-slider-end-button`, `limit-card-previous-button`, `limit-card-next-button`).
+- Produces an orbit inline editor with sheet-equivalent controls except `limit-save-button`, immediate UI preview, and serialized/debounced persistence.
+
+- [ ] **Step 1: Write failing controls test**
+
+Add a widget test that expands an orbitBudget category item and asserts:
+
+```dart
+expect(find.byKey(const ValueKey('limit-amount-input')), findsOneWidget);
+expect(find.byKey(const ValueKey('limit-reset-inline-button')), findsOneWidget);
+expect(find.byKey(const ValueKey('limit-card-previous-button')), findsOneWidget);
+expect(find.byKey(const ValueKey('limit-card-next-button')), findsOneWidget);
+expect(find.byKey(const ValueKey('backheader-overview-jump-button')), findsOneWidget);
+expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+```
+
+Tap reset and verify the latest save callback receives `limitAmount == 0` and `alertActive == false`.
+
+- [ ] **Step 2: Write failing input/max/jump test**
+
+Add a widget test that expands an overview/income item, taps `limit-slider-end-button`, enters text into `limit-amount-input`, and verifies immediate preview/save. From a category item, tap `backheader-overview-jump-button` and verify `onActiveItemChanged` receives the matching overview/income item.
+
+- [ ] **Step 3: Write failing smooth-save test**
+
+Add a widget test with a delayed save callback. Call the slider `onChanged` several times rapidly through the `CategoryLimitSlider` widget and assert no more than one in-flight save at a time, the UI amount updates immediately, and after debounce/flush the latest amount is saved. Add a save callback that throws once and assert `tester.takeException()` stays null.
+
+- [ ] **Step 4: Write failing +10px layout test**
+
+Record the `top` of `backheader-orbit-icon`/`backheader-orbit-title` and assert it is at least 10 px lower than the previous orbit top offset, while a heroToken/classic test keeps its existing positions/keys.
+
+- [ ] **Step 5: Run RED**
+
+```bash
+proot-distro login ubuntu --user flutteruser -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter test test/transactions/category_budget_stage_test.dart --plain-name "orbitBudget"'
+```
+
+Expected: FAIL because the inline editor only has text+slider and saves on every slider movement.
+
+- [ ] **Step 6: Implement inline editor state**
+
+Add a `TextEditingController`, `FocusNode`, `_orbitSavingByKey`, `_orbitQueuedSaveByKey`, and `Timer? _orbitSaveDebounce`. Keep UI preview state in `_orbitPendingAmountsByKey`. Input/slider/reset/max write preview immediately and schedule persistence. Dispose the controller, focus node, and timer.
+
+- [ ] **Step 7: Implement serialized/debounced persistence**
+
+Replace per-pixel `unawaited(_saveOrbitItemAmount(...))` with a scheduler that:
+
+```dart
+_orbitQueuedSaveByKey[item.key] = amount;
+_orbitSaveDebounce?.cancel();
+_orbitSaveDebounce = Timer(const Duration(milliseconds: 120), _flushOrbitSaves);
+```
+
+`_flushOrbitSaves` saves one latest amount per key sequentially. If a save is already running, mark the latest amount queued and run it after the current save completes. Wrap saves in `try/catch` and log through `DebugConsole.log`.
+
+- [ ] **Step 8: Implement missing controls**
+
+Render compact controls inside `backheader-orbit-inline-editor`: previous/next icon buttons, explicit `backheader-overview-jump-button` for category-to-overview/income, `limit-slider-end-button` for overview max, `limit-reset-inline-button`, and `ThemedPillField` with `limit-amount-input`. Do not render `limit-save-button`.
+
+- [ ] **Step 9: Move orbit top content 10px down**
+
+In `BackheaderStyleSurface._OrbitBudget`, change top padding from `32` to `42`. Do not change heroToken/classic layout.
+
+- [ ] **Step 10: Run GREEN**
+
+Run the RED command again. Expected: PASS.
+
+## Addendum Task 10: Final Regression Verification
+
+**Files:**
+- Modify: `docs/superpowers/checklists/2026-07-05-category-sheet-orbit-backheader-checklist.md`
+
+- [ ] **Step 1: Run focused suite**
+
+```bash
+proot-distro login ubuntu --user flutteruser -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter test --no-pub test/transactions/category_menu_test.dart test/transactions/category_budget_stage_test.dart test/transactions/transaction_home_limits_test.dart test/widget_test.dart'
+```
+
+- [ ] **Step 2: Run analyzer**
+
+```bash
+proot-distro login ubuntu --user flutteruser -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter analyze --no-pub'
+```
+
+- [ ] **Step 3: Update checklist**
+
+Set CS5 and OB12-OB17 to `DONE` only after the focused tests/analyzer and direct code inspection confirm the acceptance conditions.

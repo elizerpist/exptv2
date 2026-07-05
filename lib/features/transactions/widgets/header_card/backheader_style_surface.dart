@@ -205,7 +205,7 @@ class _OrbitBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('backheader-style-orbitBudget-content'),
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
+      padding: const EdgeInsets.fromLTRB(24, 42, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

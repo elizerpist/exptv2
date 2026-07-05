@@ -17,6 +17,7 @@ import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
+import '../themed_pill_field.dart';
 import '../transaction_menu_metrics.dart';
 import 'budget_bar_geometry.dart';
 import 'backheader_style_surface.dart';
@@ -89,8 +90,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
   late final AnimationController _slideController;
   Animation<double>? _slideAnimation;
+  late final TextEditingController _orbitAmountController;
+  late final FocusNode _orbitAmountFocus;
   final _orbitRememberedSliderMaxByKey = <String, double>{};
   final _orbitPendingAmountsByKey = <String, double>{};
+  final _orbitQueuedSavesByKey = <String, _OrbitSaveRequest>{};
+  final _orbitSavingKeys = <String>{};
+  Timer? _orbitSaveDebounce;
   var _index = 0;
   var _dragDx = 0.0;
   var _settling = false;
@@ -106,19 +112,29 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _orbitExpandTriggered = false;
   var _orbitHandlePointerActive = false;
   var _orbitSuppressHorizontalDrag = false;
+  var _orbitUpdatingController = false;
 
   @override
   void initState() {
     super.initState();
+    _orbitAmountController = TextEditingController()
+      ..addListener(_handleOrbitAmountInputChanged);
+    _orbitAmountFocus = FocusNode();
     _slideController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 140),
     )..addListener(_syncSlideAnimation);
     _syncControlledIndex();
+    if (_items.isNotEmpty) _syncOrbitAmountController(_items[_index]);
   }
 
   @override
   void dispose() {
+    _orbitSaveDebounce?.cancel();
+    _orbitAmountFocus.dispose();
+    _orbitAmountController
+      ..removeListener(_handleOrbitAmountInputChanged)
+      ..dispose();
     _slideController.dispose();
     super.dispose();
   }
@@ -129,6 +145,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final synced = _syncControlledIndex(resetDrag: true);
     if (_index >= _items.length) _index = 0;
     if (!synced && _items.length != _oldItems(oldWidget).length) _dragDx = 0;
+    if (_items.isNotEmpty) _syncOrbitAmountController(_items[_index]);
   }
 
   @override
@@ -590,39 +607,123 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   Widget _buildOrbitInlineEditor(BackheaderBudgetItem current) {
+    _syncOrbitAmountController(current);
     final range = _orbitSliderRangeFor(current);
+    final showSetToMax = current.overview != null;
+    final canJumpToOverview = _orbitMatchingOverviewIndexFor(current) != null;
     return KeyedSubtree(
       key: const ValueKey('backheader-orbit-inline-editor'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            _orbitAmountTextFor(current),
-            key: const ValueKey('backheader-orbit-inline-amount'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.white.withValues(alpha: 0.9),
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  key: const ValueKey('limit-card-previous-button'),
+                  onPressed: () => _selectOrbitAdjacent(-1),
+                  icon: const Icon(Icons.chevron_left),
+                  color: AppColors.white,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 34,
+                    height: 34,
+                  ),
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Előző',
+                ),
+                if (canJumpToOverview)
+                  IconButton(
+                    key: const ValueKey('backheader-overview-jump-button'),
+                    onPressed: _jumpToOverviewForCurrent,
+                    icon: const Icon(Icons.account_balance_wallet_outlined),
+                    color: AppColors.white,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 34,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Összesítő',
+                  )
+                else
+                  const SizedBox(width: 34, height: 34),
+                Expanded(
+                  child: Text(
+                    _orbitAmountTextFor(current),
+                    key: const ValueKey('backheader-orbit-inline-amount'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey('limit-card-next-button'),
+                  onPressed: () => _selectOrbitAdjacent(1),
+                  icon: const Icon(Icons.chevron_right),
+                  color: AppColors.white,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 34,
+                    height: 34,
+                  ),
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Következő',
+                ),
+              ],
             ),
-          ),
-          KeyedSubtree(
-            key: const ValueKey('backheader-orbit-slider'),
-            child: CategoryLimitSlider(
-              value: range.value,
-              max: range.max,
-              divisions: range.divisions,
-              enabled: range.enabled,
-              activeColor: AppColors.white,
-              onChanged: (amount) => _setOrbitAmountFromSlider(current, amount),
-              onChangeEnd: (amount) =>
-                  _setOrbitAmountFromSlider(current, amount),
+            KeyedSubtree(
+              key: const ValueKey('backheader-orbit-slider'),
+              child: CategoryLimitSlider(
+                value: range.value,
+                max: range.max,
+                divisions: range.divisions,
+                enabled: range.enabled,
+                activeColor: AppColors.white,
+                onChanged: (amount) =>
+                    _setOrbitAmountFromSlider(current, amount),
+                onChangeEnd: (amount) =>
+                    _setOrbitAmountFromSlider(current, amount, flush: true),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            ThemedPillField(
+              fieldKey: const ValueKey('limit-amount-input'),
+              debugLabel: 'OrbitBudget.amount',
+              controller: _orbitAmountController,
+              focusNode: _orbitAmountFocus,
+              keyboardType: TextInputType.number,
+              onChanged: (text) =>
+                  _setOrbitAmountFromInput(current, text, flush: false),
+              label: _orbitInputLabelFor(current),
+              suffixText: 'Ft',
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showSetToMax)
+                    IconButton(
+                      key: const ValueKey('limit-slider-end-button'),
+                      onPressed: () => _setOrbitOverviewToMax(current),
+                      icon: const Icon(Icons.last_page),
+                      tooltip: 'Max',
+                    ),
+                  IconButton(
+                    key: const ValueKey('limit-reset-inline-button'),
+                    onPressed: () => _setOrbitAmount(current, 0, flush: true),
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Reset',
+                  ),
+                ],
+              ),
+              surfaceColor: AppColors.white.withValues(alpha: 0.94),
+              surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -779,19 +880,194 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     return 0;
   }
 
-  void _setOrbitAmountFromSlider(BackheaderBudgetItem item, double amount) {
+  String _orbitInputLabelFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    if (overview == null) return 'Kategória limit';
+    return switch (overview.kind) {
+      BudgetGoalKind.expenseBudget => 'Budget limit',
+      BudgetGoalKind.incomeGoal => 'Bevételi cél',
+      BudgetGoalKind.savingGoal => 'Megtakarítási cél',
+    };
+  }
+
+  void _handleOrbitAmountInputChanged() {
+    if (_orbitUpdatingController || _items.isEmpty) return;
+    _setOrbitAmountFromInput(
+      _items[_index],
+      _orbitAmountController.text,
+      updateController: false,
+    );
+  }
+
+  void _setOrbitAmountFromInput(
+    BackheaderBudgetItem item,
+    String text, {
+    bool updateController = false,
+    bool flush = false,
+  }) {
+    final value = text.trim().replaceAll(' ', '');
+    final amount = math.max(0, double.tryParse(value) ?? 0).toDouble();
+    _setOrbitAmount(
+      item,
+      amount,
+      updateController: updateController,
+      flush: flush,
+    );
+  }
+
+  void _syncOrbitAmountController(BackheaderBudgetItem item) {
+    if (_orbitAmountFocus.hasFocus && !_orbitUpdatingController) return;
+    final amount = _orbitEffectiveAmountFor(item);
+    final text = amount > 0 ? amount.round().toString() : '';
+    if (_orbitAmountController.text == text) return;
+    _orbitUpdatingController = true;
+    _orbitAmountController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _orbitUpdatingController = false;
+  }
+
+  void _setOrbitAmountFromSlider(
+    BackheaderBudgetItem item,
+    double amount, {
+    bool flush = false,
+  }) {
     final range = _orbitSliderRangeFor(item);
     final snapped = LimitAllocationManager.snapSliderAmount(
       amount,
     ).clamp(0.0, range.max).toDouble();
-    if ((_orbitEffectiveAmountFor(item) - snapped).abs() < 0.01) return;
+    _setOrbitAmount(item, snapped, flush: flush);
+  }
+
+  void _setOrbitOverviewToMax(BackheaderBudgetItem item) {
+    final max = math.max(0.0, widget.periodIncome).toDouble();
+    _setOrbitAmount(item, max, flush: true);
+  }
+
+  void _setOrbitAmount(
+    BackheaderBudgetItem item,
+    double rawAmount, {
+    bool updateController = true,
+    bool flush = false,
+    bool snap = false,
+  }) {
+    final range = _orbitSliderRangeFor(item);
+    final normalized = math.max(0.0, rawAmount).toDouble();
+    final amount =
+        (snap
+                ? LimitAllocationManager.snapSliderAmount(normalized)
+                : normalized)
+            .clamp(0.0, range.max)
+            .toDouble();
+    final current = _orbitEffectiveAmountFor(item);
+    if ((current - amount).abs() < 0.01) {
+      if (updateController) _syncOrbitAmountController(item);
+      return;
+    }
     _orbitRememberedSliderMaxByKey[item.key] = math.max(
       _orbitRememberedSliderMaxByKey[item.key] ?? 0,
-      snapped,
+      amount,
     );
-    _orbitPendingAmountsByKey[item.key] = snapped;
+    _orbitPendingAmountsByKey[item.key] = amount;
+    if (updateController &&
+        _items.isNotEmpty &&
+        _items[_index].key == item.key) {
+      final text = amount > 0 ? amount.round().toString() : '';
+      if (_orbitAmountController.text != text) {
+        _orbitUpdatingController = true;
+        _orbitAmountController.value = TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: text.length),
+        );
+        _orbitUpdatingController = false;
+      }
+    }
     setState(() {});
-    unawaited(_saveOrbitItemAmount(item, snapped));
+    _scheduleOrbitSave(item, amount, flush: flush);
+  }
+
+  void _selectOrbitAdjacent(int direction) {
+    final items = _items;
+    if (items.length < 2) return;
+    final nextIndex = (_index + direction + items.length) % items.length;
+    _selectOrbitIndex(nextIndex);
+  }
+
+  void _selectOrbitIndex(int nextIndex) {
+    final items = _items;
+    if (nextIndex < 0 || nextIndex >= items.length || nextIndex == _index) {
+      return;
+    }
+    _slideController.stop();
+    setState(() {
+      _index = nextIndex;
+      _dragDx = 0;
+      _settling = false;
+    });
+    _syncOrbitAmountController(items[nextIndex]);
+    widget.onActiveItemChanged?.call(items[nextIndex]);
+  }
+
+  int? _orbitMatchingOverviewIndexFor(BackheaderBudgetItem item) {
+    final category = item.category;
+    if (category == null) return null;
+    final targetIndex = _items.indexWhere((candidate) {
+      final overview = candidate.overview;
+      return overview != null &&
+          overview.kind.transactionType == category.transactionType.nativeValue;
+    });
+    if (targetIndex < 0 || targetIndex == _index) return null;
+    return targetIndex;
+  }
+
+  void _scheduleOrbitSave(
+    BackheaderBudgetItem item,
+    double amount, {
+    bool flush = false,
+  }) {
+    _orbitQueuedSavesByKey[item.key] = _OrbitSaveRequest(item, amount);
+    final canStartNow = !_orbitSavingKeys.contains(item.key);
+    if (flush || canStartNow) {
+      _flushOrbitSaves();
+      return;
+    }
+    _orbitSaveDebounce?.cancel();
+    _orbitSaveDebounce = Timer(
+      const Duration(milliseconds: 120),
+      _flushOrbitSaves,
+    );
+  }
+
+  void _flushOrbitSaves() {
+    _orbitSaveDebounce?.cancel();
+    _orbitSaveDebounce = null;
+    final requests = _orbitQueuedSavesByKey.values.toList();
+    for (final request in requests) {
+      if (_orbitSavingKeys.contains(request.item.key)) continue;
+      _orbitQueuedSavesByKey.remove(request.item.key);
+      _startOrbitSave(request);
+    }
+  }
+
+  void _startOrbitSave(_OrbitSaveRequest request) {
+    final key = request.item.key;
+    _orbitSavingKeys.add(key);
+    unawaited(() async {
+      try {
+        await _saveOrbitItemAmount(request.item, request.amount);
+      } catch (error) {
+        DebugConsole.log(
+          '[BackheaderBudget] orbit inline save failed key=$key error=$error',
+        );
+      } finally {
+        _orbitSavingKeys.remove(key);
+        if (_orbitQueuedSavesByKey.containsKey(key)) {
+          _flushOrbitSaves();
+        }
+        if (mounted) setState(() {});
+      }
+    }());
   }
 
   Future<void> _saveOrbitItemAmount(
@@ -978,25 +1254,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final items = _items;
     if (items.length < 2 || _index >= items.length) return;
     final current = items[_index];
-    final category = current.category;
-    if (category == null) return;
-    final targetIndex = items.indexWhere((item) {
-      final overview = item.overview;
-      return overview != null &&
-          overview.kind.transactionType == category.transactionType.nativeValue;
-    });
-    if (targetIndex < 0 || targetIndex == _index) return;
+    final targetIndex = _orbitMatchingOverviewIndexFor(current);
+    if (targetIndex == null) return;
     HapticFeedback.selectionClick();
     DebugConsole.log(
       '[BackheaderBudget] long press jump from=${current.key} to=${items[targetIndex].key}',
     );
-    _slideController.stop();
-    setState(() {
-      _index = targetIndex;
-      _dragDx = 0;
-      _settling = false;
-    });
-    widget.onActiveItemChanged?.call(items[targetIndex]);
+    _selectOrbitIndex(targetIndex);
   }
 
   Future<void> _settleDrag() async {
@@ -1156,4 +1420,11 @@ class _OverviewBudgetBar extends StatelessWidget {
       },
     );
   }
+}
+
+class _OrbitSaveRequest {
+  const _OrbitSaveRequest(this.item, this.amount);
+
+  final BackheaderBudgetItem item;
+  final double amount;
 }

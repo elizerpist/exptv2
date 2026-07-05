@@ -52,23 +52,73 @@ class CategoryMenuPanel extends StatelessWidget {
         .toList();
     final bottomAddButton =
         addButtonPlacement == CategoryMenuAddButtonPlacement.bottomPill;
+    if (bottomAddButton) {
+      return Column(
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 42,
+              height: 4,
+              decoration: const BoxDecoration(
+                color: AppColors.gray200,
+                borderRadius: BorderRadius.all(Radius.circular(2)),
+              ),
+            ),
+          ),
+          const SizedBox(
+            height: 54,
+            child: Center(
+              child: Text(
+                'Válassz kategóriát',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.gray800,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: KeyedSubtree(
+              key: const ValueKey('category-menu-scroll-body'),
+              child: _CategoryGrid(
+                categories: filtered,
+                categoryTransactionCounts: categoryTransactionCounts,
+                activeCategory: activeCategory,
+                onSelect: onSelect,
+                onModify: onModify,
+                onDelete: onDelete,
+                cardSurfaceColor: cardSurfaceColor,
+                cardSurfaceStyle: cardSurfaceStyle,
+                avatarSurfaceStyle: avatarSurfaceStyle,
+                accentColor: accentColor,
+                activeBackgroundColor: activeBackgroundColor,
+                cardShadowEnabled: cardShadowEnabled,
+                bottomPadding: 20,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+            child: ExpenseSurfaceButton(
+              buttonKey: const ValueKey('category-menu-add-pill'),
+              label: 'Új kategória',
+              icon: Icons.add_rounded,
+              onPressed: onAdd,
+              surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              color: accentColor,
+              foregroundColor: AppColors.white,
+            ),
+          ),
+        ],
+      );
+    }
     return Stack(
       children: [
         Column(
           children: [
-            if (bottomAddButton) ...[
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.gray200,
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
-                  ),
-                ),
-              ),
-            ],
             const SizedBox(
               height: 54,
               child: Center(
@@ -83,43 +133,20 @@ class CategoryMenuPanel extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: GridView.builder(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  10,
-                  20,
-                  bottomAddButton ? 96 : 20,
-                ),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 15,
-                  crossAxisSpacing: 14,
-                  mainAxisExtent: 150,
-                ),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final category = filtered[index];
-                  final count =
-                      categoryTransactionCounts[category
-                          .transactionCategoryID] ??
-                      0;
-                  return CategoryCard(
-                    category: category,
-                    transactionCount: count,
-                    active:
-                        activeCategory?.transactionCategoryID ==
-                        category.transactionCategoryID,
-                    onSelect: onSelect,
-                    onModify: onModify,
-                    onDelete: onDelete,
-                    surfaceColor: cardSurfaceColor,
-                    cardSurfaceStyle: cardSurfaceStyle,
-                    avatarSurfaceStyle: avatarSurfaceStyle,
-                    accentColor: accentColor,
-                    activeBackgroundColor: activeBackgroundColor,
-                    shadowEnabled: cardShadowEnabled,
-                  );
-                },
+              child: _CategoryGrid(
+                categories: filtered,
+                categoryTransactionCounts: categoryTransactionCounts,
+                activeCategory: activeCategory,
+                onSelect: onSelect,
+                onModify: onModify,
+                onDelete: onDelete,
+                cardSurfaceColor: cardSurfaceColor,
+                cardSurfaceStyle: cardSurfaceStyle,
+                avatarSurfaceStyle: avatarSurfaceStyle,
+                accentColor: accentColor,
+                activeBackgroundColor: activeBackgroundColor,
+                cardShadowEnabled: cardShadowEnabled,
+                bottomPadding: 20,
               ),
             ),
           ],
@@ -138,21 +165,6 @@ class CategoryMenuPanel extends StatelessWidget {
               elevation: 3,
               child: const Icon(Icons.add_rounded),
             ),
-          )
-        else
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 22,
-            child: ExpenseSurfaceButton(
-              buttonKey: const ValueKey('category-menu-add-pill'),
-              label: 'Új kategória',
-              icon: Icons.add_rounded,
-              onPressed: onAdd,
-              surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
-              color: accentColor,
-              foregroundColor: AppColors.white,
-            ),
           ),
       ],
     );
@@ -160,3 +172,70 @@ class CategoryMenuPanel extends StatelessWidget {
 }
 
 enum CategoryMenuAddButtonPlacement { topFab, bottomPill }
+
+class _CategoryGrid extends StatelessWidget {
+  const _CategoryGrid({
+    required this.categories,
+    required this.categoryTransactionCounts,
+    required this.activeCategory,
+    required this.onSelect,
+    required this.onModify,
+    required this.onDelete,
+    required this.cardSurfaceColor,
+    required this.cardSurfaceStyle,
+    required this.avatarSurfaceStyle,
+    required this.accentColor,
+    required this.activeBackgroundColor,
+    required this.cardShadowEnabled,
+    required this.bottomPadding,
+  });
+
+  final List<TransactionCategory> categories;
+  final Map<int, int> categoryTransactionCounts;
+  final TransactionCategory? activeCategory;
+  final ValueChanged<TransactionCategory> onSelect;
+  final ValueChanged<TransactionCategory> onModify;
+  final ValueChanged<TransactionCategory> onDelete;
+  final Color cardSurfaceColor;
+  final ExpenseSurfaceInteraction cardSurfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
+  final Color accentColor;
+  final Color activeBackgroundColor;
+  final bool cardShadowEnabled;
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: EdgeInsets.fromLTRB(20, 10, 20, bottomPadding),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 15,
+        crossAxisSpacing: 14,
+        mainAxisExtent: 150,
+      ),
+      itemCount: categories.length,
+      itemBuilder: (context, index) {
+        final category = categories[index];
+        final count =
+            categoryTransactionCounts[category.transactionCategoryID] ?? 0;
+        return CategoryCard(
+          category: category,
+          transactionCount: count,
+          active:
+              activeCategory?.transactionCategoryID ==
+              category.transactionCategoryID,
+          onSelect: onSelect,
+          onModify: onModify,
+          onDelete: onDelete,
+          surfaceColor: cardSurfaceColor,
+          cardSurfaceStyle: cardSurfaceStyle,
+          avatarSurfaceStyle: avatarSurfaceStyle,
+          accentColor: accentColor,
+          activeBackgroundColor: activeBackgroundColor,
+          shadowEnabled: cardShadowEnabled,
+        );
+      },
+    );
+  }
+}

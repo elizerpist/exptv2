@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/data/limit_allocation_manager.dart';
 import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
@@ -11,6 +13,7 @@ import 'package:exptv2/features/transactions/widgets/header_card/category_budget
 import 'package:exptv2/features/transactions/widgets/header_card/category_budget_stage.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_partition_bar.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/category_limit_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -555,6 +558,287 @@ void main() {
       expect(activeItem?.category?.title, 'Travel');
     },
   );
+
+  testWidgets('orbitBudget inline editor exposes sheet controls and reset', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 1000);
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+    final saved = <({double amount, bool alert})>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              periodIncome: 10000,
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    saved.add((amount: limitAmount, alert: alertActive));
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _expandOrbitEditor(tester);
+
+    expect(find.byKey(const ValueKey('limit-amount-input')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('limit-reset-inline-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('limit-card-previous-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('limit-card-next-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-overview-jump-button')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('limit-reset-inline-button')));
+    await tester.pump(const Duration(milliseconds: 180));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotEmpty);
+    expect(saved.last.amount, 0);
+    expect(saved.last.alert, isFalse);
+  });
+
+  testWidgets(
+    'orbitBudget inline editor supports input max and overview jump',
+    (tester) async {
+      BackheaderBudgetItem? activeItem;
+      final salary = barFixture(
+        8,
+        'Salary',
+        300,
+        400,
+        transactionType: TransactionType.income,
+      );
+      final incomeOverview = overviewFixture(
+        BudgetGoalKind.incomeGoal,
+        500,
+        600,
+      );
+      final savedOverviewAmounts = <double>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.orbitBudget,
+                items: [
+                  BackheaderBudgetItem.overview(incomeOverview),
+                  BackheaderBudgetItem.category(salary),
+                ],
+                categoryBars: [salary],
+                overviewItems: [incomeOverview],
+                periodIncome: 900,
+                activeKey: BackheaderBudgetItem.category(salary).key,
+                onActiveItemChanged: (item) => activeItem = item,
+                onItemTap: (_) {},
+                onSaveOverview:
+                    (kind, {required limitAmount, required alertActive}) async {
+                      savedOverviewAmounts.add(limitAmount);
+                    },
+                onSaveCategory:
+                    (
+                      bar, {
+                      required limitAmount,
+                      required alertActive,
+                    }) async {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await _expandOrbitEditor(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('backheader-overview-jump-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(activeItem?.overview?.kind, BudgetGoalKind.incomeGoal);
+      expect(find.text('Beveteli cel'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('limit-slider-end-button')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
+      await tester.pump(const Duration(milliseconds: 180));
+      expect(savedOverviewAmounts, isNotEmpty);
+      expect(savedOverviewAmounts.last, 900);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('limit-amount-input')),
+        '700',
+      );
+      await tester.pump(const Duration(milliseconds: 180));
+      expect(savedOverviewAmounts.last, 700);
+      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+    },
+  );
+
+  testWidgets('orbitBudget slider coalesces saves and catches save errors', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 1000);
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+    final savedAmounts = <double>[];
+    final saveCompleters = <Completer<void>>[];
+    var inFlight = 0;
+    var maxInFlight = 0;
+    var throwOnNextSave = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              periodIncome: 10000,
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    if (throwOnNextSave) {
+                      throwOnNextSave = false;
+                      throw StateError('forced save failure');
+                    }
+                    inFlight += 1;
+                    maxInFlight = maxInFlight < inFlight
+                        ? inFlight
+                        : maxInFlight;
+                    savedAmounts.add(limitAmount);
+                    final completer = Completer<void>();
+                    saveCompleters.add(completer);
+                    await completer.future;
+                    inFlight -= 1;
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _expandOrbitEditor(tester);
+
+    final slider = tester.widget<CategoryLimitSlider>(
+      find.byType(CategoryLimitSlider),
+    );
+    slider.onChanged(2000);
+    slider.onChanged(3000);
+    slider.onChanged(4000);
+    await tester.pump();
+
+    expect(maxInFlight, 1);
+    expect(savedAmounts.length, lessThanOrEqualTo(1));
+
+    for (final completer in saveCompleters) {
+      if (!completer.isCompleted) completer.complete();
+    }
+    await tester.pump(const Duration(milliseconds: 220));
+    for (final completer in saveCompleters) {
+      if (!completer.isCompleted) completer.complete();
+    }
+    await tester.pumpAndSettle();
+
+    expect(savedAmounts, isNotEmpty);
+    expect(savedAmounts.last, 4000);
+    expect(maxInFlight, 1);
+
+    throwOnNextSave = true;
+    tester
+        .widget<CategoryLimitSlider>(find.byType(CategoryLimitSlider))
+        .onChanged(5000);
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('orbitBudget top content sits 10px lower', (tester) async {
+    final food = barFixture(6, 'Food', 100, 150);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final orbitIcon = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-icon')),
+    );
+    expect(orbitIcon.top, greaterThanOrEqualTo(42));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.heroToken,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-style-heroToken-content')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('backheader-orbit-icon')), findsNothing);
+  });
 
   testWidgets(
     'experimental backheader preserves swipe and long press behavior',
@@ -1370,16 +1654,29 @@ void main() {
   });
 }
 
+Future<void> _expandOrbitEditor(WidgetTester tester) async {
+  await tester.drag(
+    find.byKey(const ValueKey('backheader-orbit-handle')),
+    const Offset(0, 90),
+  );
+  await tester.pumpAndSettle();
+  expect(
+    find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+    findsOneWidget,
+  );
+}
+
 CategoryBudgetBarData barFixture(
   int id,
   String title,
   double spent,
-  double limit,
-) {
+  double limit, {
+  TransactionType transactionType = TransactionType.expense,
+}) {
   final category = TransactionCategory.fromMap({
     'transactionCategoryID': id,
     'name': title,
-    'type': 'kiadás',
+    'type': transactionType.nativeValue == 'income' ? 'bevétel' : 'kiadás',
     'colorSlot': 7,
     'iconSlot': 2,
     'backgroundColor': '#0ea5e9',
@@ -1392,7 +1689,7 @@ CategoryBudgetBarData barFixture(
     key: 'category-$id',
     targetType: LimitTargetType.category,
     targetId: id,
-    transactionType: TransactionType.expense,
+    transactionType: transactionType,
     window: LimitWindow.monthly,
     periodKey: '2026-05',
     title: title,

@@ -190,6 +190,49 @@ void main() {
     );
   });
 
+  testWidgets('slide-up category menu scroll body ends above the add pill', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final store = TransactionStore(FakeTransactionRepository());
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 919,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    final body = tester.getRect(
+      find.byKey(const ValueKey('category-menu-scroll-body')),
+    );
+    final addPill = tester.getRect(
+      find.byKey(const ValueKey('category-menu-add-pill')),
+    );
+
+    expect(body.bottom, lessThan(addPill.top));
+    expect(addPill.top - body.bottom, greaterThanOrEqualTo(20));
+  });
+
   testWidgets('slide-up category menu drags only from the handler', (
     tester,
   ) async {
