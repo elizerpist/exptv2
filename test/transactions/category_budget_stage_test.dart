@@ -343,6 +343,9 @@ void main() {
     final input = tester.widget<TextField>(
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
     );
+    final ring = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+    );
     final pill = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-limit-pill')),
     );
@@ -362,7 +365,7 @@ void main() {
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    final expectedTrackHeight = previousTrackHeight * 0.7;
+    final expectedTrackHeight = previousTrackHeight * 0.63;
     final expectedPartitionTop =
         TransactionHeaderMetrics.magnetTop +
         TransactionHeaderMetrics.magnetHeight / 2 -
@@ -377,10 +380,29 @@ void main() {
       moreOrLessEquals(expectedTrackHeight, epsilon: 0.1),
     );
     expect(icon.top, moreOrLessEquals(expectedOrbitTop, epsilon: 0.1));
+    expect(expectedOrbitTop, moreOrLessEquals(54, epsilon: 0.1));
+    expect(ring.painter, isNotNull);
+    expect(ring.child, isNotNull);
+    final ringSize = tester.getSize(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+    );
+    expect(ringSize.width, greaterThan(0));
+    expect(ringSize.width, moreOrLessEquals(icon.width, epsilon: 0.1));
     expect(input.controller!.text, '150');
     expect(input.style!.fontSize, moreOrLessEquals(16.8, epsilon: 0.01));
     expect(input.cursorColor, AppColors.white);
     expect(input.decoration!.filled, isFalse);
+    final partitionContainer = tester.widget<Container>(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    final foreground =
+        partitionContainer.foregroundDecoration! as BoxDecoration;
+    final border = foreground.border! as Border;
+    expect(foreground.borderRadius, isNull);
+    expect(border.top.width, moreOrLessEquals(1.6, epsilon: 0.01));
+    expect(border.bottom.width, moreOrLessEquals(1.6, epsilon: 0.01));
+    expect(border.left.style, BorderStyle.none);
+    expect(border.right.style, BorderStyle.none);
     expect(pill.left, lessThan(slash.left));
     expect(slash.left, lessThan(spent.left));
     expect(spent.center.dy, moreOrLessEquals(pill.center.dy, epsilon: 0.5));
@@ -609,6 +631,60 @@ void main() {
     },
   );
 
+  testWidgets('orbitBudget shows neighboring card preview while swiping', (
+    tester,
+  ) async {
+    BackheaderBudgetItem? activeItem;
+    final food = barFixture(6, 'Food', 100, 150);
+    final travel = barFixture(7, 'Travel', 40, 300);
+    final overview = BackheaderBudgetItem.overview(
+      overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 300,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [
+                overview,
+                BackheaderBudgetItem.category(food),
+                BackheaderBudgetItem.category(travel),
+              ],
+              categoryBars: [food, travel],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onActiveItemChanged: (item) => activeItem = item,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+      ),
+    );
+    await gesture.moveBy(const Offset(-24, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-48, 0));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-preview-next')),
+      findsOneWidget,
+    );
+    expect(activeItem, isNull);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(activeItem?.category?.title, 'Travel');
+  });
+
   testWidgets('orbitBudget handle overpull snaps or requests close', (
     tester,
   ) async {
@@ -728,6 +804,70 @@ void main() {
     expect(find.text('100 Ft / 1 000 Ft'), findsNothing);
   });
 
+  testWidgets('orbitBudget partition slider defers saves during drag', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 1000);
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+    final savedCategoryAmounts = <double>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              periodIncome: 10000,
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    savedCategoryAmounts.add(limitAmount);
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final partition = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    final initialHandle = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-partition-handle')),
+    );
+    final gesture = await tester.startGesture(
+      Offset(partition.left + 8, partition.center.dy),
+    );
+    await gesture.moveBy(Offset(partition.width * 0.25, 0));
+    await tester.pump();
+    await gesture.moveBy(Offset(partition.width * 0.20, 0));
+    await tester.pump(const Duration(milliseconds: 160));
+
+    final movedHandle = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-partition-handle')),
+    );
+    expect(movedHandle.center.dx, greaterThan(initialHandle.center.dx));
+    expect(savedCategoryAmounts, isEmpty);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 180));
+
+    expect(savedCategoryAmounts, isNotEmpty);
+    expect(savedCategoryAmounts.length, 1);
+    expect(savedCategoryAmounts.last, greaterThan(1000));
+  });
+
   testWidgets('orbitBudget amount text edits category limits inline', (
     tester,
   ) async {
@@ -844,12 +984,21 @@ void main() {
     final partition = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
+    final expectedOrbitTop =
+        TransactionHeaderMetrics.cardHeight -
+        TransactionHeaderMetrics.expandedSlideDistance +
+        10;
     expect(max.left, greaterThan(reset.right));
     expect(max.right, lessThanOrEqualTo(surface.right));
-    expect(reset.top, greaterThanOrEqualTo(surface.top));
-    expect(max.top, greaterThanOrEqualTo(surface.top));
+    expect(reset.top, moreOrLessEquals(expectedOrbitTop, epsilon: 0.1));
+    expect(max.top, moreOrLessEquals(expectedOrbitTop, epsilon: 0.1));
     expect(reset.bottom, lessThan(partition.top));
     expect(max.bottom, lessThan(partition.top));
+    final overviewRing = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+    );
+    expect(overviewRing.painter, isNotNull);
+    expect(overviewRing.child, isNotNull);
 
     await tester.tap(find.byKey(const ValueKey('backheader-orbit-max-button')));
     await tester.pump(const Duration(milliseconds: 180));

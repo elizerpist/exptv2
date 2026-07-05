@@ -17,6 +17,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     this.overviewLimitAmount,
     this.height = 42,
     this.onSegmentTap,
+    this.fullBleedSquare = false,
   });
 
   final List<CategoryBudgetBarData> bars;
@@ -26,6 +27,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   final double? overviewLimitAmount;
   final double height;
   final ValueChanged<int>? onSegmentTap;
+  final bool fullBleedSquare;
   static const borderWidth = 1.6;
 
   @override
@@ -36,10 +38,13 @@ class CategoryLimitPartitionBar extends StatelessWidget {
         allocation: allocation,
         height: height,
         onSegmentTap: onSegmentTap,
+        fullBleedSquare: fullBleedSquare,
       );
     }
     final overviewLimit = overviewLimitAmount ?? 0;
-    final radius = BorderRadius.circular(height / 2);
+    final radius = fullBleedSquare
+        ? BorderRadius.zero
+        : BorderRadius.circular(height / 2);
     return Container(
       key: const ValueKey('category-limit-partition-bar'),
       height: height,
@@ -55,8 +60,13 @@ class CategoryLimitPartitionBar extends StatelessWidget {
         ],
       ),
       foregroundDecoration: BoxDecoration(
-        borderRadius: radius,
-        border: Border.all(color: AppColors.white, width: borderWidth),
+        borderRadius: fullBleedSquare ? null : radius,
+        border: fullBleedSquare
+            ? const Border(
+                top: BorderSide(color: AppColors.white, width: borderWidth),
+                bottom: BorderSide(color: AppColors.white, width: borderWidth),
+              )
+            : Border.all(color: AppColors.white, width: borderWidth),
       ),
       clipBehavior: Clip.antiAlias,
       child: ColoredBox(
@@ -251,25 +261,40 @@ class _AllocationPartitionBar extends StatelessWidget {
     required this.allocation,
     required this.height,
     this.onSegmentTap,
+    this.fullBleedSquare = false,
   });
 
   final LimitAllocationData allocation;
   final double height;
   final ValueChanged<int>? onSegmentTap;
+  final bool fullBleedSquare;
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(8);
+    final radius = fullBleedSquare
+        ? BorderRadius.zero
+        : BorderRadius.circular(8);
     return Container(
       key: const ValueKey('category-limit-partition-bar'),
       height: height,
       decoration: BoxDecoration(color: AppColors.gray200, borderRadius: radius),
       foregroundDecoration: BoxDecoration(
-        borderRadius: radius,
-        border: Border.all(
-          color: AppColors.white,
-          width: CategoryLimitPartitionBar.borderWidth,
-        ),
+        borderRadius: fullBleedSquare ? null : radius,
+        border: fullBleedSquare
+            ? const Border(
+                top: BorderSide(
+                  color: AppColors.white,
+                  width: CategoryLimitPartitionBar.borderWidth,
+                ),
+                bottom: BorderSide(
+                  color: AppColors.white,
+                  width: CategoryLimitPartitionBar.borderWidth,
+                ),
+              )
+            : Border.all(
+                color: AppColors.white,
+                width: CategoryLimitPartitionBar.borderWidth,
+              ),
       ),
       clipBehavior: Clip.antiAlias,
       child: ColoredBox(

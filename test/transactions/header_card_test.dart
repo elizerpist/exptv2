@@ -21,6 +21,12 @@ void main() {
     );
 
     expect(TransactionHeaderMetrics.cardHeight, 188);
+    expect(TransactionHeaderMetrics.expandedSlideDistance, 144);
+    expect(
+      TransactionHeaderMetrics.cardHeight -
+          TransactionHeaderMetrics.expandedSlideDistance,
+      44,
+    );
     expect(TransactionHeaderMetrics.balanceLabelTop, 112);
     expect(TransactionHeaderMetrics.balanceTop, 134);
     expect(TransactionHeaderMetrics.titleTop, 35);

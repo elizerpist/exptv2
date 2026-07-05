@@ -340,10 +340,12 @@ class _OrbitIcon extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           if (hasLimit)
-            CustomPaint(
-              key: const ValueKey('backheader-orbit-progress-ring'),
-              size: const Size.square(_outerSize),
-              painter: _OrbitProgressRingPainter(progress),
+            Positioned.fill(
+              child: CustomPaint(
+                key: const ValueKey('backheader-orbit-progress-ring'),
+                painter: _OrbitProgressRingPainter(progress),
+                child: const SizedBox.expand(),
+              ),
             ),
           Container(
             width: _innerSize,

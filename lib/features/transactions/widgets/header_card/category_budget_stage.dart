@@ -110,6 +110,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _orbitRejectedDrag = false;
   var _orbitCloseArmed = false;
   var _orbitHandlePointerActive = false;
+  var _orbitPartitionDragActive = false;
   var _orbitSuppressHorizontalDrag = false;
   var _orbitUpdatingController = false;
 
@@ -324,6 +325,45 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     required OverviewBudgetData? frameOverview,
   }) {
     final isOrbitBudget = widget.backheaderStyle == BackheaderStyle.orbitBudget;
+    Widget surfaceFor(BackheaderBudgetItem item, {bool preview = false}) {
+      return BackheaderStyleSurface(
+        style: widget.backheaderStyle,
+        current: item,
+        items: items,
+        categoryBars: _categoryBars,
+        frameProgress: frameProgress,
+        frameOverview: frameOverview,
+        activeIndex: _index,
+        backgroundColor: widget.backgroundColor,
+        orbitPartitionBar: isOrbitBudget
+            ? preview
+                  ? _orbitStaticPartitionBarFor(item)
+                  : _orbitPartitionBarFor(item)
+            : null,
+        orbitProgress: _orbitProgressFor(item),
+        orbitHasLimit: _orbitHasLimit(item),
+        orbitAmountText: isOrbitBudget ? _orbitAmountTextFor(item) : null,
+        orbitAmountEditor: isOrbitBudget && !preview
+            ? _buildOrbitAmountEditor(item)
+            : null,
+        orbitActions: isOrbitBudget && !preview
+            ? _buildOrbitActions(item)
+            : null,
+        onOrbitHandlePointerDown: isOrbitBudget && !preview
+            ? _handleOrbitHandlePointerDown
+            : null,
+        onOrbitHandlePointerMove: isOrbitBudget && !preview
+            ? _handleOrbitHandlePointerMove
+            : null,
+        onOrbitHandlePointerUp: isOrbitBudget && !preview
+            ? _handleOrbitHandlePointerUp
+            : null,
+        onOrbitHandlePointerCancel: isOrbitBudget && !preview
+            ? _handleOrbitHandlePointerCancel
+            : null,
+      );
+    }
+
     return SizedBox(
       key: const ValueKey('category-budget-stage'),
       height:
@@ -368,45 +408,67 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 _settleDrag();
               },
               onLongPress: _jumpToOverviewForCurrent,
-              child: Transform.translate(
-                offset: Offset(_dragDx, 0),
-                child: BackheaderStyleSurface(
-                  style: widget.backheaderStyle,
-                  current: current,
-                  items: items,
-                  categoryBars: _categoryBars,
-                  frameProgress: frameProgress,
-                  frameOverview: frameOverview,
-                  activeIndex: _index,
-                  backgroundColor: widget.backgroundColor,
-                  orbitPartitionBar:
-                      widget.backheaderStyle == BackheaderStyle.orbitBudget
-                      ? _orbitPartitionBarFor(current)
-                      : null,
-                  orbitProgress: _orbitProgressFor(current),
-                  orbitHasLimit: _orbitHasLimit(current),
-                  orbitAmountText: isOrbitBudget
-                      ? _orbitAmountTextFor(current)
-                      : null,
-                  orbitAmountEditor: isOrbitBudget
-                      ? _buildOrbitAmountEditor(current)
-                      : null,
-                  orbitActions: isOrbitBudget
-                      ? _buildOrbitActions(current)
-                      : null,
-                  onOrbitHandlePointerDown: isOrbitBudget
-                      ? _handleOrbitHandlePointerDown
-                      : null,
-                  onOrbitHandlePointerMove: isOrbitBudget
-                      ? _handleOrbitHandlePointerMove
-                      : null,
-                  onOrbitHandlePointerUp: isOrbitBudget
-                      ? _handleOrbitHandlePointerUp
-                      : null,
-                  onOrbitHandlePointerCancel: isOrbitBudget
-                      ? _handleOrbitHandlePointerCancel
-                      : null,
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final showPreview =
+                      isOrbitBudget && items.length > 1 && _dragDx != 0;
+                  final nextIndex = (_index + 1) % items.length;
+                  final previousIndex = _index == 0
+                      ? items.length - 1
+                      : _index - 1;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (showPreview && _dragDx < 0)
+                        Positioned.fill(
+                          child: Transform.translate(
+                            offset: Offset(width + _dragDx, 0),
+                            child: IgnorePointer(
+                              child: KeyedSubtree(
+                                key: const ValueKey(
+                                  'backheader-orbit-preview-next',
+                                ),
+                                child: Opacity(
+                                  opacity: 0.82,
+                                  child: surfaceFor(
+                                    items[nextIndex],
+                                    preview: true,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (showPreview && _dragDx > 0)
+                        Positioned.fill(
+                          child: Transform.translate(
+                            offset: Offset(-width + _dragDx, 0),
+                            child: IgnorePointer(
+                              child: KeyedSubtree(
+                                key: const ValueKey(
+                                  'backheader-orbit-preview-previous',
+                                ),
+                                child: Opacity(
+                                  opacity: 0.82,
+                                  child: surfaceFor(
+                                    items[previousIndex],
+                                    preview: true,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Positioned.fill(
+                        child: Transform.translate(
+                          offset: Offset(_dragDx, 0),
+                          child: surfaceFor(current),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -560,19 +622,30 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       builder: (context) {
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onTapDown: (details) => _setOrbitAmountFromPartitionPosition(
+          onTapUp: (details) => _setOrbitAmountFromPartitionPosition(
             current,
             context,
             details.globalPosition.dx,
             flush: true,
           ),
+          onHorizontalDragStart: (_) {
+            _orbitPartitionDragActive = true;
+          },
           onHorizontalDragUpdate: (details) =>
               _setOrbitAmountFromPartitionPosition(
                 current,
                 context,
                 details.globalPosition.dx,
+                deferSave: true,
               ),
-          onHorizontalDragEnd: (_) => _flushOrbitSaves(),
+          onHorizontalDragCancel: () {
+            _orbitPartitionDragActive = false;
+            _flushOrbitSaves();
+          },
+          onHorizontalDragEnd: (_) {
+            _orbitPartitionDragActive = false;
+            _flushOrbitSaves();
+          },
           child: LayoutBuilder(
             builder: (context, constraints) {
               const handleWidth = 12.0;
@@ -588,6 +661,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   CategoryLimitPartitionBar(
                     height: _orbitPartitionHeight,
                     allocation: allocation,
+                    fullBleedSquare: true,
                   ),
                   Positioned(
                     key: const ValueKey('backheader-orbit-partition-handle'),
@@ -618,12 +692,26 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     );
   }
 
+  Widget _orbitStaticPartitionBarFor(BackheaderBudgetItem current) {
+    if (current.overview?.kind == BudgetGoalKind.savingGoal) {
+      return const SizedBox.shrink();
+    }
+    return CategoryLimitPartitionBar(
+      height: _orbitPartitionHeight,
+      allocation: LimitAllocationManager.build(
+        overviewLimit: _orbitOverviewLimitAmount(current),
+        bars: _orbitPartitionBars,
+      ),
+      fullBleedSquare: true,
+    );
+  }
+
   double get _orbitPartitionHeight {
     final previousTrackHeight = MagnetStripPainter.visualTrackHeight(
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    return math.max(2.0, previousTrackHeight * 0.7);
+    return math.max(2.0, previousTrackHeight * 0.63);
   }
 
   double _orbitOverviewLimitAmount(BackheaderBudgetItem current) {
@@ -989,12 +1077,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     BackheaderBudgetItem item,
     double amount, {
     bool flush = false,
+    bool deferSave = false,
   }) {
     final range = _orbitSliderRangeFor(item);
     final snapped = LimitAllocationManager.snapSliderAmount(
       amount,
     ).clamp(0.0, range.max).toDouble();
-    _setOrbitAmount(item, snapped, flush: flush);
+    _setOrbitAmount(item, snapped, flush: flush, deferSave: deferSave);
   }
 
   void _setOrbitAmountFromPartitionPosition(
@@ -1002,6 +1091,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     BuildContext context,
     double globalDx, {
     bool flush = false,
+    bool deferSave = false,
   }) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
@@ -1009,7 +1099,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     if (!range.enabled || range.max <= 0) return;
     final localDx = box.globalToLocal(Offset(globalDx, 0)).dx;
     final ratio = (localDx / box.size.width).clamp(0.0, 1.0).toDouble();
-    _setOrbitAmountFromSlider(item, range.max * ratio, flush: flush);
+    _setOrbitAmountFromSlider(
+      item,
+      range.max * ratio,
+      flush: flush,
+      deferSave: deferSave,
+    );
   }
 
   void _setOrbitOverviewToMax(BackheaderBudgetItem item) {
@@ -1022,6 +1117,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     double rawAmount, {
     bool updateController = true,
     bool flush = false,
+    bool deferSave = false,
     bool snap = false,
   }) {
     final range = _orbitSliderRangeFor(item);
@@ -1056,7 +1152,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       }
     }
     setState(() {});
-    _scheduleOrbitSave(item, amount, flush: flush);
+    _scheduleOrbitSave(item, amount, flush: flush, deferSave: deferSave);
   }
 
   void _selectOrbitIndex(int nextIndex) {
@@ -1090,8 +1186,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     BackheaderBudgetItem item,
     double amount, {
     bool flush = false,
+    bool deferSave = false,
   }) {
     _orbitQueuedSavesByKey[item.key] = _OrbitSaveRequest(item, amount);
+    if (deferSave || _orbitPartitionDragActive) {
+      _orbitSaveDebounce?.cancel();
+      return;
+    }
     final canStartNow = !_orbitSavingKeys.contains(item.key);
     if (flush || canStartNow) {
       _flushOrbitSaves();
