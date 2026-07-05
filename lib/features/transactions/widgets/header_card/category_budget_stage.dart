@@ -111,7 +111,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _orbitCloseArmed = false;
   var _orbitHandlePointerActive = false;
   var _orbitPartitionDragActive = false;
-  var _orbitSuppressHorizontalDrag = false;
+  int? _orbitSurfaceSwipePointer;
+  var _orbitSurfaceSwipeDx = 0.0;
+  var _orbitSurfaceSwipeDy = 0.0;
+  var _orbitSurfaceSwipeAccepted = false;
+  var _orbitSurfaceSwipeRejected = false;
   var _orbitUpdatingController = false;
 
   @override
@@ -373,102 +377,105 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       child: Stack(
         children: [
           Positioned.fill(
-            child: GestureDetector(
-              key: const ValueKey('backheader-experimental-surface'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _tap(current),
-              onHorizontalDragStart: (_) {
-                if (_orbitHandlePointerActive) {
-                  _orbitSuppressHorizontalDrag = true;
-                  return;
-                }
-                _slideController.stop();
-                _settling = false;
-              },
-              onHorizontalDragUpdate: (details) {
-                if (_orbitSuppressHorizontalDrag) return;
-                if (_settling) return;
-                final nextDx = (_dragDx + details.delta.dx)
-                    .clamp(-_maxVisualDrag, _maxVisualDrag)
-                    .toDouble();
-                setState(() => _dragDx = nextDx);
-              },
-              onHorizontalDragCancel: () {
-                if (_orbitSuppressHorizontalDrag) {
-                  _orbitSuppressHorizontalDrag = false;
-                  return;
-                }
-                _animateDragTo(0);
-              },
-              onHorizontalDragEnd: (_) {
-                if (_orbitSuppressHorizontalDrag) {
-                  _orbitSuppressHorizontalDrag = false;
-                  return;
-                }
-                _settleDrag();
-              },
-              onLongPress: _jumpToOverviewForCurrent,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  final showPreview =
-                      isOrbitBudget && items.length > 1 && _dragDx != 0;
-                  final nextIndex = (_index + 1) % items.length;
-                  final previousIndex = _index == 0
-                      ? items.length - 1
-                      : _index - 1;
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      if (showPreview && _dragDx < 0)
-                        Positioned.fill(
-                          child: Transform.translate(
-                            offset: Offset(width + _dragDx, 0),
-                            child: IgnorePointer(
-                              child: KeyedSubtree(
-                                key: const ValueKey(
-                                  'backheader-orbit-preview-next',
-                                ),
-                                child: Opacity(
-                                  opacity: 0.82,
-                                  child: surfaceFor(
-                                    items[nextIndex],
-                                    preview: true,
+            child: Listener(
+              onPointerDown: isOrbitBudget
+                  ? _handleOrbitSurfacePointerDown
+                  : null,
+              onPointerMove: isOrbitBudget
+                  ? _handleOrbitSurfacePointerMove
+                  : null,
+              onPointerUp: isOrbitBudget ? _handleOrbitSurfacePointerUp : null,
+              onPointerCancel: isOrbitBudget
+                  ? _handleOrbitSurfacePointerCancel
+                  : null,
+              child: GestureDetector(
+                key: const ValueKey('backheader-experimental-surface'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _tap(current),
+                onHorizontalDragStart: isOrbitBudget
+                    ? null
+                    : (_) {
+                        _slideController.stop();
+                        _settling = false;
+                      },
+                onHorizontalDragUpdate: isOrbitBudget
+                    ? null
+                    : (details) {
+                        if (_settling) return;
+                        final nextDx = (_dragDx + details.delta.dx)
+                            .clamp(-_maxVisualDrag, _maxVisualDrag)
+                            .toDouble();
+                        setState(() => _dragDx = nextDx);
+                      },
+                onHorizontalDragCancel: isOrbitBudget
+                    ? null
+                    : () => _animateDragTo(0),
+                onHorizontalDragEnd: isOrbitBudget
+                    ? null
+                    : (_) => _settleDrag(),
+                onLongPress: _jumpToOverviewForCurrent,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    final showPreview =
+                        isOrbitBudget && items.length > 1 && _dragDx != 0;
+                    final nextIndex = (_index + 1) % items.length;
+                    final previousIndex = _index == 0
+                        ? items.length - 1
+                        : _index - 1;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (showPreview && _dragDx < 0)
+                          Positioned.fill(
+                            child: Transform.translate(
+                              offset: Offset(width + _dragDx, 0),
+                              child: IgnorePointer(
+                                child: KeyedSubtree(
+                                  key: const ValueKey(
+                                    'backheader-orbit-preview-next',
+                                  ),
+                                  child: Opacity(
+                                    opacity: 0.82,
+                                    child: surfaceFor(
+                                      items[nextIndex],
+                                      preview: true,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      if (showPreview && _dragDx > 0)
-                        Positioned.fill(
-                          child: Transform.translate(
-                            offset: Offset(-width + _dragDx, 0),
-                            child: IgnorePointer(
-                              child: KeyedSubtree(
-                                key: const ValueKey(
-                                  'backheader-orbit-preview-previous',
-                                ),
-                                child: Opacity(
-                                  opacity: 0.82,
-                                  child: surfaceFor(
-                                    items[previousIndex],
-                                    preview: true,
+                        if (showPreview && _dragDx > 0)
+                          Positioned.fill(
+                            child: Transform.translate(
+                              offset: Offset(-width + _dragDx, 0),
+                              child: IgnorePointer(
+                                child: KeyedSubtree(
+                                  key: const ValueKey(
+                                    'backheader-orbit-preview-previous',
+                                  ),
+                                  child: Opacity(
+                                    opacity: 0.82,
+                                    child: surfaceFor(
+                                      items[previousIndex],
+                                      preview: true,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
+                        Positioned.fill(
+                          child: Transform.translate(
+                            offset: Offset(_dragDx, 0),
+                            child: surfaceFor(current),
+                          ),
                         ),
-                      Positioned.fill(
-                        child: Transform.translate(
-                          offset: Offset(_dragDx, 0),
-                          child: surfaceFor(current),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -801,6 +808,20 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Text(
+            spentText,
+            key: const ValueKey('backheader-orbit-spent-text'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: amountStyle,
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            '/',
+            key: ValueKey('backheader-orbit-amount-slash'),
+            style: amountStyle,
+          ),
+          const SizedBox(width: 6),
           Container(
             key: const ValueKey('backheader-orbit-limit-pill'),
             width: pillWidth,
@@ -820,6 +841,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               focusNode: _orbitAmountFocus,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              enableInteractiveSelection: false,
               maxLines: 1,
               textAlign: TextAlign.center,
               textAlignVertical: TextAlignVertical.center,
@@ -839,20 +861,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 contentPadding: EdgeInsets.zero,
               ),
             ),
-          ),
-          const SizedBox(width: 6),
-          const Text(
-            '/',
-            key: ValueKey('backheader-orbit-amount-slash'),
-            style: amountStyle,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            spentText,
-            key: const ValueKey('backheader-orbit-spent-text'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: amountStyle,
           ),
         ],
       ),
@@ -1112,6 +1120,86 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _setOrbitAmount(item, max, flush: true);
   }
 
+  void _handleOrbitSurfacePointerDown(PointerDownEvent event) {
+    if (_orbitHandlePointerActive ||
+        _orbitSurfaceSwipeBlocked(event.localPosition)) {
+      return;
+    }
+    _orbitSurfaceSwipePointer = event.pointer;
+    _orbitSurfaceSwipeDx = 0;
+    _orbitSurfaceSwipeDy = 0;
+    _orbitSurfaceSwipeAccepted = false;
+    _orbitSurfaceSwipeRejected = false;
+  }
+
+  void _handleOrbitSurfacePointerMove(PointerMoveEvent event) {
+    if (_orbitSurfaceSwipePointer != event.pointer ||
+        _orbitSurfaceSwipeRejected ||
+        _settling) {
+      return;
+    }
+    _orbitSurfaceSwipeDx += event.delta.dx;
+    _orbitSurfaceSwipeDy += event.delta.dy;
+    if (!_orbitSurfaceSwipeAccepted) {
+      final absDx = _orbitSurfaceSwipeDx.abs();
+      final absDy = _orbitSurfaceSwipeDy.abs();
+      if (absDx <= _orbitAxisSlop && absDy <= _orbitAxisSlop) return;
+      if (absDy > absDx) {
+        _orbitSurfaceSwipeRejected = true;
+        return;
+      }
+      _orbitSurfaceSwipeAccepted = true;
+      _slideController.stop();
+      _settling = false;
+    }
+    final nextDx = (_dragDx + event.delta.dx)
+        .clamp(-_maxVisualDrag, _maxVisualDrag)
+        .toDouble();
+    setState(() => _dragDx = nextDx);
+  }
+
+  void _handleOrbitSurfacePointerUp(PointerUpEvent event) {
+    if (_orbitSurfaceSwipePointer != event.pointer) return;
+    final shouldSettle = _orbitSurfaceSwipeAccepted;
+    _resetOrbitSurfaceSwipe();
+    if (shouldSettle) {
+      _settleDrag();
+    } else {
+      _animateDragTo(0);
+    }
+  }
+
+  void _handleOrbitSurfacePointerCancel(PointerCancelEvent event) {
+    if (_orbitSurfaceSwipePointer != event.pointer) return;
+    _resetOrbitSurfaceSwipe();
+    _animateDragTo(0);
+  }
+
+  bool _orbitSurfaceSwipeBlocked(Offset localPosition) {
+    final trackHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.fade,
+      TransactionHeaderMetrics.magnetHeight,
+    );
+    final partitionTop =
+        TransactionHeaderMetrics.magnetTop +
+        TransactionHeaderMetrics.magnetHeight / 2 -
+        trackHeight / 2;
+    final partitionBottom = partitionTop + trackHeight * 0.7;
+    final handleTop =
+        TransactionHeaderMetrics.cardHeight + _orbitClosePull - 30;
+    return localPosition.dy >= partitionTop - 8 &&
+            localPosition.dy <= partitionBottom + 8 ||
+        localPosition.dy >= handleTop;
+  }
+
+  void _resetOrbitSurfaceSwipe() {
+    _orbitSurfaceSwipePointer = null;
+    _orbitSurfaceSwipeDx = 0;
+    _orbitSurfaceSwipeDy = 0;
+    _orbitSurfaceSwipeAccepted = false;
+    _orbitSurfaceSwipeRejected = false;
+  }
+
   void _setOrbitAmount(
     BackheaderBudgetItem item,
     double rawAmount, {
@@ -1261,7 +1349,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
   void _handleOrbitHandlePointerDown(PointerDownEvent event) {
     _orbitHandlePointerActive = true;
-    _orbitSuppressHorizontalDrag = false;
     _orbitGestureDx = 0;
     _orbitGestureDy = 0;
     _orbitAcceptedVerticalDrag = false;

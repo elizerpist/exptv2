@@ -343,6 +343,9 @@ void main() {
     final input = tester.widget<TextField>(
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
     );
+    final inputRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+    );
     final ring = tester.widget<CustomPaint>(
       find.byKey(const ValueKey('backheader-orbit-progress-ring')),
     );
@@ -392,6 +395,14 @@ void main() {
     expect(input.style!.fontSize, moreOrLessEquals(16.8, epsilon: 0.01));
     expect(input.cursorColor, AppColors.white);
     expect(input.decoration!.filled, isFalse);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-orbit-spent-text')),
+          )
+          .data,
+      '100 Ft',
+    );
     final partitionContainer = tester.widget<Container>(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
@@ -403,8 +414,9 @@ void main() {
     expect(border.bottom.width, moreOrLessEquals(1.6, epsilon: 0.01));
     expect(border.left.style, BorderStyle.none);
     expect(border.right.style, BorderStyle.none);
-    expect(pill.left, lessThan(slash.left));
-    expect(slash.left, lessThan(spent.left));
+    expect(spent.left, lessThan(slash.left));
+    expect(slash.left, lessThan(pill.left));
+    expect(inputRect.center.dx, moreOrLessEquals(pill.center.dx, epsilon: 1));
     expect(spent.center.dy, moreOrLessEquals(pill.center.dy, epsilon: 0.5));
     expect(amount.top - partition.bottom, greaterThan(6));
     expect(find.text('Food'), findsOneWidget);
@@ -784,6 +796,20 @@ void main() {
     final initialHandle = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-partition-handle')),
     );
+    final usedSegment = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-segment-0')),
+    );
+    final remainingSegment = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-segment-1')),
+    );
+    expect(
+      usedSegment.width,
+      moreOrLessEquals(partition.width * 100 / 10000, epsilon: 0.1),
+    );
+    expect(
+      remainingSegment.width,
+      moreOrLessEquals(partition.width * 900 / 10000, epsilon: 0.1),
+    );
     expect(
       initialHandle.center.dx,
       moreOrLessEquals(partition.left + partition.width * 0.10, epsilon: 1.5),
@@ -1012,7 +1038,7 @@ void main() {
     expect(saved.last.alert, isFalse);
   });
 
-  testWidgets('orbitBudget no-limit category shows empty lower-left editor', (
+  testWidgets('orbitBudget no-limit category shows empty editable y pill', (
     tester,
   ) async {
     final travel = barFixture(7, 'Travel', 40, 0);
@@ -1046,11 +1072,19 @@ void main() {
     final pill = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-limit-pill')),
     );
+    final spent = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-spent-text')),
+    );
+    final slash = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-amount-slash')),
+    );
     final surface = tester.getRect(
       find.byKey(const ValueKey('backheader-style-orbitBudget')),
     );
-    expect(input.left, lessThan(surface.left + 180));
-    expect(pill.left, lessThan(surface.left + 180));
+    expect(spent.left, lessThan(surface.left + 180));
+    expect(spent.left, lessThan(slash.left));
+    expect(slash.left, lessThan(pill.left));
+    expect(input.center.dx, moreOrLessEquals(pill.center.dx, epsilon: 1));
     expect(
       tester
           .widget<TextField>(
