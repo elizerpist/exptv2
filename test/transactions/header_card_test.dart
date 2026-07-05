@@ -60,10 +60,7 @@ void main() {
       find.byKey(const ValueKey('header-budget-trigger-chip')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('header-card-drag-handle')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('header-card-drag-handle')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
     await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
@@ -89,6 +86,14 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('header-budget-trigger-chip'))),
       const Size(36, 28),
     );
+    final chipContainer = tester.widget<Container>(
+      find.descendant(
+        of: find.byKey(const ValueKey('header-budget-trigger-chip')),
+        matching: find.byType(Container),
+      ),
+    );
+    final decoration = chipContainer.decoration! as BoxDecoration;
+    expect(decoration.color, const Color(0xFFFBBF24));
     expect(find.byIcon(Icons.account_balance_wallet_outlined), findsOneWidget);
   });
 

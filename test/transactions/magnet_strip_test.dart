@@ -73,14 +73,31 @@ void main() {
   });
 
   test('magnet strip fade uses income and expense colors', () {
-    expect(
-      MagnetStripPainter.gradientColorsFor(MagnetType.fade),
-      [AppColors.income, AppColors.expense],
+    expect(MagnetStripPainter.gradientColorsFor(MagnetType.fade), [
+      AppColors.income,
+      AppColors.expense,
+    ]);
+    expect(MagnetStripPainter.gradientColorsFor(MagnetType.nofade), [
+      AppColors.income,
+      AppColors.income,
+      AppColors.expense,
+      AppColors.expense,
+    ]);
+  });
+
+  test('all magnet variants use the fade visual track height', () {
+    final fadeHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.fade,
+      MagnetStrip.defaultHeight,
     );
-    expect(
-      MagnetStripPainter.gradientColorsFor(MagnetType.nofade),
-      [AppColors.income, AppColors.income, AppColors.expense, AppColors.expense],
-    );
+
+    for (final type in MagnetType.values) {
+      expect(
+        MagnetStripPainter.visualTrackHeight(type, MagnetStrip.defaultHeight),
+        moreOrLessEquals(fadeHeight, epsilon: 0.01),
+        reason: '${type.nativeValue} should match fade visual height',
+      );
+    }
   });
 
   testWidgets('budget magnet strip renders React-style limit progress', (
@@ -118,7 +135,17 @@ void main() {
     );
     final decoration = fill.decoration as BoxDecoration;
 
-    expect(fillRect.width, moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5));
+    expect(
+      trackRect.height,
+      moreOrLessEquals(
+        MagnetStripPainter.visualTrackHeight(MagnetType.budget, 35),
+        epsilon: 0.1,
+      ),
+    );
+    expect(
+      fillRect.width,
+      moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
+    );
     expect(decoration.color, const Color(0xffff8800));
   });
 }

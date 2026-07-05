@@ -18,9 +18,8 @@ class BudgetStripProgress {
   final double limitAmount;
 
   bool get visible => hasLimit && limitAmount > 0;
-  double get factor => visible
-      ? (spent / limitAmount).clamp(0.0, 1.0).toDouble()
-      : 0.0;
+  double get factor =>
+      visible ? (spent / limitAmount).clamp(0.0, 1.0).toDouble() : 0.0;
   Color get fillColor => LimitManager.progressColor(spent, limitAmount);
 }
 
@@ -104,7 +103,10 @@ class _BudgetMagnetProgressStrip extends StatelessWidget {
           child: SizedBox(
             key: const ValueKey('magnet-budget-progress-track'),
             width: width,
-            height: 2,
+            height: MagnetStripPainter.visualTrackHeight(
+              MagnetType.budget,
+              height,
+            ),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -167,11 +169,15 @@ class MagnetStripPainter extends CustomPainter {
     };
   }
 
+  static double visualTrackHeight(MagnetType type, double stripHeight) {
+    return math.max(2.0, stripHeight * 6 / 35);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final ratio = incomeRatio(totalIncome, totalExpense);
     final centerY = size.height / 2;
-    final trackHeight = math.max(2.0, size.height * 6 / 35);
+    final trackHeight = visualTrackHeight(type, size.height);
     final rect = Rect.fromLTWH(
       0,
       centerY - trackHeight / 2,
@@ -186,7 +192,7 @@ class MagnetStripPainter extends CustomPainter {
 
     if (type == MagnetType.adaptive) {
       final pillWidth = math.max(20.0, size.width * ratio);
-      final pillHeight = math.max(4.0, size.height * 16 / 35);
+      final pillHeight = trackHeight;
       final pillRect = Rect.fromLTWH(
         0,
         centerY - pillHeight / 2,
@@ -243,8 +249,8 @@ class MagnetStripPainter extends CustomPainter {
     final paint = Paint()
       ..color = AppColors.gray800.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.0, size.height / 35);
-    final slabHeight = math.max(12.0, size.height * 16 / 35);
+      ..strokeWidth = math.max(1.0, visualTrackHeight(type, size.height) / 8);
+    final slabHeight = visualTrackHeight(type, size.height);
     final rect = Rect.fromLTWH(
       0,
       size.height / 2 - slabHeight / 2,

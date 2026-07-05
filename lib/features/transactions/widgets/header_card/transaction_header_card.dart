@@ -25,7 +25,6 @@ class TransactionHeaderCard extends StatelessWidget {
     this.fastInfoVisible = false,
     this.balanceHidden = false,
     this.drawSurface = true,
-    this.dragHandleHitTestEnabled = true,
     this.onBalanceVisibilityPressed,
     this.slideProgress,
     this.contentOpacity,
@@ -48,7 +47,6 @@ class TransactionHeaderCard extends StatelessWidget {
   final bool fastInfoVisible;
   final bool balanceHidden;
   final bool drawSurface;
-  final bool dragHandleHitTestEnabled;
   final VoidCallback? onBalanceVisibilityPressed;
   final double? slideProgress;
   final double? contentOpacity;
@@ -146,7 +144,7 @@ class TransactionHeaderCard extends StatelessWidget {
                     width: 36,
                     height: 28,
                     decoration: BoxDecoration(
-                      color: accent,
+                      color: const Color(0xFFFBBF24),
                       borderRadius: BorderRadius.circular(7),
                       border: Border.all(color: AppColors.white, width: 2),
                     ),
@@ -263,42 +261,7 @@ class TransactionHeaderCard extends StatelessWidget {
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          slidingHeader,
-          Positioned(
-            top: TransactionHeaderMetrics.expandButtonTop - 26,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: IgnorePointer(
-                ignoring: !dragHandleHitTestEnabled,
-                child: GestureDetector(
-                  key: const ValueKey('header-card-drag-handle'),
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragUpdate: onVerticalDragUpdate,
-                  onVerticalDragEnd: onVerticalDragEnd,
-                  child: SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppColors.gray500.withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: slidingHeader,
     );
   }
 }

@@ -39,13 +39,13 @@ class CategoryLimitPartitionBar extends StatelessWidget {
       );
     }
     final overviewLimit = overviewLimitAmount ?? 0;
+    final radius = BorderRadius.circular(height / 2);
     return Container(
       key: const ValueKey('category-limit-partition-bar'),
       height: height,
       decoration: BoxDecoration(
         color: AppColors.gray200,
-        borderRadius: BorderRadius.circular(height / 2),
-        border: Border.all(color: AppColors.white, width: _borderWidth),
+        borderRadius: radius,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -54,46 +54,43 @@ class CategoryLimitPartitionBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(_borderWidth),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            math.max(0, height / 2 - _borderWidth),
-          ),
-          child: ColoredBox(
-            color: AppColors.gray200,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (overviewLimit > 0) {
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: _budgetSegments(
-                      overviewLimit: overviewLimit,
-                      maxWidth: constraints.maxWidth,
-                      trackHeight: constraints.maxHeight,
-                    ),
-                  );
-                }
-                final partitions = LimitPartitionManager.partitions(
-                  bars: bars,
-                  activeBar: activeBar,
-                  activeLimitAmount: activeLimitAmount,
-                );
-                if (partitions.isEmpty) return const SizedBox.expand();
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ..._legacySegments(
-                      partitions,
-                      constraints.maxWidth,
-                      constraints.maxHeight,
-                    ),
-                    ..._unitMarks(partitions.length),
-                  ],
-                );
-              },
-            ),
-          ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: AppColors.white, width: _borderWidth),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ColoredBox(
+        color: AppColors.gray200,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (overviewLimit > 0) {
+              return Stack(
+                fit: StackFit.expand,
+                children: _budgetSegments(
+                  overviewLimit: overviewLimit,
+                  maxWidth: constraints.maxWidth,
+                  trackHeight: constraints.maxHeight,
+                ),
+              );
+            }
+            final partitions = LimitPartitionManager.partitions(
+              bars: bars,
+              activeBar: activeBar,
+              activeLimitAmount: activeLimitAmount,
+            );
+            if (partitions.isEmpty) return const SizedBox.expand();
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                ..._legacySegments(
+                  partitions,
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                ),
+                ..._unitMarks(partitions.length),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -262,59 +259,53 @@ class _AllocationPartitionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(8);
     return Container(
       key: const ValueKey('category-limit-partition-bar'),
       height: height,
-      decoration: BoxDecoration(
-        color: AppColors.gray200,
-        borderRadius: BorderRadius.circular(8),
+      decoration: BoxDecoration(color: AppColors.gray200, borderRadius: radius),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: radius,
         border: Border.all(
           color: AppColors.white,
           width: CategoryLimitPartitionBar._borderWidth,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(CategoryLimitPartitionBar._borderWidth),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            math.max(0, 8 - CategoryLimitPartitionBar._borderWidth),
-          ),
-          child: ColoredBox(
-            color: AppColors.gray200,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                var left = 0.0;
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    for (var i = 0; i < allocation.segments.length; i += 1)
-                      () {
-                        final segment = allocation.segments[i];
-                        final width = constraints.maxWidth * segment.fraction;
-                        final targetId = segment.targetId;
-                        final onTap = onSegmentTap;
-                        final child = Positioned(
-                          key: ValueKey('category-limit-partition-segment-$i'),
-                          left: left,
-                          top: 0,
-                          width: width,
-                          bottom: 0,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: targetId == null || onTap == null
-                                ? null
-                                : () => onTap(targetId),
-                            child: ColoredBox(color: segment.color),
-                          ),
-                        );
-                        left += width;
-                        return child;
-                      }(),
-                  ],
-                );
-              },
-            ),
-          ),
+      clipBehavior: Clip.antiAlias,
+      child: ColoredBox(
+        color: AppColors.gray200,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            var left = 0.0;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                for (var i = 0; i < allocation.segments.length; i += 1)
+                  () {
+                    final segment = allocation.segments[i];
+                    final width = constraints.maxWidth * segment.fraction;
+                    final targetId = segment.targetId;
+                    final onTap = onSegmentTap;
+                    final child = Positioned(
+                      key: ValueKey('category-limit-partition-segment-$i'),
+                      left: left,
+                      top: 0,
+                      width: width,
+                      bottom: 0,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: targetId == null || onTap == null
+                            ? null
+                            : () => onTap(targetId),
+                        child: ColoredBox(color: segment.color),
+                      ),
+                    );
+                    left += width;
+                    return child;
+                  }(),
+              ],
+            );
+          },
         ),
       ),
     );

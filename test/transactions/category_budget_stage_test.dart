@@ -14,6 +14,7 @@ import 'package:exptv2/features/transactions/widgets/header_card/category_budget
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_partition_bar.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_slider.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -235,7 +236,7 @@ void main() {
           home: Scaffold(
             body: SizedBox(
               width: 390,
-              height: 260,
+              height: 300,
               child: CategoryBudgetStage(
                 backheaderStyle: style,
                 items: bars.map(BackheaderBudgetItem.category).toList(),
@@ -252,7 +253,15 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Food'), findsOneWidget);
-      expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
+      if (style == BackheaderStyle.orbitBudget) {
+        expect(find.text('100 Ft /'), findsOneWidget);
+        final input = tester.widget<TextField>(
+          find.byKey(const ValueKey('backheader-orbit-amount-input')),
+        );
+        expect(input.controller!.text, '150');
+      } else {
+        expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
+      }
     }
   });
 
@@ -317,6 +326,9 @@ void main() {
     final amount = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-amount')),
     );
+    final input = tester.widget<TextField>(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+    );
     final partition = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
@@ -325,10 +337,28 @@ void main() {
     );
 
     expect(icon.left, lessThan(title.left));
-    expect(title.right, lessThan(amount.right));
+    expect(amount.top, greaterThan(partition.bottom));
+    expect(amount.left, lessThan(title.left));
+    final expectedTrackHeight = TransactionHeaderMetrics.magnetHeight * 6 / 35;
+    final expectedPartitionTop =
+        TransactionHeaderMetrics.magnetTop +
+        TransactionHeaderMetrics.magnetHeight / 2 -
+        expectedTrackHeight / 2;
+    final expectedOrbitTop =
+        TransactionHeaderMetrics.cardHeight -
+        TransactionHeaderMetrics.expandedSlideDistance +
+        10;
+    expect(partition.top, moreOrLessEquals(expectedPartitionTop, epsilon: 0.1));
+    expect(
+      partition.height,
+      moreOrLessEquals(expectedTrackHeight, epsilon: 0.1),
+    );
+    expect(icon.top, moreOrLessEquals(expectedOrbitTop, epsilon: 0.1));
+    expect(input.controller!.text, '150');
+    expect(input.style!.fontSize, 24);
     expect(partition.bottom, lessThan(stage.bottom - 12));
     expect(find.text('Food'), findsOneWidget);
-    expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
+    expect(find.text('100 Ft /'), findsOneWidget);
   });
 
   testWidgets('orbitBudget hides progress ring for unlimited category', (
@@ -359,7 +389,10 @@ void main() {
       findsNothing,
     );
     expect(find.text('Travel'), findsOneWidget);
-    expect(find.text('40 Ft'), findsOneWidget);
+    final input = tester.widget<TextField>(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+    );
+    expect(input.controller!.text, isEmpty);
   });
 
   testWidgets('heroToken keeps legacy experimental partition layout', (
@@ -396,11 +429,10 @@ void main() {
   });
 
   testWidgets(
-    'orbitBudget expands inline editor from handle and saves slider immediately',
+    'orbitBudget is compact and has only the white backheader handle',
     (tester) async {
       final food = barFixture(6, 'Food', 100, 150);
       final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
-      final savedCategoryAmounts = <double>[];
 
       await tester.pumpWidget(
         MaterialApp(
@@ -416,115 +448,42 @@ void main() {
                 ],
                 categoryBars: [food],
                 overviewItems: [overview],
-                periodIncome: 1000,
                 activeKey: BackheaderBudgetItem.category(food).key,
                 onItemTap: (_) {},
-                onSaveOverview:
-                    (_, {required limitAmount, required alertActive}) async {},
-                onSaveCategory:
-                    (bar, {required limitAmount, required alertActive}) async {
-                      savedCategoryAmounts.add(limitAmount);
-                    },
               ),
             ),
           ),
         ),
       );
 
-      await tester.drag(
+      expect(
         find.byKey(const ValueKey('backheader-orbit-handle')),
-        const Offset(0, 40),
+        findsOneWidget,
       );
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('backheader-orbit-inline-editor')),
         findsNothing,
       );
-
-      await tester.drag(
-        find.byKey(const ValueKey('backheader-orbit-handle')),
-        const Offset(0, 90),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
-        findsOneWidget,
-      );
       expect(
         find.byKey(const ValueKey('backheader-orbit-slider')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
-
-      await tester.drag(
-        find.byKey(const ValueKey('backheader-orbit-slider')),
-        const Offset(140, 0),
-      );
-      await tester.pump();
-
-      expect(savedCategoryAmounts, isNotEmpty);
-      expect(savedCategoryAmounts.last, greaterThan(150));
-      expect(find.text('100 Ft / 150 Ft'), findsNothing);
-
-      final saveCount = savedCategoryAmounts.length;
-      final normalExpandedHeight = tester
-          .getRect(find.byKey(const ValueKey('category-budget-stage')))
-          .height;
-      await tester.drag(
-        find.byKey(const ValueKey('backheader-orbit-handle')),
-        const Offset(0, 18),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
-        findsOneWidget,
-      );
-      expect(
-        tester
-            .getRect(find.byKey(const ValueKey('category-budget-stage')))
-            .height,
-        moreOrLessEquals(normalExpandedHeight, epsilon: 0.1),
-      );
-      expect(savedCategoryAmounts, hasLength(saveCount));
-
-      await tester.drag(
-        find.byKey(const ValueKey('backheader-orbit-handle')),
-        const Offset(0, 58),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
         findsNothing,
       );
-      expect(savedCategoryAmounts, hasLength(saveCount));
-
-      await tester.drag(
+      expect(
+        find.byKey(const ValueKey('backheader-overview-jump-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-amount-input')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('limit-reset-inline-button')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('backheader-orbit-handle')),
-        const Offset(0, 90),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
         findsOneWidget,
       );
-
-      final cancelShrink = await tester.startGesture(
-        tester.getCenter(find.byKey(const ValueKey('backheader-orbit-handle'))),
-      );
-      await cancelShrink.moveBy(const Offset(0, 12));
-      await tester.pump();
-      await cancelShrink.moveBy(const Offset(0, -12));
-      await cancelShrink.up();
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
-        findsOneWidget,
-      );
-      expect(savedCategoryAmounts, hasLength(saveCount));
     },
   );
 
@@ -580,12 +539,62 @@ void main() {
     },
   );
 
-  testWidgets('orbitBudget inline editor exposes compact controls and reset', (
+  testWidgets('orbitBudget handle overpull snaps or requests close', (
+    tester,
+  ) async {
+    var closeRequests = 0;
+    final food = barFixture(6, 'Food', 100, 150);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 300,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onOrbitCloseRequested: () => closeRequests += 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final normalHeight = tester
+        .getRect(find.byKey(const ValueKey('category-budget-stage')))
+        .height;
+
+    await tester.drag(
+      find.byKey(const ValueKey('backheader-orbit-handle')),
+      const Offset(0, 22),
+    );
+    await tester.pumpAndSettle();
+    expect(closeRequests, 0);
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('category-budget-stage')))
+          .height,
+      moreOrLessEquals(normalHeight, epsilon: 0.1),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('backheader-orbit-handle')),
+      const Offset(0, 62),
+    );
+    await tester.pumpAndSettle();
+    expect(closeRequests, 1);
+  });
+
+  testWidgets('orbitBudget partition bar acts as the live limit slider', (
     tester,
   ) async {
     final food = barFixture(6, 'Food', 100, 1000);
     final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
-    final saved = <({double amount, bool alert})>[];
+    final savedCategoryAmounts = <double>[];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -608,7 +617,7 @@ void main() {
                   (_, {required limitAmount, required alertActive}) async {},
               onSaveCategory:
                   (bar, {required limitAmount, required alertActive}) async {
-                    saved.add((amount: limitAmount, alert: alertActive));
+                    savedCategoryAmounts.add(limitAmount);
                   },
             ),
           ),
@@ -616,46 +625,29 @@ void main() {
       ),
     );
 
-    await _expandOrbitEditor(tester);
-
-    expect(find.byKey(const ValueKey('limit-amount-input')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('limit-reset-inline-button')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('limit-card-previous-button')),
-      findsNothing,
-    );
-    expect(find.byKey(const ValueKey('limit-card-next-button')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('backheader-overview-jump-button')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('backheader-orbit-inline-amount')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('backheader-orbit-amount')),
-      findsOneWidget,
-    );
+    expect(find.byType(CategoryLimitSlider), findsNothing);
     expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('limit-reset-inline-button')));
+    final partition = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    await tester.dragFrom(
+      Offset(partition.left + 8, partition.center.dy),
+      Offset(partition.width * 0.55, 0),
+    );
     await tester.pump(const Duration(milliseconds: 180));
-    await tester.pumpAndSettle();
 
-    expect(saved, isNotEmpty);
-    expect(saved.last.amount, 0);
-    expect(saved.last.alert, isFalse);
+    expect(savedCategoryAmounts, isNotEmpty);
+    expect(savedCategoryAmounts.last, greaterThan(1000));
+    expect(find.text('100 Ft / 1 000 Ft'), findsNothing);
   });
 
-  testWidgets('orbitBudget compact editor controls fit above the handle', (
+  testWidgets('orbitBudget amount text edits category limits inline', (
     tester,
   ) async {
     final food = barFixture(6, 'Food', 100, 1000);
     final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+    final saved = <double>[];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -677,6 +669,53 @@ void main() {
               onSaveOverview:
                   (_, {required limitAmount, required alertActive}) async {},
               onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    saved.add(limitAmount);
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+      '700',
+    );
+    await tester.pump(const Duration(milliseconds: 180));
+
+    expect(saved, isNotEmpty);
+    expect(saved.last, 700);
+    expect(find.byKey(const ValueKey('limit-amount-input')), findsNothing);
+  });
+
+  testWidgets('orbitBudget overview amount max and reset sit at bottom right', (
+    tester,
+  ) async {
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
+    final saved = <({double amount, bool alert})>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 300,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [BackheaderBudgetItem.overview(overview)],
+              overviewItems: [overview],
+              periodIncome: 9000,
+              activeKey: BackheaderBudgetItem.overview(overview).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (kind, {required limitAmount, required alertActive}) async {
+                    saved.add((amount: limitAmount, alert: alertActive));
+                  },
+              onSaveCategory:
                   (bar, {required limitAmount, required alertActive}) async {},
             ),
           ),
@@ -684,45 +723,105 @@ void main() {
       ),
     );
 
-    await _expandOrbitEditor(tester);
-
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-max-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('limit-reset-inline-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-overview-jump-button')),
+      findsNothing,
+    );
+    final reset = tester.getRect(
+      find.byKey(const ValueKey('limit-reset-inline-button')),
+    );
+    final max = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-max-button')),
+    );
     final surface = tester.getRect(
       find.byKey(const ValueKey('backheader-style-orbitBudget')),
     );
-    final handle = tester.getRect(
-      find.byKey(const ValueKey('backheader-orbit-handle')),
+    expect(max.left, greaterThan(reset.right));
+    expect(max.right, lessThanOrEqualTo(surface.right));
+
+    await tester.tap(find.byKey(const ValueKey('backheader-orbit-max-button')));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(saved, isNotEmpty);
+    expect(saved.last.amount, 9000);
+    expect(saved.last.alert, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('limit-reset-inline-button')));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(saved.last.amount, 0);
+    expect(saved.last.alert, isFalse);
+  });
+
+  testWidgets('orbitBudget no-limit category shows empty lower-left editor', (
+    tester,
+  ) async {
+    final travel = barFixture(7, 'Travel', 40, 0);
+    final saved = <double>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 300,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [BackheaderBudgetItem.category(travel)],
+              categoryBars: [travel],
+              activeKey: BackheaderBudgetItem.category(travel).key,
+              onItemTap: (_) {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    saved.add(limitAmount);
+                  },
+            ),
+          ),
+        ),
+      ),
     );
 
-    for (final key in [
-      'backheader-orbit-slider',
-      'limit-amount-input',
-      'limit-reset-inline-button',
-      'backheader-overview-jump-button',
-    ]) {
-      final rect = tester.getRect(find.byKey(ValueKey(key)));
-      expect(rect.top, greaterThanOrEqualTo(surface.top));
-      expect(rect.bottom, lessThanOrEqualTo(handle.top));
-      expect(rect.bottom, lessThanOrEqualTo(surface.bottom));
-    }
+    final input = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+    );
+    final surface = tester.getRect(
+      find.byKey(const ValueKey('backheader-style-orbitBudget')),
+    );
+    expect(input.left, lessThan(surface.left + 180));
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      isEmpty,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('backheader-orbit-amount-input')),
+      '300',
+    );
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(saved, isNotEmpty);
+    expect(saved.last, 300);
   });
 
   testWidgets(
-    'orbitBudget inline editor supports input max and overview jump',
+    'orbitBudget partition slider coalesces saves and catches errors',
     (tester) async {
-      BackheaderBudgetItem? activeItem;
-      final salary = barFixture(
-        8,
-        'Salary',
-        300,
-        400,
-        transactionType: TransactionType.income,
+      final food = barFixture(6, 'Food', 100, 1000);
+      final overview = overviewFixture(
+        BudgetGoalKind.expenseBudget,
+        100,
+        10000,
       );
-      final incomeOverview = overviewFixture(
-        BudgetGoalKind.incomeGoal,
-        500,
-        600,
-      );
-      final savedOverviewAmounts = <double>[];
+      final savedAmounts = <double>[];
+      final saveCompleters = <Completer<void>>[];
+      var inFlight = 0;
+      var maxInFlight = 0;
+      var throwOnNextSave = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -733,190 +832,82 @@ void main() {
               child: CategoryBudgetStage(
                 backheaderStyle: BackheaderStyle.orbitBudget,
                 items: [
-                  BackheaderBudgetItem.overview(incomeOverview),
-                  BackheaderBudgetItem.category(salary),
+                  BackheaderBudgetItem.overview(overview),
+                  BackheaderBudgetItem.category(food),
                 ],
-                categoryBars: [salary],
-                overviewItems: [incomeOverview],
-                periodIncome: 900,
-                activeKey: BackheaderBudgetItem.category(salary).key,
-                onActiveItemChanged: (item) => activeItem = item,
+                categoryBars: [food],
+                overviewItems: [overview],
+                periodIncome: 10000,
+                activeKey: BackheaderBudgetItem.category(food).key,
                 onItemTap: (_) {},
                 onSaveOverview:
-                    (kind, {required limitAmount, required alertActive}) async {
-                      savedOverviewAmounts.add(limitAmount);
-                    },
+                    (_, {required limitAmount, required alertActive}) async {},
                 onSaveCategory:
-                    (
-                      bar, {
-                      required limitAmount,
-                      required alertActive,
-                    }) async {},
+                    (bar, {required limitAmount, required alertActive}) async {
+                      if (throwOnNextSave) {
+                        throwOnNextSave = false;
+                        throw StateError('forced save failure');
+                      }
+                      inFlight += 1;
+                      maxInFlight = maxInFlight < inFlight
+                          ? inFlight
+                          : maxInFlight;
+                      savedAmounts.add(limitAmount);
+                      final completer = Completer<void>();
+                      saveCompleters.add(completer);
+                      await completer.future;
+                      inFlight -= 1;
+                    },
               ),
             ),
           ),
         ),
       );
 
-      await _expandOrbitEditor(tester);
-      await tester.tap(
-        find.byKey(const ValueKey('backheader-overview-jump-button')),
+      final partition = tester.getRect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
       );
+      await tester.dragFrom(
+        Offset(partition.left + 10, partition.center.dy),
+        Offset(partition.width * 0.20, 0),
+      );
+      await tester.dragFrom(
+        Offset(partition.left + 10, partition.center.dy),
+        Offset(partition.width * 0.30, 0),
+      );
+      await tester.dragFrom(
+        Offset(partition.left + 10, partition.center.dy),
+        Offset(partition.width * 0.40, 0),
+      );
+      await tester.pump();
+
+      expect(maxInFlight, 1);
+      expect(savedAmounts.length, lessThanOrEqualTo(1));
+
+      for (final completer in saveCompleters) {
+        if (!completer.isCompleted) completer.complete();
+      }
+      await tester.pump(const Duration(milliseconds: 220));
+      for (final completer in saveCompleters) {
+        if (!completer.isCompleted) completer.complete();
+      }
       await tester.pumpAndSettle();
 
-      expect(activeItem?.overview?.kind, BudgetGoalKind.incomeGoal);
-      expect(find.text('Beveteli cel'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('limit-slider-end-button')),
-        findsOneWidget,
-      );
+      expect(savedAmounts, isNotEmpty);
+      expect(savedAmounts.last, greaterThan(3000));
+      expect(maxInFlight, 1);
 
-      await tester.tap(find.byKey(const ValueKey('limit-slider-end-button')));
-      await tester.pump(const Duration(milliseconds: 180));
-      expect(savedOverviewAmounts, isNotEmpty);
-      expect(savedOverviewAmounts.last, 900);
-
-      await tester.enterText(
-        find.byKey(const ValueKey('limit-amount-input')),
-        '700',
+      throwOnNextSave = true;
+      await tester.dragFrom(
+        Offset(partition.left + 10, partition.center.dy),
+        Offset(partition.width * 0.50, 0),
       );
-      await tester.pump(const Duration(milliseconds: 180));
-      expect(savedOverviewAmounts.last, 700);
-      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 220));
+      expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('orbitBudget jump button can switch to income mode', (
-    tester,
-  ) async {
-    var jumpedToIncome = false;
-    final food = barFixture(6, 'Food', 100, 1000);
-    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 340,
-            child: CategoryBudgetStage(
-              backheaderStyle: BackheaderStyle.orbitBudget,
-              items: [
-                BackheaderBudgetItem.overview(overview),
-                BackheaderBudgetItem.category(food),
-              ],
-              categoryBars: [food],
-              overviewItems: [overview],
-              periodIncome: 10000,
-              activeKey: BackheaderBudgetItem.overview(overview).key,
-              onItemTap: (_) {},
-              onJumpToIncome: () => jumpedToIncome = true,
-              onSaveOverview:
-                  (_, {required limitAmount, required alertActive}) async {},
-              onSaveCategory:
-                  (bar, {required limitAmount, required alertActive}) async {},
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await _expandOrbitEditor(tester);
-    await tester.tap(
-      find.byKey(const ValueKey('backheader-overview-jump-button')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(jumpedToIncome, isTrue);
-  });
-
-  testWidgets('orbitBudget slider coalesces saves and catches save errors', (
-    tester,
-  ) async {
-    final food = barFixture(6, 'Food', 100, 1000);
-    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
-    final savedAmounts = <double>[];
-    final saveCompleters = <Completer<void>>[];
-    var inFlight = 0;
-    var maxInFlight = 0;
-    var throwOnNextSave = false;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 340,
-            child: CategoryBudgetStage(
-              backheaderStyle: BackheaderStyle.orbitBudget,
-              items: [
-                BackheaderBudgetItem.overview(overview),
-                BackheaderBudgetItem.category(food),
-              ],
-              categoryBars: [food],
-              overviewItems: [overview],
-              periodIncome: 10000,
-              activeKey: BackheaderBudgetItem.category(food).key,
-              onItemTap: (_) {},
-              onSaveOverview:
-                  (_, {required limitAmount, required alertActive}) async {},
-              onSaveCategory:
-                  (bar, {required limitAmount, required alertActive}) async {
-                    if (throwOnNextSave) {
-                      throwOnNextSave = false;
-                      throw StateError('forced save failure');
-                    }
-                    inFlight += 1;
-                    maxInFlight = maxInFlight < inFlight
-                        ? inFlight
-                        : maxInFlight;
-                    savedAmounts.add(limitAmount);
-                    final completer = Completer<void>();
-                    saveCompleters.add(completer);
-                    await completer.future;
-                    inFlight -= 1;
-                  },
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await _expandOrbitEditor(tester);
-
-    final slider = tester.widget<CategoryLimitSlider>(
-      find.byType(CategoryLimitSlider),
-    );
-    slider.onChanged(2000);
-    slider.onChanged(3000);
-    slider.onChanged(4000);
-    await tester.pump();
-
-    expect(maxInFlight, 1);
-    expect(savedAmounts.length, lessThanOrEqualTo(1));
-
-    for (final completer in saveCompleters) {
-      if (!completer.isCompleted) completer.complete();
-    }
-    await tester.pump(const Duration(milliseconds: 220));
-    for (final completer in saveCompleters) {
-      if (!completer.isCompleted) completer.complete();
-    }
-    await tester.pumpAndSettle();
-
-    expect(savedAmounts, isNotEmpty);
-    expect(savedAmounts.last, 4000);
-    expect(maxInFlight, 1);
-
-    throwOnNextSave = true;
-    tester
-        .widget<CategoryLimitSlider>(find.byType(CategoryLimitSlider))
-        .onChanged(5000);
-    await tester.pump(const Duration(milliseconds: 220));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('orbitBudget icon is smaller and fixed during expand', (
+  testWidgets('orbitBudget icon is smaller and fixed during close overpull', (
     tester,
   ) async {
     final food = barFixture(6, 'Food', 100, 150);
@@ -945,23 +936,32 @@ void main() {
       find.byKey(const ValueKey('backheader-orbit-progress-ring')),
     );
 
-    await _expandOrbitEditor(tester);
+    final overpull = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('backheader-orbit-handle'))),
+    );
+    await overpull.moveBy(const Offset(0, 18));
+    await tester.pump();
 
-    final expandedIcon = tester.getRect(
+    final overpulledIcon = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-icon')),
     );
-    final expandedRing = tester.getSize(
+    final overpulledRing = tester.getSize(
       find.byKey(const ValueKey('backheader-orbit-progress-ring')),
     );
+    await overpull.up();
+    await tester.pumpAndSettle();
 
     expect(collapsedIcon.size.width, moreOrLessEquals(40.6, epsilon: 0.5));
     expect(collapsedIcon.size.height, moreOrLessEquals(40.6, epsilon: 0.5));
     expect(collapsedRing.width, moreOrLessEquals(40.6, epsilon: 0.5));
     expect(
-      expandedRing.width,
+      overpulledRing.width,
       moreOrLessEquals(collapsedRing.width, epsilon: 0.1),
     );
-    expect(expandedIcon.top, moreOrLessEquals(collapsedIcon.top, epsilon: 0.1));
+    expect(
+      overpulledIcon.top,
+      moreOrLessEquals(collapsedIcon.top, epsilon: 0.1),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1002,7 +1002,7 @@ void main() {
           home: Scaffold(
             body: SizedBox(
               width: 390,
-              height: 260,
+              height: 300,
               child: CategoryBudgetStage(
                 backheaderStyle: BackheaderStyle.orbitBudget,
                 items: [
@@ -1755,7 +1755,7 @@ void main() {
     final container = tester.widget<Container>(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
-    final decoration = container.decoration! as BoxDecoration;
+    final decoration = container.foregroundDecoration! as BoxDecoration;
     final border = decoration.border! as Border;
     expect(bar.height, moreOrLessEquals(23.5, epsilon: 0.1));
     expect(border.top.color, Colors.white);
@@ -1775,9 +1775,9 @@ void main() {
     final segment = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-segment-0')),
     );
-    expect(segment.left, greaterThan(bar.left));
-    expect(segment.top, greaterThan(bar.top));
-    expect(segment.bottom, lessThan(bar.bottom));
+    expect(segment.left, moreOrLessEquals(bar.left, epsilon: 0.1));
+    expect(segment.top, moreOrLessEquals(bar.top, epsilon: 0.1));
+    expect(segment.bottom, moreOrLessEquals(bar.bottom, epsilon: 0.1));
   });
 
   testWidgets('partition bar segment tap reports category target id', (
@@ -1812,18 +1812,6 @@ void main() {
 
     expect(tappedTargetId, 6);
   });
-}
-
-Future<void> _expandOrbitEditor(WidgetTester tester) async {
-  await tester.drag(
-    find.byKey(const ValueKey('backheader-orbit-handle')),
-    const Offset(0, 90),
-  );
-  await tester.pumpAndSettle();
-  expect(
-    find.byKey(const ValueKey('backheader-orbit-inline-editor')),
-    findsOneWidget,
-  );
 }
 
 CategoryBudgetBarData barFixture(

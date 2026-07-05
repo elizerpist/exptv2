@@ -8,6 +8,8 @@ import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../category_slot_icon.dart';
+import 'magnet_strip.dart';
+import 'transaction_header_metrics.dart';
 
 class BackheaderStyleSurface extends StatelessWidget {
   const BackheaderStyleSurface({
@@ -24,8 +26,8 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.orbitProgress = 0,
     this.orbitHasLimit = false,
     this.orbitAmountText,
-    this.orbitInlineEditor,
-    this.orbitTopPadding = 42,
+    this.orbitAmountEditor,
+    this.orbitActions,
     this.onOrbitHandlePointerDown,
     this.onOrbitHandlePointerMove,
     this.onOrbitHandlePointerUp,
@@ -44,8 +46,8 @@ class BackheaderStyleSurface extends StatelessWidget {
   final double orbitProgress;
   final bool orbitHasLimit;
   final String? orbitAmountText;
-  final Widget? orbitInlineEditor;
-  final double orbitTopPadding;
+  final Widget? orbitAmountEditor;
+  final Widget? orbitActions;
   final void Function(PointerDownEvent event)? onOrbitHandlePointerDown;
   final void Function(PointerMoveEvent event)? onOrbitHandlePointerMove;
   final void Function(PointerUpEvent event)? onOrbitHandlePointerUp;
@@ -78,8 +80,8 @@ class BackheaderStyleSurface extends StatelessWidget {
               partitionBar: orbitPartitionBar,
               progress: orbitProgress,
               hasLimit: orbitHasLimit,
-              inlineEditor: orbitInlineEditor,
-              topPadding: orbitTopPadding,
+              amountEditor: orbitAmountEditor,
+              actions: orbitActions,
               onHandlePointerDown: onOrbitHandlePointerDown,
               onHandlePointerMove: onOrbitHandlePointerMove,
               onHandlePointerUp: onOrbitHandlePointerUp,
@@ -185,8 +187,8 @@ class _OrbitBudget extends StatelessWidget {
     required this.partitionBar,
     required this.progress,
     required this.hasLimit,
-    required this.inlineEditor,
-    required this.topPadding,
+    required this.amountEditor,
+    required this.actions,
     this.onHandlePointerDown,
     this.onHandlePointerMove,
     this.onHandlePointerUp,
@@ -199,8 +201,8 @@ class _OrbitBudget extends StatelessWidget {
   final Widget? partitionBar;
   final double progress;
   final bool hasLimit;
-  final Widget? inlineEditor;
-  final double topPadding;
+  final Widget? amountEditor;
+  final Widget? actions;
   final void Function(PointerDownEvent event)? onHandlePointerDown;
   final void Function(PointerMoveEvent event)? onHandlePointerMove;
   final void Function(PointerUpEvent event)? onHandlePointerUp;
@@ -208,13 +210,26 @@ class _OrbitBudget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final trackHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.fade,
+      TransactionHeaderMetrics.magnetHeight,
+    );
+    final partitionTop =
+        TransactionHeaderMetrics.magnetTop +
+        TransactionHeaderMetrics.magnetHeight / 2 -
+        trackHeight / 2;
+    final topRowTop =
+        TransactionHeaderMetrics.cardHeight -
+        TransactionHeaderMetrics.expandedSlideDistance +
+        10;
+    return Stack(
       key: const ValueKey('backheader-style-orbitBudget-content'),
-      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+      children: [
+        Positioned(
+          top: topRowTop,
+          left: 24,
+          right: 24,
+          child: Row(
             children: [
               _OrbitIcon(item: current, progress: progress, hasLimit: hasLimit),
               const SizedBox(width: 14),
@@ -232,32 +247,43 @@ class _OrbitBudget extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  amountText,
-                  key: const ValueKey('backheader-orbit-amount'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: AppColors.white.withValues(alpha: 0.86),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    height: 1.18,
-                  ),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 8),
-          partitionBar ?? const SizedBox(height: 14),
-          Expanded(
-            child: inlineEditor == null
-                ? const SizedBox.shrink()
-                : Align(alignment: Alignment.bottomCenter, child: inlineEditor),
+        ),
+        Positioned(
+          top: partitionTop,
+          left: 0,
+          right: 0,
+          child: SizedBox(
+            height: trackHeight,
+            child: partitionBar ?? SizedBox(height: trackHeight),
           ),
-          Center(
+        ),
+        Positioned(
+          top: TransactionHeaderMetrics.balanceTop,
+          left: 24,
+          right: 24,
+          child:
+              amountEditor ??
+              Text(
+                amountText,
+                key: const ValueKey('backheader-orbit-amount'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  height: 1.05,
+                ),
+              ),
+        ),
+        if (actions != null) Positioned(right: 24, bottom: 16, child: actions!),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 4,
+          child: Center(
             child: Listener(
               key: const ValueKey('backheader-orbit-handle'),
               behavior: HitTestBehavior.opaque,
@@ -281,9 +307,8 @@ class _OrbitBudget extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 4),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

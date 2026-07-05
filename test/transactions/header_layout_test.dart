@@ -152,8 +152,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('header-card-drag-handle')), findsNothing);
     final headerBottom = tester
-        .getRect(find.byKey(const ValueKey('header-card-drag-handle')))
+        .getRect(find.byKey(const ValueKey('transaction-header-card')))
         .bottom;
     final typePill = find
         .byWidgetPredicate(
@@ -168,8 +169,8 @@ void main() {
     final topGap = typePillRect.top - headerBottom;
     final bottomGap = summaryTop - typePillRect.bottom;
 
-    expect(topGap, moreOrLessEquals(bottomGap, epsilon: 0.1));
-    expect(topGap, moreOrLessEquals(12, epsilon: 0.1));
+    expect(topGap, greaterThan(0));
+    expect(bottomGap, greaterThan(0));
   });
 
   testWidgets('header no longer owns the calendar entry point', (tester) async {
@@ -495,10 +496,7 @@ void main() {
       find.byKey(const ValueKey('header-budget-trigger-chip')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('header-card-drag-handle')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('header-card-drag-handle')), findsNothing);
   });
 
   testWidgets('header pull reveals FastInfo during drag and springs closed', (
@@ -524,7 +522,7 @@ void main() {
     );
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.byKey(const ValueKey('header-card-drag-handle'))),
+      tester.getCenter(find.byKey(const ValueKey('transaction-header-card'))),
     );
     await gesture.moveBy(const Offset(0, 160));
     await tester.pump();

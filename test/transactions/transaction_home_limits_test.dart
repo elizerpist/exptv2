@@ -752,7 +752,9 @@ void main() {
     expect(find.text('Food'), findsWidgets);
   });
 
-  testWidgets('orbit budget embeds limit editor in backheader', (tester) async {
+  testWidgets('orbit budget closes from white handle without inline editor', (
+    tester,
+  ) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
     final store = TransactionStore(
       repository,
@@ -775,21 +777,27 @@ void main() {
       find.byKey(const ValueKey('budget-target-editor-card')),
       findsNothing,
     );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('backheader-orbit-slider')), findsNothing);
+
+    final expandedTop = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
 
     await tester.drag(
       find.byKey(const ValueKey('backheader-orbit-handle')),
-      const Offset(0, 90),
+      const Offset(0, 64),
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('backheader-orbit-inline-editor')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('backheader-orbit-slider')),
-      findsOneWidget,
-    );
+    final closedTop = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+    expect(closedTop, greaterThan(expandedTop));
+    expect(find.byKey(const ValueKey('category-budget-stage')), findsNothing);
     expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
   });
 

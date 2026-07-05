@@ -17,13 +17,11 @@ import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
-import '../transaction_menu_metrics.dart';
 import 'budget_bar_geometry.dart';
 import 'backheader_style_surface.dart';
 import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
 import 'category_limit_partition_bar.dart';
-import 'category_limit_slider.dart';
 import 'category_progress_bar.dart';
 import 'transaction_header_metrics.dart';
 
@@ -43,7 +41,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.overviewItems = const [],
     this.periodIncome = 0,
-    this.onJumpToIncome,
+    this.onOrbitCloseRequested,
     this.onSaveOverview,
     this.onSaveCategory,
   });
@@ -59,7 +57,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final ExpenseSurfaceInteraction surfaceStyle;
   final List<OverviewBudgetData> overviewItems;
   final double periodIncome;
-  final VoidCallback? onJumpToIncome;
+  final VoidCallback? onOrbitCloseRequested;
   final Future<void> Function(
     BudgetGoalKind kind, {
     required double limitAmount,
@@ -87,8 +85,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   static const _switchThreshold = 44.0;
   static const _orbitAxisSlop = 8.0;
   static const _orbitVerticalBias = 1.25;
-  static const _orbitShrinkArmDistance = 10.0;
-  static const _orbitCloseArmDistance = 46.0;
+  static const _orbitSnapArmDistance = 18.0;
+  static const _orbitCloseArmDistance = 54.0;
+  static const _orbitMaxClosePull = 64.0;
 
   late final AnimationController _slideController;
   Animation<double>? _slideAnimation;
@@ -102,16 +101,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _index = 0;
   var _dragDx = 0.0;
   var _settling = false;
-  var _orbitExpansion = 0.0;
-  var _orbitDragStartExpansion = 0.0;
+  var _orbitClosePull = 0.0;
   var _orbitGestureDx = 0.0;
   var _orbitGestureDy = 0.0;
-  var _orbitExpanded = false;
-  var _orbitShrinkArmed = false;
+  var _orbitSnapArmed = false;
   var _orbitAcceptedVerticalDrag = false;
   var _orbitRejectedDrag = false;
-  var _orbitDragStartedExpanded = false;
-  var _orbitExpandTriggered = false;
   var _orbitCloseArmed = false;
   var _orbitHandlePointerActive = false;
   var _orbitSuppressHorizontalDrag = false;
@@ -332,7 +327,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       key: const ValueKey('category-budget-stage'),
       height:
           TransactionHeaderMetrics.cardHeight +
-          (isOrbitBudget ? _orbitExpansion : 0),
+          (isOrbitBudget ? _orbitClosePull : 0),
       width: double.infinity,
       child: Stack(
         children: [
@@ -392,9 +387,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   orbitAmountText: isOrbitBudget
                       ? _orbitAmountTextFor(current)
                       : null,
-                  orbitTopPadding: isOrbitBudget ? 72 : 42,
-                  orbitInlineEditor: isOrbitBudget && _orbitExpanded
-                      ? _buildOrbitInlineEditor(current)
+                  orbitAmountEditor: isOrbitBudget
+                      ? _buildOrbitAmountEditor(current)
+                      : null,
+                  orbitActions: isOrbitBudget
+                      ? _buildOrbitActions(current)
                       : null,
                   onOrbitHandlePointerDown: isOrbitBudget
                       ? _handleOrbitHandlePointerDown
@@ -554,7 +551,34 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       overviewLimit: _orbitOverviewLimitAmount(current),
       bars: _orbitPartitionBars,
     );
-    return CategoryLimitPartitionBar(height: 14, allocation: allocation);
+    return Builder(
+      builder: (context) {
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapDown: (details) => _setOrbitAmountFromPartitionPosition(
+            current,
+            context,
+            details.globalPosition.dx,
+            flush: true,
+          ),
+          onHorizontalDragUpdate: (details) =>
+              _setOrbitAmountFromPartitionPosition(
+                current,
+                context,
+                details.globalPosition.dx,
+              ),
+          onHorizontalDragEnd: (_) => _flushOrbitSaves(),
+          child: CategoryLimitPartitionBar(
+            height: _orbitPartitionHeight,
+            allocation: allocation,
+          ),
+        );
+      },
+    );
+  }
+
+  double get _orbitPartitionHeight {
+    return math.max(2.0, TransactionHeaderMetrics.magnetHeight * 6 / 35);
   }
 
   double _orbitOverviewLimitAmount(BackheaderBudgetItem current) {
@@ -610,65 +634,110 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         : category.formattedSpent;
   }
 
-  Widget _buildOrbitInlineEditor(BackheaderBudgetItem current) {
+  String _orbitSpentPrefixFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    if (overview != null) return '${formatHuf(overview.amount)} /';
+    final category = item.category;
+    if (category != null) return '${category.formattedSpent} /';
+    return '${item.amountText} /';
+  }
+
+  Widget _buildOrbitAmountEditor(BackheaderBudgetItem current) {
     _syncOrbitAmountController(current);
-    final range = _orbitSliderRangeFor(current);
-    final showSetToMax = current.overview != null;
-    final canJump = _orbitCanJump(current);
+    final amount = _orbitEffectiveAmountFor(current);
+    final hasLimit = amount > 0;
+    final prefix = hasLimit ? _orbitSpentPrefixFor(current) : null;
+    final input = SizedBox(
+      width: hasLimit ? 118 : 92,
+      height: 36,
+      child: TextField(
+        key: const ValueKey('backheader-orbit-amount-input'),
+        controller: _orbitAmountController,
+        focusNode: _orbitAmountFocus,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        maxLines: 1,
+        style: const TextStyle(
+          color: AppColors.white,
+          fontSize: 24,
+          fontWeight: FontWeight.w800,
+          height: 1.05,
+        ),
+        cursorColor: AppColors.white,
+        decoration: InputDecoration(
+          suffixText: hasLimit ? 'Ft' : null,
+          suffixStyle: TextStyle(
+            color: AppColors.white.withValues(alpha: 0.88),
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            height: 1.05,
+          ),
+          isDense: true,
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+      ),
+    );
     return KeyedSubtree(
-      key: const ValueKey('backheader-orbit-inline-editor'),
-      child: Column(
+      key: const ValueKey('backheader-orbit-amount'),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            key: const ValueKey('backheader-orbit-slider'),
-            height: 30,
-            child: CategoryLimitSlider(
-              value: range.value,
-              max: range.max,
-              divisions: range.divisions,
-              enabled: range.enabled,
-              activeColor: AppColors.white,
-              onChanged: (amount) => _setOrbitAmountFromSlider(current, amount),
-              onChangeEnd: (amount) =>
-                  _setOrbitAmountFromSlider(current, amount, flush: true),
+          if (prefix != null) ...[
+            Text(
+              prefix,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                height: 1.05,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 40,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (canJump) ...[
-                  _OrbitCompactIconButton(
-                    buttonKey: const ValueKey(
-                      'backheader-overview-jump-button',
-                    ),
-                    icon: _orbitJumpIconFor(current),
-                    tooltip: _orbitJumpTooltipFor(current),
-                    onPressed: () => _handleOrbitJump(current),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                Expanded(
-                  child: _OrbitAmountPill(
-                    controller: _orbitAmountController,
-                    focusNode: _orbitAmountFocus,
-                    label: _orbitInputLabelFor(current),
-                    onChanged: (text) =>
-                        _setOrbitAmountFromInput(current, text, flush: false),
-                    showSetToMax: showSetToMax,
-                    onSetToMax: () => _setOrbitOverviewToMax(current),
-                    onReset: () => _setOrbitAmount(current, 0, flush: true),
-                  ),
+            const SizedBox(width: 6),
+            input,
+          ] else
+            Container(
+              key: const ValueKey('backheader-orbit-empty-limit-pill'),
+              width: 116,
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.white.withValues(alpha: 0.20),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.white.withValues(alpha: 0.42),
                 ),
-              ],
+              ),
+              alignment: Alignment.centerLeft,
+              child: input,
             ),
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOrbitActions(BackheaderBudgetItem current) {
+    final showSetToMax = current.overview != null && widget.periodIncome > 0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _OrbitCompactIconButton(
+          buttonKey: const ValueKey('limit-reset-inline-button'),
+          icon: Icons.delete_outline,
+          tooltip: 'Reset',
+          onPressed: () => _setOrbitAmount(current, 0, flush: true),
+        ),
+        if (showSetToMax) ...[
+          const SizedBox(width: 6),
+          _OrbitCompactIconButton(
+            buttonKey: const ValueKey('backheader-orbit-max-button'),
+            icon: Icons.last_page,
+            tooltip: 'Max',
+            onPressed: () => _setOrbitOverviewToMax(current),
+          ),
+        ],
+      ],
     );
   }
 
@@ -824,16 +893,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     return 0;
   }
 
-  String _orbitInputLabelFor(BackheaderBudgetItem item) {
-    final overview = item.overview;
-    if (overview == null) return 'Kategória limit';
-    return switch (overview.kind) {
-      BudgetGoalKind.expenseBudget => 'Budget limit',
-      BudgetGoalKind.incomeGoal => 'Bevételi cél',
-      BudgetGoalKind.savingGoal => 'Megtakarítási cél',
-    };
-  }
-
   void _handleOrbitAmountInputChanged() {
     if (_orbitUpdatingController || _items.isEmpty) return;
     _setOrbitAmountFromInput(
@@ -882,6 +941,21 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       amount,
     ).clamp(0.0, range.max).toDouble();
     _setOrbitAmount(item, snapped, flush: flush);
+  }
+
+  void _setOrbitAmountFromPartitionPosition(
+    BackheaderBudgetItem item,
+    BuildContext context,
+    double globalDx, {
+    bool flush = false,
+  }) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final range = _orbitSliderRangeFor(item);
+    if (!range.enabled || range.max <= 0) return;
+    final localDx = box.globalToLocal(Offset(globalDx, 0)).dx;
+    final ratio = (localDx / box.size.width).clamp(0.0, 1.0).toDouble();
+    _setOrbitAmountFromSlider(item, range.max * ratio, flush: flush);
   }
 
   void _setOrbitOverviewToMax(BackheaderBudgetItem item) {
@@ -958,38 +1032,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     return targetIndex;
   }
 
-  bool _orbitCanJump(BackheaderBudgetItem item) {
-    return _orbitMatchingOverviewIndexFor(item) != null ||
-        _orbitCanJumpToIncome(item);
-  }
-
-  bool _orbitCanJumpToIncome(BackheaderBudgetItem item) {
-    return widget.onJumpToIncome != null &&
-        item.overview?.kind == BudgetGoalKind.expenseBudget;
-  }
-
-  IconData _orbitJumpIconFor(BackheaderBudgetItem item) {
-    if (_orbitCanJumpToIncome(item)) return Icons.trending_up;
-    return Icons.account_balance_wallet_outlined;
-  }
-
-  String _orbitJumpTooltipFor(BackheaderBudgetItem item) {
-    if (_orbitCanJumpToIncome(item)) return 'Bevétel';
-    return 'Összesítő';
-  }
-
-  void _handleOrbitJump(BackheaderBudgetItem item) {
-    final targetIndex = _orbitMatchingOverviewIndexFor(item);
-    if (targetIndex != null) {
-      _jumpToOverviewForCurrent();
-      return;
-    }
-    if (_orbitCanJumpToIncome(item)) {
-      HapticFeedback.selectionClick();
-      widget.onJumpToIncome?.call();
-    }
-  }
-
   void _scheduleOrbitSave(
     BackheaderBudgetItem item,
     double amount, {
@@ -1062,29 +1104,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     }
   }
 
-  double get _orbitMaxExpansion {
-    return math
-        .max(
-          0.0,
-          TransactionHeaderMetrics.contentTop +
-              TransactionMenuMetrics.typePillTopPadding +
-              TransactionMenuMetrics.typePillMinHeight -
-              TransactionHeaderMetrics.cardHeight,
-        )
-        .toDouble();
-  }
-
   void _handleOrbitHandlePointerDown(PointerDownEvent event) {
     _orbitHandlePointerActive = true;
     _orbitSuppressHorizontalDrag = false;
-    _orbitDragStartExpansion = _orbitExpansion;
     _orbitGestureDx = 0;
     _orbitGestureDy = 0;
     _orbitAcceptedVerticalDrag = false;
     _orbitRejectedDrag = false;
-    _orbitDragStartedExpanded = _orbitExpanded;
-    _orbitExpandTriggered = _orbitExpanded;
-    _orbitShrinkArmed = false;
+    _orbitSnapArmed = false;
     _orbitCloseArmed = false;
   }
 
@@ -1109,41 +1136,23 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       _orbitAcceptedVerticalDrag = true;
     }
 
-    final maxExpansion = _orbitMaxExpansion;
-    final dragLimit = _orbitDragStartedExpanded
-        ? maxExpansion + _orbitCloseArmDistance
-        : maxExpansion;
-    final nextExpansion = (_orbitDragStartExpansion + _orbitGestureDy)
-        .clamp(0.0, dragLimit)
-        .toDouble();
-    var nextShrinkArmed = _orbitShrinkArmed;
+    final nextPull = _orbitGestureDy.clamp(0.0, _orbitMaxClosePull).toDouble();
+    var nextSnapArmed = _orbitSnapArmed;
     var nextCloseArmed = _orbitCloseArmed;
-    var nextExpandTriggered = _orbitExpandTriggered;
-    if (!_orbitDragStartedExpanded &&
-        !nextExpandTriggered &&
-        nextExpansion >= maxExpansion) {
-      nextExpandTriggered = true;
+    final snapArmed = nextPull >= _orbitSnapArmDistance;
+    if (snapArmed != nextSnapArmed) {
+      nextSnapArmed = snapArmed;
       HapticFeedback.selectionClick();
     }
-    if (_orbitDragStartedExpanded) {
-      final shrinkArmed =
-          nextExpansion >= maxExpansion + _orbitShrinkArmDistance - 0.1;
-      if (shrinkArmed != nextShrinkArmed) {
-        nextShrinkArmed = shrinkArmed;
-        HapticFeedback.selectionClick();
-      }
-      final closeArmed =
-          nextExpansion >= maxExpansion + _orbitCloseArmDistance - 0.1;
-      if (closeArmed != nextCloseArmed) {
-        nextCloseArmed = closeArmed;
-        HapticFeedback.selectionClick();
-      }
+    final closeArmed = nextPull >= _orbitCloseArmDistance;
+    if (closeArmed != nextCloseArmed) {
+      nextCloseArmed = closeArmed;
+      HapticFeedback.selectionClick();
     }
     setState(() {
-      _orbitExpansion = nextExpansion;
-      _orbitShrinkArmed = nextShrinkArmed;
+      _orbitClosePull = nextPull;
+      _orbitSnapArmed = nextSnapArmed;
       _orbitCloseArmed = nextCloseArmed;
-      _orbitExpandTriggered = nextExpandTriggered;
     });
   }
 
@@ -1153,35 +1162,22 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       _resetOrbitHandleGesture();
       return;
     }
-    final maxExpansion = _orbitMaxExpansion;
+    final shouldClose = _orbitCloseArmed;
     setState(() {
-      if (_orbitDragStartedExpanded) {
-        if (_orbitCloseArmed) {
-          _orbitExpanded = false;
-          _orbitExpansion = 0;
-        } else {
-          _orbitExpanded = true;
-          _orbitExpansion = maxExpansion;
-        }
-      } else if (_orbitExpansion >= maxExpansion) {
-        _orbitExpanded = true;
-        _orbitExpansion = maxExpansion;
-      } else {
-        _orbitExpanded = false;
-        _orbitExpansion = 0;
-      }
-      _orbitShrinkArmed = false;
+      _orbitClosePull = 0;
+      _orbitSnapArmed = false;
       _orbitCloseArmed = false;
     });
     _resetOrbitHandleGesture();
+    if (shouldClose) widget.onOrbitCloseRequested?.call();
   }
 
   void _handleOrbitHandlePointerCancel(PointerCancelEvent event) {
     _orbitHandlePointerActive = false;
     if (_orbitAcceptedVerticalDrag && !_orbitRejectedDrag) {
       setState(() {
-        _orbitExpansion = _orbitExpanded ? _orbitMaxExpansion : 0;
-        _orbitShrinkArmed = false;
+        _orbitClosePull = 0;
+        _orbitSnapArmed = false;
         _orbitCloseArmed = false;
       });
     }
@@ -1189,14 +1185,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   void _resetOrbitHandleGesture() {
-    _orbitDragStartExpansion = _orbitExpansion;
     _orbitGestureDx = 0;
     _orbitGestureDy = 0;
     _orbitAcceptedVerticalDrag = false;
     _orbitRejectedDrag = false;
-    _orbitDragStartedExpanded = false;
-    _orbitExpandTriggered = _orbitExpanded;
-    _orbitShrinkArmed = false;
+    _orbitSnapArmed = false;
     _orbitCloseArmed = false;
   }
 
@@ -1440,85 +1433,6 @@ class _OrbitCompactIconButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           tooltip: tooltip,
         ),
-      ),
-    );
-  }
-}
-
-class _OrbitAmountPill extends StatelessWidget {
-  const _OrbitAmountPill({
-    required this.controller,
-    required this.focusNode,
-    required this.label,
-    required this.onChanged,
-    required this.showSetToMax,
-    required this.onSetToMax,
-    required this.onReset,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String label;
-  final ValueChanged<String> onChanged;
-  final bool showSetToMax;
-  final VoidCallback onSetToMax;
-  final VoidCallback onReset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              key: const ValueKey('limit-amount-input'),
-              controller: controller,
-              focusNode: focusNode,
-              keyboardType: TextInputType.number,
-              onChanged: onChanged,
-              maxLines: 1,
-              style: const TextStyle(
-                color: AppColors.gray800,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-              decoration: InputDecoration(
-                hintText: label,
-                suffixText: 'Ft',
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.only(left: 14, right: 6),
-              ),
-            ),
-          ),
-          if (showSetToMax)
-            IconButton(
-              key: const ValueKey('limit-slider-end-button'),
-              onPressed: onSetToMax,
-              icon: const Icon(Icons.last_page),
-              iconSize: 19,
-              color: AppColors.gray700,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 32, height: 38),
-              tooltip: 'Max',
-            ),
-          IconButton(
-            key: const ValueKey('limit-reset-inline-button'),
-            onPressed: onReset,
-            icon: const Icon(Icons.delete_outline),
-            iconSize: 19,
-            color: AppColors.gray700,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 38),
-            tooltip: 'Reset',
-          ),
-          const SizedBox(width: 4),
-        ],
       ),
     );
   }

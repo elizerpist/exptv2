@@ -340,8 +340,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onItemTap: _openBudgetTargetEditor,
-                    onJumpToIncome: () =>
-                        _setActiveType(TransactionType.income),
+                    onOrbitCloseRequested: () {
+                      if (_headerExpanded) unawaited(_collapseHeader());
+                    },
                     onSaveOverview:
                         (
                           kind, {
@@ -662,10 +663,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
         drawSurface: drawSurface,
-        dragHandleHitTestEnabled:
-            !(_headerExpanded &&
-                expenseTheme.settings.backheaderStyle ==
-                    BackheaderStyle.orbitBudget),
         slideProgress: slideProgress,
         contentOpacity: contentOpacity,
         onBalanceVisibilityPressed: () {
