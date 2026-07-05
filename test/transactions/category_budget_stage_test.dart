@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/data/limit_allocation_manager.dart';
 import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
@@ -14,6 +15,7 @@ import 'package:exptv2/features/transactions/widgets/header_card/category_budget
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_partition_bar.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_slider.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -254,7 +256,19 @@ void main() {
       );
       expect(find.text('Food'), findsOneWidget);
       if (style == BackheaderStyle.orbitBudget) {
-        expect(find.text('100 Ft /'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('backheader-orbit-limit-pill')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('backheader-orbit-amount-slash')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('backheader-orbit-spent-text')),
+          findsOneWidget,
+        );
+        expect(find.text('100 Ft'), findsOneWidget);
         final input = tester.widget<TextField>(
           find.byKey(const ValueKey('backheader-orbit-amount-input')),
         );
@@ -329,21 +343,30 @@ void main() {
     final input = tester.widget<TextField>(
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
     );
+    final pill = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-limit-pill')),
+    );
+    final spent = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-spent-text')),
+    );
+    final slash = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-amount-slash')),
+    );
     final partition = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
-    final stage = tester.getRect(
-      find.byKey(const ValueKey('category-budget-stage')),
-    );
-
     expect(icon.left, lessThan(title.left));
     expect(amount.top, greaterThan(partition.bottom));
     expect(amount.left, lessThan(title.left));
-    final expectedTrackHeight = TransactionHeaderMetrics.magnetHeight * 6 / 35;
+    final previousTrackHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.fade,
+      TransactionHeaderMetrics.magnetHeight,
+    );
+    final expectedTrackHeight = previousTrackHeight * 0.7;
     final expectedPartitionTop =
         TransactionHeaderMetrics.magnetTop +
         TransactionHeaderMetrics.magnetHeight / 2 -
-        expectedTrackHeight / 2;
+        previousTrackHeight / 2;
     final expectedOrbitTop =
         TransactionHeaderMetrics.cardHeight -
         TransactionHeaderMetrics.expandedSlideDistance +
@@ -355,10 +378,47 @@ void main() {
     );
     expect(icon.top, moreOrLessEquals(expectedOrbitTop, epsilon: 0.1));
     expect(input.controller!.text, '150');
-    expect(input.style!.fontSize, 24);
-    expect(partition.bottom, lessThan(stage.bottom - 12));
+    expect(input.style!.fontSize, moreOrLessEquals(16.8, epsilon: 0.01));
+    expect(input.cursorColor, AppColors.white);
+    expect(input.decoration!.filled, isFalse);
+    expect(pill.left, lessThan(slash.left));
+    expect(slash.left, lessThan(spent.left));
+    expect(spent.center.dy, moreOrLessEquals(pill.center.dy, epsilon: 0.5));
+    expect(amount.top - partition.bottom, greaterThan(6));
     expect(find.text('Food'), findsOneWidget);
-    expect(find.text('100 Ft /'), findsOneWidget);
+    expect(find.text('/'), findsOneWidget);
+    expect(find.text('100 Ft'), findsOneWidget);
+  });
+
+  testWidgets('orbitBudget stage height follows header card height metric', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 150);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 390,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.orbitBudget,
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('category-budget-stage')))
+          .height,
+      TransactionHeaderMetrics.cardHeight,
+    );
   });
 
   testWidgets('orbitBudget hides progress ring for unlimited category', (
@@ -393,6 +453,16 @@ void main() {
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
     );
     expect(input.controller!.text, isEmpty);
+    expect(input.decoration!.hintText, 'n/a');
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-limit-pill')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-spent-text')),
+      findsOneWidget,
+    );
+    expect(find.text('40 Ft'), findsOneWidget);
   });
 
   testWidgets('heroToken keeps legacy experimental partition layout', (
@@ -631,14 +701,30 @@ void main() {
     final partition = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-partition-handle')),
+      findsOneWidget,
+    );
+    final initialHandle = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-partition-handle')),
+    );
+    expect(
+      initialHandle.center.dx,
+      moreOrLessEquals(partition.left + partition.width * 0.10, epsilon: 1.5),
+    );
+
     await tester.dragFrom(
       Offset(partition.left + 8, partition.center.dy),
       Offset(partition.width * 0.55, 0),
     );
     await tester.pump(const Duration(milliseconds: 180));
+    final movedHandle = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-partition-handle')),
+    );
 
     expect(savedCategoryAmounts, isNotEmpty);
     expect(savedCategoryAmounts.last, greaterThan(1000));
+    expect(movedHandle.center.dx, greaterThan(initialHandle.center.dx));
     expect(find.text('100 Ft / 1 000 Ft'), findsNothing);
   });
 
@@ -646,7 +732,11 @@ void main() {
     tester,
   ) async {
     final food = barFixture(6, 'Food', 100, 1000);
-    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+    final overview = overviewFixture(
+      BudgetGoalKind.expenseBudget,
+      100,
+      10000000,
+    );
     final saved = <double>[];
 
     await tester.pumpWidget(
@@ -663,7 +753,7 @@ void main() {
               ],
               categoryBars: [food],
               overviewItems: [overview],
-              periodIncome: 10000,
+              periodIncome: 10000000,
               activeKey: BackheaderBudgetItem.category(food).key,
               onItemTap: (_) {},
               onSaveOverview:
@@ -678,21 +768,28 @@ void main() {
       ),
     );
 
+    final initialPill = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-limit-pill')),
+    );
     await tester.tap(
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
     );
     await tester.enterText(
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
-      '700',
+      '7000000',
     );
     await tester.pump(const Duration(milliseconds: 180));
+    final expandedPill = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-limit-pill')),
+    );
 
     expect(saved, isNotEmpty);
-    expect(saved.last, 700);
+    expect(saved.last, 7000000);
+    expect(expandedPill.width, greaterThan(initialPill.width));
     expect(find.byKey(const ValueKey('limit-amount-input')), findsNothing);
   });
 
-  testWidgets('orbitBudget overview amount max and reset sit at bottom right', (
+  testWidgets('orbitBudget overview amount max and reset sit at top right', (
     tester,
   ) async {
     final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
@@ -744,8 +841,15 @@ void main() {
     final surface = tester.getRect(
       find.byKey(const ValueKey('backheader-style-orbitBudget')),
     );
+    final partition = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
     expect(max.left, greaterThan(reset.right));
     expect(max.right, lessThanOrEqualTo(surface.right));
+    expect(reset.top, greaterThanOrEqualTo(surface.top));
+    expect(max.top, greaterThanOrEqualTo(surface.top));
+    expect(reset.bottom, lessThan(partition.top));
+    expect(max.bottom, lessThan(partition.top));
 
     await tester.tap(find.byKey(const ValueKey('backheader-orbit-max-button')));
     await tester.pump(const Duration(milliseconds: 180));
@@ -790,10 +894,24 @@ void main() {
     final input = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-amount-input')),
     );
+    final pill = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-limit-pill')),
+    );
     final surface = tester.getRect(
       find.byKey(const ValueKey('backheader-style-orbitBudget')),
     );
     expect(input.left, lessThan(surface.left + 180));
+    expect(pill.left, lessThan(surface.left + 180));
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('backheader-orbit-amount-input')),
+          )
+          .decoration!
+          .hintText,
+      'n/a',
+    );
+    expect(find.text('40 Ft'), findsOneWidget);
     expect(
       tester.widget<EditableText>(find.byType(EditableText)).controller.text,
       isEmpty,
@@ -1759,7 +1877,7 @@ void main() {
     final border = decoration.border! as Border;
     expect(bar.height, moreOrLessEquals(23.5, epsilon: 0.1));
     expect(border.top.color, Colors.white);
-    expect(border.top.width, greaterThan(1));
+    expect(border.top.width, moreOrLessEquals(1.6, epsilon: 0.01));
     expect(
       find.byKey(const ValueKey('category-limit-partition-segment-0')),
       findsOneWidget,

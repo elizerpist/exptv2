@@ -1,5 +1,6 @@
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
+import 'package:exptv2/features/transactions/widgets/transaction_menu_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,8 +20,19 @@ void main() {
       ),
     );
 
+    expect(TransactionHeaderMetrics.cardHeight, 188);
     expect(TransactionHeaderMetrics.balanceLabelTop, 112);
     expect(TransactionHeaderMetrics.balanceTop, 134);
+    expect(TransactionHeaderMetrics.titleTop, 35);
+    expect(TransactionHeaderMetrics.cameraTop, 62);
+    expect(TransactionHeaderMetrics.magnetTop, 41);
+    expect(TransactionHeaderMetrics.categoryButtonTop, 112);
+    expect(
+      TransactionHeaderMetrics.contentTop +
+          TransactionMenuMetrics.typePillTopPadding -
+          TransactionHeaderMetrics.cardHeight,
+      TransactionMenuMetrics.typePillBottomPadding,
+    );
   });
 
   testWidgets('header card copies stage0 layout and controls', (tester) async {

@@ -26,7 +26,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   final double? overviewLimitAmount;
   final double height;
   final ValueChanged<int>? onSegmentTap;
-  static const _borderWidth = 2.5;
+  static const borderWidth = 1.6;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +56,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: radius,
-        border: Border.all(color: AppColors.white, width: _borderWidth),
+        border: Border.all(color: AppColors.white, width: borderWidth),
       ),
       clipBehavior: Clip.antiAlias,
       child: ColoredBox(
@@ -268,7 +268,7 @@ class _AllocationPartitionBar extends StatelessWidget {
         borderRadius: radius,
         border: Border.all(
           color: AppColors.white,
-          width: CategoryLimitPartitionBar._borderWidth,
+          width: CategoryLimitPartitionBar.borderWidth,
         ),
       ),
       clipBehavior: Clip.antiAlias,

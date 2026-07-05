@@ -214,6 +214,7 @@ class _OrbitBudget extends StatelessWidget {
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
+    final partitionHeight = trackHeight * 0.7;
     final partitionTop =
         TransactionHeaderMetrics.magnetTop +
         TransactionHeaderMetrics.magnetHeight / 2 -
@@ -228,7 +229,7 @@ class _OrbitBudget extends StatelessWidget {
         Positioned(
           top: topRowTop,
           left: 24,
-          right: 24,
+          right: actions == null ? 24 : 120,
           child: Row(
             children: [
               _OrbitIcon(item: current, progress: progress, hasLimit: hasLimit),
@@ -255,8 +256,8 @@ class _OrbitBudget extends StatelessWidget {
           left: 0,
           right: 0,
           child: SizedBox(
-            height: trackHeight,
-            child: partitionBar ?? SizedBox(height: trackHeight),
+            height: partitionHeight,
+            child: partitionBar ?? SizedBox(height: partitionHeight),
           ),
         ),
         Positioned(
@@ -272,13 +273,14 @@ class _OrbitBudget extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.white,
-                  fontSize: 24,
+                  fontSize: 16.8,
                   fontWeight: FontWeight.w800,
                   height: 1.05,
                 ),
               ),
         ),
-        if (actions != null) Positioned(right: 24, bottom: 16, child: actions!),
+        if (actions != null)
+          Positioned(top: topRowTop, right: 24, child: actions!),
         Positioned(
           left: 0,
           right: 0,

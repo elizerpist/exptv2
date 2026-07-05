@@ -23,6 +23,7 @@ import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
 import 'category_limit_partition_bar.dart';
 import 'category_progress_bar.dart';
+import 'magnet_strip.dart';
 import 'transaction_header_metrics.dart';
 
 class CategoryBudgetStage extends StatefulWidget {
@@ -551,6 +552,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       overviewLimit: _orbitOverviewLimitAmount(current),
       bars: _orbitPartitionBars,
     );
+    final range = _orbitSliderRangeFor(current);
+    final handleRatio = range.max <= 0
+        ? 0.0
+        : (range.value / range.max).clamp(0.0, 1.0).toDouble();
     return Builder(
       builder: (context) {
         return GestureDetector(
@@ -568,9 +573,45 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 details.globalPosition.dx,
               ),
           onHorizontalDragEnd: (_) => _flushOrbitSaves(),
-          child: CategoryLimitPartitionBar(
-            height: _orbitPartitionHeight,
-            allocation: allocation,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const handleWidth = 12.0;
+              const handleHeight = 20.0;
+              final maxLeft = math.max(0.0, constraints.maxWidth - handleWidth);
+              final handleLeft =
+                  (constraints.maxWidth * handleRatio - handleWidth / 2)
+                      .clamp(0.0, maxLeft)
+                      .toDouble();
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CategoryLimitPartitionBar(
+                    height: _orbitPartitionHeight,
+                    allocation: allocation,
+                  ),
+                  Positioned(
+                    key: const ValueKey('backheader-orbit-partition-handle'),
+                    left: handleLeft,
+                    top: (_orbitPartitionHeight - handleHeight) / 2,
+                    child: Container(
+                      width: handleWidth,
+                      height: handleHeight,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(handleWidth / 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            offset: const Offset(0, 1),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
@@ -578,7 +619,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   double get _orbitPartitionHeight {
-    return math.max(2.0, TransactionHeaderMetrics.magnetHeight * 6 / 35);
+    final previousTrackHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.fade,
+      TransactionHeaderMetrics.magnetHeight,
+    );
+    return math.max(2.0, previousTrackHeight * 0.7);
   }
 
   double _orbitOverviewLimitAmount(BackheaderBudgetItem current) {
@@ -634,84 +679,93 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         : category.formattedSpent;
   }
 
-  String _orbitSpentPrefixFor(BackheaderBudgetItem item) {
+  String _orbitSpentTextFor(BackheaderBudgetItem item) {
     final overview = item.overview;
-    if (overview != null) return '${formatHuf(overview.amount)} /';
+    if (overview != null) return formatHuf(overview.amount);
     final category = item.category;
-    if (category != null) return '${category.formattedSpent} /';
-    return '${item.amountText} /';
+    if (category != null) return category.formattedSpent;
+    return item.amountText;
+  }
+
+  double _orbitLimitPillWidth({required bool hasLimit}) {
+    final display = _orbitAmountController.text.isEmpty && !hasLimit
+        ? 'n/a'
+        : _orbitAmountController.text;
+    final length = math.max(3, display.length);
+    return (length * 10.5 + 24).clamp(54.0, 164.0).toDouble();
   }
 
   Widget _buildOrbitAmountEditor(BackheaderBudgetItem current) {
     _syncOrbitAmountController(current);
     final amount = _orbitEffectiveAmountFor(current);
     final hasLimit = amount > 0;
-    final prefix = hasLimit ? _orbitSpentPrefixFor(current) : null;
-    final input = SizedBox(
-      width: hasLimit ? 118 : 92,
-      height: 36,
-      child: TextField(
-        key: const ValueKey('backheader-orbit-amount-input'),
-        controller: _orbitAmountController,
-        focusNode: _orbitAmountFocus,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        maxLines: 1,
-        style: const TextStyle(
-          color: AppColors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          height: 1.05,
-        ),
-        cursorColor: AppColors.white,
-        decoration: InputDecoration(
-          suffixText: hasLimit ? 'Ft' : null,
-          suffixStyle: TextStyle(
-            color: AppColors.white.withValues(alpha: 0.88),
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            height: 1.05,
-          ),
-          isDense: true,
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
-        ),
-      ),
+    final spentText = _orbitSpentTextFor(current);
+    const amountStyle = TextStyle(
+      color: AppColors.white,
+      fontSize: 16.8,
+      fontWeight: FontWeight.w800,
+      height: 1.05,
     );
+    final pillWidth = _orbitLimitPillWidth(hasLimit: hasLimit);
     return KeyedSubtree(
       key: const ValueKey('backheader-orbit-amount'),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (prefix != null) ...[
-            Text(
-              prefix,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                height: 1.05,
+          Container(
+            key: const ValueKey('backheader-orbit-limit-pill'),
+            width: pillWidth,
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.20),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.42),
               ),
             ),
-            const SizedBox(width: 6),
-            input,
-          ] else
-            Container(
-              key: const ValueKey('backheader-orbit-empty-limit-pill'),
-              width: 116,
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.white.withValues(alpha: 0.20),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: AppColors.white.withValues(alpha: 0.42),
+            alignment: Alignment.center,
+            child: TextField(
+              key: const ValueKey('backheader-orbit-amount-input'),
+              controller: _orbitAmountController,
+              focusNode: _orbitAmountFocus,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              textAlignVertical: TextAlignVertical.center,
+              style: amountStyle,
+              cursorColor: AppColors.white,
+              decoration: InputDecoration(
+                hintText: hasLimit ? null : 'n/a',
+                hintStyle: amountStyle.copyWith(
+                  color: AppColors.white.withValues(alpha: 0.72),
                 ),
+                isDense: true,
+                isCollapsed: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
               ),
-              alignment: Alignment.centerLeft,
-              child: input,
             ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            '/',
+            key: ValueKey('backheader-orbit-amount-slash'),
+            style: amountStyle,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            spentText,
+            key: const ValueKey('backheader-orbit-spent-text'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: amountStyle,
+          ),
         ],
       ),
     );
@@ -1419,8 +1473,8 @@ class _OrbitCompactIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 40,
-      height: 40,
+      width: 34,
+      height: 34,
       child: Material(
         color: AppColors.white.withValues(alpha: 0.94),
         shape: const CircleBorder(),
@@ -1428,7 +1482,7 @@ class _OrbitCompactIconButton extends StatelessWidget {
           key: buttonKey,
           onPressed: onPressed,
           icon: Icon(icon),
-          iconSize: 20,
+          iconSize: 18,
           color: AppColors.gray800,
           padding: EdgeInsets.zero,
           tooltip: tooltip,
