@@ -17,7 +17,6 @@ import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
-import '../themed_pill_field.dart';
 import '../transaction_menu_metrics.dart';
 import 'budget_bar_geometry.dart';
 import 'backheader_style_surface.dart';
@@ -44,6 +43,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.overviewItems = const [],
     this.periodIncome = 0,
+    this.onJumpToIncome,
     this.onSaveOverview,
     this.onSaveCategory,
   });
@@ -59,6 +59,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final ExpenseSurfaceInteraction surfaceStyle;
   final List<OverviewBudgetData> overviewItems;
   final double periodIncome;
+  final VoidCallback? onJumpToIncome;
   final Future<void> Function(
     BudgetGoalKind kind, {
     required double limitAmount,
@@ -389,6 +390,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   orbitAmountText: isOrbitBudget
                       ? _orbitAmountTextFor(current)
                       : null,
+                  orbitTopPadding:
+                      isOrbitBudget && (_orbitExpanded || _orbitExpansion > 0)
+                      ? 64
+                      : 42,
                   orbitInlineEditor: isOrbitBudget && _orbitExpanded
                       ? _buildOrbitInlineEditor(current)
                       : null,
@@ -610,120 +615,60 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _syncOrbitAmountController(current);
     final range = _orbitSliderRangeFor(current);
     final showSetToMax = current.overview != null;
-    final canJumpToOverview = _orbitMatchingOverviewIndexFor(current) != null;
+    final canJump = _orbitCanJump(current);
     return KeyedSubtree(
       key: const ValueKey('backheader-orbit-inline-editor'),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            key: const ValueKey('backheader-orbit-slider'),
+            height: 30,
+            child: CategoryLimitSlider(
+              value: range.value,
+              max: range.max,
+              divisions: range.divisions,
+              enabled: range.enabled,
+              activeColor: AppColors.white,
+              onChanged: (amount) => _setOrbitAmountFromSlider(current, amount),
+              onChangeEnd: (amount) =>
+                  _setOrbitAmountFromSlider(current, amount, flush: true),
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 40,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                IconButton(
-                  key: const ValueKey('limit-card-previous-button'),
-                  onPressed: () => _selectOrbitAdjacent(-1),
-                  icon: const Icon(Icons.chevron_left),
-                  color: AppColors.white,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 34,
-                    height: 34,
-                  ),
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Előző',
-                ),
-                if (canJumpToOverview)
-                  IconButton(
-                    key: const ValueKey('backheader-overview-jump-button'),
-                    onPressed: _jumpToOverviewForCurrent,
-                    icon: const Icon(Icons.account_balance_wallet_outlined),
-                    color: AppColors.white,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 34,
-                      height: 34,
+                if (canJump) ...[
+                  _OrbitCompactIconButton(
+                    buttonKey: const ValueKey(
+                      'backheader-overview-jump-button',
                     ),
-                    padding: EdgeInsets.zero,
-                    tooltip: 'Összesítő',
-                  )
-                else
-                  const SizedBox(width: 34, height: 34),
+                    icon: _orbitJumpIconFor(current),
+                    tooltip: _orbitJumpTooltipFor(current),
+                    onPressed: () => _handleOrbitJump(current),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
-                  child: Text(
-                    _orbitAmountTextFor(current),
-                    key: const ValueKey('backheader-orbit-inline-amount'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.white.withValues(alpha: 0.9),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: _OrbitAmountPill(
+                    controller: _orbitAmountController,
+                    focusNode: _orbitAmountFocus,
+                    label: _orbitInputLabelFor(current),
+                    onChanged: (text) =>
+                        _setOrbitAmountFromInput(current, text, flush: false),
+                    showSetToMax: showSetToMax,
+                    onSetToMax: () => _setOrbitOverviewToMax(current),
+                    onReset: () => _setOrbitAmount(current, 0, flush: true),
                   ),
-                ),
-                IconButton(
-                  key: const ValueKey('limit-card-next-button'),
-                  onPressed: () => _selectOrbitAdjacent(1),
-                  icon: const Icon(Icons.chevron_right),
-                  color: AppColors.white,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 34,
-                    height: 34,
-                  ),
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Következő',
                 ),
               ],
             ),
-            KeyedSubtree(
-              key: const ValueKey('backheader-orbit-slider'),
-              child: CategoryLimitSlider(
-                value: range.value,
-                max: range.max,
-                divisions: range.divisions,
-                enabled: range.enabled,
-                activeColor: AppColors.white,
-                onChanged: (amount) =>
-                    _setOrbitAmountFromSlider(current, amount),
-                onChangeEnd: (amount) =>
-                    _setOrbitAmountFromSlider(current, amount, flush: true),
-              ),
-            ),
-            const SizedBox(height: 4),
-            ThemedPillField(
-              fieldKey: const ValueKey('limit-amount-input'),
-              debugLabel: 'OrbitBudget.amount',
-              controller: _orbitAmountController,
-              focusNode: _orbitAmountFocus,
-              keyboardType: TextInputType.number,
-              onChanged: (text) =>
-                  _setOrbitAmountFromInput(current, text, flush: false),
-              label: _orbitInputLabelFor(current),
-              suffixText: 'Ft',
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showSetToMax)
-                    IconButton(
-                      key: const ValueKey('limit-slider-end-button'),
-                      onPressed: () => _setOrbitOverviewToMax(current),
-                      icon: const Icon(Icons.last_page),
-                      tooltip: 'Max',
-                    ),
-                  IconButton(
-                    key: const ValueKey('limit-reset-inline-button'),
-                    onPressed: () => _setOrbitAmount(current, 0, flush: true),
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Reset',
-                  ),
-                ],
-              ),
-              surfaceColor: AppColors.white.withValues(alpha: 0.94),
-              surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -987,13 +932,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _scheduleOrbitSave(item, amount, flush: flush);
   }
 
-  void _selectOrbitAdjacent(int direction) {
-    final items = _items;
-    if (items.length < 2) return;
-    final nextIndex = (_index + direction + items.length) % items.length;
-    _selectOrbitIndex(nextIndex);
-  }
-
   void _selectOrbitIndex(int nextIndex) {
     final items = _items;
     if (nextIndex < 0 || nextIndex >= items.length || nextIndex == _index) {
@@ -1019,6 +957,38 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     });
     if (targetIndex < 0 || targetIndex == _index) return null;
     return targetIndex;
+  }
+
+  bool _orbitCanJump(BackheaderBudgetItem item) {
+    return _orbitMatchingOverviewIndexFor(item) != null ||
+        _orbitCanJumpToIncome(item);
+  }
+
+  bool _orbitCanJumpToIncome(BackheaderBudgetItem item) {
+    return widget.onJumpToIncome != null &&
+        item.overview?.kind == BudgetGoalKind.expenseBudget;
+  }
+
+  IconData _orbitJumpIconFor(BackheaderBudgetItem item) {
+    if (_orbitCanJumpToIncome(item)) return Icons.trending_up;
+    return Icons.account_balance_wallet_outlined;
+  }
+
+  String _orbitJumpTooltipFor(BackheaderBudgetItem item) {
+    if (_orbitCanJumpToIncome(item)) return 'Bevétel';
+    return 'Összesítő';
+  }
+
+  void _handleOrbitJump(BackheaderBudgetItem item) {
+    final targetIndex = _orbitMatchingOverviewIndexFor(item);
+    if (targetIndex != null) {
+      _jumpToOverviewForCurrent();
+      return;
+    }
+    if (_orbitCanJumpToIncome(item)) {
+      HapticFeedback.selectionClick();
+      widget.onJumpToIncome?.call();
+    }
   }
 
   void _scheduleOrbitSave(
@@ -1427,4 +1397,118 @@ class _OrbitSaveRequest {
 
   final BackheaderBudgetItem item;
   final double amount;
+}
+
+class _OrbitCompactIconButton extends StatelessWidget {
+  const _OrbitCompactIconButton({
+    required this.buttonKey,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Material(
+        color: AppColors.white.withValues(alpha: 0.94),
+        shape: const CircleBorder(),
+        child: IconButton(
+          key: buttonKey,
+          onPressed: onPressed,
+          icon: Icon(icon),
+          iconSize: 20,
+          color: AppColors.gray800,
+          padding: EdgeInsets.zero,
+          tooltip: tooltip,
+        ),
+      ),
+    );
+  }
+}
+
+class _OrbitAmountPill extends StatelessWidget {
+  const _OrbitAmountPill({
+    required this.controller,
+    required this.focusNode,
+    required this.label,
+    required this.onChanged,
+    required this.showSetToMax,
+    required this.onSetToMax,
+    required this.onReset,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String label;
+  final ValueChanged<String> onChanged;
+  final bool showSetToMax;
+  final VoidCallback onSetToMax;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              key: const ValueKey('limit-amount-input'),
+              controller: controller,
+              focusNode: focusNode,
+              keyboardType: TextInputType.number,
+              onChanged: onChanged,
+              maxLines: 1,
+              style: const TextStyle(
+                color: AppColors.gray800,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+              decoration: InputDecoration(
+                hintText: label,
+                suffixText: 'Ft',
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.only(left: 14, right: 6),
+              ),
+            ),
+          ),
+          if (showSetToMax)
+            IconButton(
+              key: const ValueKey('limit-slider-end-button'),
+              onPressed: onSetToMax,
+              icon: const Icon(Icons.last_page),
+              iconSize: 19,
+              color: AppColors.gray700,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 38),
+              tooltip: 'Max',
+            ),
+          IconButton(
+            key: const ValueKey('limit-reset-inline-button'),
+            onPressed: onReset,
+            icon: const Icon(Icons.delete_outline),
+            iconSize: 19,
+            color: AppColors.gray700,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 38),
+            tooltip: 'Reset',
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
 }

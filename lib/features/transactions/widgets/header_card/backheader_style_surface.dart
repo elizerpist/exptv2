@@ -25,6 +25,7 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.orbitHasLimit = false,
     this.orbitAmountText,
     this.orbitInlineEditor,
+    this.orbitTopPadding = 42,
     this.onOrbitHandlePointerDown,
     this.onOrbitHandlePointerMove,
     this.onOrbitHandlePointerUp,
@@ -44,6 +45,7 @@ class BackheaderStyleSurface extends StatelessWidget {
   final bool orbitHasLimit;
   final String? orbitAmountText;
   final Widget? orbitInlineEditor;
+  final double orbitTopPadding;
   final void Function(PointerDownEvent event)? onOrbitHandlePointerDown;
   final void Function(PointerMoveEvent event)? onOrbitHandlePointerMove;
   final void Function(PointerUpEvent event)? onOrbitHandlePointerUp;
@@ -77,6 +79,7 @@ class BackheaderStyleSurface extends StatelessWidget {
               progress: orbitProgress,
               hasLimit: orbitHasLimit,
               inlineEditor: orbitInlineEditor,
+              topPadding: orbitTopPadding,
               onHandlePointerDown: onOrbitHandlePointerDown,
               onHandlePointerMove: onOrbitHandlePointerMove,
               onHandlePointerUp: onOrbitHandlePointerUp,
@@ -183,6 +186,7 @@ class _OrbitBudget extends StatelessWidget {
     required this.progress,
     required this.hasLimit,
     required this.inlineEditor,
+    required this.topPadding,
     this.onHandlePointerDown,
     this.onHandlePointerMove,
     this.onHandlePointerUp,
@@ -196,6 +200,7 @@ class _OrbitBudget extends StatelessWidget {
   final double progress;
   final bool hasLimit;
   final Widget? inlineEditor;
+  final double topPadding;
   final void Function(PointerDownEvent event)? onHandlePointerDown;
   final void Function(PointerMoveEvent event)? onHandlePointerMove;
   final void Function(PointerUpEvent event)? onHandlePointerUp;
@@ -205,7 +210,7 @@ class _OrbitBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       key: const ValueKey('backheader-style-orbitBudget-content'),
-      padding: const EdgeInsets.fromLTRB(24, 42, 24, 0),
+      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -245,7 +250,7 @@ class _OrbitBudget extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           partitionBar ?? const SizedBox(height: 14),
           Expanded(
             child: inlineEditor == null
@@ -253,37 +258,30 @@ class _OrbitBudget extends StatelessWidget {
                 : Align(alignment: Alignment.bottomCenter, child: inlineEditor),
           ),
           Center(
-            child: GestureDetector(
+            child: Listener(
               key: const ValueKey('backheader-orbit-handle'),
               behavior: HitTestBehavior.opaque,
-              onPanStart: (_) {},
-              onPanUpdate: (_) {},
-              onPanEnd: (_) {},
-              onPanCancel: () {},
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: onHandlePointerDown,
-                onPointerMove: onHandlePointerMove,
-                onPointerUp: onHandlePointerUp,
-                onPointerCancel: onHandlePointerCancel,
-                child: SizedBox(
-                  width: 78,
-                  height: 22,
-                  child: Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withValues(alpha: 0.72),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+              onPointerDown: onHandlePointerDown,
+              onPointerMove: onHandlePointerMove,
+              onPointerUp: onHandlePointerUp,
+              onPointerCancel: onHandlePointerCancel,
+              child: SizedBox(
+                width: 78,
+                height: 22,
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.white.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
         ],
       ),
     );

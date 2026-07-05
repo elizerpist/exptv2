@@ -266,7 +266,7 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 390,
-            height: 260,
+            height: 340,
             child: CategoryBudgetStage(
               backheaderStyle: BackheaderStyle.orbitBudget,
               items: [BackheaderBudgetItem.category(food)],
@@ -559,7 +559,7 @@ void main() {
     },
   );
 
-  testWidgets('orbitBudget inline editor exposes sheet controls and reset', (
+  testWidgets('orbitBudget inline editor exposes compact controls and reset', (
     tester,
   ) async {
     final food = barFixture(6, 'Food', 100, 1000);
@@ -604,14 +604,19 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('limit-card-previous-button')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(
-      find.byKey(const ValueKey('limit-card-next-button')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('limit-card-next-button')), findsNothing);
     expect(
       find.byKey(const ValueKey('backheader-overview-jump-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-inline-amount')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-amount')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
@@ -623,6 +628,61 @@ void main() {
     expect(saved, isNotEmpty);
     expect(saved.last.amount, 0);
     expect(saved.last.alert, isFalse);
+  });
+
+  testWidgets('orbitBudget compact editor controls fit above the handle', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 1000);
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              periodIncome: 10000,
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _expandOrbitEditor(tester);
+
+    final surface = tester.getRect(
+      find.byKey(const ValueKey('backheader-style-orbitBudget')),
+    );
+    final handle = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-handle')),
+    );
+
+    for (final key in [
+      'backheader-orbit-slider',
+      'limit-amount-input',
+      'limit-reset-inline-button',
+      'backheader-overview-jump-button',
+    ]) {
+      final rect = tester.getRect(find.byKey(ValueKey(key)));
+      expect(rect.top, greaterThanOrEqualTo(surface.top));
+      expect(rect.bottom, lessThanOrEqualTo(handle.top));
+      expect(rect.bottom, lessThanOrEqualTo(surface.bottom));
+    }
   });
 
   testWidgets(
@@ -704,6 +764,50 @@ void main() {
       expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
     },
   );
+
+  testWidgets('orbitBudget jump button can switch to income mode', (
+    tester,
+  ) async {
+    var jumpedToIncome = false;
+    final food = barFixture(6, 'Food', 100, 1000);
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 10000);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              periodIncome: 10000,
+              activeKey: BackheaderBudgetItem.overview(overview).key,
+              onItemTap: (_) {},
+              onJumpToIncome: () => jumpedToIncome = true,
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _expandOrbitEditor(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-overview-jump-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(jumpedToIncome, isTrue);
+  });
 
   testWidgets('orbitBudget slider coalesces saves and catches save errors', (
     tester,
@@ -811,10 +915,12 @@ void main() {
       ),
     );
 
+    await _expandOrbitEditor(tester);
+
     final orbitIcon = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-icon')),
     );
-    expect(orbitIcon.top, greaterThanOrEqualTo(42));
+    expect(orbitIcon.top, greaterThanOrEqualTo(64));
 
     await tester.pumpWidget(
       MaterialApp(

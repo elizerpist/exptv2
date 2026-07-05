@@ -340,6 +340,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onItemTap: _openBudgetTargetEditor,
+                    onJumpToIncome: () =>
+                        _setActiveType(TransactionType.income),
                     onSaveOverview:
                         (
                           kind, {
@@ -660,6 +662,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
         drawSurface: drawSurface,
+        expandButtonHitTestEnabled:
+            !(_headerExpanded &&
+                expenseTheme.settings.backheaderStyle ==
+                    BackheaderStyle.orbitBudget),
         slideProgress: slideProgress,
         contentOpacity: contentOpacity,
         onBalanceVisibilityPressed: () {
