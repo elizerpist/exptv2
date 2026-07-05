@@ -88,6 +88,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   static const _orbitAxisSlop = 8.0;
   static const _orbitVerticalBias = 1.25;
   static const _orbitShrinkArmDistance = 10.0;
+  static const _orbitCloseArmDistance = 46.0;
 
   late final AnimationController _slideController;
   Animation<double>? _slideAnimation;
@@ -111,6 +112,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _orbitRejectedDrag = false;
   var _orbitDragStartedExpanded = false;
   var _orbitExpandTriggered = false;
+  var _orbitCloseArmed = false;
   var _orbitHandlePointerActive = false;
   var _orbitSuppressHorizontalDrag = false;
   var _orbitUpdatingController = false;
@@ -390,10 +392,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   orbitAmountText: isOrbitBudget
                       ? _orbitAmountTextFor(current)
                       : null,
-                  orbitTopPadding:
-                      isOrbitBudget && (_orbitExpanded || _orbitExpansion > 0)
-                      ? 64
-                      : 42,
+                  orbitTopPadding: isOrbitBudget ? 72 : 42,
                   orbitInlineEditor: isOrbitBudget && _orbitExpanded
                       ? _buildOrbitInlineEditor(current)
                       : null,
@@ -1086,6 +1085,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _orbitDragStartedExpanded = _orbitExpanded;
     _orbitExpandTriggered = _orbitExpanded;
     _orbitShrinkArmed = false;
+    _orbitCloseArmed = false;
   }
 
   void _handleOrbitHandlePointerMove(PointerMoveEvent event) {
@@ -1111,12 +1111,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
     final maxExpansion = _orbitMaxExpansion;
     final dragLimit = _orbitDragStartedExpanded
-        ? maxExpansion + _orbitShrinkArmDistance
+        ? maxExpansion + _orbitCloseArmDistance
         : maxExpansion;
     final nextExpansion = (_orbitDragStartExpansion + _orbitGestureDy)
         .clamp(0.0, dragLimit)
         .toDouble();
     var nextShrinkArmed = _orbitShrinkArmed;
+    var nextCloseArmed = _orbitCloseArmed;
     var nextExpandTriggered = _orbitExpandTriggered;
     if (!_orbitDragStartedExpanded &&
         !nextExpandTriggered &&
@@ -1125,16 +1126,23 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       HapticFeedback.selectionClick();
     }
     if (_orbitDragStartedExpanded) {
-      final armed =
+      final shrinkArmed =
           nextExpansion >= maxExpansion + _orbitShrinkArmDistance - 0.1;
-      if (armed != nextShrinkArmed) {
-        nextShrinkArmed = armed;
+      if (shrinkArmed != nextShrinkArmed) {
+        nextShrinkArmed = shrinkArmed;
+        HapticFeedback.selectionClick();
+      }
+      final closeArmed =
+          nextExpansion >= maxExpansion + _orbitCloseArmDistance - 0.1;
+      if (closeArmed != nextCloseArmed) {
+        nextCloseArmed = closeArmed;
         HapticFeedback.selectionClick();
       }
     }
     setState(() {
       _orbitExpansion = nextExpansion;
       _orbitShrinkArmed = nextShrinkArmed;
+      _orbitCloseArmed = nextCloseArmed;
       _orbitExpandTriggered = nextExpandTriggered;
     });
   }
@@ -1148,7 +1156,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final maxExpansion = _orbitMaxExpansion;
     setState(() {
       if (_orbitDragStartedExpanded) {
-        if (_orbitShrinkArmed) {
+        if (_orbitCloseArmed) {
           _orbitExpanded = false;
           _orbitExpansion = 0;
         } else {
@@ -1163,6 +1171,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         _orbitExpansion = 0;
       }
       _orbitShrinkArmed = false;
+      _orbitCloseArmed = false;
     });
     _resetOrbitHandleGesture();
   }
@@ -1173,6 +1182,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       setState(() {
         _orbitExpansion = _orbitExpanded ? _orbitMaxExpansion : 0;
         _orbitShrinkArmed = false;
+        _orbitCloseArmed = false;
       });
     }
     _resetOrbitHandleGesture();
@@ -1187,6 +1197,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _orbitDragStartedExpanded = false;
     _orbitExpandTriggered = _orbitExpanded;
     _orbitShrinkArmed = false;
+    _orbitCloseArmed = false;
   }
 
   double _periodIncome(List<CategoryBudgetBarData> bars) {

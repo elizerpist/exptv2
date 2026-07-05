@@ -153,7 +153,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final headerBottom = tester
-        .getRect(find.byKey(const ValueKey('header-expand-button')))
+        .getRect(find.byKey(const ValueKey('header-card-drag-handle')))
         .bottom;
     final typePill = find
         .byWidgetPredicate(
@@ -349,7 +349,7 @@ void main() {
     final before = tester
         .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
         .dy;
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
     final during = tester
@@ -381,7 +381,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+      await tester.tap(
+        find.byKey(const ValueKey('header-budget-trigger-chip')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
 
@@ -404,7 +406,7 @@ void main() {
     },
   );
 
-  testWidgets('header card animates downward when backheader closes', (
+  testWidgets('budget trigger opens backheader without arrow close button', (
     tester,
   ) async {
     final store = TransactionStore(HeaderLayoutRepository());
@@ -421,28 +423,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    final closedTop = tester
+        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
+        .dy;
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
     await tester.pumpAndSettle();
     final expandedTop = tester
         .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
         .dy;
 
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 80));
-    final duringClose = tester
-        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
-        .dy;
-    await tester.pumpAndSettle();
-    final closedTop = tester
-        .getTopLeft(find.byKey(const ValueKey('transaction-header-card')))
-        .dy;
-
-    expect(duringClose, greaterThan(expandedTop));
-    expect(duringClose, lessThan(closedTop));
+    expect(expandedTop, lessThan(closedTop));
+    expect(find.byKey(const ValueKey('category-budget-stage')), findsOneWidget);
+    expect(find.byKey(const ValueKey('header-expand-button')), findsNothing);
   });
 
-  testWidgets('header expand button stays fixed when header card slides up', (
+  testWidgets('header budget trigger chip slides with the header card', (
     tester,
   ) async {
     final store = TransactionStore(HeaderLayoutRepository());
@@ -459,21 +454,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final buttonTop = tester
-        .getRect(find.byKey(const ValueKey('header-expand-button')))
+    final chipTop = tester
+        .getRect(find.byKey(const ValueKey('header-budget-trigger-chip')))
         .top;
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
     await tester.pumpAndSettle();
 
     expect(
-      tester.getRect(find.byKey(const ValueKey('header-expand-button'))).top,
-      moreOrLessEquals(buttonTop, epsilon: 0.1),
+      tester
+          .getRect(find.byKey(const ValueKey('header-budget-trigger-chip')))
+          .top,
+      moreOrLessEquals(
+        chipTop - TransactionHeaderMetrics.expandedSlideDistance,
+        epsilon: 1,
+      ),
     );
   });
 
-  testWidgets('header expand button is not clipped by the header surface', (
-    tester,
-  ) async {
+  testWidgets('header arrow expand button is not rendered', (tester) async {
     final store = TransactionStore(HeaderLayoutRepository());
     await tester.pumpWidget(
       MaterialApp(
@@ -488,12 +486,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('header-expand-button')), findsNothing);
     expect(
-      find.ancestor(
-        of: find.byKey(const ValueKey('header-expand-button')),
-        matching: find.byType(ClipRRect),
-      ),
+      find.byKey(const ValueKey('header-expand-button-hit-area')),
       findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('header-budget-trigger-chip')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('header-card-drag-handle')),
+      findsOneWidget,
     );
   });
 
@@ -519,7 +523,9 @@ void main() {
       findsOneWidget,
     );
 
-    final gesture = await tester.startGesture(const Offset(180, 80));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('header-card-drag-handle'))),
+    );
     await gesture.moveBy(const Offset(0, 160));
     await tester.pump();
 
@@ -543,7 +549,7 @@ void main() {
     expect(find.byKey(const ValueKey('fast-info-panel')), findsNothing);
   });
 
-  testWidgets('expand button still toggles after header drag', (tester) async {
+  testWidgets('budget trigger still toggles after header drag', (tester) async {
     final store = TransactionStore(HeaderLayoutRepository());
     await tester.pumpWidget(
       MaterialApp(
@@ -562,9 +568,7 @@ void main() {
     await tester.drag(header, const Offset(0, 80));
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
 
-    await tester.tap(
-      find.byKey(const ValueKey('header-expand-button-hit-area')),
-    );
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('category-budget-stage')), findsOneWidget);

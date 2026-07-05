@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('header balance label and value sit higher in the card', (tester) async {
+  testWidgets('header balance label and value sit higher in the card', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -48,15 +50,29 @@ void main() {
     expect(find.text('-7 080 Ft'), findsOneWidget);
 
     expect(find.byKey(const ValueKey('header-calendar-button')), findsNothing);
+    expect(find.byKey(const ValueKey('header-expand-button')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('header-expand-button-hit-area')),
+      findsNothing,
+    );
+    expect(find.byIcon(Icons.photo_camera_outlined), findsNothing);
+    expect(
+      find.byKey(const ValueKey('header-budget-trigger-chip')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('header-card-drag-handle')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
 
     expect(categoryPressed, isTrue);
     expect(expandPressed, isTrue);
   });
 
-  testWidgets('header camera chip is smaller', (tester) async {
+  testWidgets('header budget trigger chip is compact', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -70,9 +86,10 @@ void main() {
     );
 
     expect(
-      tester.getSize(find.byKey(const ValueKey('header-camera-chip'))),
+      tester.getSize(find.byKey(const ValueKey('header-budget-trigger-chip'))),
       const Size(36, 28),
     );
+    expect(find.byIcon(Icons.account_balance_wallet_outlined), findsOneWidget);
   });
 
   testWidgets('header renders taller magnet strip height', (tester) async {

@@ -295,6 +295,9 @@ class _OrbitIcon extends StatelessWidget {
     required this.hasLimit,
   });
 
+  static const _outerSize = 40.6;
+  static const _innerSize = 32.2;
+
   final BackheaderBudgetItem item;
   final double progress;
   final bool hasLimit;
@@ -304,20 +307,20 @@ class _OrbitIcon extends StatelessWidget {
     final category = item.category;
     return SizedBox(
       key: const ValueKey('backheader-orbit-icon'),
-      width: 58,
-      height: 58,
+      width: _outerSize,
+      height: _outerSize,
       child: Stack(
         alignment: Alignment.center,
         children: [
           if (hasLimit)
             CustomPaint(
               key: const ValueKey('backheader-orbit-progress-ring'),
-              size: const Size.square(58),
+              size: const Size.square(_outerSize),
               painter: _OrbitProgressRingPainter(progress),
             ),
           Container(
-            width: 46,
-            height: 46,
+            width: _innerSize,
+            height: _innerSize,
             decoration: BoxDecoration(
               color: AppColors.white.withValues(alpha: 0.18),
               shape: BoxShape.circle,
@@ -330,13 +333,13 @@ class _OrbitIcon extends StatelessWidget {
                 ? Icon(
                     _overviewIcon(item.overview?.kind),
                     color: AppColors.white,
-                    size: 25,
+                    size: 18,
                   )
                 : CategorySlotIcon(
                     slot: category.iconSlot,
                     color: AppColors.white,
-                    size: 27,
-                    strokeWidth: 1.25,
+                    size: 19,
+                    strokeWidth: 1,
                   ),
           ),
         ],
@@ -364,15 +367,15 @@ class _OrbitProgressRingPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final track = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round
       ..color = AppColors.white.withValues(alpha: 0.22);
     final fill = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round
       ..color = AppColors.white;
-    final ringRect = rect.deflate(2.4);
+    final ringRect = rect.deflate(1.8);
     canvas.drawArc(ringRect, 0, 6.283185307179586, false, track);
     canvas.drawArc(
       ringRect,

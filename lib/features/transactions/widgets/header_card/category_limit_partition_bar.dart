@@ -26,6 +26,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   final double? overviewLimitAmount;
   final double height;
   final ValueChanged<int>? onSegmentTap;
+  static const _borderWidth = 2.5;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +45,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.gray200,
         borderRadius: BorderRadius.circular(height / 2),
-        border: Border.all(color: AppColors.white),
+        border: Border.all(color: AppColors.white, width: _borderWidth),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -53,33 +54,46 @@ class CategoryLimitPartitionBar extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(height / 2 - 1),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (overviewLimit > 0) {
-              return Stack(
-                fit: StackFit.expand,
-                children: _budgetSegments(
-                  overviewLimit: overviewLimit,
-                  maxWidth: constraints.maxWidth,
-                ),
-              );
-            }
-            final partitions = LimitPartitionManager.partitions(
-              bars: bars,
-              activeBar: activeBar,
-              activeLimitAmount: activeLimitAmount,
-            );
-            if (partitions.isEmpty) return const SizedBox.expand();
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                ..._legacySegments(partitions, constraints.maxWidth),
-                ..._unitMarks(partitions.length),
-              ],
-            );
-          },
+      child: Padding(
+        padding: const EdgeInsets.all(_borderWidth),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(
+            math.max(0, height / 2 - _borderWidth),
+          ),
+          child: ColoredBox(
+            color: AppColors.gray200,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (overviewLimit > 0) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: _budgetSegments(
+                      overviewLimit: overviewLimit,
+                      maxWidth: constraints.maxWidth,
+                      trackHeight: constraints.maxHeight,
+                    ),
+                  );
+                }
+                final partitions = LimitPartitionManager.partitions(
+                  bars: bars,
+                  activeBar: activeBar,
+                  activeLimitAmount: activeLimitAmount,
+                );
+                if (partitions.isEmpty) return const SizedBox.expand();
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ..._legacySegments(
+                      partitions,
+                      constraints.maxWidth,
+                      constraints.maxHeight,
+                    ),
+                    ..._unitMarks(partitions.length),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -88,6 +102,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   List<Widget> _budgetSegments({
     required double overviewLimit,
     required double maxWidth,
+    required double trackHeight,
   }) {
     final visible = _budgetBars()
         .where((bar) => _limitAmountFor(bar) > 0)
@@ -98,8 +113,13 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     for (var i = 0; i < visible.length; i += 1) {
       final bar = visible[i];
       final limitAmount = _limitAmountFor(bar);
-      final usedAmount = math.min(bar.spent, limitAmount).clamp(0.0, limitAmount);
-      final remainingAmount = (limitAmount - usedAmount).clamp(0.0, limitAmount);
+      final usedAmount = math
+          .min(bar.spent, limitAmount)
+          .clamp(0.0, limitAmount);
+      final remainingAmount = (limitAmount - usedAmount).clamp(
+        0.0,
+        limitAmount,
+      );
       final usedWidth = (maxWidth * usedAmount / overviewLimit)
           .clamp(0.0, maxWidth - left)
           .toDouble();
@@ -113,7 +133,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
             left: left,
             top: 0,
             width: usedWidth,
-            height: height,
+            height: trackHeight,
             child: ColoredBox(color: bar.color),
           ),
         );
@@ -126,7 +146,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
             left: left,
             top: 0,
             width: remainingWidth,
-            height: height,
+            height: trackHeight,
             child: ColoredBox(color: bar.color.withValues(alpha: 0.70)),
           ),
         );
@@ -173,21 +193,23 @@ class CategoryLimitPartitionBar extends StatelessWidget {
   List<Widget> _legacySegments(
     List<CategoryLimitPartition> partitions,
     double maxWidth,
+    double trackHeight,
   ) {
     var left = 0.0;
     return [
       for (var i = 0; i < partitions.length; i += 1)
         () {
           final partition = partitions[i];
-          final width = (i == partitions.length - 1
-                  ? (maxWidth - left).clamp(0.0, maxWidth)
-                  : (maxWidth * partition.fraction).clamp(0.0, maxWidth))
-              .toDouble();
+          final width =
+              (i == partitions.length - 1
+                      ? (maxWidth - left).clamp(0.0, maxWidth)
+                      : (maxWidth * partition.fraction).clamp(0.0, maxWidth))
+                  .toDouble();
           final segment = Positioned(
             left: left,
             top: 0,
             width: width,
-            height: height,
+            height: trackHeight,
             child: DecoratedBox(
               key: ValueKey('category-limit-partition-segment-$i'),
               decoration: BoxDecoration(
@@ -246,41 +268,54 @@ class _AllocationPartitionBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.gray200,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.white),
+        border: Border.all(
+          color: AppColors.white,
+          width: CategoryLimitPartitionBar._borderWidth,
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          var left = 0.0;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              for (var i = 0; i < allocation.segments.length; i += 1)
-                () {
-                  final segment = allocation.segments[i];
-                  final width = constraints.maxWidth * segment.fraction;
-                  final targetId = segment.targetId;
-                  final onTap = onSegmentTap;
-                  final child = Positioned(
-                    key: ValueKey('category-limit-partition-segment-$i'),
-                    left: left,
-                    top: 0,
-                    width: width,
-                    bottom: 0,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: targetId == null || onTap == null
-                          ? null
-                          : () => onTap(targetId),
-                      child: ColoredBox(color: segment.color),
-                    ),
-                  );
-                  left += width;
-                  return child;
-                }(),
-            ],
-          );
-        },
+      child: Padding(
+        padding: const EdgeInsets.all(CategoryLimitPartitionBar._borderWidth),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(
+            math.max(0, 8 - CategoryLimitPartitionBar._borderWidth),
+          ),
+          child: ColoredBox(
+            color: AppColors.gray200,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                var left = 0.0;
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    for (var i = 0; i < allocation.segments.length; i += 1)
+                      () {
+                        final segment = allocation.segments[i];
+                        final width = constraints.maxWidth * segment.fraction;
+                        final targetId = segment.targetId;
+                        final onTap = onSegmentTap;
+                        final child = Positioned(
+                          key: ValueKey('category-limit-partition-segment-$i'),
+                          left: left,
+                          top: 0,
+                          width: width,
+                          bottom: 0,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: targetId == null || onTap == null
+                                ? null
+                                : () => onTap(targetId),
+                            child: ColoredBox(color: segment.color),
+                          ),
+                        );
+                        left += width;
+                        return child;
+                      }(),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }

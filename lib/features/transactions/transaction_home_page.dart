@@ -662,7 +662,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
         drawSurface: drawSurface,
-        expandButtonHitTestEnabled:
+        dragHandleHitTestEnabled:
             !(_headerExpanded &&
                 expenseTheme.settings.backheaderStyle ==
                     BackheaderStyle.orbitBudget),

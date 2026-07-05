@@ -25,7 +25,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.fastInfoVisible = false,
     this.balanceHidden = false,
     this.drawSurface = true,
-    this.expandButtonHitTestEnabled = true,
+    this.dragHandleHitTestEnabled = true,
     this.onBalanceVisibilityPressed,
     this.slideProgress,
     this.contentOpacity,
@@ -48,7 +48,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final bool fastInfoVisible;
   final bool balanceHidden;
   final bool drawSurface;
-  final bool expandButtonHitTestEnabled;
+  final bool dragHandleHitTestEnabled;
   final VoidCallback? onBalanceVisibilityPressed;
   final double? slideProgress;
   final double? contentOpacity;
@@ -117,26 +117,6 @@ class TransactionHeaderCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: TransactionHeaderMetrics.cameraTop,
-              left: 30,
-              child: Container(
-                key: const ValueKey('header-camera-chip'),
-                width: 36,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFBBF24),
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: AppColors.white, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.photo_camera_outlined,
-                  color: AppColors.white,
-                  size: 21,
-                ),
-              ),
-            ),
-            Positioned(
               top: TransactionHeaderMetrics.magnetTop,
               left: 0,
               right: 0,
@@ -149,6 +129,34 @@ class TransactionHeaderCard extends StatelessWidget {
                   accent: accent,
                   height: TransactionHeaderMetrics.magnetHeight,
                   budgetProgress: budgetProgress,
+                ),
+              ),
+            ),
+            Positioned(
+              top: TransactionHeaderMetrics.cameraTop,
+              left: 30,
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+                child: InkWell(
+                  key: const ValueKey('header-budget-trigger-chip'),
+                  onTap: onExpandPressed,
+                  borderRadius: BorderRadius.circular(7),
+                  child: Container(
+                    width: 36,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: AppColors.white, width: 2),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      color: AppColors.white,
+                      size: 20,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -260,76 +268,29 @@ class TransactionHeaderCard extends StatelessWidget {
         children: [
           slidingHeader,
           Positioned(
-            top: TransactionHeaderMetrics.expandButtonTop - 13,
+            top: TransactionHeaderMetrics.expandButtonTop - 26,
             left: 0,
             right: 0,
             child: Center(
               child: IgnorePointer(
-                ignoring: !expandButtonHitTestEnabled,
-                child: SizedBox(
-                  key: const ValueKey('header-expand-button-hit-area'),
-                  width: 56,
-                  height: 56,
-                  child: Center(
-                    child: ExpensePressable(
-                      enabled: buttonSurfaceStyle.hasPressEffect,
-                      builder: (context, pressed) {
-                        final radius = BorderRadius.circular(15);
-                        final materialFeedback =
-                            ExpenseSurface.materialFeedbackEnabled(
-                              buttonSurfaceStyle,
-                            );
-                        return ExpenseSurfaceContainer(
-                          surfaceKey: const ValueKey(
-                            'header-expand-button-surface',
-                          ),
-                          style: buttonSurfaceStyle,
-                          color: accent,
-                          borderRadius: radius,
-                          pressed: pressed,
-                          primary: true,
-                          primaryColor: accent,
-                          width: 30,
-                          height: 30,
-                          clipContent: false,
-                          neutralShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              offset: const Offset(0, 6),
-                              blurRadius: 12,
-                            ),
-                          ],
-                          child: Material(
-                            color: Colors.transparent,
-                            borderRadius: radius,
-                            child: InkWell(
-                              key: const ValueKey('header-expand-button'),
-                              onTap: onExpandPressed,
-                              borderRadius: radius,
-                              overlayColor: materialFeedback
-                                  ? null
-                                  : ExpenseSurface.transparentOverlayColor,
-                              splashColor: materialFeedback
-                                  ? null
-                                  : Colors.transparent,
-                              highlightColor: materialFeedback
-                                  ? null
-                                  : Colors.transparent,
-                              child: SizedBox(
-                                width: 30,
-                                height: 30,
-                                child: Icon(
-                                  expanded
-                                      ? Icons.keyboard_arrow_up
-                                      : Icons.keyboard_arrow_down,
-                                  color: AppColors.white,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                ignoring: !dragHandleHitTestEnabled,
+                child: GestureDetector(
+                  key: const ValueKey('header-card-drag-handle'),
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: onVerticalDragUpdate,
+                  onVerticalDragEnd: onVerticalDragEnd,
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.gray500.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
                   ),
                 ),

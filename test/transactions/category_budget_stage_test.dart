@@ -468,9 +468,30 @@ void main() {
       expect(find.text('100 Ft / 150 Ft'), findsNothing);
 
       final saveCount = savedCategoryAmounts.length;
+      final normalExpandedHeight = tester
+          .getRect(find.byKey(const ValueKey('category-budget-stage')))
+          .height;
       await tester.drag(
         find.byKey(const ValueKey('backheader-orbit-handle')),
-        const Offset(0, 12),
+        const Offset(0, 18),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('category-budget-stage')))
+            .height,
+        moreOrLessEquals(normalExpandedHeight, epsilon: 0.1),
+      );
+      expect(savedCategoryAmounts, hasLength(saveCount));
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-handle')),
+        const Offset(0, 58),
       );
       await tester.pumpAndSettle();
 
@@ -895,7 +916,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('orbitBudget top content sits 10px lower', (tester) async {
+  testWidgets('orbitBudget icon is smaller and fixed during expand', (
+    tester,
+  ) async {
     final food = barFixture(6, 'Food', 100, 150);
 
     await tester.pumpWidget(
@@ -903,7 +926,7 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 390,
-            height: 260,
+            height: 340,
             child: CategoryBudgetStage(
               backheaderStyle: BackheaderStyle.orbitBudget,
               items: [BackheaderBudgetItem.category(food)],
@@ -915,19 +938,37 @@ void main() {
       ),
     );
 
-    await _expandOrbitEditor(tester);
-
-    final orbitIcon = tester.getRect(
+    final collapsedIcon = tester.getRect(
       find.byKey(const ValueKey('backheader-orbit-icon')),
     );
-    expect(orbitIcon.top, greaterThanOrEqualTo(64));
+    final collapsedRing = tester.getSize(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+    );
+
+    await _expandOrbitEditor(tester);
+
+    final expandedIcon = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-icon')),
+    );
+    final expandedRing = tester.getSize(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+    );
+
+    expect(collapsedIcon.size.width, moreOrLessEquals(40.6, epsilon: 0.5));
+    expect(collapsedIcon.size.height, moreOrLessEquals(40.6, epsilon: 0.5));
+    expect(collapsedRing.width, moreOrLessEquals(40.6, epsilon: 0.5));
+    expect(
+      expandedRing.width,
+      moreOrLessEquals(collapsedRing.width, epsilon: 0.1),
+    );
+    expect(expandedIcon.top, moreOrLessEquals(collapsedIcon.top, epsilon: 0.1));
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: SizedBox(
             width: 390,
-            height: 260,
+            height: 340,
             child: CategoryBudgetStage(
               backheaderStyle: BackheaderStyle.heroToken,
               items: [BackheaderBudgetItem.category(food)],
@@ -1711,7 +1752,14 @@ void main() {
     final bar = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
+    final container = tester.widget<Container>(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    final border = decoration.border! as Border;
     expect(bar.height, moreOrLessEquals(23.5, epsilon: 0.1));
+    expect(border.top.color, Colors.white);
+    expect(border.top.width, greaterThan(1));
     expect(
       find.byKey(const ValueKey('category-limit-partition-segment-0')),
       findsOneWidget,
@@ -1724,6 +1772,12 @@ void main() {
       find.byKey(const ValueKey('category-limit-partition-segment-2')),
       findsOneWidget,
     );
+    final segment = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-segment-0')),
+    );
+    expect(segment.left, greaterThan(bar.left));
+    expect(segment.top, greaterThan(bar.top));
+    expect(segment.bottom, lessThan(bar.bottom));
   });
 
   testWidgets('partition bar segment tap reports category target id', (

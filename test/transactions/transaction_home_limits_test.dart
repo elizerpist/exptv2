@@ -515,7 +515,7 @@ void main() {
       const Offset(0, -90),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
@@ -980,7 +980,7 @@ Future<void> pumpExpandedMonthlyHome(
     const Offset(0, -90),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('header-expand-button')));
+  await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
   await tester.pumpAndSettle();
 }
 
