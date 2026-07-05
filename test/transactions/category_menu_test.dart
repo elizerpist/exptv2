@@ -190,6 +190,65 @@ void main() {
     );
   });
 
+  testWidgets('slide-up category menu drags only from the handler', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final store = TransactionStore(FakeTransactionRepository());
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 919,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    final initialTranslation = _slideCardTranslationY(tester);
+    final contentDrag = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('category-card-6'))),
+    );
+    await contentDrag.moveBy(const Offset(0, 92));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), initialTranslation);
+    await contentDrag.up();
+    await tester.pumpAndSettle();
+
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+    );
+    final handlerDrag = await tester.startGesture(
+      sheetRect.topCenter + const Offset(0, 24),
+    );
+    await handlerDrag.moveBy(const Offset(0, 64));
+    await tester.pump();
+    expect(_slideCardTranslationY(tester), greaterThan(initialTranslation));
+    await handlerDrag.up();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('slide-up category menu closes on select and drag gestures', (
     tester,
   ) async {
@@ -258,6 +317,22 @@ void main() {
     expect(
       find.byKey(const ValueKey('category-menu-slide-card')),
       findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+    sheetRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+    );
+    final diagonalDrag = await tester.startGesture(
+      sheetRect.topCenter + const Offset(0, 24),
+    );
+    await diagonalDrag.moveBy(const Offset(80, 88));
+    await diagonalDrag.up();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
     );
   });
 
@@ -458,4 +533,11 @@ class FakeTransactionRepository extends TransactionRepositoryContract {
   Future<CategoryLimit> upsertCategoryLimit(
     Map<String, Object?> payload,
   ) async => throw UnimplementedError();
+}
+
+double _slideCardTranslationY(WidgetTester tester) {
+  final transform = tester.widget<Transform>(
+    find.byKey(const ValueKey('slide-up-menu-transform')),
+  );
+  return transform.transform.getTranslation().y;
 }

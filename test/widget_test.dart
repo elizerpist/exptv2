@@ -15,6 +15,7 @@ final updatedTransactions = <Map<dynamic, dynamic>>[];
 final updatedThemeSettings = <Map<dynamic, dynamic>>[];
 final recurringRulesPayload = <Map<String, Object?>>[];
 final deletedTransactionIds = <int>[];
+Map<String, Object?>? themeSettingsOverride;
 var firstLaunchNotificationPromptEnabled = false;
 var firstLaunchNotificationPromptCalls = 0;
 
@@ -28,6 +29,7 @@ void main() {
     updatedThemeSettings.clear();
     recurringRulesPayload.clear();
     deletedTransactionIds.clear();
+    themeSettingsOverride = null;
     firstLaunchNotificationPromptEnabled = false;
     firstLaunchNotificationPromptCalls = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -40,14 +42,16 @@ void main() {
           }
           if (call.method == 'expenseLoadSettings') {
             return <String, Object?>{
-              'themeSettings': <String, Object?>{
-                'magnetType': 'fade',
-                'cardColor': 'lightgray',
-                'theme': 'Türkiz',
-                'backgroundColor': 'gray',
-                'boxColor': 'gray',
-                'backheaderStyle': 'classic',
-              },
+              'themeSettings':
+                  themeSettingsOverride ??
+                  <String, Object?>{
+                    'magnetType': 'fade',
+                    'cardColor': 'lightgray',
+                    'theme': 'Türkiz',
+                    'backgroundColor': 'gray',
+                    'boxColor': 'gray',
+                    'backheaderStyle': 'classic',
+                  },
               'fastInfoConfig': <String, Object?>{
                 'pills': <Object?>[null, null, null],
                 'boxes': <Object?>[null, null, null],
@@ -948,6 +952,43 @@ void main() {
       find.byKey(const ValueKey('category-menu-add-button')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('slide-up category sheet hides shell navigation controls', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'categoryMenuPresentation': 'slideUpSheet',
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-menu-add-pill')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
+    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
   });
 
   testWidgets('add category sheet keeps the picker behind and covers nav', (

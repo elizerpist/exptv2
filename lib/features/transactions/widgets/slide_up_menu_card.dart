@@ -32,6 +32,8 @@ class SlideUpMenuCard extends StatefulWidget {
     this.focusVeilPassthroughTop = 0,
     this.dragExclusionKeys = const <GlobalKey>[],
     this.canDragFrom,
+    this.dragFromHandleOnly = false,
+    this.verticalDragBias = 1.0,
     this.openRequestedAt,
     this.deferEntryAnimation = false,
     this.keyboardAvoidance = true,
@@ -53,6 +55,8 @@ class SlideUpMenuCard extends StatefulWidget {
   final double focusVeilPassthroughTop;
   final List<GlobalKey> dragExclusionKeys;
   final SlideUpDragGate? canDragFrom;
+  final bool dragFromHandleOnly;
+  final double verticalDragBias;
   final DateTime? openRequestedAt;
   final bool deferEntryAnimation;
   final bool keyboardAvoidance;
@@ -466,6 +470,14 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       );
       return;
     }
+    if (widget.dragFromHandleOnly &&
+        event.localPosition.dy > widget.dragHandleExtent) {
+      _dragActive = false;
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel drag ignored outside handle y=${event.localPosition.dy.toStringAsFixed(1)} handle=${widget.dragHandleExtent.toStringAsFixed(1)}',
+      );
+      return;
+    }
     _dragActive = true;
     _dragStartY = event.localPosition.dy;
     _dragStartGlobalPosition = event.position;
@@ -502,7 +514,10 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
         );
         return;
       }
-      if (absDy <= _axisLockSlop || absDy < absDx) return;
+      if (absDy <= _axisLockSlop ||
+          absDy < absDx * widget.verticalDragBias) {
+        return;
+      }
       _verticalDragAccepted = true;
     }
 

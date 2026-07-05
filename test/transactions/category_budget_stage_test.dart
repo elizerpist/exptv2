@@ -124,10 +124,7 @@ void main() {
     final classicSurface = tester.widget<DecoratedBox>(
       find.byKey(const ValueKey('category-budget-stage-background')),
     );
-    expect(
-      (classicSurface.decoration as BoxDecoration).color,
-      backgroundColor,
-    );
+    expect((classicSurface.decoration as BoxDecoration).color, backgroundColor);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -255,6 +252,309 @@ void main() {
       expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
     }
   });
+
+  testWidgets('orbitBudget renders icon title amount and real partition bar', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 150);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-style-orbitBudget-content')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('backheader-orbit-icon')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-amount')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-handle')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-partition-strip')),
+      findsNothing,
+    );
+
+    final icon = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-icon')),
+    );
+    final title = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-title')),
+    );
+    final amount = tester.getRect(
+      find.byKey(const ValueKey('backheader-orbit-amount')),
+    );
+    final partition = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    final stage = tester.getRect(
+      find.byKey(const ValueKey('category-budget-stage')),
+    );
+
+    expect(icon.left, lessThan(title.left));
+    expect(title.right, lessThan(amount.right));
+    expect(partition.bottom, lessThan(stage.bottom - 12));
+    expect(find.text('Food'), findsOneWidget);
+    expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
+  });
+
+  testWidgets('orbitBudget hides progress ring for unlimited category', (
+    tester,
+  ) async {
+    final travel = barFixture(7, 'Travel', 40, 0);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.orbitBudget,
+              items: [BackheaderBudgetItem.category(travel)],
+              categoryBars: [travel],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('backheader-orbit-icon')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-progress-ring')),
+      findsNothing,
+    );
+    expect(find.text('Travel'), findsOneWidget);
+    expect(find.text('40 Ft'), findsOneWidget);
+  });
+
+  testWidgets('heroToken keeps legacy experimental partition layout', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 150);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 260,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.heroToken,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-partition-strip')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('backheader-orbit-icon')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'orbitBudget expands inline editor from handle and saves slider immediately',
+    (tester) async {
+      final food = barFixture(6, 'Food', 100, 150);
+      final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
+      final savedCategoryAmounts = <double>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 300,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.orbitBudget,
+                items: [
+                  BackheaderBudgetItem.overview(overview),
+                  BackheaderBudgetItem.category(food),
+                ],
+                categoryBars: [food],
+                overviewItems: [overview],
+                periodIncome: 1000,
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+                onSaveOverview:
+                    (_, {required limitAmount, required alertActive}) async {},
+                onSaveCategory:
+                    (bar, {required limitAmount, required alertActive}) async {
+                      savedCategoryAmounts.add(limitAmount);
+                    },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-handle')),
+        const Offset(0, 40),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsNothing,
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-handle')),
+        const Offset(0, 90),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-slider')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-slider')),
+        const Offset(140, 0),
+      );
+      await tester.pump();
+
+      expect(savedCategoryAmounts, isNotEmpty);
+      expect(savedCategoryAmounts.last, greaterThan(150));
+      expect(find.text('100 Ft / 150 Ft'), findsNothing);
+
+      final saveCount = savedCategoryAmounts.length;
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-handle')),
+        const Offset(0, 12),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsNothing,
+      );
+      expect(savedCategoryAmounts, hasLength(saveCount));
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-handle')),
+        const Offset(0, 90),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsOneWidget,
+      );
+
+      final cancelShrink = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('backheader-orbit-handle'))),
+      );
+      await cancelShrink.moveBy(const Offset(0, 12));
+      await tester.pump();
+      await cancelShrink.moveBy(const Offset(0, -12));
+      await cancelShrink.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsOneWidget,
+      );
+      expect(savedCategoryAmounts, hasLength(saveCount));
+    },
+  );
+
+  testWidgets(
+    'orbitBudget handle ignores diagonal drag while horizontal swipe remains',
+    (tester) async {
+      BackheaderBudgetItem? activeItem;
+      final food = barFixture(6, 'Food', 100, 150);
+      final travel = barFixture(7, 'Travel', 40, 0);
+      final overview = BackheaderBudgetItem.overview(
+        overviewFixture(BudgetGoalKind.expenseBudget, 100, 300),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 300,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.orbitBudget,
+                items: [
+                  overview,
+                  BackheaderBudgetItem.category(food),
+                  BackheaderBudgetItem.category(travel),
+                ],
+                categoryBars: [food, travel],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onActiveItemChanged: (item) => activeItem = item,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-orbit-handle')),
+        const Offset(70, 72),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+        findsNothing,
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+        const Offset(-180, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(activeItem?.category?.title, 'Travel');
+    },
+  );
 
   testWidgets(
     'experimental backheader preserves swipe and long press behavior',

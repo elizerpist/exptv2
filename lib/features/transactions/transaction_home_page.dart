@@ -168,6 +168,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final visibleGhostTransactions =
               widget.store.visibleGhostTransactions;
           final visibleLogEntries = widget.store.visibleDisplayLogEntries;
+          final categoryMenuIsSlide =
+              expenseTheme.settings.categoryMenuPresentation ==
+              CategoryMenuPresentation.slideUpSheet;
           _logHomeBuildFrame(
             startedAt: homeBuildStartedAt,
             entryCount: visibleLogEntries.length,
@@ -176,6 +179,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           );
           _notifyBlockingOverlay(
             _categoryEditorOpen ||
+                (_categoryMode != null && categoryMenuIsSlide) ||
                 (_budgetEditorItem != null &&
                     widget.onBudgetTargetEditorRequested == null),
           );
@@ -183,9 +187,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final budgetHostItem = widget.onBudgetTargetEditorRequested == null
               ? _budgetEditorItem ?? _defaultBudgetEditorItem()
               : null;
-          final categoryMenuIsSlide =
-              expenseTheme.settings.categoryMenuPresentation ==
-              CategoryMenuPresentation.slideUpSheet;
 
           return Stack(
             clipBehavior: Clip.none,
@@ -288,6 +289,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     panelHeight: _menuPanelHeight(context),
                     onDismissed: _closeCategoryMenu,
                     dismissOnVeilTap: false,
+                    dragFromHandleOnly: true,
+                    dragHandleExtent: 72,
+                    verticalDragBias: 1.2,
                     child: SafeArea(
                       top: false,
                       bottom: false,
@@ -329,11 +333,37 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     backgroundColor: expenseTheme.appBackground,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
+                    overviewItems: widget.store.overviewBudgetItems,
+                    periodIncome: widget.store.activePeriodIncomeTotal,
                     periodLabel: widget.store.activePeriodLabel,
                     activeKey: _backheaderActiveKey,
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onItemTap: _openBudgetTargetEditor,
+                    onSaveOverview:
+                        (
+                          kind, {
+                          required limitAmount,
+                          required alertActive,
+                        }) async {
+                          await widget.store.saveOverviewLimit(
+                            kind,
+                            limitAmount: limitAmount,
+                            alertActive: alertActive,
+                          );
+                        },
+                    onSaveCategory:
+                        (
+                          bar, {
+                          required limitAmount,
+                          required alertActive,
+                        }) async {
+                          await widget.store.saveCategoryLimitForBar(
+                            bar,
+                            limitAmount: limitAmount,
+                            alertActive: alertActive,
+                          );
+                        },
                   ),
                 ),
                 builder: (context, budgetStage) {

@@ -627,7 +627,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
                   _buildShellPage(appTabs[index], expenseTheme),
             ),
           ),
-          ...shellNavigation,
+          if (!_homeBlockingOverlayOpen) ...shellNavigation,
           DebugFloatingButton(
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:

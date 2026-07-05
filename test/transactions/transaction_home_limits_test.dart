@@ -356,72 +356,71 @@ void main() {
     },
   );
 
-  testWidgets(
-    'budget magnet strip follows the active swiped category limit',
-    (tester) async {
-      final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
-      repository.limits = [
-        CategoryLimit.fromMap({
-          'id': 10,
-          'targetType': 'overview',
-          'targetId': 0,
-          'transactionType': 'expense',
-          'window': 'monthly',
-          'periodKey': '2026-05',
-          'hasLimit': true,
-          'limitAmount': 1000,
-          'alertActive': false,
-          'createdAt': 0,
-          'updatedAt': 1,
-        }),
-        CategoryLimit.fromMap({
-          'id': 11,
-          'targetType': 'category',
-          'targetId': 6,
-          'transactionType': 'expense',
-          'window': 'monthly',
-          'periodKey': '2026-05',
-          'hasLimit': true,
-          'limitAmount': 125,
-          'alertActive': false,
-          'createdAt': 0,
-          'updatedAt': 1,
-        }),
-      ];
-      final store = TransactionStore(
-        repository,
-        clock: () => DateTime(2026, 5, 17),
-      );
-      final budgetTheme = ExpenseTheme.fromSettings(
-        AppThemeSettings.defaults().copyWith(magnetType: MagnetType.budget),
-      );
+  testWidgets('budget magnet strip follows the active swiped category limit', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    repository.limits = [
+      CategoryLimit.fromMap({
+        'id': 10,
+        'targetType': 'overview',
+        'targetId': 0,
+        'transactionType': 'expense',
+        'window': 'monthly',
+        'periodKey': '2026-05',
+        'hasLimit': true,
+        'limitAmount': 1000,
+        'alertActive': false,
+        'createdAt': 0,
+        'updatedAt': 1,
+      }),
+      CategoryLimit.fromMap({
+        'id': 11,
+        'targetType': 'category',
+        'targetId': 6,
+        'transactionType': 'expense',
+        'window': 'monthly',
+        'periodKey': '2026-05',
+        'hasLimit': true,
+        'limitAmount': 125,
+        'alertActive': false,
+        'createdAt': 0,
+        'updatedAt': 1,
+      }),
+    ];
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    final budgetTheme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(magnetType: MagnetType.budget),
+    );
 
-      await pumpExpandedMonthlyHome(tester, store, expenseTheme: budgetTheme);
-      await tester.drag(
-        find.byKey(const ValueKey('category-budget-bar')),
-        const Offset(-180, 0),
-      );
-      await tester.pumpAndSettle();
+    await pumpExpandedMonthlyHome(tester, store, expenseTheme: budgetTheme);
+    await tester.drag(
+      find.byKey(const ValueKey('category-budget-bar')),
+      const Offset(-180, 0),
+    );
+    await tester.pumpAndSettle();
 
-      final trackRect = tester.getRect(
-        find.byKey(const ValueKey('magnet-budget-progress-track')),
-      );
-      final fillRect = tester.getRect(
-        find.byKey(const ValueKey('magnet-budget-progress-fill')),
-      );
-      final fill = tester.widget<DecoratedBox>(
-        find.byKey(const ValueKey('magnet-budget-progress-fill')),
-      );
-      final decoration = fill.decoration as BoxDecoration;
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-budget-progress-track')),
+    );
+    final fillRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-budget-progress-fill')),
+    );
+    final fill = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('magnet-budget-progress-fill')),
+    );
+    final decoration = fill.decoration as BoxDecoration;
 
-      expect(find.text('Food'), findsOneWidget);
-      expect(
-        fillRect.width,
-        moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
-      );
-      expect(decoration.color, const Color(0xffff8800));
-    },
-  );
+    expect(find.text('Food'), findsOneWidget);
+    expect(
+      fillRect.width,
+      moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
+    );
+    expect(decoration.color, const Color(0xffff8800));
+  });
 
   testWidgets('budget end button saves period income as overview limit', (
     tester,
@@ -751,6 +750,47 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Food'), findsWidgets);
+  });
+
+  testWidgets('orbit budget embeds limit editor in backheader', (tester) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    final orbitTheme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        backheaderStyle: BackheaderStyle.orbitBudget,
+      ),
+    );
+    await pumpExpandedMonthlyHome(tester, store, expenseTheme: orbitTheme);
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('budget-target-editor-card')),
+      findsNothing,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('backheader-orbit-handle')),
+      const Offset(0, 90),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-inline-editor')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-orbit-slider')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('limit-save-button')), findsNothing);
   });
 
   testWidgets(

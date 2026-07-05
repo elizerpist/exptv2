@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,16 +8,22 @@ import '../../../../core/debug/debug_console.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../data/budget_progress_manager.dart';
+import '../../data/limit_allocation_manager.dart';
+import '../../data/limit_slider_range.dart';
 import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
+import '../../models/transaction_record.dart';
+import '../transaction_menu_metrics.dart';
 import 'budget_bar_geometry.dart';
 import 'backheader_style_surface.dart';
 import 'budget_progress_frame.dart';
 import 'category_budget_bar.dart';
+import 'category_limit_partition_bar.dart';
+import 'category_limit_slider.dart';
 import 'category_progress_bar.dart';
 import 'transaction_header_metrics.dart';
 
@@ -34,6 +41,10 @@ class CategoryBudgetStage extends StatefulWidget {
     this.bars,
     this.onBarTap,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.overviewItems = const [],
+    this.periodIncome = 0,
+    this.onSaveOverview,
+    this.onSaveCategory,
   });
 
   final List<BackheaderBudgetItem>? items;
@@ -45,6 +56,20 @@ class CategoryBudgetStage extends StatefulWidget {
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final List<OverviewBudgetData> overviewItems;
+  final double periodIncome;
+  final Future<void> Function(
+    BudgetGoalKind kind, {
+    required double limitAmount,
+    required bool alertActive,
+  })?
+  onSaveOverview;
+  final Future<void> Function(
+    CategoryBudgetBarData bar, {
+    required double limitAmount,
+    required bool alertActive,
+  })?
+  onSaveCategory;
 
   // Compatibility for call sites migrated in the next implementation task.
   final List<CategoryBudgetBarData>? bars;
@@ -58,12 +83,29 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     with SingleTickerProviderStateMixin {
   static const _maxVisualDrag = 72.0;
   static const _switchThreshold = 44.0;
+  static const _orbitAxisSlop = 8.0;
+  static const _orbitVerticalBias = 1.25;
+  static const _orbitShrinkArmDistance = 10.0;
 
   late final AnimationController _slideController;
   Animation<double>? _slideAnimation;
+  final _orbitRememberedSliderMaxByKey = <String, double>{};
+  final _orbitPendingAmountsByKey = <String, double>{};
   var _index = 0;
   var _dragDx = 0.0;
   var _settling = false;
+  var _orbitExpansion = 0.0;
+  var _orbitDragStartExpansion = 0.0;
+  var _orbitGestureDx = 0.0;
+  var _orbitGestureDy = 0.0;
+  var _orbitExpanded = false;
+  var _orbitShrinkArmed = false;
+  var _orbitAcceptedVerticalDrag = false;
+  var _orbitRejectedDrag = false;
+  var _orbitDragStartedExpanded = false;
+  var _orbitExpandTriggered = false;
+  var _orbitHandlePointerActive = false;
+  var _orbitSuppressHorizontalDrag = false;
 
   @override
   void initState() {
@@ -228,7 +270,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               },
             ),
           ),
-          if (items.length > 1)
+          if (items.length > 1 &&
+              widget.backheaderStyle != BackheaderStyle.orbitBudget)
             Positioned(
               top: 150,
               left: 0,
@@ -264,9 +307,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     required BudgetProgressData? frameProgress,
     required OverviewBudgetData? frameOverview,
   }) {
+    final isOrbitBudget = widget.backheaderStyle == BackheaderStyle.orbitBudget;
     return SizedBox(
       key: const ValueKey('category-budget-stage'),
-      height: TransactionHeaderMetrics.cardHeight,
+      height:
+          TransactionHeaderMetrics.cardHeight +
+          (isOrbitBudget ? _orbitExpansion : 0),
       width: double.infinity,
       child: Stack(
         children: [
@@ -276,18 +322,35 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               behavior: HitTestBehavior.opaque,
               onTap: () => _tap(current),
               onHorizontalDragStart: (_) {
+                if (_orbitHandlePointerActive) {
+                  _orbitSuppressHorizontalDrag = true;
+                  return;
+                }
                 _slideController.stop();
                 _settling = false;
               },
               onHorizontalDragUpdate: (details) {
+                if (_orbitSuppressHorizontalDrag) return;
                 if (_settling) return;
                 final nextDx = (_dragDx + details.delta.dx)
                     .clamp(-_maxVisualDrag, _maxVisualDrag)
                     .toDouble();
                 setState(() => _dragDx = nextDx);
               },
-              onHorizontalDragCancel: () => _animateDragTo(0),
-              onHorizontalDragEnd: (_) => _settleDrag(),
+              onHorizontalDragCancel: () {
+                if (_orbitSuppressHorizontalDrag) {
+                  _orbitSuppressHorizontalDrag = false;
+                  return;
+                }
+                _animateDragTo(0);
+              },
+              onHorizontalDragEnd: (_) {
+                if (_orbitSuppressHorizontalDrag) {
+                  _orbitSuppressHorizontalDrag = false;
+                  return;
+                }
+                _settleDrag();
+              },
               onLongPress: _jumpToOverviewForCurrent,
               child: Transform.translate(
                 offset: Offset(_dragDx, 0),
@@ -300,11 +363,36 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                   frameOverview: frameOverview,
                   activeIndex: _index,
                   backgroundColor: widget.backgroundColor,
+                  orbitPartitionBar:
+                      widget.backheaderStyle == BackheaderStyle.orbitBudget
+                      ? _orbitPartitionBarFor(current)
+                      : null,
+                  orbitProgress: _orbitProgressFor(current),
+                  orbitHasLimit: _orbitHasLimit(current),
+                  orbitAmountText: isOrbitBudget
+                      ? _orbitAmountTextFor(current)
+                      : null,
+                  orbitInlineEditor: isOrbitBudget && _orbitExpanded
+                      ? _buildOrbitInlineEditor(current)
+                      : null,
+                  onOrbitHandlePointerDown: isOrbitBudget
+                      ? _handleOrbitHandlePointerDown
+                      : null,
+                  onOrbitHandlePointerMove: isOrbitBudget
+                      ? _handleOrbitHandlePointerMove
+                      : null,
+                  onOrbitHandlePointerUp: isOrbitBudget
+                      ? _handleOrbitHandlePointerUp
+                      : null,
+                  onOrbitHandlePointerCancel: isOrbitBudget
+                      ? _handleOrbitHandlePointerCancel
+                      : null,
                 ),
               ),
             ),
           ),
-          if (items.length > 1)
+          if (items.length > 1 &&
+              widget.backheaderStyle != BackheaderStyle.orbitBudget)
             Positioned(
               top: 150,
               left: 0,
@@ -394,6 +482,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   void _tap(BackheaderBudgetItem item) {
+    if (widget.backheaderStyle == BackheaderStyle.orbitBudget) return;
     widget.onItemTap?.call(item);
     final category = item.category;
     if (category != null) widget.onBarTap?.call(category);
@@ -434,6 +523,424 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       periodIncome: _periodIncome(bars),
       periodExpense: _periodExpense(bars),
     );
+  }
+
+  Widget _orbitPartitionBarFor(BackheaderBudgetItem current) {
+    if (current.overview?.kind == BudgetGoalKind.savingGoal) {
+      return const SizedBox.shrink();
+    }
+    final allocation = LimitAllocationManager.build(
+      overviewLimit: _orbitOverviewLimitAmount(current),
+      bars: _orbitPartitionBars,
+    );
+    return CategoryLimitPartitionBar(height: 14, allocation: allocation);
+  }
+
+  double _orbitOverviewLimitAmount(BackheaderBudgetItem current) {
+    final overview = current.overview;
+    if (overview != null) {
+      return _orbitEffectiveAmountFor(current);
+    }
+    final category = current.category;
+    if (category == null) return 0;
+    for (final item in _items) {
+      final overview = item.overview;
+      if (overview == null || overview.kind == BudgetGoalKind.savingGoal) {
+        continue;
+      }
+      if (overview.kind.transactionType ==
+          category.transactionType.nativeValue) {
+        return _orbitEffectiveAmountFor(item);
+      }
+    }
+    return _orbitEffectiveAmountFor(current);
+  }
+
+  bool _orbitHasLimit(BackheaderBudgetItem item) {
+    return _orbitEffectiveAmountFor(item) > 0;
+  }
+
+  double _orbitProgressFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    final amount = _orbitEffectiveAmountFor(item);
+    if (overview != null) {
+      if (amount <= 0) return 0;
+      return (overview.amount / amount).clamp(0.0, 1.0).toDouble();
+    }
+    final category = item.category;
+    if (category == null) return 0;
+    if (amount <= 0) return 0;
+    return (category.spent / amount).clamp(0.0, 1.0).toDouble();
+  }
+
+  String _orbitAmountTextFor(BackheaderBudgetItem item) {
+    final amount = _orbitEffectiveAmountFor(item);
+    final overview = item.overview;
+    if (overview != null) {
+      final formattedAmount = formatHuf(overview.amount);
+      return amount > 0
+          ? '$formattedAmount / ${formatHuf(amount)}'
+          : formattedAmount;
+    }
+    final category = item.category;
+    if (category == null) return item.amountText;
+    return amount > 0
+        ? '${category.formattedSpent} / ${formatHuf(amount)}'
+        : category.formattedSpent;
+  }
+
+  Widget _buildOrbitInlineEditor(BackheaderBudgetItem current) {
+    final range = _orbitSliderRangeFor(current);
+    return KeyedSubtree(
+      key: const ValueKey('backheader-orbit-inline-editor'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _orbitAmountTextFor(current),
+            key: const ValueKey('backheader-orbit-inline-amount'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.white.withValues(alpha: 0.9),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          KeyedSubtree(
+            key: const ValueKey('backheader-orbit-slider'),
+            child: CategoryLimitSlider(
+              value: range.value,
+              max: range.max,
+              divisions: range.divisions,
+              enabled: range.enabled,
+              activeColor: AppColors.white,
+              onChanged: (amount) => _setOrbitAmountFromSlider(current, amount),
+              onChangeEnd: (amount) =>
+                  _setOrbitAmountFromSlider(current, amount),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  LimitSliderRange _orbitSliderRangeFor(BackheaderBudgetItem item) {
+    final amount = _orbitEffectiveAmountFor(item);
+    final remembered = _orbitRememberedSliderMaxByKey[item.key] ?? 0;
+    final overview = item.overview;
+    if (overview != null) {
+      if (widget.periodIncome > 0) {
+        return LimitSliderRange.constrained(
+          amount: amount,
+          rememberedMax: remembered,
+          maxAllowed: math.max(widget.periodIncome, amount),
+          hasExistingLimit: amount > 0,
+        );
+      }
+      return LimitSliderRange.unconstrained(
+        amount: amount,
+        rememberedMax: remembered,
+      );
+    }
+
+    final category = item.category;
+    if (category == null) {
+      return const LimitSliderRange(
+        value: 0,
+        max: 1,
+        divisions: 1,
+        enabled: false,
+      );
+    }
+    final overviewLimit = _orbitMatchingOverviewLimitForCategory(category);
+    if (overviewLimit <= 0) {
+      return LimitSliderRange.unconstrained(
+        amount: amount,
+        rememberedMax: remembered,
+      );
+    }
+    final activePreview = _orbitPreviewCategoryBar(category, amount);
+    final maxAllowed = LimitAllocationManager.categorySliderMax(
+      overviewLimit: overviewLimit,
+      bars: _orbitPartitionBars,
+      activeBar: activePreview,
+    );
+    return LimitSliderRange.constrained(
+      amount: amount,
+      rememberedMax: remembered,
+      maxAllowed: maxAllowed,
+      hasExistingLimit: _orbitLimitAmountFor(item) > 0 || amount > 0,
+    );
+  }
+
+  List<CategoryBudgetBarData> get _orbitPartitionBars {
+    final result = <CategoryBudgetBarData>[];
+    for (final bar in _categoryBars) {
+      final item = _orbitItemForCategoryBar(bar);
+      final amount = item == null
+          ? bar.limitAmount
+          : _orbitEffectiveAmountFor(item);
+      result.add(_orbitPreviewCategoryBar(bar, amount));
+    }
+    final activeCategory = _items[_index].category;
+    if (activeCategory != null &&
+        !result.any((bar) => _orbitSameTarget(bar, activeCategory))) {
+      result.insert(
+        0,
+        _orbitPreviewCategoryBar(
+          activeCategory,
+          _orbitEffectiveAmountFor(_items[_index]),
+        ),
+      );
+    }
+    return result;
+  }
+
+  CategoryBudgetBarData _orbitPreviewCategoryBar(
+    CategoryBudgetBarData category,
+    double amount,
+  ) {
+    final hasLimit = amount > 0;
+    return CategoryBudgetBarData(
+      key: category.key,
+      targetType: category.targetType,
+      targetId: category.targetId,
+      transactionType: category.transactionType,
+      window: category.window,
+      periodKey: category.periodKey,
+      title: category.title,
+      spent: category.spent,
+      hasLimit: hasLimit,
+      limitAmount: hasLimit ? amount : 0,
+      alertActive: hasLimit,
+      color: category.color,
+      iconSlot: category.iconSlot,
+      category: category.category,
+      sourceLimit: category.sourceLimit,
+    );
+  }
+
+  double _orbitMatchingOverviewLimitForCategory(
+    CategoryBudgetBarData category,
+  ) {
+    for (final item in _items) {
+      final overview = item.overview;
+      if (overview == null || overview.kind == BudgetGoalKind.savingGoal) {
+        continue;
+      }
+      if (overview.kind.transactionType !=
+          category.transactionType.nativeValue) {
+        continue;
+      }
+      return _orbitEffectiveAmountFor(item);
+    }
+    for (final overview in widget.overviewItems) {
+      if (overview.kind == BudgetGoalKind.savingGoal) continue;
+      if (overview.kind.transactionType !=
+          category.transactionType.nativeValue) {
+        continue;
+      }
+      return _orbitEffectiveAmountFor(BackheaderBudgetItem.overview(overview));
+    }
+    return 0;
+  }
+
+  BackheaderBudgetItem? _orbitItemForCategoryBar(CategoryBudgetBarData bar) {
+    for (final item in _items) {
+      final category = item.category;
+      if (category != null && _orbitSameTarget(category, bar)) return item;
+    }
+    return null;
+  }
+
+  bool _orbitSameTarget(
+    CategoryBudgetBarData left,
+    CategoryBudgetBarData right,
+  ) {
+    return left.targetType == right.targetType &&
+        left.targetId == right.targetId &&
+        left.transactionType == right.transactionType &&
+        left.window == right.window &&
+        left.periodKey == right.periodKey;
+  }
+
+  double _orbitEffectiveAmountFor(BackheaderBudgetItem item) {
+    return _orbitPendingAmountsByKey[item.key] ?? _orbitLimitAmountFor(item);
+  }
+
+  double _orbitLimitAmountFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    if (overview != null && overview.hasLimit) return overview.limitAmount;
+    final category = item.category;
+    if (category != null && category.hasLimit) return category.limitAmount;
+    return 0;
+  }
+
+  void _setOrbitAmountFromSlider(BackheaderBudgetItem item, double amount) {
+    final range = _orbitSliderRangeFor(item);
+    final snapped = LimitAllocationManager.snapSliderAmount(
+      amount,
+    ).clamp(0.0, range.max).toDouble();
+    if ((_orbitEffectiveAmountFor(item) - snapped).abs() < 0.01) return;
+    _orbitRememberedSliderMaxByKey[item.key] = math.max(
+      _orbitRememberedSliderMaxByKey[item.key] ?? 0,
+      snapped,
+    );
+    _orbitPendingAmountsByKey[item.key] = snapped;
+    setState(() {});
+    unawaited(_saveOrbitItemAmount(item, snapped));
+  }
+
+  Future<void> _saveOrbitItemAmount(
+    BackheaderBudgetItem item,
+    double rawAmount,
+  ) async {
+    final amount = math.max(0.0, rawAmount).toDouble();
+    final alertActive = amount > 0;
+    final overview = item.overview;
+    final category = item.category;
+    if (overview != null) {
+      await widget.onSaveOverview?.call(
+        overview.kind,
+        limitAmount: amount,
+        alertActive: alertActive,
+      );
+    } else if (category != null) {
+      await widget.onSaveCategory?.call(
+        category,
+        limitAmount: amount,
+        alertActive: alertActive,
+      );
+    }
+  }
+
+  double get _orbitMaxExpansion {
+    return math
+        .max(
+          0.0,
+          TransactionHeaderMetrics.contentTop +
+              TransactionMenuMetrics.typePillTopPadding +
+              TransactionMenuMetrics.typePillMinHeight -
+              TransactionHeaderMetrics.cardHeight,
+        )
+        .toDouble();
+  }
+
+  void _handleOrbitHandlePointerDown(PointerDownEvent event) {
+    _orbitHandlePointerActive = true;
+    _orbitSuppressHorizontalDrag = false;
+    _orbitDragStartExpansion = _orbitExpansion;
+    _orbitGestureDx = 0;
+    _orbitGestureDy = 0;
+    _orbitAcceptedVerticalDrag = false;
+    _orbitRejectedDrag = false;
+    _orbitDragStartedExpanded = _orbitExpanded;
+    _orbitExpandTriggered = _orbitExpanded;
+    _orbitShrinkArmed = false;
+  }
+
+  void _handleOrbitHandlePointerMove(PointerMoveEvent event) {
+    if (widget.backheaderStyle != BackheaderStyle.orbitBudget) return;
+    _orbitGestureDx += event.delta.dx;
+    _orbitGestureDy += event.delta.dy;
+    if (_orbitRejectedDrag) return;
+
+    if (!_orbitAcceptedVerticalDrag) {
+      final absDx = _orbitGestureDx.abs();
+      final absDy = _orbitGestureDy.abs();
+      if (absDx > _orbitAxisSlop && absDx >= absDy) {
+        _orbitRejectedDrag = true;
+        return;
+      }
+      if (absDy <= _orbitAxisSlop) return;
+      if (absDy < absDx * _orbitVerticalBias || _orbitGestureDy <= 0) {
+        _orbitRejectedDrag = true;
+        return;
+      }
+      _orbitAcceptedVerticalDrag = true;
+    }
+
+    final maxExpansion = _orbitMaxExpansion;
+    final dragLimit = _orbitDragStartedExpanded
+        ? maxExpansion + _orbitShrinkArmDistance
+        : maxExpansion;
+    final nextExpansion = (_orbitDragStartExpansion + _orbitGestureDy)
+        .clamp(0.0, dragLimit)
+        .toDouble();
+    var nextShrinkArmed = _orbitShrinkArmed;
+    var nextExpandTriggered = _orbitExpandTriggered;
+    if (!_orbitDragStartedExpanded &&
+        !nextExpandTriggered &&
+        nextExpansion >= maxExpansion) {
+      nextExpandTriggered = true;
+      HapticFeedback.selectionClick();
+    }
+    if (_orbitDragStartedExpanded) {
+      final armed =
+          nextExpansion >= maxExpansion + _orbitShrinkArmDistance - 0.1;
+      if (armed != nextShrinkArmed) {
+        nextShrinkArmed = armed;
+        HapticFeedback.selectionClick();
+      }
+    }
+    setState(() {
+      _orbitExpansion = nextExpansion;
+      _orbitShrinkArmed = nextShrinkArmed;
+      _orbitExpandTriggered = nextExpandTriggered;
+    });
+  }
+
+  void _handleOrbitHandlePointerUp(PointerUpEvent event) {
+    _orbitHandlePointerActive = false;
+    if (!_orbitAcceptedVerticalDrag || _orbitRejectedDrag) {
+      _resetOrbitHandleGesture();
+      return;
+    }
+    final maxExpansion = _orbitMaxExpansion;
+    setState(() {
+      if (_orbitDragStartedExpanded) {
+        if (_orbitShrinkArmed) {
+          _orbitExpanded = false;
+          _orbitExpansion = 0;
+        } else {
+          _orbitExpanded = true;
+          _orbitExpansion = maxExpansion;
+        }
+      } else if (_orbitExpansion >= maxExpansion) {
+        _orbitExpanded = true;
+        _orbitExpansion = maxExpansion;
+      } else {
+        _orbitExpanded = false;
+        _orbitExpansion = 0;
+      }
+      _orbitShrinkArmed = false;
+    });
+    _resetOrbitHandleGesture();
+  }
+
+  void _handleOrbitHandlePointerCancel(PointerCancelEvent event) {
+    _orbitHandlePointerActive = false;
+    if (_orbitAcceptedVerticalDrag && !_orbitRejectedDrag) {
+      setState(() {
+        _orbitExpansion = _orbitExpanded ? _orbitMaxExpansion : 0;
+        _orbitShrinkArmed = false;
+      });
+    }
+    _resetOrbitHandleGesture();
+  }
+
+  void _resetOrbitHandleGesture() {
+    _orbitDragStartExpansion = _orbitExpansion;
+    _orbitGestureDx = 0;
+    _orbitGestureDy = 0;
+    _orbitAcceptedVerticalDrag = false;
+    _orbitRejectedDrag = false;
+    _orbitDragStartedExpanded = false;
+    _orbitExpandTriggered = _orbitExpanded;
+    _orbitShrinkArmed = false;
   }
 
   double _periodIncome(List<CategoryBudgetBarData> bars) {
