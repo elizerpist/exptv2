@@ -636,9 +636,14 @@ void main() {
       expect(amountRect.top - surfaceRect.top, greaterThanOrEqualTo(43));
       expect(badgeRect.top, greaterThan(amountRect.bottom));
       expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
+      expect(badgeRect.top, moreOrLessEquals(surfaceRect.top + 73, epsilon: 1));
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
-      expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 6));
+      expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 10));
+      expect(
+        handleRect.bottom,
+        moreOrLessEquals(surfaceRect.bottom - 2, epsilon: 1),
+      );
     },
   );
 
@@ -804,6 +809,30 @@ void main() {
             .opacity,
       ),
     );
+    expect(
+      tester
+          .widget<Opacity>(
+            find.descendant(of: nextInner, matching: find.byType(Opacity)),
+          )
+          .opacity,
+      greaterThanOrEqualTo(0.60),
+    );
+    expect(
+      tester
+          .widget<Opacity>(
+            find.descendant(of: nextOuter, matching: find.byType(Opacity)),
+          )
+          .opacity,
+      greaterThanOrEqualTo(0.42),
+    );
+    expect(
+      tester
+          .widget<Opacity>(
+            find.descendant(of: nextFarthest, matching: find.byType(Opacity)),
+          )
+          .opacity,
+      greaterThanOrEqualTo(0.30),
+    );
 
     selected.clear();
     await tester.pumpWidget(const SizedBox.shrink());
@@ -877,6 +906,14 @@ void main() {
       final initialCenter = tester.getCenter(
         find.byKey(const ValueKey('backheader-center-budget-button')),
       );
+      final initialNextCenter = tester.getCenter(
+        find.byKey(const ValueKey('backheader-center-preview-next-1')),
+      );
+      expect(
+        initialNextCenter.dy,
+        moreOrLessEquals(initialCenter.dy, epsilon: 0.5),
+      );
+      expect(initialNextCenter.dx - initialCenter.dx, greaterThanOrEqualTo(62));
       final drag = await tester.startGesture(
         tester.getCenter(
           find.byKey(const ValueKey('backheader-experimental-surface')),
@@ -921,9 +958,64 @@ void main() {
         find.byKey(const ValueKey('backheader-center-budget-button')),
       );
       expect(draggedCenter.dx, lessThan(initialCenter.dx - 8));
+      expect(
+        tester
+            .getCenter(
+              find.byKey(const ValueKey('backheader-center-preview-next-1')),
+            )
+            .dy,
+        moreOrLessEquals(initialCenter.dy, epsilon: 0.5),
+      );
 
       await drag.up();
       await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget fast short fling keeps spinning after release',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+      ];
+      final selected = <String>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onActiveItemChanged: (item) => selected.add(item.title),
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.fling(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+        const Offset(-92, 0),
+        2600,
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+
+      expect(selected.length, lessThan(3));
+
+      await tester.pumpAndSettle();
+
+      expect(selected, ['Travel', 'Books', 'Health']);
     },
   );
 

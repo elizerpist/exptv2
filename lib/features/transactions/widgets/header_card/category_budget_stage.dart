@@ -96,7 +96,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   static const _orbitSnapArmDistance = 18.0;
   static const _orbitCloseArmDistance = 54.0;
   static const _orbitMaxClosePull = 64.0;
-  static const _centerCarouselSlotDistance = 52.0;
+  static const _centerCarouselSlotDistance = 64.0;
   static const _centerJoystickDeadZone = 10.0;
   static const _centerJoystickTickInterval = Duration(milliseconds: 90);
 
@@ -1460,9 +1460,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final swipedLeft = (_centerSurfaceVelocityDx.abs() > 1
         ? _centerSurfaceVelocityDx < 0
         : _centerSurfaceDragDx < 0);
-    final flingSteps = _centerSurfaceTicks == 0
-        ? _centerSurfaceFlingSteps()
-        : 0;
+    final maxFlingSteps = math.max(0, _items.length - 1 - _centerSurfaceTicks);
+    final flingSteps = math.min(_centerSurfaceFlingSteps(), maxFlingSteps);
     _resetCenterSurfaceDrag();
     if (!shouldSettle) {
       _animateDragTo(0);
@@ -1968,11 +1967,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final normalizedSteps = steps.clamp(1, items.length - 1).toInt();
     _slideController.stop();
     _settling = true;
-    setState(() {
-      _dragDx = 0;
-      _dragTotalDx = 0;
-    });
+    _dragTotalDx = 0;
     for (var step = 0; step < normalizedSteps; step += 1) {
+      if (!mounted) return;
+      await _animateDragTo(
+        swipedLeft ? -_centerCarouselSlotDistance : _centerCarouselSlotDistance,
+        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 130),
+      );
       if (!mounted) return;
       final nextIndex = swipedLeft
           ? (_index + 1) % items.length
@@ -1983,6 +1985,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       HapticFeedback.selectionClick();
       setState(() {
         _index = normalizedNextIndex;
+        _dragDx = 0;
       });
       _syncOrbitAmountController(_items[_index]);
       widget.onActiveItemChanged?.call(_items[_index]);

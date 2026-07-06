@@ -564,7 +564,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 30;
+    final railTop = safeTop + 28;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
     final handleColor = coloredDesign
@@ -657,7 +657,7 @@ class _CenterBadgeBudget extends StatelessWidget {
         Positioned(
           left: 0,
           right: 0,
-          bottom: 4,
+          bottom: 2,
           child: Center(
             child: Listener(
               key: const ValueKey('backheader-center-handle'),
@@ -720,12 +720,12 @@ class _CenterBadgeWheel extends StatelessWidget {
     required this.onBadgeLongPressCancel,
   });
 
-  static const width = 340.0;
+  static const width = 386.0;
   static const _activeSize = 78.0;
   static const _innerPreviewSize = 48.0;
   static const _outerPreviewSize = 38.0;
   static const _farthestPreviewSize = 30.0;
-  static const _slotSpacing = 52.0;
+  static const _slotSpacing = 64.0;
   static const _titleTop = 78.0;
 
   final BackheaderBudgetItem current;
@@ -859,7 +859,7 @@ class _CenterBadgeWheel extends StatelessWidget {
     }
     return Positioned(
       left: left,
-      top: top + 4,
+      top: top,
       child: _CenterPreviewBadge(
         key: ValueKey('backheader-center-preview-${_slotName(slot.offset)}'),
         item: slot.item,
@@ -889,9 +889,9 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   double _opacityForDistance(double distance) {
     if (distance <= 0) return 1;
-    if (distance <= 1) return _lerp(1, 0.46, distance);
-    if (distance <= 2) return _lerp(0.46, 0.24, distance - 1);
-    return _lerp(0.24, 0.14, distance - 2);
+    if (distance <= 1) return _lerp(1, 0.64, distance);
+    if (distance <= 2) return _lerp(0.64, 0.46, distance - 1);
+    return _lerp(0.46, 0.34, distance - 2);
   }
 
   double _lerp(double begin, double end, double value) {
