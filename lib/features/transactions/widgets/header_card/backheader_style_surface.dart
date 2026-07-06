@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -34,6 +36,8 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerActions,
     this.centerPrevious,
     this.centerNext,
+    this.centerWheelDirection = 0,
+    this.centerExpandedExtent = 0,
     this.onCenterPreviousTap,
     this.onCenterNextTap,
     this.onCenterBadgeLongPressStart,
@@ -71,6 +75,8 @@ class BackheaderStyleSurface extends StatelessWidget {
   final Widget? centerActions;
   final BackheaderBudgetItem? centerPrevious;
   final BackheaderBudgetItem? centerNext;
+  final int centerWheelDirection;
+  final double centerExpandedExtent;
   final VoidCallback? onCenterPreviousTap;
   final VoidCallback? onCenterNextTap;
   final GestureLongPressStartCallback? onCenterBadgeLongPressStart;
@@ -131,6 +137,8 @@ class BackheaderStyleSurface extends StatelessWidget {
               actions: centerActions,
               previous: centerPrevious,
               next: centerNext,
+              wheelDirection: centerWheelDirection,
+              expandedExtent: centerExpandedExtent,
               onPreviousTap: onCenterPreviousTap,
               onNextTap: onCenterNextTap,
               onBadgeLongPressStart: onCenterBadgeLongPressStart,
@@ -455,6 +463,8 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.actions,
     required this.previous,
     required this.next,
+    required this.wheelDirection,
+    required this.expandedExtent,
     required this.onPreviousTap,
     required this.onNextTap,
     required this.onBadgeLongPressStart,
@@ -477,6 +487,8 @@ class _CenterBadgeBudget extends StatelessWidget {
   final Widget? actions;
   final BackheaderBudgetItem? previous;
   final BackheaderBudgetItem? next;
+  final int wheelDirection;
+  final double expandedExtent;
   final VoidCallback? onPreviousTap;
   final VoidCallback? onNextTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
@@ -495,7 +507,7 @@ class _CenterBadgeBudget extends StatelessWidget {
       key: const ValueKey('backheader-style-centerBadgeBudget-content'),
       children: [
         Positioned(
-          top: TransactionHeaderMetrics.balanceTop,
+          top: 20,
           left: 24,
           right: 132,
           child: Text(
@@ -513,14 +525,15 @@ class _CenterBadgeBudget extends StatelessWidget {
         ),
         Center(
           child: SizedBox(
-            width: 174,
-            height: 78,
+            width: 196,
+            height: 112,
             child: Stack(
-              alignment: Alignment.center,
+              alignment: Alignment.topCenter,
               children: [
                 if (previous != null)
                   Positioned(
                     left: 0,
+                    top: 17,
                     child: _CenterPreviewBadge(
                       key: const ValueKey('backheader-center-preview-previous'),
                       item: previous!,
@@ -530,63 +543,82 @@ class _CenterBadgeBudget extends StatelessWidget {
                 if (next != null)
                   Positioned(
                     right: 0,
+                    top: 17,
                     child: _CenterPreviewBadge(
                       key: const ValueKey('backheader-center-preview-next'),
                       item: next!,
                       onTap: onNextTap,
                     ),
                   ),
-                SizedBox(
-                  width: 70,
-                  height: 70,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned.fill(
-                        child: CustomPaint(
-                          key: const ValueKey(
-                            'backheader-center-progress-ring',
-                          ),
-                          painter: _CenterBadgeProgressRingPainter(
-                            progress: hasLimit ? progress : 0,
-                            color: progressColor,
-                            showFill: hasLimit,
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onLongPressStart: onBadgeLongPressStart,
-                        onLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
-                        onLongPressEnd: onBadgeLongPressEnd,
-                        onLongPressCancel: onBadgeLongPressCancel,
-                        child: Container(
-                          key: const ValueKey(
-                            'backheader-center-budget-button',
-                          ),
-                          width: 58,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 120),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
                           alignment: Alignment.center,
-                          child: current.category == null
-                              ? Icon(
-                                  _overviewIcon(current.overview?.kind),
-                                  color: AppColors.white,
-                                  size: 26,
-                                )
-                              : CategorySlotIcon(
-                                  slot: current.category!.iconSlot,
-                                  color: AppColors.white,
-                                  size: 27,
-                                  strokeWidth: 1,
-                                ),
+                          children: [...previousChildren, ?currentChild],
+                        );
+                      },
+                      transitionBuilder: (child, animation) {
+                        final direction = wheelDirection == 0
+                            ? 1.0
+                            : wheelDirection.toDouble();
+                        final incoming =
+                            child.key ==
+                            ValueKey('backheader-center-active-${current.key}');
+                        final slide = Tween<Offset>(
+                          begin: Offset(
+                            (incoming ? direction : -direction) * 0.62,
+                            0,
+                          ),
+                          end: Offset.zero,
+                        ).animate(animation);
+                        final scale = Tween<double>(
+                          begin: 0.72,
+                          end: 1,
+                        ).animate(animation);
+                        return SlideTransition(
+                          position: slide,
+                          child: ScaleTransition(scale: scale, child: child),
+                        );
+                      },
+                      child: _CenterActiveBadge(
+                        key: ValueKey(
+                          'backheader-center-active-${current.key}',
+                        ),
+                        current: current,
+                        color: color,
+                        progress: progress,
+                        hasLimit: hasLimit,
+                        progressColor: progressColor,
+                        onBadgeLongPressStart: onBadgeLongPressStart,
+                        onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
+                        onBadgeLongPressEnd: onBadgeLongPressEnd,
+                        onBadgeLongPressCancel: onBadgeLongPressCancel,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 142,
+                      child: Text(
+                        current.title,
+                        key: const ValueKey('backheader-center-badge-title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.gray700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          height: 1.05,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -597,7 +629,9 @@ class _CenterBadgeBudget extends StatelessWidget {
           Positioned(
             left: 24,
             right: 24,
-            bottom: 44,
+            top:
+                TransactionHeaderMetrics.cardHeight +
+                math.max(0.0, expandedExtent - 18) / 2,
             child: Text(
               remainingText!,
               key: const ValueKey('backheader-center-remaining-amount'),
@@ -640,6 +674,80 @@ class _CenterBadgeBudget extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CenterActiveBadge extends StatelessWidget {
+  const _CenterActiveBadge({
+    super.key,
+    required this.current,
+    required this.color,
+    required this.progress,
+    required this.hasLimit,
+    required this.progressColor,
+    required this.onBadgeLongPressStart,
+    required this.onBadgeLongPressMoveUpdate,
+    required this.onBadgeLongPressEnd,
+    required this.onBadgeLongPressCancel,
+  });
+
+  final BackheaderBudgetItem current;
+  final Color color;
+  final double progress;
+  final bool hasLimit;
+  final Color progressColor;
+  final GestureLongPressStartCallback? onBadgeLongPressStart;
+  final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
+  final GestureLongPressEndCallback? onBadgeLongPressEnd;
+  final VoidCallback? onBadgeLongPressCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 70,
+      height: 70,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              key: const ValueKey('backheader-center-progress-ring'),
+              painter: _CenterBadgeProgressRingPainter(
+                progress: hasLimit ? progress : 0,
+                color: progressColor,
+                showFill: hasLimit,
+              ),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPressStart: onBadgeLongPressStart,
+            onLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
+            onLongPressEnd: onBadgeLongPressEnd,
+            onLongPressCancel: onBadgeLongPressCancel,
+            child: Container(
+              key: const ValueKey('backheader-center-budget-button'),
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: current.category == null
+                  ? Icon(
+                      _overviewIcon(current.overview?.kind),
+                      color: AppColors.white,
+                      size: 26,
+                    )
+                  : CategorySlotIcon(
+                      slot: current.category!.iconSlot,
+                      color: AppColors.white,
+                      size: 27,
+                      strokeWidth: 1,
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

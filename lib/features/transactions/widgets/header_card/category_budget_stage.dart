@@ -109,6 +109,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _index = 0;
   var _dragDx = 0.0;
   var _dragTotalDx = 0.0;
+  var _centerWheelDirection = 0;
   var _settling = false;
   var _orbitClosePull = 0.0;
   var _orbitGestureDx = 0.0;
@@ -382,11 +383,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerNext: isCenterBadgeBudget && !preview && items.length > 1
             ? items[nextIndex]
             : null,
+        centerWheelDirection: isCenterBadgeBudget ? _centerWheelDirection : 0,
+        centerExpandedExtent: isCenterBadgeBudget ? _orbitClosePull : 0,
         onCenterPreviousTap: isCenterBadgeBudget && !preview
-            ? () => _selectOrbitIndex(previousIndex)
+            ? () => _selectCenterPreviewIndex(previousIndex)
             : null,
         onCenterNextTap: isCenterBadgeBudget && !preview
-            ? () => _selectOrbitIndex(nextIndex)
+            ? () => _selectCenterPreviewIndex(nextIndex)
             : null,
         onCenterBadgeLongPressStart: isCenterBadgeBudget && !preview
             ? (details) => _handleCenterBadgeLongPressStart(item, details)
@@ -530,10 +533,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                             ),
                           ),
                         Positioned.fill(
-                          child: Transform.translate(
-                            offset: Offset(_dragDx, 0),
-                            child: surfaceFor(current),
-                          ),
+                          child: isCenterBadgeBudget
+                              ? surfaceFor(current)
+                              : Transform.translate(
+                                  offset: Offset(_dragDx, 0),
+                                  child: surfaceFor(current),
+                                ),
                         ),
                       ],
                     );
@@ -543,7 +548,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             ),
           ),
           if (items.length > 1 &&
-              widget.backheaderStyle != BackheaderStyle.orbitBudget)
+              widget.backheaderStyle != BackheaderStyle.orbitBudget &&
+              widget.backheaderStyle != BackheaderStyle.centerBadgeBudget)
             Positioned(
               top: 150,
               left: 0,
@@ -1062,12 +1068,20 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final direction = _centerJoystickDragOffsetY < 0 ? 1 : -1;
     final range = _orbitSliderRangeFor(item);
     final step = _centerJoystickStepFor(range.max);
-    final next =
-        (_orbitEffectiveAmountFor(item) +
-                direction * step * speed.stepMultiplier)
-            .clamp(0.0, range.max)
-            .toDouble();
-    _setOrbitAmount(item, next, deferSave: true, snap: true);
+    final next = math
+        .max(
+          0.0,
+          _orbitEffectiveAmountFor(item) +
+              direction * step * speed.stepMultiplier,
+        )
+        .toDouble();
+    _setOrbitAmount(
+      item,
+      next,
+      deferSave: true,
+      snap: true,
+      maxOverride: direction > 0 ? next : null,
+    );
     HapticFeedback.selectionClick();
   }
 
@@ -1403,14 +1417,16 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     bool flush = false,
     bool deferSave = false,
     bool snap = false,
+    double? maxOverride,
   }) {
     final range = _orbitSliderRangeFor(item);
+    final clampMax = math.max(range.max, maxOverride ?? range.max);
     final normalized = math.max(0.0, rawAmount).toDouble();
     final amount =
         (snap
                 ? LimitAllocationManager.snapSliderAmount(normalized)
                 : normalized)
-            .clamp(0.0, range.max)
+            .clamp(0.0, clampMax)
             .toDouble();
     final current = _orbitEffectiveAmountFor(item);
     if ((current - amount).abs() < 0.01) {
@@ -1452,6 +1468,26 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     });
     _syncOrbitAmountController(items[nextIndex]);
     widget.onActiveItemChanged?.call(items[nextIndex]);
+  }
+
+  void _selectCenterPreviewIndex(int nextIndex) {
+    if (_settling) return;
+    final items = _items;
+    if (nextIndex < 0 || nextIndex >= items.length || nextIndex == _index) {
+      return;
+    }
+    final previousIndex = _previousIndex(items);
+    final nextItemIndex = _nextIndex(items);
+    if (nextIndex == previousIndex) {
+      unawaited(_tickCenterCarouselBySteps(steps: 1, swipedLeft: false));
+      return;
+    }
+    if (nextIndex == nextItemIndex) {
+      unawaited(_tickCenterCarouselBySteps(steps: 1, swipedLeft: true));
+      return;
+    }
+    HapticFeedback.selectionClick();
+    _selectOrbitIndex(nextIndex);
   }
 
   int? _orbitMatchingOverviewIndexFor(BackheaderBudgetItem item) {
@@ -1688,7 +1724,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     if (widget.backheaderStyle == BackheaderStyle.centerBadgeBudget) {
       final swipedLeft = (_dragTotalDx == 0 ? _dragDx : _dragTotalDx) < 0;
       final steps = _centerCarouselSteps(details);
-      await _snapBySteps(steps: steps, swipedLeft: swipedLeft);
+      await _tickCenterCarouselBySteps(steps: steps, swipedLeft: swipedLeft);
       return;
     }
     await _snapToNext(swipedLeft: _dragDx < 0);
@@ -1708,6 +1744,41 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
 
   Future<void> _snapToNext({required bool swipedLeft}) async {
     await _snapBySteps(steps: 1, swipedLeft: swipedLeft);
+  }
+
+  Future<void> _tickCenterCarouselBySteps({
+    required int steps,
+    required bool swipedLeft,
+  }) async {
+    if (_settling) return;
+    final items = _items;
+    if (items.length < 2) return;
+    final normalizedSteps = steps.clamp(1, items.length - 1).toInt();
+    _slideController.stop();
+    _settling = true;
+    setState(() {
+      _dragDx = 0;
+      _dragTotalDx = 0;
+      _centerWheelDirection = swipedLeft ? 1 : -1;
+    });
+    for (var step = 0; step < normalizedSteps; step += 1) {
+      if (!mounted) return;
+      HapticFeedback.selectionClick();
+      setState(() {
+        _index = swipedLeft
+            ? (_index + 1) % items.length
+            : (_index - 1) % items.length;
+        if (_index < 0) _index += items.length;
+      });
+      _syncOrbitAmountController(_items[_index]);
+      widget.onActiveItemChanged?.call(_items[_index]);
+      await Future<void>.delayed(const Duration(milliseconds: 130));
+    }
+    if (!mounted) return;
+    setState(() {
+      _centerWheelDirection = 0;
+      _settling = false;
+    });
   }
 
   Future<void> _snapBySteps({

@@ -488,10 +488,31 @@ void main() {
       expect(amount.data, '100 Ft / 500 Ft');
       expect(amount.style?.fontSize, 13);
       expect(amount.style?.color, AppColors.gray800);
+      final surfaceRect = tester.getRect(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      final amountRect = tester.getRect(
+        find.byKey(const ValueKey('backheader-center-badge-amount')),
+      );
+      expect(amountRect.left - surfaceRect.left, moreOrLessEquals(24));
+      expect(amountRect.top - surfaceRect.top, lessThanOrEqualTo(28));
+      expect(find.byKey(const ValueKey('category-budget-dot-0')), findsNothing);
 
       expect(
         find.byKey(const ValueKey('backheader-center-budget-button')),
         findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-badge-title')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('backheader-center-badge-title')),
+            )
+            .data,
+        'Food',
       );
       expect(
         find.byKey(const ValueKey('backheader-center-progress-ring')),
@@ -513,6 +534,20 @@ void main() {
         find.byKey(const ValueKey('backheader-center-preview-next')),
         findsOneWidget,
       );
+
+      final drag = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('backheader-experimental-surface')),
+        ),
+      );
+      await drag.moveBy(const Offset(-90, 0));
+      await tester.pump();
+      final draggedSurfaceRect = tester.getRect(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      expect(draggedSurfaceRect.left, moreOrLessEquals(surfaceRect.left));
+      await drag.cancel();
+      await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(const ValueKey('backheader-center-budget-button')),
@@ -570,7 +605,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(selected.last, 'Health');
+    expect(selected, ['Travel', 'Books', 'Health']);
   });
 
   testWidgets('centerBadgeBudget badge joystick adjusts limit live', (
@@ -627,6 +662,65 @@ void main() {
     expect(savedAmounts, isNotEmpty);
   });
 
+  testWidgets('centerBadgeBudget joystick can raise budget above old cap', (
+    tester,
+  ) async {
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
+    final food = barFixture(6, 'Food', 100, 500);
+    final travel = barFixture(7, 'Travel', 100, 500);
+    final savedAmounts = <double>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+                BackheaderBudgetItem.category(travel),
+              ],
+              categoryBars: [food, travel],
+              overviewItems: [overview],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    savedAmounts.add(limitAmount);
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final button = find.byKey(
+      const ValueKey('backheader-center-budget-button'),
+    );
+    final start = tester.getCenter(button);
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 620));
+    await gesture.moveTo(start.translate(0, -170));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final amount = tester.widget<Text>(
+      find.byKey(const ValueKey('backheader-center-badge-amount')),
+    );
+    final limitMatch = RegExp(r'/ ([\d ]+) Ft$').firstMatch(amount.data ?? '');
+    expect(limitMatch, isNotNull);
+    final limit = int.parse(limitMatch!.group(1)!.replaceAll(' ', ''));
+    expect(limit, greaterThan(500));
+
+    await gesture.up();
+    await tester.pump();
+    expect(savedAmounts.last, greaterThan(500));
+  });
+
   testWidgets('centerBadgeBudget handle expands remaining amount and closes', (
     tester,
   ) async {
@@ -655,13 +749,20 @@ void main() {
     expect(handle, findsOneWidget);
 
     final gesture = await tester.startGesture(tester.getCenter(handle));
-    await gesture.moveBy(const Offset(0, 30));
+    await gesture.moveBy(const Offset(0, 60));
     await tester.pump();
     expect(
       find.byKey(const ValueKey('backheader-center-remaining-amount')),
       findsOneWidget,
     );
     expect(find.textContaining('400 Ft'), findsOneWidget);
+    final remainingRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-center-remaining-amount')),
+    );
+    expect(
+      remainingRect.top,
+      greaterThanOrEqualTo(TransactionHeaderMetrics.cardHeight - 2),
+    );
 
     await gesture.moveBy(const Offset(0, 40));
     await gesture.up();
