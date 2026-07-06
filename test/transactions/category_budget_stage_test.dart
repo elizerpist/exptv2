@@ -637,8 +637,10 @@ void main() {
       expect(amountRect.top - surfaceRect.top, greaterThanOrEqualTo(43));
       expect(badgeRect.top, greaterThan(amountRect.bottom));
       expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
-      expect(badgeRect.top, greaterThanOrEqualTo(surfaceRect.top + 68));
-      expect(badgeRect.top, lessThanOrEqualTo(surfaceRect.top + 73));
+      expect(
+        badgeRect.top,
+        moreOrLessEquals(surfaceRect.top + 67.5, epsilon: 0.75),
+      );
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
       expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 10));
@@ -848,19 +850,19 @@ void main() {
     );
     expect(
       tester.getSize(previousEdge).width,
-      moreOrLessEquals(28 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(28 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousFarthest).width,
-      moreOrLessEquals(34 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(34 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousOuter).width,
-      moreOrLessEquals(40 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(40 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousInner).width,
-      moreOrLessEquals(48 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(48 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester
@@ -869,6 +871,23 @@ void main() {
           )
           .width,
       moreOrLessEquals(58 * 1.15, epsilon: 0.1),
+    );
+    final activeFillRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-center-budget-button')),
+    );
+    final previousInnerFillRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-center-preview-fill-previous-1')),
+    );
+    final nextInnerFillRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-center-preview-fill-next-1')),
+    );
+    expect(
+      activeFillRect.left - previousInnerFillRect.right,
+      moreOrLessEquals(11, epsilon: 0.8),
+    );
+    expect(
+      nextInnerFillRect.left - activeFillRect.right,
+      moreOrLessEquals(11, epsilon: 0.8),
     );
     expect(
       tester
@@ -916,6 +935,56 @@ void main() {
     );
 
     expect(selected.last, 'Home');
+  });
+
+  testWidgets('centerBadgeBudget renders the incoming drag edge before tick', (
+    tester,
+  ) async {
+    final bars = [
+      for (var index = 0; index < 11; index++)
+        barFixture(20 + index, 'Item $index', 10.0 + index, 100),
+    ];
+    final selected = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onActiveItemChanged: (item) => selected.add(item.title),
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-center-preview-next-5')),
+      findsNothing,
+    );
+
+    final drag = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+      ),
+    );
+    await drag.moveBy(const Offset(-45, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(selected, isEmpty);
+    expect(
+      find.byKey(const ValueKey('backheader-center-preview-next-5')),
+      findsOneWidget,
+    );
+
+    await drag.cancel();
+    await tester.pumpAndSettle();
   });
 
   testWidgets(

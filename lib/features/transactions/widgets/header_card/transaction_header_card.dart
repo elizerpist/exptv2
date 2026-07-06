@@ -136,7 +136,7 @@ class TransactionHeaderCard extends StatelessWidget {
             ),
             Positioned(
               top: TransactionHeaderMetrics.cameraTop,
-              right: 30,
+              left: 30,
               child: Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(7),

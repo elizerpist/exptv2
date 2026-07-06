@@ -87,7 +87,7 @@ void main() {
     );
   });
 
-  testWidgets('budget trigger chip is right aligned on the header card', (
+  testWidgets('budget trigger chip is left aligned on the header card', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -112,7 +112,7 @@ void main() {
       find.byKey(const ValueKey('header-budget-trigger-chip')),
     );
 
-    expect(headerRect.right - chipRect.right, moreOrLessEquals(30, epsilon: 1));
+    expect(chipRect.left - headerRect.left, moreOrLessEquals(30, epsilon: 1));
   });
 
   testWidgets('hide balance button toggles the visible balance text', (

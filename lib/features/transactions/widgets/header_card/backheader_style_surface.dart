@@ -164,6 +164,8 @@ class BackheaderStyleSurface extends StatelessWidget {
             ),
             BackheaderStyle.centerBadgeBudget => _CenterBadgeBudget(
               current: current,
+              items: items,
+              activeIndex: activeIndex,
               amountText: amountText,
               color: color,
               coloredDesign: centerDesign == BackheaderCenterDesign.colored,
@@ -510,6 +512,8 @@ class _OrbitIcon extends StatelessWidget {
 class _CenterBadgeBudget extends StatelessWidget {
   const _CenterBadgeBudget({
     required this.current,
+    required this.items,
+    required this.activeIndex,
     required this.amountText,
     required this.color,
     required this.coloredDesign,
@@ -551,6 +555,8 @@ class _CenterBadgeBudget extends StatelessWidget {
   });
 
   final BackheaderBudgetItem current;
+  final List<BackheaderBudgetItem> items;
+  final int activeIndex;
   final String amountText;
   final Color color;
   final bool coloredDesign;
@@ -594,7 +600,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 23;
+    final railTop = safeTop + 21;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
     final periodColor = coloredDesign
@@ -656,6 +662,8 @@ class _CenterBadgeBudget extends StatelessWidget {
               height: 112,
               child: _CenterBadgeWheel(
                 current: current,
+                items: items,
+                activeIndex: activeIndex,
                 currentColor: color,
                 coloredDesign: coloredDesign,
                 progress: progress,
@@ -749,6 +757,8 @@ class _CenterBadgeBudget extends StatelessWidget {
 class _CenterBadgeWheel extends StatelessWidget {
   const _CenterBadgeWheel({
     required this.current,
+    required this.items,
+    required this.activeIndex,
     required this.currentColor,
     required this.coloredDesign,
     required this.progress,
@@ -784,15 +794,17 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   static const width = 386.0;
   static const _activeSize = 78.0 * 1.15;
-  static const _innerPreviewSize = 48.0 * 1.10;
-  static const _outerPreviewSize = 40.0 * 1.10;
-  static const _farthestPreviewSize = 34.0 * 1.10;
-  static const _edgePreviewSize = 28.0 * 1.10;
-  static const _slotSpacing = 64.0;
+  static const _innerPreviewSize = 48.0 * 1.10 * 1.10;
+  static const _outerPreviewSize = 40.0 * 1.10 * 1.10;
+  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10;
+  static const _edgePreviewSize = 28.0 * 1.10 * 1.10;
+  static const _slotSpacing = 66.0;
   static const _compressedOuterSpacing = 38.0;
   static const _titleTop = 82.0;
 
   final BackheaderBudgetItem current;
+  final List<BackheaderBudgetItem> items;
+  final int activeIndex;
   final Color currentColor;
   final bool coloredDesign;
   final double progress;
@@ -858,8 +870,11 @@ class _CenterBadgeWheel extends StatelessWidget {
   }
 
   List<_CenterWheelSlotData> _slots() {
+    final previousIncoming = dragOffset > 0 ? _extraNeighborAtOffset(-5) : null;
+    final nextIncoming = dragOffset < 0 ? _extraNeighborAtOffset(5) : null;
     return [
       if (previousEdge != null) _slotData(-4, previousEdge!, onPreviousEdgeTap),
+      if (previousIncoming != null) _slotData(-5, previousIncoming, null),
       if (previousFarthest != null)
         _slotData(-3, previousFarthest!, onPreviousFarthestTap),
       if (previousOuter != null)
@@ -871,7 +886,28 @@ class _CenterBadgeWheel extends StatelessWidget {
       if (nextOuter != null) _slotData(2, nextOuter!, onNextOuterTap),
       if (nextFarthest != null) _slotData(3, nextFarthest!, onNextFarthestTap),
       if (nextEdge != null) _slotData(4, nextEdge!, onNextEdgeTap),
+      if (nextIncoming != null) _slotData(5, nextIncoming, null),
     ];
+  }
+
+  BackheaderBudgetItem? _extraNeighborAtOffset(int offset) {
+    if (offset == 0 || items.length < 2) return null;
+    final rawIndex = (activeIndex + offset) % items.length;
+    final index = rawIndex < 0 ? rawIndex + items.length : rawIndex;
+    final item = items[index];
+    final visibleKeys = <String>{
+      current.key,
+      if (previousEdge != null) previousEdge!.key,
+      if (previousFarthest != null) previousFarthest!.key,
+      if (previousOuter != null) previousOuter!.key,
+      if (previousInner != null) previousInner!.key,
+      if (nextInner != null) nextInner!.key,
+      if (nextOuter != null) nextOuter!.key,
+      if (nextFarthest != null) nextFarthest!.key,
+      if (nextEdge != null) nextEdge!.key,
+    };
+    if (visibleKeys.contains(item.key)) return null;
+    return item;
   }
 
   _CenterWheelSlotData _slotData(
