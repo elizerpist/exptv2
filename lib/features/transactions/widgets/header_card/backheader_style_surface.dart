@@ -1111,7 +1111,6 @@ class _CenterBadgeVisual extends StatelessWidget {
   Widget build(BuildContext context) {
     final scale = size / _baseSize;
     final fillSize = _baseFillSize * scale;
-    final ringPadding = 4.0 * scale;
     final iconSize = (_baseIconSize * scale).clamp(14.0, 27.0).toDouble();
     final progressKey = active
         ? const ValueKey('backheader-center-progress-ring')
@@ -1128,29 +1127,6 @@ class _CenterBadgeVisual extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            if (partitionAllocation != null)
-              Positioned.fill(
-                child: CustomPaint(
-                  key: const ValueKey('backheader-center-partition-ring'),
-                  painter: _CenterBadgePartitionRingPainter(
-                    allocation: partitionAllocation!,
-                  ),
-                ),
-              ),
-            Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.all(ringPadding),
-                child: CustomPaint(
-                  key: progressKey,
-                  painter: _CenterBadgeProgressRingPainter(
-                    progress: hasLimit ? progress : 0,
-                    color: progressColor,
-                    trackColor: ringTrackColor,
-                    showFill: hasLimit,
-                  ),
-                ),
-              ),
-            ),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onTap,
@@ -1167,18 +1143,42 @@ class _CenterBadgeVisual extends StatelessWidget {
                   coloredDesign: coloredDesign,
                 ),
                 alignment: Alignment.center,
-                child: item.category == null
-                    ? Icon(
-                        _overviewIcon(item.overview?.kind),
-                        color: AppColors.white,
-                        size: iconSize,
-                      )
-                    : CategorySlotIcon(
-                        slot: item.category!.iconSlot,
-                        color: AppColors.white,
-                        size: iconSize,
-                        strokeWidth: 1,
+                child: Stack(
+                  fit: StackFit.expand,
+                  alignment: Alignment.center,
+                  children: [
+                    if (partitionAllocation != null)
+                      CustomPaint(
+                        key: const ValueKey('backheader-center-partition-ring'),
+                        painter: _CenterBadgePartitionRingPainter(
+                          allocation: partitionAllocation!,
+                        ),
                       ),
+                    CustomPaint(
+                      key: progressKey,
+                      painter: _CenterBadgeProgressRingPainter(
+                        progress: hasLimit ? progress : 0,
+                        color: progressColor,
+                        trackColor: ringTrackColor,
+                        showFill: hasLimit,
+                      ),
+                    ),
+                    Center(
+                      child: item.category == null
+                          ? Icon(
+                              _overviewIcon(item.overview?.kind),
+                              color: AppColors.white,
+                              size: iconSize,
+                            )
+                          : CategorySlotIcon(
+                              slot: item.category!.iconSlot,
+                              color: AppColors.white,
+                              size: iconSize,
+                              listenForSlotChanges: false,
+                            ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
