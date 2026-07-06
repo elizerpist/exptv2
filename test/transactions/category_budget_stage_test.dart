@@ -1034,6 +1034,113 @@ void main() {
     },
   );
 
+  testWidgets(
+    'centerBadgeBudget incoming badge uses active-sized fill and ring before tick',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final activeFill = find.byKey(
+        const ValueKey('backheader-center-budget-button'),
+      );
+      final focusedFillWidth = tester.getSize(activeFill).width;
+      final drag = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('backheader-experimental-surface')),
+        ),
+      );
+      await drag.moveBy(const Offset(-60, 0));
+      await tester.pump();
+
+      final incomingFill = find.byKey(
+        const ValueKey('backheader-center-preview-fill-next-1'),
+      );
+      expect(incomingFill, findsOneWidget);
+      expect(
+        tester.getSize(incomingFill).width,
+        lessThanOrEqualTo(focusedFillWidth),
+      );
+      expect(
+        find.byKey(
+          const ValueKey('backheader-center-preview-progress-ring-next-1'),
+        ),
+        findsOneWidget,
+      );
+
+      await drag.up();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('centerBadgeBudget background tap does not open item action', (
+    tester,
+  ) async {
+    final bars = [
+      barFixture(6, 'Food', 10, 100),
+      barFixture(7, 'Travel', 20, 100),
+      barFixture(8, 'Books', 30, 100),
+      barFixture(9, 'Health', 40, 100),
+      barFixture(10, 'Home', 50, 100),
+      barFixture(11, 'Rent', 60, 100),
+      barFixture(12, 'Gifts', 70, 100),
+    ];
+    final tapped = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onItemTap: (item) => tapped.add(item.title),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final surfaceTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    await tester.tapAt(surfaceTopLeft + const Offset(24, 24));
+    await tester.pump();
+    expect(tapped, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-center-budget-button')),
+    );
+    await tester.pump();
+    expect(tapped, ['Food']);
+  });
+
   testWidgets('centerBadgeBudget belt ticks while drag is held', (
     tester,
   ) async {
@@ -1074,7 +1181,7 @@ void main() {
     await drag.moveBy(const Offset(-150, 0));
     await tester.pump();
 
-    expect(selected, ['Travel', 'Books']);
+    expect(selected, isEmpty);
     expect(
       tester
           .widget<Text>(
@@ -1087,7 +1194,7 @@ void main() {
     await drag.up();
     await tester.pumpAndSettle();
 
-    expect(selected, ['Travel', 'Books']);
+    expect(selected, ['Books']);
     expect(
       tester
           .widget<Text>(
@@ -1146,7 +1253,7 @@ void main() {
       await drag.up();
       await tester.pumpAndSettle();
 
-      expect(selected.first, 'Travel');
+      expect(selected, isNotEmpty);
     },
   );
 
@@ -1210,7 +1317,7 @@ void main() {
       ]);
 
       expect(tailWeighted, evenlySplit);
-      expect(evenlySplit, ['Travel', 'Books']);
+      expect(evenlySplit, ['Books']);
     },
   );
 
@@ -1253,11 +1360,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 40));
 
-      expect(selected.length, lessThan(3));
+      expect(selected, isEmpty);
 
       await tester.pumpAndSettle();
 
-      expect(selected, ['Travel', 'Books', 'Health']);
+      expect(selected, ['Health']);
     },
   );
 

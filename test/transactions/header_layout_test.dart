@@ -87,6 +87,34 @@ void main() {
     );
   });
 
+  testWidgets('budget trigger chip is right aligned on the header card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            child: TransactionHeaderCard(
+              balanceText: '-100 Ft',
+              onCategoryPressed: () {},
+              onExpandPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final headerRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-header-card')),
+    );
+    final chipRect = tester.getRect(
+      find.byKey(const ValueKey('header-budget-trigger-chip')),
+    );
+
+    expect(headerRect.right - chipRect.right, moreOrLessEquals(30, epsilon: 1));
+  });
+
   testWidgets('hide balance button toggles the visible balance text', (
     tester,
   ) async {

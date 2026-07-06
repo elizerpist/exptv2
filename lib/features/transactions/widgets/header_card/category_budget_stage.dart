@@ -144,6 +144,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   Duration? _centerSurfaceLastMoveAt;
   var _centerBeltAnimationActive = false;
   var _centerBeltAnimationLastValue = 0.0;
+  BackheaderBudgetItem? _pendingCenterActiveItem;
   var _orbitUpdatingController = false;
 
   @override
@@ -175,10 +176,18 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   @override
   void didUpdateWidget(covariant CategoryBudgetStage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final centerBeltBusy =
+        widget.backheaderStyle == BackheaderStyle.centerBadgeBudget &&
+        (_centerSurfaceDragPointer != null ||
+            _settling ||
+            _centerBeltAnimationActive ||
+            _pendingCenterActiveItem != null);
     final keepCenterDrag =
         widget.backheaderStyle == BackheaderStyle.centerBadgeBudget &&
         _centerSurfaceDragAccepted;
-    final synced = _syncControlledIndex(resetDrag: !keepCenterDrag);
+    final synced = centerBeltBusy
+        ? false
+        : _syncControlledIndex(resetDrag: !keepCenterDrag);
     if (_index >= _items.length) _index = 0;
     if (!synced && _items.length != _oldItems(oldWidget).length) _dragDx = 0;
     _discardStaleOrbitPendingAmounts();
@@ -455,6 +464,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         onCenterNextEdgeTap: showCenterPreviews
             ? () => _selectCenterPreviewOffset(4)
             : null,
+        onCenterBadgeTap: isCenterBadgeBudget && !preview
+            ? () => _tap(item)
+            : null,
         onCenterBadgeLongPressStart: isCenterBadgeBudget && !preview
             ? (details) => _handleCenterBadgeLongPressStart(item, details)
             : null,
@@ -531,7 +543,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               child: GestureDetector(
                 key: const ValueKey('backheader-experimental-surface'),
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _tap(current),
+                onTap: isCenterBadgeBudget ? null : () => _tap(current),
                 onHorizontalDragStart: isOrbitBudget || isCenterBadgeBudget
                     ? null
                     : (_) {
@@ -1450,6 +1462,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _centerBeltAnimationActive = false;
     _centerBeltAnimationLastValue = 0;
     _settling = false;
+    _flushPendingCenterActiveItem(source: 'interrupt');
     _dragTotalDx = 0;
     _logCenterCarousel(
       'down pointer=${event.pointer} local=(${_fmt(event.localPosition.dx)},${_fmt(event.localPosition.dy)}) items=${_items.length}',
@@ -1595,7 +1608,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     for (final item in tickedItems) {
       HapticFeedback.selectionClick();
       _syncOrbitAmountController(item);
-      widget.onActiveItemChanged?.call(item);
+      _pendingCenterActiveItem = item;
       _logCenterCarousel(
         'tick source=$source current=${item.key}:${item.title}',
       );
@@ -1640,6 +1653,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       return;
     } finally {
       if (mounted && _settling) {
+        _flushPendingCenterActiveItem(source: 'release');
         setState(() {
           _settling = false;
         });
@@ -1673,6 +1687,16 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
           : _centerCarouselSlotDistance - residual;
     }
     return -residual;
+  }
+
+  void _flushPendingCenterActiveItem({required String source}) {
+    final item = _pendingCenterActiveItem;
+    if (item == null) return;
+    _pendingCenterActiveItem = null;
+    widget.onActiveItemChanged?.call(item);
+    _logCenterCarousel(
+      'flush source=$source current=${item.key}:${item.title}',
+    );
   }
 
   void _handleOrbitSurfacePointerDown(PointerDownEvent event) {
@@ -1811,6 +1835,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       _dragDx = 0;
       _settling = false;
     });
+    _pendingCenterActiveItem = null;
     _syncOrbitAmountController(items[nextIndex]);
     widget.onActiveItemChanged?.call(items[nextIndex]);
   }
