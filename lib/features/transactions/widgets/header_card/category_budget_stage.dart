@@ -14,6 +14,7 @@ import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/limit_allocation_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_record.dart';
@@ -34,6 +35,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.periodLabel,
     this.backheaderStyle = BackheaderStyle.classic,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
+    this.centerPartitionRingEnabled = false,
     this.backgroundColor = AppColors.gray100,
     this.activeKey,
     this.onActiveItemChanged,
@@ -54,6 +56,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final String? periodLabel;
   final BackheaderStyle backheaderStyle;
   final BackheaderCenterDesign centerBackheaderDesign;
+  final bool centerPartitionRingEnabled;
   final Color backgroundColor;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
@@ -93,6 +96,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   static const _orbitSnapArmDistance = 18.0;
   static const _orbitCloseArmDistance = 54.0;
   static const _orbitMaxClosePull = 64.0;
+  static const _centerCarouselSlotDistance = 52.0;
   static const _centerJoystickDeadZone = 10.0;
   static const _centerJoystickTickInterval = Duration(milliseconds: 90);
 
@@ -113,10 +117,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _index = 0;
   var _dragDx = 0.0;
   var _dragTotalDx = 0.0;
-  var _centerWheelDirection = 0;
-  var _centerWheelToken = 0;
-  BackheaderBudgetItem? _centerWheelFrom;
-  BackheaderBudgetItem? _centerWheelTo;
   var _settling = false;
   var _orbitClosePull = 0.0;
   var _orbitGestureDx = 0.0;
@@ -132,6 +132,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _orbitSurfaceSwipeDy = 0.0;
   var _orbitSurfaceSwipeAccepted = false;
   var _orbitSurfaceSwipeRejected = false;
+  int? _centerSurfaceDragPointer;
+  var _centerSurfaceDragDx = 0.0;
+  var _centerSurfaceDragDy = 0.0;
+  var _centerSurfaceDragAccepted = false;
+  var _centerSurfaceDragRejected = false;
+  var _centerSurfaceTicks = 0;
+  var _centerSurfaceVelocityDx = 0.0;
+  Duration? _centerSurfaceLastMoveAt;
   var _orbitUpdatingController = false;
 
   @override
@@ -163,7 +171,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   @override
   void didUpdateWidget(covariant CategoryBudgetStage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final synced = _syncControlledIndex(resetDrag: true);
+    final keepCenterDrag =
+        widget.backheaderStyle == BackheaderStyle.centerBadgeBudget &&
+        _centerSurfaceDragAccepted;
+    final synced = _syncControlledIndex(resetDrag: !keepCenterDrag);
     if (_index >= _items.length) _index = 0;
     if (!synced && _items.length != _oldItems(oldWidget).length) _dragDx = 0;
     _discardStaleOrbitPendingAmounts();
@@ -353,6 +364,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         widget.backheaderStyle == BackheaderStyle.centerBadgeBudget;
     Widget surfaceFor(BackheaderBudgetItem item, {bool preview = false}) {
       final showCenterPreviews = isCenterBadgeBudget && !preview;
+      final centerPartitionAllocation =
+          isCenterBadgeBudget && widget.centerPartitionRingEnabled
+          ? _centerPartitionAllocationFor(item)
+          : null;
       return BackheaderStyleSurface(
         style: widget.backheaderStyle,
         current: item,
@@ -363,6 +378,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         activeIndex: _index,
         backgroundColor: widget.backgroundColor,
         centerDesign: widget.centerBackheaderDesign,
+        centerPartitionRingEnabled: widget.centerPartitionRingEnabled,
+        centerPartitionAllocation: centerPartitionAllocation,
+        centerDragOffset: isCenterBadgeBudget ? _dragDx : 0,
         orbitPartitionBar: isOrbitBudget
             ? preview
                   ? _orbitStaticPartitionBarFor(item)
@@ -382,8 +400,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerProgress: _orbitProgressFor(item),
         centerHasLimit: _orbitHasLimit(item),
         centerProgressColor: _centerProgressColorFor(item),
-        centerActions: isCenterBadgeBudget && !preview
-            ? _buildCenterActions(item)
+        centerActions: null,
+        centerPreviousFarthest: showCenterPreviews
+            ? _centerNeighborAtOffset(items, -3)
             : null,
         centerPreviousOuter: showCenterPreviews
             ? _centerNeighborAtOffset(items, -2)
@@ -397,13 +416,15 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerNextOuter: showCenterPreviews
             ? _centerNeighborAtOffset(items, 2)
             : null,
-        centerWheelDirection: isCenterBadgeBudget ? _centerWheelDirection : 0,
-        centerWheelToken: isCenterBadgeBudget ? _centerWheelToken : 0,
-        centerWheelFrom: isCenterBadgeBudget ? _centerWheelFrom : null,
-        centerWheelTo: isCenterBadgeBudget ? _centerWheelTo : null,
+        centerNextFarthest: showCenterPreviews
+            ? _centerNeighborAtOffset(items, 3)
+            : null,
         centerExpandedExtent: isCenterBadgeBudget ? _orbitClosePull : 0,
         onCenterPreviousOuterTap: showCenterPreviews
             ? () => _selectCenterPreviewOffset(-2)
+            : null,
+        onCenterPreviousFarthestTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(-3)
             : null,
         onCenterPreviousInnerTap: showCenterPreviews
             ? () => _selectCenterPreviewOffset(-1)
@@ -413,6 +434,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             : null,
         onCenterNextOuterTap: showCenterPreviews
             ? () => _selectCenterPreviewOffset(2)
+            : null,
+        onCenterNextFarthestTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(3)
             : null,
         onCenterBadgeLongPressStart: isCenterBadgeBudget && !preview
             ? (details) => _handleCenterBadgeLongPressStart(item, details)
@@ -469,26 +493,36 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             child: Listener(
               onPointerDown: isOrbitBudget
                   ? _handleOrbitSurfacePointerDown
+                  : isCenterBadgeBudget
+                  ? _handleCenterSurfacePointerDown
                   : null,
               onPointerMove: isOrbitBudget
                   ? _handleOrbitSurfacePointerMove
+                  : isCenterBadgeBudget
+                  ? _handleCenterSurfacePointerMove
                   : null,
-              onPointerUp: isOrbitBudget ? _handleOrbitSurfacePointerUp : null,
+              onPointerUp: isOrbitBudget
+                  ? _handleOrbitSurfacePointerUp
+                  : isCenterBadgeBudget
+                  ? _handleCenterSurfacePointerUp
+                  : null,
               onPointerCancel: isOrbitBudget
                   ? _handleOrbitSurfacePointerCancel
+                  : isCenterBadgeBudget
+                  ? _handleCenterSurfacePointerCancel
                   : null,
               child: GestureDetector(
                 key: const ValueKey('backheader-experimental-surface'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _tap(current),
-                onHorizontalDragStart: isOrbitBudget
+                onHorizontalDragStart: isOrbitBudget || isCenterBadgeBudget
                     ? null
                     : (_) {
                         _slideController.stop();
                         _settling = false;
                         _dragTotalDx = 0;
                       },
-                onHorizontalDragUpdate: isOrbitBudget
+                onHorizontalDragUpdate: isOrbitBudget || isCenterBadgeBudget
                     ? null
                     : (details) {
                         if (_settling) return;
@@ -498,10 +532,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                             .toDouble();
                         setState(() => _dragDx = nextDx);
                       },
-                onHorizontalDragCancel: isOrbitBudget
+                onHorizontalDragCancel: isOrbitBudget || isCenterBadgeBudget
                     ? null
                     : () => _animateDragTo(0),
-                onHorizontalDragEnd: isOrbitBudget ? null : _settleDrag,
+                onHorizontalDragEnd: isOrbitBudget || isCenterBadgeBudget
+                    ? null
+                    : _settleDrag,
                 onLongPress: _jumpToOverviewForCurrent,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -617,7 +653,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     int offset,
   ) {
     if (offset == 0 || items.length < 2) return null;
-    if (offset.abs() == 2 && items.length < 5) return null;
+    if (items.length < offset.abs() * 2 + 1) return null;
     final rawIndex = (_index + offset) % items.length;
     final normalizedIndex = rawIndex < 0 ? rawIndex + items.length : rawIndex;
     final item = items[normalizedIndex];
@@ -803,6 +839,18 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     );
   }
 
+  LimitAllocationData? _centerPartitionAllocationFor(
+    BackheaderBudgetItem current,
+  ) {
+    if (current.overview?.kind == BudgetGoalKind.savingGoal) return null;
+    final overviewLimit = _orbitOverviewLimitAmount(current);
+    if (overviewLimit <= 0) return null;
+    return LimitAllocationManager.build(
+      overviewLimit: overviewLimit,
+      bars: _orbitPartitionBars,
+    );
+  }
+
   Widget _orbitStaticPartitionBarFor(BackheaderBudgetItem current) {
     if (current.overview?.kind == BudgetGoalKind.savingGoal) {
       return const SizedBox.shrink();
@@ -822,7 +870,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    return math.max(2.0, previousTrackHeight * 0.567);
+    return math.max(2.0, previousTrackHeight * 0.5103);
   }
 
   double _orbitOverviewLimitAmount(BackheaderBudgetItem current) {
@@ -998,31 +1046,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             onPressed: () => _setOrbitOverviewToMax(current),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildCenterActions(BackheaderBudgetItem current) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _OrbitCompactIconButton(
-          buttonKey: const ValueKey('backheader-center-reset-action'),
-          icon: Icons.delete_outline,
-          tooltip: 'Reset',
-          onPressed: () => _setOrbitAmount(current, 0, flush: true),
-        ),
-        const SizedBox(width: 6),
-        _OrbitCompactIconButton(
-          buttonKey: const ValueKey('backheader-center-max-action'),
-          icon: Icons.last_page,
-          tooltip: 'Max',
-          onPressed: () => _setOrbitAmount(
-            current,
-            _orbitSliderRangeFor(current).max,
-            flush: true,
-          ),
-        ),
       ],
     );
   }
@@ -1391,6 +1414,146 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _setOrbitAmount(item, max, flush: true);
   }
 
+  void _handleCenterSurfacePointerDown(PointerDownEvent event) {
+    if (_orbitHandlePointerActive ||
+        _centerSurfaceDragBlocked(event.localPosition)) {
+      return;
+    }
+    _centerSurfaceDragPointer = event.pointer;
+    _centerSurfaceDragDx = 0;
+    _centerSurfaceDragDy = 0;
+    _centerSurfaceDragAccepted = false;
+    _centerSurfaceDragRejected = false;
+    _centerSurfaceTicks = 0;
+    _centerSurfaceVelocityDx = 0;
+    _centerSurfaceLastMoveAt = event.timeStamp;
+    _slideController.stop();
+    _settling = false;
+    _dragTotalDx = 0;
+  }
+
+  void _handleCenterSurfacePointerMove(PointerMoveEvent event) {
+    if (_centerSurfaceDragPointer != event.pointer ||
+        _centerSurfaceDragRejected ||
+        _settling) {
+      return;
+    }
+    _recordCenterSurfaceVelocity(event);
+    _centerSurfaceDragDx += event.delta.dx;
+    _centerSurfaceDragDy += event.delta.dy;
+    if (!_centerSurfaceDragAccepted) {
+      final absDx = _centerSurfaceDragDx.abs();
+      final absDy = _centerSurfaceDragDy.abs();
+      if (absDx <= _orbitAxisSlop && absDy <= _orbitAxisSlop) return;
+      if (absDy > absDx) {
+        _centerSurfaceDragRejected = true;
+        return;
+      }
+      _centerSurfaceDragAccepted = true;
+    }
+    _applyCenterSurfaceDragDelta(event.delta.dx);
+  }
+
+  void _handleCenterSurfacePointerUp(PointerUpEvent event) {
+    if (_centerSurfaceDragPointer != event.pointer) return;
+    final shouldSettle = _centerSurfaceDragAccepted;
+    final swipedLeft = (_centerSurfaceVelocityDx.abs() > 1
+        ? _centerSurfaceVelocityDx < 0
+        : _centerSurfaceDragDx < 0);
+    final flingSteps = _centerSurfaceTicks == 0
+        ? _centerSurfaceFlingSteps()
+        : 0;
+    _resetCenterSurfaceDrag();
+    if (!shouldSettle) {
+      _animateDragTo(0);
+      return;
+    }
+    if (flingSteps > 0) {
+      unawaited(
+        _tickCenterCarouselBySteps(steps: flingSteps, swipedLeft: swipedLeft),
+      );
+      return;
+    }
+    unawaited(_settleDrag());
+  }
+
+  void _handleCenterSurfacePointerCancel(PointerCancelEvent event) {
+    if (_centerSurfaceDragPointer != event.pointer) return;
+    _resetCenterSurfaceDrag();
+    _animateDragTo(0);
+  }
+
+  void _recordCenterSurfaceVelocity(PointerMoveEvent event) {
+    final previous = _centerSurfaceLastMoveAt;
+    if (previous != null) {
+      final elapsed = event.timeStamp - previous;
+      if (elapsed.inMicroseconds > 0) {
+        _centerSurfaceVelocityDx =
+            event.delta.dx /
+            elapsed.inMicroseconds *
+            Duration.microsecondsPerSecond;
+      }
+    }
+    _centerSurfaceLastMoveAt = event.timeStamp;
+  }
+
+  int _centerSurfaceFlingSteps() {
+    final velocity = _centerSurfaceVelocityDx.abs();
+    if (velocity < 1200) return 0;
+    final maxSteps = math.max(1, _items.length - 1);
+    return (velocity / 1200).floor().clamp(1, maxSteps).toInt();
+  }
+
+  bool _centerSurfaceDragBlocked(Offset localPosition) {
+    final handleTop =
+        TransactionHeaderMetrics.fastInfoHeight + _orbitClosePull - 34;
+    return localPosition.dy >= handleTop;
+  }
+
+  void _resetCenterSurfaceDrag() {
+    _centerSurfaceDragPointer = null;
+    _centerSurfaceDragDx = 0;
+    _centerSurfaceDragDy = 0;
+    _centerSurfaceDragAccepted = false;
+    _centerSurfaceDragRejected = false;
+    _centerSurfaceTicks = 0;
+    _centerSurfaceVelocityDx = 0;
+    _centerSurfaceLastMoveAt = null;
+  }
+
+  void _applyCenterSurfaceDragDelta(double deltaDx) {
+    final items = _items;
+    if (items.length < 2) return;
+    _dragTotalDx += deltaDx;
+    var nextDx = _dragDx + deltaDx;
+    var nextIndex = _index;
+    final selectedItems = <BackheaderBudgetItem>[];
+
+    while (nextDx <= -_centerCarouselSlotDistance) {
+      nextDx += _centerCarouselSlotDistance;
+      nextIndex = (nextIndex + 1) % items.length;
+      selectedItems.add(items[nextIndex]);
+    }
+    while (nextDx >= _centerCarouselSlotDistance) {
+      nextDx -= _centerCarouselSlotDistance;
+      nextIndex = (nextIndex - 1) % items.length;
+      if (nextIndex < 0) nextIndex += items.length;
+      selectedItems.add(items[nextIndex]);
+    }
+
+    setState(() {
+      _index = nextIndex;
+      _dragDx = nextDx.clamp(-_maxVisualDrag, _maxVisualDrag).toDouble();
+    });
+    if (selectedItems.isEmpty) return;
+    _centerSurfaceTicks += selectedItems.length;
+    _syncOrbitAmountController(items[nextIndex]);
+    for (final item in selectedItems) {
+      HapticFeedback.selectionClick();
+      widget.onActiveItemChanged?.call(item);
+    }
+  }
+
   void _handleOrbitSurfacePointerDown(PointerDownEvent event) {
     if (_orbitHandlePointerActive ||
         _orbitSurfaceSwipeBlocked(event.localPosition)) {
@@ -1526,9 +1689,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       _index = nextIndex;
       _dragDx = 0;
       _settling = false;
-      _centerWheelDirection = 0;
-      _centerWheelFrom = null;
-      _centerWheelTo = null;
     });
     _syncOrbitAmountController(items[nextIndex]);
     widget.onActiveItemChanged?.call(items[nextIndex]);
@@ -1814,35 +1974,21 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     });
     for (var step = 0; step < normalizedSteps; step += 1) {
       if (!mounted) return;
-      final from = _items[_index];
       final nextIndex = swipedLeft
           ? (_index + 1) % items.length
           : (_index - 1) % items.length;
       final normalizedNextIndex = nextIndex < 0
           ? nextIndex + items.length
           : nextIndex;
-      final to = _items[normalizedNextIndex];
       HapticFeedback.selectionClick();
       setState(() {
-        _centerWheelDirection = swipedLeft ? 1 : -1;
-        _centerWheelFrom = from;
-        _centerWheelTo = to;
-        _centerWheelToken += 1;
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 190));
-      if (!mounted) return;
-      setState(() {
         _index = normalizedNextIndex;
-        if (_index < 0) _index += items.length;
-        _centerWheelFrom = null;
-        _centerWheelTo = null;
       });
       _syncOrbitAmountController(_items[_index]);
       widget.onActiveItemChanged?.call(_items[_index]);
     }
     if (!mounted) return;
     setState(() {
-      _centerWheelDirection = 0;
       _settling = false;
     });
   }

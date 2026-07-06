@@ -104,6 +104,7 @@ class ExpenseSettingsStoreSecurityTest {
                 "contentSurfaceStyle" to "neutralNeutral",
                 "backheaderStyle" to "orbitBudget",
                 "centerBackheaderDesign" to "colored",
+                "centerPartitionRingEnabled" to true,
                 "designProfile" to "neumorphism",
                 "appColor" to "pink",
             )
@@ -113,8 +114,10 @@ class ExpenseSettingsStoreSecurityTest {
         assertFalse(updated.containsKey("nightMode"))
         assertEquals("pink", updated["appColor"])
         assertEquals("colored", updated["centerBackheaderDesign"])
+        assertEquals(true, updated["centerPartitionRingEnabled"])
         assertEquals("normal", store.loadThemeSettings()["designProfile"])
         assertEquals("colored", store.loadThemeSettings()["centerBackheaderDesign"])
+        assertEquals(true, store.loadThemeSettings()["centerPartitionRingEnabled"])
         assertEquals(
             null,
             context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)

@@ -791,7 +791,7 @@ class _BudgetLimitCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         partitionBar,
-        const SizedBox(height: 18),
+        const SizedBox(height: 10),
         if (saving)
           SizedBox(
             height: 2,
@@ -799,8 +799,7 @@ class _BudgetLimitCard extends StatelessWidget {
           )
         else
           const SizedBox(height: 2),
-        const Spacer(),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         ThemedPillField(
           fieldKey: const ValueKey('limit-amount-input'),
           debugLabel: 'BudgetTargetEditor.amount',

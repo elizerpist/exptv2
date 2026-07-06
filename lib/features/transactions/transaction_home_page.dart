@@ -336,6 +336,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     backheaderStyle: expenseTheme.settings.backheaderStyle,
                     centerBackheaderDesign:
                         expenseTheme.settings.centerBackheaderDesign,
+                    centerPartitionRingEnabled:
+                        expenseTheme.settings.centerPartitionRingEnabled,
                     backgroundColor: expenseTheme.appBackground,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,

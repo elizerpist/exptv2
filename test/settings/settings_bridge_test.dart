@@ -325,38 +325,39 @@ void main() {
 
   test('updates theme settings through native bridge', () async {
     final updated = await bridge.expenseUpdateThemeSettings(
-      const AppThemeSettings(
-        magnetType: MagnetType.adaptive,
-        cardColor: AppCardColor.darkgray,
-        theme: AppTheme.turquoise,
-        backgroundColor: AppBackgroundColor.white,
-        boxColor: AppBoxColor.gray,
-        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-        contentSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
-        ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
-        ghostLogboxSettings: GhostLogboxSettings(
-          borderStyle: GhostLogboxBorderStyle.normal,
-          backgroundOpacityEnabled: false,
-          avatarOpacityEnabled: true,
-          textOpacityEnabled: true,
-          avatarBadgeEnabled: false,
-          textTone: GhostLogboxTextTone.gray,
-          expectedLabelEnabled: false,
-        ),
-        categoryMenuColor: AppBoxColor.darkgray,
-        categoryMenuSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
-        categoryCardColor: AppBoxColor.white,
-        categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-        backheaderStyle: BackheaderStyle.orbitBudget,
-        centerBackheaderDesign: BackheaderCenterDesign.colored,
-        appColor: AppColorMode.pink,
-        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
-        categoryCardShadowEnabled: false,
-        logboxShadowEnabled: false,
-        headerPillShadowEnabled: false,
-        summaryPillShadowEnabled: false,
-        searchPillShadowEnabled: false,
-      ),
+      AppThemeSettings.fromMap(const <String, Object?>{
+        'magnetType': 'adaptive',
+        'cardColor': 'darkgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'white',
+        'boxColor': 'gray',
+        'buttonSurfaceStyle': 'raisedInset',
+        'contentSurfaceStyle': 'neutralInset',
+        'ghostLogboxSurfaceStyle': 'insetInset',
+        'ghostLogboxSettings': <String, Object?>{
+          'borderStyle': 'normal',
+          'backgroundOpacityEnabled': false,
+          'avatarOpacityEnabled': true,
+          'textOpacityEnabled': true,
+          'avatarBadgeEnabled': false,
+          'textTone': 'gray',
+          'expectedLabelEnabled': false,
+        },
+        'categoryMenuColor': 'darkgray',
+        'categoryMenuSurfaceStyle': 'insetInset',
+        'categoryCardColor': 'white',
+        'categoryCardSurfaceStyle': 'raisedInset',
+        'backheaderStyle': 'orbitBudget',
+        'centerBackheaderDesign': 'colored',
+        'centerPartitionRingEnabled': true,
+        'appColor': 'pink',
+        'categoryMenuPresentation': 'slideUpSheet',
+        'categoryCardShadowEnabled': false,
+        'logboxShadowEnabled': false,
+        'headerPillShadowEnabled': false,
+        'summaryPillShadowEnabled': false,
+        'searchPillShadowEnabled': false,
+      }),
     );
 
     expect(updated.magnetType, MagnetType.adaptive);
@@ -371,6 +372,7 @@ void main() {
     expect(updated.ghostLogboxSettings.textTone, GhostLogboxTextTone.gray);
     expect(updated.ghostLogboxSettings.expectedLabelEnabled, isFalse);
     expect(updated.centerBackheaderDesign, BackheaderCenterDesign.colored);
+    expect(updated.toMap()['centerPartitionRingEnabled'], isTrue);
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
@@ -396,6 +398,7 @@ void main() {
     expect(ghostPayload['expectedLabelEnabled'], isFalse);
     expect(payload['backheaderStyle'], 'orbitBudget');
     expect(payload['centerBackheaderDesign'], 'colored');
+    expect(payload['centerPartitionRingEnabled'], isTrue);
     expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);
     expect(payload['appColor'], 'pink');

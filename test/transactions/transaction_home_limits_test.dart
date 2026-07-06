@@ -65,8 +65,11 @@ void main() {
       final amountInput = tester.getRect(
         find.byKey(const ValueKey('limit-amount-input')),
       );
-      expect(SlideUpPanelMetrics.budgetBaseHeight, 432);
-      expect(limitCard.height, moreOrLessEquals(432, epsilon: 0.1));
+      final partitionBar = tester.getRect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
+      );
+      expect(SlideUpPanelMetrics.budgetBaseHeight, 333);
+      expect(limitCard.height, moreOrLessEquals(333, epsilon: 0.1));
       expect(
         limitCard.bottom - saveButton.bottom,
         moreOrLessEquals(
@@ -75,6 +78,7 @@ void main() {
         ),
       );
       expect(saveButton.top - amountInput.bottom, lessThanOrEqualTo(22));
+      expect(amountInput.top - partitionBar.bottom, lessThanOrEqualTo(64));
     },
   );
 
@@ -583,7 +587,7 @@ void main() {
       find.byKey(const ValueKey('budget-target-editor-card')),
     );
     expect(card.top, greaterThan(summaryTop + 70));
-    expect(card.height, greaterThan(400));
+    expect(card.height, moreOrLessEquals(333, epsilon: 0.1));
     expect(card.bottom, moreOrLessEquals(844, epsilon: 0.1));
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
     final veil = tester.widget<ColoredBox>(

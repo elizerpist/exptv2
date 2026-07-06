@@ -355,6 +355,7 @@ class AppThemeSettings {
     required this.backheaderStyle,
     required this.appColor,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
+    this.centerPartitionRingEnabled = false,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
@@ -380,6 +381,7 @@ class AppThemeSettings {
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
       centerBackheaderDesign: BackheaderCenterDesign.neutral,
+      centerPartitionRingEnabled: false,
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
       categoryCardShadowEnabled: true,
@@ -440,6 +442,10 @@ class AppThemeSettings {
       centerBackheaderDesign: BackheaderCenterDesign.fromAny(
         map['centerBackheaderDesign'],
       ),
+      centerPartitionRingEnabled: _bool(
+        map['centerPartitionRingEnabled'],
+        false,
+      ),
       appColor: _appColorFromMap(map),
       categoryMenuPresentation: CategoryMenuPresentation.fromAny(
         map['categoryMenuPresentation'],
@@ -467,6 +473,7 @@ class AppThemeSettings {
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
   final BackheaderStyle backheaderStyle;
   final BackheaderCenterDesign centerBackheaderDesign;
+  final bool centerPartitionRingEnabled;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
   final bool categoryCardShadowEnabled;
@@ -502,6 +509,7 @@ class AppThemeSettings {
       'categoryCardSurfaceStyle': categoryCardSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
       'centerBackheaderDesign': centerBackheaderDesign.nativeValue,
+      'centerPartitionRingEnabled': centerPartitionRingEnabled,
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
@@ -528,6 +536,7 @@ class AppThemeSettings {
     ExpenseSurfaceInteraction? categoryCardSurfaceStyle,
     BackheaderStyle? backheaderStyle,
     BackheaderCenterDesign? centerBackheaderDesign,
+    bool? centerPartitionRingEnabled,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
     bool? categoryCardShadowEnabled,
@@ -556,6 +565,8 @@ class AppThemeSettings {
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
       centerBackheaderDesign:
           centerBackheaderDesign ?? this.centerBackheaderDesign,
+      centerPartitionRingEnabled:
+          centerPartitionRingEnabled ?? this.centerPartitionRingEnabled,
       appColor: appColor ?? this.appColor,
       categoryMenuPresentation:
           categoryMenuPresentation ?? this.categoryMenuPresentation,

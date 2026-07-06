@@ -379,7 +379,7 @@ void main() {
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    final expectedTrackHeight = previousTrackHeight * 0.567;
+    final expectedTrackHeight = previousTrackHeight * 0.5103;
     final expectedPartitionTop =
         TransactionHeaderMetrics.magnetTop +
         TransactionHeaderMetrics.magnetHeight / 2 -
@@ -453,6 +453,7 @@ void main() {
               height: 340,
               child: CategoryBudgetStage(
                 backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerPartitionRingEnabled: true,
                 backgroundColor: const Color(0xfff8fafc),
                 items: [
                   BackheaderBudgetItem.overview(overview),
@@ -523,12 +524,28 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('backheader-center-reset-action')),
+        find.byKey(const ValueKey('backheader-center-partition-ring')),
         findsOneWidget,
       );
       expect(
+        find.byKey(const ValueKey('backheader-center-partition-ring')),
+        paints
+          ..arc(color: food.color)
+          ..arc(color: food.color.withValues(alpha: 0.70))
+          ..arc(color: books.color)
+          ..arc(color: books.color.withValues(alpha: 0.70))
+          ..arc(color: health.color)
+          ..arc(color: health.color.withValues(alpha: 0.70))
+          ..arc(color: travel.color)
+          ..arc(color: AppColors.gray200),
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-reset-action')),
+        findsNothing,
+      );
+      expect(
         find.byKey(const ValueKey('backheader-center-max-action')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('backheader-center-preview-previous-2')),
@@ -552,7 +569,7 @@ void main() {
           find.byKey(const ValueKey('backheader-experimental-surface')),
         ),
       );
-      await drag.moveBy(const Offset(-90, 0));
+      await drag.moveBy(const Offset(-40, 0));
       await tester.pump();
       final draggedSurfaceRect = tester.getRect(
         find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
@@ -625,7 +642,68 @@ void main() {
     },
   );
 
-  testWidgets('centerBadgeBudget carousel renders five fading badge slots', (
+  testWidgets('centerBadgeBudget partition ring follows pending amount map', (
+    tester,
+  ) async {
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
+    final food = barFixture(6, 'Food', 100, 500);
+    final foodItem = BackheaderBudgetItem.category(food);
+
+    Future<void> pumpStage(Map<String, double> pendingAmountsByKey) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerPartitionRingEnabled: true,
+                items: [BackheaderBudgetItem.overview(overview), foodItem],
+                categoryBars: [food],
+                overviewItems: [overview],
+                pendingAmountsByKey: pendingAmountsByKey,
+                activeKey: foodItem.key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await pumpStage(const <String, double>{});
+    expect(
+      find.byKey(const ValueKey('backheader-center-partition-ring')),
+      paints
+        ..arc(color: food.color)
+        ..arc(color: food.color.withValues(alpha: 0.70))
+        ..arc(color: AppColors.gray200),
+    );
+
+    await pumpStage(<String, double>{foodItem.key: 1000});
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-amount')),
+          )
+          .data,
+      '100 Ft / 1 000 Ft',
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-center-partition-ring')),
+      isNot(
+        paints
+          ..arc(color: food.color)
+          ..arc(color: food.color.withValues(alpha: 0.70))
+          ..arc(color: AppColors.gray200),
+      ),
+    );
+  });
+
+  testWidgets('centerBadgeBudget carousel renders seven fading badge slots', (
     tester,
   ) async {
     final bars = [
@@ -634,6 +712,8 @@ void main() {
       barFixture(8, 'Books', 30, 100),
       barFixture(9, 'Health', 40, 100),
       barFixture(10, 'Home', 50, 100),
+      barFixture(11, 'Rent', 60, 100),
+      barFixture(12, 'Gifts', 70, 100),
     ];
     final selected = <String>[];
 
@@ -659,11 +739,14 @@ void main() {
 
     await pumpStage();
     await tester.tap(
-      find.byKey(const ValueKey('backheader-center-preview-next-2')),
+      find.byKey(const ValueKey('backheader-center-preview-next-3')),
     );
     await tester.pumpAndSettle();
-    expect(selected.last, 'Books');
+    expect(selected.last, 'Health');
 
+    final previousFarthest = find.byKey(
+      const ValueKey('backheader-center-preview-previous-3'),
+    );
     final previousOuter = find.byKey(
       const ValueKey('backheader-center-preview-previous-2'),
     );
@@ -676,10 +759,19 @@ void main() {
     final nextOuter = find.byKey(
       const ValueKey('backheader-center-preview-next-2'),
     );
+    final nextFarthest = find.byKey(
+      const ValueKey('backheader-center-preview-next-3'),
+    );
+    expect(previousFarthest, findsOneWidget);
     expect(previousOuter, findsOneWidget);
     expect(previousInner, findsOneWidget);
     expect(nextInner, findsOneWidget);
     expect(nextOuter, findsOneWidget);
+    expect(nextFarthest, findsOneWidget);
+    expect(
+      tester.getSize(previousFarthest).width,
+      lessThan(tester.getSize(previousOuter).width),
+    );
     expect(
       tester.getSize(previousOuter).width,
       lessThan(tester.getSize(previousInner).width),
@@ -689,16 +781,23 @@ void main() {
       lessThan(tester.getSize(nextInner).width),
     );
     expect(
+      tester.getSize(nextFarthest).width,
+      lessThan(tester.getSize(nextOuter).width),
+    );
+    expect(
       tester
           .widget<Opacity>(
-            find.descendant(of: previousOuter, matching: find.byType(Opacity)),
+            find.descendant(
+              of: previousFarthest,
+              matching: find.byType(Opacity),
+            ),
           )
           .opacity,
       lessThan(
         tester
             .widget<Opacity>(
               find.descendant(
-                of: previousInner,
+                of: previousOuter,
                 matching: find.byType(Opacity),
               ),
             )
@@ -716,11 +815,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(selected, ['Travel', 'Books', 'Health']);
+    expect(selected, ['Travel', 'Books', 'Health', 'Home', 'Rent', 'Gifts']);
   });
 
   testWidgets(
-    'centerBadgeBudget wheel hides static edge badges during tick animation',
+    'centerBadgeBudget keeps seven slots stable during continuous drag',
     (tester) async {
       final bars = [
         barFixture(6, 'Food', 10, 100),
@@ -728,6 +827,8 @@ void main() {
         barFixture(8, 'Books', 30, 100),
         barFixture(9, 'Health', 40, 100),
         barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
       ];
 
       await tester.pumpWidget(
@@ -749,6 +850,10 @@ void main() {
       );
 
       expect(
+        find.byKey(const ValueKey('backheader-center-preview-previous-3')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('backheader-center-preview-previous-2')),
         findsOneWidget,
       );
@@ -764,67 +869,60 @@ void main() {
         find.byKey(const ValueKey('backheader-center-preview-next-2')),
         findsOneWidget,
       );
-
-      await tester.fling(
-        find.byKey(const ValueKey('backheader-experimental-surface')),
-        const Offset(-180, 0),
-        1000,
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-3')),
+        findsOneWidget,
       );
+
+      final initialCenter = tester.getCenter(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      final drag = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('backheader-experimental-surface')),
+        ),
+      );
+      await drag.moveBy(const Offset(-45, 0));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 110));
 
       expect(
+        find.byKey(const ValueKey('backheader-center-preview-previous-3')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('backheader-center-preview-previous-2')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('backheader-center-preview-previous-1')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('backheader-center-preview-next-1')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('backheader-center-preview-next-2')),
-        findsNothing,
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-3')),
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('backheader-center-wheel-outgoing')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('backheader-center-wheel-incoming')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(
-        find.byKey(const ValueKey('backheader-center-wheel-outgoing-scale')),
-        findsOneWidget,
+      final draggedCenter = tester.getCenter(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
       );
-      expect(
-        find.byKey(const ValueKey('backheader-center-wheel-incoming-scale')),
-        findsOneWidget,
-      );
-      final outgoingScale = tester
-          .widget<Transform>(
-            find.byKey(
-              const ValueKey('backheader-center-wheel-outgoing-scale'),
-            ),
-          )
-          .transform
-          .storage[0];
-      final incomingScale = tester
-          .widget<Transform>(
-            find.byKey(
-              const ValueKey('backheader-center-wheel-incoming-scale'),
-            ),
-          )
-          .transform
-          .storage[0];
-      expect(outgoingScale, lessThan(0.78));
-      expect(incomingScale, greaterThan(0.68));
-      expect(incomingScale, lessThan(0.96));
+      expect(draggedCenter.dx, lessThan(initialCenter.dx - 8));
 
+      await drag.up();
       await tester.pumpAndSettle();
     },
   );

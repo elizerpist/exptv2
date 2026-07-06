@@ -20,6 +20,18 @@ void main() {
       ).centerBackheaderDesign,
       BackheaderCenterDesign.neutral,
     );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerPartitionRingEnabled': true,
+      }).toMap()['centerPartitionRingEnabled'],
+      isTrue,
+    );
+    expect(
+      AppThemeSettings.fromMap(
+        const <dynamic, dynamic>{},
+      ).toMap()['centerPartitionRingEnabled'],
+      isFalse,
+    );
   });
 
   testWidgets('backheader style panel lists classic and experimental styles', (
@@ -111,5 +123,41 @@ void main() {
     await tester.pump();
 
     expect(updated?.centerBackheaderDesign, BackheaderCenterDesign.colored);
+  });
+
+  testWidgets('backheader style panel toggles center partition ring', (
+    tester,
+  ) async {
+    AppThemeSettings? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackheaderStyleOptionsPanel(
+            settings: AppThemeSettings.fromMap(const <dynamic, dynamic>{
+              'backheaderStyle': 'centerBadgeBudget',
+              'centerPartitionRingEnabled': false,
+            }),
+            onChanged: (next) => updated = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Külső partition kör'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('center-partition-ring-toggle')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('center-partition-ring-toggle')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('center-partition-ring-toggle')),
+    );
+    await tester.pump();
+
+    expect(updated?.toMap()['centerPartitionRingEnabled'], isTrue);
   });
 }

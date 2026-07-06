@@ -57,7 +57,65 @@ class BackheaderStyleOptionsPanel extends StatelessWidget {
                     settings.copyWith(centerBackheaderDesign: design),
                   ),
                 ),
+              const SizedBox(height: 4),
+              _CenterPartitionRingToggle(
+                enabled: settings.centerPartitionRingEnabled,
+                onChanged: (enabled) => onChanged(
+                  settings.copyWith(centerPartitionRingEnabled: enabled),
+                ),
+              ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CenterPartitionRingToggle extends StatelessWidget {
+  const _CenterPartitionRingToggle({
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: const ValueKey('center-partition-ring-toggle'),
+      onTap: () => onChanged(!enabled),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Külső partition kör',
+                    style: TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'A lineáris partition progress kör alakú, külső gyűrűként.',
+                    style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            Switch(value: enabled, onChanged: onChanged),
           ],
         ),
       ),

@@ -53,6 +53,10 @@ class ExpenseSettingsStore(context: Context) {
                 KEY_CENTER_BACKHEADER_DESIGN,
                 "neutral",
             ),
+            "centerPartitionRingEnabled" to prefs.getBoolean(
+                KEY_CENTER_PARTITION_RING_ENABLED,
+                false,
+            ),
             "designProfile" to (
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
                     ?: legacyDesignProfile()
@@ -123,6 +127,10 @@ class ExpenseSettingsStore(context: Context) {
             .putString(
                 KEY_CENTER_BACKHEADER_DESIGN,
                 args["centerBackheaderDesign"]?.toString() ?: "neutral"
+            )
+            .putBoolean(
+                KEY_CENTER_PARTITION_RING_ENABLED,
+                boolArg(args["centerPartitionRingEnabled"], false)
             )
             .remove(KEY_DESIGN_PROFILE)
             .putString(
@@ -364,6 +372,7 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_GHOST_LOGBOX_EXPECTED_LABEL_ENABLED = "ghostLogboxExpectedLabelEnabled"
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_CENTER_BACKHEADER_DESIGN = "centerBackheaderDesign"
+        private const val KEY_CENTER_PARTITION_RING_ENABLED = "centerPartitionRingEnabled"
         private const val KEY_DESIGN_PROFILE = "designProfile"
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"
