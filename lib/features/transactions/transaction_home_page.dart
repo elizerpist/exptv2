@@ -88,6 +88,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   CategoryOverlayMode? _categoryMode;
   BackheaderBudgetItem? _budgetEditorItem;
   DateTime? _budgetEditorOpenRequestedAt;
+  final _budgetEditorPendingAmountsByKey = <String, double>{};
   var _categoryEditorOpen = false;
   var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
@@ -333,10 +334,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                 child: RepaintBoundary(
                   child: CategoryBudgetStage(
                     backheaderStyle: expenseTheme.settings.backheaderStyle,
+                    centerBackheaderDesign:
+                        expenseTheme.settings.centerBackheaderDesign,
                     backgroundColor: expenseTheme.appBackground,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
                     overviewItems: widget.store.overviewBudgetItems,
+                    pendingAmountsByKey: _budgetEditorPendingAmountsByKey,
                     periodIncome: widget.store.activePeriodIncomeTotal,
                     periodLabel: widget.store.activePeriodLabel,
                     activeKey: _backheaderActiveKey,
@@ -461,6 +465,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     expenseTheme: expenseTheme,
                     onCancel: _closeBudgetTargetEditor,
                     onActiveItemChanged: _setBackheaderActiveItem,
+                    onPendingAmountChanged: _setBudgetEditorPendingAmount,
                     onSaveOverview:
                         (
                           kind, {
@@ -887,6 +892,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     setState(() {
       _budgetEditorItem = null;
       _budgetEditorOpenRequestedAt = null;
+      _budgetEditorPendingAmountsByKey.clear();
+    });
+  }
+
+  void _setBudgetEditorPendingAmount(BackheaderBudgetItem item, double amount) {
+    if (!mounted) return;
+    final normalized = amount < 0 ? 0.0 : amount;
+    final current = _budgetEditorPendingAmountsByKey[item.key];
+    if (current != null && (current - normalized).abs() < 0.01) return;
+    setState(() {
+      _budgetEditorPendingAmountsByKey[item.key] = normalized;
     });
   }
 

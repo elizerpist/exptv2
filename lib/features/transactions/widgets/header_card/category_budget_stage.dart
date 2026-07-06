@@ -33,6 +33,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.categoryBars,
     this.periodLabel,
     this.backheaderStyle = BackheaderStyle.classic,
+    this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.backgroundColor = AppColors.gray100,
     this.activeKey,
     this.onActiveItemChanged,
@@ -41,6 +42,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.onBarTap,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.overviewItems = const [],
+    this.pendingAmountsByKey = const <String, double>{},
     this.periodIncome = 0,
     this.onOrbitCloseRequested,
     this.onSaveOverview,
@@ -51,12 +53,14 @@ class CategoryBudgetStage extends StatefulWidget {
   final List<CategoryBudgetBarData>? categoryBars;
   final String? periodLabel;
   final BackheaderStyle backheaderStyle;
+  final BackheaderCenterDesign centerBackheaderDesign;
   final Color backgroundColor;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
   final ExpenseSurfaceInteraction surfaceStyle;
   final List<OverviewBudgetData> overviewItems;
+  final Map<String, double> pendingAmountsByKey;
   final double periodIncome;
   final VoidCallback? onOrbitCloseRequested;
   final Future<void> Function(
@@ -162,6 +166,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final synced = _syncControlledIndex(resetDrag: true);
     if (_index >= _items.length) _index = 0;
     if (!synced && _items.length != _oldItems(oldWidget).length) _dragDx = 0;
+    _discardStaleOrbitPendingAmounts();
     if (_items.isNotEmpty) _syncOrbitAmountController(_items[_index]);
   }
 
@@ -358,6 +363,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         frameOverview: frameOverview,
         activeIndex: _index,
         backgroundColor: widget.backgroundColor,
+        centerDesign: widget.centerBackheaderDesign,
         orbitPartitionBar: isOrbitBudget
             ? preview
                   ? _orbitStaticPartitionBarFor(item)
@@ -1098,13 +1104,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   _CenterJoystickSpeed _centerJoystickSpeedForOffset(double distance) {
-    if (distance >= 150) {
-      return const _CenterJoystickSpeed(stepMultiplier: 6, tickStride: 1);
-    }
-    if (distance >= 88) {
-      return const _CenterJoystickSpeed(stepMultiplier: 2, tickStride: 1);
-    }
-    return const _CenterJoystickSpeed(stepMultiplier: 1, tickStride: 3);
+    final activeDistance = math.max(0.0, distance - _centerJoystickDeadZone);
+    final normalized = (activeDistance / 52).clamp(0.0, 1.0).toDouble();
+    final parabolicBoost = normalized * normalized;
+    final multiplier = (1 + parabolicBoost * 9).round().clamp(1, 10);
+    return _CenterJoystickSpeed(stepMultiplier: multiplier, tickStride: 1);
   }
 
   LimitSliderRange _orbitSliderRangeFor(BackheaderBudgetItem item) {
@@ -1248,7 +1252,37 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   double _orbitEffectiveAmountFor(BackheaderBudgetItem item) {
-    return _orbitPendingAmountsByKey[item.key] ?? _orbitLimitAmountFor(item);
+    return widget.pendingAmountsByKey[item.key] ??
+        _orbitPendingAmountsByKey[item.key] ??
+        _orbitLimitAmountFor(item);
+  }
+
+  void _discardStaleOrbitPendingAmounts() {
+    final keysToRemove = <String>[];
+    for (final entry in _orbitPendingAmountsByKey.entries) {
+      if (widget.pendingAmountsByKey.containsKey(entry.key)) {
+        keysToRemove.add(entry.key);
+        continue;
+      }
+      final item = _itemForKeyOrNull(entry.key);
+      if (item == null) {
+        keysToRemove.add(entry.key);
+        continue;
+      }
+      if ((_orbitLimitAmountFor(item) - entry.value).abs() < 0.01) {
+        keysToRemove.add(entry.key);
+      }
+    }
+    for (final key in keysToRemove) {
+      _orbitPendingAmountsByKey.remove(key);
+    }
+  }
+
+  BackheaderBudgetItem? _itemForKeyOrNull(String key) {
+    for (final item in _items) {
+      if (item.key == key) return item;
+    }
+    return null;
   }
 
   double _orbitLimitAmountFor(BackheaderBudgetItem item) {
@@ -1786,7 +1820,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         _centerWheelTo = to;
         _centerWheelToken += 1;
       });
-      await Future<void>.delayed(const Duration(milliseconds: 130));
+      await Future<void>.delayed(const Duration(milliseconds: 190));
       if (!mounted) return;
       setState(() {
         _index = normalizedNextIndex;

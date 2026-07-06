@@ -33,6 +33,7 @@ class BudgetTargetEditorSheet extends StatefulWidget {
     required this.periodIncome,
     required this.onCancel,
     required this.onActiveItemChanged,
+    this.onPendingAmountChanged,
     required this.onSaveOverview,
     required this.onSaveCategory,
     this.overviewItems = const [],
@@ -50,6 +51,8 @@ class BudgetTargetEditorSheet extends StatefulWidget {
   final ExpenseTheme? expenseTheme;
   final VoidCallback onCancel;
   final ValueChanged<BackheaderBudgetItem> onActiveItemChanged;
+  final void Function(BackheaderBudgetItem item, double amount)?
+  onPendingAmountChanged;
   final Future<void> Function(
     BudgetGoalKind kind, {
     required double limitAmount,
@@ -476,6 +479,7 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
     final normalized = math.max(0.0, amount).toDouble();
     _pendingAmountsByKey[key] = normalized;
     _rememberSliderMax(normalized);
+    widget.onPendingAmountChanged?.call(_itemForKey(key), normalized);
   }
 
   void _rememberSliderMax(double amount) {

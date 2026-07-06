@@ -33,6 +33,31 @@ class BackheaderStyleOptionsPanel extends StatelessWidget {
                     onChanged(settings.copyWith(backheaderStyle: style)),
                 preview: BackheaderStylePreview(style: style),
               ),
+            if (settings.backheaderStyle ==
+                BackheaderStyle.centerBadgeBudget) ...[
+              const SizedBox(height: 4),
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 12, top: 4),
+                child: Text(
+                  'Center Badge háttér',
+                  style: TextStyle(
+                    color: Color(0xFF374151),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              for (final design in BackheaderCenterDesign.values)
+                SettingsRadioOption(
+                  title:
+                      '${design.displayTitle}${settings.centerBackheaderDesign == design ? ' (jelenlegi)' : ''}',
+                  description: design.description,
+                  selected: settings.centerBackheaderDesign == design,
+                  onTap: () => onChanged(
+                    settings.copyWith(centerBackheaderDesign: design),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

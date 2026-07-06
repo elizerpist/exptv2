@@ -24,6 +24,7 @@ class BackheaderStyleSurface extends StatelessWidget {
     required this.frameOverview,
     required this.activeIndex,
     this.backgroundColor = AppColors.gray100,
+    this.centerDesign = BackheaderCenterDesign.neutral,
     this.orbitPartitionBar,
     this.orbitProgress = 0,
     this.orbitHasLimit = false,
@@ -66,6 +67,7 @@ class BackheaderStyleSurface extends StatelessWidget {
   final OverviewBudgetData? frameOverview;
   final int activeIndex;
   final Color backgroundColor;
+  final BackheaderCenterDesign centerDesign;
   final Widget? orbitPartitionBar;
   final double orbitProgress;
   final bool orbitHasLimit;
@@ -137,6 +139,7 @@ class BackheaderStyleSurface extends StatelessWidget {
               current: current,
               amountText: amountText,
               color: color,
+              coloredDesign: centerDesign == BackheaderCenterDesign.colored,
               progress: centerProgress,
               hasLimit: centerHasLimit,
               progressColor: centerProgressColor,
@@ -190,6 +193,9 @@ class BackheaderStyleSurface extends StatelessWidget {
 
   Color _background(Color color) => switch (style) {
     BackheaderStyle.orbitBudget => color,
+    BackheaderStyle.centerBadgeBudget
+        when centerDesign == BackheaderCenterDesign.colored =>
+      Color.alphaBlend(color.withValues(alpha: 0.72), backgroundColor),
     _ => backgroundColor,
   };
 
@@ -466,6 +472,7 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.current,
     required this.amountText,
     required this.color,
+    required this.coloredDesign,
     required this.progress,
     required this.hasLimit,
     required this.progressColor,
@@ -493,6 +500,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   final BackheaderBudgetItem current;
   final String amountText;
   final Color color;
+  final bool coloredDesign;
   final double progress;
   final bool hasLimit;
   final Color progressColor;
@@ -520,7 +528,16 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 50;
+    final railTop = safeTop + 34;
+    final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
+    final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
+    final handleColor = coloredDesign
+        ? AppColors.white.withValues(alpha: 0.78)
+        : AppColors.gray500.withValues(alpha: 0.72);
+    final ringColor = coloredDesign ? AppColors.white : progressColor;
+    final ringTrackColor = coloredDesign
+        ? AppColors.white.withValues(alpha: 0.34)
+        : AppColors.gray300;
     return Stack(
       key: const ValueKey('backheader-style-centerBadgeBudget-content'),
       children: [
@@ -533,8 +550,8 @@ class _CenterBadgeBudget extends StatelessWidget {
             key: const ValueKey('backheader-center-badge-amount'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.gray800,
+            style: TextStyle(
+              color: amountColor,
               fontSize: 13,
               fontWeight: FontWeight.w800,
               height: 1.05,
@@ -552,9 +569,12 @@ class _CenterBadgeBudget extends StatelessWidget {
               child: _CenterBadgeWheel(
                 current: current,
                 currentColor: color,
+                coloredDesign: coloredDesign,
                 progress: progress,
                 hasLimit: hasLimit,
-                progressColor: progressColor,
+                progressColor: ringColor,
+                ringTrackColor: ringTrackColor,
+                titleColor: titleColor,
                 previous: previous,
                 next: next,
                 wheelDirection: wheelDirection,
@@ -583,8 +603,8 @@ class _CenterBadgeBudget extends StatelessWidget {
               remainingText!,
               key: const ValueKey('backheader-center-remaining-amount'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.gray700,
+              style: TextStyle(
+                color: coloredDesign ? AppColors.white : AppColors.gray700,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 height: 1.05,
@@ -608,10 +628,11 @@ class _CenterBadgeBudget extends StatelessWidget {
                 height: 22,
                 child: Center(
                   child: Container(
+                    key: const ValueKey('backheader-center-handle-line'),
                     width: 42,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: AppColors.gray500.withValues(alpha: 0.72),
+                      color: handleColor,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -629,9 +650,12 @@ class _CenterBadgeWheel extends StatelessWidget {
   const _CenterBadgeWheel({
     required this.current,
     required this.currentColor,
+    required this.coloredDesign,
     required this.progress,
     required this.hasLimit,
     required this.progressColor,
+    required this.ringTrackColor,
+    required this.titleColor,
     required this.previous,
     required this.next,
     required this.wheelDirection,
@@ -654,9 +678,12 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   final BackheaderBudgetItem current;
   final Color currentColor;
+  final bool coloredDesign;
   final double progress;
   final bool hasLimit;
   final Color progressColor;
+  final Color ringTrackColor;
+  final Color titleColor;
   final BackheaderBudgetItem? previous;
   final BackheaderBudgetItem? next;
   final int wheelDirection;
@@ -686,6 +713,7 @@ class _CenterBadgeWheel extends StatelessWidget {
             child: _CenterPreviewBadge(
               key: const ValueKey('backheader-center-preview-previous'),
               item: previous!,
+              coloredDesign: coloredDesign,
               onTap: onPreviousTap,
             ),
           ),
@@ -696,6 +724,7 @@ class _CenterBadgeWheel extends StatelessWidget {
             child: _CenterPreviewBadge(
               key: const ValueKey('backheader-center-preview-next'),
               item: next!,
+              coloredDesign: coloredDesign,
               onTap: onNextTap,
             ),
           ),
@@ -705,9 +734,11 @@ class _CenterBadgeWheel extends StatelessWidget {
             key: ValueKey('backheader-center-active-${current.key}'),
             current: current,
             color: currentColor,
+            coloredDesign: coloredDesign,
             progress: progress,
             hasLimit: hasLimit,
             progressColor: progressColor,
+            ringTrackColor: ringTrackColor,
             onBadgeLongPressStart: onBadgeLongPressStart,
             onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
             onBadgeLongPressEnd: onBadgeLongPressEnd,
@@ -724,9 +755,9 @@ class _CenterBadgeWheel extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.gray700,
-                fontSize: 12,
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
                 height: 1.05,
               ),
@@ -742,7 +773,7 @@ class _CenterBadgeWheel extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       key: ValueKey('backheader-center-wheel-$wheelToken'),
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 120),
+      duration: const Duration(milliseconds: 180),
       curve: Curves.easeInOutCubic,
       builder: (context, value, child) {
         final center = _slotFor(_WheelSlot.center);
@@ -762,13 +793,16 @@ class _CenterBadgeWheel extends StatelessWidget {
               left: outgoingOffset.dx,
               top: outgoingOffset.dy,
               child: Transform.scale(
-                scale: _lerp(1, 0.72, value),
+                key: const ValueKey('backheader-center-wheel-outgoing-scale'),
+                scale: _lerp(1, 0.50, value),
                 child: _CenterMotionBadge(
                   item: wheelFrom!,
                   color: _itemColor(wheelFrom!),
+                  coloredDesign: coloredDesign,
                   progress: progress,
                   hasRing: hasLimit,
                   progressColor: progressColor,
+                  ringTrackColor: ringTrackColor,
                 ),
               ),
             ),
@@ -777,13 +811,16 @@ class _CenterBadgeWheel extends StatelessWidget {
               left: incomingOffset.dx,
               top: incomingOffset.dy,
               child: Transform.scale(
-                scale: _lerp(0.72, 1, value),
+                key: const ValueKey('backheader-center-wheel-incoming-scale'),
+                scale: _lerp(0.50, 1, value),
                 child: _CenterMotionBadge(
                   item: wheelTo!,
                   color: _itemColor(wheelTo!),
+                  coloredDesign: coloredDesign,
                   progress: 0,
                   hasRing: false,
                   progressColor: progressColor,
+                  ringTrackColor: ringTrackColor,
                 ),
               ),
             ),
@@ -826,20 +863,38 @@ class _CenterBadgeWheel extends StatelessWidget {
 
 enum _WheelSlot { left, center, right }
 
+BoxDecoration _centerBadgeDecoration({
+  required Color color,
+  required bool coloredDesign,
+}) {
+  if (!coloredDesign) {
+    return BoxDecoration(color: color, shape: BoxShape.circle);
+  }
+  return BoxDecoration(
+    color: AppColors.white.withValues(alpha: 0.18),
+    shape: BoxShape.circle,
+    border: Border.all(color: AppColors.white.withValues(alpha: 0.22)),
+  );
+}
+
 class _CenterMotionBadge extends StatelessWidget {
   const _CenterMotionBadge({
     required this.item,
     required this.color,
+    required this.coloredDesign,
     required this.progress,
     required this.hasRing,
     required this.progressColor,
+    required this.ringTrackColor,
   });
 
   final BackheaderBudgetItem item;
   final Color color;
+  final bool coloredDesign;
   final double progress;
   final bool hasRing;
   final Color progressColor;
+  final Color ringTrackColor;
 
   @override
   Widget build(BuildContext context) {
@@ -855,6 +910,7 @@ class _CenterMotionBadge extends StatelessWidget {
                 painter: _CenterBadgeProgressRingPainter(
                   progress: progress,
                   color: progressColor,
+                  trackColor: ringTrackColor,
                   showFill: true,
                 ),
               ),
@@ -862,7 +918,10 @@ class _CenterMotionBadge extends StatelessWidget {
           Container(
             width: 58,
             height: 58,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            decoration: _centerBadgeDecoration(
+              color: color,
+              coloredDesign: coloredDesign,
+            ),
             alignment: Alignment.center,
             child: item.category == null
                 ? Icon(
@@ -897,9 +956,11 @@ class _CenterActiveBadge extends StatelessWidget {
     super.key,
     required this.current,
     required this.color,
+    required this.coloredDesign,
     required this.progress,
     required this.hasLimit,
     required this.progressColor,
+    required this.ringTrackColor,
     required this.onBadgeLongPressStart,
     required this.onBadgeLongPressMoveUpdate,
     required this.onBadgeLongPressEnd,
@@ -908,9 +969,11 @@ class _CenterActiveBadge extends StatelessWidget {
 
   final BackheaderBudgetItem current;
   final Color color;
+  final bool coloredDesign;
   final double progress;
   final bool hasLimit;
   final Color progressColor;
+  final Color ringTrackColor;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onBadgeLongPressEnd;
@@ -930,6 +993,7 @@ class _CenterActiveBadge extends StatelessWidget {
               painter: _CenterBadgeProgressRingPainter(
                 progress: hasLimit ? progress : 0,
                 color: progressColor,
+                trackColor: ringTrackColor,
                 showFill: hasLimit,
               ),
             ),
@@ -944,7 +1008,10 @@ class _CenterActiveBadge extends StatelessWidget {
               key: const ValueKey('backheader-center-budget-button'),
               width: 58,
               height: 58,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              decoration: _centerBadgeDecoration(
+                color: color,
+                coloredDesign: coloredDesign,
+              ),
               alignment: Alignment.center,
               child: current.category == null
                   ? Icon(
@@ -979,10 +1046,12 @@ class _CenterPreviewBadge extends StatelessWidget {
   const _CenterPreviewBadge({
     super.key,
     required this.item,
+    required this.coloredDesign,
     required this.onTap,
   });
 
   final BackheaderBudgetItem item;
+  final bool coloredDesign;
   final VoidCallback? onTap;
 
   @override
@@ -999,7 +1068,10 @@ class _CenterPreviewBadge extends StatelessWidget {
           child: Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            decoration: _centerBadgeDecoration(
+              color: color,
+              coloredDesign: coloredDesign,
+            ),
             alignment: Alignment.center,
             child: category == null
                 ? Icon(
@@ -1033,11 +1105,13 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
   const _CenterBadgeProgressRingPainter({
     required this.progress,
     required this.color,
+    required this.trackColor,
     required this.showFill,
   });
 
   final double progress;
   final Color color;
+  final Color trackColor;
   final bool showFill;
 
   @override
@@ -1047,7 +1121,7 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round
-      ..color = AppColors.gray300;
+      ..color = trackColor;
     canvas.drawArc(rect, 0, 6.283185307179586, false, track);
     if (!showFill) return;
     final fill = Paint()
@@ -1068,6 +1142,7 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
   bool shouldRepaint(covariant _CenterBadgeProgressRingPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.color != color ||
+        oldDelegate.trackColor != trackColor ||
         oldDelegate.showFill != showFill;
   }
 }

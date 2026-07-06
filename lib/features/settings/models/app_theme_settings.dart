@@ -55,6 +55,34 @@ enum BackheaderStyle {
   };
 }
 
+enum BackheaderCenterDesign {
+  neutral('neutral'),
+  colored('colored');
+
+  const BackheaderCenterDesign(this.nativeValue);
+  final String nativeValue;
+
+  static BackheaderCenterDesign fromAny(Object? value) {
+    final raw = value?.toString();
+    return BackheaderCenterDesign.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => BackheaderCenterDesign.neutral,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    BackheaderCenterDesign.neutral => 'Jelenlegi háttér',
+    BackheaderCenterDesign.colored => 'Színes háttér',
+  };
+
+  String get description => switch (this) {
+    BackheaderCenterDesign.neutral =>
+      'A Center Badge Budget az app jelenlegi háttérszínét használja.',
+    BackheaderCenterDesign.colored =>
+      'Kategóriaszínű, orbit jellegű háttér fehér badge veil elemekkel.',
+  };
+}
+
 enum AppCardColor {
   white('white'),
   lightgray('lightgray'),
@@ -326,6 +354,7 @@ class AppThemeSettings {
     required this.categoryCardSurfaceStyle,
     required this.backheaderStyle,
     required this.appColor,
+    this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
@@ -350,6 +379,7 @@ class AppThemeSettings {
       categoryCardColor: AppBoxColor.gray,
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
+      centerBackheaderDesign: BackheaderCenterDesign.neutral,
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
       categoryCardShadowEnabled: true,
@@ -407,6 +437,9 @@ class AppThemeSettings {
         ExpenseSurfaceInteraction.neutralNeutral,
       ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
+      centerBackheaderDesign: BackheaderCenterDesign.fromAny(
+        map['centerBackheaderDesign'],
+      ),
       appColor: _appColorFromMap(map),
       categoryMenuPresentation: CategoryMenuPresentation.fromAny(
         map['categoryMenuPresentation'],
@@ -433,6 +466,7 @@ class AppThemeSettings {
   final AppBoxColor categoryCardColor;
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
   final BackheaderStyle backheaderStyle;
+  final BackheaderCenterDesign centerBackheaderDesign;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
   final bool categoryCardShadowEnabled;
@@ -467,6 +501,7 @@ class AppThemeSettings {
       'categoryCardColor': categoryCardColor.nativeValue,
       'categoryCardSurfaceStyle': categoryCardSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
+      'centerBackheaderDesign': centerBackheaderDesign.nativeValue,
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
@@ -492,6 +527,7 @@ class AppThemeSettings {
     AppBoxColor? categoryCardColor,
     ExpenseSurfaceInteraction? categoryCardSurfaceStyle,
     BackheaderStyle? backheaderStyle,
+    BackheaderCenterDesign? centerBackheaderDesign,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
     bool? categoryCardShadowEnabled,
@@ -518,6 +554,8 @@ class AppThemeSettings {
       categoryCardSurfaceStyle:
           categoryCardSurfaceStyle ?? this.categoryCardSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
+      centerBackheaderDesign:
+          centerBackheaderDesign ?? this.centerBackheaderDesign,
       appColor: appColor ?? this.appColor,
       categoryMenuPresentation:
           categoryMenuPresentation ?? this.categoryMenuPresentation,

@@ -968,6 +968,75 @@ void main() {
     );
   });
 
+  testWidgets('center badge backheader follows manual sheet amount edits', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    final centerTheme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        backheaderStyle: BackheaderStyle.centerBadgeBudget,
+      ),
+    );
+    await pumpExpandedMonthlyHome(tester, store, expenseTheme: centerTheme);
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-center-preview-next')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-title')),
+          )
+          .data,
+      'Food',
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-amount')),
+          )
+          .data,
+      '100 Ft / 250 Ft',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-center-budget-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('limit-amount-input')),
+      '900',
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-amount')),
+          )
+          .data,
+      '100 Ft / 900 Ft',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('limit-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimits.last['limitAmount'], 900);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-amount')),
+          )
+          .data,
+      '100 Ft / 900 Ft',
+    );
+  });
+
   testWidgets('income side uses income goal and income category allocation', (
     tester,
   ) async {

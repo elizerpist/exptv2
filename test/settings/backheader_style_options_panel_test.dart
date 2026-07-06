@@ -4,6 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('center backheader design persists through theme settings map', () {
+    final settings = AppThemeSettings.defaults().copyWith(
+      backheaderStyle: BackheaderStyle.centerBadgeBudget,
+      centerBackheaderDesign: BackheaderCenterDesign.colored,
+    );
+
+    final roundTrip = AppThemeSettings.fromMap(settings.toMap());
+
+    expect(roundTrip.backheaderStyle, BackheaderStyle.centerBadgeBudget);
+    expect(roundTrip.centerBackheaderDesign, BackheaderCenterDesign.colored);
+    expect(
+      AppThemeSettings.fromMap(
+        const <dynamic, dynamic>{},
+      ).centerBackheaderDesign,
+      BackheaderCenterDesign.neutral,
+    );
+  });
+
   testWidgets('backheader style panel lists classic and experimental styles', (
     tester,
   ) async {
@@ -67,5 +85,31 @@ void main() {
     await tester.pump();
 
     expect(updated?.backheaderStyle, BackheaderStyle.centerBadgeBudget);
+  });
+
+  testWidgets('backheader style panel updates center design mode', (
+    tester,
+  ) async {
+    AppThemeSettings? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackheaderStyleOptionsPanel(
+            settings: AppThemeSettings.defaults().copyWith(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+            ),
+            onChanged: (next) => updated = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Jelenlegi háttér (jelenlegi)'), findsOneWidget);
+    expect(find.text('Színes háttér'), findsOneWidget);
+
+    await tester.tap(find.text('Színes háttér'));
+    await tester.pump();
+
+    expect(updated?.centerBackheaderDesign, BackheaderCenterDesign.colored);
   });
 }
