@@ -1087,6 +1087,123 @@ void main() {
   });
 
   testWidgets(
+    'centerBadgeBudget release direction follows total drag after reverse tail',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+      ];
+      final selected = <String>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onActiveItemChanged: (item) => selected.add(item.title),
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final drag = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('backheader-experimental-surface')),
+        ),
+      );
+      await drag.moveBy(
+        const Offset(-120, 0),
+        timeStamp: const Duration(milliseconds: 16),
+      );
+      await drag.moveBy(
+        const Offset(8, 0),
+        timeStamp: const Duration(milliseconds: 32),
+      );
+      await drag.up();
+      await tester.pumpAndSettle();
+
+      expect(selected.take(2), ['Travel', 'Books']);
+      expect(selected, isNot(contains('Gifts')));
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget equivalent drags settle to the same sequence',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+      ];
+
+      Future<List<String>> runGesture(
+        List<MapEntry<Duration, double>> moves,
+      ) async {
+        final selected = <String>[];
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 390,
+                height: 340,
+                child: CategoryBudgetStage(
+                  backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                  items: bars.map(BackheaderBudgetItem.category).toList(),
+                  categoryBars: bars,
+                  onActiveItemChanged: (item) => selected.add(item.title),
+                  onItemTap: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final drag = await tester.startGesture(
+          tester.getCenter(
+            find.byKey(const ValueKey('backheader-experimental-surface')),
+          ),
+        );
+        for (final move in moves) {
+          await drag.moveBy(Offset(move.value, 0), timeStamp: move.key);
+        }
+        await drag.up();
+        await tester.pumpAndSettle();
+        return selected;
+      }
+
+      final tailWeighted = await runGesture([
+        MapEntry(const Duration(milliseconds: 16), -120),
+        MapEntry(const Duration(milliseconds: 48), -30),
+      ]);
+      final evenlySplit = await runGesture([
+        MapEntry(const Duration(milliseconds: 24), -75),
+        MapEntry(const Duration(milliseconds: 48), -75),
+      ]);
+
+      expect(tailWeighted, evenlySplit);
+      expect(evenlySplit, ['Travel', 'Books', 'Health', 'Home']);
+    },
+  );
+
+  testWidgets(
     'centerBadgeBudget fast short fling keeps spinning after release',
     (tester) async {
       final bars = [

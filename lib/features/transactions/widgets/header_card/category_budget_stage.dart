@@ -138,6 +138,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _centerSurfaceDragAccepted = false;
   var _centerSurfaceDragRejected = false;
   var _centerSurfaceVelocityDx = 0.0;
+  Duration? _centerSurfaceStartedAt;
   Duration? _centerSurfaceLastMoveAt;
   var _orbitUpdatingController = false;
 
@@ -1425,6 +1426,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _centerSurfaceDragAccepted = false;
     _centerSurfaceDragRejected = false;
     _centerSurfaceVelocityDx = 0;
+    _centerSurfaceStartedAt = event.timeStamp;
     _centerSurfaceLastMoveAt = event.timeStamp;
     _slideController.stop();
     _settling = false;
@@ -1465,12 +1467,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   void _handleCenterSurfacePointerUp(PointerUpEvent event) {
     if (_centerSurfaceDragPointer != event.pointer) return;
     final shouldSettle = _centerSurfaceDragAccepted;
-    final swipedLeft = (_centerSurfaceVelocityDx.abs() > 1
-        ? _centerSurfaceVelocityDx < 0
-        : _centerSurfaceDragDx < 0);
-    final plan = _centerSurfaceReleasePlan();
+    final releaseVelocityDx = _centerSurfaceReleaseVelocityDx(event.timeStamp);
+    final swipedLeft = _centerSurfaceReleaseSwipedLeft(releaseVelocityDx);
+    final plan = _centerSurfaceReleasePlan(velocityDx: releaseVelocityDx);
     _logCenterCarousel(
-      'up accepted=$shouldSettle totalDx=${_fmt(_centerSurfaceDragDx)} visualDx=${_fmt(_dragDx)} velocity=${_fmt(_centerSurfaceVelocityDx)} swipedLeft=$swipedLeft',
+      'up accepted=$shouldSettle totalDx=${_fmt(_centerSurfaceDragDx)} visualDx=${_fmt(_dragDx)} sampleVelocity=${_fmt(_centerSurfaceVelocityDx)} releaseVelocity=${_fmt(releaseVelocityDx)} swipedLeft=$swipedLeft',
     );
     _logCenterCarousel(
       'plan steps=${plan.steps} distanceSteps=${plan.distanceSteps} velocitySteps=${plan.velocitySteps} distance=${_fmt(plan.distance)} velocity=${_fmt(plan.velocity)}',
@@ -1531,6 +1532,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _centerSurfaceDragAccepted = false;
     _centerSurfaceDragRejected = false;
     _centerSurfaceVelocityDx = 0;
+    _centerSurfaceStartedAt = null;
     _centerSurfaceLastMoveAt = null;
   }
 
@@ -1969,14 +1971,35 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     return _centerCarouselPlanFor(distance: distance, velocity: velocity).steps;
   }
 
-  _CenterCarouselPlan _centerSurfaceReleasePlan() {
+  double _centerSurfaceReleaseVelocityDx(Duration releaseAt) {
+    final startedAt = _centerSurfaceStartedAt;
+    if (startedAt == null) return _centerSurfaceVelocityDx;
+    final effectiveReleaseAt = releaseAt > startedAt
+        ? releaseAt
+        : _centerSurfaceLastMoveAt;
+    if (effectiveReleaseAt == null) return _centerSurfaceVelocityDx;
+    final elapsed = effectiveReleaseAt - startedAt;
+    if (elapsed.inMicroseconds <= 0) return _centerSurfaceVelocityDx;
+    return _centerSurfaceDragDx /
+        elapsed.inMicroseconds *
+        Duration.microsecondsPerSecond;
+  }
+
+  bool _centerSurfaceReleaseSwipedLeft(double velocityDx) {
+    final totalDx = _centerSurfaceDragDx;
+    if (totalDx.abs() >= _switchThreshold) return totalDx < 0;
+    if (velocityDx.abs() >= 1200) return velocityDx < 0;
+    return (_dragDx == 0 ? totalDx : _dragDx) < 0;
+  }
+
+  _CenterCarouselPlan _centerSurfaceReleasePlan({required double velocityDx}) {
     final dragDistance = math.max(
       _centerSurfaceDragDx.abs(),
       math.max(_dragTotalDx.abs(), _dragDx.abs()),
     );
     return _centerCarouselPlanFor(
       distance: dragDistance,
-      velocity: _centerSurfaceVelocityDx.abs(),
+      velocity: velocityDx.abs(),
     );
   }
 
