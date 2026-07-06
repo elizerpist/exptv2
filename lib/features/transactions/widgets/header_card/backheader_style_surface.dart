@@ -594,7 +594,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 27;
+    final railTop = safeTop + 23;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
     final periodColor = coloredDesign
@@ -783,14 +783,14 @@ class _CenterBadgeWheel extends StatelessWidget {
   });
 
   static const width = 386.0;
-  static const _activeSize = 78.0;
-  static const _innerPreviewSize = 48.0;
-  static const _outerPreviewSize = 40.0;
-  static const _farthestPreviewSize = 34.0;
-  static const _edgePreviewSize = 28.0;
+  static const _activeSize = 78.0 * 1.15;
+  static const _innerPreviewSize = 48.0 * 1.10;
+  static const _outerPreviewSize = 40.0 * 1.10;
+  static const _farthestPreviewSize = 34.0 * 1.10;
+  static const _edgePreviewSize = 28.0 * 1.10;
   static const _slotSpacing = 64.0;
   static const _compressedOuterSpacing = 38.0;
-  static const _titleTop = 78.0;
+  static const _titleTop = 82.0;
 
   final BackheaderBudgetItem current;
   final Color currentColor;
@@ -1088,6 +1088,7 @@ class _CenterBadgeVisual extends StatelessWidget {
   static const _baseSize = 78.0;
   static const _baseFillSize = 58.0;
   static const _baseIconSize = 27.0;
+  static const _partitionPadding = 4.0;
 
   final BackheaderBudgetItem item;
   final String? previewSlotName;
@@ -1111,6 +1112,7 @@ class _CenterBadgeVisual extends StatelessWidget {
   Widget build(BuildContext context) {
     final scale = size / _baseSize;
     final fillSize = _baseFillSize * scale;
+    final partitionSize = fillSize + _partitionPadding * scale * 2;
     final iconSize = (_baseIconSize * scale).clamp(14.0, 27.0).toDouble();
     final progressKey = active
         ? const ValueKey('backheader-center-progress-ring')
@@ -1127,6 +1129,17 @@ class _CenterBadgeVisual extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
+            if (partitionAllocation != null)
+              SizedBox(
+                width: partitionSize,
+                height: partitionSize,
+                child: CustomPaint(
+                  key: const ValueKey('backheader-center-partition-ring'),
+                  painter: _CenterBadgePartitionRingPainter(
+                    allocation: partitionAllocation!,
+                  ),
+                ),
+              ),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onTap,
@@ -1147,13 +1160,6 @@ class _CenterBadgeVisual extends StatelessWidget {
                   fit: StackFit.expand,
                   alignment: Alignment.center,
                   children: [
-                    if (partitionAllocation != null)
-                      CustomPaint(
-                        key: const ValueKey('backheader-center-partition-ring'),
-                        painter: _CenterBadgePartitionRingPainter(
-                          allocation: partitionAllocation!,
-                        ),
-                      ),
                     CustomPaint(
                       key: progressKey,
                       painter: _CenterBadgeProgressRingPainter(
@@ -1197,6 +1203,8 @@ class _CenterBadgeVisual extends StatelessWidget {
   }
 }
 
+const _centerBadgeRingStrokeWidth = 2.4;
+
 class _CenterBadgePartitionRingPainter extends CustomPainter {
   const _CenterBadgePartitionRingPainter({required this.allocation});
 
@@ -1205,10 +1213,10 @@ class _CenterBadgePartitionRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (allocation.segments.isEmpty) return;
-    final rect = (Offset.zero & size).deflate(2);
+    final rect = (Offset.zero & size).deflate(_centerBadgeRingStrokeWidth / 2);
     final paint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = _centerBadgeRingStrokeWidth
       ..strokeCap = StrokeCap.butt;
     var start = -math.pi / 2;
     for (final segment in allocation.segments) {
@@ -1253,17 +1261,17 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = (Offset.zero & size).deflate(3);
+    final rect = (Offset.zero & size).deflate(_centerBadgeRingStrokeWidth / 2);
     final track = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
+      ..strokeWidth = _centerBadgeRingStrokeWidth
       ..strokeCap = StrokeCap.round
       ..color = trackColor;
     canvas.drawArc(rect, 0, 6.283185307179586, false, track);
     if (!showFill) return;
     final fill = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
+      ..strokeWidth = _centerBadgeRingStrokeWidth
       ..strokeCap = StrokeCap.round
       ..color = color;
     canvas.drawArc(

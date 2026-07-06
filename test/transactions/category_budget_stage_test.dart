@@ -637,7 +637,8 @@ void main() {
       expect(amountRect.top - surfaceRect.top, greaterThanOrEqualTo(43));
       expect(badgeRect.top, greaterThan(amountRect.bottom));
       expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
-      expect(badgeRect.top, moreOrLessEquals(surfaceRect.top + 72, epsilon: 1));
+      expect(badgeRect.top, greaterThanOrEqualTo(surfaceRect.top + 68));
+      expect(badgeRect.top, lessThanOrEqualTo(surfaceRect.top + 73));
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
       expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 10));
@@ -844,6 +845,30 @@ void main() {
     expect(
       tester.getSize(nextEdge).width,
       lessThan(tester.getSize(nextFarthest).width),
+    );
+    expect(
+      tester.getSize(previousEdge).width,
+      moreOrLessEquals(28 * 1.10, epsilon: 0.1),
+    );
+    expect(
+      tester.getSize(previousFarthest).width,
+      moreOrLessEquals(34 * 1.10, epsilon: 0.1),
+    );
+    expect(
+      tester.getSize(previousOuter).width,
+      moreOrLessEquals(40 * 1.10, epsilon: 0.1),
+    );
+    expect(
+      tester.getSize(previousInner).width,
+      moreOrLessEquals(48 * 1.10, epsilon: 0.1),
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey('backheader-center-budget-button')),
+          )
+          .width,
+      moreOrLessEquals(58 * 1.15, epsilon: 0.1),
     );
     expect(
       tester
@@ -1096,63 +1121,82 @@ void main() {
     },
   );
 
-  testWidgets('centerBadgeBudget progress ring is the badge border', (
-    tester,
-  ) async {
-    final bars = [
-      barFixture(6, 'Food', 10, 100),
-      barFixture(7, 'Travel', 20, 100),
-      barFixture(8, 'Books', 30, 100),
-      barFixture(9, 'Health', 40, 100),
-      barFixture(10, 'Home', 50, 100),
-      barFixture(11, 'Rent', 60, 100),
-      barFixture(12, 'Gifts', 70, 100),
-    ];
+  testWidgets(
+    'centerBadgeBudget progress and partition rings use border layers',
+    (tester) async {
+      final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+      ];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 340,
-            child: CategoryBudgetStage(
-              backheaderStyle: BackheaderStyle.centerBadgeBudget,
-              items: bars.map(BackheaderBudgetItem.category).toList(),
-              categoryBars: bars,
-              onItemTap: (_) {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerPartitionRingEnabled: true,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                overviewItems: [overview],
+                periodIncome: 1000,
+                onItemTap: (_) {},
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final activeFill = find.byKey(
-      const ValueKey('backheader-center-budget-button'),
-    );
-    final activeRing = find.byKey(
-      const ValueKey('backheader-center-progress-ring'),
-    );
-    expect(tester.getSize(activeRing), tester.getSize(activeFill));
+      final activeFill = find.byKey(
+        const ValueKey('backheader-center-budget-button'),
+      );
+      final activeRing = find.byKey(
+        const ValueKey('backheader-center-progress-ring'),
+      );
+      final activePartition = find.byKey(
+        const ValueKey('backheader-center-partition-ring'),
+      );
+      final activeFillSize = tester.getSize(activeFill);
+      final activeRingSize = tester.getSize(activeRing);
+      final activePartitionSize = tester.getSize(activePartition);
+      expect(activeFillSize.width, moreOrLessEquals(58 * 1.15, epsilon: 0.1));
+      expect(activeRingSize, activeFillSize);
+      expect(activePartitionSize.width, greaterThan(activeRingSize.width));
+      expect(
+        activePartitionSize.width - activeRingSize.width,
+        moreOrLessEquals(8 * 1.15, epsilon: 0.2),
+      );
 
-    final drag = await tester.startGesture(
-      tester.getCenter(
-        find.byKey(const ValueKey('backheader-experimental-surface')),
-      ),
-    );
-    await drag.moveBy(const Offset(-60, 0));
-    await tester.pump();
+      final drag = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('backheader-experimental-surface')),
+        ),
+      );
+      await drag.moveBy(const Offset(-60, 0));
+      await tester.pump();
 
-    final incomingFill = find.byKey(
-      const ValueKey('backheader-center-preview-fill-next-1'),
-    );
-    final incomingRing = find.byKey(
-      const ValueKey('backheader-center-preview-progress-ring-next-1'),
-    );
-    expect(tester.getSize(incomingRing), tester.getSize(incomingFill));
+      final incomingFill = find.byKey(
+        const ValueKey('backheader-center-preview-fill-next-1'),
+      );
+      final incomingRing = find.byKey(
+        const ValueKey('backheader-center-preview-progress-ring-next-1'),
+      );
+      final incomingFillSize = tester.getSize(incomingFill);
+      expect(incomingFillSize.width, lessThanOrEqualTo(activeFillSize.width));
+      expect(tester.getSize(incomingRing), incomingFillSize);
 
-    await drag.up();
-    await tester.pumpAndSettle();
-  });
+      await drag.up();
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('centerBadgeBudget badge icons do not use async placeholders', (
     tester,
