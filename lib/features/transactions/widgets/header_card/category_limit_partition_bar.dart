@@ -1,8 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../data/limit_allocation_manager.dart';
 import '../../data/limit_partition_manager.dart';
 import '../../models/category_budget_bar_data.dart';
 import '../../models/limit_allocation_data.dart';
@@ -74,13 +73,14 @@ class CategoryLimitPartitionBar extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (overviewLimit > 0) {
-              return Stack(
-                fit: StackFit.expand,
-                children: _budgetSegments(
+              return _AllocationPartitionBar(
+                allocation: LimitAllocationManager.build(
                   overviewLimit: overviewLimit,
-                  maxWidth: constraints.maxWidth,
-                  trackHeight: constraints.maxHeight,
+                  bars: _budgetBarsForAllocation(),
                 ),
+                height: height,
+                onSegmentTap: onSegmentTap,
+                fullBleedSquare: fullBleedSquare,
               );
             }
             final partitions = LimitPartitionManager.partitions(
@@ -106,65 +106,7 @@ class CategoryLimitPartitionBar extends StatelessWidget {
     );
   }
 
-  List<Widget> _budgetSegments({
-    required double overviewLimit,
-    required double maxWidth,
-    required double trackHeight,
-  }) {
-    final visible = _budgetBars()
-        .where((bar) => _limitAmountFor(bar) > 0)
-        .toList();
-    if (visible.isEmpty) return const [];
-    var left = 0.0;
-    final children = <Widget>[];
-    for (var i = 0; i < visible.length; i += 1) {
-      final bar = visible[i];
-      final limitAmount = _limitAmountFor(bar);
-      final usedAmount = math
-          .min(bar.spent, limitAmount)
-          .clamp(0.0, limitAmount);
-      final remainingAmount = (limitAmount - usedAmount).clamp(
-        0.0,
-        limitAmount,
-      );
-      final usedWidth = (maxWidth * usedAmount / overviewLimit)
-          .clamp(0.0, maxWidth - left)
-          .toDouble();
-      final remainingWidth = (maxWidth * remainingAmount / overviewLimit)
-          .clamp(0.0, maxWidth - left - usedWidth)
-          .toDouble();
-      if (usedWidth > 0) {
-        children.add(
-          Positioned(
-            key: ValueKey('category-limit-partition-segment-$i'),
-            left: left,
-            top: 0,
-            width: usedWidth,
-            height: trackHeight,
-            child: ColoredBox(color: bar.color),
-          ),
-        );
-        left += usedWidth;
-      }
-      if (remainingWidth > 0) {
-        children.add(
-          Positioned(
-            key: ValueKey('category-limit-partition-remaining-$i'),
-            left: left,
-            top: 0,
-            width: remainingWidth,
-            height: trackHeight,
-            child: ColoredBox(color: bar.color.withValues(alpha: 0.70)),
-          ),
-        );
-        left += remainingWidth;
-      }
-      if (left >= maxWidth) break;
-    }
-    return children;
-  }
-
-  List<CategoryBudgetBarData> _budgetBars() {
+  List<CategoryBudgetBarData> _budgetBarsForAllocation() {
     final active = activeBar;
     if (active == null) return bars;
     final result = <CategoryBudgetBarData>[];
@@ -178,15 +120,36 @@ class CategoryLimitPartitionBar extends StatelessWidget {
       }
     }
     if (!found) result.insert(0, active);
-    return result;
+    final amount = activeLimitAmount;
+    if (amount == null) return result;
+    return [
+      for (final bar in result)
+        _sameTarget(bar, active) ? _barWithLimit(bar, amount) : bar,
+    ];
   }
 
-  double _limitAmountFor(CategoryBudgetBarData bar) {
-    final active = activeBar;
-    if (active != null && _sameTarget(bar, active)) {
-      return activeLimitAmount ?? bar.limitAmount;
-    }
-    return bar.limitAmount;
+  CategoryBudgetBarData _barWithLimit(
+    CategoryBudgetBarData bar,
+    double amount,
+  ) {
+    final limitAmount = amount.clamp(0.0, double.infinity).toDouble();
+    return CategoryBudgetBarData(
+      key: bar.key,
+      targetType: bar.targetType,
+      targetId: bar.targetId,
+      transactionType: bar.transactionType,
+      window: bar.window,
+      periodKey: bar.periodKey,
+      title: bar.title,
+      spent: bar.spent,
+      hasLimit: limitAmount > 0,
+      limitAmount: limitAmount,
+      alertActive: limitAmount > 0,
+      color: bar.color,
+      iconSlot: bar.iconSlot,
+      category: bar.category,
+      sourceLimit: bar.sourceLimit,
+    );
   }
 
   bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {

@@ -7,7 +7,8 @@ enum MagnetType {
   nofade('nofade'),
   budget('budget'),
   magnetcard('magnetcard'),
-  adaptive('adaptive');
+  adaptive('adaptive'),
+  partitionedBudget('partitionedBudget');
 
   const MagnetType(this.nativeValue);
   final String nativeValue;
@@ -24,7 +25,8 @@ enum MagnetType {
 enum BackheaderStyle {
   classic('classic'),
   heroToken('heroToken'),
-  orbitBudget('orbitBudget');
+  orbitBudget('orbitBudget'),
+  centerBadgeBudget('centerBadgeBudget');
 
   const BackheaderStyle(this.nativeValue);
   final String nativeValue;
@@ -41,12 +43,15 @@ enum BackheaderStyle {
     BackheaderStyle.classic => 'Jelenlegi bar rendszer',
     BackheaderStyle.heroToken => 'C - Hero Token',
     BackheaderStyle.orbitBudget => 'D - Orbit Budget',
+    BackheaderStyle.centerBadgeBudget => 'E - Center Badge Budget',
   };
 
   String get description => switch (this) {
     BackheaderStyle.classic => 'A mostani kategória/overview bar rendszer',
     BackheaderStyle.heroToken => 'Nagy aktív kategória token mini partitionnel',
     BackheaderStyle.orbitBudget => 'Kategóriaszínű orbit/ring budget nézet',
+    BackheaderStyle.centerBadgeBudget =>
+      'Középső limit/budget badge élő progress ringgel',
   };
 }
 

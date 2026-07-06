@@ -22,6 +22,7 @@ void main() {
     expect(find.text('Jelenlegi bar rendszer (jelenlegi)'), findsOneWidget);
     expect(find.text('C - Hero Token'), findsOneWidget);
     expect(find.text('D - Orbit Budget'), findsOneWidget);
+    expect(find.text('E - Center Badge Budget'), findsOneWidget);
     expect(find.text('A - Color Field Partition'), findsNothing);
     expect(find.text('B - Partition Dashboard'), findsNothing);
     expect(find.text('E - Mosaic Budget'), findsNothing);
@@ -36,6 +37,10 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('backheader-style-preview-orbitBudget')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('backheader-style-preview-centerBadgeBudget')),
       findsOneWidget,
     );
   });
@@ -57,5 +62,10 @@ void main() {
     await tester.pump();
 
     expect(updated?.backheaderStyle, BackheaderStyle.orbitBudget);
+
+    await tester.tap(find.text('E - Center Badge Budget'));
+    await tester.pump();
+
+    expect(updated?.backheaderStyle, BackheaderStyle.centerBadgeBudget);
   });
 }

@@ -54,6 +54,29 @@ class BackheaderStylePreview extends StatelessWidget {
           _miniStrip(light: true),
         ],
       ),
+      BackheaderStyle.centerBadgeBudget => Stack(
+        alignment: Alignment.center,
+        children: [
+          const Positioned(top: 0, left: 0, child: _MiniAmount()),
+          Container(
+            width: 25,
+            height: 25,
+            decoration: BoxDecoration(
+              color: const Color(0xFF22C55E),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF59E0B), width: 2),
+            ),
+          ),
+          const Positioned(
+            right: 0,
+            bottom: 0,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [_MiniDot(), SizedBox(width: 3), _MiniDot()],
+            ),
+          ),
+        ],
+      ),
       BackheaderStyle.classic => Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -102,6 +125,37 @@ class BackheaderStylePreview extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MiniAmount extends StatelessWidget {
+  const _MiniAmount();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 5,
+      decoration: BoxDecoration(
+        color: AppColors.gray800,
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+}
+
+class _MiniDot extends StatelessWidget {
+  const _MiniDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.gray800,
+        shape: BoxShape.circle,
+      ),
+      child: SizedBox(width: 7, height: 7),
     );
   }
 }

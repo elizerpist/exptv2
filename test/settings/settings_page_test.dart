@@ -510,6 +510,33 @@ void main() {
     expect(updated.last.appColor, AppColorMode.pink);
   });
 
+  testWidgets('theme menu exposes partitioned magnet as separate option', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final updated = <AppThemeSettings>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ThemeOptionsPanel(
+          settings: AppThemeSettings.defaults(),
+          onChanged: updated.add,
+        ),
+      ),
+    );
+
+    expect(find.text('Budget vizualizáció'), findsOneWidget);
+    expect(find.text('Partitioned budget mágnescsík'), findsOneWidget);
+
+    await tester.tap(find.text('Partitioned budget mágnescsík'));
+    await tester.pump();
+
+    expect(updated.single.magnetType, MagnetType.partitionedBudget);
+  });
+
   testWidgets('permissions menu opens Android permission actions', (
     tester,
   ) async {

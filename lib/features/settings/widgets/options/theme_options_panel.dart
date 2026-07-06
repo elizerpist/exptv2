@@ -59,6 +59,19 @@ class ThemeOptionsPanel extends StatelessWidget {
               ),
               SettingsRadioOption(
                 title:
+                    'Partitioned budget mágnescsík${settings.magnetType == MagnetType.partitionedBudget ? ' (jelenlegi)' : ''}',
+                description:
+                    'Budget partition szegmensek az eredeti mágnescsík formában',
+                selected: settings.magnetType == MagnetType.partitionedBudget,
+                onTap: () => onChanged(
+                  settings.copyWith(magnetType: MagnetType.partitionedBudget),
+                ),
+                preview: const _MagnetPreview(
+                  type: MagnetType.partitionedBudget,
+                ),
+              ),
+              SettingsRadioOption(
+                title:
                     'Mágneskártya${settings.magnetType == MagnetType.magnetcard ? ' (jelenlegi)' : ''}',
                 description:
                     'Felső és alsó keret, egyenes vonal az egyenleg színével',

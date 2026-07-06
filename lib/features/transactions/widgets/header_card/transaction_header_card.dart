@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
+import '../../models/limit_allocation_data.dart';
 import 'magnet_strip.dart';
 import 'transaction_header_metrics.dart';
 
@@ -22,6 +23,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.totalIncome = 0,
     this.totalExpense = 0,
     this.budgetProgress,
+    this.budgetAllocation,
     this.fastInfoVisible = false,
     this.balanceHidden = false,
     this.drawSurface = true,
@@ -44,6 +46,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final double totalIncome;
   final double totalExpense;
   final BudgetStripProgress? budgetProgress;
+  final LimitAllocationData? budgetAllocation;
   final bool fastInfoVisible;
   final bool balanceHidden;
   final bool drawSurface;
@@ -127,6 +130,7 @@ class TransactionHeaderCard extends StatelessWidget {
                   accent: accent,
                   height: TransactionHeaderMetrics.magnetHeight,
                   budgetProgress: budgetProgress,
+                  budgetAllocation: budgetAllocation,
                 ),
               ),
             ),

@@ -254,8 +254,8 @@ void main() {
         find.byKey(ValueKey('backheader-style-${style.nativeValue}')),
         findsOneWidget,
       );
-      expect(find.text('Food'), findsOneWidget);
       if (style == BackheaderStyle.orbitBudget) {
+        expect(find.text('Food'), findsOneWidget);
         expect(
           find.byKey(const ValueKey('backheader-orbit-limit-pill')),
           findsOneWidget,
@@ -273,7 +273,18 @@ void main() {
           find.byKey(const ValueKey('backheader-orbit-amount-input')),
         );
         expect(input.controller!.text, '150');
+      } else if (style == BackheaderStyle.centerBadgeBudget) {
+        expect(
+          find.byKey(const ValueKey('backheader-center-budget-button')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('backheader-center-progress-ring')),
+          findsOneWidget,
+        );
+        expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
       } else {
+        expect(find.text('Food'), findsOneWidget);
         expect(find.text('100 Ft / 150 Ft'), findsOneWidget);
       }
     }
@@ -422,6 +433,240 @@ void main() {
     expect(find.text('Food'), findsOneWidget);
     expect(find.text('/'), findsOneWidget);
     expect(find.text('100 Ft'), findsOneWidget);
+  });
+
+  testWidgets(
+    'centerBadgeBudget renders requested badge layout and opens sheet tap',
+    (tester) async {
+      final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
+      final food = barFixture(6, 'Food', 100, 500);
+      final travel = barFixture(7, 'Travel', 40, 0);
+      BackheaderBudgetItem? tapped;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                backgroundColor: const Color(0xfff8fafc),
+                items: [
+                  BackheaderBudgetItem.overview(overview),
+                  BackheaderBudgetItem.category(food),
+                  BackheaderBudgetItem.category(travel),
+                ],
+                categoryBars: [food, travel],
+                overviewItems: [overview],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                periodIncome: 1000,
+                onItemTap: (item) => tapped = item,
+                onSaveOverview:
+                    (_, {required limitAmount, required alertActive}) async {},
+                onSaveCategory:
+                    (_, {required limitAmount, required alertActive}) async {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final surface = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      final decoration = surface.decoration as BoxDecoration;
+      expect(decoration.color, const Color(0xfff8fafc));
+      expect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
+        findsNothing,
+      );
+
+      final amount = tester.widget<Text>(
+        find.byKey(const ValueKey('backheader-center-badge-amount')),
+      );
+      expect(amount.data, '100 Ft / 500 Ft');
+      expect(amount.style?.fontSize, 13);
+      expect(amount.style?.color, AppColors.gray800);
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-reset-action')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-max-action')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-previous')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect(tapped?.category?.title, 'Food');
+    },
+  );
+
+  testWidgets('centerBadgeBudget carousel previews tap and fast swipe skips', (
+    tester,
+  ) async {
+    final bars = [
+      barFixture(6, 'Food', 10, 100),
+      barFixture(7, 'Travel', 20, 100),
+      barFixture(8, 'Books', 30, 100),
+      barFixture(9, 'Health', 40, 100),
+      barFixture(10, 'Home', 50, 100),
+    ];
+    final selected = <String>[];
+
+    Future<void> pumpStage() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onActiveItemChanged: (item) => selected.add(item.title),
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await pumpStage();
+    await tester.tap(
+      find.byKey(const ValueKey('backheader-center-preview-next')),
+    );
+    await tester.pumpAndSettle();
+    expect(selected.last, 'Travel');
+
+    selected.clear();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpStage();
+    await tester.fling(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+      const Offset(-360, 0),
+      2600,
+    );
+    await tester.pumpAndSettle();
+
+    expect(selected.last, 'Health');
+  });
+
+  testWidgets('centerBadgeBudget badge joystick adjusts limit live', (
+    tester,
+  ) async {
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 5000);
+    final food = barFixture(6, 'Food', 100, 500);
+    final savedAmounts = <double>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (bar, {required limitAmount, required alertActive}) async {
+                    savedAmounts.add(limitAmount);
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final button = find.byKey(
+      const ValueKey('backheader-center-budget-button'),
+    );
+    final start = tester.getCenter(button);
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 620));
+    await gesture.moveTo(start.translate(0, -150));
+    await tester.pump(const Duration(milliseconds: 320));
+
+    final amount = tester.widget<Text>(
+      find.byKey(const ValueKey('backheader-center-badge-amount')),
+    );
+    expect(amount.data, isNot('100 Ft / 500 Ft'));
+
+    await gesture.up();
+    await tester.pump();
+    expect(savedAmounts, isNotEmpty);
+  });
+
+  testWidgets('centerBadgeBudget handle expands remaining amount and closes', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 500);
+    var closeRequests = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 420,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              onItemTap: (_) {},
+              onOrbitCloseRequested: () => closeRequests += 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final handle = find.byKey(const ValueKey('backheader-center-handle'));
+    expect(handle, findsOneWidget);
+
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(0, 30));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('backheader-center-remaining-amount')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('400 Ft'), findsOneWidget);
+
+    await gesture.moveBy(const Offset(0, 40));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(closeRequests, 1);
   });
 
   testWidgets('orbitBudget stage height follows header card height metric', (

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../data/limit_manager.dart';
+import '../../models/limit_allocation_data.dart';
 
 class BudgetStripProgress {
   const BudgetStripProgress({
@@ -34,6 +35,7 @@ class MagnetStrip extends StatelessWidget {
     this.height = defaultHeight,
     this.accent = AppColors.primary,
     this.budgetProgress,
+    this.budgetAllocation,
   });
 
   final MagnetType type;
@@ -42,6 +44,7 @@ class MagnetStrip extends StatelessWidget {
   final double height;
   final Color accent;
   final BudgetStripProgress? budgetProgress;
+  final LimitAllocationData? budgetAllocation;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +60,13 @@ class MagnetStrip extends StatelessWidget {
             progress: budgetProgress,
           );
         }
+        if (type == MagnetType.partitionedBudget) {
+          return _PartitionedBudgetMagnetStrip(
+            width: width,
+            height: height,
+            allocation: budgetAllocation,
+          );
+        }
         return CustomPaint(
           key: ValueKey('magnet-strip-${type.nativeValue}'),
           size: Size(width, height),
@@ -68,6 +78,82 @@ class MagnetStrip extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _PartitionedBudgetMagnetStrip extends StatelessWidget {
+  const _PartitionedBudgetMagnetStrip({
+    required this.width,
+    required this.height,
+    required this.allocation,
+  });
+
+  final double width;
+  final double height;
+  final LimitAllocationData? allocation;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = allocation;
+    if (resolved == null || resolved.segments.isEmpty) {
+      return SizedBox(
+        key: const ValueKey('magnet-strip-partitionedBudget'),
+        width: width,
+        height: height,
+      );
+    }
+    final trackHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.partitionedBudget,
+      height,
+    );
+    return SizedBox(
+      key: const ValueKey('magnet-strip-partitionedBudget'),
+      width: width,
+      height: height,
+      child: Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: DecoratedBox(
+            key: const ValueKey('magnet-partitioned-budget-track'),
+            decoration: const BoxDecoration(color: AppColors.gray200),
+            child: SizedBox(
+              width: width,
+              height: trackHeight,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  var left = 0.0;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      for (var i = 0; i < resolved.segments.length; i += 1)
+                        () {
+                          final segment = resolved.segments[i];
+                          final segmentWidth =
+                              (constraints.maxWidth * segment.fraction)
+                                  .clamp(0.0, constraints.maxWidth - left)
+                                  .toDouble();
+                          final child = Positioned(
+                            key: ValueKey(
+                              'magnet-partitioned-budget-segment-$i',
+                            ),
+                            left: left,
+                            top: 0,
+                            width: segmentWidth,
+                            bottom: 0,
+                            child: ColoredBox(color: segment.color),
+                          );
+                          left += segmentWidth;
+                          return child;
+                        }(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -165,6 +251,11 @@ class MagnetStripPainter extends CustomPainter {
       MagnetType.budget => const [AppColors.expense, AppColors.income],
       MagnetType.magnetcard => const [AppColors.gray500, AppColors.gray500],
       MagnetType.adaptive => const [AppColors.income, AppColors.income],
+      MagnetType.partitionedBudget => const [
+        AppColors.income,
+        Color(0xFFF59E0B),
+        AppColors.expense,
+      ],
       MagnetType.fade => const [AppColors.income, AppColors.expense],
     };
   }
@@ -206,7 +297,7 @@ class MagnetStripPainter extends CustomPainter {
       return;
     }
 
-    if (type == MagnetType.budget) {
+    if (type == MagnetType.budget || type == MagnetType.partitionedBudget) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(2)),
         Paint()

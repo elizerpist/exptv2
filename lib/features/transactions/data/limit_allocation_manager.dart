@@ -20,11 +20,15 @@ class LimitAllocationManager {
       );
     }
 
-    final visibleBars = bars.where((bar) => bar.limitAmount > 0).toList();
     final segments = <LimitAllocationSegment>[];
     var allocated = 0.0;
-    for (final bar in visibleBars) {
-      final limit = bar.limitAmount.clamp(0.0, overviewLimit).toDouble();
+
+    for (final bar in bars.where((bar) => bar.limitAmount > 0)) {
+      final available = (overviewLimit - allocated)
+          .clamp(0.0, overviewLimit)
+          .toDouble();
+      if (available <= 0) break;
+      final limit = bar.limitAmount.clamp(0.0, available).toDouble();
       final used = math.min(bar.spent, limit).clamp(0.0, limit).toDouble();
       final remaining = (limit - used).clamp(0.0, limit).toDouble();
       allocated += limit;
@@ -53,7 +57,31 @@ class LimitAllocationManager {
         );
       }
     }
-    final free = (overviewLimit - allocated).clamp(0.0, overviewLimit).toDouble();
+
+    for (final bar in bars.where(
+      (bar) => bar.limitAmount <= 0 && bar.spent > 0,
+    )) {
+      final available = (overviewLimit - allocated)
+          .clamp(0.0, overviewLimit)
+          .toDouble();
+      if (available <= 0) break;
+      final used = bar.spent.clamp(0.0, available).toDouble();
+      allocated += used;
+      segments.add(
+        LimitAllocationSegment(
+          kind: LimitAllocationSegmentKind.unlimitedUsed,
+          amount: used,
+          fraction: used / overviewLimit,
+          color: bar.color,
+          targetId: bar.targetId,
+          label: bar.title,
+        ),
+      );
+    }
+
+    final free = (overviewLimit - allocated)
+        .clamp(0.0, overviewLimit)
+        .toDouble();
     if (free > 0) {
       segments.add(
         LimitAllocationSegment(
@@ -110,7 +138,10 @@ class LimitAllocationManager {
     return math.max(1, (max / sliderStep).ceil()).toInt();
   }
 
-  static bool _sameTarget(CategoryBudgetBarData left, CategoryBudgetBarData right) {
+  static bool _sameTarget(
+    CategoryBudgetBarData left,
+    CategoryBudgetBarData right,
+  ) {
     return left.targetType == right.targetType &&
         left.targetId == right.targetId &&
         left.transactionType == right.transactionType &&

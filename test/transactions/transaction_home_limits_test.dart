@@ -422,6 +422,62 @@ void main() {
     expect(decoration.color, const Color(0xffff8800));
   });
 
+  testWidgets('partitioned magnet strip uses shared budget allocation', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    repository.transactions.add(
+      TransactionRecord.fromMap({
+        'id': 3,
+        'date': '2026.05.08',
+        'time': '11:00',
+        'merchant': 'Train',
+        'amount': -300,
+        'userAssignedName': null,
+        'transactionCategoryID': 7,
+      }),
+    );
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    final budgetTheme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        magnetType: MagnetType.partitionedBudget,
+      ),
+    );
+
+    await pumpExpandedMonthlyHome(tester, store, expenseTheme: budgetTheme);
+
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-partitioned-budget-track')),
+    );
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey('magnet-partitioned-budget-segment-0')),
+          )
+          .width,
+      moreOrLessEquals(trackRect.width * 0.10, epsilon: 0.5),
+    );
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey('magnet-partitioned-budget-segment-1')),
+          )
+          .width,
+      moreOrLessEquals(trackRect.width * 0.15, epsilon: 0.5),
+    );
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey('magnet-partitioned-budget-segment-2')),
+          )
+          .width,
+      moreOrLessEquals(trackRect.width * 0.30, epsilon: 0.5),
+    );
+  });
+
   testWidgets('budget end button saves period income as overview limit', (
     tester,
   ) async {

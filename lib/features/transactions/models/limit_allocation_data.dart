@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum LimitAllocationSegmentKind { used, remaining, free }
+enum LimitAllocationSegmentKind { used, remaining, unlimitedUsed, free }
 
 class LimitAllocationSegment {
   const LimitAllocationSegment({

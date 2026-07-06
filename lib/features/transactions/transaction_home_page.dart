@@ -8,8 +8,10 @@ import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
+import 'data/limit_allocation_manager.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
+import 'models/budget_goal_kind.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
@@ -23,6 +25,7 @@ import 'widgets/header_card/header_fast_info_surface.dart';
 import 'widgets/header_card/magnet_strip.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
+import 'models/limit_allocation_data.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/slide_up_menu_card.dart';
 import 'widgets/slide_up_panel_metrics.dart';
@@ -660,6 +663,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         totalIncome: widget.store.activePeriodIncomeTotal,
         totalExpense: widget.store.activePeriodExpenseTotal,
         budgetProgress: _headerBudgetProgress(),
+        budgetAllocation: _headerBudgetAllocation(),
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
         drawSurface: drawSurface,
@@ -702,6 +706,21 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       spent: category.spent,
       limitAmount: category.limitAmount,
     );
+  }
+
+  LimitAllocationData? _headerBudgetAllocation() {
+    for (final overview in widget.store.overviewBudgetItems) {
+      if (overview.kind != BudgetGoalKind.expenseBudget ||
+          !overview.hasLimit ||
+          overview.limitAmount <= 0) {
+        continue;
+      }
+      return LimitAllocationManager.build(
+        overviewLimit: overview.limitAmount,
+        bars: widget.store.categoryBudgetBars,
+      );
+    }
+    return null;
   }
 
   BackheaderBudgetItem? _activeBackheaderItem() {

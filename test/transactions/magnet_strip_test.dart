@@ -1,5 +1,6 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/transactions/models/limit_allocation_data.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -147,5 +148,94 @@ void main() {
       moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
     );
     expect(decoration.color, const Color(0xffff8800));
+  });
+
+  testWidgets('partitioned magnet renders allocation in original strip shape', (
+    tester,
+  ) async {
+    const allocation = LimitAllocationData(
+      overviewLimit: 1000,
+      allocatedAmount: 800,
+      freeAmount: 200,
+      segments: [
+        LimitAllocationSegment(
+          kind: LimitAllocationSegmentKind.used,
+          amount: 250,
+          fraction: 0.25,
+          color: Color(0xff22c55e),
+          targetId: 6,
+        ),
+        LimitAllocationSegment(
+          kind: LimitAllocationSegmentKind.remaining,
+          amount: 250,
+          fraction: 0.25,
+          color: Color(0xb322c55e),
+          targetId: 6,
+        ),
+        LimitAllocationSegment(
+          kind: LimitAllocationSegmentKind.unlimitedUsed,
+          amount: 300,
+          fraction: 0.30,
+          color: Color(0xffec4899),
+          targetId: 8,
+        ),
+        LimitAllocationSegment(
+          kind: LimitAllocationSegmentKind.free,
+          amount: 200,
+          fraction: 0.20,
+          color: AppColors.gray200,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: MagnetStrip(
+              type: MagnetType.partitionedBudget,
+              totalIncome: 0,
+              totalExpense: 0,
+              height: 35,
+              budgetAllocation: allocation,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-partitioned-budget-track')),
+    );
+    final track = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('magnet-partitioned-budget-track')),
+    );
+    final decoration = track.decoration as BoxDecoration;
+
+    expect(
+      trackRect.height,
+      moreOrLessEquals(
+        MagnetStripPainter.visualTrackHeight(MagnetType.partitionedBudget, 35),
+        epsilon: 0.1,
+      ),
+    );
+    expect(decoration.border, isNull);
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey('magnet-partitioned-budget-segment-0')),
+          )
+          .width,
+      moreOrLessEquals(trackRect.width * 0.25, epsilon: 0.5),
+    );
+    expect(
+      tester
+          .getRect(
+            find.byKey(const ValueKey('magnet-partitioned-budget-segment-2')),
+          )
+          .width,
+      moreOrLessEquals(trackRect.width * 0.30, epsilon: 0.5),
+    );
   });
 }
