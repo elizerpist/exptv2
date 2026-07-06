@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/data/limit_allocation_manager.dart';
@@ -636,7 +637,7 @@ void main() {
       expect(amountRect.top - surfaceRect.top, greaterThanOrEqualTo(43));
       expect(badgeRect.top, greaterThan(amountRect.bottom));
       expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
-      expect(badgeRect.top, moreOrLessEquals(surfaceRect.top + 73, epsilon: 1));
+      expect(badgeRect.top, moreOrLessEquals(surfaceRect.top + 72, epsilon: 1));
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
       expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 10));
@@ -646,6 +647,43 @@ void main() {
       );
     },
   );
+
+  testWidgets('centerBadgeBudget shows the active period in the top right', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 500);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              periodLabel: '2026 július',
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final surfaceRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+    );
+    final periodFinder = find.byKey(
+      const ValueKey('backheader-center-period-label'),
+    );
+    expect(periodFinder, findsOneWidget);
+    expect(tester.widget<Text>(periodFinder).data, '2026 július');
+    final periodRect = tester.getRect(periodFinder);
+    expect(periodRect.right, lessThanOrEqualTo(surfaceRect.right - 23));
+    expect(periodRect.top - surfaceRect.top, lessThanOrEqualTo(28));
+  });
 
   testWidgets('centerBadgeBudget partition ring follows pending amount map', (
     tester,
@@ -902,6 +940,18 @@ void main() {
         find.byKey(const ValueKey('backheader-center-preview-next-3')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(
+          const ValueKey('backheader-center-preview-next-1-category-7'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('backheader-center-preview-previous-1-category-12'),
+        ),
+        findsOneWidget,
+      );
 
       final initialCenter = tester.getCenter(
         find.byKey(const ValueKey('backheader-center-budget-button')),
@@ -972,6 +1022,70 @@ void main() {
     },
   );
 
+  testWidgets('centerBadgeBudget keeps active item stable while drag is held', (
+    tester,
+  ) async {
+    final bars = [
+      barFixture(6, 'Food', 10, 100),
+      barFixture(7, 'Travel', 20, 100),
+      barFixture(8, 'Books', 30, 100),
+      barFixture(9, 'Health', 40, 100),
+      barFixture(10, 'Home', 50, 100),
+      barFixture(11, 'Rent', 60, 100),
+      barFixture(12, 'Gifts', 70, 100),
+    ];
+    final selected = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onActiveItemChanged: (item) => selected.add(item.title),
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final drag = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+      ),
+    );
+    await drag.moveBy(const Offset(-150, 0));
+    await tester.pump();
+
+    expect(selected, isEmpty);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-title')),
+          )
+          .data,
+      'Food',
+    );
+
+    await drag.up();
+    await tester.pumpAndSettle();
+
+    expect(selected, ['Travel', 'Books']);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('backheader-center-badge-title')),
+          )
+          .data,
+      'Books',
+    );
+  });
+
   testWidgets(
     'centerBadgeBudget fast short fling keeps spinning after release',
     (tester) async {
@@ -1018,6 +1132,57 @@ void main() {
       expect(selected, ['Travel', 'Books', 'Health']);
     },
   );
+
+  testWidgets('centerBadgeBudget writes copyable carousel diagnostics', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    final bars = [
+      barFixture(6, 'Food', 10, 100),
+      barFixture(7, 'Travel', 20, 100),
+      barFixture(8, 'Books', 30, 100),
+      barFixture(9, 'Health', 40, 100),
+      barFixture(10, 'Home', 50, 100),
+      barFixture(11, 'Rent', 60, 100),
+      barFixture(12, 'Gifts', 70, 100),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: bars.map(BackheaderBudgetItem.category).toList(),
+              categoryBars: bars,
+              onActiveItemChanged: (_) {},
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.fling(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+      const Offset(-92, 0),
+      2600,
+    );
+    await tester.pumpAndSettle();
+
+    final logs = DebugConsole.entries
+        .where((entry) => entry.contains('[CenterCarousel]'))
+        .join('\n');
+    expect(logs, contains('down pointer='));
+    expect(logs, contains('accept dx='));
+    expect(logs, contains('move delta='));
+    expect(logs, contains('up accepted=true'));
+    expect(logs, contains('plan steps='));
+    expect(logs, contains('step start'));
+    expect(logs, contains('step end'));
+  });
 
   testWidgets('centerBadgeBudget badge joystick adjusts limit live', (
     tester,

@@ -38,6 +38,7 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerPartitionRingEnabled = false,
     this.centerPartitionAllocation,
     this.centerDragOffset = 0,
+    this.centerPeriodLabel,
     this.centerActions,
     this.centerPreviousFarthest,
     this.centerPreviousOuter,
@@ -88,6 +89,7 @@ class BackheaderStyleSurface extends StatelessWidget {
   final bool centerPartitionRingEnabled;
   final LimitAllocationData? centerPartitionAllocation;
   final double centerDragOffset;
+  final String? centerPeriodLabel;
   final Widget? centerActions;
   final BackheaderBudgetItem? centerPreviousFarthest;
   final BackheaderBudgetItem? centerPreviousOuter;
@@ -160,6 +162,7 @@ class BackheaderStyleSurface extends StatelessWidget {
               progressColor: centerProgressColor,
               partitionRingEnabled: centerPartitionRingEnabled,
               partitionAllocation: centerPartitionAllocation,
+              periodLabel: centerPeriodLabel,
               actions: centerActions,
               previousFarthest: centerPreviousFarthest,
               previousOuter: centerPreviousOuter,
@@ -500,6 +503,7 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.progressColor,
     required this.partitionRingEnabled,
     required this.partitionAllocation,
+    required this.periodLabel,
     required this.actions,
     required this.previousFarthest,
     required this.previousOuter,
@@ -535,6 +539,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   final Color progressColor;
   final bool partitionRingEnabled;
   final LimitAllocationData? partitionAllocation;
+  final String? periodLabel;
   final Widget? actions;
   final BackheaderBudgetItem? previousFarthest;
   final BackheaderBudgetItem? previousOuter;
@@ -564,9 +569,12 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 28;
+    final railTop = safeTop + 27;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
+    final periodColor = coloredDesign
+        ? AppColors.white.withValues(alpha: 0.9)
+        : AppColors.gray700;
     final handleColor = coloredDesign
         ? AppColors.white.withValues(alpha: 0.78)
         : AppColors.gray500.withValues(alpha: 0.72);
@@ -594,6 +602,25 @@ class _CenterBadgeBudget extends StatelessWidget {
             ),
           ),
         ),
+        if (periodLabel != null && periodLabel!.trim().isNotEmpty)
+          Positioned(
+            top: amountTop,
+            right: 24,
+            width: 104,
+            child: Text(
+              periodLabel!,
+              key: const ValueKey('backheader-center-period-label'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: periodColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                height: 1.05,
+              ),
+            ),
+          ),
         Positioned(
           top: railTop,
           left: 0,
@@ -857,11 +884,13 @@ class _CenterBadgeWheel extends StatelessWidget {
         ),
       );
     }
+    final slotName = _slotName(slot.offset);
     return Positioned(
+      key: ValueKey('backheader-center-preview-$slotName-${slot.item.key}'),
       left: left,
       top: top,
       child: _CenterPreviewBadge(
-        key: ValueKey('backheader-center-preview-${_slotName(slot.offset)}'),
+        key: ValueKey('backheader-center-preview-$slotName'),
         item: slot.item,
         coloredDesign: coloredDesign,
         size: slot.size,
