@@ -379,7 +379,7 @@ void main() {
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    final expectedTrackHeight = previousTrackHeight * 0.63;
+    final expectedTrackHeight = previousTrackHeight * 0.567;
     final expectedPartitionTop =
         TransactionHeaderMetrics.magnetTop +
         TransactionHeaderMetrics.magnetHeight / 2 -
@@ -441,6 +441,8 @@ void main() {
       final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 1000);
       final food = barFixture(6, 'Food', 100, 500);
       final travel = barFixture(7, 'Travel', 40, 0);
+      final books = barFixture(8, 'Books', 30, 100);
+      final health = barFixture(9, 'Health', 20, 100);
       BackheaderBudgetItem? tapped;
 
       await tester.pumpWidget(
@@ -456,8 +458,10 @@ void main() {
                   BackheaderBudgetItem.overview(overview),
                   BackheaderBudgetItem.category(food),
                   BackheaderBudgetItem.category(travel),
+                  BackheaderBudgetItem.category(books),
+                  BackheaderBudgetItem.category(health),
                 ],
-                categoryBars: [food, travel],
+                categoryBars: [food, travel, books, health],
                 overviewItems: [overview],
                 activeKey: BackheaderBudgetItem.category(food).key,
                 periodIncome: 1000,
@@ -527,11 +531,19 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('backheader-center-preview-previous')),
+        find.byKey(const ValueKey('backheader-center-preview-previous-2')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('backheader-center-preview-next')),
+        find.byKey(const ValueKey('backheader-center-preview-previous-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-2')),
         findsOneWidget,
       );
 
@@ -606,14 +618,14 @@ void main() {
 
       expect(amountRect.top - surfaceRect.top, greaterThanOrEqualTo(43));
       expect(badgeRect.top, greaterThan(amountRect.bottom));
-      expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(22));
+      expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
-      expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 2));
+      expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 6));
     },
   );
 
-  testWidgets('centerBadgeBudget carousel previews tap and fast swipe skips', (
+  testWidgets('centerBadgeBudget carousel renders five fading badge slots', (
     tester,
   ) async {
     final bars = [
@@ -647,10 +659,52 @@ void main() {
 
     await pumpStage();
     await tester.tap(
-      find.byKey(const ValueKey('backheader-center-preview-next')),
+      find.byKey(const ValueKey('backheader-center-preview-next-2')),
     );
     await tester.pumpAndSettle();
-    expect(selected.last, 'Travel');
+    expect(selected.last, 'Books');
+
+    final previousOuter = find.byKey(
+      const ValueKey('backheader-center-preview-previous-2'),
+    );
+    final previousInner = find.byKey(
+      const ValueKey('backheader-center-preview-previous-1'),
+    );
+    final nextInner = find.byKey(
+      const ValueKey('backheader-center-preview-next-1'),
+    );
+    final nextOuter = find.byKey(
+      const ValueKey('backheader-center-preview-next-2'),
+    );
+    expect(previousOuter, findsOneWidget);
+    expect(previousInner, findsOneWidget);
+    expect(nextInner, findsOneWidget);
+    expect(nextOuter, findsOneWidget);
+    expect(
+      tester.getSize(previousOuter).width,
+      lessThan(tester.getSize(previousInner).width),
+    );
+    expect(
+      tester.getSize(nextOuter).width,
+      lessThan(tester.getSize(nextInner).width),
+    );
+    expect(
+      tester
+          .widget<Opacity>(
+            find.descendant(of: previousOuter, matching: find.byType(Opacity)),
+          )
+          .opacity,
+      lessThan(
+        tester
+            .widget<Opacity>(
+              find.descendant(
+                of: previousInner,
+                matching: find.byType(Opacity),
+              ),
+            )
+            .opacity,
+      ),
+    );
 
     selected.clear();
     await tester.pumpWidget(const SizedBox.shrink());
@@ -672,6 +726,8 @@ void main() {
         barFixture(6, 'Food', 10, 100),
         barFixture(7, 'Travel', 20, 100),
         barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
       ];
 
       await tester.pumpWidget(
@@ -693,11 +749,19 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('backheader-center-preview-previous')),
+        find.byKey(const ValueKey('backheader-center-preview-previous-2')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('backheader-center-preview-next')),
+        find.byKey(const ValueKey('backheader-center-preview-previous-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-2')),
         findsOneWidget,
       );
 
@@ -710,11 +774,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 110));
 
       expect(
-        find.byKey(const ValueKey('backheader-center-preview-previous')),
+        find.byKey(const ValueKey('backheader-center-preview-previous-2')),
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey('backheader-center-preview-next')),
+        find.byKey(const ValueKey('backheader-center-preview-previous-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next-2')),
         findsNothing,
       );
       expect(
@@ -870,8 +942,61 @@ void main() {
     expect(savedAmounts.last, greaterThan(500));
   });
 
+  testWidgets('centerBadgeBudget tiny upward joystick pull stays slower', (
+    tester,
+  ) async {
+    final overview = overviewFixture(BudgetGoalKind.expenseBudget, 100, 50000);
+    final food = barFixture(6, 'Food', 100, 500);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: [
+                BackheaderBudgetItem.overview(overview),
+                BackheaderBudgetItem.category(food),
+              ],
+              categoryBars: [food],
+              overviewItems: [overview],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+              onSaveOverview:
+                  (_, {required limitAmount, required alertActive}) async {},
+              onSaveCategory:
+                  (_, {required limitAmount, required alertActive}) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final button = find.byKey(
+      const ValueKey('backheader-center-budget-button'),
+    );
+    final start = tester.getCenter(button);
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 620));
+    await gesture.moveTo(start.translate(0, -16));
+    await tester.pump(const Duration(milliseconds: 320));
+
+    final amount = tester.widget<Text>(
+      find.byKey(const ValueKey('backheader-center-badge-amount')),
+    );
+    final limitMatch = RegExp(r'/ ([\d ]+) Ft$').firstMatch(amount.data ?? '');
+    expect(limitMatch, isNotNull);
+    final limit = int.parse(limitMatch!.group(1)!.replaceAll(' ', ''));
+    expect(limit, lessThanOrEqualTo(3000));
+
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets(
-    'centerBadgeBudget short upward joystick pull accelerates limit',
+    'centerBadgeBudget far upward joystick pull keeps fast limit speed',
     (tester) async {
       final overview = overviewFixture(
         BudgetGoalKind.expenseBudget,
@@ -2474,7 +2599,7 @@ void main() {
     expect(savedAlert, isFalse);
   });
 
-  testWidgets('category limit editor slider updates the limit amount', (
+  testWidgets('category limit editor partition bar updates the limit amount', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -2500,15 +2625,33 @@ void main() {
       find.byKey(const ValueKey('category-limit-partition-bar')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('category-limit-slider')), findsOneWidget);
-
-    await tester.drag(
-      find.byKey(const ValueKey('category-limit-slider')),
-      const Offset(220, 0),
+    expect(find.byKey(const ValueKey('category-limit-slider')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('category-limit-partition-handle')),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
+
+    final barRect = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
+    );
+    await tester.tapAt(
+      Offset(barRect.left + barRect.width * 0.72, barRect.center.dy),
+    );
+    await tester.pump();
 
     expect(savedAmount, isNull);
+    final input = tester.widget<TextField>(
+      find.byKey(const ValueKey('limit-amount-input')),
+    );
+    expect(double.parse(input.controller!.text), greaterThan(0));
+    final handle = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-handle')),
+    );
+    expect(
+      handle.center.dx,
+      moreOrLessEquals(barRect.left + barRect.width * 0.72, epsilon: 8),
+    );
+
     await tester.tap(find.byKey(const ValueKey('limit-save-button')));
     await tester.pumpAndSettle();
 

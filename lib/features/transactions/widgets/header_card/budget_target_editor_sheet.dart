@@ -19,7 +19,6 @@ import '../slide_up_menu_card.dart';
 import '../slide_up_panel_metrics.dart';
 import '../themed_pill_field.dart';
 import 'category_limit_partition_bar.dart';
-import 'category_limit_slider.dart';
 
 class BudgetTargetEditorSheet extends StatefulWidget {
   const BudgetTargetEditorSheet({
@@ -172,17 +171,11 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                             inputLabel: _inputLabel,
                             activeColor: _activeColor(expenseTheme),
                             progressColor: expenseTheme.accent,
-                            sliderValue: _sliderRange.value,
-                            sliderMax: _sliderRange.max,
-                            sliderEnabled: _sliderRange.enabled,
-                            sliderDivisions: _sliderRange.divisions,
                             saving: _saving,
                             onPrevious: _selectPrevious,
                             onNext: _selectNext,
                             onAvatarDoubleTap: _selectOverviewItem,
                             onReset: _resetLimit,
-                            onSliderChanged: _setAmountFromSlider,
-                            onSliderChangeEnd: _setAmountFromSlider,
                             onInputChanged: _captureInputAmount,
                             onSetToMax: _setOverviewToMax,
                             showSetToMax: _activeItem.overview != null,
@@ -380,20 +373,69 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       overviewLimit: _overviewLimitAmount ?? 0,
       bars: _partitionBars,
     );
-    return CategoryLimitPartitionBar(
-      height: 18.8,
-      allocation: allocation,
-      onSegmentTap: _selectCategoryByTargetId,
+    final range = _sliderRange;
+    final handleRatio = range.max <= 0
+        ? 0.0
+        : (range.value / range.max).clamp(0.0, 1.0).toDouble();
+    return Builder(
+      builder: (context) {
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapUp: range.enabled
+              ? (details) => _setAmountFromPartitionPosition(
+                  context,
+                  details.globalPosition.dx,
+                )
+              : null,
+          onHorizontalDragUpdate: range.enabled
+              ? (details) => _setAmountFromPartitionPosition(
+                  context,
+                  details.globalPosition.dx,
+                )
+              : null,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const handleWidth = 12.0;
+              const handleHeight = 22.0;
+              final maxLeft = math.max(0.0, constraints.maxWidth - handleWidth);
+              final handleLeft =
+                  (constraints.maxWidth * handleRatio - handleWidth / 2)
+                      .clamp(0.0, maxLeft)
+                      .toDouble();
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CategoryLimitPartitionBar(
+                    height: 18.8,
+                    allocation: allocation,
+                  ),
+                  Positioned(
+                    key: const ValueKey('category-limit-partition-handle'),
+                    left: handleLeft,
+                    top: (18.8 - handleHeight) / 2,
+                    child: Container(
+                      width: handleWidth,
+                      height: handleHeight,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(handleWidth / 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            offset: const Offset(0, 1),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
-  }
-
-  void _selectCategoryByTargetId(int targetId) {
-    for (final item in _items) {
-      if (item.category?.targetId == targetId) {
-        _selectItem(item);
-        return;
-      }
-    }
   }
 
   void _selectItem(BackheaderBudgetItem item) {
@@ -422,6 +464,14 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
       amount,
     ).clamp(0.0, _sliderRange.max).toDouble();
     _setControllerAmount(snapped);
+  }
+
+  void _setAmountFromPartitionPosition(BuildContext context, double globalDx) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || box.size.width <= 0) return;
+    final localDx = box.globalToLocal(Offset(globalDx, 0)).dx;
+    final ratio = (localDx / box.size.width).clamp(0.0, 1.0).toDouble();
+    _setAmountFromSlider(_sliderRange.max * ratio);
   }
 
   void _setOverviewToMax() {
@@ -625,17 +675,11 @@ class _BudgetLimitCard extends StatelessWidget {
     required this.inputLabel,
     required this.activeColor,
     required this.progressColor,
-    required this.sliderValue,
-    required this.sliderMax,
-    required this.sliderEnabled,
-    required this.sliderDivisions,
     required this.saving,
     required this.onPrevious,
     required this.onNext,
     required this.onAvatarDoubleTap,
     required this.onReset,
-    required this.onSliderChanged,
-    required this.onSliderChangeEnd,
     required this.onInputChanged,
     required this.onSetToMax,
     required this.showSetToMax,
@@ -651,17 +695,11 @@ class _BudgetLimitCard extends StatelessWidget {
   final String inputLabel;
   final Color activeColor;
   final Color progressColor;
-  final double sliderValue;
-  final double sliderMax;
-  final bool sliderEnabled;
-  final int sliderDivisions;
   final bool saving;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onAvatarDoubleTap;
   final VoidCallback onReset;
-  final ValueChanged<double> onSliderChanged;
-  final ValueChanged<double> onSliderChangeEnd;
   final ValueChanged<String> onInputChanged;
   final VoidCallback onSetToMax;
   final bool showSetToMax;
@@ -753,16 +791,7 @@ class _BudgetLimitCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         partitionBar,
-        const SizedBox(height: 14),
-        CategoryLimitSlider(
-          value: sliderValue,
-          max: sliderMax,
-          divisions: sliderDivisions,
-          activeColor: activeColor,
-          enabled: sliderEnabled,
-          onChanged: onSliderChanged,
-          onChangeEnd: onSliderChangeEnd,
-        ),
+        const SizedBox(height: 18),
         if (saving)
           SizedBox(
             height: 2,

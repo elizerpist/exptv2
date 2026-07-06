@@ -351,9 +351,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final isOrbitBudget = widget.backheaderStyle == BackheaderStyle.orbitBudget;
     final isCenterBadgeBudget =
         widget.backheaderStyle == BackheaderStyle.centerBadgeBudget;
-    final previousIndex = _previousIndex(items);
-    final nextIndex = _nextIndex(items);
     Widget surfaceFor(BackheaderBudgetItem item, {bool preview = false}) {
+      final showCenterPreviews = isCenterBadgeBudget && !preview;
       return BackheaderStyleSurface(
         style: widget.backheaderStyle,
         current: item,
@@ -386,22 +385,34 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerActions: isCenterBadgeBudget && !preview
             ? _buildCenterActions(item)
             : null,
-        centerPrevious: isCenterBadgeBudget && !preview && items.length > 1
-            ? items[previousIndex]
+        centerPreviousOuter: showCenterPreviews
+            ? _centerNeighborAtOffset(items, -2)
             : null,
-        centerNext: isCenterBadgeBudget && !preview && items.length > 1
-            ? items[nextIndex]
+        centerPreviousInner: showCenterPreviews
+            ? _centerNeighborAtOffset(items, -1)
+            : null,
+        centerNextInner: showCenterPreviews
+            ? _centerNeighborAtOffset(items, 1)
+            : null,
+        centerNextOuter: showCenterPreviews
+            ? _centerNeighborAtOffset(items, 2)
             : null,
         centerWheelDirection: isCenterBadgeBudget ? _centerWheelDirection : 0,
         centerWheelToken: isCenterBadgeBudget ? _centerWheelToken : 0,
         centerWheelFrom: isCenterBadgeBudget ? _centerWheelFrom : null,
         centerWheelTo: isCenterBadgeBudget ? _centerWheelTo : null,
         centerExpandedExtent: isCenterBadgeBudget ? _orbitClosePull : 0,
-        onCenterPreviousTap: isCenterBadgeBudget && !preview
-            ? () => _selectCenterPreviewIndex(previousIndex)
+        onCenterPreviousOuterTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(-2)
             : null,
-        onCenterNextTap: isCenterBadgeBudget && !preview
-            ? () => _selectCenterPreviewIndex(nextIndex)
+        onCenterPreviousInnerTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(-1)
+            : null,
+        onCenterNextInnerTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(1)
+            : null,
+        onCenterNextOuterTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(2)
             : null,
         onCenterBadgeLongPressStart: isCenterBadgeBudget && !preview
             ? (details) => _handleCenterBadgeLongPressStart(item, details)
@@ -601,14 +612,16 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     return true;
   }
 
-  int _previousIndex(List<BackheaderBudgetItem> items) {
-    if (items.isEmpty) return 0;
-    return _index == 0 ? items.length - 1 : _index - 1;
-  }
-
-  int _nextIndex(List<BackheaderBudgetItem> items) {
-    if (items.isEmpty) return 0;
-    return (_index + 1) % items.length;
+  BackheaderBudgetItem? _centerNeighborAtOffset(
+    List<BackheaderBudgetItem> items,
+    int offset,
+  ) {
+    if (offset == 0 || items.length < 2) return null;
+    if (offset.abs() == 2 && items.length < 5) return null;
+    final rawIndex = (_index + offset) % items.length;
+    final normalizedIndex = rawIndex < 0 ? rawIndex + items.length : rawIndex;
+    final item = items[normalizedIndex];
+    return item.key == items[_index].key ? null : item;
   }
 
   List<BackheaderBudgetItem> get _items {
@@ -809,7 +822,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    return math.max(2.0, previousTrackHeight * 0.63);
+    return math.max(2.0, previousTrackHeight * 0.567);
   }
 
   double _orbitOverviewLimitAmount(BackheaderBudgetItem current) {
@@ -1108,7 +1121,15 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final normalized = (activeDistance / 52).clamp(0.0, 1.0).toDouble();
     final parabolicBoost = normalized * normalized;
     final multiplier = (1 + parabolicBoost * 9).round().clamp(1, 10);
-    return _CenterJoystickSpeed(stepMultiplier: multiplier, tickStride: 1);
+    final tickStride = activeDistance < 18
+        ? 3
+        : activeDistance < 28
+        ? 2
+        : 1;
+    return _CenterJoystickSpeed(
+      stepMultiplier: multiplier,
+      tickStride: tickStride,
+    );
   }
 
   LimitSliderRange _orbitSliderRangeFor(BackheaderBudgetItem item) {
@@ -1513,24 +1534,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     widget.onActiveItemChanged?.call(items[nextIndex]);
   }
 
-  void _selectCenterPreviewIndex(int nextIndex) {
+  void _selectCenterPreviewOffset(int offset) {
     if (_settling) return;
-    final items = _items;
-    if (nextIndex < 0 || nextIndex >= items.length || nextIndex == _index) {
-      return;
-    }
-    final previousIndex = _previousIndex(items);
-    final nextItemIndex = _nextIndex(items);
-    if (nextIndex == previousIndex) {
-      unawaited(_tickCenterCarouselBySteps(steps: 1, swipedLeft: false));
-      return;
-    }
-    if (nextIndex == nextItemIndex) {
-      unawaited(_tickCenterCarouselBySteps(steps: 1, swipedLeft: true));
-      return;
-    }
-    HapticFeedback.selectionClick();
-    _selectOrbitIndex(nextIndex);
+    if (offset == 0) return;
+    unawaited(
+      _tickCenterCarouselBySteps(steps: offset.abs(), swipedLeft: offset > 0),
+    );
   }
 
   int? _orbitMatchingOverviewIndexFor(BackheaderBudgetItem item) {

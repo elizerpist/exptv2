@@ -49,6 +49,10 @@ class ExpenseSettingsStore(context: Context) {
                 ),
             "ghostLogboxSettings" to loadGhostLogboxSettings(),
             "backheaderStyle" to prefs.getString(KEY_BACKHEADER_STYLE, "classic"),
+            "centerBackheaderDesign" to prefs.getString(
+                KEY_CENTER_BACKHEADER_DESIGN,
+                "neutral",
+            ),
             "designProfile" to (
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
                     ?: legacyDesignProfile()
@@ -116,6 +120,10 @@ class ExpenseSettingsStore(context: Context) {
                 boolArg(ghostLogboxSettings["expectedLabelEnabled"], true)
             )
             .putString(KEY_BACKHEADER_STYLE, args["backheaderStyle"]?.toString() ?: "classic")
+            .putString(
+                KEY_CENTER_BACKHEADER_DESIGN,
+                args["centerBackheaderDesign"]?.toString() ?: "neutral"
+            )
             .remove(KEY_DESIGN_PROFILE)
             .putString(
                 KEY_APP_COLOR,
@@ -355,6 +363,7 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_GHOST_LOGBOX_TEXT_TONE = "ghostLogboxTextTone"
         private const val KEY_GHOST_LOGBOX_EXPECTED_LABEL_ENABLED = "ghostLogboxExpectedLabelEnabled"
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
+        private const val KEY_CENTER_BACKHEADER_DESIGN = "centerBackheaderDesign"
         private const val KEY_DESIGN_PROFILE = "designProfile"
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"

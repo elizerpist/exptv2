@@ -35,15 +35,19 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerHasLimit = false,
     this.centerProgressColor = AppColors.primary,
     this.centerActions,
-    this.centerPrevious,
-    this.centerNext,
+    this.centerPreviousOuter,
+    this.centerPreviousInner,
+    this.centerNextInner,
+    this.centerNextOuter,
     this.centerWheelDirection = 0,
     this.centerWheelToken = 0,
     this.centerWheelFrom,
     this.centerWheelTo,
     this.centerExpandedExtent = 0,
-    this.onCenterPreviousTap,
-    this.onCenterNextTap,
+    this.onCenterPreviousOuterTap,
+    this.onCenterPreviousInnerTap,
+    this.onCenterNextInnerTap,
+    this.onCenterNextOuterTap,
     this.onCenterBadgeLongPressStart,
     this.onCenterBadgeLongPressMoveUpdate,
     this.onCenterBadgeLongPressEnd,
@@ -78,15 +82,19 @@ class BackheaderStyleSurface extends StatelessWidget {
   final bool centerHasLimit;
   final Color centerProgressColor;
   final Widget? centerActions;
-  final BackheaderBudgetItem? centerPrevious;
-  final BackheaderBudgetItem? centerNext;
+  final BackheaderBudgetItem? centerPreviousOuter;
+  final BackheaderBudgetItem? centerPreviousInner;
+  final BackheaderBudgetItem? centerNextInner;
+  final BackheaderBudgetItem? centerNextOuter;
   final int centerWheelDirection;
   final int centerWheelToken;
   final BackheaderBudgetItem? centerWheelFrom;
   final BackheaderBudgetItem? centerWheelTo;
   final double centerExpandedExtent;
-  final VoidCallback? onCenterPreviousTap;
-  final VoidCallback? onCenterNextTap;
+  final VoidCallback? onCenterPreviousOuterTap;
+  final VoidCallback? onCenterPreviousInnerTap;
+  final VoidCallback? onCenterNextInnerTap;
+  final VoidCallback? onCenterNextOuterTap;
   final GestureLongPressStartCallback? onCenterBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onCenterBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onCenterBadgeLongPressEnd;
@@ -144,15 +152,19 @@ class BackheaderStyleSurface extends StatelessWidget {
               hasLimit: centerHasLimit,
               progressColor: centerProgressColor,
               actions: centerActions,
-              previous: centerPrevious,
-              next: centerNext,
+              previousOuter: centerPreviousOuter,
+              previousInner: centerPreviousInner,
+              nextInner: centerNextInner,
+              nextOuter: centerNextOuter,
               wheelDirection: centerWheelDirection,
               wheelToken: centerWheelToken,
               wheelFrom: centerWheelFrom,
               wheelTo: centerWheelTo,
               expandedExtent: centerExpandedExtent,
-              onPreviousTap: onCenterPreviousTap,
-              onNextTap: onCenterNextTap,
+              onPreviousOuterTap: onCenterPreviousOuterTap,
+              onPreviousInnerTap: onCenterPreviousInnerTap,
+              onNextInnerTap: onCenterNextInnerTap,
+              onNextOuterTap: onCenterNextOuterTap,
               onBadgeLongPressStart: onCenterBadgeLongPressStart,
               onBadgeLongPressMoveUpdate: onCenterBadgeLongPressMoveUpdate,
               onBadgeLongPressEnd: onCenterBadgeLongPressEnd,
@@ -295,7 +307,7 @@ class _OrbitBudget extends StatelessWidget {
       MagnetType.fade,
       TransactionHeaderMetrics.magnetHeight,
     );
-    final partitionHeight = trackHeight * 0.7;
+    final partitionHeight = trackHeight * 0.63;
     final partitionTop =
         TransactionHeaderMetrics.magnetTop +
         TransactionHeaderMetrics.magnetHeight / 2 -
@@ -477,15 +489,19 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.hasLimit,
     required this.progressColor,
     required this.actions,
-    required this.previous,
-    required this.next,
+    required this.previousOuter,
+    required this.previousInner,
+    required this.nextInner,
+    required this.nextOuter,
     required this.wheelDirection,
     required this.wheelToken,
     required this.wheelFrom,
     required this.wheelTo,
     required this.expandedExtent,
-    required this.onPreviousTap,
-    required this.onNextTap,
+    required this.onPreviousOuterTap,
+    required this.onPreviousInnerTap,
+    required this.onNextInnerTap,
+    required this.onNextOuterTap,
     required this.onBadgeLongPressStart,
     required this.onBadgeLongPressMoveUpdate,
     required this.onBadgeLongPressEnd,
@@ -505,15 +521,19 @@ class _CenterBadgeBudget extends StatelessWidget {
   final bool hasLimit;
   final Color progressColor;
   final Widget? actions;
-  final BackheaderBudgetItem? previous;
-  final BackheaderBudgetItem? next;
+  final BackheaderBudgetItem? previousOuter;
+  final BackheaderBudgetItem? previousInner;
+  final BackheaderBudgetItem? nextInner;
+  final BackheaderBudgetItem? nextOuter;
   final int wheelDirection;
   final int wheelToken;
   final BackheaderBudgetItem? wheelFrom;
   final BackheaderBudgetItem? wheelTo;
   final double expandedExtent;
-  final VoidCallback? onPreviousTap;
-  final VoidCallback? onNextTap;
+  final VoidCallback? onPreviousOuterTap;
+  final VoidCallback? onPreviousInnerTap;
+  final VoidCallback? onNextInnerTap;
+  final VoidCallback? onNextOuterTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onBadgeLongPressEnd;
@@ -528,7 +548,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 34;
+    final railTop = safeTop + 30;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
     final handleColor = coloredDesign
@@ -564,7 +584,7 @@ class _CenterBadgeBudget extends StatelessWidget {
           right: 0,
           child: Center(
             child: SizedBox(
-              width: 196,
+              width: 274,
               height: 112,
               child: _CenterBadgeWheel(
                 current: current,
@@ -575,14 +595,18 @@ class _CenterBadgeBudget extends StatelessWidget {
                 progressColor: ringColor,
                 ringTrackColor: ringTrackColor,
                 titleColor: titleColor,
-                previous: previous,
-                next: next,
+                previousOuter: previousOuter,
+                previousInner: previousInner,
+                nextInner: nextInner,
+                nextOuter: nextOuter,
                 wheelDirection: wheelDirection,
                 wheelToken: wheelToken,
                 wheelFrom: wheelFrom,
                 wheelTo: wheelTo,
-                onPreviousTap: onPreviousTap,
-                onNextTap: onNextTap,
+                onPreviousOuterTap: onPreviousOuterTap,
+                onPreviousInnerTap: onPreviousInnerTap,
+                onNextInnerTap: onNextInnerTap,
+                onNextOuterTap: onNextOuterTap,
                 onBadgeLongPressStart: onBadgeLongPressStart,
                 onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
                 onBadgeLongPressEnd: onBadgeLongPressEnd,
@@ -656,25 +680,32 @@ class _CenterBadgeWheel extends StatelessWidget {
     required this.progressColor,
     required this.ringTrackColor,
     required this.titleColor,
-    required this.previous,
-    required this.next,
+    required this.previousOuter,
+    required this.previousInner,
+    required this.nextInner,
+    required this.nextOuter,
     required this.wheelDirection,
     required this.wheelToken,
     required this.wheelFrom,
     required this.wheelTo,
-    required this.onPreviousTap,
-    required this.onNextTap,
+    required this.onPreviousOuterTap,
+    required this.onPreviousInnerTap,
+    required this.onNextInnerTap,
+    required this.onNextOuterTap,
     required this.onBadgeLongPressStart,
     required this.onBadgeLongPressMoveUpdate,
     required this.onBadgeLongPressEnd,
     required this.onBadgeLongPressCancel,
   });
 
-  static const _width = 196.0;
+  static const _width = 274.0;
   static const _activeSize = 70.0;
-  static const _previewSize = 48.0;
-  static const _previewTop = 17.0;
-  static const _titleTop = 76.0;
+  static const _innerPreviewSize = 48.0;
+  static const _outerPreviewSize = 38.0;
+  static const _innerPreviewTop = 17.0;
+  static const _outerPreviewTop = 25.0;
+  static const _innerPreviewSide = 52.0;
+  static const _titleTop = 74.0;
 
   final BackheaderBudgetItem current;
   final Color currentColor;
@@ -684,14 +715,18 @@ class _CenterBadgeWheel extends StatelessWidget {
   final Color progressColor;
   final Color ringTrackColor;
   final Color titleColor;
-  final BackheaderBudgetItem? previous;
-  final BackheaderBudgetItem? next;
+  final BackheaderBudgetItem? previousOuter;
+  final BackheaderBudgetItem? previousInner;
+  final BackheaderBudgetItem? nextInner;
+  final BackheaderBudgetItem? nextOuter;
   final int wheelDirection;
   final int wheelToken;
   final BackheaderBudgetItem? wheelFrom;
   final BackheaderBudgetItem? wheelTo;
-  final VoidCallback? onPreviousTap;
-  final VoidCallback? onNextTap;
+  final VoidCallback? onPreviousOuterTap;
+  final VoidCallback? onPreviousInnerTap;
+  final VoidCallback? onNextInnerTap;
+  final VoidCallback? onNextOuterTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onBadgeLongPressEnd;
@@ -706,26 +741,60 @@ class _CenterBadgeWheel extends StatelessWidget {
     return Stack(
       alignment: Alignment.topCenter,
       children: [
-        if (previous != null)
+        if (previousOuter != null)
           Positioned(
             left: 0,
-            top: _previewTop,
+            top: _outerPreviewTop,
             child: _CenterPreviewBadge(
-              key: const ValueKey('backheader-center-preview-previous'),
-              item: previous!,
+              key: const ValueKey('backheader-center-preview-previous-2'),
+              item: previousOuter!,
               coloredDesign: coloredDesign,
-              onTap: onPreviousTap,
+              size: _outerPreviewSize,
+              opacity: 0.24,
+              iconSize: 19,
+              onTap: onPreviousOuterTap,
             ),
           ),
-        if (next != null)
+        if (previousInner != null)
+          Positioned(
+            left: _innerPreviewSide,
+            top: _innerPreviewTop,
+            child: _CenterPreviewBadge(
+              key: const ValueKey('backheader-center-preview-previous-1'),
+              item: previousInner!,
+              coloredDesign: coloredDesign,
+              size: _innerPreviewSize,
+              opacity: 0.46,
+              iconSize: 23,
+              onTap: onPreviousInnerTap,
+            ),
+          ),
+        if (nextInner != null)
+          Positioned(
+            right: _innerPreviewSide,
+            top: _innerPreviewTop,
+            child: _CenterPreviewBadge(
+              key: const ValueKey('backheader-center-preview-next-1'),
+              item: nextInner!,
+              coloredDesign: coloredDesign,
+              size: _innerPreviewSize,
+              opacity: 0.46,
+              iconSize: 23,
+              onTap: onNextInnerTap,
+            ),
+          ),
+        if (nextOuter != null)
           Positioned(
             right: 0,
-            top: _previewTop,
+            top: _outerPreviewTop,
             child: _CenterPreviewBadge(
-              key: const ValueKey('backheader-center-preview-next'),
-              item: next!,
+              key: const ValueKey('backheader-center-preview-next-2'),
+              item: nextOuter!,
               coloredDesign: coloredDesign,
-              onTap: onNextTap,
+              size: _outerPreviewSize,
+              opacity: 0.24,
+              iconSize: 19,
+              onTap: onNextOuterTap,
             ),
           ),
         Positioned(
@@ -832,15 +901,19 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   Offset _slotFor(_WheelSlot slot) {
     const centerLeft = (_width - _activeSize) / 2;
-    const edgeTop = _previewTop + (_previewSize / 2) - (_activeSize / 2);
+    const edgeTop =
+        _innerPreviewTop + (_innerPreviewSize / 2) - (_activeSize / 2);
     return switch (slot) {
       _WheelSlot.left => const Offset(
-        (_previewSize / 2) - (_activeSize / 2),
+        _innerPreviewSide + (_innerPreviewSize / 2) - (_activeSize / 2),
         edgeTop,
       ),
       _WheelSlot.center => const Offset(centerLeft, 0),
       _WheelSlot.right => const Offset(
-        _width - (_previewSize / 2) - (_activeSize / 2),
+        _width -
+            _innerPreviewSide -
+            (_innerPreviewSize / 2) -
+            (_activeSize / 2),
         edgeTop,
       ),
     };
@@ -1047,11 +1120,17 @@ class _CenterPreviewBadge extends StatelessWidget {
     super.key,
     required this.item,
     required this.coloredDesign,
+    required this.size,
+    required this.opacity,
+    required this.iconSize,
     required this.onTap,
   });
 
   final BackheaderBudgetItem item;
   final bool coloredDesign;
+  final double size;
+  final double opacity;
+  final double iconSize;
   final VoidCallback? onTap;
 
   @override
@@ -1062,30 +1141,27 @@ class _CenterPreviewBadge extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Opacity(
-        opacity: 0.46,
-        child: Transform.scale(
-          scale: 0.72,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: _centerBadgeDecoration(
-              color: color,
-              coloredDesign: coloredDesign,
-            ),
-            alignment: Alignment.center,
-            child: category == null
-                ? Icon(
-                    _overviewIcon(item.overview?.kind),
-                    color: AppColors.white,
-                    size: 22,
-                  )
-                : CategorySlotIcon(
-                    slot: category.iconSlot,
-                    color: AppColors.white,
-                    size: 23,
-                    strokeWidth: 1,
-                  ),
+        opacity: opacity,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: _centerBadgeDecoration(
+            color: color,
+            coloredDesign: coloredDesign,
           ),
+          alignment: Alignment.center,
+          child: category == null
+              ? Icon(
+                  _overviewIcon(item.overview?.kind),
+                  color: AppColors.white,
+                  size: iconSize,
+                )
+              : CategorySlotIcon(
+                  slot: category.iconSlot,
+                  color: AppColors.white,
+                  size: iconSize,
+                  strokeWidth: 1,
+                ),
         ),
       ),
     );

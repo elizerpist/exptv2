@@ -348,6 +348,7 @@ void main() {
         categoryCardColor: AppBoxColor.white,
         categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
         backheaderStyle: BackheaderStyle.orbitBudget,
+        centerBackheaderDesign: BackheaderCenterDesign.colored,
         appColor: AppColorMode.pink,
         categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
         categoryCardShadowEnabled: false,
@@ -369,6 +370,7 @@ void main() {
     );
     expect(updated.ghostLogboxSettings.textTone, GhostLogboxTextTone.gray);
     expect(updated.ghostLogboxSettings.expectedLabelEnabled, isFalse);
+    expect(updated.centerBackheaderDesign, BackheaderCenterDesign.colored);
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
@@ -393,6 +395,7 @@ void main() {
     expect(ghostPayload['textTone'], 'gray');
     expect(ghostPayload['expectedLabelEnabled'], isFalse);
     expect(payload['backheaderStyle'], 'orbitBudget');
+    expect(payload['centerBackheaderDesign'], 'colored');
     expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);
     expect(payload['appColor'], 'pink');

@@ -176,8 +176,8 @@ void main() {
     final progress = tester.getRect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
     );
-    final slider = tester.getRect(
-      find.byKey(const ValueKey('category-limit-slider')),
+    final handle = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-handle')),
     );
     final input = tester.getRect(
       find.byKey(const ValueKey('limit-amount-input')),
@@ -190,8 +190,8 @@ void main() {
     expect(avatar.bottom, lessThanOrEqualTo(period.top));
     expect(period.center.dy, moreOrLessEquals(title.center.dy, epsilon: 1.0));
     expect(title.bottom, lessThan(progress.top));
-    expect(progress.bottom, lessThan(slider.top));
-    expect(slider.bottom, lessThan(input.top));
+    expect(handle.center.dy, moreOrLessEquals(progress.center.dy, epsilon: 1));
+    expect(progress.bottom, lessThan(input.top));
     expect(input.bottom, lessThan(save.top));
   });
 
@@ -330,8 +330,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Food'), findsWidgets);
       expect(find.byKey(const ValueKey('limit-save-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('category-limit-slider')), findsNothing);
       expect(
-        find.byKey(const ValueKey('category-limit-slider')),
+        find.byKey(const ValueKey('category-limit-partition-handle')),
         findsOneWidget,
       );
       expect(
@@ -502,7 +503,7 @@ void main() {
   });
 
   testWidgets(
-    'limit editor slider keeps adaptive max after manual high input',
+    'limit editor partition bar keeps adaptive max after manual high input',
     (tester) async {
       final repository = FakeHomeLimitRepository.withoutBudgetLimits();
       final store = TransactionStore(
@@ -519,11 +520,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
       await tester.pumpAndSettle();
 
-      final initialSlider = tester.widget<Slider>(
-        find.byKey(const ValueKey('category-limit-slider')),
+      expect(find.byKey(const ValueKey('category-limit-slider')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('category-limit-partition-handle')),
+        findsOneWidget,
       );
-      expect(initialSlider.max, 100000);
-      expect(initialSlider.divisions, 100);
 
       await tester.enterText(
         find.byKey(const ValueKey('limit-amount-input')),
@@ -531,21 +532,20 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 500));
 
-      final highSlider = tester.widget<Slider>(
-        find.byKey(const ValueKey('category-limit-slider')),
+      final barRect = tester.getRect(
+        find.byKey(const ValueKey('category-limit-partition-bar')),
       );
-      expect(highSlider.max, 250000);
+      await tester.tapAt(
+        Offset(barRect.left + barRect.width * 0.5, barRect.center.dy),
+      );
+      await tester.pump();
 
-      await tester.drag(
-        find.byKey(const ValueKey('category-limit-slider')),
-        const Offset(-120, 0),
+      final input = tester.widget<TextField>(
+        find.byKey(const ValueKey('limit-amount-input')),
       );
-      await tester.pumpAndSettle();
-
-      final reducedSlider = tester.widget<Slider>(
-        find.byKey(const ValueKey('category-limit-slider')),
-      );
-      expect(reducedSlider.max, 250000);
+      final reduced = double.parse(input.controller!.text);
+      expect(reduced, greaterThan(100000));
+      expect(reduced, lessThan(250000));
     },
   );
 
@@ -644,8 +644,9 @@ void main() {
         find.byKey(const ValueKey('limit-reset-inline-button')),
         findsOneWidget,
       );
+      expect(find.byKey(const ValueKey('category-limit-slider')), findsNothing);
       expect(
-        find.byKey(const ValueKey('category-limit-slider')),
+        find.byKey(const ValueKey('category-limit-partition-handle')),
         findsOneWidget,
       );
       expect(
@@ -665,8 +666,8 @@ void main() {
       final partition = tester.getRect(
         find.byKey(const ValueKey('category-limit-partition-bar')),
       );
-      final slider = tester.getRect(
-        find.byKey(const ValueKey('category-limit-slider')),
+      final handle = tester.getRect(
+        find.byKey(const ValueKey('category-limit-partition-handle')),
       );
       final amount = tester.getRect(
         find.byKey(const ValueKey('limit-amount-input')),
@@ -680,8 +681,11 @@ void main() {
       expect(period.center.dy, moreOrLessEquals(title.center.dy, epsilon: 1.0));
       expect(partition.top, greaterThanOrEqualTo(title.bottom));
       expect(partition.height, moreOrLessEquals(18.8, epsilon: 0.2));
-      expect(slider.top, greaterThan(partition.bottom));
-      expect(amount.top, greaterThan(slider.bottom));
+      expect(
+        handle.center.dy,
+        moreOrLessEquals(partition.center.dy, epsilon: 1),
+      );
+      expect(amount.top, greaterThan(partition.bottom));
       expect(save.top, greaterThan(amount.bottom));
     },
   );
@@ -720,7 +724,7 @@ void main() {
     );
   });
 
-  testWidgets('partition tap selects category and syncs backheader', (
+  testWidgets('partition tap adjusts active limit without category switch', (
     tester,
   ) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
@@ -742,18 +746,32 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('category-limit-partition-segment-0')),
+    final barRect = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-bar')),
     );
-    await tester.pumpAndSettle();
+    await tester.tapAt(
+      Offset(barRect.left + barRect.width * 0.6, barRect.center.dy),
+    );
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('limit-card-title')), findsOneWidget);
-    expect(find.text('Food'), findsWidgets);
+    expect(find.text('Budget'), findsWidgets);
+    expect(find.text('Food'), findsNothing);
+    final input = tester.widget<TextField>(
+      find.byKey(const ValueKey('limit-amount-input')),
+    );
+    expect(double.parse(input.controller!.text), greaterThan(0));
+    final handle = tester.getRect(
+      find.byKey(const ValueKey('category-limit-partition-handle')),
+    );
+    expect(handle.center.dx, inInclusiveRange(barRect.left, barRect.right + 8));
+    expect(handle.center.dx, greaterThan(barRect.left + barRect.width * 0.5));
+    expect(repository.savedLimits, isEmpty);
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('backheader-active-title')))
           .data,
-      'Food',
+      'Budget',
     );
   });
 
@@ -984,7 +1002,7 @@ void main() {
     await pumpExpandedMonthlyHome(tester, store, expenseTheme: centerTheme);
 
     await tester.tap(
-      find.byKey(const ValueKey('backheader-center-preview-next')),
+      find.byKey(const ValueKey('backheader-center-preview-next-1')),
     );
     await tester.pumpAndSettle();
     expect(
