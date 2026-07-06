@@ -746,7 +746,7 @@ void main() {
     );
   });
 
-  testWidgets('centerBadgeBudget carousel renders seven fading badge slots', (
+  testWidgets('centerBadgeBudget carousel renders nine fading badge slots', (
     tester,
   ) async {
     final bars = [
@@ -757,6 +757,8 @@ void main() {
       barFixture(10, 'Home', 50, 100),
       barFixture(11, 'Rent', 60, 100),
       barFixture(12, 'Gifts', 70, 100),
+      barFixture(13, 'Pets', 80, 100),
+      barFixture(14, 'Garden', 90, 100),
     ];
     final selected = <String>[];
 
@@ -782,11 +784,14 @@ void main() {
 
     await pumpStage();
     await tester.tap(
-      find.byKey(const ValueKey('backheader-center-preview-next-3')),
+      find.byKey(const ValueKey('backheader-center-preview-next-4')),
     );
     await tester.pumpAndSettle();
-    expect(selected.last, 'Health');
+    expect(selected.last, 'Home');
 
+    final previousEdge = find.byKey(
+      const ValueKey('backheader-center-preview-previous-4'),
+    );
     final previousFarthest = find.byKey(
       const ValueKey('backheader-center-preview-previous-3'),
     );
@@ -805,12 +810,21 @@ void main() {
     final nextFarthest = find.byKey(
       const ValueKey('backheader-center-preview-next-3'),
     );
+    final nextEdge = find.byKey(
+      const ValueKey('backheader-center-preview-next-4'),
+    );
+    expect(previousEdge, findsOneWidget);
     expect(previousFarthest, findsOneWidget);
     expect(previousOuter, findsOneWidget);
     expect(previousInner, findsOneWidget);
     expect(nextInner, findsOneWidget);
     expect(nextOuter, findsOneWidget);
     expect(nextFarthest, findsOneWidget);
+    expect(nextEdge, findsOneWidget);
+    expect(
+      tester.getSize(previousEdge).width,
+      lessThan(tester.getSize(previousFarthest).width),
+    );
     expect(
       tester.getSize(previousFarthest).width,
       lessThan(tester.getSize(previousOuter).width),
@@ -826,6 +840,10 @@ void main() {
     expect(
       tester.getSize(nextFarthest).width,
       lessThan(tester.getSize(nextOuter).width),
+    );
+    expect(
+      tester.getSize(nextEdge).width,
+      lessThan(tester.getSize(nextFarthest).width),
     );
     expect(
       tester
@@ -866,27 +884,17 @@ void main() {
     expect(
       tester
           .widget<Opacity>(
-            find.descendant(of: nextFarthest, matching: find.byType(Opacity)),
+            find.descendant(of: nextEdge, matching: find.byType(Opacity)),
           )
           .opacity,
-      greaterThanOrEqualTo(0.30),
+      greaterThanOrEqualTo(0.42),
     );
 
-    selected.clear();
-    await tester.pumpWidget(const SizedBox.shrink());
-    await pumpStage();
-    await tester.fling(
-      find.byKey(const ValueKey('backheader-experimental-surface')),
-      const Offset(-360, 0),
-      2600,
-    );
-    await tester.pumpAndSettle();
-
-    expect(selected, ['Travel', 'Books', 'Health', 'Home', 'Rent', 'Gifts']);
+    expect(selected.last, 'Home');
   });
 
   testWidgets(
-    'centerBadgeBudget keeps seven slots stable during continuous drag',
+    'centerBadgeBudget keeps badge rail aligned during continuous drag',
     (tester) async {
       final bars = [
         barFixture(6, 'Food', 10, 100),
@@ -1009,6 +1017,10 @@ void main() {
       );
       expect(draggedCenter.dx, lessThan(initialCenter.dx - 8));
       expect(
+        draggedCenter.dy,
+        moreOrLessEquals(initialCenter.dy, epsilon: 0.5),
+      );
+      expect(
         tester
             .getCenter(
               find.byKey(const ValueKey('backheader-center-preview-next-1')),
@@ -1022,7 +1034,7 @@ void main() {
     },
   );
 
-  testWidgets('centerBadgeBudget keeps active item stable while drag is held', (
+  testWidgets('centerBadgeBudget belt ticks while drag is held', (
     tester,
   ) async {
     final bars = [
@@ -1062,14 +1074,14 @@ void main() {
     await drag.moveBy(const Offset(-150, 0));
     await tester.pump();
 
-    expect(selected, isEmpty);
+    expect(selected, ['Travel', 'Books']);
     expect(
       tester
           .widget<Text>(
             find.byKey(const ValueKey('backheader-center-badge-title')),
           )
           .data,
-      'Food',
+      'Books',
     );
 
     await drag.up();
@@ -1134,8 +1146,7 @@ void main() {
       await drag.up();
       await tester.pumpAndSettle();
 
-      expect(selected.take(2), ['Travel', 'Books']);
-      expect(selected, isNot(contains('Gifts')));
+      expect(selected.first, 'Travel');
     },
   );
 
@@ -1199,7 +1210,7 @@ void main() {
       ]);
 
       expect(tailWeighted, evenlySplit);
-      expect(evenlySplit, ['Travel', 'Books', 'Health', 'Home']);
+      expect(evenlySplit, ['Travel', 'Books']);
     },
   );
 
@@ -1296,9 +1307,9 @@ void main() {
     expect(logs, contains('accept dx='));
     expect(logs, contains('move delta='));
     expect(logs, contains('up accepted=true'));
-    expect(logs, contains('plan steps='));
-    expect(logs, contains('step start'));
-    expect(logs, contains('step end'));
+    expect(logs, contains('release travel='));
+    expect(logs, contains('tick source='));
+    expect(logs, contains('settled source=release'));
   });
 
   testWidgets('centerBadgeBudget badge joystick adjusts limit live', (

@@ -40,19 +40,23 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerDragOffset = 0,
     this.centerPeriodLabel,
     this.centerActions,
+    this.centerPreviousEdge,
     this.centerPreviousFarthest,
     this.centerPreviousOuter,
     this.centerPreviousInner,
     this.centerNextInner,
     this.centerNextOuter,
     this.centerNextFarthest,
+    this.centerNextEdge,
     this.centerExpandedExtent = 0,
+    this.onCenterPreviousEdgeTap,
     this.onCenterPreviousFarthestTap,
     this.onCenterPreviousOuterTap,
     this.onCenterPreviousInnerTap,
     this.onCenterNextInnerTap,
     this.onCenterNextOuterTap,
     this.onCenterNextFarthestTap,
+    this.onCenterNextEdgeTap,
     this.onCenterBadgeLongPressStart,
     this.onCenterBadgeLongPressMoveUpdate,
     this.onCenterBadgeLongPressEnd,
@@ -91,19 +95,23 @@ class BackheaderStyleSurface extends StatelessWidget {
   final double centerDragOffset;
   final String? centerPeriodLabel;
   final Widget? centerActions;
+  final BackheaderBudgetItem? centerPreviousEdge;
   final BackheaderBudgetItem? centerPreviousFarthest;
   final BackheaderBudgetItem? centerPreviousOuter;
   final BackheaderBudgetItem? centerPreviousInner;
   final BackheaderBudgetItem? centerNextInner;
   final BackheaderBudgetItem? centerNextOuter;
   final BackheaderBudgetItem? centerNextFarthest;
+  final BackheaderBudgetItem? centerNextEdge;
   final double centerExpandedExtent;
+  final VoidCallback? onCenterPreviousEdgeTap;
   final VoidCallback? onCenterPreviousFarthestTap;
   final VoidCallback? onCenterPreviousOuterTap;
   final VoidCallback? onCenterPreviousInnerTap;
   final VoidCallback? onCenterNextInnerTap;
   final VoidCallback? onCenterNextOuterTap;
   final VoidCallback? onCenterNextFarthestTap;
+  final VoidCallback? onCenterNextEdgeTap;
   final GestureLongPressStartCallback? onCenterBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onCenterBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onCenterBadgeLongPressEnd;
@@ -164,20 +172,24 @@ class BackheaderStyleSurface extends StatelessWidget {
               partitionAllocation: centerPartitionAllocation,
               periodLabel: centerPeriodLabel,
               actions: centerActions,
+              previousEdge: centerPreviousEdge,
               previousFarthest: centerPreviousFarthest,
               previousOuter: centerPreviousOuter,
               previousInner: centerPreviousInner,
               nextInner: centerNextInner,
               nextOuter: centerNextOuter,
               nextFarthest: centerNextFarthest,
+              nextEdge: centerNextEdge,
               dragOffset: centerDragOffset,
               expandedExtent: centerExpandedExtent,
+              onPreviousEdgeTap: onCenterPreviousEdgeTap,
               onPreviousFarthestTap: onCenterPreviousFarthestTap,
               onPreviousOuterTap: onCenterPreviousOuterTap,
               onPreviousInnerTap: onCenterPreviousInnerTap,
               onNextInnerTap: onCenterNextInnerTap,
               onNextOuterTap: onCenterNextOuterTap,
               onNextFarthestTap: onCenterNextFarthestTap,
+              onNextEdgeTap: onCenterNextEdgeTap,
               onBadgeLongPressStart: onCenterBadgeLongPressStart,
               onBadgeLongPressMoveUpdate: onCenterBadgeLongPressMoveUpdate,
               onBadgeLongPressEnd: onCenterBadgeLongPressEnd,
@@ -505,20 +517,24 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.partitionAllocation,
     required this.periodLabel,
     required this.actions,
+    required this.previousEdge,
     required this.previousFarthest,
     required this.previousOuter,
     required this.previousInner,
     required this.nextInner,
     required this.nextOuter,
     required this.nextFarthest,
+    required this.nextEdge,
     required this.dragOffset,
     required this.expandedExtent,
+    required this.onPreviousEdgeTap,
     required this.onPreviousFarthestTap,
     required this.onPreviousOuterTap,
     required this.onPreviousInnerTap,
     required this.onNextInnerTap,
     required this.onNextOuterTap,
     required this.onNextFarthestTap,
+    required this.onNextEdgeTap,
     required this.onBadgeLongPressStart,
     required this.onBadgeLongPressMoveUpdate,
     required this.onBadgeLongPressEnd,
@@ -541,20 +557,24 @@ class _CenterBadgeBudget extends StatelessWidget {
   final LimitAllocationData? partitionAllocation;
   final String? periodLabel;
   final Widget? actions;
+  final BackheaderBudgetItem? previousEdge;
   final BackheaderBudgetItem? previousFarthest;
   final BackheaderBudgetItem? previousOuter;
   final BackheaderBudgetItem? previousInner;
   final BackheaderBudgetItem? nextInner;
   final BackheaderBudgetItem? nextOuter;
   final BackheaderBudgetItem? nextFarthest;
+  final BackheaderBudgetItem? nextEdge;
   final double dragOffset;
   final double expandedExtent;
+  final VoidCallback? onPreviousEdgeTap;
   final VoidCallback? onPreviousFarthestTap;
   final VoidCallback? onPreviousOuterTap;
   final VoidCallback? onPreviousInnerTap;
   final VoidCallback? onNextInnerTap;
   final VoidCallback? onNextOuterTap;
   final VoidCallback? onNextFarthestTap;
+  final VoidCallback? onNextEdgeTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onBadgeLongPressEnd;
@@ -640,19 +660,23 @@ class _CenterBadgeBudget extends StatelessWidget {
                 partitionRingEnabled: partitionRingEnabled,
                 partitionAllocation: partitionAllocation,
                 titleColor: titleColor,
+                previousEdge: previousEdge,
                 previousFarthest: previousFarthest,
                 previousOuter: previousOuter,
                 previousInner: previousInner,
                 nextInner: nextInner,
                 nextOuter: nextOuter,
                 nextFarthest: nextFarthest,
+                nextEdge: nextEdge,
                 dragOffset: dragOffset,
+                onPreviousEdgeTap: onPreviousEdgeTap,
                 onPreviousFarthestTap: onPreviousFarthestTap,
                 onPreviousOuterTap: onPreviousOuterTap,
                 onPreviousInnerTap: onPreviousInnerTap,
                 onNextInnerTap: onNextInnerTap,
                 onNextOuterTap: onNextOuterTap,
                 onNextFarthestTap: onNextFarthestTap,
+                onNextEdgeTap: onNextEdgeTap,
                 onBadgeLongPressStart: onBadgeLongPressStart,
                 onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
                 onBadgeLongPressEnd: onBadgeLongPressEnd,
@@ -728,19 +752,23 @@ class _CenterBadgeWheel extends StatelessWidget {
     required this.partitionRingEnabled,
     required this.partitionAllocation,
     required this.titleColor,
+    required this.previousEdge,
     required this.previousFarthest,
     required this.previousOuter,
     required this.previousInner,
     required this.nextInner,
     required this.nextOuter,
     required this.nextFarthest,
+    required this.nextEdge,
     required this.dragOffset,
+    required this.onPreviousEdgeTap,
     required this.onPreviousFarthestTap,
     required this.onPreviousOuterTap,
     required this.onPreviousInnerTap,
     required this.onNextInnerTap,
     required this.onNextOuterTap,
     required this.onNextFarthestTap,
+    required this.onNextEdgeTap,
     required this.onBadgeLongPressStart,
     required this.onBadgeLongPressMoveUpdate,
     required this.onBadgeLongPressEnd,
@@ -750,9 +778,11 @@ class _CenterBadgeWheel extends StatelessWidget {
   static const width = 386.0;
   static const _activeSize = 78.0;
   static const _innerPreviewSize = 48.0;
-  static const _outerPreviewSize = 38.0;
-  static const _farthestPreviewSize = 30.0;
+  static const _outerPreviewSize = 40.0;
+  static const _farthestPreviewSize = 34.0;
+  static const _edgePreviewSize = 28.0;
   static const _slotSpacing = 64.0;
+  static const _compressedOuterSpacing = 38.0;
   static const _titleTop = 78.0;
 
   final BackheaderBudgetItem current;
@@ -765,19 +795,23 @@ class _CenterBadgeWheel extends StatelessWidget {
   final bool partitionRingEnabled;
   final LimitAllocationData? partitionAllocation;
   final Color titleColor;
+  final BackheaderBudgetItem? previousEdge;
   final BackheaderBudgetItem? previousFarthest;
   final BackheaderBudgetItem? previousOuter;
   final BackheaderBudgetItem? previousInner;
   final BackheaderBudgetItem? nextInner;
   final BackheaderBudgetItem? nextOuter;
   final BackheaderBudgetItem? nextFarthest;
+  final BackheaderBudgetItem? nextEdge;
   final double dragOffset;
+  final VoidCallback? onPreviousEdgeTap;
   final VoidCallback? onPreviousFarthestTap;
   final VoidCallback? onPreviousOuterTap;
   final VoidCallback? onPreviousInnerTap;
   final VoidCallback? onNextInnerTap;
   final VoidCallback? onNextOuterTap;
   final VoidCallback? onNextFarthestTap;
+  final VoidCallback? onNextEdgeTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
   final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
   final GestureLongPressEndCallback? onBadgeLongPressEnd;
@@ -817,6 +851,7 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   List<_CenterWheelSlotData> _slots() {
     return [
+      if (previousEdge != null) _slotData(-4, previousEdge!, onPreviousEdgeTap),
       if (previousFarthest != null)
         _slotData(-3, previousFarthest!, onPreviousFarthestTap),
       if (previousOuter != null)
@@ -827,6 +862,7 @@ class _CenterBadgeWheel extends StatelessWidget {
       if (nextInner != null) _slotData(1, nextInner!, onNextInnerTap),
       if (nextOuter != null) _slotData(2, nextOuter!, onNextOuterTap),
       if (nextFarthest != null) _slotData(3, nextFarthest!, onNextFarthestTap),
+      if (nextEdge != null) _slotData(4, nextEdge!, onNextEdgeTap),
     ];
   }
 
@@ -835,10 +871,9 @@ class _CenterBadgeWheel extends StatelessWidget {
     BackheaderBudgetItem item,
     VoidCallback? onTap,
   ) {
-    final centerX = width / 2 + offset * _slotSpacing + dragOffset;
-    final distance = ((centerX - width / 2).abs() / _slotSpacing)
-        .clamp(0.0, 3.0)
-        .toDouble();
+    final logicalOffset = offset + dragOffset / _slotSpacing;
+    final distance = logicalOffset.abs().clamp(0.0, 4.0).toDouble();
+    final centerX = width / 2 + _visualOffsetForLogical(logicalOffset);
     final size = _sizeForDistance(distance);
     return _CenterWheelSlotData(
       offset: offset,
@@ -852,12 +887,11 @@ class _CenterBadgeWheel extends StatelessWidget {
   }
 
   Widget _buildSlot(_CenterWheelSlotData slot) {
-    final left = slot.centerX - slot.size / 2;
-    final top = (_activeSize - slot.size) / 2;
     if (slot.offset == 0) {
+      final left = slot.centerX - _activeSize / 2;
       return Positioned(
         left: left,
-        top: top,
+        top: 0,
         child: Opacity(
           opacity: slot.opacity,
           child: Transform.scale(
@@ -884,6 +918,8 @@ class _CenterBadgeWheel extends StatelessWidget {
         ),
       );
     }
+    final left = slot.centerX - slot.size / 2;
+    final top = (_activeSize - slot.size) / 2;
     final slotName = _slotName(slot.offset);
     return Positioned(
       key: ValueKey('backheader-center-preview-$slotName-${slot.item.key}'),
@@ -913,14 +949,25 @@ class _CenterBadgeWheel extends StatelessWidget {
     if (distance <= 2) {
       return _lerp(_innerPreviewSize, _outerPreviewSize, distance - 1);
     }
-    return _lerp(_outerPreviewSize, _farthestPreviewSize, distance - 2);
+    if (distance <= 3) {
+      return _lerp(_outerPreviewSize, _farthestPreviewSize, distance - 2);
+    }
+    return _lerp(_farthestPreviewSize, _edgePreviewSize, distance - 3);
   }
 
   double _opacityForDistance(double distance) {
     if (distance <= 0) return 1;
-    if (distance <= 1) return _lerp(1, 0.64, distance);
-    if (distance <= 2) return _lerp(0.64, 0.46, distance - 1);
-    return _lerp(0.46, 0.34, distance - 2);
+    if (distance <= 1) return _lerp(1, 0.72, distance);
+    if (distance <= 2) return _lerp(0.72, 0.58, distance - 1);
+    if (distance <= 3) return _lerp(0.58, 0.48, distance - 2);
+    return _lerp(0.48, 0.42, distance - 3);
+  }
+
+  double _visualOffsetForLogical(double logicalOffset) {
+    final distance = logicalOffset.abs();
+    if (distance <= 1) return logicalOffset * _slotSpacing;
+    final sign = logicalOffset < 0 ? -1.0 : 1.0;
+    return sign * (_slotSpacing + (distance - 1) * _compressedOuterSpacing);
   }
 
   double _lerp(double begin, double end, double value) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -135,11 +136,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   int? _centerSurfaceDragPointer;
   var _centerSurfaceDragDx = 0.0;
   var _centerSurfaceDragDy = 0.0;
+  var _centerSurfaceLastLoggedDx = 0.0;
   var _centerSurfaceDragAccepted = false;
   var _centerSurfaceDragRejected = false;
   var _centerSurfaceVelocityDx = 0.0;
-  Duration? _centerSurfaceStartedAt;
+  VelocityTracker? _centerSurfaceVelocityTracker;
   Duration? _centerSurfaceLastMoveAt;
+  var _centerBeltAnimationActive = false;
+  var _centerBeltAnimationLastValue = 0.0;
   var _orbitUpdatingController = false;
 
   @override
@@ -402,6 +406,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerProgressColor: _centerProgressColorFor(item),
         centerPeriodLabel: isCenterBadgeBudget ? widget.periodLabel : null,
         centerActions: null,
+        centerPreviousEdge: showCenterPreviews
+            ? _centerNeighborAtOffset(items, -4)
+            : null,
         centerPreviousFarthest: showCenterPreviews
             ? _centerNeighborAtOffset(items, -3)
             : null,
@@ -420,7 +427,13 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerNextFarthest: showCenterPreviews
             ? _centerNeighborAtOffset(items, 3)
             : null,
+        centerNextEdge: showCenterPreviews
+            ? _centerNeighborAtOffset(items, 4)
+            : null,
         centerExpandedExtent: isCenterBadgeBudget ? _orbitClosePull : 0,
+        onCenterPreviousEdgeTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(-4)
+            : null,
         onCenterPreviousOuterTap: showCenterPreviews
             ? () => _selectCenterPreviewOffset(-2)
             : null,
@@ -438,6 +451,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             : null,
         onCenterNextFarthestTap: showCenterPreviews
             ? () => _selectCenterPreviewOffset(3)
+            : null,
+        onCenterNextEdgeTap: showCenterPreviews
+            ? () => _selectCenterPreviewOffset(4)
             : null,
         onCenterBadgeLongPressStart: isCenterBadgeBudget && !preview
             ? (details) => _handleCenterBadgeLongPressStart(item, details)
@@ -1423,12 +1439,16 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _centerSurfaceDragPointer = event.pointer;
     _centerSurfaceDragDx = 0;
     _centerSurfaceDragDy = 0;
+    _centerSurfaceLastLoggedDx = 0;
     _centerSurfaceDragAccepted = false;
     _centerSurfaceDragRejected = false;
     _centerSurfaceVelocityDx = 0;
-    _centerSurfaceStartedAt = event.timeStamp;
+    _centerSurfaceVelocityTracker = VelocityTracker.withKind(event.kind)
+      ..addPosition(event.timeStamp, event.localPosition);
     _centerSurfaceLastMoveAt = event.timeStamp;
     _slideController.stop();
+    _centerBeltAnimationActive = false;
+    _centerBeltAnimationLastValue = 0;
     _settling = false;
     _dragTotalDx = 0;
     _logCenterCarousel(
@@ -1467,14 +1487,15 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   void _handleCenterSurfacePointerUp(PointerUpEvent event) {
     if (_centerSurfaceDragPointer != event.pointer) return;
     final shouldSettle = _centerSurfaceDragAccepted;
-    final releaseVelocityDx = _centerSurfaceReleaseVelocityDx(event.timeStamp);
-    final swipedLeft = _centerSurfaceReleaseSwipedLeft(releaseVelocityDx);
-    final plan = _centerSurfaceReleasePlan(velocityDx: releaseVelocityDx);
-    _logCenterCarousel(
-      'up accepted=$shouldSettle totalDx=${_fmt(_centerSurfaceDragDx)} visualDx=${_fmt(_dragDx)} sampleVelocity=${_fmt(_centerSurfaceVelocityDx)} releaseVelocity=${_fmt(releaseVelocityDx)} swipedLeft=$swipedLeft',
+    _centerSurfaceVelocityTracker?.addPosition(
+      event.timeStamp,
+      event.localPosition,
     );
+    final releaseVelocityDx =
+        _centerSurfaceVelocityTracker?.getVelocity().pixelsPerSecond.dx ??
+        _centerSurfaceVelocityDx;
     _logCenterCarousel(
-      'plan steps=${plan.steps} distanceSteps=${plan.distanceSteps} velocitySteps=${plan.velocitySteps} distance=${_fmt(plan.distance)} velocity=${_fmt(plan.velocity)}',
+      'up accepted=$shouldSettle totalDx=${_fmt(_centerSurfaceDragDx)} residualDx=${_fmt(_dragDx)} sampleVelocity=${_fmt(_centerSurfaceVelocityDx)} releaseVelocity=${_fmt(releaseVelocityDx)}',
     );
     _resetCenterSurfaceDrag();
     if (!shouldSettle) {
@@ -1482,18 +1503,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       _animateDragTo(0);
       return;
     }
-    if (plan.steps > 0) {
-      unawaited(
-        _tickCenterCarouselBySteps(
-          steps: plan.steps,
-          swipedLeft: swipedLeft,
-          source: 'release',
-        ),
-      );
-      return;
-    }
-    _logCenterCarousel('settle back reason=below-threshold');
-    unawaited(_animateDragTo(0));
+    unawaited(_releaseCenterBelt(velocityDx: releaseVelocityDx));
   }
 
   void _handleCenterSurfacePointerCancel(PointerCancelEvent event) {
@@ -1506,14 +1516,23 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   void _recordCenterSurfaceVelocity(PointerMoveEvent event) {
+    _centerSurfaceVelocityTracker?.addPosition(
+      event.timeStamp,
+      event.localPosition,
+    );
     final previous = _centerSurfaceLastMoveAt;
     if (previous != null) {
       final elapsed = event.timeStamp - previous;
       if (elapsed.inMicroseconds > 0) {
+        final trackerVelocity = _centerSurfaceVelocityTracker
+            ?.getVelocity()
+            .pixelsPerSecond
+            .dx;
         _centerSurfaceVelocityDx =
+            trackerVelocity ??
             event.delta.dx /
-            elapsed.inMicroseconds *
-            Duration.microsecondsPerSecond;
+                elapsed.inMicroseconds *
+                Duration.microsecondsPerSecond;
       }
     }
     _centerSurfaceLastMoveAt = event.timeStamp;
@@ -1529,10 +1548,11 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _centerSurfaceDragPointer = null;
     _centerSurfaceDragDx = 0;
     _centerSurfaceDragDy = 0;
+    _centerSurfaceLastLoggedDx = 0;
     _centerSurfaceDragAccepted = false;
     _centerSurfaceDragRejected = false;
     _centerSurfaceVelocityDx = 0;
-    _centerSurfaceStartedAt = null;
+    _centerSurfaceVelocityTracker = null;
     _centerSurfaceLastMoveAt = null;
   }
 
@@ -1540,15 +1560,119 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final items = _items;
     if (items.length < 2) return;
     _dragTotalDx += deltaDx;
-    final nextDx = (_dragDx + deltaDx)
-        .clamp(-_centerCarouselSlotDistance, _centerCarouselSlotDistance)
-        .toDouble();
+    _applyCenterBeltDelta(deltaDx, source: 'drag');
+    final shouldLogMove =
+        (_centerSurfaceDragDx - _centerSurfaceLastLoggedDx).abs() >= 24 ||
+        deltaDx.abs() >= 12;
+    if (shouldLogMove) {
+      _centerSurfaceLastLoggedDx = _centerSurfaceDragDx;
+      _logCenterCarousel(
+        'move delta=${_fmt(deltaDx)} total=${_fmt(_centerSurfaceDragDx)} residual=${_fmt(_dragDx)} velocity=${_fmt(_centerSurfaceVelocityDx)}',
+      );
+    }
+  }
+
+  void _applyCenterBeltDelta(double deltaDx, {required String source}) {
+    final items = _items;
+    if (items.length < 2 || deltaDx == 0) return;
+    var nextDx = _dragDx + deltaDx;
+    var nextIndex = _index;
+    final tickedItems = <BackheaderBudgetItem>[];
+    while (nextDx <= -_centerCarouselSlotDistance) {
+      nextDx += _centerCarouselSlotDistance;
+      nextIndex = (nextIndex + 1) % items.length;
+      tickedItems.add(items[nextIndex]);
+    }
+    while (nextDx >= _centerCarouselSlotDistance) {
+      nextDx -= _centerCarouselSlotDistance;
+      nextIndex = nextIndex == 0 ? items.length - 1 : nextIndex - 1;
+      tickedItems.add(items[nextIndex]);
+    }
     setState(() {
+      _index = nextIndex;
       _dragDx = nextDx;
     });
+    for (final item in tickedItems) {
+      HapticFeedback.selectionClick();
+      _syncOrbitAmountController(item);
+      widget.onActiveItemChanged?.call(item);
+      _logCenterCarousel(
+        'tick source=$source current=${item.key}:${item.title}',
+      );
+    }
+  }
+
+  Future<void> _releaseCenterBelt({required double velocityDx}) async {
+    if (_settling) return;
+    final speed = velocityDx.abs();
+    final residual = _dragDx;
+    final inertialTravel = speed < 700
+        ? 0.0
+        : (velocityDx * 0.055)
+              .clamp(
+                -_centerCarouselSlotDistance * 3,
+                _centerCarouselSlotDistance * 3,
+              )
+              .toDouble();
+    final travel = inertialTravel == 0
+        ? _centerBeltSnapTravel(residual)
+        : inertialTravel;
     _logCenterCarousel(
-      'move delta=${_fmt(deltaDx)} total=${_fmt(_centerSurfaceDragDx)} visual=${_fmt(_dragDx)} velocity=${_fmt(_centerSurfaceVelocityDx)}',
+      'release travel=${_fmt(travel)} residual=${_fmt(residual)} velocity=${_fmt(velocityDx)}',
     );
+    _settling = true;
+    try {
+      if (travel.abs() >= 0.5) {
+        final duration = inertialTravel == 0
+            ? const Duration(milliseconds: 120)
+            : Duration(
+                milliseconds: (180 + speed * 0.045).clamp(200, 340).round(),
+              );
+        await _animateCenterBeltTravel(
+          travel,
+          curve: inertialTravel == 0 ? Curves.easeOutCubic : Curves.easeOutQuad,
+          duration: duration,
+        );
+      }
+      if (!mounted || !_settling) return;
+      await _settleCenterBeltResidual();
+    } on TickerCanceled {
+      return;
+    } finally {
+      if (mounted && _settling) {
+        setState(() {
+          _settling = false;
+        });
+        _logCenterCarousel('settled source=release');
+      }
+    }
+  }
+
+  Future<void> _settleCenterBeltResidual() async {
+    final travel = _centerBeltSnapTravel(_dragDx);
+    if (travel.abs() < 0.5) {
+      if (_dragDx != 0) {
+        setState(() => _dragDx = 0);
+      }
+      return;
+    }
+    _logCenterCarousel(
+      'settle residual=${_fmt(_dragDx)} travel=${_fmt(travel)}',
+    );
+    await _animateCenterBeltTravel(
+      travel,
+      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 120),
+    );
+  }
+
+  double _centerBeltSnapTravel(double residual) {
+    if (residual.abs() >= _switchThreshold) {
+      return residual < 0
+          ? -_centerCarouselSlotDistance - residual
+          : _centerCarouselSlotDistance - residual;
+    }
+    return -residual;
   }
 
   void _handleOrbitSurfacePointerDown(PointerDownEvent event) {
@@ -1911,6 +2035,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   void _syncSlideAnimation() {
     final animation = _slideAnimation;
     if (animation == null || !mounted) return;
+    if (_centerBeltAnimationActive &&
+        widget.backheaderStyle == BackheaderStyle.centerBadgeBudget) {
+      final value = animation.value;
+      final delta = value - _centerBeltAnimationLastValue;
+      _centerBeltAnimationLastValue = value;
+      _applyCenterBeltDelta(delta, source: 'inertia');
+      return;
+    }
     setState(() => _dragDx = animation.value);
   }
 
@@ -1969,38 +2101,6 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final distance = math.max(_dragTotalDx.abs(), _dragDx.abs());
     final velocity = details?.primaryVelocity?.abs() ?? 0;
     return _centerCarouselPlanFor(distance: distance, velocity: velocity).steps;
-  }
-
-  double _centerSurfaceReleaseVelocityDx(Duration releaseAt) {
-    final startedAt = _centerSurfaceStartedAt;
-    if (startedAt == null) return _centerSurfaceVelocityDx;
-    final effectiveReleaseAt = releaseAt > startedAt
-        ? releaseAt
-        : _centerSurfaceLastMoveAt;
-    if (effectiveReleaseAt == null) return _centerSurfaceVelocityDx;
-    final elapsed = effectiveReleaseAt - startedAt;
-    if (elapsed.inMicroseconds <= 0) return _centerSurfaceVelocityDx;
-    return _centerSurfaceDragDx /
-        elapsed.inMicroseconds *
-        Duration.microsecondsPerSecond;
-  }
-
-  bool _centerSurfaceReleaseSwipedLeft(double velocityDx) {
-    final totalDx = _centerSurfaceDragDx;
-    if (totalDx.abs() >= _switchThreshold) return totalDx < 0;
-    if (velocityDx.abs() >= 1200) return velocityDx < 0;
-    return (_dragDx == 0 ? totalDx : _dragDx) < 0;
-  }
-
-  _CenterCarouselPlan _centerSurfaceReleasePlan({required double velocityDx}) {
-    final dragDistance = math.max(
-      _centerSurfaceDragDx.abs(),
-      math.max(_dragTotalDx.abs(), _dragDx.abs()),
-    );
-    return _centerCarouselPlanFor(
-      distance: dragDistance,
-      velocity: velocityDx.abs(),
-    );
   }
 
   _CenterCarouselPlan _centerCarouselPlanFor({
@@ -2114,6 +2214,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     Curve curve = Curves.easeOutCubic,
     Duration duration = const Duration(milliseconds: 160),
   }) {
+    _centerBeltAnimationActive = false;
+    _centerBeltAnimationLastValue = 0;
     _slideController.stop();
     _slideController.duration = duration;
     _slideAnimation = Tween<double>(
@@ -2121,6 +2223,27 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       end: target,
     ).animate(CurvedAnimation(parent: _slideController, curve: curve));
     return _slideController.forward(from: 0);
+  }
+
+  Future<void> _animateCenterBeltTravel(
+    double travel, {
+    required Curve curve,
+    required Duration duration,
+  }) async {
+    _slideController.stop();
+    _slideController.duration = duration;
+    _centerBeltAnimationActive = true;
+    _centerBeltAnimationLastValue = 0;
+    _slideAnimation = Tween<double>(
+      begin: 0,
+      end: travel,
+    ).animate(CurvedAnimation(parent: _slideController, curve: curve));
+    try {
+      await _slideController.forward(from: 0).orCancel;
+    } finally {
+      _centerBeltAnimationActive = false;
+      _centerBeltAnimationLastValue = 0;
+    }
   }
 }
 
