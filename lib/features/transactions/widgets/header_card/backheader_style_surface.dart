@@ -37,6 +37,9 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerPrevious,
     this.centerNext,
     this.centerWheelDirection = 0,
+    this.centerWheelToken = 0,
+    this.centerWheelFrom,
+    this.centerWheelTo,
     this.centerExpandedExtent = 0,
     this.onCenterPreviousTap,
     this.onCenterNextTap,
@@ -76,6 +79,9 @@ class BackheaderStyleSurface extends StatelessWidget {
   final BackheaderBudgetItem? centerPrevious;
   final BackheaderBudgetItem? centerNext;
   final int centerWheelDirection;
+  final int centerWheelToken;
+  final BackheaderBudgetItem? centerWheelFrom;
+  final BackheaderBudgetItem? centerWheelTo;
   final double centerExpandedExtent;
   final VoidCallback? onCenterPreviousTap;
   final VoidCallback? onCenterNextTap;
@@ -138,6 +144,9 @@ class BackheaderStyleSurface extends StatelessWidget {
               previous: centerPrevious,
               next: centerNext,
               wheelDirection: centerWheelDirection,
+              wheelToken: centerWheelToken,
+              wheelFrom: centerWheelFrom,
+              wheelTo: centerWheelTo,
               expandedExtent: centerExpandedExtent,
               onPreviousTap: onCenterPreviousTap,
               onNextTap: onCenterNextTap,
@@ -464,6 +473,9 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.previous,
     required this.next,
     required this.wheelDirection,
+    required this.wheelToken,
+    required this.wheelFrom,
+    required this.wheelTo,
     required this.expandedExtent,
     required this.onPreviousTap,
     required this.onNextTap,
@@ -488,6 +500,9 @@ class _CenterBadgeBudget extends StatelessWidget {
   final BackheaderBudgetItem? previous;
   final BackheaderBudgetItem? next;
   final int wheelDirection;
+  final int wheelToken;
+  final BackheaderBudgetItem? wheelFrom;
+  final BackheaderBudgetItem? wheelTo;
   final double expandedExtent;
   final VoidCallback? onPreviousTap;
   final VoidCallback? onNextTap;
@@ -503,11 +518,14 @@ class _CenterBadgeBudget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeTop = MediaQuery.paddingOf(context).top;
+    final amountTop = safeTop + 8;
+    final railTop = safeTop + 50;
     return Stack(
       key: const ValueKey('backheader-style-centerBadgeBudget-content'),
       children: [
         Positioned(
-          top: 20,
+          top: amountTop,
           left: 24,
           right: 132,
           child: Text(
@@ -523,104 +541,33 @@ class _CenterBadgeBudget extends StatelessWidget {
             ),
           ),
         ),
-        Center(
-          child: SizedBox(
-            width: 196,
-            height: 112,
-            child: Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                if (previous != null)
-                  Positioned(
-                    left: 0,
-                    top: 17,
-                    child: _CenterPreviewBadge(
-                      key: const ValueKey('backheader-center-preview-previous'),
-                      item: previous!,
-                      onTap: onPreviousTap,
-                    ),
-                  ),
-                if (next != null)
-                  Positioned(
-                    right: 0,
-                    top: 17,
-                    child: _CenterPreviewBadge(
-                      key: const ValueKey('backheader-center-preview-next'),
-                      item: next!,
-                      onTap: onNextTap,
-                    ),
-                  ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 120),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      layoutBuilder: (currentChild, previousChildren) {
-                        return Stack(
-                          alignment: Alignment.center,
-                          children: [...previousChildren, ?currentChild],
-                        );
-                      },
-                      transitionBuilder: (child, animation) {
-                        final direction = wheelDirection == 0
-                            ? 1.0
-                            : wheelDirection.toDouble();
-                        final incoming =
-                            child.key ==
-                            ValueKey('backheader-center-active-${current.key}');
-                        final slide = Tween<Offset>(
-                          begin: Offset(
-                            (incoming ? direction : -direction) * 0.62,
-                            0,
-                          ),
-                          end: Offset.zero,
-                        ).animate(animation);
-                        final scale = Tween<double>(
-                          begin: 0.72,
-                          end: 1,
-                        ).animate(animation);
-                        return SlideTransition(
-                          position: slide,
-                          child: ScaleTransition(scale: scale, child: child),
-                        );
-                      },
-                      child: _CenterActiveBadge(
-                        key: ValueKey(
-                          'backheader-center-active-${current.key}',
-                        ),
-                        current: current,
-                        color: color,
-                        progress: progress,
-                        hasLimit: hasLimit,
-                        progressColor: progressColor,
-                        onBadgeLongPressStart: onBadgeLongPressStart,
-                        onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
-                        onBadgeLongPressEnd: onBadgeLongPressEnd,
-                        onBadgeLongPressCancel: onBadgeLongPressCancel,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: 142,
-                      child: Text(
-                        current.title,
-                        key: const ValueKey('backheader-center-badge-title'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.gray700,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          height: 1.05,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+        Positioned(
+          top: railTop,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: SizedBox(
+              width: 196,
+              height: 112,
+              child: _CenterBadgeWheel(
+                current: current,
+                currentColor: color,
+                progress: progress,
+                hasLimit: hasLimit,
+                progressColor: progressColor,
+                previous: previous,
+                next: next,
+                wheelDirection: wheelDirection,
+                wheelToken: wheelToken,
+                wheelFrom: wheelFrom,
+                wheelTo: wheelTo,
+                onPreviousTap: onPreviousTap,
+                onNextTap: onNextTap,
+                onBadgeLongPressStart: onBadgeLongPressStart,
+                onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
+                onBadgeLongPressEnd: onBadgeLongPressEnd,
+                onBadgeLongPressCancel: onBadgeLongPressCancel,
+              ),
             ),
           ),
         ),
@@ -675,6 +622,273 @@ class _CenterBadgeBudget extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _CenterBadgeWheel extends StatelessWidget {
+  const _CenterBadgeWheel({
+    required this.current,
+    required this.currentColor,
+    required this.progress,
+    required this.hasLimit,
+    required this.progressColor,
+    required this.previous,
+    required this.next,
+    required this.wheelDirection,
+    required this.wheelToken,
+    required this.wheelFrom,
+    required this.wheelTo,
+    required this.onPreviousTap,
+    required this.onNextTap,
+    required this.onBadgeLongPressStart,
+    required this.onBadgeLongPressMoveUpdate,
+    required this.onBadgeLongPressEnd,
+    required this.onBadgeLongPressCancel,
+  });
+
+  static const _width = 196.0;
+  static const _activeSize = 70.0;
+  static const _previewSize = 48.0;
+  static const _previewTop = 17.0;
+  static const _titleTop = 76.0;
+
+  final BackheaderBudgetItem current;
+  final Color currentColor;
+  final double progress;
+  final bool hasLimit;
+  final Color progressColor;
+  final BackheaderBudgetItem? previous;
+  final BackheaderBudgetItem? next;
+  final int wheelDirection;
+  final int wheelToken;
+  final BackheaderBudgetItem? wheelFrom;
+  final BackheaderBudgetItem? wheelTo;
+  final VoidCallback? onPreviousTap;
+  final VoidCallback? onNextTap;
+  final GestureLongPressStartCallback? onBadgeLongPressStart;
+  final GestureLongPressMoveUpdateCallback? onBadgeLongPressMoveUpdate;
+  final GestureLongPressEndCallback? onBadgeLongPressEnd;
+  final VoidCallback? onBadgeLongPressCancel;
+
+  bool get _isAnimating =>
+      wheelDirection != 0 && wheelFrom != null && wheelTo != null;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isAnimating) return _buildAnimated();
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        if (previous != null)
+          Positioned(
+            left: 0,
+            top: _previewTop,
+            child: _CenterPreviewBadge(
+              key: const ValueKey('backheader-center-preview-previous'),
+              item: previous!,
+              onTap: onPreviousTap,
+            ),
+          ),
+        if (next != null)
+          Positioned(
+            right: 0,
+            top: _previewTop,
+            child: _CenterPreviewBadge(
+              key: const ValueKey('backheader-center-preview-next'),
+              item: next!,
+              onTap: onNextTap,
+            ),
+          ),
+        Positioned(
+          top: 0,
+          child: _CenterActiveBadge(
+            key: ValueKey('backheader-center-active-${current.key}'),
+            current: current,
+            color: currentColor,
+            progress: progress,
+            hasLimit: hasLimit,
+            progressColor: progressColor,
+            onBadgeLongPressStart: onBadgeLongPressStart,
+            onBadgeLongPressMoveUpdate: onBadgeLongPressMoveUpdate,
+            onBadgeLongPressEnd: onBadgeLongPressEnd,
+            onBadgeLongPressCancel: onBadgeLongPressCancel,
+          ),
+        ),
+        Positioned(
+          top: _titleTop,
+          child: SizedBox(
+            width: 142,
+            child: Text(
+              current.title,
+              key: const ValueKey('backheader-center-badge-title'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.gray700,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                height: 1.05,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnimated() {
+    final direction = wheelDirection > 0 ? 1 : -1;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('backheader-center-wheel-$wheelToken'),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeInOutCubic,
+      builder: (context, value, child) {
+        final center = _slotFor(_WheelSlot.center);
+        final outgoingEdge = direction > 0
+            ? _slotFor(_WheelSlot.left)
+            : _slotFor(_WheelSlot.right);
+        final incomingEdge = direction > 0
+            ? _slotFor(_WheelSlot.right)
+            : _slotFor(_WheelSlot.left);
+        final outgoingOffset = Offset.lerp(center, outgoingEdge, value)!;
+        final incomingOffset = Offset.lerp(incomingEdge, center, value)!;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              key: const ValueKey('backheader-center-wheel-outgoing'),
+              left: outgoingOffset.dx,
+              top: outgoingOffset.dy,
+              child: Transform.scale(
+                scale: _lerp(1, 0.72, value),
+                child: _CenterMotionBadge(
+                  item: wheelFrom!,
+                  color: _itemColor(wheelFrom!),
+                  progress: progress,
+                  hasRing: hasLimit,
+                  progressColor: progressColor,
+                ),
+              ),
+            ),
+            Positioned(
+              key: const ValueKey('backheader-center-wheel-incoming'),
+              left: incomingOffset.dx,
+              top: incomingOffset.dy,
+              child: Transform.scale(
+                scale: _lerp(0.72, 1, value),
+                child: _CenterMotionBadge(
+                  item: wheelTo!,
+                  color: _itemColor(wheelTo!),
+                  progress: 0,
+                  hasRing: false,
+                  progressColor: progressColor,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Offset _slotFor(_WheelSlot slot) {
+    const centerLeft = (_width - _activeSize) / 2;
+    const edgeTop = _previewTop + (_previewSize / 2) - (_activeSize / 2);
+    return switch (slot) {
+      _WheelSlot.left => const Offset(
+        (_previewSize / 2) - (_activeSize / 2),
+        edgeTop,
+      ),
+      _WheelSlot.center => const Offset(centerLeft, 0),
+      _WheelSlot.right => const Offset(
+        _width - (_previewSize / 2) - (_activeSize / 2),
+        edgeTop,
+      ),
+    };
+  }
+
+  double _lerp(double begin, double end, double value) {
+    return begin + (end - begin) * value;
+  }
+
+  Color _itemColor(BackheaderBudgetItem item) {
+    final category = item.category;
+    if (category != null) return category.color;
+    return switch (item.overview?.kind) {
+      BudgetGoalKind.incomeGoal => AppColors.income,
+      BudgetGoalKind.savingGoal => const Color(0xFF3B82F6),
+      _ => AppColors.primary,
+    };
+  }
+}
+
+enum _WheelSlot { left, center, right }
+
+class _CenterMotionBadge extends StatelessWidget {
+  const _CenterMotionBadge({
+    required this.item,
+    required this.color,
+    required this.progress,
+    required this.hasRing,
+    required this.progressColor,
+  });
+
+  final BackheaderBudgetItem item;
+  final Color color;
+  final double progress;
+  final bool hasRing;
+  final Color progressColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 70,
+      height: 70,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (hasRing)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _CenterBadgeProgressRingPainter(
+                  progress: progress,
+                  color: progressColor,
+                  showFill: true,
+                ),
+              ),
+            ),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: item.category == null
+                ? Icon(
+                    _overviewIcon(item.overview?.kind),
+                    color: AppColors.white,
+                    size: 26,
+                  )
+                : CategorySlotIcon(
+                    slot: item.category!.iconSlot,
+                    color: AppColors.white,
+                    size: 27,
+                    strokeWidth: 1,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _overviewIcon(BudgetGoalKind? kind) {
+    return switch (kind) {
+      BudgetGoalKind.expenseBudget => Icons.account_balance_wallet_outlined,
+      BudgetGoalKind.incomeGoal => Icons.trending_up,
+      BudgetGoalKind.savingGoal => Icons.savings_outlined,
+      null => Icons.account_balance_wallet_outlined,
+    };
   }
 }
 

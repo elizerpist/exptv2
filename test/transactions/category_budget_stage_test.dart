@@ -556,6 +556,51 @@ void main() {
     },
   );
 
+  testWidgets(
+    'centerBadgeBudget keeps amount below status bar and lowers badge rail',
+    (tester) async {
+      final food = barFixture(6, 'Food', 100, 500);
+      final travel = barFixture(7, 'Travel', 40, 0);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(padding: EdgeInsets.only(top: 35)),
+            child: Scaffold(
+              body: SizedBox(
+                width: 390,
+                height: 340,
+                child: CategoryBudgetStage(
+                  backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                  items: [
+                    BackheaderBudgetItem.category(food),
+                    BackheaderBudgetItem.category(travel),
+                  ],
+                  categoryBars: [food, travel],
+                  activeKey: BackheaderBudgetItem.category(food).key,
+                  onItemTap: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final surfaceRect = tester.getRect(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      final amountRect = tester.getRect(
+        find.byKey(const ValueKey('backheader-center-badge-amount')),
+      );
+      final badgeRect = tester.getRect(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+
+      expect(amountRect.top - surfaceRect.top, greaterThanOrEqualTo(43));
+      expect(badgeRect.top, greaterThanOrEqualTo(amountRect.bottom + 24));
+    },
+  );
+
   testWidgets('centerBadgeBudget carousel previews tap and fast swipe skips', (
     tester,
   ) async {
@@ -607,6 +652,70 @@ void main() {
 
     expect(selected, ['Travel', 'Books', 'Health']);
   });
+
+  testWidgets(
+    'centerBadgeBudget wheel hides static edge badges during tick animation',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onActiveItemChanged: (_) {},
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-previous')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next')),
+        findsOneWidget,
+      );
+
+      await tester.fling(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+        const Offset(-180, 0),
+        1000,
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-previous')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-preview-next')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-wheel-outgoing')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backheader-center-wheel-incoming')),
+        findsOneWidget,
+      );
+
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('centerBadgeBudget badge joystick adjusts limit live', (
     tester,

@@ -110,6 +110,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   var _dragDx = 0.0;
   var _dragTotalDx = 0.0;
   var _centerWheelDirection = 0;
+  var _centerWheelToken = 0;
+  BackheaderBudgetItem? _centerWheelFrom;
+  BackheaderBudgetItem? _centerWheelTo;
   var _settling = false;
   var _orbitClosePull = 0.0;
   var _orbitGestureDx = 0.0;
@@ -384,6 +387,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
             ? items[nextIndex]
             : null,
         centerWheelDirection: isCenterBadgeBudget ? _centerWheelDirection : 0,
+        centerWheelToken: isCenterBadgeBudget ? _centerWheelToken : 0,
+        centerWheelFrom: isCenterBadgeBudget ? _centerWheelFrom : null,
+        centerWheelTo: isCenterBadgeBudget ? _centerWheelTo : null,
         centerExpandedExtent: isCenterBadgeBudget ? _orbitClosePull : 0,
         onCenterPreviousTap: isCenterBadgeBudget && !preview
             ? () => _selectCenterPreviewIndex(previousIndex)
@@ -1465,6 +1471,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
       _index = nextIndex;
       _dragDx = 0;
       _settling = false;
+      _centerWheelDirection = 0;
+      _centerWheelFrom = null;
+      _centerWheelTo = null;
     });
     _syncOrbitAmountController(items[nextIndex]);
     widget.onActiveItemChanged?.call(items[nextIndex]);
@@ -1759,20 +1768,34 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     setState(() {
       _dragDx = 0;
       _dragTotalDx = 0;
-      _centerWheelDirection = swipedLeft ? 1 : -1;
     });
     for (var step = 0; step < normalizedSteps; step += 1) {
       if (!mounted) return;
+      final from = _items[_index];
+      final nextIndex = swipedLeft
+          ? (_index + 1) % items.length
+          : (_index - 1) % items.length;
+      final normalizedNextIndex = nextIndex < 0
+          ? nextIndex + items.length
+          : nextIndex;
+      final to = _items[normalizedNextIndex];
       HapticFeedback.selectionClick();
       setState(() {
-        _index = swipedLeft
-            ? (_index + 1) % items.length
-            : (_index - 1) % items.length;
+        _centerWheelDirection = swipedLeft ? 1 : -1;
+        _centerWheelFrom = from;
+        _centerWheelTo = to;
+        _centerWheelToken += 1;
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 130));
+      if (!mounted) return;
+      setState(() {
+        _index = normalizedNextIndex;
         if (_index < 0) _index += items.length;
+        _centerWheelFrom = null;
+        _centerWheelTo = null;
       });
       _syncOrbitAmountController(_items[_index]);
       widget.onActiveItemChanged?.call(_items[_index]);
-      await Future<void>.delayed(const Duration(milliseconds: 130));
     }
     if (!mounted) return;
     setState(() {
