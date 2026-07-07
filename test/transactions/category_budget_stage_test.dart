@@ -639,9 +639,13 @@ void main() {
       expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
       expect(
         badgeRect.top,
-        moreOrLessEquals(surfaceRect.top + 67.5, epsilon: 0.75),
+        moreOrLessEquals(surfaceRect.top + 65.5, epsilon: 0.75),
       );
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
+      expect(
+        titleRect.top,
+        moreOrLessEquals(surfaceRect.top + 140, epsilon: 0.75),
+      );
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
       expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 10));
       expect(
@@ -850,19 +854,19 @@ void main() {
     );
     expect(
       tester.getSize(previousEdge).width,
-      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousFarthest).width,
-      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousOuter).width,
-      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousInner).width,
-      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester

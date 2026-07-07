@@ -31,9 +31,14 @@ enum BackheaderStyle {
   const BackheaderStyle(this.nativeValue);
   final String nativeValue;
 
+  static const selectableValues = <BackheaderStyle>[
+    BackheaderStyle.classic,
+    BackheaderStyle.centerBadgeBudget,
+  ];
+
   static BackheaderStyle fromAny(Object? value) {
     final raw = value?.toString();
-    return BackheaderStyle.values.firstWhere(
+    return selectableValues.firstWhere(
       (item) => item.nativeValue == raw,
       orElse: () => BackheaderStyle.classic,
     );

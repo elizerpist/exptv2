@@ -34,6 +34,23 @@ void main() {
     );
   });
 
+  test('legacy token backheader styles fall back to classic', () {
+    expect(BackheaderStyle.fromAny('heroToken'), BackheaderStyle.classic);
+    expect(BackheaderStyle.fromAny('orbitBudget'), BackheaderStyle.classic);
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'backheaderStyle': 'heroToken',
+      }).backheaderStyle,
+      BackheaderStyle.classic,
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'backheaderStyle': 'orbitBudget',
+      }).backheaderStyle,
+      BackheaderStyle.classic,
+    );
+  });
+
   testWidgets('backheader style panel lists classic and experimental styles', (
     tester,
   ) async {
@@ -50,8 +67,8 @@ void main() {
     );
 
     expect(find.text('Jelenlegi bar rendszer (jelenlegi)'), findsOneWidget);
-    expect(find.text('C - Hero Token'), findsOneWidget);
-    expect(find.text('D - Orbit Budget'), findsOneWidget);
+    expect(find.text('C - Hero Token'), findsNothing);
+    expect(find.text('D - Orbit Budget'), findsNothing);
     expect(find.text('E - Center Badge Budget'), findsOneWidget);
     expect(find.text('A - Color Field Partition'), findsNothing);
     expect(find.text('B - Partition Dashboard'), findsNothing);
@@ -63,11 +80,11 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('backheader-style-preview-heroToken')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('backheader-style-preview-orbitBudget')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('backheader-style-preview-centerBadgeBudget')),
@@ -87,11 +104,6 @@ void main() {
         ),
       ),
     );
-
-    await tester.tap(find.text('D - Orbit Budget'));
-    await tester.pump();
-
-    expect(updated?.backheaderStyle, BackheaderStyle.orbitBudget);
 
     await tester.tap(find.text('E - Center Badge Budget'));
     await tester.pump();

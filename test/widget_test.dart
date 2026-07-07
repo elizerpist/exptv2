@@ -1228,19 +1228,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Jelenlegi bar rendszer (jelenlegi)'), findsOneWidget);
-    expect(find.text('C - Hero Token'), findsOneWidget);
-    expect(find.text('D - Orbit Budget'), findsOneWidget);
+    expect(find.text('C - Hero Token'), findsNothing);
+    expect(find.text('D - Orbit Budget'), findsNothing);
+    expect(find.text('E - Center Badge Budget'), findsOneWidget);
     expect(find.text('A - Color Field Partition'), findsNothing);
     expect(find.text('B - Partition Dashboard'), findsNothing);
     expect(find.text('E - Mosaic Budget'), findsNothing);
     expect(find.text('F - Ledger Strip'), findsNothing);
 
-    await tester.ensureVisible(find.text('D - Orbit Budget'));
+    await tester.ensureVisible(find.text('E - Center Badge Budget'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('D - Orbit Budget'));
+    await tester.tap(find.text('E - Center Badge Budget'));
     await tester.pumpAndSettle();
 
-    expect(updatedThemeSettings.single['backheaderStyle'], 'orbitBudget');
+    expect(updatedThemeSettings.single['backheaderStyle'], 'centerBadgeBudget');
   });
 
   testWidgets('settings contains push parser profiles and app picker', (

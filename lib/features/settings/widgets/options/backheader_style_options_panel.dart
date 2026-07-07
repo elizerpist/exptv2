@@ -23,7 +23,7 @@ class BackheaderStyleOptionsPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final style in BackheaderStyle.values)
+            for (final style in BackheaderStyle.selectableValues)
               SettingsRadioOption(
                 title:
                     '${style.displayTitle}${settings.backheaderStyle == style ? ' (jelenlegi)' : ''}',

@@ -600,7 +600,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 21;
+    final railTop = safeTop + 19;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
     final periodColor = coloredDesign
@@ -794,13 +794,13 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   static const width = 386.0;
   static const _activeSize = 78.0 * 1.15;
-  static const _innerPreviewSize = 48.0 * 1.10 * 1.10 * 1.10 * 1.10;
-  static const _outerPreviewSize = 40.0 * 1.10 * 1.10 * 1.10 * 1.10;
-  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10 * 1.10 * 1.10;
-  static const _edgePreviewSize = 28.0 * 1.10 * 1.10 * 1.10 * 1.10;
-  static const _slotSpacing = 70.5;
+  static const _innerPreviewSize = 48.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _outerPreviewSize = 40.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _edgePreviewSize = 28.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _slotSpacing = 73.1;
   static const _compressedOuterSpacing = 38.0;
-  static const _titleTop = 82.0;
+  static const _titleTop = 86.0;
 
   final BackheaderBudgetItem current;
   final List<BackheaderBudgetItem> items;

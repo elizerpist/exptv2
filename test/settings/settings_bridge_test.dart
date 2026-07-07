@@ -302,7 +302,7 @@ void main() {
       settings.themeSettings.ghostLogboxSettings.expectedLabelEnabled,
       isTrue,
     );
-    expect(settings.themeSettings.backheaderStyle, BackheaderStyle.heroToken);
+    expect(settings.themeSettings.backheaderStyle, BackheaderStyle.classic);
     expect(
       settings.themeSettings.categoryMenuPresentation,
       CategoryMenuPresentation.slideUpSheet,
@@ -347,7 +347,7 @@ void main() {
         'categoryMenuSurfaceStyle': 'insetInset',
         'categoryCardColor': 'white',
         'categoryCardSurfaceStyle': 'raisedInset',
-        'backheaderStyle': 'orbitBudget',
+        'backheaderStyle': 'centerBadgeBudget',
         'centerBackheaderDesign': 'colored',
         'centerPartitionRingEnabled': true,
         'appColor': 'pink',
@@ -396,7 +396,7 @@ void main() {
     );
     expect(ghostPayload['textTone'], 'gray');
     expect(ghostPayload['expectedLabelEnabled'], isFalse);
-    expect(payload['backheaderStyle'], 'orbitBudget');
+    expect(payload['backheaderStyle'], 'centerBadgeBudget');
     expect(payload['centerBackheaderDesign'], 'colored');
     expect(payload['centerPartitionRingEnabled'], isTrue);
     expect(payload.containsKey('designProfile'), isFalse);
@@ -420,6 +420,18 @@ void main() {
       expect(
         AppThemeSettings.fromMap(const <String, Object?>{
           'backheaderStyle': 'mosaicBudget',
+        }).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{
+          'backheaderStyle': 'heroToken',
+        }).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{
+          'backheaderStyle': 'orbitBudget',
         }).backheaderStyle,
         BackheaderStyle.classic,
       );

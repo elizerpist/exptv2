@@ -102,7 +102,7 @@ class ExpenseSettingsStoreSecurityTest {
                 "boxColor" to "gray",
                 "buttonSurfaceStyle" to "neutralNeutral",
                 "contentSurfaceStyle" to "neutralNeutral",
-                "backheaderStyle" to "orbitBudget",
+                "backheaderStyle" to "centerBadgeBudget",
                 "centerBackheaderDesign" to "colored",
                 "centerPartitionRingEnabled" to true,
                 "designProfile" to "neumorphism",
