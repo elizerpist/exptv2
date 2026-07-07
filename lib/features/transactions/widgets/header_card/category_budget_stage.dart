@@ -98,6 +98,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   static const _orbitCloseArmDistance = 54.0;
   static const _orbitMaxClosePull = 64.0;
   static const _centerCarouselSlotDistance = 64.0;
+  static const _centerCarouselHalfSlotDistance =
+      _centerCarouselSlotDistance / 2;
+  static const _centerCarouselDirectionalSnapMin = 16.0;
   static const _centerJoystickDeadZone = 10.0;
   static const _centerJoystickTickInterval = Duration(milliseconds: 90);
 
@@ -144,6 +147,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   Duration? _centerSurfaceLastMoveAt;
   var _centerBeltAnimationActive = false;
   var _centerBeltAnimationLastValue = 0.0;
+  var _centerBeltReleaseDxDirection = 0;
   BackheaderBudgetItem? _pendingCenterActiveItem;
   var _orbitUpdatingController = false;
 
@@ -1461,6 +1465,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     _slideController.stop();
     _centerBeltAnimationActive = false;
     _centerBeltAnimationLastValue = 0;
+    _centerBeltReleaseDxDirection = 0;
     _settling = false;
     _flushPendingCenterActiveItem(source: 'interrupt');
     _dragTotalDx = 0;
@@ -1619,6 +1624,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     if (_settling) return;
     final speed = velocityDx.abs();
     final residual = _dragDx;
+    final preferredDxDirection = _centerBeltPreferredDxDirection(
+      velocityDx: velocityDx,
+      residual: residual,
+    );
     final inertialTravel = speed < 700
         ? 0.0
         : (velocityDx * 0.055)
@@ -1627,11 +1636,23 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
                 _centerCarouselSlotDistance * 3,
               )
               .toDouble();
+    final directionalSnapAllowed =
+        inertialTravel != 0 ||
+        _pendingCenterActiveItem != null ||
+        _dragTotalDx.abs() >= _centerCarouselSlotDistance ||
+        residual.abs() >= _centerCarouselHalfSlotDistance;
+    _centerBeltReleaseDxDirection = inertialTravel == 0
+        ? preferredDxDirection
+        : _dxDirectionFor(inertialTravel);
     final travel = inertialTravel == 0
-        ? _centerBeltSnapTravel(residual)
+        ? _centerBeltSnapTravel(
+            residual,
+            preferredDxDirection: preferredDxDirection,
+            allowDirectionalSnap: directionalSnapAllowed,
+          )
         : inertialTravel;
     _logCenterCarousel(
-      'release travel=${_fmt(travel)} residual=${_fmt(residual)} velocity=${_fmt(velocityDx)}',
+      'release travel=${_fmt(travel)} residual=${_fmt(residual)} velocity=${_fmt(velocityDx)} direction=$_centerBeltReleaseDxDirection directionalSnap=$directionalSnapAllowed',
     );
     _settling = true;
     try {
@@ -1648,7 +1669,10 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         );
       }
       if (!mounted || !_settling) return;
-      await _settleCenterBeltResidual();
+      await _settleCenterBeltResidual(
+        preferredDxDirection: _centerBeltReleaseDxDirection,
+        allowDirectionalSnap: directionalSnapAllowed,
+      );
     } on TickerCanceled {
       return;
     } finally {
@@ -1657,13 +1681,21 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         setState(() {
           _settling = false;
         });
+        _centerBeltReleaseDxDirection = 0;
         _logCenterCarousel('settled source=release');
       }
     }
   }
 
-  Future<void> _settleCenterBeltResidual() async {
-    final travel = _centerBeltSnapTravel(_dragDx);
+  Future<void> _settleCenterBeltResidual({
+    required int preferredDxDirection,
+    required bool allowDirectionalSnap,
+  }) async {
+    final travel = _centerBeltSnapTravel(
+      _dragDx,
+      preferredDxDirection: preferredDxDirection,
+      allowDirectionalSnap: allowDirectionalSnap,
+    );
     if (travel.abs() < 0.5) {
       if (_dragDx != 0) {
         setState(() => _dragDx = 0);
@@ -1680,13 +1712,45 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     );
   }
 
-  double _centerBeltSnapTravel(double residual) {
+  double _centerBeltSnapTravel(
+    double residual, {
+    int preferredDxDirection = 0,
+    bool allowDirectionalSnap = false,
+  }) {
+    final residualDirection = _dxDirectionFor(residual);
+    if (allowDirectionalSnap &&
+        preferredDxDirection != 0 &&
+        residualDirection == preferredDxDirection &&
+        residual.abs() >= _centerCarouselDirectionalSnapMin) {
+      return preferredDxDirection < 0
+          ? -_centerCarouselSlotDistance - residual
+          : _centerCarouselSlotDistance - residual;
+    }
     if (residual.abs() >= _switchThreshold) {
       return residual < 0
           ? -_centerCarouselSlotDistance - residual
           : _centerCarouselSlotDistance - residual;
     }
     return -residual;
+  }
+
+  int _centerBeltPreferredDxDirection({
+    required double velocityDx,
+    required double residual,
+  }) {
+    final velocityDirection = _dxDirectionFor(velocityDx);
+    if (velocityDirection != 0 && velocityDx.abs() >= 50) {
+      return velocityDirection;
+    }
+    final dragDirection = _dxDirectionFor(_dragTotalDx);
+    if (dragDirection != 0) return dragDirection;
+    return _dxDirectionFor(residual);
+  }
+
+  int _dxDirectionFor(double value) {
+    if (value > 0.5) return 1;
+    if (value < -0.5) return -1;
+    return 0;
   }
 
   void _flushPendingCenterActiveItem({required String source}) {
