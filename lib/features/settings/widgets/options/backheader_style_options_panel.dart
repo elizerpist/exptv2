@@ -140,21 +140,11 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
   static const _distanceLabels = [
     'Közép',
     'Mellette',
-    'Következő',
-    'Távoli',
+    'Második pár',
+    'Harmadik pár',
     'Szél',
   ];
-  static const _slotLabels = [
-    'Bal 4',
-    'Bal 3',
-    'Bal 2',
-    'Bal 1',
-    'Közép',
-    'Jobb 1',
-    'Jobb 2',
-    'Jobb 3',
-    'Jobb 4',
-  ];
+  static const _centerSlotIndex = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -168,64 +158,35 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Fehér opacity finomhangolás',
-            style: TextStyle(
-              color: Color(0xFF1F2937),
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Fehér opacity finomhangolás',
+                  style: TextStyle(
+                    color: Color(0xFF1F2937),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('center-badge-tuning-reset-button'),
+                onPressed: _resetTuning,
+                child: const Text('Reset'),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           const Text(
-            'Csak a színes Center Badge fehér rétegeire vonatkozik.',
+            'Csak a színes Center Badge fehér rétegeire vonatkozik. A vezérlők páronként, a középtől mért távolság szerint állítanak.',
             style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
           ),
           const SizedBox(height: 12),
-          _buildGroup(
-            title: 'Korong',
-            keyPrefix: 'disc',
-            values: settings.centerBadgeWhiteDiscOpacities,
-            onValueChanged: (index, value) => onChanged(
-              settings.copyWith(
-                centerBadgeWhiteDiscOpacities: _replaceAt(
-                  settings.centerBadgeWhiteDiscOpacities,
-                  index,
-                  value,
-                ),
-              ),
-            ),
+          _CenterBadgeRelativeScaleSection(
+            settings: settings,
+            onChanged: onChanged,
           ),
-          const SizedBox(height: 10),
-          _buildGroup(
-            title: 'Ikon',
-            keyPrefix: 'icon',
-            values: settings.centerBadgeWhiteIconOpacities,
-            onValueChanged: (index, value) => onChanged(
-              settings.copyWith(
-                centerBadgeWhiteIconOpacities: _replaceAt(
-                  settings.centerBadgeWhiteIconOpacities,
-                  index,
-                  value,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildGroup(
-            title: 'Progress circle',
-            keyPrefix: 'progress',
-            values: settings.centerBadgeWhiteProgressOpacities,
-            onValueChanged: (index, value) => onChanged(
-              settings.copyWith(
-                centerBadgeWhiteProgressOpacities: _replaceAt(
-                  settings.centerBadgeWhiteProgressOpacities,
-                  index,
-                  value,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _CenterBadgeOpacityRow(
             label: 'Háttér opacity',
             sliderKey: const ValueKey('center-badge-opacity-background-slider'),
@@ -249,51 +210,6 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
             style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
           ),
           const SizedBox(height: 12),
-          _buildGroup(
-            title: 'Badge fill',
-            keyPrefix: 'colored-opacity-fill',
-            values: settings.centerBadgeColoredFillOpacities,
-            onValueChanged: (index, value) => onChanged(
-              settings.copyWith(
-                centerBadgeColoredFillOpacities: _replaceAt(
-                  settings.centerBadgeColoredFillOpacities,
-                  index,
-                  value,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildGroup(
-            title: 'Ikon',
-            keyPrefix: 'colored-opacity-icon',
-            values: settings.centerBadgeColoredIconOpacities,
-            onValueChanged: (index, value) => onChanged(
-              settings.copyWith(
-                centerBadgeColoredIconOpacities: _replaceAt(
-                  settings.centerBadgeColoredIconOpacities,
-                  index,
-                  value,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildGroup(
-            title: 'Progress circle',
-            keyPrefix: 'colored-opacity-progress',
-            values: settings.centerBadgeColoredProgressOpacities,
-            onValueChanged: (index, value) => onChanged(
-              settings.copyWith(
-                centerBadgeColoredProgressOpacities: _replaceAt(
-                  settings.centerBadgeColoredProgressOpacities,
-                  index,
-                  value,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
           const Text(
             'Badge méret és pozíció',
             style: TextStyle(
@@ -303,96 +219,227 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Slotonkénti méret (%) és vízszintes X offset (px) élő finomhangoláshoz.',
+            'Öt távolsági szekció: közép, majd a bal-jobb badge párok. A távolság érték pozitívan kifelé, negatívan befelé mozgat.',
             style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
           ),
           const SizedBox(height: 12),
-          for (var index = 0; index < _slotLabels.length; index += 1) ...[
-            _CenterBadgeOpacityRow(
-              label: '${_slotLabels[index]} méret',
-              sliderKey: ValueKey('center-badge-slot-size-$index-slider'),
-              inputKey: ValueKey('center-badge-slot-size-$index-input'),
-              value: settings.centerBadgeSlotSizePercents[index],
-              min: kCenterBadgeSlotSizePercentMin,
-              max: kCenterBadgeSlotSizePercentMax,
-              onChanged: (value) => onChanged(
-                settings.copyWith(
-                  centerBadgeSlotSizePercents: _replaceAtBounded(
-                    settings.centerBadgeSlotSizePercents,
-                    index,
-                    value,
-                    min: kCenterBadgeSlotSizePercentMin,
-                    max: kCenterBadgeSlotSizePercentMax,
-                  ),
-                ),
-              ),
-            ),
-            _CenterBadgeOpacityRow(
-              label: '${_slotLabels[index]} X',
-              sliderKey: ValueKey('center-badge-slot-x-offset-$index-slider'),
-              inputKey: ValueKey('center-badge-slot-x-offset-$index-input'),
-              value: settings.centerBadgeSlotXOffsets[index],
-              min: kCenterBadgeSlotXOffsetMin,
-              max: kCenterBadgeSlotXOffsetMax,
-              onChanged: (value) => onChanged(
-                settings.copyWith(
-                  centerBadgeSlotXOffsets: _replaceAtBounded(
-                    settings.centerBadgeSlotXOffsets,
-                    index,
-                    value,
-                    min: kCenterBadgeSlotXOffsetMin,
-                    max: kCenterBadgeSlotXOffsetMax,
-                  ),
-                ),
-              ),
-            ),
-            if (index != _slotLabels.length - 1) const SizedBox(height: 6),
-          ],
+          for (
+            var distance = 0;
+            distance < _distanceLabels.length;
+            distance += 1
+          )
+            _buildDistanceSection(distance),
         ],
       ),
     );
   }
 
-  Widget _buildGroup({
-    required String title,
-    required String keyPrefix,
-    required List<int> values,
-    required void Function(int index, int value) onValueChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF374151),
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+  Widget _buildDistanceSection(int distance) {
+    return Container(
+      key: ValueKey('center-badge-tuning-section-$distance'),
+      margin: EdgeInsets.only(
+        bottom: distance == _distanceLabels.length - 1 ? 0 : 12,
+      ),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _distanceLabels[distance],
+            style: const TextStyle(
+              color: Color(0xFF374151),
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        for (var index = 0; index < _distanceLabels.length; index += 1)
+          const SizedBox(height: 8),
+          _buildOpacityRow(
+            label: 'Fehér korong',
+            keyName: 'opacity-disc',
+            values: settings.centerBadgeWhiteDiscOpacities,
+            distance: distance,
+            onValuesChanged: (values) => onChanged(
+              settings.copyWith(centerBadgeWhiteDiscOpacities: values),
+            ),
+          ),
+          _buildOpacityRow(
+            label: 'Fehér ikon',
+            keyName: 'opacity-icon',
+            values: settings.centerBadgeWhiteIconOpacities,
+            distance: distance,
+            onValuesChanged: (values) => onChanged(
+              settings.copyWith(centerBadgeWhiteIconOpacities: values),
+            ),
+          ),
+          _buildOpacityRow(
+            label: 'Fehér progress',
+            keyName: 'opacity-progress',
+            values: settings.centerBadgeWhiteProgressOpacities,
+            distance: distance,
+            onValuesChanged: (values) => onChanged(
+              settings.copyWith(centerBadgeWhiteProgressOpacities: values),
+            ),
+          ),
+          _buildOpacityRow(
+            label: 'Színes fill',
+            keyName: 'colored-opacity-fill',
+            values: settings.centerBadgeColoredFillOpacities,
+            distance: distance,
+            onValuesChanged: (values) => onChanged(
+              settings.copyWith(centerBadgeColoredFillOpacities: values),
+            ),
+          ),
+          _buildOpacityRow(
+            label: 'Színes ikon',
+            keyName: 'colored-opacity-icon',
+            values: settings.centerBadgeColoredIconOpacities,
+            distance: distance,
+            onValuesChanged: (values) => onChanged(
+              settings.copyWith(centerBadgeColoredIconOpacities: values),
+            ),
+          ),
+          _buildOpacityRow(
+            label: 'Színes progress',
+            keyName: 'colored-opacity-progress',
+            values: settings.centerBadgeColoredProgressOpacities,
+            distance: distance,
+            onValuesChanged: (values) => onChanged(
+              settings.copyWith(centerBadgeColoredProgressOpacities: values),
+            ),
+          ),
           _CenterBadgeOpacityRow(
-            label: _distanceLabels[index],
-            sliderKey: ValueKey(
-              keyPrefix.startsWith('colored-')
-                  ? 'center-badge-$keyPrefix-$index-slider'
-                  : 'center-badge-opacity-$keyPrefix-$index-slider',
+            label: 'Méret',
+            sliderKey: ValueKey('center-badge-pair-size-$distance-slider'),
+            inputKey: ValueKey('center-badge-pair-size-$distance-input'),
+            value: _pairSizeValue(distance),
+            min: kCenterBadgeSlotSizePercentMin,
+            max: kCenterBadgeSlotSizePercentMax,
+            onChanged: (value) => onChanged(
+              settings.copyWith(
+                centerBadgeSlotSizePercents: _replacePairDistance(
+                  settings.centerBadgeSlotSizePercents,
+                  distance,
+                  value,
+                  min: kCenterBadgeSlotSizePercentMin,
+                  max: kCenterBadgeSlotSizePercentMax,
+                ),
+              ),
             ),
-            inputKey: ValueKey(
-              keyPrefix.startsWith('colored-')
-                  ? 'center-badge-$keyPrefix-$index-input'
-                  : 'center-badge-opacity-$keyPrefix-$index-input',
-            ),
-            value: values[index],
-            onChanged: (value) => onValueChanged(index, value),
           ),
-      ],
+          if (distance > 0)
+            _CenterBadgeOpacityRow(
+              label: 'Távolság',
+              sliderKey: ValueKey(
+                'center-badge-distance-offset-$distance-slider',
+              ),
+              inputKey: ValueKey(
+                'center-badge-distance-offset-$distance-input',
+              ),
+              value: _pairDistanceOffsetValue(distance),
+              min: kCenterBadgeSlotXOffsetMin,
+              max: kCenterBadgeSlotXOffsetMax,
+              onChanged: (value) => onChanged(
+                settings.copyWith(
+                  centerBadgeSlotXOffsets: _replaceDistanceOffset(
+                    settings.centerBadgeSlotXOffsets,
+                    distance,
+                    value,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  List<int> _replaceAt(List<int> values, int index, int value) {
-    return _replaceAtBounded(values, index, value, min: 0, max: 100);
+  Widget _buildOpacityRow({
+    required String label,
+    required String keyName,
+    required List<int> values,
+    required int distance,
+    required ValueChanged<List<int>> onValuesChanged,
+  }) {
+    return _CenterBadgeOpacityRow(
+      label: label,
+      sliderKey: ValueKey('center-badge-$keyName-$distance-slider'),
+      inputKey: ValueKey('center-badge-$keyName-$distance-input'),
+      value: values[distance],
+      onChanged: (value) => onValuesChanged(
+        _replaceAtBounded(values, distance, value, min: 0, max: 100),
+      ),
+    );
+  }
+
+  int _pairSizeValue(int distance) {
+    if (distance == 0) {
+      return settings.centerBadgeSlotSizePercents[_centerSlotIndex];
+    }
+    return settings.centerBadgeSlotSizePercents[_centerSlotIndex + distance];
+  }
+
+  int _pairDistanceOffsetValue(int distance) {
+    final left = settings.centerBadgeSlotXOffsets[_centerSlotIndex - distance];
+    final right = settings.centerBadgeSlotXOffsets[_centerSlotIndex + distance];
+    return ((right - left) / 2).round();
+  }
+
+  List<int> _replacePairDistance(
+    List<int> values,
+    int distance,
+    int value, {
+    required int min,
+    required int max,
+  }) {
+    final next = List<int>.of(values);
+    final clamped = _clampNumber(value, min: min, max: max);
+    if (distance == 0) {
+      next[_centerSlotIndex] = clamped;
+      return next;
+    }
+    next[_centerSlotIndex - distance] = clamped;
+    next[_centerSlotIndex + distance] = clamped;
+    return next;
+  }
+
+  List<int> _replaceDistanceOffset(List<int> values, int distance, int value) {
+    final next = List<int>.of(values);
+    final clamped = _clampNumber(
+      value,
+      min: kCenterBadgeSlotXOffsetMin,
+      max: kCenterBadgeSlotXOffsetMax,
+    );
+    next[_centerSlotIndex - distance] = -clamped;
+    next[_centerSlotIndex + distance] = clamped;
+    return next;
+  }
+
+  void _resetTuning() {
+    onChanged(
+      settings.copyWith(
+        centerPartitionRingEnabled: false,
+        centerBadgeDiscEnabled: true,
+        centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
+        centerBadgeOverlapMaskEnabled: false,
+        centerBadgeWhiteDiscOpacities: kCenterBadgeWhiteDiscOpacityDefaults,
+        centerBadgeWhiteIconOpacities: kCenterBadgeWhiteIconOpacityDefaults,
+        centerBadgeWhiteProgressOpacities:
+            kCenterBadgeWhiteProgressOpacityDefaults,
+        centerBadgeColoredFillOpacities: kCenterBadgeColoredFillOpacityDefaults,
+        centerBadgeColoredIconOpacities: kCenterBadgeColoredIconOpacityDefaults,
+        centerBadgeColoredProgressOpacities:
+            kCenterBadgeColoredProgressOpacityDefaults,
+        centerBadgeSlotSizePercents: kCenterBadgeSlotSizePercentDefaults,
+        centerBadgeSlotXOffsets: kCenterBadgeSlotXOffsetDefaults,
+        centerBadgeColoredBackgroundOpacity:
+            kCenterBadgeColoredBackgroundOpacityDefault,
+      ),
+    );
   }
 
   List<int> _replaceAtBounded(
@@ -408,11 +455,151 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
   }
 }
 
+class _CenterBadgeRelativeScaleSection extends StatefulWidget {
+  const _CenterBadgeRelativeScaleSection({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  final AppThemeSettings settings;
+  final ValueChanged<AppThemeSettings> onChanged;
+
+  @override
+  State<_CenterBadgeRelativeScaleSection> createState() =>
+      _CenterBadgeRelativeScaleSectionState();
+}
+
+class _CenterBadgeRelativeScaleSectionState
+    extends State<_CenterBadgeRelativeScaleSection> {
+  var _percent = 100;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('center-badge-relative-section'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Relatív beállítás',
+            style: TextStyle(
+              color: Color(0xFF374151),
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          _CenterBadgeOpacityRow(
+            label: 'Összes',
+            sliderKey: const ValueKey('center-badge-relative-all-slider'),
+            inputKey: const ValueKey('center-badge-relative-all-input'),
+            value: _percent,
+            min: 50,
+            max: 150,
+            onChanged: _scaleAll,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _scaleAll(int nextPercent) {
+    final safeCurrent = _percent == 0 ? 100 : _percent;
+    final factor = nextPercent / safeCurrent;
+    _percent = nextPercent;
+    final settings = widget.settings;
+    widget.onChanged(
+      settings.copyWith(
+        centerBadgeWhiteDiscOpacities: _scaleList(
+          settings.centerBadgeWhiteDiscOpacities,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeWhiteIconOpacities: _scaleList(
+          settings.centerBadgeWhiteIconOpacities,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeWhiteProgressOpacities: _scaleList(
+          settings.centerBadgeWhiteProgressOpacities,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeColoredFillOpacities: _scaleList(
+          settings.centerBadgeColoredFillOpacities,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeColoredIconOpacities: _scaleList(
+          settings.centerBadgeColoredIconOpacities,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeColoredProgressOpacities: _scaleList(
+          settings.centerBadgeColoredProgressOpacities,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeSlotSizePercents: _scaleList(
+          settings.centerBadgeSlotSizePercents,
+          factor,
+          min: kCenterBadgeSlotSizePercentMin,
+          max: kCenterBadgeSlotSizePercentMax,
+        ),
+        centerBadgeSlotXOffsets: _scaleList(
+          settings.centerBadgeSlotXOffsets,
+          factor,
+          min: kCenterBadgeSlotXOffsetMin,
+          max: kCenterBadgeSlotXOffsetMax,
+        ),
+        centerBadgeColoredBackgroundOpacity: _scaleInt(
+          settings.centerBadgeColoredBackgroundOpacity,
+          factor,
+          min: 0,
+          max: 100,
+        ),
+      ),
+    );
+  }
+
+  List<int> _scaleList(
+    List<int> values,
+    double factor, {
+    required int min,
+    required int max,
+  }) {
+    return [
+      for (final value in values) _scaleInt(value, factor, min: min, max: max),
+    ];
+  }
+
+  int _scaleInt(
+    int value,
+    double factor, {
+    required int min,
+    required int max,
+  }) {
+    return _clampNumber((value * factor).round(), min: min, max: max);
+  }
+}
+
 int _clampNumber(int value, {required int min, required int max}) {
   return value.clamp(min, max).toInt();
 }
 
-class _CenterBadgeOpacityRow extends StatelessWidget {
+class _CenterBadgeOpacityRow extends StatefulWidget {
   const _CenterBadgeOpacityRow({
     required this.label,
     required this.sliderKey,
@@ -432,8 +619,45 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   @override
+  State<_CenterBadgeOpacityRow> createState() => _CenterBadgeOpacityRowState();
+}
+
+class _CenterBadgeOpacityRowState extends State<_CenterBadgeOpacityRow> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  int get _clampedValue =>
+      _clampNumber(widget.value, min: widget.min, max: widget.max);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '$_clampedValue');
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CenterBadgeOpacityRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextText = '$_clampedValue';
+    if (!_focusNode.hasFocus && _controller.text != nextText) {
+      _controller.value = TextEditingValue(
+        text: nextText,
+        selection: TextSelection.collapsed(offset: nextText.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final clampedValue = _clampNumber(value, min: min, max: max);
+    final clampedValue = _clampedValue;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -441,19 +665,20 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
           SizedBox(
             width: 86,
             child: Text(
-              label,
+              widget.label,
               style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
             ),
           ),
           Expanded(
             child: Slider(
-              key: sliderKey,
-              min: min.toDouble(),
-              max: max.toDouble(),
-              divisions: max - min,
+              key: widget.sliderKey,
+              min: widget.min.toDouble(),
+              max: widget.max.toDouble(),
+              divisions: widget.max - widget.min,
               value: clampedValue.toDouble(),
-              onChanged: (next) =>
-                  onChanged(_clampNumber(next.round(), min: min, max: max)),
+              onChanged: (next) => widget.onChanged(
+                _clampNumber(next.round(), min: widget.min, max: widget.max),
+              ),
             ),
           ),
           Container(
@@ -466,10 +691,13 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
               border: Border.all(color: const Color(0xFFE5E7EB)),
             ),
             child: TextFormField(
-              key: inputKey,
-              initialValue: '$clampedValue',
+              key: widget.inputKey,
+              controller: _controller,
+              focusNode: _focusNode,
               textAlign: TextAlign.center,
-              keyboardType: TextInputType.numberWithOptions(signed: min < 0),
+              keyboardType: TextInputType.numberWithOptions(
+                signed: widget.min < 0,
+              ),
               textInputAction: TextInputAction.done,
               style: const TextStyle(
                 color: Color(0xFF1F2937),
@@ -495,7 +723,12 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
   void _submit(String raw) {
     final parsed = int.tryParse(raw.trim());
     if (parsed == null) return;
-    onChanged(_clampNumber(parsed, min: min, max: max));
+    final clamped = _clampNumber(parsed, min: widget.min, max: widget.max);
+    _controller.value = TextEditingValue(
+      text: '$clamped',
+      selection: TextSelection.collapsed(offset: '$clamped'.length),
+    );
+    widget.onChanged(clamped);
   }
 }
 

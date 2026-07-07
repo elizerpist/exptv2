@@ -1101,17 +1101,51 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsNothing);
 
     await tester.ensureVisible(
-      find.byKey(const ValueKey('center-badge-slot-size-4-input')),
+      find.byKey(const ValueKey('center-badge-pair-size-0-input')),
     );
     await tester.pump();
     await tester.enterText(
-      find.byKey(const ValueKey('center-badge-slot-size-4-input')),
+      find.byKey(const ValueKey('center-badge-pair-size-0-input')),
       '115',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
     expect(changed.last.centerBadgeSlotSizePercents[4], 115);
+  });
+
+  testWidgets('center badge background delegates live tuner to shell host', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    var requested = 0;
+    final centerTheme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        backheaderStyle: BackheaderStyle.centerBadgeBudget,
+      ),
+    );
+    await pumpExpandedMonthlyHome(
+      tester,
+      store,
+      expenseTheme: centerTheme,
+      onBackheaderLiveTunerRequested: () => requested += 1,
+    );
+
+    final surfaceTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    await tester.tapAt(surfaceTopLeft + const Offset(24, 96));
+    await tester.pumpAndSettle();
+
+    expect(requested, 1);
+    expect(
+      find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
+      findsNothing,
+    );
   });
 
   testWidgets('income side uses income goal and income category allocation', (
@@ -1166,6 +1200,7 @@ Future<void> pumpExpandedMonthlyHome(
   ValueNotifier<String?>? budgetEditorActiveKey,
   ExpenseTheme? expenseTheme,
   ValueChanged<AppThemeSettings>? onThemeSettingsChanged,
+  VoidCallback? onBackheaderLiveTunerRequested,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -1180,6 +1215,7 @@ Future<void> pumpExpandedMonthlyHome(
             onBudgetTargetEditorRequested: onBudgetTargetEditorRequested,
             budgetEditorActiveKey: budgetEditorActiveKey,
             onThemeSettingsChanged: onThemeSettingsChanged,
+            onBackheaderLiveTunerRequested: onBackheaderLiveTunerRequested,
           ),
         ),
       ),

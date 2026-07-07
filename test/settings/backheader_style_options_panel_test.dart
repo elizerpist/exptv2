@@ -333,7 +333,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Fehér korong'), findsOneWidget);
+    expect(find.text('Fehér korong'), findsWidgets);
     expect(
       find.byKey(const ValueKey('center-badge-disc-toggle')),
       findsOneWidget,
@@ -436,23 +436,25 @@ void main() {
       }
     }
     expect(find.text('Badge méret és pozíció'), findsOneWidget);
-    for (var index = 0; index < 9; index += 1) {
+    for (var distance = 0; distance < 5; distance += 1) {
       expect(
-        find.byKey(ValueKey('center-badge-slot-size-$index-slider')),
+        find.byKey(ValueKey('center-badge-pair-size-$distance-slider')),
         findsOneWidget,
       );
       expect(
-        find.byKey(ValueKey('center-badge-slot-size-$index-input')),
+        find.byKey(ValueKey('center-badge-pair-size-$distance-input')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(ValueKey('center-badge-slot-x-offset-$index-slider')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(ValueKey('center-badge-slot-x-offset-$index-input')),
-        findsOneWidget,
-      );
+      if (distance > 0) {
+        expect(
+          find.byKey(ValueKey('center-badge-distance-offset-$distance-slider')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ValueKey('center-badge-distance-offset-$distance-input')),
+          findsOneWidget,
+        );
+      }
     }
 
     await tester.ensureVisible(
@@ -495,11 +497,11 @@ void main() {
     expect(updated?.centerBadgeColoredIconOpacities, [100, 72, 33, 48, 42]);
 
     await tester.ensureVisible(
-      find.byKey(const ValueKey('center-badge-slot-size-4-input')),
+      find.byKey(const ValueKey('center-badge-pair-size-0-input')),
     );
     await tester.pump();
     await tester.enterText(
-      find.byKey(const ValueKey('center-badge-slot-size-4-input')),
+      find.byKey(const ValueKey('center-badge-pair-size-0-input')),
       '115',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -518,17 +520,223 @@ void main() {
     ]);
 
     await tester.ensureVisible(
-      find.byKey(const ValueKey('center-badge-slot-x-offset-5-input')),
+      find.byKey(const ValueKey('center-badge-distance-offset-1-input')),
     );
     await tester.pump();
     await tester.enterText(
-      find.byKey(const ValueKey('center-badge-slot-x-offset-5-input')),
-      '-6',
+      find.byKey(const ValueKey('center-badge-distance-offset-1-input')),
+      '6',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
-    expect(updated?.centerBadgeSlotXOffsets, [0, 0, 0, 0, 0, -6, 0, 0, 0]);
+    expect(updated?.centerBadgeSlotXOffsets, [0, 0, 0, -6, 0, 6, 0, 0, 0]);
+  });
+
+  testWidgets(
+    'center badge tuner groups controls by distance pairs and resets',
+    (tester) async {
+      AppThemeSettings? updated;
+      final settings = AppThemeSettings.defaults().copyWith(
+        backheaderStyle: BackheaderStyle.centerBadgeBudget,
+        centerBadgeWhiteIconOpacities: const [90, 70, 50, 30, 10],
+        centerBadgeColoredFillOpacities: const [80, 60, 40, 20, 5],
+        centerBadgeSlotSizePercents: const [88, 89, 90, 91, 92, 93, 94, 95, 96],
+        centerBadgeSlotXOffsets: const [-16, -12, -8, -4, 0, 4, 8, 12, 16],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BackheaderStyleOptionsPanel(
+              settings: settings,
+              onChanged: (next) => updated = next,
+            ),
+          ),
+        ),
+      );
+
+      for (var distance = 0; distance < 5; distance += 1) {
+        expect(
+          find.byKey(ValueKey('center-badge-tuning-section-$distance')),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.byKey(const ValueKey('center-badge-slot-x-offset-5-input')),
+        findsNothing,
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('center-badge-pair-size-1-input')),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('center-badge-pair-size-1-input')),
+        '122',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      expect(updated?.centerBadgeSlotSizePercents, [
+        88,
+        89,
+        90,
+        122,
+        92,
+        122,
+        94,
+        95,
+        96,
+      ]);
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('center-badge-distance-offset-2-input')),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('center-badge-distance-offset-2-input')),
+        '9',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      expect(updated?.centerBadgeSlotXOffsets, [
+        -16,
+        -12,
+        -9,
+        -4,
+        0,
+        4,
+        9,
+        12,
+        16,
+      ]);
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('center-badge-tuning-reset-button')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('center-badge-tuning-reset-button')),
+      );
+      await tester.pump();
+
+      expect(updated?.backheaderStyle, BackheaderStyle.centerBadgeBudget);
+      expect(
+        updated?.centerBadgeWhiteIconOpacities,
+        kCenterBadgeWhiteIconOpacityDefaults,
+      );
+      expect(
+        updated?.centerBadgeColoredFillOpacities,
+        kCenterBadgeColoredFillOpacityDefaults,
+      );
+      expect(
+        updated?.centerBadgeSlotSizePercents,
+        kCenterBadgeSlotSizePercentDefaults,
+      );
+      expect(updated?.centerBadgeSlotXOffsets, kCenterBadgeSlotXOffsetDefaults);
+    },
+  );
+
+  testWidgets('center badge tuner slider updates numeric pill live', (
+    tester,
+  ) async {
+    var settings = AppThemeSettings.defaults().copyWith(
+      backheaderStyle: BackheaderStyle.centerBadgeBudget,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return BackheaderStyleOptionsPanel(
+                settings: settings,
+                onChanged: (next) => setState(() => settings = next),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    final sliderFinder = find.byKey(
+      const ValueKey('center-badge-colored-opacity-icon-2-slider'),
+    );
+    await tester.ensureVisible(sliderFinder);
+    await tester.pump();
+    tester.widget<Slider>(sliderFinder).onChanged!(34);
+    await tester.pump();
+
+    final inputFinder = find.byKey(
+      const ValueKey('center-badge-colored-opacity-icon-2-input'),
+    );
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: inputFinder, matching: find.byType(EditableText)),
+    );
+    expect(editable.controller.text, '34');
+  });
+
+  testWidgets('center badge relative section scales current tuning values', (
+    tester,
+  ) async {
+    var settings = AppThemeSettings.defaults().copyWith(
+      backheaderStyle: BackheaderStyle.centerBadgeBudget,
+      centerBadgeWhiteDiscOpacities: const [10, 20, 30, 40, 50],
+      centerBadgeColoredIconOpacities: const [20, 40, 60, 80, 100],
+      centerBadgeSlotSizePercents: const [
+        80,
+        90,
+        100,
+        110,
+        120,
+        110,
+        100,
+        90,
+        80,
+      ],
+      centerBadgeSlotXOffsets: const [-8, -6, -4, -2, 0, 2, 4, 6, 8],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return BackheaderStyleOptionsPanel(
+                settings: settings,
+                onChanged: (next) => setState(() => settings = next),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('center-badge-relative-section')),
+      findsOneWidget,
+    );
+    final sliderFinder = find.byKey(
+      const ValueKey('center-badge-relative-all-slider'),
+    );
+    await tester.ensureVisible(sliderFinder);
+    await tester.pump();
+    tester.widget<Slider>(sliderFinder).onChanged!(125);
+    await tester.pump();
+
+    expect(settings.centerBadgeWhiteDiscOpacities, [13, 25, 38, 50, 63]);
+    expect(settings.centerBadgeColoredIconOpacities, [25, 50, 75, 100, 100]);
+    expect(settings.centerBadgeSlotSizePercents, [
+      100,
+      113,
+      125,
+      138,
+      150,
+      138,
+      125,
+      113,
+      100,
+    ]);
+    expect(settings.centerBadgeSlotXOffsets, [-10, -8, -5, -3, 0, 3, 5, 8, 10]);
   });
 
   testWidgets('backheader style panel toggles overlap masking', (tester) async {

@@ -56,6 +56,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
     this.onThemeSettingsChanged,
+    this.onBackheaderLiveTunerRequested,
     this.budgetEditorActiveKey,
   });
 
@@ -72,6 +73,7 @@ class TransactionHomePage extends StatefulWidget {
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
+  final VoidCallback? onBackheaderLiveTunerRequested;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -964,6 +966,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         widget.expenseTheme?.settings ?? AppThemeSettings.defaults();
     if (!_headerExpanded ||
         settings.backheaderStyle != BackheaderStyle.centerBadgeBudget) {
+      return;
+    }
+    if (widget.onBackheaderLiveTunerRequested != null) {
+      DebugConsole.log('[BackheaderTuner] request shell host from background');
+      widget.onBackheaderLiveTunerRequested!();
       return;
     }
     if (_backheaderLiveTunerOpen) return;

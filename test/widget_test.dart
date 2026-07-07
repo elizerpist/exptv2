@@ -212,6 +212,59 @@ void main() {
     expect(scaffold.resizeToAvoidBottomInset, isFalse);
   });
 
+  testWidgets('backheader live tuner covers bottom nav from shell overlay', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'centerBadgeBudget',
+    };
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('summary-pill')),
+      const Offset(0, -90),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
+    await tester.pumpAndSettle();
+
+    final surfaceTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    await tester.tapAt(surfaceTopLeft + const Offset(24, 96));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
+      findsOneWidget,
+    );
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
+    );
+    final navRect = tester.getRect(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    expect(sheetRect.top, lessThan(navRect.top));
+    expect(sheetRect.bottom, greaterThanOrEqualTo(navRect.bottom));
+
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+  });
+
   testWidgets('bottom nav taps switch secondary pages', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();

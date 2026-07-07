@@ -17,6 +17,7 @@ import '../settings/models/fast_info_config.dart';
 import '../settings/settings_page.dart';
 import '../settings/state/push_notification_log_store.dart';
 import '../settings/widgets/push_log/push_notification_event_sheet.dart';
+import '../settings/widgets/options/backheader_style_options_panel.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -32,6 +33,7 @@ import '../transactions/widgets/category_menu/category_editor_sheet.dart';
 import '../transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/recurring_manager_sheet.dart';
+import '../transactions/widgets/slide_up_menu_card.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
@@ -66,6 +68,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
+  Timer? _homeThemeSettingsSaveDebounce;
+  var _homeThemeSettingsRevision = 0;
   late StatsPage _statsPage;
 
   @override
@@ -98,6 +102,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
+    _homeThemeSettingsSaveDebounce?.cancel();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     _notificationStore.removeListener(_handleNotificationStoreChanged);
@@ -177,7 +182,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         _sheetHostKey.currentState?.openCategory(initialCategory: category);
       },
       onThemeSettingsChanged: (settings) {
-        unawaited(_updateHomeThemeSettings(settings));
+        _queueHomeThemeSettings(settings);
+      },
+      onBackheaderLiveTunerRequested: () {
+        _sheetHostKey.currentState?.openBackheaderLiveTuner();
       },
       budgetEditorActiveKey: _budgetEditorActiveKey,
     );
@@ -292,13 +300,26 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _updateHomeThemeSettings(AppThemeSettings settings) async {
+  void _queueHomeThemeSettings(AppThemeSettings settings) {
+    _homeThemeSettingsRevision += 1;
+    final revision = _homeThemeSettingsRevision;
     _applyThemeSettings(settings);
+    _homeThemeSettingsSaveDebounce?.cancel();
+    _homeThemeSettingsSaveDebounce = Timer(
+      const Duration(milliseconds: 180),
+      () => unawaited(_persistHomeThemeSettings(settings, revision)),
+    );
+  }
+
+  Future<void> _persistHomeThemeSettings(
+    AppThemeSettings settings,
+    int revision,
+  ) async {
     try {
       final confirmed = await widget.nativeBridge.expenseUpdateThemeSettings(
         settings,
       );
-      if (!mounted) return;
+      if (!mounted || revision != _homeThemeSettingsRevision) return;
       _applyThemeSettings(confirmed);
     } catch (error) {
       DebugConsole.log('[ThemeSurface] home live update failed: $error');
@@ -659,6 +680,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               resolveNotificationEventId:
                   widget.nativeBridge.expenseNotificationEventIdForTransaction,
               onOpenNotificationEvent: _openNotificationEventFromTransaction,
+              onThemeSettingsChanged: _queueHomeThemeSettings,
             ),
           ),
         ],
@@ -709,6 +731,7 @@ class _ShellSheetHost extends StatefulWidget {
     required this.expenseTheme,
     required this.resolveNotificationEventId,
     required this.onOpenNotificationEvent,
+    required this.onThemeSettingsChanged,
   });
 
   final TransactionStore store;
@@ -717,6 +740,7 @@ class _ShellSheetHost extends StatefulWidget {
   final ExpenseTheme expenseTheme;
   final Future<int?> Function(int transactionId) resolveNotificationEventId;
   final Future<void> Function(int eventId) onOpenNotificationEvent;
+  final ValueChanged<AppThemeSettings> onThemeSettingsChanged;
 
   @override
   State<_ShellSheetHost> createState() => _ShellSheetHostState();
@@ -727,6 +751,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   final _categorySlotKey = GlobalKey<_CategorySheetSlotState>();
   final _recurringSlotKey = GlobalKey<_RecurringSheetSlotState>();
   final _budgetSlotKey = GlobalKey<_BudgetTargetSheetSlotState>();
+  final _backheaderTunerSlotKey = GlobalKey<_BackheaderLiveTunerSlotState>();
 
   void openTransaction({
     required DateTime requestedAt,
@@ -736,6 +761,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _transactionSlotKey.currentState?.open(
       requestedAt: requestedAt,
       source: source,
@@ -747,6 +773,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _transactionSlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.open(initialCategory: initialCategory);
   }
 
@@ -754,7 +781,16 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _transactionSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _recurringSlotKey.currentState?.open(requestedAt: DateTime.now());
+  }
+
+  void openBackheaderLiveTuner() {
+    _transactionSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.open();
   }
 
   void openBudgetTargetEditor(
@@ -765,6 +801,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _transactionSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.open(
       item,
       requestedAt: requestedAt,
@@ -785,6 +822,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
   }
 
   @override
@@ -823,8 +861,96 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             expenseTheme: widget.expenseTheme,
           ),
         ),
+        Positioned.fill(
+          child: _BackheaderLiveTunerSlot(
+            key: _backheaderTunerSlotKey,
+            expenseTheme: widget.expenseTheme,
+            onThemeSettingsChanged: widget.onThemeSettingsChanged,
+          ),
+        ),
       ],
     );
+  }
+}
+
+class _BackheaderLiveTunerSlot extends StatefulWidget {
+  const _BackheaderLiveTunerSlot({
+    super.key,
+    required this.expenseTheme,
+    required this.onThemeSettingsChanged,
+  });
+
+  final ExpenseTheme expenseTheme;
+  final ValueChanged<AppThemeSettings> onThemeSettingsChanged;
+
+  @override
+  State<_BackheaderLiveTunerSlot> createState() =>
+      _BackheaderLiveTunerSlotState();
+}
+
+class _BackheaderLiveTunerSlotState extends State<_BackheaderLiveTunerSlot> {
+  var _open = false;
+  AppThemeSettings? _draftSettings;
+
+  void open() {
+    setState(() {
+      _open = true;
+      _draftSettings = widget.expenseTheme.settings;
+    });
+    DebugConsole.log('[BackheaderTuner] shell open');
+  }
+
+  void close() {
+    if (!_open && _draftSettings == null) return;
+    setState(() {
+      _open = false;
+      _draftSettings = null;
+    });
+    DebugConsole.log('[BackheaderTuner] shell closed');
+  }
+
+  @override
+  void didUpdateWidget(covariant _BackheaderLiveTunerSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_open) {
+      _draftSettings = null;
+    } else {
+      _draftSettings ??= widget.expenseTheme.settings;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = _draftSettings ?? widget.expenseTheme.settings;
+    return SlideUpMenuCard(
+      cardKey: const ValueKey('backheader-live-tuner-slide-card'),
+      debugLabel: 'BackheaderLiveTuner',
+      visible: _open,
+      panelHeight: MediaQuery.sizeOf(context).height,
+      showFocusVeil: false,
+      dismissOnVeilTap: false,
+      dragFromHandleOnly: true,
+      dragHandleExtent: 72,
+      verticalDragBias: 1.2,
+      onDismissed: close,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: ColoredBox(
+          key: const ValueKey('backheader-live-tuner-panel'),
+          color: widget.expenseTheme.fieldSurface,
+          child: BackheaderStyleOptionsPanel(
+            settings: settings,
+            onChanged: _updateDraftSettings,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _updateDraftSettings(AppThemeSettings settings) {
+    setState(() => _draftSettings = settings);
+    widget.onThemeSettingsChanged(settings);
   }
 }
 
