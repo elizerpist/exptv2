@@ -219,7 +219,8 @@ void main() {
     await tester.tap(find.text('Stats'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
 
     await tester.tap(find.text('Értesítések'));
@@ -296,7 +297,8 @@ void main() {
     var logs = DebugConsole.allText;
     expect(logs, contains('[Perf] BottomNav pointer dispatch tab=stats'));
     expect(logs, contains('[Perf] BottomNav page jump deferred tab=stats'));
-    expect(logs, contains('[Perf] CalendarRender build source=overlay'));
+    expect(logs, isNot(contains('[Perf] CalendarRender build source=overlay')));
+    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
 
     await tester.tap(find.text('Beállítások'));
     await tester.pumpAndSettle();
