@@ -922,11 +922,15 @@ class _BackheaderLiveTunerSlotState extends State<_BackheaderLiveTunerSlot> {
   @override
   Widget build(BuildContext context) {
     final settings = _draftSettings ?? widget.expenseTheme.settings;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final panelHeight = (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
     return SlideUpMenuCard(
       cardKey: const ValueKey('backheader-live-tuner-slide-card'),
       debugLabel: 'BackheaderLiveTuner',
       visible: _open,
-      panelHeight: MediaQuery.sizeOf(context).height,
+      panelHeight: panelHeight,
       showFocusVeil: false,
       dismissOnVeilTap: false,
       dragFromHandleOnly: true,

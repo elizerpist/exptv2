@@ -31,6 +31,7 @@ import 'widgets/search_pill.dart';
 import 'widgets/slide_up_menu_card.dart';
 import 'widgets/slide_up_panel_metrics.dart';
 import 'widgets/summary_pill.dart';
+import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
@@ -487,7 +488,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   child: SlideUpMenuCard(
                     cardKey: const ValueKey('backheader-live-tuner-slide-card'),
                     debugLabel: 'BackheaderLiveTuner',
-                    panelHeight: _menuPanelHeight(context),
+                    panelHeight: _backheaderTunerPanelHeight(context),
                     showFocusVeil: false,
                     dismissOnVeilTap: false,
                     dragFromHandleOnly: true,
@@ -699,6 +700,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   double _menuPanelHeight(BuildContext context) {
     return SlideUpPanelMetrics.fullHeight(context);
+  }
+
+  double _backheaderTunerPanelHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   void _notifyBlockingOverlay(bool active) {

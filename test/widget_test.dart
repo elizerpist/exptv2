@@ -253,13 +253,24 @@ void main() {
     final sheetRect = tester.getRect(
       find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
     );
+    final summaryRect = tester.getRect(
+      find.byKey(const ValueKey('summary-pill')),
+    );
     final navRect = tester.getRect(
       find.byKey(const ValueKey('expt-bottom-nav')),
     );
     expect(sheetRect.top, lessThan(navRect.top));
     expect(sheetRect.bottom, greaterThanOrEqualTo(navRect.bottom));
+    expect(sheetRect.top, greaterThanOrEqualTo(summaryRect.top - 1));
+    expect(sheetRect.top, lessThanOrEqualTo(summaryRect.top + 4));
 
-    await tester.tap(find.text('Beállítások'));
+    final scrollRect = tester.getRect(
+      find.byKey(const ValueKey('settings-backheader-style-scroll')),
+    );
+    expect(scrollRect.top, greaterThanOrEqualTo(sheetRect.top));
+    expect(scrollRect.bottom, lessThanOrEqualTo(sheetRect.bottom));
+
+    await tester.tap(find.text('Beállítások'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('settings-page')), findsNothing);
