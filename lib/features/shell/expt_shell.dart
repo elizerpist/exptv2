@@ -55,6 +55,9 @@ class ExptShell extends StatefulWidget {
 }
 
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
+  static const _rightFabBottomOffset = AppDimensions.bottomNavHeight + 24.0;
+  static const _rightFabLogBottomPadding = 168.0;
+
   late AppTab _activeTab;
   late final TransactionStore _transactionStore;
   late final NotificationStore _notificationStore;
@@ -154,10 +157,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   TransactionHomePage _buildTransactionHomePage() {
+    final rightRoundedFab =
+        _themeSettings.shellNavigationLayout ==
+        ShellNavigationLayout.rightRoundedFab;
     return TransactionHomePage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       fastInfoConfig: _fastInfoConfig,
+      logBottomPadding: rightRoundedFab ? _rightFabLogBottomPadding : 96,
+      onNotificationPressed: rightRoundedFab
+          ? _handleHeaderNotificationPressed
+          : null,
+      notificationUnreadCount: _notificationStore.unreadCount,
       onEditTransaction: _openEditTransaction,
       onDeleteTransactionRequested: _confirmDeleteTransaction,
       onBlockingOverlayChanged: _setHomeBlockingOverlay,
@@ -279,7 +290,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         widget.store.allEvents.map((event) => event.id),
       ),
     );
-    setState(() {});
+    setState(() {
+      _transactionHomePage = _buildTransactionHomePage();
+    });
   }
 
   Future<void> _refreshNotificationsAfterTransactionChange() async {
@@ -454,6 +467,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     _sheetHostKey.currentState?.openRecurring();
   }
 
+  void _handleHeaderNotificationPressed() {
+    DebugConsole.log('[Notification] header bell open requested');
+    _selectTab(AppTab.notifications);
+  }
+
   void _openEditTransaction(TransactionRecord transaction) {
     final requestedAt = DateTime.now();
     DebugConsole.log(
@@ -586,6 +604,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   List<Widget> _buildShellNavigation(ExpenseTheme expenseTheme) {
+    final shellLayout = expenseTheme.settings.shellNavigationLayout;
+    final rightRoundedFab =
+        shellLayout == ShellNavigationLayout.rightRoundedFab;
     return [
       Positioned(
         left: 0,
@@ -599,22 +620,36 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           accentLightColor: expenseTheme.accentLight,
           activeBackgroundColor: expenseTheme.activeBackground,
           unreadNotificationCount: _notificationStore.unreadCount,
+          layout: shellLayout,
           onTabSelected: _selectTab,
         ),
       ),
-      Positioned(
-        left: 0,
-        right: 0,
-        bottom: AppDimensions.fabBottom,
-        child: Center(
+      if (rightRoundedFab)
+        Positioned(
+          right: 20,
+          bottom: _rightFabBottomOffset,
           child: ExptFab(
             primaryColor: expenseTheme.accent,
             surfaceStyle: expenseTheme.buttonSurfaceStyle,
+            shape: ExptFabShape.roundedSquare,
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,
           ),
+        )
+      else
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: AppDimensions.fabBottom,
+          child: Center(
+            child: ExptFab(
+              primaryColor: expenseTheme.accent,
+              surfaceStyle: expenseTheme.buttonSurfaceStyle,
+              onPressed: _handleFabPressed,
+              onLongPress: _handleFabLongPressed,
+            ),
+          ),
         ),
-      ),
     ];
   }
 
@@ -707,7 +742,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         'card=${settings.cardColor.nativeValue} '
         'box=${settings.boxColor.nativeValue} '
         'magnet=${settings.magnetType.nativeValue} '
-        'backheader=${settings.backheaderStyle.nativeValue}';
+        'backheader=${settings.backheaderStyle.nativeValue} '
+        'nav=${settings.shellNavigationLayout.nativeValue}';
   }
 
   String _hex(Color color) {

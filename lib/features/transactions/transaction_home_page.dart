@@ -58,6 +58,9 @@ class TransactionHomePage extends StatefulWidget {
     this.onEditCategoryEditorRequested,
     this.onThemeSettingsChanged,
     this.onBackheaderLiveTunerRequested,
+    this.onNotificationPressed,
+    this.notificationUnreadCount = 0,
+    this.logBottomPadding = 96,
     this.budgetEditorActiveKey,
   });
 
@@ -75,6 +78,9 @@ class TransactionHomePage extends StatefulWidget {
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final VoidCallback? onBackheaderLiveTunerRequested;
+  final VoidCallback? onNotificationPressed;
+  final int notificationUnreadCount;
+  final double logBottomPadding;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -270,6 +276,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       onResetMerchantName: _resetTransactionNamesByMerchant,
                       hasMore: widget.store.hasMoreVisibleDisplayLogEntries,
                       onLoadMore: widget.store.loadMoreVisibleDisplayLogEntries,
+                      bottomPadding: widget.logBottomPadding,
                     ),
                   ),
                 ],
@@ -747,6 +754,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           setState(() => _balanceHidden = !_balanceHidden);
         },
         onCategoryPressed: _openCategoryMenu,
+        onNotificationPressed: widget.onNotificationPressed,
+        notificationUnreadCount: widget.notificationUnreadCount,
         onVerticalDragUpdate: _handleHeaderDragUpdate,
         onVerticalDragEnd: _handleHeaderDragEnd,
         onExpandPressed: _toggleHeaderExpanded,

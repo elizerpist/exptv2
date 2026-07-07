@@ -289,6 +289,28 @@ void main() {
     expect(settings.toMap()['searchPillShadowEnabled'], isFalse);
   });
 
+  test('shell navigation layout parses, serializes, and copies', () {
+    final defaults = AppThemeSettings.defaults();
+    expect(defaults.shellNavigationLayout, ShellNavigationLayout.current);
+    expect(defaults.toMap()['shellNavigationLayout'], 'current');
+
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'shellNavigationLayout': 'rightRoundedFab',
+    });
+
+    expect(
+      settings.shellNavigationLayout,
+      ShellNavigationLayout.rightRoundedFab,
+    );
+    expect(settings.toMap()['shellNavigationLayout'], 'rightRoundedFab');
+    expect(
+      settings
+          .copyWith(shellNavigationLayout: ShellNavigationLayout.current)
+          .shellNavigationLayout,
+      ShellNavigationLayout.current,
+    );
+  });
+
   test('accent helpers resolve active background for all palettes', () {
     final turquoise = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     final pink = ExpenseTheme.fromSettings(

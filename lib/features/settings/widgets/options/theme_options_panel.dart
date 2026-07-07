@@ -213,6 +213,28 @@ class ThemeOptionsPanel extends StatelessWidget {
                   color: AppColors.gray500,
                 ),
               ),
+              _sectionTitle('Navigáció', 'Bottom nav és FAB elrendezés:'),
+              for (final layout in ShellNavigationLayout.values)
+                SettingsRadioOption(
+                  key: ValueKey(
+                    layout == ShellNavigationLayout.current
+                        ? 'theme-shell-navigation-current'
+                        : 'theme-shell-navigation-right-rounded-fab',
+                  ),
+                  title:
+                      '${layout.displayTitle}${settings.shellNavigationLayout == layout ? ' (jelenlegi)' : ''}',
+                  description: layout.description,
+                  selected: settings.shellNavigationLayout == layout,
+                  onTap: () => onChanged(
+                    settings.copyWith(shellNavigationLayout: layout),
+                  ),
+                  preview: Icon(
+                    layout == ShellNavigationLayout.current
+                        ? Icons.add_circle_outline
+                        : Icons.rounded_corner,
+                    color: AppColors.gray500,
+                  ),
+                ),
               _sectionTitle(
                 'Kategória menü felülete',
                 'A kategória overlay háttérfelülete:',

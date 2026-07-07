@@ -18,6 +18,7 @@ class ExptBottomNav extends StatefulWidget {
     this.accentLightColor = AppColors.primaryLight,
     this.activeBackgroundColor = AppColors.primaryActiveBackground,
     this.unreadNotificationCount = 0,
+    this.layout = ShellNavigationLayout.current,
   });
 
   final AppTab activeTab;
@@ -28,6 +29,7 @@ class ExptBottomNav extends StatefulWidget {
   final Color accentLightColor;
   final Color activeBackgroundColor;
   final int unreadNotificationCount;
+  final ShellNavigationLayout layout;
 
   @override
   State<ExptBottomNav> createState() => _ExptBottomNavState();
@@ -59,14 +61,32 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
   @override
   Widget build(BuildContext context) {
     final buildKey =
-        '${_optimisticActiveTab.id}|${widget.activeTab.id}|${widget.unreadNotificationCount}';
+        '${_optimisticActiveTab.id}|${widget.activeTab.id}|${widget.unreadNotificationCount}|${widget.layout.nativeValue}';
     if (_lastLoggedBuildKey != buildKey) {
       _lastLoggedBuildKey = buildKey;
       DebugConsole.log(
         '[Perf] BottomNav build active=${_optimisticActiveTab.id} '
-        'parent=${widget.activeTab.id} unread=${widget.unreadNotificationCount}',
+        'parent=${widget.activeTab.id} unread=${widget.unreadNotificationCount} '
+        'layout=${widget.layout.nativeValue}',
       );
     }
+
+    final children = widget.layout == ShellNavigationLayout.rightRoundedFab
+        ? <Widget>[
+            _buildItem(AppTab.home),
+            _buildItem(AppTab.stats),
+            _buildItem(AppTab.settings),
+          ]
+        : <Widget>[
+            _buildItem(AppTab.home),
+            _buildItem(AppTab.stats),
+            const Expanded(child: SizedBox.shrink()),
+            _buildItem(
+              AppTab.notifications,
+              badgeCount: widget.unreadNotificationCount,
+            ),
+            _buildItem(AppTab.settings),
+          ];
 
     return ExpenseSurfaceContainer(
       surfaceKey: const ValueKey('expt-bottom-nav'),
@@ -87,18 +107,7 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
           blurRadius: 16,
         ),
       ],
-      child: Row(
-        children: [
-          _buildItem(AppTab.home),
-          _buildItem(AppTab.stats),
-          const Expanded(child: SizedBox.shrink()),
-          _buildItem(
-            AppTab.notifications,
-            badgeCount: widget.unreadNotificationCount,
-          ),
-          _buildItem(AppTab.settings),
-        ],
-      ),
+      child: Row(children: children),
     );
   }
 

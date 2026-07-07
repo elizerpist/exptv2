@@ -116,6 +116,32 @@ void main() {
     );
   });
 
+  testWidgets('right rounded FAB layout removes notifications nav item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: ExptBottomNav(
+            activeTab: AppTab.home,
+            layout: ShellNavigationLayout.rightRoundedFab,
+            unreadNotificationCount: 3,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Főoldal'), findsOneWidget);
+    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Beállítások'), findsOneWidget);
+    expect(find.text('Értesítések'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('bottom-nav-notifications-unread-badge')),
+      findsNothing,
+    );
+  });
+
   testWidgets('active bottom nav item rests normally for raised style', (
     tester,
   ) async {
@@ -176,31 +202,32 @@ void main() {
     ]);
   });
 
-  testWidgets('active bottom nav item remains inset for neutral-inset nav style', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          bottomNavigationBar: ExptBottomNav(
-            activeTab: AppTab.home,
-            surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
-            onTabSelected: (_) {},
+  testWidgets(
+    'active bottom nav item remains inset for neutral-inset nav style',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: ExptBottomNav(
+              activeTab: AppTab.home,
+              surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+              onTabSelected: (_) {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final activeSurface = tester.widget<Container>(
-      find.byKey(const ValueKey('bottom-nav-home-surface')),
-    );
-    final inactiveSurface = tester.widget<Container>(
-      find.byKey(const ValueKey('bottom-nav-settings-surface')),
-    );
-    final activeDecoration = activeSurface.decoration! as BoxDecoration;
-    final inactiveDecoration = inactiveSurface.decoration! as BoxDecoration;
+      final activeSurface = tester.widget<Container>(
+        find.byKey(const ValueKey('bottom-nav-home-surface')),
+      );
+      final inactiveSurface = tester.widget<Container>(
+        find.byKey(const ValueKey('bottom-nav-settings-surface')),
+      );
+      final activeDecoration = activeSurface.decoration! as BoxDecoration;
+      final inactiveDecoration = inactiveSurface.decoration! as BoxDecoration;
 
-    expect(activeDecoration.gradient, isA<LinearGradient>());
-    expect(inactiveDecoration.gradient, isNull);
-  });
+      expect(activeDecoration.gradient, isA<LinearGradient>());
+      expect(inactiveDecoration.gradient, isNull);
+    },
+  );
 }

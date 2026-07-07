@@ -202,6 +202,47 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
+  testWidgets('B shell layout moves notifications to header and FAB right', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'shellNavigationLayout': 'rightRoundedFab',
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Főoldal'), findsOneWidget);
+    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Beállítások'), findsOneWidget);
+    expect(find.text('Értesítések'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('header-notification-button')),
+      findsOneWidget,
+    );
+
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    expect(fabRect.left, greaterThan(280));
+
+    final fabSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('expt-fab')),
+    );
+    final decoration = fabSurface.decoration as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+    expect(borderRadius.topLeft.x, 18);
+  });
+
   testWidgets('shell keeps the body stable while the keyboard opens', (
     tester,
   ) async {
@@ -687,6 +728,29 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
 
     expect(singleTaps, 1);
+  });
+
+  testWidgets('FAB can render as rounded square', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(shape: ExptFabShape.roundedSquare, onPressed: () {}),
+          ),
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('expt-fab')),
+    );
+    final decoration = surface.decoration as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+
+    expect(borderRadius.topLeft.x, 18);
+    expect(borderRadius.topRight.x, 18);
+    expect(borderRadius.bottomLeft.x, 18);
+    expect(borderRadius.bottomRight.x, 18);
   });
 
   testWidgets('FAB quick second tap dispatches another single tap', (

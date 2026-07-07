@@ -247,6 +247,34 @@ enum CategoryMenuPresentation {
   }
 }
 
+enum ShellNavigationLayout {
+  current('current'),
+  rightRoundedFab('rightRoundedFab');
+
+  const ShellNavigationLayout(this.nativeValue);
+  final String nativeValue;
+
+  static ShellNavigationLayout fromAny(Object? value) {
+    final raw = value?.toString();
+    return ShellNavigationLayout.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => ShellNavigationLayout.current,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    ShellNavigationLayout.current => 'A - Jelenlegi',
+    ShellNavigationLayout.rightRoundedFab => 'B - 3 menü + jobb FAB',
+  };
+
+  String get description => switch (this) {
+    ShellNavigationLayout.current =>
+      'Négy bottom-nav elem, középen kerek FAB, értesítések a navban.',
+    ShellNavigationLayout.rightRoundedFab =>
+      'Három bottom-nav elem, jobb alsó rounded-square FAB, értesítés a headerben.',
+  };
+}
+
 enum GhostLogboxBorderStyle {
   normal('normal'),
   dashed('dashed');
@@ -419,6 +447,7 @@ class AppThemeSettings {
     this.centerBadgeColoredBackgroundOpacity =
         kCenterBadgeColoredBackgroundOpacityDefault,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
+    this.shellNavigationLayout = ShellNavigationLayout.current,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
     this.headerPillShadowEnabled = true,
@@ -461,6 +490,7 @@ class AppThemeSettings {
           kCenterBadgeColoredBackgroundOpacityDefault,
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
+      shellNavigationLayout: ShellNavigationLayout.current,
       categoryCardShadowEnabled: true,
       logboxShadowEnabled: false,
       headerPillShadowEnabled: true,
@@ -575,6 +605,9 @@ class AppThemeSettings {
       categoryMenuPresentation: CategoryMenuPresentation.fromAny(
         map['categoryMenuPresentation'],
       ),
+      shellNavigationLayout: ShellNavigationLayout.fromAny(
+        map['shellNavigationLayout'],
+      ),
       categoryCardShadowEnabled: _bool(map['categoryCardShadowEnabled'], true),
       logboxShadowEnabled: _bool(map['logboxShadowEnabled'], false),
       headerPillShadowEnabled: _bool(map['headerPillShadowEnabled'], true),
@@ -613,6 +646,7 @@ class AppThemeSettings {
   final int centerBadgeColoredBackgroundOpacity;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
+  final ShellNavigationLayout shellNavigationLayout;
   final bool categoryCardShadowEnabled;
   final bool logboxShadowEnabled;
   final bool headerPillShadowEnabled;
@@ -663,6 +697,7 @@ class AppThemeSettings {
           centerBadgeColoredBackgroundOpacity,
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
+      'shellNavigationLayout': shellNavigationLayout.nativeValue,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
       'logboxShadowEnabled': logboxShadowEnabled,
       'headerPillShadowEnabled': headerPillShadowEnabled,
@@ -702,6 +737,7 @@ class AppThemeSettings {
     int? centerBadgeColoredBackgroundOpacity,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
+    ShellNavigationLayout? shellNavigationLayout,
     bool? categoryCardShadowEnabled,
     bool? logboxShadowEnabled,
     bool? headerPillShadowEnabled,
@@ -762,6 +798,8 @@ class AppThemeSettings {
       appColor: appColor ?? this.appColor,
       categoryMenuPresentation:
           categoryMenuPresentation ?? this.categoryMenuPresentation,
+      shellNavigationLayout:
+          shellNavigationLayout ?? this.shellNavigationLayout,
       categoryCardShadowEnabled:
           categoryCardShadowEnabled ?? this.categoryCardShadowEnabled,
       logboxShadowEnabled: logboxShadowEnabled ?? this.logboxShadowEnabled,
