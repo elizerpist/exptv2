@@ -57,6 +57,14 @@ class ExpenseSettingsStore(context: Context) {
                 KEY_CENTER_PARTITION_RING_ENABLED,
                 false,
             ),
+            "centerBadgeDiscEnabled" to prefs.getBoolean(
+                KEY_CENTER_BADGE_DISC_ENABLED,
+                true,
+            ),
+            "centerBadgeBorderMode" to prefs.getString(
+                KEY_CENTER_BADGE_BORDER_MODE,
+                "limitOnly",
+            ),
             "designProfile" to (
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
                     ?: legacyDesignProfile()
@@ -131,6 +139,15 @@ class ExpenseSettingsStore(context: Context) {
             .putBoolean(
                 KEY_CENTER_PARTITION_RING_ENABLED,
                 boolArg(args["centerPartitionRingEnabled"], false)
+            )
+            .putBoolean(
+                KEY_CENTER_BADGE_DISC_ENABLED,
+                boolArg(args["centerBadgeDiscEnabled"], true)
+            )
+            .putString(
+                KEY_CENTER_BADGE_BORDER_MODE,
+                args["centerBadgeBorderMode"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: "limitOnly"
             )
             .remove(KEY_DESIGN_PROFILE)
             .putString(
@@ -373,6 +390,8 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_CENTER_BACKHEADER_DESIGN = "centerBackheaderDesign"
         private const val KEY_CENTER_PARTITION_RING_ENABLED = "centerPartitionRingEnabled"
+        private const val KEY_CENTER_BADGE_DISC_ENABLED = "centerBadgeDiscEnabled"
+        private const val KEY_CENTER_BADGE_BORDER_MODE = "centerBadgeBorderMode"
         private const val KEY_DESIGN_PROFILE = "designProfile"
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"

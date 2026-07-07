@@ -350,6 +350,8 @@ void main() {
         'backheaderStyle': 'centerBadgeBudget',
         'centerBackheaderDesign': 'colored',
         'centerPartitionRingEnabled': true,
+        'centerBadgeDiscEnabled': false,
+        'centerBadgeBorderMode': 'always',
         'appColor': 'pink',
         'categoryMenuPresentation': 'slideUpSheet',
         'categoryCardShadowEnabled': false,
@@ -373,6 +375,8 @@ void main() {
     expect(updated.ghostLogboxSettings.expectedLabelEnabled, isFalse);
     expect(updated.centerBackheaderDesign, BackheaderCenterDesign.colored);
     expect(updated.toMap()['centerPartitionRingEnabled'], isTrue);
+    expect(updated.centerBadgeDiscEnabled, isFalse);
+    expect(updated.centerBadgeBorderMode, CenterBadgeBorderMode.always);
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
@@ -399,6 +403,8 @@ void main() {
     expect(payload['backheaderStyle'], 'centerBadgeBudget');
     expect(payload['centerBackheaderDesign'], 'colored');
     expect(payload['centerPartitionRingEnabled'], isTrue);
+    expect(payload['centerBadgeDiscEnabled'], isFalse);
+    expect(payload['centerBadgeBorderMode'], 'always');
     expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);
     expect(payload['appColor'], 'pink');

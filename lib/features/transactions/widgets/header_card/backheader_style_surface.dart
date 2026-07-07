@@ -36,6 +36,8 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerHasLimit = false,
     this.centerProgressColor = AppColors.primary,
     this.centerPartitionRingEnabled = false,
+    this.centerBadgeDiscEnabled = true,
+    this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
     this.centerPartitionAllocation,
     this.centerDragOffset = 0,
     this.centerPeriodLabel,
@@ -92,6 +94,8 @@ class BackheaderStyleSurface extends StatelessWidget {
   final bool centerHasLimit;
   final Color centerProgressColor;
   final bool centerPartitionRingEnabled;
+  final bool centerBadgeDiscEnabled;
+  final CenterBadgeBorderMode centerBadgeBorderMode;
   final LimitAllocationData? centerPartitionAllocation;
   final double centerDragOffset;
   final String? centerPeriodLabel;
@@ -173,6 +177,8 @@ class BackheaderStyleSurface extends StatelessWidget {
               hasLimit: centerHasLimit,
               progressColor: centerProgressColor,
               partitionRingEnabled: centerPartitionRingEnabled,
+              badgeDiscEnabled: centerBadgeDiscEnabled,
+              borderMode: centerBadgeBorderMode,
               partitionAllocation: centerPartitionAllocation,
               periodLabel: centerPeriodLabel,
               actions: centerActions,
@@ -521,6 +527,8 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.hasLimit,
     required this.progressColor,
     required this.partitionRingEnabled,
+    required this.badgeDiscEnabled,
+    required this.borderMode,
     required this.partitionAllocation,
     required this.periodLabel,
     required this.actions,
@@ -564,6 +572,8 @@ class _CenterBadgeBudget extends StatelessWidget {
   final bool hasLimit;
   final Color progressColor;
   final bool partitionRingEnabled;
+  final bool badgeDiscEnabled;
+  final CenterBadgeBorderMode borderMode;
   final LimitAllocationData? partitionAllocation;
   final String? periodLabel;
   final Widget? actions;
@@ -671,6 +681,8 @@ class _CenterBadgeBudget extends StatelessWidget {
                 progressColor: ringColor,
                 ringTrackColor: ringTrackColor,
                 partitionRingEnabled: partitionRingEnabled,
+                badgeDiscEnabled: badgeDiscEnabled,
+                borderMode: borderMode,
                 partitionAllocation: partitionAllocation,
                 titleColor: titleColor,
                 previousEdge: previousEdge,
@@ -766,6 +778,8 @@ class _CenterBadgeWheel extends StatelessWidget {
     required this.progressColor,
     required this.ringTrackColor,
     required this.partitionRingEnabled,
+    required this.badgeDiscEnabled,
+    required this.borderMode,
     required this.partitionAllocation,
     required this.titleColor,
     required this.previousEdge,
@@ -812,6 +826,8 @@ class _CenterBadgeWheel extends StatelessWidget {
   final Color progressColor;
   final Color ringTrackColor;
   final bool partitionRingEnabled;
+  final bool badgeDiscEnabled;
+  final CenterBadgeBorderMode borderMode;
   final LimitAllocationData? partitionAllocation;
   final Color titleColor;
   final BackheaderBudgetItem? previousEdge;
@@ -964,6 +980,8 @@ class _CenterBadgeWheel extends StatelessWidget {
         hasLimit: slot.hasLimit,
         progressColor: coloredDesign ? AppColors.white : slot.progressColor,
         ringTrackColor: ringTrackColor,
+        badgeDiscEnabled: badgeDiscEnabled,
+        borderMode: borderMode,
         partitionAllocation: active && partitionRingEnabled
             ? partitionAllocation
             : null,
@@ -1088,14 +1106,16 @@ class _CenterWheelSlotData {
 BoxDecoration _centerBadgeDecoration({
   required Color color,
   required bool coloredDesign,
+  required bool badgeDiscEnabled,
 }) {
   if (!coloredDesign) {
     return BoxDecoration(color: color, shape: BoxShape.circle);
   }
   return BoxDecoration(
-    color: AppColors.white.withValues(alpha: 0.18),
+    color: badgeDiscEnabled
+        ? AppColors.white.withValues(alpha: 0.18)
+        : Colors.transparent,
     shape: BoxShape.circle,
-    border: Border.all(color: AppColors.white.withValues(alpha: 0.22)),
   );
 }
 
@@ -1113,6 +1133,8 @@ class _CenterBadgeVisual extends StatelessWidget {
     required this.hasLimit,
     required this.progressColor,
     required this.ringTrackColor,
+    required this.badgeDiscEnabled,
+    required this.borderMode,
     required this.partitionAllocation,
     required this.onTap,
     required this.onBadgeLongPressStart,
@@ -1137,6 +1159,8 @@ class _CenterBadgeVisual extends StatelessWidget {
   final bool hasLimit;
   final Color progressColor;
   final Color ringTrackColor;
+  final bool badgeDiscEnabled;
+  final CenterBadgeBorderMode borderMode;
   final LimitAllocationData? partitionAllocation;
   final VoidCallback? onTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
@@ -1156,6 +1180,8 @@ class _CenterBadgeVisual extends StatelessWidget {
     final fillKey = active
         ? const ValueKey('backheader-center-budget-button')
         : ValueKey('backheader-center-preview-fill-$previewSlotName');
+    final showProgressTrack =
+        hasLimit || borderMode == CenterBadgeBorderMode.always;
 
     return Opacity(
       opacity: opacity,
@@ -1190,6 +1216,7 @@ class _CenterBadgeVisual extends StatelessWidget {
                 decoration: _centerBadgeDecoration(
                   color: color,
                   coloredDesign: coloredDesign,
+                  badgeDiscEnabled: badgeDiscEnabled,
                 ),
                 alignment: Alignment.center,
                 child: Stack(
@@ -1202,6 +1229,7 @@ class _CenterBadgeVisual extends StatelessWidget {
                         progress: hasLimit ? progress : 0,
                         color: progressColor,
                         trackColor: ringTrackColor,
+                        showTrack: showProgressTrack,
                         showFill: hasLimit,
                       ),
                     ),
@@ -1287,23 +1315,28 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
     required this.progress,
     required this.color,
     required this.trackColor,
+    required this.showTrack,
     required this.showFill,
   });
 
   final double progress;
   final Color color;
   final Color trackColor;
+  final bool showTrack;
   final bool showFill;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (!showTrack && !showFill) return;
     final rect = (Offset.zero & size).deflate(_centerBadgeRingStrokeWidth / 2);
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _centerBadgeRingStrokeWidth
-      ..strokeCap = StrokeCap.round
-      ..color = trackColor;
-    canvas.drawArc(rect, 0, 6.283185307179586, false, track);
+    if (showTrack) {
+      final track = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _centerBadgeRingStrokeWidth
+        ..strokeCap = StrokeCap.round
+        ..color = trackColor;
+      canvas.drawArc(rect, 0, 6.283185307179586, false, track);
+    }
     if (!showFill) return;
     final fill = Paint()
       ..style = PaintingStyle.stroke
@@ -1324,6 +1357,7 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
     return oldDelegate.progress != progress ||
         oldDelegate.color != color ||
         oldDelegate.trackColor != trackColor ||
+        oldDelegate.showTrack != showTrack ||
         oldDelegate.showFill != showFill;
   }
 }

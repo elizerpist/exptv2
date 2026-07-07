@@ -37,6 +37,8 @@ class CategoryBudgetStage extends StatefulWidget {
     this.backheaderStyle = BackheaderStyle.classic,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.centerPartitionRingEnabled = false,
+    this.centerBadgeDiscEnabled = true,
+    this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
     this.backgroundColor = AppColors.gray100,
     this.activeKey,
     this.onActiveItemChanged,
@@ -58,6 +60,8 @@ class CategoryBudgetStage extends StatefulWidget {
   final BackheaderStyle backheaderStyle;
   final BackheaderCenterDesign centerBackheaderDesign;
   final bool centerPartitionRingEnabled;
+  final bool centerBadgeDiscEnabled;
+  final CenterBadgeBorderMode centerBadgeBorderMode;
   final Color backgroundColor;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
@@ -396,6 +400,8 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         backgroundColor: widget.backgroundColor,
         centerDesign: widget.centerBackheaderDesign,
         centerPartitionRingEnabled: widget.centerPartitionRingEnabled,
+        centerBadgeDiscEnabled: widget.centerBadgeDiscEnabled,
+        centerBadgeBorderMode: widget.centerBadgeBorderMode,
         centerPartitionAllocation: centerPartitionAllocation,
         centerDragOffset: isCenterBadgeBudget ? _dragDx : 0,
         orbitPartitionBar: isOrbitBudget

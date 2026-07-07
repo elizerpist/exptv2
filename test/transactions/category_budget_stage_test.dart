@@ -1990,6 +1990,124 @@ void main() {
     );
   });
 
+  testWidgets(
+    'centerBadgeBudget can hide colored white badge disc independently',
+    (tester) async {
+      const backgroundColor = Color(0xffeef3f7);
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.colored,
+                centerBadgeDiscEnabled: false,
+                backgroundColor: backgroundColor,
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect((button.decoration as BoxDecoration).color, Colors.transparent);
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints
+          ..arc(color: AppColors.white.withValues(alpha: 0.34))
+          ..arc(color: AppColors.white),
+      );
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget limit-only border distinguishes no-limit from zero progress limit',
+    (tester) async {
+      final noLimit = barFixture(6, 'No limit', 0, 0);
+      final zeroProgressLimit = barFixture(7, 'Zero limit spend', 0, 500);
+
+      Future<void> pumpActive(BackheaderBudgetItem activeItem) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 390,
+                height: 340,
+                child: CategoryBudgetStage(
+                  backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                  centerBackheaderDesign: BackheaderCenterDesign.colored,
+                  centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
+                  backgroundColor: const Color(0xffeef3f7),
+                  items: [
+                    BackheaderBudgetItem.category(noLimit),
+                    BackheaderBudgetItem.category(zeroProgressLimit),
+                  ],
+                  categoryBars: [noLimit, zeroProgressLimit],
+                  activeKey: activeItem.key,
+                  onItemTap: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await pumpActive(BackheaderBudgetItem.category(noLimit));
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        isNot(paints..arc(color: AppColors.white.withValues(alpha: 0.34))),
+      );
+
+      await pumpActive(BackheaderBudgetItem.category(zeroProgressLimit));
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints..arc(color: AppColors.white.withValues(alpha: 0.34)),
+      );
+    },
+  );
+
+  testWidgets('centerBadgeBudget always border mode keeps no-limit track', (
+    tester,
+  ) async {
+    final noLimit = barFixture(6, 'No limit', 0, 0);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              centerBackheaderDesign: BackheaderCenterDesign.colored,
+              centerBadgeBorderMode: CenterBadgeBorderMode.always,
+              backgroundColor: const Color(0xffeef3f7),
+              items: [BackheaderBudgetItem.category(noLimit)],
+              categoryBars: [noLimit],
+              activeKey: BackheaderBudgetItem.category(noLimit).key,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-center-progress-ring')),
+      paints..arc(color: AppColors.white.withValues(alpha: 0.34)),
+    );
+  });
+
   testWidgets('centerBadgeBudget handle expands remaining amount and closes', (
     tester,
   ) async {

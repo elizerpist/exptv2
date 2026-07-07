@@ -8,12 +8,16 @@ void main() {
     final settings = AppThemeSettings.defaults().copyWith(
       backheaderStyle: BackheaderStyle.centerBadgeBudget,
       centerBackheaderDesign: BackheaderCenterDesign.colored,
+      centerBadgeDiscEnabled: false,
+      centerBadgeBorderMode: CenterBadgeBorderMode.always,
     );
 
     final roundTrip = AppThemeSettings.fromMap(settings.toMap());
 
     expect(roundTrip.backheaderStyle, BackheaderStyle.centerBadgeBudget);
     expect(roundTrip.centerBackheaderDesign, BackheaderCenterDesign.colored);
+    expect(roundTrip.centerBadgeDiscEnabled, isFalse);
+    expect(roundTrip.centerBadgeBorderMode, CenterBadgeBorderMode.always);
     expect(
       AppThemeSettings.fromMap(
         const <dynamic, dynamic>{},
@@ -21,10 +25,38 @@ void main() {
       BackheaderCenterDesign.neutral,
     );
     expect(
+      AppThemeSettings.fromMap(
+        const <dynamic, dynamic>{},
+      ).centerBadgeDiscEnabled,
+      isTrue,
+    );
+    expect(
+      AppThemeSettings.fromMap(
+        const <dynamic, dynamic>{},
+      ).centerBadgeBorderMode,
+      CenterBadgeBorderMode.limitOnly,
+    );
+    expect(
       AppThemeSettings.fromMap(const <dynamic, dynamic>{
         'centerPartitionRingEnabled': true,
+        'centerBadgeDiscEnabled': false,
+        'centerBadgeBorderMode': 'always',
       }).toMap()['centerPartitionRingEnabled'],
       isTrue,
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerBadgeDiscEnabled': false,
+        'centerBadgeBorderMode': 'always',
+      }).toMap(),
+      containsPair('centerBadgeDiscEnabled', false),
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerBadgeDiscEnabled': false,
+        'centerBadgeBorderMode': 'always',
+      }).toMap(),
+      containsPair('centerBadgeBorderMode', 'always'),
     );
     expect(
       AppThemeSettings.fromMap(
@@ -171,5 +203,70 @@ void main() {
     await tester.pump();
 
     expect(updated?.toMap()['centerPartitionRingEnabled'], isTrue);
+  });
+
+  testWidgets('backheader style panel toggles colored badge disc', (
+    tester,
+  ) async {
+    AppThemeSettings? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackheaderStyleOptionsPanel(
+            settings: AppThemeSettings.fromMap(const <dynamic, dynamic>{
+              'backheaderStyle': 'centerBadgeBudget',
+              'centerBackheaderDesign': 'colored',
+              'centerBadgeDiscEnabled': true,
+            }),
+            onChanged: (next) => updated = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Fehér korong'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('center-badge-disc-toggle')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('center-badge-disc-toggle')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('center-badge-disc-toggle')));
+    await tester.pump();
+
+    expect(updated?.centerBadgeDiscEnabled, isFalse);
+  });
+
+  testWidgets('backheader style panel updates center badge border mode', (
+    tester,
+  ) async {
+    AppThemeSettings? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackheaderStyleOptionsPanel(
+            settings: AppThemeSettings.fromMap(const <dynamic, dynamic>{
+              'backheaderStyle': 'centerBadgeBudget',
+              'centerBadgeBorderMode': 'limitOnly',
+            }),
+            onChanged: (next) => updated = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Badge border'), findsOneWidget);
+    expect(find.text('Csak limites badgeken (jelenlegi)'), findsOneWidget);
+    expect(find.text('Mindig látszik'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Mindig látszik'));
+    await tester.pump();
+    await tester.tap(find.text('Mindig látszik'));
+    await tester.pump();
+
+    expect(updated?.centerBadgeBorderMode, CenterBadgeBorderMode.always);
   });
 }

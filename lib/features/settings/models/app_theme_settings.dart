@@ -88,6 +88,22 @@ enum BackheaderCenterDesign {
   };
 }
 
+enum CenterBadgeBorderMode {
+  limitOnly('limitOnly'),
+  always('always');
+
+  const CenterBadgeBorderMode(this.nativeValue);
+  final String nativeValue;
+
+  static CenterBadgeBorderMode fromAny(Object? value) {
+    final raw = value?.toString();
+    return CenterBadgeBorderMode.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => CenterBadgeBorderMode.limitOnly,
+    );
+  }
+}
+
 enum AppCardColor {
   white('white'),
   lightgray('lightgray'),
@@ -361,6 +377,8 @@ class AppThemeSettings {
     required this.appColor,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.centerPartitionRingEnabled = false,
+    this.centerBadgeDiscEnabled = true,
+    this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
@@ -387,6 +405,8 @@ class AppThemeSettings {
       backheaderStyle: BackheaderStyle.classic,
       centerBackheaderDesign: BackheaderCenterDesign.neutral,
       centerPartitionRingEnabled: false,
+      centerBadgeDiscEnabled: true,
+      centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
       categoryCardShadowEnabled: true,
@@ -451,6 +471,10 @@ class AppThemeSettings {
         map['centerPartitionRingEnabled'],
         false,
       ),
+      centerBadgeDiscEnabled: _bool(map['centerBadgeDiscEnabled'], true),
+      centerBadgeBorderMode: CenterBadgeBorderMode.fromAny(
+        map['centerBadgeBorderMode'],
+      ),
       appColor: _appColorFromMap(map),
       categoryMenuPresentation: CategoryMenuPresentation.fromAny(
         map['categoryMenuPresentation'],
@@ -479,6 +503,8 @@ class AppThemeSettings {
   final BackheaderStyle backheaderStyle;
   final BackheaderCenterDesign centerBackheaderDesign;
   final bool centerPartitionRingEnabled;
+  final bool centerBadgeDiscEnabled;
+  final CenterBadgeBorderMode centerBadgeBorderMode;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
   final bool categoryCardShadowEnabled;
@@ -515,6 +541,8 @@ class AppThemeSettings {
       'backheaderStyle': backheaderStyle.nativeValue,
       'centerBackheaderDesign': centerBackheaderDesign.nativeValue,
       'centerPartitionRingEnabled': centerPartitionRingEnabled,
+      'centerBadgeDiscEnabled': centerBadgeDiscEnabled,
+      'centerBadgeBorderMode': centerBadgeBorderMode.nativeValue,
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
@@ -542,6 +570,8 @@ class AppThemeSettings {
     BackheaderStyle? backheaderStyle,
     BackheaderCenterDesign? centerBackheaderDesign,
     bool? centerPartitionRingEnabled,
+    bool? centerBadgeDiscEnabled,
+    CenterBadgeBorderMode? centerBadgeBorderMode,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
     bool? categoryCardShadowEnabled,
@@ -572,6 +602,10 @@ class AppThemeSettings {
           centerBackheaderDesign ?? this.centerBackheaderDesign,
       centerPartitionRingEnabled:
           centerPartitionRingEnabled ?? this.centerPartitionRingEnabled,
+      centerBadgeDiscEnabled:
+          centerBadgeDiscEnabled ?? this.centerBadgeDiscEnabled,
+      centerBadgeBorderMode:
+          centerBadgeBorderMode ?? this.centerBadgeBorderMode,
       appColor: appColor ?? this.appColor,
       categoryMenuPresentation:
           categoryMenuPresentation ?? this.categoryMenuPresentation,
