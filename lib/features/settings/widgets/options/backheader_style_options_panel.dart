@@ -473,6 +473,7 @@ class _CenterBadgeRelativeScaleSectionState
     extends State<_CenterBadgeRelativeScaleSection> {
   var _sizePercent = 100;
   var _opacityPercent = 100;
+  var _discOpacityPercent = 100;
   late List<int> _baseSizes;
   late List<int> _baseWhiteDiscOpacities;
   late List<int> _baseWhiteIconOpacities;
@@ -485,14 +486,16 @@ class _CenterBadgeRelativeScaleSectionState
   void initState() {
     super.initState();
     _captureSizeBaseline();
-    _captureOpacityBaseline();
+    _captureBadgeOpacityBaseline();
+    _captureDiscOpacityBaseline();
   }
 
   @override
   void didUpdateWidget(covariant _CenterBadgeRelativeScaleSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_sizePercent == 100) _captureSizeBaseline();
-    if (_opacityPercent == 100) _captureOpacityBaseline();
+    if (_opacityPercent == 100) _captureBadgeOpacityBaseline();
+    if (_discOpacityPercent == 100) _captureDiscOpacityBaseline();
   }
 
   @override
@@ -540,6 +543,19 @@ class _CenterBadgeRelativeScaleSectionState
             max: 150,
             onChanged: _scaleBadgeOpacity,
           ),
+          _CenterBadgeOpacityRow(
+            label: 'Relatív korong opacity',
+            sliderKey: const ValueKey(
+              'center-badge-relative-disc-opacity-slider',
+            ),
+            inputKey: const ValueKey(
+              'center-badge-relative-disc-opacity-input',
+            ),
+            value: _discOpacityPercent,
+            min: 50,
+            max: 150,
+            onChanged: _scaleDiscOpacity,
+          ),
         ],
       ),
     );
@@ -549,25 +565,29 @@ class _CenterBadgeRelativeScaleSectionState
     _baseSizes = List<int>.of(widget.settings.centerBadgeSlotSizePercents);
   }
 
-  void _captureOpacityBaseline() {
+  void _captureBadgeOpacityBaseline() {
     final settings = widget.settings;
-    _baseWhiteDiscOpacities = List<int>.of(
-      settings.centerBadgeWhiteDiscOpacities,
-    );
     _baseWhiteIconOpacities = List<int>.of(
       settings.centerBadgeWhiteIconOpacities,
     );
     _baseWhiteProgressOpacities = List<int>.of(
       settings.centerBadgeWhiteProgressOpacities,
     );
-    _baseColoredFillOpacities = List<int>.of(
-      settings.centerBadgeColoredFillOpacities,
-    );
     _baseColoredIconOpacities = List<int>.of(
       settings.centerBadgeColoredIconOpacities,
     );
     _baseColoredProgressOpacities = List<int>.of(
       settings.centerBadgeColoredProgressOpacities,
+    );
+  }
+
+  void _captureDiscOpacityBaseline() {
+    final settings = widget.settings;
+    _baseWhiteDiscOpacities = List<int>.of(
+      settings.centerBadgeWhiteDiscOpacities,
+    );
+    _baseColoredFillOpacities = List<int>.of(
+      settings.centerBadgeColoredFillOpacities,
     );
   }
 
@@ -589,12 +609,6 @@ class _CenterBadgeRelativeScaleSectionState
     setState(() => _opacityPercent = nextPercent);
     widget.onChanged(
       widget.settings.copyWith(
-        centerBadgeWhiteDiscOpacities: _scaleList(
-          _baseWhiteDiscOpacities,
-          nextPercent / 100,
-          min: 0,
-          max: 100,
-        ),
         centerBadgeWhiteIconOpacities: _scaleList(
           _baseWhiteIconOpacities,
           nextPercent / 100,
@@ -607,12 +621,6 @@ class _CenterBadgeRelativeScaleSectionState
           min: 0,
           max: 100,
         ),
-        centerBadgeColoredFillOpacities: _scaleList(
-          _baseColoredFillOpacities,
-          nextPercent / 100,
-          min: 0,
-          max: 100,
-        ),
         centerBadgeColoredIconOpacities: _scaleList(
           _baseColoredIconOpacities,
           nextPercent / 100,
@@ -621,6 +629,26 @@ class _CenterBadgeRelativeScaleSectionState
         ),
         centerBadgeColoredProgressOpacities: _scaleList(
           _baseColoredProgressOpacities,
+          nextPercent / 100,
+          min: 0,
+          max: 100,
+        ),
+      ),
+    );
+  }
+
+  void _scaleDiscOpacity(int nextPercent) {
+    setState(() => _discOpacityPercent = nextPercent);
+    widget.onChanged(
+      widget.settings.copyWith(
+        centerBadgeWhiteDiscOpacities: _scaleList(
+          _baseWhiteDiscOpacities,
+          nextPercent / 100,
+          min: 0,
+          max: 100,
+        ),
+        centerBadgeColoredFillOpacities: _scaleList(
+          _baseColoredFillOpacities,
           nextPercent / 100,
           min: 0,
           max: 100,

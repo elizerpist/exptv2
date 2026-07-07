@@ -677,7 +677,7 @@ void main() {
   });
 
   testWidgets(
-    'center badge relative section separates size and badge opacity',
+    'center badge relative section separates size badge and disc opacity',
     (tester) async {
       var settings = AppThemeSettings.defaults().copyWith(
         backheaderStyle: BackheaderStyle.centerBadgeBudget,
@@ -734,6 +734,7 @@ void main() {
       );
       expect(find.text('Relatív méret'), findsOneWidget);
       expect(find.text('Relatív badge opacity'), findsOneWidget);
+      expect(find.text('Relatív korong opacity'), findsOneWidget);
 
       final sizeSliderFinder = find.byKey(
         const ValueKey('center-badge-relative-size-slider'),
@@ -791,10 +792,10 @@ void main() {
       tester.widget<Slider>(opacitySliderFinder).onChanged!(125);
       await tester.pump();
 
-      expect(settings.centerBadgeWhiteDiscOpacities, [13, 25, 38, 50, 63]);
+      expect(settings.centerBadgeWhiteDiscOpacities, baselineWhiteDisc);
       expect(settings.centerBadgeWhiteIconOpacities, [100, 100, 75, 50, 25]);
       expect(settings.centerBadgeWhiteProgressOpacities, [100, 88, 63, 38, 13]);
-      expect(settings.centerBadgeColoredFillOpacities, [19, 31, 44, 56, 69]);
+      expect(settings.centerBadgeColoredFillOpacities, baselineColoredFill);
       expect(settings.centerBadgeColoredIconOpacities, [25, 50, 75, 100, 100]);
       expect(settings.centerBadgeColoredProgressOpacities, [
         15,
@@ -821,8 +822,46 @@ void main() {
 
       tester.widget<Slider>(opacitySliderFinder).onChanged!(50);
       await tester.pump();
-      expect(settings.centerBadgeWhiteDiscOpacities, [5, 10, 15, 20, 25]);
+      expect(settings.centerBadgeWhiteDiscOpacities, baselineWhiteDisc);
       expect(settings.centerBadgeColoredIconOpacities, [10, 20, 30, 40, 50]);
+      expect(settings.centerBadgeColoredBackgroundOpacity, 64);
+
+      tester.widget<Slider>(opacitySliderFinder).onChanged!(100);
+      await tester.pump();
+
+      final discOpacitySliderFinder = find.byKey(
+        const ValueKey('center-badge-relative-disc-opacity-slider'),
+      );
+      await tester.ensureVisible(discOpacitySliderFinder);
+      await tester.pump();
+      expect(tester.widget<Slider>(discOpacitySliderFinder).value, 100);
+      tester.widget<Slider>(discOpacitySliderFinder).onChanged!(125);
+      await tester.pump();
+
+      expect(settings.centerBadgeWhiteDiscOpacities, [13, 25, 38, 50, 63]);
+      expect(settings.centerBadgeColoredFillOpacities, [19, 31, 44, 56, 69]);
+      expect(settings.centerBadgeWhiteIconOpacities, baselineWhiteIcon);
+      expect(settings.centerBadgeWhiteProgressOpacities, baselineWhiteProgress);
+      expect(settings.centerBadgeColoredIconOpacities, baselineColoredIcon);
+      expect(
+        settings.centerBadgeColoredProgressOpacities,
+        baselineColoredProgress,
+      );
+      expect(settings.centerBadgeSlotSizePercents, baselineSizes);
+      expect(settings.centerBadgeSlotXOffsets, baselineOffsets);
+      expect(settings.centerBadgeColoredBackgroundOpacity, 64);
+
+      tester.widget<Slider>(discOpacitySliderFinder).onChanged!(100);
+      await tester.pump();
+      expect(settings.centerBadgeWhiteDiscOpacities, baselineWhiteDisc);
+      expect(settings.centerBadgeColoredFillOpacities, baselineColoredFill);
+
+      tester.widget<Slider>(discOpacitySliderFinder).onChanged!(50);
+      await tester.pump();
+      expect(settings.centerBadgeWhiteDiscOpacities, [5, 10, 15, 20, 25]);
+      expect(settings.centerBadgeColoredFillOpacities, [8, 13, 18, 23, 28]);
+      expect(settings.centerBadgeWhiteIconOpacities, baselineWhiteIcon);
+      expect(settings.centerBadgeColoredIconOpacities, baselineColoredIcon);
       expect(settings.centerBadgeColoredBackgroundOpacity, 64);
     },
   );
