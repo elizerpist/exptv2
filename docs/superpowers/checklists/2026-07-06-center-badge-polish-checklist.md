@@ -16,6 +16,7 @@ Source:
 - User feedback on 2026-07-07 after commit `734983a`: after swipe/inertia, when the belt slows between two badges, it can settle backward instead of finishing in the original spin direction.
 - User requirement: if the final settle must decide between two badges and there is no remaining momentum, complete the last movement in the swipe/spin direction instead of rolling one badge backward.
 - User requirement: make side badges another 10% larger while preserving the center-to-adjacent badge padding.
+- User requirement on 2026-07-07: increase side badge sizes by another 10%.
 - Workflow requirement: keep work in small checklist-backed steps; do not make a partial commit/build.
 
 Root-cause notes:
@@ -46,6 +47,9 @@ Root-cause notes:
 - Latest RED verification: `centerBadgeBudget between-slot release settles in swipe direction` failed with selected `Travel` instead of expected `Books`; `centerBadgeBudget carousel renders nine fading badge slots` failed with edge slot `33.88` vs expected `37.27`.
 - Latest GREEN verification: targeted CBP-19/CBP-20 tests passed 2/2; full `category_budget_stage_test.dart` passed 66/66 after updating older expectations that encoded the previous backward snap behavior.
 - Latest final verification: clean detached worktree with only this patch applied passed `flutter analyze` with `No issues found` and full `flutter test --reporter compact` with 586/586 tests passed; the run emitted the existing non-fatal hit-test warning in `widget_test.dart`.
+- Latest root-cause hypothesis: side slots are now at `1.10^3`, and the latest request asks for one more 10% size bump to `1.10^4`; `_slotSpacing` must move outward again so the focused-to-direct-neighbor fill gap stays near 11 px.
+- Latest RED verification: `centerBadgeBudget carousel renders nine fading badge slots` failed with edge slot `37.27` vs expected `40.99`, confirming the current code has not applied the new +10% side size.
+- Latest GREEN verification: targeted `centerBadgeBudget carousel renders nine fading badge slots` passed after moving side sizes to `1.10^4`; full `category_budget_stage_test.dart` passed 66/66.
 
 | ID | Source Instruction | Intended Code Area | Acceptance Condition | Verification Method | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -69,3 +73,4 @@ Root-cause notes:
 | CBP-18 | "header card chipet ... vissza a bal oldalra" | `TransactionHeaderCard` chip `Positioned` and header layout tests | `header-budget-trigger-chip` is left-aligned with the existing 30 px margin. | RED/GREEN header layout widget test checks chip left margin. | DONE |
 | CBP-19 | "ha 2 közt kell dönteni és nincs lendület, akkor még az utolsót mozogja ki" | `CategoryBudgetStage` center belt release and residual settle logic | A released belt that stops between badges completes the final settle in the last swipe/spin direction instead of snapping backward to the current badge. | RED/GREEN widget test drives a between-slot release and expects the next badge in swipe direction after settle. | DONE |
 | CBP-20 | "oldalsó badgek legyenek nagyobbak még 10%-al" | `_CenterBadgeWheel` side slot sizes and spacing | All non-center badge slots are 10% larger than the current committed sizes; the focused-to-direct-neighbor visible gap remains about the previous 11 px. | RED/GREEN widget test checks side slot dimensions and active-to-inner visible fill gap. | DONE |
+| CBP-21 | "növeld még 10%-al az oldalsó badgek méretét" | `_CenterBadgeWheel` side slot sizes and spacing | All non-center badge slots are 10% larger than CBP-20, while the focused-to-direct-neighbor visible fill gap remains about 11 px. | RED/GREEN widget test checks side slot dimensions and active-to-inner visible fill gap. | DONE |

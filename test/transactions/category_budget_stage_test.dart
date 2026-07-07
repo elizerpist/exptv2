@@ -850,19 +850,19 @@ void main() {
     );
     expect(
       tester.getSize(previousEdge).width,
-      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousFarthest).width,
-      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousOuter).width,
-      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousInner).width,
-      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester

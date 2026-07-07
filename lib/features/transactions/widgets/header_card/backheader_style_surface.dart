@@ -794,11 +794,11 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   static const width = 386.0;
   static const _activeSize = 78.0 * 1.15;
-  static const _innerPreviewSize = 48.0 * 1.10 * 1.10 * 1.10;
-  static const _outerPreviewSize = 40.0 * 1.10 * 1.10 * 1.10;
-  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10 * 1.10;
-  static const _edgePreviewSize = 28.0 * 1.10 * 1.10 * 1.10;
-  static const _slotSpacing = 68.0;
+  static const _innerPreviewSize = 48.0 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _outerPreviewSize = 40.0 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _edgePreviewSize = 28.0 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _slotSpacing = 70.5;
   static const _compressedOuterSpacing = 38.0;
   static const _titleTop = 82.0;
 
