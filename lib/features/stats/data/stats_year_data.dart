@@ -27,6 +27,9 @@ class StatsYearData {
     required this.scopeLabel,
     required this.selectedCategoryIds,
     required this.totalThresholdHitDays,
+    required this.graphMonths,
+    required this.graphStartMonth,
+    required this.graphEndMonth,
   });
 
   final int year;
@@ -41,6 +44,9 @@ class StatsYearData {
   final String scopeLabel;
   final Set<int> selectedCategoryIds;
   final int totalThresholdHitDays;
+  final List<StatsMonthData> graphMonths;
+  final int graphStartMonth;
+  final int graphEndMonth;
 
   static const monthNames = [
     'January',
@@ -83,11 +89,19 @@ class StatsYearData {
     };
     final normalizedToday = _dateOnly(today ?? DateTime.now());
     final byDate = <DateTime, List<TransactionRecord>>{};
+    int? firstActiveMonth;
+    int? lastActiveMonth;
     for (final record in transactions) {
       final parsed = _parseDate(record.normalizedDate);
       if (parsed == null || parsed.year != year) continue;
       final matchesType = _recordType(record) == activeType;
       if (!matchesType) continue;
+      firstActiveMonth = firstActiveMonth == null
+          ? parsed.month
+          : (parsed.month < firstActiveMonth ? parsed.month : firstActiveMonth);
+      lastActiveMonth = lastActiveMonth == null
+          ? parsed.month
+          : (parsed.month > lastActiveMonth ? parsed.month : lastActiveMonth);
       byDate
           .putIfAbsent(_dateOnly(parsed), () => <TransactionRecord>[])
           .add(record);
@@ -189,6 +203,14 @@ class StatsYearData {
       0,
       (sum, month) => sum + month.thresholdHitDays,
     );
+    final graphStartMonth = firstActiveMonth ?? 1;
+    final graphEndMonth = lastActiveMonth ?? 12;
+    final graphMonths = months
+        .where(
+          (month) =>
+              month.month >= graphStartMonth && month.month <= graphEndMonth,
+        )
+        .toList(growable: false);
     return StatsYearData(
       year: year,
       activeType: activeType,
@@ -209,6 +231,9 @@ class StatsYearData {
       scopeLabel: scopeLabel,
       selectedCategoryIds: Set.unmodifiable(scopedCategoryIds),
       totalThresholdHitDays: totalThresholdHitDays,
+      graphMonths: List.unmodifiable(graphMonths),
+      graphStartMonth: graphStartMonth,
+      graphEndMonth: graphEndMonth,
     );
   }
 

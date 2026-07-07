@@ -280,6 +280,108 @@ void main() {
     expect(find.byKey(const ValueKey('stats-fastinfo-graph')), findsOneWidget);
     await gesture.up();
   });
+
+  testWidgets(
+    'stats month card tap opens focused month view and back returns',
+    (tester) async {
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-01-12', amount: -6000, categoryId: 1),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(store: store),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('stats-month-hit-1')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('calendar-focus-month-view')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar-focus-month-canvas')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('calendar-focus-back')), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-year-calendar')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('calendar-focus-back')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('calendar-focus-month-view')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    },
+  );
+
+  testWidgets('stats header pull keeps FastInfo graph stable between frames', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('transaction-header-card'))),
+    );
+    await gesture.moveBy(const Offset(0, 80));
+    await tester.pump();
+    final firstGraph = tester.widget<StatsFastInfoGraph>(
+      find.byType(StatsFastInfoGraph),
+    );
+
+    await gesture.moveBy(const Offset(0, 24));
+    await tester.pump();
+    final secondGraph = tester.widget<StatsFastInfoGraph>(
+      find.byType(StatsFastInfoGraph),
+    );
+
+    expect(identical(firstGraph, secondGraph), isTrue);
+    await gesture.up();
+  });
 }
 
 TransactionRecord record({

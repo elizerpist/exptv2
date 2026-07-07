@@ -1,0 +1,7 @@
+# Stats menu regression fixes checklist
+
+| ID | Source instruction | Intended code area | Acceptance condition | Verification method | Status |
+| --- | --- | --- | --- | --- | --- |
+| STAT-FIX-001 | User: "statisztika menuben nagyon laggol a header card pull down" | `StatsPage`, `HeaderFastInfoSurface`, `StatsFastInfoGraph` | Pulling the stats header keeps the graph widget/painter stable across drag frames and does not rebuild the annual stats data on every drag tick. | Widget test checks FastInfo graph identity across continued drag; targeted stats tests pass. | DONE |
+| STAT-FIX-002 | User: "elveszett a fókusz mód ... monthcardra a tappel nem történik semmi" | `StatsPage`, stats month calendar/focused view | Tapping a month card opens a focused month stats view, and a back control returns to the annual 12-month view. | Widget test taps `stats-month-hit-*`, verifies `calendar-focus-month-view`, `calendar-focus-month-canvas`, and back behavior. | DONE |
+| STAT-FIX-003 | User: "grafikonok vége ne az év vége legyen ... kezdete ... legelső ... tranzakció ... vége ... legutolsó tranzakció" | `StatsYearData`, `StatsFastInfoGraph` | FastInfo graphs use only the active transaction type's first-through-last active months in the selected year, falling back to all 12 months only when there is no active-side transaction. | Unit test verifies graph month domain for active-side expense/income transactions; targeted stats tests pass. | DONE |

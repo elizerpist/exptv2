@@ -7,9 +7,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
+import '../transactions/models/calendar_menu_mode.dart';
+import '../transactions/models/calendar_render_models.dart';
 import '../transactions/models/transaction_category.dart';
+import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/widgets/calendar_menu/calendar_value_slider_panel.dart';
+import '../transactions/widgets/calendar_menu/focused_month_canvas.dart';
+import '../transactions/widgets/calendar_menu/month_stats_charts.dart';
 import '../transactions/widgets/header_card/header_fast_info_surface.dart';
 import '../transactions/widgets/header_card/transaction_header_card.dart';
 import '../transactions/widgets/header_card/transaction_header_metrics.dart';
@@ -36,6 +41,7 @@ class _StatsPageState extends State<StatsPage>
   var _activeType = TransactionType.expense;
   var _renderMode = StatsRenderMode.categoryScope;
   var _thresholdValue = 5000.0;
+  int? _focusedMonth;
   late final ValueNotifier<double> _fastInfoExtent;
   late final AnimationController _headerPullController;
   final _selectedScopeByType = <TransactionType, Set<int>>{
@@ -94,6 +100,12 @@ class _StatsPageState extends State<StatsPage>
               );
             }
             final data = _buildStatsData();
+            final focusedMonth = _focusedMonth == null
+                ? null
+                : data.months[(_focusedMonth! - 1).clamp(
+                    0,
+                    data.months.length - 1,
+                  )];
             return Stack(
               clipBehavior: Clip.none,
               children: [
@@ -129,33 +141,35 @@ class _StatsPageState extends State<StatsPage>
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: StatsYearCalendar(
-                          data: data,
-                          onMonthSelected: (_) {},
-                        ),
+                        child: focusedMonth == null
+                            ? StatsYearCalendar(
+                                data: data,
+                                onMonthSelected: _selectMonth,
+                              )
+                            : _StatsFocusedMonthView(
+                                data: data,
+                                month: focusedMonth,
+                                transactions: widget.store.transactions,
+                                categories: widget.store.categories,
+                                onBack: () {
+                                  setState(() => _focusedMonth = null);
+                                },
+                              ),
                       ),
                     ),
                   ],
                 ),
-                ValueListenableBuilder<double>(
+                HeaderFastInfoSurface.listenable(
                   key: const ValueKey('stats-fastinfo-extent-builder'),
-                  valueListenable: _fastInfoExtent,
-                  builder: (context, fastInfoExtent, _) {
-                    final visibleFastInfoExtent = fastInfoExtent
-                        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
-                        .toDouble();
-                    return HeaderFastInfoSurface(
-                      visibleFastInfoExtent: visibleFastInfoExtent,
-                      cardColor: resolvedTheme.headerCard,
-                      surfaceStyle: resolvedTheme.contentSurfaceStyle,
-                      fastInfo: StatsFastInfoGraph(data: data),
-                      header: _buildHeaderCard(
-                        data: data,
-                        expenseTheme: resolvedTheme,
-                        drawSurface: false,
-                      ),
-                    );
-                  },
+                  visibleFastInfoExtentListenable: _fastInfoExtent,
+                  cardColor: resolvedTheme.headerCard,
+                  surfaceStyle: resolvedTheme.contentSurfaceStyle,
+                  fastInfo: StatsFastInfoGraph(data: data),
+                  header: _buildHeaderCard(
+                    data: data,
+                    expenseTheme: resolvedTheme,
+                    drawSurface: false,
+                  ),
                 ),
                 CalendarValueSliderPanel.threshold(
                   value: _thresholdValue,
@@ -236,6 +250,10 @@ class _StatsPageState extends State<StatsPage>
   void _setActiveType(TransactionType type) {
     if (_activeType == type) return;
     setState(() => _activeType = type);
+  }
+
+  void _selectMonth(StatsMonthData month) {
+    setState(() => _focusedMonth = month.month);
   }
 
   Future<void> _openScopeSheet() async {
@@ -335,6 +353,153 @@ class _StatsPageState extends State<StatsPage>
             _fastInfoExtent.value = 0;
           })
           .catchError((_) {}),
+    );
+  }
+}
+
+class _StatsFocusedMonthView extends StatelessWidget {
+  const _StatsFocusedMonthView({
+    required this.data,
+    required this.month,
+    required this.transactions,
+    required this.categories,
+    required this.onBack,
+  });
+
+  final StatsYearData data;
+  final StatsMonthData month;
+  final List<TransactionRecord> transactions;
+  final List<TransactionCategory> categories;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final calendarMode = _calendarMode;
+    final calendarMonth = _calendarMonth(calendarMode);
+    return SingleChildScrollView(
+      key: const ValueKey('calendar-focus-month-view'),
+      padding: const EdgeInsets.only(bottom: 144),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 52,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  left: 0,
+                  child: IconButton(
+                    key: const ValueKey('calendar-focus-back'),
+                    onPressed: onBack,
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.gray700,
+                    ),
+                    tooltip: 'Vissza az éves nézethez',
+                  ),
+                ),
+                Text(
+                  '${month.name} ${month.year}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.gray800,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FocusedMonthCanvas(
+            month: calendarMonth,
+            mode: calendarMode,
+            thresholdValue: data.thresholdValue,
+            heatmapMinValue: 0,
+            heatmapCurrentValue: _heatmapCurrentValue,
+          ),
+          const SizedBox(height: 14),
+          MonthStatsCharts(
+            year: month.year,
+            month: month.month,
+            transactions: transactions,
+            categories: categories,
+          ),
+        ],
+      ),
+    );
+  }
+
+  CalendarMenuMode get _calendarMode => switch (data.mode) {
+    StatsRenderMode.categoryScope => CalendarMenuMode.category,
+    StatsRenderMode.closing => CalendarMenuMode.summary,
+    StatsRenderMode.heatmap => CalendarMenuMode.heatmap,
+  };
+
+  double get _heatmapCurrentValue {
+    var max = data.thresholdValue;
+    for (final day in month.days) {
+      if (day.scopeAmount > max) max = day.scopeAmount;
+    }
+    return max <= 0 ? 1 : max;
+  }
+
+  CalendarMonthRenderData _calendarMonth(CalendarMenuMode calendarMode) {
+    final visualAsExpense = calendarMode != CalendarMenuMode.summary;
+    final income = !visualAsExpense && data.activeType == TransactionType.income
+        ? month.activeTotal
+        : 0.0;
+    final expense =
+        visualAsExpense || data.activeType == TransactionType.expense
+        ? month.activeTotal
+        : 0.0;
+    return CalendarMonthRenderData(
+      year: month.year,
+      month: month.month,
+      name: month.name,
+      weekdayLabels: month.weekdayLabels,
+      leadingBlankDays: month.leadingBlankDays,
+      days: [
+        for (final day in month.days)
+          _calendarDay(day, visualAsExpense: visualAsExpense),
+      ],
+      income: income,
+      expense: expense,
+      balance: income - expense,
+      transactionCount: month.transactionCount,
+    );
+  }
+
+  CalendarDayRenderData _calendarDay(
+    StatsDayData day, {
+    required bool visualAsExpense,
+  }) {
+    final income = !visualAsExpense && data.activeType == TransactionType.income
+        ? day.activeAmount
+        : 0.0;
+    final expense =
+        visualAsExpense || data.activeType == TransactionType.expense
+        ? day.activeAmount
+        : 0.0;
+    return CalendarDayRenderData(
+      date: day.date,
+      day: day.day,
+      income: income,
+      expense: expense,
+      hasIncome:
+          !visualAsExpense &&
+          data.activeType == TransactionType.income &&
+          day.hasActiveTypeActivity,
+      hasExpense:
+          !visualAsExpense &&
+          data.activeType == TransactionType.expense &&
+          day.hasActiveTypeActivity,
+      meetsThreshold: day.meetsThreshold,
+      heatmapPercentage: day.heatmapIntensity,
+      dominantCategoryId: day.dominantCategoryId,
+      dominantCategoryColor: day.dominantCategoryColor,
+      isToday: day.isToday,
     );
   }
 }

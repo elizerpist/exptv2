@@ -58,19 +58,31 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
   }
 
   void _drawTrendLine(Canvas canvas, Rect chart) {
-    final values = data.months
+    final months = data.graphMonths;
+    final values = months
         .map((month) => month.thresholdHitDays.toDouble())
         .toList();
     final maxValue = _max(values).clamp(1.0, double.infinity);
     final path = Path();
     for (var i = 0; i < values.length; i += 1) {
-      final x = chart.left + chart.width * i / (values.length - 1);
+      final x = _xForIndex(chart, i, values.length);
       final y = chart.bottom - chart.height * values[i] / maxValue;
       if (i == 0) {
         path.moveTo(x, y);
       } else {
         path.lineTo(x, y);
       }
+    }
+    if (values.length == 1) {
+      canvas.drawCircle(
+        Offset(
+          chart.center.dx,
+          chart.bottom - chart.height * values.first / maxValue,
+        ),
+        5,
+        Paint()..color = AppColors.expense,
+      );
+      return;
     }
     canvas.drawPath(
       path,
@@ -91,12 +103,13 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
   }
 
   void _drawClosingBars(Canvas canvas, Rect chart) {
-    final values = data.months.map((month) => month.closingAmount).toList();
+    final months = data.graphMonths;
+    final values = months.map((month) => month.closingAmount).toList();
     final maxValue = _max(values).clamp(1.0, double.infinity);
-    final barWidth = chart.width / 18;
-    for (var i = 0; i < data.months.length; i += 1) {
-      final month = data.months[i];
-      final centerX = chart.left + chart.width * (i + 0.5) / 12;
+    final barWidth = (chart.width / (months.length * 1.5)).clamp(8.0, 22.0);
+    for (var i = 0; i < months.length; i += 1) {
+      final month = months[i];
+      final centerX = _xForBarIndex(chart, i, months.length);
       final barHeight = chart.height * month.closingAmount / maxValue;
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
@@ -125,14 +138,15 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
   }
 
   void _drawHeatDistribution(Canvas canvas, Rect chart) {
+    final months = data.graphMonths;
     final maxValue = _max(
-      data.months.map((month) => month.scopeTotal).toList(),
+      months.map((month) => month.scopeTotal).toList(),
     ).clamp(1.0, double.infinity);
     final tile = (chart.width / 16).clamp(12.0, 18.0).toDouble();
-    for (var i = 0; i < data.months.length; i += 1) {
-      final month = data.months[i];
+    for (var i = 0; i < months.length; i += 1) {
+      final month = months[i];
       final intensity = (month.scopeTotal / maxValue).clamp(0.05, 1.0);
-      final x = chart.left + chart.width * i / 12;
+      final x = _xForIndex(chart, i, months.length) - tile / 2;
       final y = chart.bottom - chart.height * intensity;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -147,6 +161,16 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
           )!,
       );
     }
+  }
+
+  double _xForIndex(Rect chart, int index, int count) {
+    if (count <= 1) return chart.center.dx;
+    return chart.left + chart.width * index / (count - 1);
+  }
+
+  double _xForBarIndex(Rect chart, int index, int count) {
+    if (count <= 1) return chart.center.dx;
+    return chart.left + chart.width * (index + 0.5) / count;
   }
 
   double _max(List<double> values) {

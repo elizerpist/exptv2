@@ -86,6 +86,55 @@ void main() {
     expect(data.months[1].thresholdHitDays, 1);
     expect(data.months[1].closingAmount, 7000);
   });
+
+  test(
+    'graph domain uses active side first through last transaction month',
+    () {
+      final expenseData = StatsYearData.build(
+        year: 2026,
+        activeType: TransactionType.expense,
+        mode: StatsRenderMode.categoryScope,
+        thresholdValue: 5000,
+        transactions: [
+          record(id: 1, date: '2026-03-01', amount: -4000, categoryId: 1),
+          record(id: 2, date: '2026-07-01', amount: -7000, categoryId: 1),
+          record(id: 3, date: '2026-12-01', amount: 9000, categoryId: 2),
+        ],
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          category(id: 2, name: 'Fizetés', type: TransactionType.income),
+        ],
+        selectedCategoryIds: const {},
+      );
+
+      expect(expenseData.graphMonths.map((month) => month.month), [
+        3,
+        4,
+        5,
+        6,
+        7,
+      ]);
+
+      final incomeData = StatsYearData.build(
+        year: 2026,
+        activeType: TransactionType.income,
+        mode: StatsRenderMode.heatmap,
+        thresholdValue: 5000,
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -4000, categoryId: 1),
+          record(id: 2, date: '2026-04-01', amount: 7000, categoryId: 2),
+          record(id: 3, date: '2026-06-01', amount: 9000, categoryId: 2),
+        ],
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          category(id: 2, name: 'Fizetés', type: TransactionType.income),
+        ],
+        selectedCategoryIds: const {},
+      );
+
+      expect(incomeData.graphMonths.map((month) => month.month), [4, 5, 6]);
+    },
+  );
 }
 
 TransactionRecord record({
