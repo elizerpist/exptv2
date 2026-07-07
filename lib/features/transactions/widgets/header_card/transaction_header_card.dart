@@ -14,6 +14,7 @@ class TransactionHeaderCard extends StatelessWidget {
     required this.onExpandPressed,
     this.onVerticalDragUpdate,
     this.onVerticalDragEnd,
+    this.labelText = 'Egyenleg',
     this.expanded = false,
     this.magnetType = MagnetType.fade,
     this.accent = AppColors.primary,
@@ -26,6 +27,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.budgetAllocation,
     this.fastInfoVisible = false,
     this.balanceHidden = false,
+    this.showBalanceVisibilityButton = true,
     this.drawSurface = true,
     this.onBalanceVisibilityPressed,
     this.slideProgress,
@@ -37,6 +39,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final VoidCallback onExpandPressed;
   final GestureDragUpdateCallback? onVerticalDragUpdate;
   final GestureDragEndCallback? onVerticalDragEnd;
+  final String labelText;
   final bool expanded;
   final MagnetType magnetType;
   final Color accent;
@@ -49,6 +52,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final LimitAllocationData? budgetAllocation;
   final bool fastInfoVisible;
   final bool balanceHidden;
+  final bool showBalanceVisibilityButton;
   final bool drawSurface;
   final VoidCallback? onBalanceVisibilityPressed;
   final double? slideProgress;
@@ -166,9 +170,9 @@ class TransactionHeaderCard extends StatelessWidget {
               top: TransactionHeaderMetrics.balanceLabelTop,
               left: 30,
               child: headerContentOpacity(
-                const Text(
-                  'Egyenleg',
-                  style: TextStyle(
+                Text(
+                  labelText,
+                  style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.gray600,
                     letterSpacing: 1.5,
@@ -196,27 +200,29 @@ class TransactionHeaderCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 2),
-                    IconButton(
-                      key: const ValueKey('header-balance-visibility-button'),
-                      onPressed: onBalanceVisibilityPressed,
-                      icon: Icon(
-                        balanceHidden
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        color: AppColors.gray800,
-                        size: 20,
+                    if (showBalanceVisibilityButton) ...[
+                      const SizedBox(width: 2),
+                      IconButton(
+                        key: const ValueKey('header-balance-visibility-button'),
+                        onPressed: onBalanceVisibilityPressed,
+                        icon: Icon(
+                          balanceHidden
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.gray800,
+                          size: 20,
+                        ),
+                        tooltip: balanceHidden
+                            ? 'Egyenleg megjelenítése'
+                            : 'Egyenleg elrejtése',
+                        splashRadius: 16,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 30,
+                          height: 30,
+                        ),
                       ),
-                      tooltip: balanceHidden
-                          ? 'Egyenleg megjelenítése'
-                          : 'Egyenleg elrejtése',
-                      splashRadius: 16,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 30,
-                        height: 30,
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),

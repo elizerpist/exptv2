@@ -253,6 +253,43 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+    'joystick tap can open a secondary action without changing value',
+    (tester) async {
+      var tapped = false;
+      var changed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: CalendarValueSliderPanel.threshold(
+                value: 1000,
+                observedMax: 22000,
+                fallbackMax: 50000,
+                onTap: () => tapped = true,
+                onChanged: (_) => changed = true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('calendar-threshold-joystick-trigger')),
+      );
+      await tester.pump();
+
+      expect(tapped, isTrue);
+      expect(changed, isFalse);
+      expect(
+        find.byKey(const ValueKey('calendar-threshold-joystick-value-card')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('joystick haptics activate and tick without frame spam', (
     tester,
   ) async {
@@ -741,7 +778,7 @@ void main() {
     expect(find.text('Teszt'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('stats page renders calendar as a full screen tab', (
+  testWidgets('stats page renders redesigned annual stats as a full screen tab', (
     tester,
   ) async {
     final store = TransactionStore(CalendarHomeRepository());
@@ -760,8 +797,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsOneWidget);
-    expect(find.text('Domináns kategória'), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
+    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(find.text('SCOPE TREND'), findsOneWidget);
   });
 }
 

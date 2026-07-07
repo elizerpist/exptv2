@@ -87,6 +87,31 @@ void main() {
     expect(expandPressed, isTrue);
   });
 
+  testWidgets('header card can show stats feedback without visibility button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            labelText: 'HEATMAP',
+            balanceText: '96 forró nap 5k felett',
+            showBalanceVisibilityButton: false,
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('HEATMAP'), findsOneWidget);
+    expect(find.text('96 forró nap 5k felett'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('header-balance-visibility-button')),
+      findsNothing,
+    );
+  });
+
   testWidgets('header budget trigger chip is compact', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

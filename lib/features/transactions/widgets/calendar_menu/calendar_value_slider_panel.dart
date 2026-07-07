@@ -16,6 +16,7 @@ class CalendarValueSliderPanel extends StatefulWidget {
     required this.observedMax,
     required this.fallbackMax,
     required this.onChanged,
+    this.onTap,
   }) : kind = CalendarSliderKind.threshold;
 
   const CalendarValueSliderPanel.heatmap({
@@ -24,6 +25,7 @@ class CalendarValueSliderPanel extends StatefulWidget {
     required this.observedMax,
     required this.fallbackMax,
     required this.onChanged,
+    this.onTap,
   }) : kind = CalendarSliderKind.heatmap;
 
   final CalendarSliderKind kind;
@@ -31,6 +33,7 @@ class CalendarValueSliderPanel extends StatefulWidget {
   final double observedMax;
   final double fallbackMax;
   final ValueChanged<double> onChanged;
+  final VoidCallback? onTap;
 
   @override
   State<CalendarValueSliderPanel> createState() =>
@@ -164,6 +167,7 @@ class _CalendarValueSliderPanelState extends State<CalendarValueSliderPanel> {
                     GestureDetector(
                       key: ValueKey('$sliderKey-joystick-trigger'),
                       behavior: HitTestBehavior.opaque,
+                      onTap: widget.onTap,
                       onLongPressStart: _handleLongPressStart,
                       onLongPressMoveUpdate: _handleLongPressMoveUpdate,
                       onLongPressEnd: (_) => _finishJoystick(),

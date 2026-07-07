@@ -1,11 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
+import '../transactions/models/transaction_category.dart';
 import '../transactions/state/transaction_store.dart';
-import '../transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
+import '../transactions/widgets/calendar_menu/calendar_value_slider_panel.dart';
+import '../transactions/widgets/header_card/header_fast_info_surface.dart';
+import '../transactions/widgets/header_card/transaction_header_card.dart';
+import '../transactions/widgets/header_card/transaction_header_metrics.dart';
+import '../transactions/widgets/summary_pill.dart';
+import '../transactions/widgets/transaction_type_pills.dart';
+import 'data/stats_year_data.dart';
+import 'widgets/stats_category_scope_sheet.dart';
+import 'widgets/stats_fast_info_graph.dart';
+import 'widgets/stats_year_calendar.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key, required this.store, this.expenseTheme});
@@ -18,14 +31,42 @@ class StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<StatsPage>
-    with AutomaticKeepAliveClientMixin<StatsPage> {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin<StatsPage> {
+  late int _year;
+  var _activeType = TransactionType.expense;
+  var _renderMode = StatsRenderMode.categoryScope;
+  var _thresholdValue = 5000.0;
+  late final ValueNotifier<double> _fastInfoExtent;
+  late final AnimationController _headerPullController;
+  final _selectedScopeByType = <TransactionType, Set<int>>{
+    TransactionType.income: <int>{},
+    TransactionType.expense: <int>{},
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _year = widget.store.currentDate.year;
+    _fastInfoExtent = ValueNotifier<double>(0);
+    _headerPullController = AnimationController.unbounded(vsync: this)
+      ..addListener(_syncHeaderPullFromController);
+  }
+
+  @override
+  void dispose() {
+    _fastInfoExtent.dispose();
+    _headerPullController.dispose();
+    super.dispose();
+  }
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final resolvedTheme = widget.expenseTheme ??
+    final resolvedTheme =
+        widget.expenseTheme ??
         ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     return ColoredBox(
       key: const ValueKey('stats-page'),
@@ -52,16 +93,380 @@ class _StatsPageState extends State<StatsPage>
                 ),
               );
             }
-            return CalendarMenuOverlay(
-              fullScreen: true,
-              transactions: widget.store.transactions,
-              categories: widget.store.categories,
-              onClose: () {},
-              onMonthSelect: (_, _) {},
+            final data = _buildStatsData();
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Column(
+                  children: [
+                    const SizedBox(height: TransactionHeaderMetrics.contentTop),
+                    TransactionTypePills(
+                      activeType: _activeType,
+                      surfaceColor: resolvedTheme.logBox,
+                      surfaceStyle: resolvedTheme.buttonSurfaceStyle,
+                      accentColor: resolvedTheme.accent,
+                      shadowEnabled:
+                          resolvedTheme.settings.headerPillShadowEnabled,
+                      onChanged: _setActiveType,
+                    ),
+                    SummaryPill(
+                      title: 'Éves · $_year · ${_activeType.label}',
+                      value: data.summaryValue,
+                      surfaceColor: resolvedTheme.logBox,
+                      surfaceStyle: resolvedTheme.contentSurfaceStyle,
+                      shadowEnabled:
+                          resolvedTheme.settings.summaryPillShadowEnabled,
+                      onIntervalSwipe: () {},
+                      onPeriodSwipe: (direction) {
+                        if (direction == 0) return;
+                        setState(() => _year += direction);
+                      },
+                      onResetToCurrentMonth: () {
+                        setState(() => _year = widget.store.currentDate.year);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: StatsYearCalendar(
+                          data: data,
+                          onMonthSelected: (_) {},
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                ValueListenableBuilder<double>(
+                  key: const ValueKey('stats-fastinfo-extent-builder'),
+                  valueListenable: _fastInfoExtent,
+                  builder: (context, fastInfoExtent, _) {
+                    final visibleFastInfoExtent = fastInfoExtent
+                        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+                        .toDouble();
+                    return HeaderFastInfoSurface(
+                      visibleFastInfoExtent: visibleFastInfoExtent,
+                      cardColor: resolvedTheme.headerCard,
+                      surfaceStyle: resolvedTheme.contentSurfaceStyle,
+                      fastInfo: StatsFastInfoGraph(data: data),
+                      header: _buildHeaderCard(
+                        data: data,
+                        expenseTheme: resolvedTheme,
+                        drawSurface: false,
+                      ),
+                    );
+                  },
+                ),
+                CalendarValueSliderPanel.threshold(
+                  value: _thresholdValue,
+                  observedMax: _observedMaxScopeAmount(data),
+                  fallbackMax: 50000,
+                  onTap: _openRenderModeSelector,
+                  onChanged: (value) {
+                    setState(() => _thresholdValue = value);
+                  },
+                ),
+              ],
             );
           },
         ),
       ),
     );
   }
+
+  StatsYearData _buildStatsData() {
+    return StatsYearData.build(
+      year: _year,
+      activeType: _activeType,
+      mode: _renderMode,
+      thresholdValue: _thresholdValue,
+      transactions: widget.store.transactions,
+      categories: widget.store.categories,
+      selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
+      today: widget.store.currentDate,
+    );
+  }
+
+  Widget _buildHeaderCard({
+    required StatsYearData data,
+    required ExpenseTheme expenseTheme,
+    bool drawSurface = true,
+  }) {
+    return RepaintBoundary(
+      child: TransactionHeaderCard(
+        labelText: data.headerLabel,
+        balanceText: data.headerValue,
+        showBalanceVisibilityButton: false,
+        magnetType: MagnetType.fade,
+        accent: expenseTheme.accent,
+        cardColor: expenseTheme.headerCard,
+        surfaceStyle: expenseTheme.contentSurfaceStyle,
+        buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+        totalIncome: _yearTotal(TransactionType.income),
+        totalExpense: _yearTotal(TransactionType.expense),
+        drawSurface: drawSurface,
+        onCategoryPressed: _openScopeSheet,
+        onExpandPressed: () {},
+        onVerticalDragUpdate: _handleHeaderDragUpdate,
+        onVerticalDragEnd: _handleHeaderDragEnd,
+      ),
+    );
+  }
+
+  double _yearTotal(TransactionType type) {
+    var total = 0.0;
+    for (final record in widget.store.transactions) {
+      final date = DateTime.tryParse(record.normalizedDate);
+      if (date == null || date.year != _year || record.type != type) continue;
+      total += record.amount.abs();
+    }
+    return total;
+  }
+
+  double _observedMaxScopeAmount(StatsYearData data) {
+    var max = 0.0;
+    for (final month in data.months) {
+      for (final day in month.days) {
+        if (day.scopeAmount > max) max = day.scopeAmount;
+      }
+    }
+    return max;
+  }
+
+  void _setActiveType(TransactionType type) {
+    if (_activeType == type) return;
+    setState(() => _activeType = type);
+  }
+
+  Future<void> _openScopeSheet() async {
+    final result = await showModalBottomSheet<Set<int>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final height = MediaQuery.sizeOf(context).height * 0.72;
+        return SizedBox(
+          height: height,
+          child: StatsCategoryScopeSheet(
+            activeType: _activeType,
+            categories: widget.store.categories,
+            selectedCategoryIds:
+                _selectedScopeByType[_activeType] ?? const <int>{},
+            accentColor: _expenseTheme.accent,
+            onApply: (ids) => Navigator.of(context).pop(ids),
+          ),
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _selectedScopeByType[_activeType] = result;
+    });
+  }
+
+  Future<void> _openRenderModeSelector() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _StatsRenderModeSheet(
+          activeMode: _renderMode,
+          accentColor: _expenseTheme.accent,
+          onSelected: (mode) {
+            setState(() => _renderMode = mode);
+            Navigator.of(context).pop();
+          },
+        );
+      },
+    );
+  }
+
+  ExpenseTheme get _expenseTheme =>
+      widget.expenseTheme ??
+      ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+  void _syncHeaderPullFromController() {
+    final rawNext = _headerPullController.value
+        .clamp(-12.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    final next = rawNext.abs() < 0.5 ? 0.0 : rawNext;
+    if ((next - _fastInfoExtent.value).abs() < 0.01) return;
+    _fastInfoExtent.value = next;
+  }
+
+  void _handleHeaderDragUpdate(DragUpdateDetails details) {
+    _headerPullController.stop();
+    final resistedDelta = details.delta.dy > 0
+        ? details.delta.dy * 0.85
+        : details.delta.dy;
+    final current = _fastInfoExtent.value;
+    final next = (current + resistedDelta)
+        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    if (next == current) return;
+    _headerPullController.value = next;
+  }
+
+  void _handleHeaderDragEnd(DragEndDetails details) {
+    final start = _fastInfoExtent.value
+        .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
+        .toDouble();
+    if (start == 0) {
+      _headerPullController.value = 0;
+      return;
+    }
+    _headerPullController.value = start;
+    final releaseVelocity = details.velocity.pixelsPerSecond.dy;
+    final closingVelocity = releaseVelocity < 0 ? releaseVelocity : 0.0;
+    final spring = _headerPullController.animateWith(
+      SpringSimulation(
+        const SpringDescription(mass: 0.75, stiffness: 620, damping: 16),
+        start,
+        0,
+        closingVelocity,
+      ),
+    );
+    unawaited(
+      spring.orCancel
+          .then<void>((_) {
+            if (!mounted) return;
+            _headerPullController.value = 0;
+            if (_fastInfoExtent.value == 0) return;
+            _fastInfoExtent.value = 0;
+          })
+          .catchError((_) {}),
+    );
+  }
+}
+
+class _StatsRenderModeSheet extends StatelessWidget {
+  const _StatsRenderModeSheet({
+    required this.activeMode,
+    required this.accentColor,
+    required this.onSelected,
+  });
+
+  final StatsRenderMode activeMode;
+  final Color accentColor;
+  final ValueChanged<StatsRenderMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: const ValueKey('stats-render-mode-selector'),
+      color: AppColors.gray100,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: AppColors.gray200,
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final mode in StatsRenderMode.values)
+                    _StatsRenderModeButton(
+                      mode: mode,
+                      active: mode == activeMode,
+                      accentColor: accentColor,
+                      onTap: () => onSelected(mode),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatsRenderModeButton extends StatelessWidget {
+  const _StatsRenderModeButton({
+    required this.mode,
+    required this.active,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  final StatsRenderMode mode;
+  final bool active;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: ValueKey('stats-render-mode-${mode.name}'),
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: SizedBox(
+        width: 92,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: active ? 34 : 30,
+              height: active ? 34 : 30,
+              decoration: BoxDecoration(
+                color: _modeColor,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: active ? accentColor : AppColors.gray200,
+                  width: active ? 3 : 1,
+                ),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.24),
+                          offset: const Offset(0, 3),
+                          blurRadius: 4,
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: Icon(_icon, size: 17, color: AppColors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              mode.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.gray700,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color get _modeColor => switch (mode) {
+    StatsRenderMode.categoryScope => const Color(0xFFF97316),
+    StatsRenderMode.closing => AppColors.income,
+    StatsRenderMode.heatmap => accentColor,
+  };
+
+  IconData get _icon => switch (mode) {
+    StatsRenderMode.categoryScope => Icons.scatter_plot_outlined,
+    StatsRenderMode.closing => Icons.stacked_bar_chart_rounded,
+    StatsRenderMode.heatmap => Icons.grid_view_rounded,
+  };
 }
