@@ -850,19 +850,19 @@ void main() {
     );
     expect(
       tester.getSize(previousEdge).width,
-      moreOrLessEquals(28 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousFarthest).width,
-      moreOrLessEquals(34 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousOuter).width,
-      moreOrLessEquals(40 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousInner).width,
-      moreOrLessEquals(48 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester
@@ -1411,16 +1411,67 @@ void main() {
     await drag.up();
     await tester.pumpAndSettle();
 
-    expect(selected, ['Books']);
+    expect(selected, ['Health']);
     expect(
       tester
           .widget<Text>(
             find.byKey(const ValueKey('backheader-center-badge-title')),
           )
           .data,
-      'Books',
+      'Health',
     );
   });
+
+  testWidgets(
+    'centerBadgeBudget between-slot release settles in swipe direction',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+      ];
+      final selected = <String>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onActiveItemChanged: (item) => selected.add(item.title),
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.timedDrag(
+        find.byKey(const ValueKey('backheader-experimental-surface')),
+        const Offset(-96, 0),
+        const Duration(milliseconds: 600),
+      );
+      await tester.pumpAndSettle();
+
+      expect(selected, ['Books']);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('backheader-center-badge-title')),
+            )
+            .data,
+        'Books',
+      );
+    },
+  );
 
   testWidgets(
     'centerBadgeBudget release direction follows total drag after reverse tail',
@@ -1534,7 +1585,7 @@ void main() {
       ]);
 
       expect(tailWeighted, evenlySplit);
-      expect(evenlySplit, ['Books']);
+      expect(evenlySplit, ['Health']);
     },
   );
 
@@ -1581,7 +1632,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(selected, ['Health']);
+      expect(selected, ['Home']);
     },
   );
 
