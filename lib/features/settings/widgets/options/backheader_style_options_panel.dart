@@ -471,7 +471,29 @@ class _CenterBadgeRelativeScaleSection extends StatefulWidget {
 
 class _CenterBadgeRelativeScaleSectionState
     extends State<_CenterBadgeRelativeScaleSection> {
-  var _percent = 100;
+  var _sizePercent = 100;
+  var _opacityPercent = 100;
+  late List<int> _baseSizes;
+  late List<int> _baseWhiteDiscOpacities;
+  late List<int> _baseWhiteIconOpacities;
+  late List<int> _baseWhiteProgressOpacities;
+  late List<int> _baseColoredFillOpacities;
+  late List<int> _baseColoredIconOpacities;
+  late List<int> _baseColoredProgressOpacities;
+
+  @override
+  void initState() {
+    super.initState();
+    _captureSizeBaseline();
+    _captureOpacityBaseline();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CenterBadgeRelativeScaleSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_sizePercent == 100) _captureSizeBaseline();
+    if (_opacityPercent == 100) _captureOpacityBaseline();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -495,78 +517,111 @@ class _CenterBadgeRelativeScaleSectionState
             ),
           ),
           const SizedBox(height: 6),
+          const Text(
+            'A középállás az aktuális, kézzel beállított érték. Felfelé növel, lefelé csökkent.',
+            style: TextStyle(color: Color(0xFF4B5563), fontSize: 12),
+          ),
+          const SizedBox(height: 8),
           _CenterBadgeOpacityRow(
-            label: 'Összes',
-            sliderKey: const ValueKey('center-badge-relative-all-slider'),
-            inputKey: const ValueKey('center-badge-relative-all-input'),
-            value: _percent,
+            label: 'Relatív méret',
+            sliderKey: const ValueKey('center-badge-relative-size-slider'),
+            inputKey: const ValueKey('center-badge-relative-size-input'),
+            value: _sizePercent,
             min: 50,
             max: 150,
-            onChanged: _scaleAll,
+            onChanged: _scaleSize,
+          ),
+          _CenterBadgeOpacityRow(
+            label: 'Relatív badge opacity',
+            sliderKey: const ValueKey('center-badge-relative-opacity-slider'),
+            inputKey: const ValueKey('center-badge-relative-opacity-input'),
+            value: _opacityPercent,
+            min: 50,
+            max: 150,
+            onChanged: _scaleBadgeOpacity,
           ),
         ],
       ),
     );
   }
 
-  void _scaleAll(int nextPercent) {
-    final safeCurrent = _percent == 0 ? 100 : _percent;
-    final factor = nextPercent / safeCurrent;
-    _percent = nextPercent;
+  void _captureSizeBaseline() {
+    _baseSizes = List<int>.of(widget.settings.centerBadgeSlotSizePercents);
+  }
+
+  void _captureOpacityBaseline() {
     final settings = widget.settings;
+    _baseWhiteDiscOpacities = List<int>.of(
+      settings.centerBadgeWhiteDiscOpacities,
+    );
+    _baseWhiteIconOpacities = List<int>.of(
+      settings.centerBadgeWhiteIconOpacities,
+    );
+    _baseWhiteProgressOpacities = List<int>.of(
+      settings.centerBadgeWhiteProgressOpacities,
+    );
+    _baseColoredFillOpacities = List<int>.of(
+      settings.centerBadgeColoredFillOpacities,
+    );
+    _baseColoredIconOpacities = List<int>.of(
+      settings.centerBadgeColoredIconOpacities,
+    );
+    _baseColoredProgressOpacities = List<int>.of(
+      settings.centerBadgeColoredProgressOpacities,
+    );
+  }
+
+  void _scaleSize(int nextPercent) {
+    setState(() => _sizePercent = nextPercent);
     widget.onChanged(
-      settings.copyWith(
+      widget.settings.copyWith(
+        centerBadgeSlotSizePercents: _scaleList(
+          _baseSizes,
+          nextPercent / 100,
+          min: kCenterBadgeSlotSizePercentMin,
+          max: kCenterBadgeSlotSizePercentMax,
+        ),
+      ),
+    );
+  }
+
+  void _scaleBadgeOpacity(int nextPercent) {
+    setState(() => _opacityPercent = nextPercent);
+    widget.onChanged(
+      widget.settings.copyWith(
         centerBadgeWhiteDiscOpacities: _scaleList(
-          settings.centerBadgeWhiteDiscOpacities,
-          factor,
+          _baseWhiteDiscOpacities,
+          nextPercent / 100,
           min: 0,
           max: 100,
         ),
         centerBadgeWhiteIconOpacities: _scaleList(
-          settings.centerBadgeWhiteIconOpacities,
-          factor,
+          _baseWhiteIconOpacities,
+          nextPercent / 100,
           min: 0,
           max: 100,
         ),
         centerBadgeWhiteProgressOpacities: _scaleList(
-          settings.centerBadgeWhiteProgressOpacities,
-          factor,
+          _baseWhiteProgressOpacities,
+          nextPercent / 100,
           min: 0,
           max: 100,
         ),
         centerBadgeColoredFillOpacities: _scaleList(
-          settings.centerBadgeColoredFillOpacities,
-          factor,
+          _baseColoredFillOpacities,
+          nextPercent / 100,
           min: 0,
           max: 100,
         ),
         centerBadgeColoredIconOpacities: _scaleList(
-          settings.centerBadgeColoredIconOpacities,
-          factor,
+          _baseColoredIconOpacities,
+          nextPercent / 100,
           min: 0,
           max: 100,
         ),
         centerBadgeColoredProgressOpacities: _scaleList(
-          settings.centerBadgeColoredProgressOpacities,
-          factor,
-          min: 0,
-          max: 100,
-        ),
-        centerBadgeSlotSizePercents: _scaleList(
-          settings.centerBadgeSlotSizePercents,
-          factor,
-          min: kCenterBadgeSlotSizePercentMin,
-          max: kCenterBadgeSlotSizePercentMax,
-        ),
-        centerBadgeSlotXOffsets: _scaleList(
-          settings.centerBadgeSlotXOffsets,
-          factor,
-          min: kCenterBadgeSlotXOffsetMin,
-          max: kCenterBadgeSlotXOffsetMax,
-        ),
-        centerBadgeColoredBackgroundOpacity: _scaleInt(
-          settings.centerBadgeColoredBackgroundOpacity,
-          factor,
+          _baseColoredProgressOpacities,
+          nextPercent / 100,
           min: 0,
           max: 100,
         ),

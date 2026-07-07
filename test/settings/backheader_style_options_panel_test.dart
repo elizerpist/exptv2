@@ -676,68 +676,156 @@ void main() {
     expect(editable.controller.text, '34');
   });
 
-  testWidgets('center badge relative section scales current tuning values', (
-    tester,
-  ) async {
-    var settings = AppThemeSettings.defaults().copyWith(
-      backheaderStyle: BackheaderStyle.centerBadgeBudget,
-      centerBadgeWhiteDiscOpacities: const [10, 20, 30, 40, 50],
-      centerBadgeColoredIconOpacities: const [20, 40, 60, 80, 100],
-      centerBadgeSlotSizePercents: const [
-        80,
-        90,
-        100,
-        110,
-        120,
-        110,
-        100,
-        90,
-        80,
-      ],
-      centerBadgeSlotXOffsets: const [-8, -6, -4, -2, 0, 2, 4, 6, 8],
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, setState) {
-              return BackheaderStyleOptionsPanel(
-                settings: settings,
-                onChanged: (next) => setState(() => settings = next),
-              );
-            },
+  testWidgets(
+    'center badge relative section separates size and badge opacity',
+    (tester) async {
+      var settings = AppThemeSettings.defaults().copyWith(
+        backheaderStyle: BackheaderStyle.centerBadgeBudget,
+        centerBadgeWhiteDiscOpacities: const [10, 20, 30, 40, 50],
+        centerBadgeWhiteIconOpacities: const [100, 80, 60, 40, 20],
+        centerBadgeWhiteProgressOpacities: const [90, 70, 50, 30, 10],
+        centerBadgeColoredFillOpacities: const [15, 25, 35, 45, 55],
+        centerBadgeColoredIconOpacities: const [20, 40, 60, 80, 100],
+        centerBadgeColoredProgressOpacities: const [12, 24, 36, 48, 60],
+        centerBadgeSlotSizePercents: const [
+          80,
+          90,
+          100,
+          110,
+          120,
+          110,
+          100,
+          90,
+          80,
+        ],
+        centerBadgeSlotXOffsets: const [-8, -6, -4, -2, 0, 2, 4, 6, 8],
+        centerBadgeColoredBackgroundOpacity: 64,
+      );
+      const baselineWhiteDisc = [10, 20, 30, 40, 50];
+      const baselineWhiteIcon = [100, 80, 60, 40, 20];
+      const baselineWhiteProgress = [90, 70, 50, 30, 10];
+      const baselineColoredFill = [15, 25, 35, 45, 55];
+      const baselineColoredIcon = [20, 40, 60, 80, 100];
+      const baselineColoredProgress = [12, 24, 36, 48, 60];
+      const baselineSizes = [80, 90, 100, 110, 120, 110, 100, 90, 80];
+      const baselineOffsets = [-8, -6, -4, -2, 0, 2, 4, 6, 8];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                return BackheaderStyleOptionsPanel(
+                  settings: settings,
+                  onChanged: (next) => setState(() => settings = next),
+                );
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      find.byKey(const ValueKey('center-badge-relative-section')),
-      findsOneWidget,
-    );
-    final sliderFinder = find.byKey(
-      const ValueKey('center-badge-relative-all-slider'),
-    );
-    await tester.ensureVisible(sliderFinder);
-    await tester.pump();
-    tester.widget<Slider>(sliderFinder).onChanged!(125);
-    await tester.pump();
+      expect(
+        find.byKey(const ValueKey('center-badge-relative-section')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('center-badge-relative-all-slider')),
+        findsNothing,
+      );
+      expect(find.text('Relatív méret'), findsOneWidget);
+      expect(find.text('Relatív badge opacity'), findsOneWidget);
 
-    expect(settings.centerBadgeWhiteDiscOpacities, [13, 25, 38, 50, 63]);
-    expect(settings.centerBadgeColoredIconOpacities, [25, 50, 75, 100, 100]);
-    expect(settings.centerBadgeSlotSizePercents, [
-      100,
-      113,
-      125,
-      138,
-      150,
-      138,
-      125,
-      113,
-      100,
-    ]);
-    expect(settings.centerBadgeSlotXOffsets, [-10, -8, -5, -3, 0, 3, 5, 8, 10]);
-  });
+      final sizeSliderFinder = find.byKey(
+        const ValueKey('center-badge-relative-size-slider'),
+      );
+      await tester.ensureVisible(sizeSliderFinder);
+      await tester.pump();
+      expect(tester.widget<Slider>(sizeSliderFinder).value, 100);
+      tester.widget<Slider>(sizeSliderFinder).onChanged!(125);
+      await tester.pump();
+
+      expect(settings.centerBadgeSlotSizePercents, [
+        100,
+        113,
+        125,
+        138,
+        150,
+        138,
+        125,
+        113,
+        100,
+      ]);
+      expect(settings.centerBadgeSlotXOffsets, baselineOffsets);
+      expect(settings.centerBadgeWhiteDiscOpacities, baselineWhiteDisc);
+      expect(settings.centerBadgeColoredIconOpacities, baselineColoredIcon);
+      expect(settings.centerBadgeColoredBackgroundOpacity, 64);
+
+      tester.widget<Slider>(sizeSliderFinder).onChanged!(100);
+      await tester.pump();
+      expect(settings.centerBadgeSlotSizePercents, baselineSizes);
+
+      tester.widget<Slider>(sizeSliderFinder).onChanged!(75);
+      await tester.pump();
+      expect(settings.centerBadgeSlotSizePercents, [
+        60,
+        68,
+        75,
+        83,
+        90,
+        83,
+        75,
+        68,
+        60,
+      ]);
+      expect(settings.centerBadgeColoredBackgroundOpacity, 64);
+
+      tester.widget<Slider>(sizeSliderFinder).onChanged!(100);
+      await tester.pump();
+
+      final opacitySliderFinder = find.byKey(
+        const ValueKey('center-badge-relative-opacity-slider'),
+      );
+      await tester.ensureVisible(opacitySliderFinder);
+      await tester.pump();
+      expect(tester.widget<Slider>(opacitySliderFinder).value, 100);
+      tester.widget<Slider>(opacitySliderFinder).onChanged!(125);
+      await tester.pump();
+
+      expect(settings.centerBadgeWhiteDiscOpacities, [13, 25, 38, 50, 63]);
+      expect(settings.centerBadgeWhiteIconOpacities, [100, 100, 75, 50, 25]);
+      expect(settings.centerBadgeWhiteProgressOpacities, [100, 88, 63, 38, 13]);
+      expect(settings.centerBadgeColoredFillOpacities, [19, 31, 44, 56, 69]);
+      expect(settings.centerBadgeColoredIconOpacities, [25, 50, 75, 100, 100]);
+      expect(settings.centerBadgeColoredProgressOpacities, [
+        15,
+        30,
+        45,
+        60,
+        75,
+      ]);
+      expect(settings.centerBadgeSlotSizePercents, baselineSizes);
+      expect(settings.centerBadgeSlotXOffsets, baselineOffsets);
+      expect(settings.centerBadgeColoredBackgroundOpacity, 64);
+
+      tester.widget<Slider>(opacitySliderFinder).onChanged!(100);
+      await tester.pump();
+      expect(settings.centerBadgeWhiteDiscOpacities, baselineWhiteDisc);
+      expect(settings.centerBadgeWhiteIconOpacities, baselineWhiteIcon);
+      expect(settings.centerBadgeWhiteProgressOpacities, baselineWhiteProgress);
+      expect(settings.centerBadgeColoredFillOpacities, baselineColoredFill);
+      expect(settings.centerBadgeColoredIconOpacities, baselineColoredIcon);
+      expect(
+        settings.centerBadgeColoredProgressOpacities,
+        baselineColoredProgress,
+      );
+
+      tester.widget<Slider>(opacitySliderFinder).onChanged!(50);
+      await tester.pump();
+      expect(settings.centerBadgeWhiteDiscOpacities, [5, 10, 15, 20, 25]);
+      expect(settings.centerBadgeColoredIconOpacities, [10, 20, 30, 40, 50]);
+      expect(settings.centerBadgeColoredBackgroundOpacity, 64);
+    },
+  );
 
   testWidgets('backheader style panel toggles overlap masking', (tester) async {
     AppThemeSettings? updated;
