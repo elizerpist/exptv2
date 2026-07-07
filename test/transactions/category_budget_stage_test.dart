@@ -2148,10 +2148,28 @@ void main() {
       );
       expect((activeMask.decoration as BoxDecoration).color, expectedSurface);
       expect(
+        tester.getSize(
+          find.byKey(const ValueKey('backheader-center-overlap-mask')),
+        ),
+        tester.getSize(
+          find.byKey(const ValueKey('backheader-center-budget-button')),
+        ),
+      );
+      expect(
         find.byKey(
           const ValueKey('backheader-center-preview-overlap-mask-next-1'),
         ),
         findsOneWidget,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('backheader-center-preview-overlap-mask-next-1'),
+          ),
+        ),
+        tester.getSize(
+          find.byKey(const ValueKey('backheader-center-preview-fill-next-1')),
+        ),
       );
     },
   );

@@ -1299,8 +1299,8 @@ class _CenterBadgeVisual extends StatelessWidget {
         children: [
           if (coloredDesign && overlapMaskEnabled)
             SizedBox(
-              width: size,
-              height: size,
+              width: fillSize,
+              height: fillSize,
               child: DecoratedBox(
                 key: maskKey,
                 decoration: BoxDecoration(
