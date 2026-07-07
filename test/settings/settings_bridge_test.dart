@@ -356,6 +356,21 @@ void main() {
         'centerBadgeWhiteDiscOpacities': <Object?>[20, 30, 40, 50, 60],
         'centerBadgeWhiteIconOpacities': <Object?>[100, 90, 80, 70, 60],
         'centerBadgeWhiteProgressOpacities': <Object?>[55, 45, 35, 25, 15],
+        'centerBadgeColoredFillOpacities': <Object?>[99, 88, 77, 66, 55],
+        'centerBadgeColoredIconOpacities': <Object?>[91, 82, 73, 64, 55],
+        'centerBadgeColoredProgressOpacities': <Object?>[81, 72, 63, 54, 45],
+        'centerBadgeSlotSizePercents': <Object?>[
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+        ],
+        'centerBadgeSlotXOffsets': <Object?>[-8, -6, -4, -2, 0, 2, 4, 6, 8],
         'centerBadgeColoredBackgroundOpacity': 64,
         'appColor': 'pink',
         'categoryMenuPresentation': 'slideUpSheet',
@@ -386,6 +401,21 @@ void main() {
     expect(updated.centerBadgeWhiteDiscOpacities, [20, 30, 40, 50, 60]);
     expect(updated.centerBadgeWhiteIconOpacities, [100, 90, 80, 70, 60]);
     expect(updated.centerBadgeWhiteProgressOpacities, [55, 45, 35, 25, 15]);
+    expect(updated.centerBadgeColoredFillOpacities, [99, 88, 77, 66, 55]);
+    expect(updated.centerBadgeColoredIconOpacities, [91, 82, 73, 64, 55]);
+    expect(updated.centerBadgeColoredProgressOpacities, [81, 72, 63, 54, 45]);
+    expect(updated.centerBadgeSlotSizePercents, [
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+    ]);
+    expect(updated.centerBadgeSlotXOffsets, [-8, -6, -4, -2, 0, 2, 4, 6, 8]);
     expect(updated.centerBadgeColoredBackgroundOpacity, 64);
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
@@ -419,6 +449,27 @@ void main() {
     expect(payload['centerBadgeWhiteDiscOpacities'], [20, 30, 40, 50, 60]);
     expect(payload['centerBadgeWhiteIconOpacities'], [100, 90, 80, 70, 60]);
     expect(payload['centerBadgeWhiteProgressOpacities'], [55, 45, 35, 25, 15]);
+    expect(payload['centerBadgeColoredFillOpacities'], [99, 88, 77, 66, 55]);
+    expect(payload['centerBadgeColoredIconOpacities'], [91, 82, 73, 64, 55]);
+    expect(payload['centerBadgeColoredProgressOpacities'], [
+      81,
+      72,
+      63,
+      54,
+      45,
+    ]);
+    expect(payload['centerBadgeSlotSizePercents'], [
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+    ]);
+    expect(payload['centerBadgeSlotXOffsets'], [-8, -6, -4, -2, 0, 2, 4, 6, 8]);
     expect(payload['centerBadgeColoredBackgroundOpacity'], 64);
     expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);

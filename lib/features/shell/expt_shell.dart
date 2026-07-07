@@ -176,6 +176,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onEditCategoryEditorRequested: (category) {
         _sheetHostKey.currentState?.openCategory(initialCategory: category);
       },
+      onThemeSettingsChanged: (settings) {
+        unawaited(_updateHomeThemeSettings(settings));
+      },
       budgetEditorActiveKey: _budgetEditorActiveKey,
     );
   }
@@ -287,6 +290,19 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     DebugConsole.log(
       '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
     );
+  }
+
+  Future<void> _updateHomeThemeSettings(AppThemeSettings settings) async {
+    _applyThemeSettings(settings);
+    try {
+      final confirmed = await widget.nativeBridge.expenseUpdateThemeSettings(
+        settings,
+      );
+      if (!mounted) return;
+      _applyThemeSettings(confirmed);
+    } catch (error) {
+      DebugConsole.log('[ThemeSurface] home live update failed: $error');
+    }
   }
 
   void _applyFastInfoConfig(FastInfoConfig config) {

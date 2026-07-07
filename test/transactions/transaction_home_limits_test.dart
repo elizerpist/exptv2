@@ -10,6 +10,7 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/budget_target_editor_sheet.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/theme/expense_theme.dart';
@@ -1059,6 +1060,60 @@ void main() {
     );
   });
 
+  testWidgets('center badge background opens no-veil live tuner', (
+    tester,
+  ) async {
+    final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 5, 17),
+    );
+    final changed = <AppThemeSettings>[];
+    final centerTheme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        backheaderStyle: BackheaderStyle.centerBadgeBudget,
+      ),
+    );
+    await pumpExpandedMonthlyHome(
+      tester,
+      store,
+      expenseTheme: centerTheme,
+      onThemeSettingsChanged: changed.add,
+    );
+
+    final surfaceTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    await tester.tapAt(surfaceTopLeft + const Offset(24, 96));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
+      findsOneWidget,
+    );
+    final slideCard = tester.widget<SlideUpMenuCard>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('backheader-live-tuner-panel')),
+        matching: find.byType(SlideUpMenuCard),
+      ),
+    );
+    expect(slideCard.showFocusVeil, isFalse);
+    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsNothing);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('center-badge-slot-size-4-input')),
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('center-badge-slot-size-4-input')),
+      '115',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(changed.last.centerBadgeSlotSizePercents[4], 115);
+  });
+
   testWidgets('income side uses income goal and income category allocation', (
     tester,
   ) async {
@@ -1110,6 +1165,7 @@ Future<void> pumpExpandedMonthlyHome(
   BudgetTargetEditorRequest? onBudgetTargetEditorRequested,
   ValueNotifier<String?>? budgetEditorActiveKey,
   ExpenseTheme? expenseTheme,
+  ValueChanged<AppThemeSettings>? onThemeSettingsChanged,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -1123,6 +1179,7 @@ Future<void> pumpExpandedMonthlyHome(
             onBlockingOverlayChanged: onBlockingOverlayChanged,
             onBudgetTargetEditorRequested: onBudgetTargetEditorRequested,
             budgetEditorActiveKey: budgetEditorActiveKey,
+            onThemeSettingsChanged: onThemeSettingsChanged,
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
+import '../settings/widgets/options/backheader_style_options_panel.dart';
 import 'data/limit_allocation_manager.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
@@ -54,6 +55,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onFocusedSheetDismissRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
+    this.onThemeSettingsChanged,
     this.budgetEditorActiveKey,
   });
 
@@ -69,6 +71,7 @@ class TransactionHomePage extends StatefulWidget {
   final VoidCallback? onFocusedSheetDismissRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
+  final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -90,6 +93,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   DateTime? _budgetEditorOpenRequestedAt;
   final _budgetEditorPendingAmountsByKey = <String, double>{};
   var _categoryEditorOpen = false;
+  var _backheaderLiveTunerOpen = false;
   var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
   int? _lastHomeBuildEntriesLogged;
@@ -350,6 +354,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         expenseTheme.settings.centerBadgeWhiteIconOpacities,
                     centerBadgeWhiteProgressOpacities:
                         expenseTheme.settings.centerBadgeWhiteProgressOpacities,
+                    centerBadgeColoredFillOpacities:
+                        expenseTheme.settings.centerBadgeColoredFillOpacities,
+                    centerBadgeColoredIconOpacities:
+                        expenseTheme.settings.centerBadgeColoredIconOpacities,
+                    centerBadgeColoredProgressOpacities: expenseTheme
+                        .settings
+                        .centerBadgeColoredProgressOpacities,
+                    centerBadgeSlotSizePercents:
+                        expenseTheme.settings.centerBadgeSlotSizePercents,
+                    centerBadgeSlotXOffsets:
+                        expenseTheme.settings.centerBadgeSlotXOffsets,
                     centerBadgeColoredBackgroundOpacity: expenseTheme
                         .settings
                         .centerBadgeColoredBackgroundOpacity,
@@ -364,6 +379,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onItemTap: _openBudgetTargetEditor,
+                    onCenterBackgroundTap: _openBackheaderLiveTuner,
                     onOrbitCloseRequested: () {
                       if (_headerExpanded) unawaited(_collapseHeader());
                     },
@@ -462,6 +478,32 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                     selectedSurfaceStyle: expenseTheme.forcedInsetSurfaceStyle,
                     accentColor: expenseTheme.accent,
+                  ),
+                ),
+              if (_backheaderLiveTunerOpen)
+                Positioned.fill(
+                  child: SlideUpMenuCard(
+                    cardKey: const ValueKey('backheader-live-tuner-slide-card'),
+                    debugLabel: 'BackheaderLiveTuner',
+                    panelHeight: _menuPanelHeight(context),
+                    showFocusVeil: false,
+                    dismissOnVeilTap: false,
+                    dragFromHandleOnly: true,
+                    dragHandleExtent: 72,
+                    verticalDragBias: 1.2,
+                    onDismissed: _closeBackheaderLiveTuner,
+                    child: SafeArea(
+                      top: false,
+                      bottom: false,
+                      child: ColoredBox(
+                        key: const ValueKey('backheader-live-tuner-panel'),
+                        color: expenseTheme.fieldSurface,
+                        child: BackheaderStyleOptionsPanel(
+                          settings: expenseTheme.settings,
+                          onChanged: _updateBackheaderLiveThemeSettings,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               if (budgetHostItem != null)
@@ -825,6 +867,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         _categoryEditorOpen = false;
         _editingCategory = null;
       }
+      _backheaderLiveTunerOpen = false;
       _budgetEditorItem = null;
     });
   }
@@ -881,6 +924,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
+    if (_backheaderLiveTunerOpen) {
+      setState(() => _backheaderLiveTunerOpen = false);
+    }
     final requestedAt = DateTime.now();
     DebugConsole.log(
       '[BudgetTargetEditor] open from backheader key=${item.key} '
@@ -911,6 +957,28 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _budgetEditorOpenRequestedAt = null;
       _budgetEditorPendingAmountsByKey.clear();
     });
+  }
+
+  void _openBackheaderLiveTuner() {
+    final settings =
+        widget.expenseTheme?.settings ?? AppThemeSettings.defaults();
+    if (!_headerExpanded ||
+        settings.backheaderStyle != BackheaderStyle.centerBadgeBudget) {
+      return;
+    }
+    if (_backheaderLiveTunerOpen) return;
+    setState(() => _backheaderLiveTunerOpen = true);
+    DebugConsole.log('[BackheaderTuner] open from backheader background');
+  }
+
+  void _closeBackheaderLiveTuner() {
+    if (!_backheaderLiveTunerOpen) return;
+    setState(() => _backheaderLiveTunerOpen = false);
+    DebugConsole.log('[BackheaderTuner] closed');
+  }
+
+  void _updateBackheaderLiveThemeSettings(AppThemeSettings settings) {
+    widget.onThemeSettingsChanged?.call(settings);
   }
 
   void _setBudgetEditorPendingAmount(BackheaderBudgetItem item, double amount) {

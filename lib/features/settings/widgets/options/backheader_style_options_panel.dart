@@ -144,6 +144,17 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
     'Távoli',
     'Szél',
   ];
+  static const _slotLabels = [
+    'Bal 4',
+    'Bal 3',
+    'Bal 2',
+    'Bal 1',
+    'Közép',
+    'Jobb 1',
+    'Jobb 2',
+    'Jobb 3',
+    'Jobb 4',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +235,119 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
               settings.copyWith(centerBadgeColoredBackgroundOpacity: value),
             ),
           ),
+          const SizedBox(height: 16),
+          const Text(
+            'Színes badge opacity',
+            style: TextStyle(
+              color: Color(0xFF1F2937),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'A nem fehér badge fill, ikon és progress rétegeire vonatkozik.',
+            style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          _buildGroup(
+            title: 'Badge fill',
+            keyPrefix: 'colored-opacity-fill',
+            values: settings.centerBadgeColoredFillOpacities,
+            onValueChanged: (index, value) => onChanged(
+              settings.copyWith(
+                centerBadgeColoredFillOpacities: _replaceAt(
+                  settings.centerBadgeColoredFillOpacities,
+                  index,
+                  value,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildGroup(
+            title: 'Ikon',
+            keyPrefix: 'colored-opacity-icon',
+            values: settings.centerBadgeColoredIconOpacities,
+            onValueChanged: (index, value) => onChanged(
+              settings.copyWith(
+                centerBadgeColoredIconOpacities: _replaceAt(
+                  settings.centerBadgeColoredIconOpacities,
+                  index,
+                  value,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildGroup(
+            title: 'Progress circle',
+            keyPrefix: 'colored-opacity-progress',
+            values: settings.centerBadgeColoredProgressOpacities,
+            onValueChanged: (index, value) => onChanged(
+              settings.copyWith(
+                centerBadgeColoredProgressOpacities: _replaceAt(
+                  settings.centerBadgeColoredProgressOpacities,
+                  index,
+                  value,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Badge méret és pozíció',
+            style: TextStyle(
+              color: Color(0xFF1F2937),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Slotonkénti méret (%) és vízszintes X offset (px) élő finomhangoláshoz.',
+            style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          for (var index = 0; index < _slotLabels.length; index += 1) ...[
+            _CenterBadgeOpacityRow(
+              label: '${_slotLabels[index]} méret',
+              sliderKey: ValueKey('center-badge-slot-size-$index-slider'),
+              inputKey: ValueKey('center-badge-slot-size-$index-input'),
+              value: settings.centerBadgeSlotSizePercents[index],
+              min: kCenterBadgeSlotSizePercentMin,
+              max: kCenterBadgeSlotSizePercentMax,
+              onChanged: (value) => onChanged(
+                settings.copyWith(
+                  centerBadgeSlotSizePercents: _replaceAtBounded(
+                    settings.centerBadgeSlotSizePercents,
+                    index,
+                    value,
+                    min: kCenterBadgeSlotSizePercentMin,
+                    max: kCenterBadgeSlotSizePercentMax,
+                  ),
+                ),
+              ),
+            ),
+            _CenterBadgeOpacityRow(
+              label: '${_slotLabels[index]} X',
+              sliderKey: ValueKey('center-badge-slot-x-offset-$index-slider'),
+              inputKey: ValueKey('center-badge-slot-x-offset-$index-input'),
+              value: settings.centerBadgeSlotXOffsets[index],
+              min: kCenterBadgeSlotXOffsetMin,
+              max: kCenterBadgeSlotXOffsetMax,
+              onChanged: (value) => onChanged(
+                settings.copyWith(
+                  centerBadgeSlotXOffsets: _replaceAtBounded(
+                    settings.centerBadgeSlotXOffsets,
+                    index,
+                    value,
+                    min: kCenterBadgeSlotXOffsetMin,
+                    max: kCenterBadgeSlotXOffsetMax,
+                  ),
+                ),
+              ),
+            ),
+            if (index != _slotLabels.length - 1) const SizedBox(height: 6),
+          ],
         ],
       ),
     );
@@ -251,9 +375,15 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
           _CenterBadgeOpacityRow(
             label: _distanceLabels[index],
             sliderKey: ValueKey(
-              'center-badge-opacity-$keyPrefix-$index-slider',
+              keyPrefix.startsWith('colored-')
+                  ? 'center-badge-$keyPrefix-$index-slider'
+                  : 'center-badge-opacity-$keyPrefix-$index-slider',
             ),
-            inputKey: ValueKey('center-badge-opacity-$keyPrefix-$index-input'),
+            inputKey: ValueKey(
+              keyPrefix.startsWith('colored-')
+                  ? 'center-badge-$keyPrefix-$index-input'
+                  : 'center-badge-opacity-$keyPrefix-$index-input',
+            ),
             value: values[index],
             onChanged: (value) => onValueChanged(index, value),
           ),
@@ -262,13 +392,25 @@ class _CenterBadgeOpacityControls extends StatelessWidget {
   }
 
   List<int> _replaceAt(List<int> values, int index, int value) {
+    return _replaceAtBounded(values, index, value, min: 0, max: 100);
+  }
+
+  List<int> _replaceAtBounded(
+    List<int> values,
+    int index,
+    int value, {
+    required int min,
+    required int max,
+  }) {
     final next = List<int>.of(values);
-    next[index] = _clampPercent(value);
+    next[index] = _clampNumber(value, min: min, max: max);
     return next;
   }
 }
 
-int _clampPercent(int value) => value.clamp(0, 100).toInt();
+int _clampNumber(int value, {required int min, required int max}) {
+  return value.clamp(min, max).toInt();
+}
 
 class _CenterBadgeOpacityRow extends StatelessWidget {
   const _CenterBadgeOpacityRow({
@@ -277,22 +419,27 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
     required this.inputKey,
     required this.value,
     required this.onChanged,
+    this.min = 0,
+    this.max = 100,
   });
 
   final String label;
   final Key sliderKey;
   final Key inputKey;
   final int value;
+  final int min;
+  final int max;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final clampedValue = _clampNumber(value, min: min, max: max);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           SizedBox(
-            width: 72,
+            width: 86,
             child: Text(
               label,
               style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
@@ -301,11 +448,12 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
           Expanded(
             child: Slider(
               key: sliderKey,
-              min: 0,
-              max: 100,
-              divisions: 100,
-              value: value.toDouble().clamp(0, 100).toDouble(),
-              onChanged: (next) => onChanged(_clampPercent(next.round())),
+              min: min.toDouble(),
+              max: max.toDouble(),
+              divisions: max - min,
+              value: clampedValue.toDouble(),
+              onChanged: (next) =>
+                  onChanged(_clampNumber(next.round(), min: min, max: max)),
             ),
           ),
           Container(
@@ -319,9 +467,9 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
             ),
             child: TextFormField(
               key: inputKey,
-              initialValue: '$value',
+              initialValue: '$clampedValue',
               textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
+              keyboardType: TextInputType.numberWithOptions(signed: min < 0),
               textInputAction: TextInputAction.done,
               style: const TextStyle(
                 color: Color(0xFF1F2937),
@@ -347,7 +495,7 @@ class _CenterBadgeOpacityRow extends StatelessWidget {
   void _submit(String raw) {
     final parsed = int.tryParse(raw.trim());
     if (parsed == null) return;
-    onChanged(_clampPercent(parsed));
+    onChanged(_clampNumber(parsed, min: min, max: max));
   }
 }
 

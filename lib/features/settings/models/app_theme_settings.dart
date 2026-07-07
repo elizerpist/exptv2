@@ -107,7 +107,26 @@ enum CenterBadgeBorderMode {
 const kCenterBadgeWhiteDiscOpacityDefaults = <int>[18, 13, 10, 9, 8];
 const kCenterBadgeWhiteIconOpacityDefaults = <int>[100, 72, 58, 48, 42];
 const kCenterBadgeWhiteProgressOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredFillOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredIconOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredProgressOpacityDefaults = <int>[100, 72, 58, 48, 42];
 const kCenterBadgeColoredBackgroundOpacityDefault = 72;
+const kCenterBadgeSlotSizePercentDefaults = <int>[
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+];
+const kCenterBadgeSlotXOffsetDefaults = <int>[0, 0, 0, 0, 0, 0, 0, 0, 0];
+const kCenterBadgeSlotSizePercentMin = 50;
+const kCenterBadgeSlotSizePercentMax = 180;
+const kCenterBadgeSlotXOffsetMin = -64;
+const kCenterBadgeSlotXOffsetMax = 64;
 
 enum AppCardColor {
   white('white'),
@@ -389,6 +408,14 @@ class AppThemeSettings {
     this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
     this.centerBadgeWhiteProgressOpacities =
         kCenterBadgeWhiteProgressOpacityDefaults,
+    this.centerBadgeColoredFillOpacities =
+        kCenterBadgeColoredFillOpacityDefaults,
+    this.centerBadgeColoredIconOpacities =
+        kCenterBadgeColoredIconOpacityDefaults,
+    this.centerBadgeColoredProgressOpacities =
+        kCenterBadgeColoredProgressOpacityDefaults,
+    this.centerBadgeSlotSizePercents = kCenterBadgeSlotSizePercentDefaults,
+    this.centerBadgeSlotXOffsets = kCenterBadgeSlotXOffsetDefaults,
     this.centerBadgeColoredBackgroundOpacity =
         kCenterBadgeColoredBackgroundOpacityDefault,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
@@ -424,6 +451,12 @@ class AppThemeSettings {
       centerBadgeWhiteIconOpacities: kCenterBadgeWhiteIconOpacityDefaults,
       centerBadgeWhiteProgressOpacities:
           kCenterBadgeWhiteProgressOpacityDefaults,
+      centerBadgeColoredFillOpacities: kCenterBadgeColoredFillOpacityDefaults,
+      centerBadgeColoredIconOpacities: kCenterBadgeColoredIconOpacityDefaults,
+      centerBadgeColoredProgressOpacities:
+          kCenterBadgeColoredProgressOpacityDefaults,
+      centerBadgeSlotSizePercents: kCenterBadgeSlotSizePercentDefaults,
+      centerBadgeSlotXOffsets: kCenterBadgeSlotXOffsetDefaults,
       centerBadgeColoredBackgroundOpacity:
           kCenterBadgeColoredBackgroundOpacityDefault,
       appColor: AppColorMode.turquoise,
@@ -510,6 +543,30 @@ class AppThemeSettings {
         map['centerBadgeWhiteProgressOpacities'],
         kCenterBadgeWhiteProgressOpacityDefaults,
       ),
+      centerBadgeColoredFillOpacities: _opacityList(
+        map['centerBadgeColoredFillOpacities'],
+        kCenterBadgeColoredFillOpacityDefaults,
+      ),
+      centerBadgeColoredIconOpacities: _opacityList(
+        map['centerBadgeColoredIconOpacities'],
+        kCenterBadgeColoredIconOpacityDefaults,
+      ),
+      centerBadgeColoredProgressOpacities: _opacityList(
+        map['centerBadgeColoredProgressOpacities'],
+        kCenterBadgeColoredProgressOpacityDefaults,
+      ),
+      centerBadgeSlotSizePercents: _intList(
+        map['centerBadgeSlotSizePercents'],
+        kCenterBadgeSlotSizePercentDefaults,
+        min: kCenterBadgeSlotSizePercentMin,
+        max: kCenterBadgeSlotSizePercentMax,
+      ),
+      centerBadgeSlotXOffsets: _intList(
+        map['centerBadgeSlotXOffsets'],
+        kCenterBadgeSlotXOffsetDefaults,
+        min: kCenterBadgeSlotXOffsetMin,
+        max: kCenterBadgeSlotXOffsetMax,
+      ),
       centerBadgeColoredBackgroundOpacity: _opacityPercent(
         map['centerBadgeColoredBackgroundOpacity'],
         kCenterBadgeColoredBackgroundOpacityDefault,
@@ -548,6 +605,11 @@ class AppThemeSettings {
   final List<int> centerBadgeWhiteDiscOpacities;
   final List<int> centerBadgeWhiteIconOpacities;
   final List<int> centerBadgeWhiteProgressOpacities;
+  final List<int> centerBadgeColoredFillOpacities;
+  final List<int> centerBadgeColoredIconOpacities;
+  final List<int> centerBadgeColoredProgressOpacities;
+  final List<int> centerBadgeSlotSizePercents;
+  final List<int> centerBadgeSlotXOffsets;
   final int centerBadgeColoredBackgroundOpacity;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
@@ -591,6 +653,12 @@ class AppThemeSettings {
       'centerBadgeWhiteDiscOpacities': centerBadgeWhiteDiscOpacities,
       'centerBadgeWhiteIconOpacities': centerBadgeWhiteIconOpacities,
       'centerBadgeWhiteProgressOpacities': centerBadgeWhiteProgressOpacities,
+      'centerBadgeColoredFillOpacities': centerBadgeColoredFillOpacities,
+      'centerBadgeColoredIconOpacities': centerBadgeColoredIconOpacities,
+      'centerBadgeColoredProgressOpacities':
+          centerBadgeColoredProgressOpacities,
+      'centerBadgeSlotSizePercents': centerBadgeSlotSizePercents,
+      'centerBadgeSlotXOffsets': centerBadgeSlotXOffsets,
       'centerBadgeColoredBackgroundOpacity':
           centerBadgeColoredBackgroundOpacity,
       'appColor': appColor.nativeValue,
@@ -626,6 +694,11 @@ class AppThemeSettings {
     List<int>? centerBadgeWhiteDiscOpacities,
     List<int>? centerBadgeWhiteIconOpacities,
     List<int>? centerBadgeWhiteProgressOpacities,
+    List<int>? centerBadgeColoredFillOpacities,
+    List<int>? centerBadgeColoredIconOpacities,
+    List<int>? centerBadgeColoredProgressOpacities,
+    List<int>? centerBadgeSlotSizePercents,
+    List<int>? centerBadgeSlotXOffsets,
     int? centerBadgeColoredBackgroundOpacity,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
@@ -670,6 +743,19 @@ class AppThemeSettings {
       centerBadgeWhiteProgressOpacities:
           centerBadgeWhiteProgressOpacities ??
           this.centerBadgeWhiteProgressOpacities,
+      centerBadgeColoredFillOpacities:
+          centerBadgeColoredFillOpacities ??
+          this.centerBadgeColoredFillOpacities,
+      centerBadgeColoredIconOpacities:
+          centerBadgeColoredIconOpacities ??
+          this.centerBadgeColoredIconOpacities,
+      centerBadgeColoredProgressOpacities:
+          centerBadgeColoredProgressOpacities ??
+          this.centerBadgeColoredProgressOpacities,
+      centerBadgeSlotSizePercents:
+          centerBadgeSlotSizePercents ?? this.centerBadgeSlotSizePercents,
+      centerBadgeSlotXOffsets:
+          centerBadgeSlotXOffsets ?? this.centerBadgeSlotXOffsets,
       centerBadgeColoredBackgroundOpacity:
           centerBadgeColoredBackgroundOpacity ??
           this.centerBadgeColoredBackgroundOpacity,
@@ -720,14 +806,32 @@ class AppThemeSettings {
   }
 
   static List<int> _opacityList(Object? value, List<int> fallback) {
+    return _intList(value, fallback, min: 0, max: 100);
+  }
+
+  static List<int> _intList(
+    Object? value,
+    List<int> fallback, {
+    required int min,
+    required int max,
+  }) {
     final source = value is Iterable ? value.toList(growable: false) : null;
     return List<int>.generate(fallback.length, (index) {
       if (source == null || index >= source.length) return fallback[index];
-      return _opacityPercent(source[index], fallback[index]);
+      return _boundedInt(source[index], fallback[index], min: min, max: max);
     }, growable: false);
   }
 
   static int _opacityPercent(Object? value, int fallback) {
+    return _boundedInt(value, fallback, min: 0, max: 100);
+  }
+
+  static int _boundedInt(
+    Object? value,
+    int fallback, {
+    required int min,
+    required int max,
+  }) {
     num? parsed;
     if (value is num) {
       parsed = value;
@@ -735,6 +839,6 @@ class AppThemeSettings {
       parsed = num.tryParse(value.trim());
     }
     if (parsed == null) return fallback;
-    return parsed.round().clamp(0, 100).toInt();
+    return parsed.round().clamp(min, max).toInt();
   }
 }
