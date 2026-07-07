@@ -107,6 +107,7 @@ class ExpenseSettingsStoreSecurityTest {
                 "centerPartitionRingEnabled" to true,
                 "centerBadgeDiscEnabled" to false,
                 "centerBadgeBorderMode" to "always",
+                "centerBadgeOverlapMaskEnabled" to true,
                 "designProfile" to "neumorphism",
                 "appColor" to "pink",
             )
@@ -119,11 +120,13 @@ class ExpenseSettingsStoreSecurityTest {
         assertEquals(true, updated["centerPartitionRingEnabled"])
         assertEquals(false, updated["centerBadgeDiscEnabled"])
         assertEquals("always", updated["centerBadgeBorderMode"])
+        assertEquals(true, updated["centerBadgeOverlapMaskEnabled"])
         assertEquals("normal", store.loadThemeSettings()["designProfile"])
         assertEquals("colored", store.loadThemeSettings()["centerBackheaderDesign"])
         assertEquals(true, store.loadThemeSettings()["centerPartitionRingEnabled"])
         assertEquals(false, store.loadThemeSettings()["centerBadgeDiscEnabled"])
         assertEquals("always", store.loadThemeSettings()["centerBadgeBorderMode"])
+        assertEquals(true, store.loadThemeSettings()["centerBadgeOverlapMaskEnabled"])
         assertEquals(
             null,
             context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)

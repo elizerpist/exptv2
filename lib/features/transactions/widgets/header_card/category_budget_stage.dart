@@ -39,6 +39,7 @@ class CategoryBudgetStage extends StatefulWidget {
     this.centerPartitionRingEnabled = false,
     this.centerBadgeDiscEnabled = true,
     this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeOverlapMaskEnabled = false,
     this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
     this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
     this.centerBadgeWhiteProgressOpacities =
@@ -68,6 +69,7 @@ class CategoryBudgetStage extends StatefulWidget {
   final bool centerPartitionRingEnabled;
   final bool centerBadgeDiscEnabled;
   final CenterBadgeBorderMode centerBadgeBorderMode;
+  final bool centerBadgeOverlapMaskEnabled;
   final List<int> centerBadgeWhiteDiscOpacities;
   final List<int> centerBadgeWhiteIconOpacities;
   final List<int> centerBadgeWhiteProgressOpacities;
@@ -412,6 +414,7 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerPartitionRingEnabled: widget.centerPartitionRingEnabled,
         centerBadgeDiscEnabled: widget.centerBadgeDiscEnabled,
         centerBadgeBorderMode: widget.centerBadgeBorderMode,
+        centerBadgeOverlapMaskEnabled: widget.centerBadgeOverlapMaskEnabled,
         centerBadgeWhiteDiscOpacities: widget.centerBadgeWhiteDiscOpacities,
         centerBadgeWhiteIconOpacities: widget.centerBadgeWhiteIconOpacities,
         centerBadgeWhiteProgressOpacities:

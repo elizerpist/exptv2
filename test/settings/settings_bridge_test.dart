@@ -352,6 +352,7 @@ void main() {
         'centerPartitionRingEnabled': true,
         'centerBadgeDiscEnabled': false,
         'centerBadgeBorderMode': 'always',
+        'centerBadgeOverlapMaskEnabled': true,
         'centerBadgeWhiteDiscOpacities': <Object?>[20, 30, 40, 50, 60],
         'centerBadgeWhiteIconOpacities': <Object?>[100, 90, 80, 70, 60],
         'centerBadgeWhiteProgressOpacities': <Object?>[55, 45, 35, 25, 15],
@@ -381,6 +382,7 @@ void main() {
     expect(updated.toMap()['centerPartitionRingEnabled'], isTrue);
     expect(updated.centerBadgeDiscEnabled, isFalse);
     expect(updated.centerBadgeBorderMode, CenterBadgeBorderMode.always);
+    expect(updated.centerBadgeOverlapMaskEnabled, isTrue);
     expect(updated.centerBadgeWhiteDiscOpacities, [20, 30, 40, 50, 60]);
     expect(updated.centerBadgeWhiteIconOpacities, [100, 90, 80, 70, 60]);
     expect(updated.centerBadgeWhiteProgressOpacities, [55, 45, 35, 25, 15]);
@@ -413,6 +415,7 @@ void main() {
     expect(payload['centerPartitionRingEnabled'], isTrue);
     expect(payload['centerBadgeDiscEnabled'], isFalse);
     expect(payload['centerBadgeBorderMode'], 'always');
+    expect(payload['centerBadgeOverlapMaskEnabled'], isTrue);
     expect(payload['centerBadgeWhiteDiscOpacities'], [20, 30, 40, 50, 60]);
     expect(payload['centerBadgeWhiteIconOpacities'], [100, 90, 80, 70, 60]);
     expect(payload['centerBadgeWhiteProgressOpacities'], [55, 45, 35, 25, 15]);

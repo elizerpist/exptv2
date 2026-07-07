@@ -342,6 +342,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         expenseTheme.settings.centerBadgeDiscEnabled,
                     centerBadgeBorderMode:
                         expenseTheme.settings.centerBadgeBorderMode,
+                    centerBadgeOverlapMaskEnabled:
+                        expenseTheme.settings.centerBadgeOverlapMaskEnabled,
                     centerBadgeWhiteDiscOpacities:
                         expenseTheme.settings.centerBadgeWhiteDiscOpacities,
                     centerBadgeWhiteIconOpacities:

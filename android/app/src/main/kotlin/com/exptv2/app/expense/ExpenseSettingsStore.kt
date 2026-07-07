@@ -66,6 +66,10 @@ class ExpenseSettingsStore(context: Context) {
                 KEY_CENTER_BADGE_BORDER_MODE,
                 "limitOnly",
             ),
+            "centerBadgeOverlapMaskEnabled" to prefs.getBoolean(
+                KEY_CENTER_BADGE_OVERLAP_MASK_ENABLED,
+                false,
+            ),
             "centerBadgeWhiteDiscOpacities" to loadOpacityList(
                 KEY_CENTER_BADGE_WHITE_DISC_OPACITIES,
                 DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES,
@@ -165,6 +169,10 @@ class ExpenseSettingsStore(context: Context) {
                 KEY_CENTER_BADGE_BORDER_MODE,
                 args["centerBadgeBorderMode"]?.toString()?.takeIf { it.isNotBlank() }
                     ?: "limitOnly"
+            )
+            .putBoolean(
+                KEY_CENTER_BADGE_OVERLAP_MASK_ENABLED,
+                boolArg(args["centerBadgeOverlapMaskEnabled"], false)
             )
             .putString(
                 KEY_CENTER_BADGE_WHITE_DISC_OPACITIES,
@@ -470,6 +478,7 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_CENTER_PARTITION_RING_ENABLED = "centerPartitionRingEnabled"
         private const val KEY_CENTER_BADGE_DISC_ENABLED = "centerBadgeDiscEnabled"
         private const val KEY_CENTER_BADGE_BORDER_MODE = "centerBadgeBorderMode"
+        private const val KEY_CENTER_BADGE_OVERLAP_MASK_ENABLED = "centerBadgeOverlapMaskEnabled"
         private const val KEY_CENTER_BADGE_WHITE_DISC_OPACITIES = "centerBadgeWhiteDiscOpacities"
         private const val KEY_CENTER_BADGE_WHITE_ICON_OPACITIES = "centerBadgeWhiteIconOpacities"
         private const val KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES = "centerBadgeWhiteProgressOpacities"

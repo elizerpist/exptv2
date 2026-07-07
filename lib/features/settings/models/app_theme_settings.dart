@@ -384,6 +384,7 @@ class AppThemeSettings {
     this.centerPartitionRingEnabled = false,
     this.centerBadgeDiscEnabled = true,
     this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeOverlapMaskEnabled = false,
     this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
     this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
     this.centerBadgeWhiteProgressOpacities =
@@ -418,6 +419,7 @@ class AppThemeSettings {
       centerPartitionRingEnabled: false,
       centerBadgeDiscEnabled: true,
       centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
+      centerBadgeOverlapMaskEnabled: false,
       centerBadgeWhiteDiscOpacities: kCenterBadgeWhiteDiscOpacityDefaults,
       centerBadgeWhiteIconOpacities: kCenterBadgeWhiteIconOpacityDefaults,
       centerBadgeWhiteProgressOpacities:
@@ -492,6 +494,10 @@ class AppThemeSettings {
       centerBadgeBorderMode: CenterBadgeBorderMode.fromAny(
         map['centerBadgeBorderMode'],
       ),
+      centerBadgeOverlapMaskEnabled: _bool(
+        map['centerBadgeOverlapMaskEnabled'],
+        false,
+      ),
       centerBadgeWhiteDiscOpacities: _opacityList(
         map['centerBadgeWhiteDiscOpacities'],
         kCenterBadgeWhiteDiscOpacityDefaults,
@@ -538,6 +544,7 @@ class AppThemeSettings {
   final bool centerPartitionRingEnabled;
   final bool centerBadgeDiscEnabled;
   final CenterBadgeBorderMode centerBadgeBorderMode;
+  final bool centerBadgeOverlapMaskEnabled;
   final List<int> centerBadgeWhiteDiscOpacities;
   final List<int> centerBadgeWhiteIconOpacities;
   final List<int> centerBadgeWhiteProgressOpacities;
@@ -580,6 +587,7 @@ class AppThemeSettings {
       'centerPartitionRingEnabled': centerPartitionRingEnabled,
       'centerBadgeDiscEnabled': centerBadgeDiscEnabled,
       'centerBadgeBorderMode': centerBadgeBorderMode.nativeValue,
+      'centerBadgeOverlapMaskEnabled': centerBadgeOverlapMaskEnabled,
       'centerBadgeWhiteDiscOpacities': centerBadgeWhiteDiscOpacities,
       'centerBadgeWhiteIconOpacities': centerBadgeWhiteIconOpacities,
       'centerBadgeWhiteProgressOpacities': centerBadgeWhiteProgressOpacities,
@@ -614,6 +622,7 @@ class AppThemeSettings {
     bool? centerPartitionRingEnabled,
     bool? centerBadgeDiscEnabled,
     CenterBadgeBorderMode? centerBadgeBorderMode,
+    bool? centerBadgeOverlapMaskEnabled,
     List<int>? centerBadgeWhiteDiscOpacities,
     List<int>? centerBadgeWhiteIconOpacities,
     List<int>? centerBadgeWhiteProgressOpacities,
@@ -652,6 +661,8 @@ class AppThemeSettings {
           centerBadgeDiscEnabled ?? this.centerBadgeDiscEnabled,
       centerBadgeBorderMode:
           centerBadgeBorderMode ?? this.centerBadgeBorderMode,
+      centerBadgeOverlapMaskEnabled:
+          centerBadgeOverlapMaskEnabled ?? this.centerBadgeOverlapMaskEnabled,
       centerBadgeWhiteDiscOpacities:
           centerBadgeWhiteDiscOpacities ?? this.centerBadgeWhiteDiscOpacities,
       centerBadgeWhiteIconOpacities:

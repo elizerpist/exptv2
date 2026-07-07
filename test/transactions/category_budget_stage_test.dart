@@ -2107,6 +2107,88 @@ void main() {
   );
 
   testWidgets(
+    'centerBadgeBudget colored design can mask translucent badge overlaps',
+    (tester) async {
+      const backgroundColor = Color(0xffeef3f7);
+      final food = barFixture(6, 'Food', 100, 500);
+      final travel = barFixture(7, 'Travel', 25, 100);
+      final books = barFixture(8, 'Books', 30, 100);
+      final health = barFixture(9, 'Health', 20, 100);
+      final home = barFixture(10, 'Home', 15, 100);
+      final bars = [food, travel, books, health, home];
+      final expectedSurface = Color.alphaBlend(
+        food.color.withValues(alpha: 0.64),
+        backgroundColor,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.colored,
+                centerBadgeOverlapMaskEnabled: true,
+                centerBadgeColoredBackgroundOpacity: 64,
+                backgroundColor: backgroundColor,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final activeMask = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-center-overlap-mask')),
+      );
+      expect((activeMask.decoration as BoxDecoration).color, expectedSurface);
+      expect(
+        find.byKey(
+          const ValueKey('backheader-center-preview-overlap-mask-next-1'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('centerBadgeBudget neutral design ignores overlap mask switch', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 500);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              centerBackheaderDesign: BackheaderCenterDesign.neutral,
+              centerBadgeOverlapMaskEnabled: true,
+              backgroundColor: const Color(0xffeef3f7),
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-center-overlap-mask')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
     'centerBadgeBudget can hide colored white badge disc independently',
     (tester) async {
       const backgroundColor = Color(0xffeef3f7);

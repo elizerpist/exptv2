@@ -38,6 +38,7 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerPartitionRingEnabled = false,
     this.centerBadgeDiscEnabled = true,
     this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeOverlapMaskEnabled = false,
     this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
     this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
     this.centerBadgeWhiteProgressOpacities =
@@ -102,6 +103,7 @@ class BackheaderStyleSurface extends StatelessWidget {
   final bool centerPartitionRingEnabled;
   final bool centerBadgeDiscEnabled;
   final CenterBadgeBorderMode centerBadgeBorderMode;
+  final bool centerBadgeOverlapMaskEnabled;
   final List<int> centerBadgeWhiteDiscOpacities;
   final List<int> centerBadgeWhiteIconOpacities;
   final List<int> centerBadgeWhiteProgressOpacities;
@@ -147,10 +149,11 @@ class BackheaderStyleSurface extends StatelessWidget {
     final color = current.category?.color ?? _overviewColor;
     final amountText = orbitAmountText ?? current.amountText;
     final segments = _segmentColors;
+    final surfaceColor = _background(color);
     return DecoratedBox(
       key: ValueKey('backheader-style-${style.nativeValue}'),
       decoration: BoxDecoration(
-        color: _background(color),
+        color: surfaceColor,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Stack(
@@ -189,6 +192,8 @@ class BackheaderStyleSurface extends StatelessWidget {
               partitionRingEnabled: centerPartitionRingEnabled,
               badgeDiscEnabled: centerBadgeDiscEnabled,
               borderMode: centerBadgeBorderMode,
+              overlapMaskEnabled: centerBadgeOverlapMaskEnabled,
+              overlapMaskColor: surfaceColor,
               whiteDiscOpacities: centerBadgeWhiteDiscOpacities,
               whiteIconOpacities: centerBadgeWhiteIconOpacities,
               whiteProgressOpacities: centerBadgeWhiteProgressOpacities,
@@ -549,6 +554,8 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.partitionRingEnabled,
     required this.badgeDiscEnabled,
     required this.borderMode,
+    required this.overlapMaskEnabled,
+    required this.overlapMaskColor,
     required this.whiteDiscOpacities,
     required this.whiteIconOpacities,
     required this.whiteProgressOpacities,
@@ -597,6 +604,8 @@ class _CenterBadgeBudget extends StatelessWidget {
   final bool partitionRingEnabled;
   final bool badgeDiscEnabled;
   final CenterBadgeBorderMode borderMode;
+  final bool overlapMaskEnabled;
+  final Color overlapMaskColor;
   final List<int> whiteDiscOpacities;
   final List<int> whiteIconOpacities;
   final List<int> whiteProgressOpacities;
@@ -709,6 +718,8 @@ class _CenterBadgeBudget extends StatelessWidget {
                 partitionRingEnabled: partitionRingEnabled,
                 badgeDiscEnabled: badgeDiscEnabled,
                 borderMode: borderMode,
+                overlapMaskEnabled: overlapMaskEnabled,
+                overlapMaskColor: overlapMaskColor,
                 whiteDiscOpacities: whiteDiscOpacities,
                 whiteIconOpacities: whiteIconOpacities,
                 whiteProgressOpacities: whiteProgressOpacities,
@@ -809,6 +820,8 @@ class _CenterBadgeWheel extends StatelessWidget {
     required this.partitionRingEnabled,
     required this.badgeDiscEnabled,
     required this.borderMode,
+    required this.overlapMaskEnabled,
+    required this.overlapMaskColor,
     required this.whiteDiscOpacities,
     required this.whiteIconOpacities,
     required this.whiteProgressOpacities,
@@ -861,6 +874,8 @@ class _CenterBadgeWheel extends StatelessWidget {
   final bool partitionRingEnabled;
   final bool badgeDiscEnabled;
   final CenterBadgeBorderMode borderMode;
+  final bool overlapMaskEnabled;
+  final Color overlapMaskColor;
   final List<int> whiteDiscOpacities;
   final List<int> whiteIconOpacities;
   final List<int> whiteProgressOpacities;
@@ -1027,6 +1042,8 @@ class _CenterBadgeWheel extends StatelessWidget {
         ringTrackColor: ringTrackColor,
         badgeDiscEnabled: badgeDiscEnabled,
         borderMode: borderMode,
+        overlapMaskEnabled: overlapMaskEnabled,
+        overlapMaskColor: overlapMaskColor,
         partitionAllocation: active && partitionRingEnabled
             ? partitionAllocation
             : null,
@@ -1207,6 +1224,8 @@ class _CenterBadgeVisual extends StatelessWidget {
     required this.ringTrackColor,
     required this.badgeDiscEnabled,
     required this.borderMode,
+    required this.overlapMaskEnabled,
+    required this.overlapMaskColor,
     required this.partitionAllocation,
     required this.onTap,
     required this.onBadgeLongPressStart,
@@ -1236,6 +1255,8 @@ class _CenterBadgeVisual extends StatelessWidget {
   final Color ringTrackColor;
   final bool badgeDiscEnabled;
   final CenterBadgeBorderMode borderMode;
+  final bool overlapMaskEnabled;
+  final Color overlapMaskColor;
   final LimitAllocationData? partitionAllocation;
   final VoidCallback? onTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
@@ -1255,6 +1276,9 @@ class _CenterBadgeVisual extends StatelessWidget {
     final fillKey = active
         ? const ValueKey('backheader-center-budget-button')
         : ValueKey('backheader-center-preview-fill-$previewSlotName');
+    final maskKey = active
+        ? const ValueKey('backheader-center-overlap-mask')
+        : ValueKey('backheader-center-preview-overlap-mask-$previewSlotName');
     final showProgressTrack =
         hasLimit || borderMode == CenterBadgeBorderMode.always;
     final iconColor = coloredDesign
@@ -1273,6 +1297,18 @@ class _CenterBadgeVisual extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
+          if (coloredDesign && overlapMaskEnabled)
+            SizedBox(
+              width: size,
+              height: size,
+              child: DecoratedBox(
+                key: maskKey,
+                decoration: BoxDecoration(
+                  color: overlapMaskColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
           if (partitionAllocation != null)
             SizedBox(
               width: partitionSize,

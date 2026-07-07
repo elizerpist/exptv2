@@ -18,6 +18,7 @@ void main() {
     expect(roundTrip.centerBackheaderDesign, BackheaderCenterDesign.colored);
     expect(roundTrip.centerBadgeDiscEnabled, isFalse);
     expect(roundTrip.centerBadgeBorderMode, CenterBadgeBorderMode.always);
+    expect(roundTrip.centerBadgeOverlapMaskEnabled, isFalse);
     expect(roundTrip.centerBadgeWhiteDiscOpacities, [18, 13, 10, 9, 8]);
     expect(roundTrip.centerBadgeWhiteIconOpacities, [100, 72, 58, 48, 42]);
     expect(roundTrip.centerBadgeWhiteProgressOpacities, [100, 72, 58, 48, 42]);
@@ -59,8 +60,15 @@ void main() {
       AppThemeSettings.fromMap(const <dynamic, dynamic>{
         'centerBadgeDiscEnabled': false,
         'centerBadgeBorderMode': 'always',
+        'centerBadgeOverlapMaskEnabled': true,
       }).toMap(),
       containsPair('centerBadgeBorderMode', 'always'),
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerBadgeOverlapMaskEnabled': true,
+      }).centerBadgeOverlapMaskEnabled,
+      isTrue,
     );
     expect(
       AppThemeSettings.fromMap(const <dynamic, dynamic>{
@@ -361,5 +369,34 @@ void main() {
     await tester.pump();
 
     expect(updated?.centerBadgeColoredBackgroundOpacity, 64);
+  });
+
+  testWidgets('backheader style panel toggles overlap masking', (tester) async {
+    AppThemeSettings? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackheaderStyleOptionsPanel(
+            settings: AppThemeSettings.defaults().copyWith(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              centerBackheaderDesign: BackheaderCenterDesign.colored,
+            ),
+            onChanged: (next) => updated = next,
+          ),
+        ),
+      ),
+    );
+
+    final toggle = find.byKey(
+      const ValueKey('center-badge-overlap-mask-toggle'),
+    );
+    expect(toggle, findsOneWidget);
+
+    await tester.ensureVisible(toggle);
+    await tester.pump();
+    await tester.tap(toggle);
+    await tester.pump();
+
+    expect(updated?.centerBadgeOverlapMaskEnabled, isTrue);
   });
 }
