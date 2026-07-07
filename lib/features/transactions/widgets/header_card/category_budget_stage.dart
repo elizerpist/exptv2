@@ -39,6 +39,12 @@ class CategoryBudgetStage extends StatefulWidget {
     this.centerPartitionRingEnabled = false,
     this.centerBadgeDiscEnabled = true,
     this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
+    this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
+    this.centerBadgeWhiteProgressOpacities =
+        kCenterBadgeWhiteProgressOpacityDefaults,
+    this.centerBadgeColoredBackgroundOpacity =
+        kCenterBadgeColoredBackgroundOpacityDefault,
     this.backgroundColor = AppColors.gray100,
     this.activeKey,
     this.onActiveItemChanged,
@@ -62,6 +68,10 @@ class CategoryBudgetStage extends StatefulWidget {
   final bool centerPartitionRingEnabled;
   final bool centerBadgeDiscEnabled;
   final CenterBadgeBorderMode centerBadgeBorderMode;
+  final List<int> centerBadgeWhiteDiscOpacities;
+  final List<int> centerBadgeWhiteIconOpacities;
+  final List<int> centerBadgeWhiteProgressOpacities;
+  final int centerBadgeColoredBackgroundOpacity;
   final Color backgroundColor;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
@@ -402,6 +412,12 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         centerPartitionRingEnabled: widget.centerPartitionRingEnabled,
         centerBadgeDiscEnabled: widget.centerBadgeDiscEnabled,
         centerBadgeBorderMode: widget.centerBadgeBorderMode,
+        centerBadgeWhiteDiscOpacities: widget.centerBadgeWhiteDiscOpacities,
+        centerBadgeWhiteIconOpacities: widget.centerBadgeWhiteIconOpacities,
+        centerBadgeWhiteProgressOpacities:
+            widget.centerBadgeWhiteProgressOpacities,
+        centerBadgeColoredBackgroundOpacity:
+            widget.centerBadgeColoredBackgroundOpacity,
         centerPartitionAllocation: centerPartitionAllocation,
         centerDragOffset: isCenterBadgeBudget ? _dragDx : 0,
         orbitPartitionBar: isOrbitBudget

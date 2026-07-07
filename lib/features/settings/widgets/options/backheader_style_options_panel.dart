@@ -92,6 +92,11 @@ class BackheaderStyleOptionsPanel extends StatelessWidget {
                   settings.copyWith(centerPartitionRingEnabled: enabled),
                 ),
               ),
+              const SizedBox(height: 12),
+              _CenterBadgeOpacityControls(
+                settings: settings,
+                onChanged: onChanged,
+              ),
             ],
           ],
         ),
@@ -114,6 +119,229 @@ String _centerBadgeBorderModeDescription(CenterBadgeBorderMode mode) {
     CenterBadgeBorderMode.always =>
       'Összehasonlításhoz a nem limites badgek is megtartják a tracket.',
   };
+}
+
+class _CenterBadgeOpacityControls extends StatelessWidget {
+  const _CenterBadgeOpacityControls({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  final AppThemeSettings settings;
+  final ValueChanged<AppThemeSettings> onChanged;
+
+  static const _distanceLabels = [
+    'Közép',
+    'Mellette',
+    'Következő',
+    'Távoli',
+    'Szél',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Fehér opacity finomhangolás',
+            style: TextStyle(
+              color: Color(0xFF1F2937),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Csak a színes Center Badge fehér rétegeire vonatkozik.',
+            style: TextStyle(color: Color(0xFF4B5563), fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          _buildGroup(
+            title: 'Korong',
+            keyPrefix: 'disc',
+            values: settings.centerBadgeWhiteDiscOpacities,
+            onValueChanged: (index, value) => onChanged(
+              settings.copyWith(
+                centerBadgeWhiteDiscOpacities: _replaceAt(
+                  settings.centerBadgeWhiteDiscOpacities,
+                  index,
+                  value,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildGroup(
+            title: 'Ikon',
+            keyPrefix: 'icon',
+            values: settings.centerBadgeWhiteIconOpacities,
+            onValueChanged: (index, value) => onChanged(
+              settings.copyWith(
+                centerBadgeWhiteIconOpacities: _replaceAt(
+                  settings.centerBadgeWhiteIconOpacities,
+                  index,
+                  value,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildGroup(
+            title: 'Progress circle',
+            keyPrefix: 'progress',
+            values: settings.centerBadgeWhiteProgressOpacities,
+            onValueChanged: (index, value) => onChanged(
+              settings.copyWith(
+                centerBadgeWhiteProgressOpacities: _replaceAt(
+                  settings.centerBadgeWhiteProgressOpacities,
+                  index,
+                  value,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _CenterBadgeOpacityRow(
+            label: 'Háttér opacity',
+            sliderKey: const ValueKey('center-badge-opacity-background-slider'),
+            inputKey: const ValueKey('center-badge-opacity-background-input'),
+            value: settings.centerBadgeColoredBackgroundOpacity,
+            onChanged: (value) => onChanged(
+              settings.copyWith(centerBadgeColoredBackgroundOpacity: value),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroup({
+    required String title,
+    required String keyPrefix,
+    required List<int> values,
+    required void Function(int index, int value) onValueChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF374151),
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        for (var index = 0; index < _distanceLabels.length; index += 1)
+          _CenterBadgeOpacityRow(
+            label: _distanceLabels[index],
+            sliderKey: ValueKey(
+              'center-badge-opacity-$keyPrefix-$index-slider',
+            ),
+            inputKey: ValueKey('center-badge-opacity-$keyPrefix-$index-input'),
+            value: values[index],
+            onChanged: (value) => onValueChanged(index, value),
+          ),
+      ],
+    );
+  }
+
+  List<int> _replaceAt(List<int> values, int index, int value) {
+    final next = List<int>.of(values);
+    next[index] = _clampPercent(value);
+    return next;
+  }
+}
+
+int _clampPercent(int value) => value.clamp(0, 100).toInt();
+
+class _CenterBadgeOpacityRow extends StatelessWidget {
+  const _CenterBadgeOpacityRow({
+    required this.label,
+    required this.sliderKey,
+    required this.inputKey,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final Key sliderKey;
+  final Key inputKey;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: Slider(
+              key: sliderKey,
+              min: 0,
+              max: 100,
+              divisions: 100,
+              value: value.toDouble().clamp(0, 100).toDouble(),
+              onChanged: (next) => onChanged(_clampPercent(next.round())),
+            ),
+          ),
+          Container(
+            width: 58,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: TextFormField(
+              key: inputKey,
+              initialValue: '$value',
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              style: const TextStyle(
+                color: Color(0xFF1F2937),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 7,
+                ),
+              ),
+              onFieldSubmitted: _submit,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submit(String raw) {
+    final parsed = int.tryParse(raw.trim());
+    if (parsed == null) return;
+    onChanged(_clampPercent(parsed));
+  }
 }
 
 class _CenterBadgeDiscToggle extends StatelessWidget {

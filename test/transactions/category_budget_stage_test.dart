@@ -18,6 +18,7 @@ import 'package:exptv2/features/transactions/widgets/header_card/category_limit_
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_slider.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
+import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -887,11 +888,11 @@ void main() {
     );
     expect(
       activeFillRect.left - previousInnerFillRect.right,
-      moreOrLessEquals(11, epsilon: 0.8),
+      moreOrLessEquals(9, epsilon: 0.8),
     );
     expect(
       nextInnerFillRect.left - activeFillRect.right,
-      moreOrLessEquals(11, epsilon: 0.8),
+      moreOrLessEquals(9, epsilon: 0.8),
     );
     expect(
       tester
@@ -1989,6 +1990,121 @@ void main() {
         ..arc(color: AppColors.white),
     );
   });
+
+  testWidgets(
+    'centerBadgeBudget colored design uses custom white layer opacities',
+    (tester) async {
+      const backgroundColor = Color(0xffeef3f7);
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.colored,
+                centerBadgeWhiteDiscOpacities: const [25, 20, 15, 10, 5],
+                centerBadgeWhiteIconOpacities: const [88, 77, 66, 55, 44],
+                centerBadgeWhiteProgressOpacities: const [55, 45, 35, 25, 15],
+                centerBadgeColoredBackgroundOpacity: 64,
+                backgroundColor: backgroundColor,
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final surface = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      expect(
+        (surface.decoration as BoxDecoration).color,
+        Color.alphaBlend(food.color.withValues(alpha: 0.64), backgroundColor),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect(
+        (button.decoration as BoxDecoration).color,
+        AppColors.white.withValues(alpha: 0.25),
+      );
+
+      final icon = tester.widget<CategorySlotIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('backheader-center-budget-button')),
+          matching: find.byType(CategorySlotIcon),
+        ),
+      );
+      expect(icon.color, AppColors.white.withValues(alpha: 0.88));
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints
+          ..arc(color: AppColors.white.withValues(alpha: 0.34 * 0.55))
+          ..arc(color: AppColors.white.withValues(alpha: 0.55)),
+      );
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget neutral design ignores white opacity controls',
+    (tester) async {
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.neutral,
+                centerBadgeWhiteDiscOpacities: const [5, 5, 5, 5, 5],
+                centerBadgeWhiteIconOpacities: const [5, 5, 5, 5, 5],
+                centerBadgeWhiteProgressOpacities: const [5, 5, 5, 5, 5],
+                centerBadgeColoredBackgroundOpacity: 5,
+                backgroundColor: const Color(0xffeef3f7),
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final surface = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      expect(
+        (surface.decoration as BoxDecoration).color,
+        const Color(0xffeef3f7),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect((button.decoration as BoxDecoration).color, food.color);
+
+      final icon = tester.widget<CategorySlotIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('backheader-center-budget-button')),
+          matching: find.byType(CategorySlotIcon),
+        ),
+      );
+      expect(icon.color, AppColors.white);
+    },
+  );
 
   testWidgets(
     'centerBadgeBudget can hide colored white badge disc independently',

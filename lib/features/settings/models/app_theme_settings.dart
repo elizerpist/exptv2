@@ -104,6 +104,11 @@ enum CenterBadgeBorderMode {
   }
 }
 
+const kCenterBadgeWhiteDiscOpacityDefaults = <int>[18, 13, 10, 9, 8];
+const kCenterBadgeWhiteIconOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeWhiteProgressOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredBackgroundOpacityDefault = 72;
+
 enum AppCardColor {
   white('white'),
   lightgray('lightgray'),
@@ -379,6 +384,12 @@ class AppThemeSettings {
     this.centerPartitionRingEnabled = false,
     this.centerBadgeDiscEnabled = true,
     this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
+    this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
+    this.centerBadgeWhiteProgressOpacities =
+        kCenterBadgeWhiteProgressOpacityDefaults,
+    this.centerBadgeColoredBackgroundOpacity =
+        kCenterBadgeColoredBackgroundOpacityDefault,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
@@ -407,6 +418,12 @@ class AppThemeSettings {
       centerPartitionRingEnabled: false,
       centerBadgeDiscEnabled: true,
       centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
+      centerBadgeWhiteDiscOpacities: kCenterBadgeWhiteDiscOpacityDefaults,
+      centerBadgeWhiteIconOpacities: kCenterBadgeWhiteIconOpacityDefaults,
+      centerBadgeWhiteProgressOpacities:
+          kCenterBadgeWhiteProgressOpacityDefaults,
+      centerBadgeColoredBackgroundOpacity:
+          kCenterBadgeColoredBackgroundOpacityDefault,
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
       categoryCardShadowEnabled: true,
@@ -475,6 +492,22 @@ class AppThemeSettings {
       centerBadgeBorderMode: CenterBadgeBorderMode.fromAny(
         map['centerBadgeBorderMode'],
       ),
+      centerBadgeWhiteDiscOpacities: _opacityList(
+        map['centerBadgeWhiteDiscOpacities'],
+        kCenterBadgeWhiteDiscOpacityDefaults,
+      ),
+      centerBadgeWhiteIconOpacities: _opacityList(
+        map['centerBadgeWhiteIconOpacities'],
+        kCenterBadgeWhiteIconOpacityDefaults,
+      ),
+      centerBadgeWhiteProgressOpacities: _opacityList(
+        map['centerBadgeWhiteProgressOpacities'],
+        kCenterBadgeWhiteProgressOpacityDefaults,
+      ),
+      centerBadgeColoredBackgroundOpacity: _opacityPercent(
+        map['centerBadgeColoredBackgroundOpacity'],
+        kCenterBadgeColoredBackgroundOpacityDefault,
+      ),
       appColor: _appColorFromMap(map),
       categoryMenuPresentation: CategoryMenuPresentation.fromAny(
         map['categoryMenuPresentation'],
@@ -505,6 +538,10 @@ class AppThemeSettings {
   final bool centerPartitionRingEnabled;
   final bool centerBadgeDiscEnabled;
   final CenterBadgeBorderMode centerBadgeBorderMode;
+  final List<int> centerBadgeWhiteDiscOpacities;
+  final List<int> centerBadgeWhiteIconOpacities;
+  final List<int> centerBadgeWhiteProgressOpacities;
+  final int centerBadgeColoredBackgroundOpacity;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
   final bool categoryCardShadowEnabled;
@@ -543,6 +580,11 @@ class AppThemeSettings {
       'centerPartitionRingEnabled': centerPartitionRingEnabled,
       'centerBadgeDiscEnabled': centerBadgeDiscEnabled,
       'centerBadgeBorderMode': centerBadgeBorderMode.nativeValue,
+      'centerBadgeWhiteDiscOpacities': centerBadgeWhiteDiscOpacities,
+      'centerBadgeWhiteIconOpacities': centerBadgeWhiteIconOpacities,
+      'centerBadgeWhiteProgressOpacities': centerBadgeWhiteProgressOpacities,
+      'centerBadgeColoredBackgroundOpacity':
+          centerBadgeColoredBackgroundOpacity,
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
@@ -572,6 +614,10 @@ class AppThemeSettings {
     bool? centerPartitionRingEnabled,
     bool? centerBadgeDiscEnabled,
     CenterBadgeBorderMode? centerBadgeBorderMode,
+    List<int>? centerBadgeWhiteDiscOpacities,
+    List<int>? centerBadgeWhiteIconOpacities,
+    List<int>? centerBadgeWhiteProgressOpacities,
+    int? centerBadgeColoredBackgroundOpacity,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
     bool? categoryCardShadowEnabled,
@@ -606,6 +652,16 @@ class AppThemeSettings {
           centerBadgeDiscEnabled ?? this.centerBadgeDiscEnabled,
       centerBadgeBorderMode:
           centerBadgeBorderMode ?? this.centerBadgeBorderMode,
+      centerBadgeWhiteDiscOpacities:
+          centerBadgeWhiteDiscOpacities ?? this.centerBadgeWhiteDiscOpacities,
+      centerBadgeWhiteIconOpacities:
+          centerBadgeWhiteIconOpacities ?? this.centerBadgeWhiteIconOpacities,
+      centerBadgeWhiteProgressOpacities:
+          centerBadgeWhiteProgressOpacities ??
+          this.centerBadgeWhiteProgressOpacities,
+      centerBadgeColoredBackgroundOpacity:
+          centerBadgeColoredBackgroundOpacity ??
+          this.centerBadgeColoredBackgroundOpacity,
       appColor: appColor ?? this.appColor,
       categoryMenuPresentation:
           categoryMenuPresentation ?? this.categoryMenuPresentation,
@@ -650,5 +706,24 @@ class AppThemeSettings {
       return normalized == '1' || normalized == 'true';
     }
     return fallback;
+  }
+
+  static List<int> _opacityList(Object? value, List<int> fallback) {
+    final source = value is Iterable ? value.toList(growable: false) : null;
+    return List<int>.generate(fallback.length, (index) {
+      if (source == null || index >= source.length) return fallback[index];
+      return _opacityPercent(source[index], fallback[index]);
+    }, growable: false);
+  }
+
+  static int _opacityPercent(Object? value, int fallback) {
+    num? parsed;
+    if (value is num) {
+      parsed = value;
+    } else if (value is String) {
+      parsed = num.tryParse(value.trim());
+    }
+    if (parsed == null) return fallback;
+    return parsed.round().clamp(0, 100).toInt();
   }
 }

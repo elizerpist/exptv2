@@ -18,6 +18,10 @@ void main() {
     expect(roundTrip.centerBackheaderDesign, BackheaderCenterDesign.colored);
     expect(roundTrip.centerBadgeDiscEnabled, isFalse);
     expect(roundTrip.centerBadgeBorderMode, CenterBadgeBorderMode.always);
+    expect(roundTrip.centerBadgeWhiteDiscOpacities, [18, 13, 10, 9, 8]);
+    expect(roundTrip.centerBadgeWhiteIconOpacities, [100, 72, 58, 48, 42]);
+    expect(roundTrip.centerBadgeWhiteProgressOpacities, [100, 72, 58, 48, 42]);
+    expect(roundTrip.centerBadgeColoredBackgroundOpacity, 72);
     expect(
       AppThemeSettings.fromMap(
         const <dynamic, dynamic>{},
@@ -57,6 +61,28 @@ void main() {
         'centerBadgeBorderMode': 'always',
       }).toMap(),
       containsPair('centerBadgeBorderMode', 'always'),
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerBadgeWhiteDiscOpacities': [20, 30, 40, 50, 60],
+        'centerBadgeWhiteIconOpacities': [100, 90, 80, 70, 60],
+        'centerBadgeWhiteProgressOpacities': [55, 45, 35, 25, 15],
+        'centerBadgeColoredBackgroundOpacity': 64,
+      }).toMap(),
+      containsPair('centerBadgeWhiteDiscOpacities', [20, 30, 40, 50, 60]),
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerBadgeWhiteDiscOpacities': [120, -5, '42', 99.6, null],
+        'centerBadgeColoredBackgroundOpacity': 140,
+      }).centerBadgeWhiteDiscOpacities,
+      [100, 0, 42, 100, 8],
+    );
+    expect(
+      AppThemeSettings.fromMap(const <dynamic, dynamic>{
+        'centerBadgeColoredBackgroundOpacity': -12,
+      }).centerBadgeColoredBackgroundOpacity,
+      0,
     );
     expect(
       AppThemeSettings.fromMap(
@@ -268,5 +294,72 @@ void main() {
     await tester.pump();
 
     expect(updated?.centerBadgeBorderMode, CenterBadgeBorderMode.always);
+  });
+
+  testWidgets('backheader style panel exposes center badge opacity controls', (
+    tester,
+  ) async {
+    AppThemeSettings? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BackheaderStyleOptionsPanel(
+            settings: AppThemeSettings.defaults().copyWith(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              centerBackheaderDesign: BackheaderCenterDesign.colored,
+            ),
+            onChanged: (next) => updated = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Fehér opacity finomhangolás'), findsOneWidget);
+    for (final layer in ['disc', 'icon', 'progress']) {
+      for (var index = 0; index < 5; index += 1) {
+        expect(
+          find.byKey(ValueKey('center-badge-opacity-$layer-$index-slider')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ValueKey('center-badge-opacity-$layer-$index-input')),
+          findsOneWidget,
+        );
+      }
+    }
+    expect(
+      find.byKey(const ValueKey('center-badge-opacity-background-slider')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('center-badge-opacity-background-input')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('center-badge-opacity-icon-1-input')),
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('center-badge-opacity-icon-1-input')),
+      '37',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(updated?.centerBadgeWhiteIconOpacities, [100, 37, 58, 48, 42]);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('center-badge-opacity-background-input')),
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('center-badge-opacity-background-input')),
+      '64',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(updated?.centerBadgeColoredBackgroundOpacity, 64);
   });
 }

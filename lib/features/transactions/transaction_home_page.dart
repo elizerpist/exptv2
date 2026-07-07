@@ -342,6 +342,15 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         expenseTheme.settings.centerBadgeDiscEnabled,
                     centerBadgeBorderMode:
                         expenseTheme.settings.centerBadgeBorderMode,
+                    centerBadgeWhiteDiscOpacities:
+                        expenseTheme.settings.centerBadgeWhiteDiscOpacities,
+                    centerBadgeWhiteIconOpacities:
+                        expenseTheme.settings.centerBadgeWhiteIconOpacities,
+                    centerBadgeWhiteProgressOpacities:
+                        expenseTheme.settings.centerBadgeWhiteProgressOpacities,
+                    centerBadgeColoredBackgroundOpacity: expenseTheme
+                        .settings
+                        .centerBadgeColoredBackgroundOpacity,
                     backgroundColor: expenseTheme.appBackground,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,

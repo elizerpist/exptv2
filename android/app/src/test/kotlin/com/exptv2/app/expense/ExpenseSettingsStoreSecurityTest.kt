@@ -132,6 +132,31 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
+    fun themeSettingsPersistCenterBadgeOpacityControls() {
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "backheaderStyle" to "centerBadgeBudget",
+                "centerBackheaderDesign" to "colored",
+                "centerBadgeWhiteDiscOpacities" to listOf(20, 30, 40, 50, 60),
+                "centerBadgeWhiteIconOpacities" to listOf(100, 90, 80, 70, 60),
+                "centerBadgeWhiteProgressOpacities" to listOf(55, 45, 35, 25, 15),
+                "centerBadgeColoredBackgroundOpacity" to 64,
+            )
+        )
+
+        assertEquals(listOf(20, 30, 40, 50, 60), updated["centerBadgeWhiteDiscOpacities"])
+        assertEquals(listOf(100, 90, 80, 70, 60), updated["centerBadgeWhiteIconOpacities"])
+        assertEquals(listOf(55, 45, 35, 25, 15), updated["centerBadgeWhiteProgressOpacities"])
+        assertEquals(64, updated["centerBadgeColoredBackgroundOpacity"])
+
+        val loaded = store.loadThemeSettings()
+        assertEquals(listOf(20, 30, 40, 50, 60), loaded["centerBadgeWhiteDiscOpacities"])
+        assertEquals(listOf(100, 90, 80, 70, 60), loaded["centerBadgeWhiteIconOpacities"])
+        assertEquals(listOf(55, 45, 35, 25, 15), loaded["centerBadgeWhiteProgressOpacities"])
+        assertEquals(64, loaded["centerBadgeColoredBackgroundOpacity"])
+    }
+
+    @Test
     fun themeSettingsPersistGhostLogboxControls() {
         val updated = store.updateThemeSettings(
             mapOf(

@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlin.math.roundToInt
 
 class ExpenseSettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
@@ -64,6 +65,22 @@ class ExpenseSettingsStore(context: Context) {
             "centerBadgeBorderMode" to prefs.getString(
                 KEY_CENTER_BADGE_BORDER_MODE,
                 "limitOnly",
+            ),
+            "centerBadgeWhiteDiscOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_WHITE_DISC_OPACITIES,
+                DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES,
+            ),
+            "centerBadgeWhiteIconOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_WHITE_ICON_OPACITIES,
+                DEFAULT_CENTER_BADGE_WHITE_ICON_OPACITIES,
+            ),
+            "centerBadgeWhiteProgressOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+                DEFAULT_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+            ),
+            "centerBadgeColoredBackgroundOpacity" to prefs.getInt(
+                KEY_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
+                DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
             ),
             "designProfile" to (
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
@@ -148,6 +165,40 @@ class ExpenseSettingsStore(context: Context) {
                 KEY_CENTER_BADGE_BORDER_MODE,
                 args["centerBadgeBorderMode"]?.toString()?.takeIf { it.isNotBlank() }
                     ?: "limitOnly"
+            )
+            .putString(
+                KEY_CENTER_BADGE_WHITE_DISC_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeWhiteDiscOpacities"],
+                        DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_WHITE_ICON_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeWhiteIconOpacities"],
+                        DEFAULT_CENTER_BADGE_WHITE_ICON_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeWhiteProgressOpacities"],
+                        DEFAULT_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putInt(
+                KEY_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
+                opacityArg(
+                    args["centerBadgeColoredBackgroundOpacity"],
+                    DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
+                ),
             )
             .remove(KEY_DESIGN_PROFILE)
             .putString(
@@ -287,6 +338,33 @@ class ExpenseSettingsStore(context: Context) {
         else -> default
     }
 
+    private fun loadOpacityList(key: String, default: List<Int>): List<Int> {
+        val raw = prefs.getString(key, null) ?: return default
+        val values = runCatching { jsonArrayToList(JSONArray(raw)) }.getOrNull()
+            ?: return default
+        return opacityListArg(values, default)
+    }
+
+    private fun opacityListArg(value: Any?, default: List<Int>): List<Int> {
+        val values = when (value) {
+            is List<*> -> value
+            is JSONArray -> jsonArrayToList(value)
+            else -> null
+        }
+        return default.mapIndexed { index, fallback ->
+            opacityArg(values?.getOrNull(index), fallback)
+        }
+    }
+
+    private fun opacityArg(value: Any?, default: Int): Int {
+        val parsed = when (value) {
+            is Number -> value.toDouble()
+            is String -> value.trim().toDoubleOrNull()
+            else -> null
+        } ?: return default
+        return parsed.roundToInt().coerceIn(0, 100)
+    }
+
     private fun jsonObjectToMap(json: JSONObject): Map<String, Any?> {
         return json.keys().asSequence().associateWith { key -> jsonValue(json.get(key)) }
     }
@@ -392,6 +470,10 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_CENTER_PARTITION_RING_ENABLED = "centerPartitionRingEnabled"
         private const val KEY_CENTER_BADGE_DISC_ENABLED = "centerBadgeDiscEnabled"
         private const val KEY_CENTER_BADGE_BORDER_MODE = "centerBadgeBorderMode"
+        private const val KEY_CENTER_BADGE_WHITE_DISC_OPACITIES = "centerBadgeWhiteDiscOpacities"
+        private const val KEY_CENTER_BADGE_WHITE_ICON_OPACITIES = "centerBadgeWhiteIconOpacities"
+        private const val KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES = "centerBadgeWhiteProgressOpacities"
+        private const val KEY_CENTER_BADGE_COLORED_BACKGROUND_OPACITY = "centerBadgeColoredBackgroundOpacity"
         private const val KEY_DESIGN_PROFILE = "designProfile"
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"
@@ -404,5 +486,9 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_SECURITY_PIN_SALT = "securityPinSalt"
         private const val KEY_SECURITY_PIN_HASH = "securityPinHash"
         private const val KEY_SECURITY_BIOMETRIC_ENABLED = "securityBiometricEnabled"
+        private val DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES = listOf(18, 13, 10, 9, 8)
+        private val DEFAULT_CENTER_BADGE_WHITE_ICON_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private val DEFAULT_CENTER_BADGE_WHITE_PROGRESS_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private const val DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY = 72
     }
 }
