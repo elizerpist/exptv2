@@ -136,6 +136,7 @@ void main() {
             categories: [
               category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
               category(id: 2, name: 'Ruha', type: TransactionType.expense),
+              category(id: 4, name: 'Bolt', type: TransactionType.expense),
               category(id: 3, name: 'Fizetés', type: TransactionType.income),
             ],
             selectedCategoryIds: const {},
@@ -147,8 +148,11 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('stats-scope-sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-scope-all')), findsOneWidget);
+    expect(find.text('Minden kategória'), findsOneWidget);
     expect(find.text('Gyorskaja'), findsOneWidget);
     expect(find.text('Ruha'), findsOneWidget);
+    expect(find.text('Bolt'), findsOneWidget);
     expect(find.text('Fizetés'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('stats-scope-category-1')));
@@ -158,6 +162,35 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('stats-scope-apply')));
     expect(applied, {1, 2});
+  });
+
+  testWidgets('stats scope sheet normalizes all selected categories to ALL', (
+    tester,
+  ) async {
+    Set<int>? applied;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatsCategoryScopeSheet(
+            activeType: TransactionType.expense,
+            categories: [
+              category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+              category(id: 2, name: 'Ruha', type: TransactionType.expense),
+            ],
+            selectedCategoryIds: const {},
+            accentColor: const Color(0xFF06B6D4),
+            onApply: (ids) => applied = ids,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('stats-scope-category-1')));
+    await tester.tap(find.byKey(const ValueKey('stats-scope-category-2')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('stats-scope-apply')));
+
+    expect(applied, isEmpty);
   });
 
   testWidgets('stats page renders the redesigned annual main menu', (

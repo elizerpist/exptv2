@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../data/stats_scope_model.dart';
 import '../../transactions/models/transaction_category.dart';
 import '../../transactions/widgets/category_menu/category_icon_badge.dart';
 
@@ -39,6 +40,13 @@ class _StatsCategoryScopeSheetState extends State<StatsCategoryScopeSheet> {
     final categories = widget.categories
         .where((category) => category.normalizedType == widget.activeType)
         .toList();
+    final availableIds = categories
+        .map((category) => category.transactionCategoryID)
+        .toSet();
+    final normalizedSelection = StatsScopeSelection.normalize(
+      selectedCategoryIds: _selected,
+      availableCategoryIds: availableIds,
+    );
     return Material(
       key: const ValueKey('stats-scope-sheet'),
       color: AppColors.gray100,
@@ -79,12 +87,21 @@ class _StatsCategoryScopeSheetState extends State<StatsCategoryScopeSheet> {
                 crossAxisSpacing: 14,
                 mainAxisExtent: 150,
               ),
-              itemCount: categories.length,
+              itemCount: categories.length + 1,
               itemBuilder: (context, index) {
-                final category = categories[index];
+                if (index == 0) {
+                  return _StatsScopeAllCard(
+                    active: normalizedSelection.isAll,
+                    accentColor: widget.accentColor,
+                    onTap: _selectAll,
+                  );
+                }
+                final category = categories[index - 1];
                 return _StatsScopeCategoryCard(
                   category: category,
-                  active: _selected.contains(category.transactionCategoryID),
+                  active:
+                      !normalizedSelection.isAll &&
+                      _selected.contains(category.transactionCategoryID),
                   accentColor: widget.accentColor,
                   onTap: () => _toggle(category.transactionCategoryID),
                 );
@@ -96,7 +113,12 @@ class _StatsCategoryScopeSheetState extends State<StatsCategoryScopeSheet> {
             child: GestureDetector(
               key: const ValueKey('stats-scope-apply'),
               behavior: HitTestBehavior.opaque,
-              onTap: () => widget.onApply(Set.unmodifiable(_selected)),
+              onTap: () => widget.onApply(
+                StatsScopeSelection.normalize(
+                  selectedCategoryIds: _selected,
+                  availableCategoryIds: availableIds,
+                ).selectedCategoryIds,
+              ),
               child: Container(
                 height: 50,
                 decoration: BoxDecoration(
@@ -112,7 +134,7 @@ class _StatsCategoryScopeSheetState extends State<StatsCategoryScopeSheet> {
                 ),
                 alignment: Alignment.center,
                 child: const Text(
-                  'Szűrő beállítása',
+                  'Szűrőbeállítás',
                   style: TextStyle(
                     color: AppColors.white,
                     fontSize: 16,
@@ -131,6 +153,87 @@ class _StatsCategoryScopeSheetState extends State<StatsCategoryScopeSheet> {
     setState(() {
       if (!_selected.add(id)) _selected.remove(id);
     });
+  }
+
+  void _selectAll() {
+    setState(_selected.clear);
+  }
+}
+
+class _StatsScopeAllCard extends StatelessWidget {
+  const _StatsScopeAllCard({
+    required this.active,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  final bool active;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const ValueKey('stats-scope-all'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: active ? accentColor.withValues(alpha: 0.12) : AppColors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: active ? accentColor : AppColors.gray200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              offset: const Offset(0, 2),
+              blurRadius: 4,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 15, 12, 18),
+        child: Column(
+          children: [
+            Container(
+              width: 65,
+              height: 65,
+              decoration: BoxDecoration(
+                color: accentColor,
+                borderRadius: BorderRadius.circular(32.5),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'ALL',
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const Spacer(),
+            const Text(
+              'Minden kategória',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gray800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              active ? 'scope aktív' : 'egyedi szűrő',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: AppColors.gray500),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
