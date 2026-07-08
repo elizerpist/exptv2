@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../transactions/models/transaction_category.dart';
 import '../data/stats_year_data.dart';
 
 class StatsCategoryScopeSeries {
@@ -11,6 +12,12 @@ class StatsCategoryScopeSeries {
     required this.macd,
     required this.monthlyBars,
     required this.latestImpactLabel,
+    required this.controlBars,
+    required this.secondaryLine,
+    required this.monthLabels,
+    required this.secondaryMetricLabel,
+    required this.secondaryReferenceAmount,
+    required this.dynamicEmaPeriod,
   });
 
   final List<StatsSeriesPoint> occurrence;
@@ -20,6 +27,12 @@ class StatsCategoryScopeSeries {
   final List<StatsMacdBar> macd;
   final List<StatsMonthlyScopeBar> monthlyBars;
   final String? latestImpactLabel;
+  final List<StatsControlBar> controlBars;
+  final List<StatsSeriesPoint> secondaryLine;
+  final List<String> monthLabels;
+  final String secondaryMetricLabel;
+  final double secondaryReferenceAmount;
+  final int dynamicEmaPeriod;
 
   static StatsCategoryScopeSeries fromYearData(StatsYearData data) {
     final dailyAmounts = <double>[];
@@ -33,8 +46,11 @@ class StatsCategoryScopeSeries {
       }
     }
     return _build(
+      activeType: data.activeType,
       threshold: data.thresholdValue,
       dailyScopeAmounts: dailyAmounts,
+      graphMonths: data.graphMonths,
+      monthLabels: _monthLabels(data.graphMonths),
       window: _trendWindowForDays(dailyAmounts.length),
       monthlyCategoryTotals: data.graphMonths
           .map((month) => month.scopeCategoryTotals)
@@ -50,10 +66,14 @@ class StatsCategoryScopeSeries {
     required double threshold,
     required List<double> dailyScopeAmounts,
     int window = 7,
+    TransactionType activeType = TransactionType.expense,
   }) {
     return _build(
+      activeType: activeType,
       threshold: threshold,
       dailyScopeAmounts: dailyScopeAmounts,
+      graphMonths: const <StatsMonthData>[],
+      monthLabels: const <String>[],
       window: window,
       monthlyCategoryTotals: const <Map<int, double>>[],
       monthlyThresholdHitDays: const <int>[],
@@ -84,6 +104,12 @@ class StatsCategoryScopeSeries {
       ),
       monthlyBars: const <StatsMonthlyScopeBar>[],
       latestImpactLabel: null,
+      controlBars: const <StatsControlBar>[],
+      secondaryLine: const <StatsSeriesPoint>[],
+      monthLabels: const <String>[],
+      secondaryMetricLabel: 'Ft/kiugras',
+      secondaryReferenceAmount: 0,
+      dynamicEmaPeriod: 0,
     );
   }
 
@@ -93,8 +119,14 @@ class StatsCategoryScopeSeries {
     required Map<int, String> categoryNames,
   }) {
     return _build(
+      activeType: TransactionType.expense,
       threshold: 1,
       dailyScopeAmounts: const <double>[],
+      graphMonths: const <StatsMonthData>[],
+      monthLabels: [
+        for (var i = 0; i < monthlyCategoryTotals.length; i += 1)
+          _monthAbbreviations[i % _monthAbbreviations.length],
+      ],
       window: 1,
       monthlyCategoryTotals: monthlyCategoryTotals,
       monthlyThresholdHitDays: monthlyThresholdHitDays,
@@ -124,8 +156,11 @@ class StatsCategoryScopeSeries {
   }
 
   static StatsCategoryScopeSeries _build({
+    required TransactionType activeType,
     required double threshold,
     required List<double> dailyScopeAmounts,
+    required List<StatsMonthData> graphMonths,
+    required List<String> monthLabels,
     required int window,
     required List<Map<int, double>> monthlyCategoryTotals,
     required List<int> monthlyThresholdHitDays,
@@ -154,6 +189,12 @@ class StatsCategoryScopeSeries {
       monthlyThresholdHitDays: monthlyThresholdHitDays,
       categoryNames: categoryNames,
     );
+    final controlData = activeType == TransactionType.income
+        ? _incomeControlData(graphMonths: graphMonths)
+        : _expenseControlData(
+            threshold: threshold,
+            dailyScopeAmounts: dailyScopeAmounts,
+          );
     return StatsCategoryScopeSeries(
       occurrence: [
         for (var i = 0; i < occurrenceValues.length; i += 1)
@@ -171,6 +212,128 @@ class StatsCategoryScopeSeries {
       macd: _macd(pressureValues),
       monthlyBars: monthlyBars,
       latestImpactLabel: _latestImpactLabel(monthlyBars),
+      controlBars: controlData.controlBars,
+      secondaryLine: controlData.secondaryLine,
+      monthLabels: monthLabels,
+      secondaryMetricLabel: controlData.secondaryMetricLabel,
+      secondaryReferenceAmount: controlData.secondaryReferenceAmount,
+      dynamicEmaPeriod: controlData.dynamicEmaPeriod,
+    );
+  }
+
+  static _StatsCategoryControlData _expenseControlData({
+    required double threshold,
+    required List<double> dailyScopeAmounts,
+  }) {
+    if (dailyScopeAmounts.isEmpty) {
+      return const _StatsCategoryControlData(
+        controlBars: <StatsControlBar>[],
+        secondaryLine: <StatsSeriesPoint>[],
+        secondaryMetricLabel: 'Ft/kiugras',
+        secondaryReferenceAmount: 0,
+        dynamicEmaPeriod: 0,
+      );
+    }
+    final thresholdEnabled = threshold > 0;
+    final activeScopeDays = dailyScopeAmounts
+        .where((amount) => amount > 0)
+        .length;
+    final emaPeriod = _dynamicEmaPeriod(activeScopeDays);
+    final frequencyRaw = <double>[];
+    final valueRaw = <double>[];
+    final impactRaw = <double>[];
+    for (final amount in dailyScopeAmounts) {
+      final active = amount > 0;
+      final hit = thresholdEnabled ? amount >= threshold && active : active;
+      frequencyRaw.add(hit ? 1 : 0);
+      valueRaw.add(active ? amount : 0);
+      impactRaw.add(hit ? amount : 0);
+    }
+    final frequencyAverage = _average(frequencyRaw);
+    final valueAverage = _average(valueRaw);
+    final impactAverage = _average(impactRaw);
+    final rawControl = <double>[
+      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
+        (50 *
+                (0.35 * _ratio(frequencyRaw[i], frequencyAverage) +
+                    0.35 * _ratio(valueRaw[i], valueAverage) +
+                    0.30 * _ratio(impactRaw[i], impactAverage)))
+            .clamp(0, 100)
+            .toDouble(),
+    ];
+    final smoothedControl = _ema(rawControl, emaPeriod);
+    final secondaryValues = _ema(impactRaw, emaPeriod);
+    final referenceValues = impactRaw.where((value) => value > 0);
+    return _StatsCategoryControlData(
+      controlBars: [
+        for (var i = 0; i < smoothedControl.length; i += 1)
+          StatsControlBar(
+            index: i,
+            value: smoothedControl[i],
+            colorHex: _controlColor(
+              activeType: TransactionType.expense,
+              value: smoothedControl[i],
+            ),
+          ),
+      ],
+      secondaryLine: [
+        for (var i = 0; i < secondaryValues.length; i += 1)
+          StatsSeriesPoint(index: i, value: secondaryValues[i]),
+      ],
+      secondaryMetricLabel: thresholdEnabled ? 'Ft/kiugras' : 'Ft/aktiv nap',
+      secondaryReferenceAmount: _average(referenceValues),
+      dynamicEmaPeriod: emaPeriod,
+    );
+  }
+
+  static _StatsCategoryControlData _incomeControlData({
+    required List<StatsMonthData> graphMonths,
+  }) {
+    if (graphMonths.isEmpty) {
+      return const _StatsCategoryControlData(
+        controlBars: <StatsControlBar>[],
+        secondaryLine: <StatsSeriesPoint>[],
+        secondaryMetricLabel: 'Ft/aktiv nap',
+        secondaryReferenceAmount: 0,
+        dynamicEmaPeriod: 0,
+      );
+    }
+    final monthlyTotals = [for (final month in graphMonths) month.scopeTotal];
+    final monthlyReference = _average(monthlyTotals);
+    final secondaryValues = <double>[];
+    var activeDayTotal = 0;
+    var incomeTotal = 0.0;
+    for (final month in graphMonths) {
+      final activeDays = month.days.where((day) => day.scopeAmount > 0).length;
+      activeDayTotal += activeDays;
+      incomeTotal += month.scopeTotal;
+      secondaryValues.add(activeDays > 0 ? month.scopeTotal / activeDays : 0);
+    }
+    return _StatsCategoryControlData(
+      controlBars: [
+        for (var i = 0; i < monthlyTotals.length; i += 1)
+          StatsControlBar(
+            index: i,
+            value: (50 * _ratio(monthlyTotals[i], monthlyReference))
+                .clamp(0, 100)
+                .toDouble(),
+            colorHex: _controlColor(
+              activeType: TransactionType.income,
+              value: (50 * _ratio(monthlyTotals[i], monthlyReference))
+                  .clamp(0, 100)
+                  .toDouble(),
+            ),
+          ),
+      ],
+      secondaryLine: [
+        for (var i = 0; i < secondaryValues.length; i += 1)
+          StatsSeriesPoint(index: i, value: secondaryValues[i]),
+      ],
+      secondaryMetricLabel: 'Ft/aktiv nap',
+      secondaryReferenceAmount: activeDayTotal > 0
+          ? incomeTotal / activeDayTotal
+          : 0,
+      dynamicEmaPeriod: 0,
     );
   }
 
@@ -360,6 +523,32 @@ class StatsCategoryScopeSeries {
     return count == 0 ? 0 : sum / count;
   }
 
+  static double _ratio(double value, double reference) {
+    if (reference <= 0) return 0;
+    return value / reference;
+  }
+
+  static int _dynamicEmaPeriod(int activeScopeDays) {
+    final period = (22 - 0.45 * activeScopeDays).round();
+    return period.clamp(7, 18);
+  }
+
+  static String _controlColor({
+    required TransactionType activeType,
+    required double value,
+  }) {
+    if ((value - 50).abs() < 0.05) return '#64748B';
+    final aboveBaseline = value > 50;
+    if (activeType == TransactionType.income) {
+      return aboveBaseline ? '#22C55E' : '#EF4444';
+    }
+    return aboveBaseline ? '#EF4444' : '#22C55E';
+  }
+
+  static List<String> _monthLabels(List<StatsMonthData> months) {
+    return [for (final month in months) _monthAbbreviations[month.month - 1]];
+  }
+
   static int _trendWindowForDays(int dayCount) {
     if (dayCount <= 45) return 7;
     if (dayCount <= 180) return 14;
@@ -367,6 +556,20 @@ class StatsCategoryScopeSeries {
   }
 
   static const _categoryPalette = ['#06B6D4', '#0EA5A4', '#F97316'];
+  static const _monthAbbreviations = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 }
 
 class StatsSeriesPoint {
@@ -374,6 +577,20 @@ class StatsSeriesPoint {
 
   final int index;
   final double value;
+}
+
+class StatsControlBar {
+  const StatsControlBar({
+    required this.index,
+    required this.value,
+    required this.colorHex,
+  });
+
+  final int index;
+  final double value;
+  final String colorHex;
+
+  double get deltaFromBaseline => value - 50;
 }
 
 class StatsRiskSegment {
@@ -436,4 +653,20 @@ class StatsCategoryStackSegment {
       colorHex: colorHex,
     );
   }
+}
+
+class _StatsCategoryControlData {
+  const _StatsCategoryControlData({
+    required this.controlBars,
+    required this.secondaryLine,
+    required this.secondaryMetricLabel,
+    required this.secondaryReferenceAmount,
+    required this.dynamicEmaPeriod,
+  });
+
+  final List<StatsControlBar> controlBars;
+  final List<StatsSeriesPoint> secondaryLine;
+  final String secondaryMetricLabel;
+  final double secondaryReferenceAmount;
+  final int dynamicEmaPeriod;
 }

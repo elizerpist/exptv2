@@ -188,6 +188,22 @@ void main() {
     }
   });
 
+  test('category scope FastInfo metadata exposes the approved two charts', () {
+    final spec = StatsFastInfoGraph.specForTesting(
+      StatsRenderMode.categoryScope,
+    );
+
+    expect(spec.charts, hasLength(2));
+    expect(spec.charts[0].title, '1. Kontroll histogram');
+    expect(spec.charts[0].yAxisLabel, '50 = atlag');
+    expect(spec.charts[0].xAxisLabel, 'honapok');
+    expect(spec.charts[0].legendLabels, ['romlik', 'javul', '50']);
+    expect(spec.charts[1].title, '2. Ft/kiugras');
+    expect(spec.charts[1].yAxisLabel, 'Ft');
+    expect(spec.charts[1].xAxisLabel, 'honapok');
+    expect(spec.charts[1].legendLabels, ['Ft/kiugras']);
+  });
+
   testWidgets('stats scope sheet toggles multiple active-type categories', (
     tester,
   ) async {

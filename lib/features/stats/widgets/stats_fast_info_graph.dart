@@ -23,6 +23,10 @@ class StatsFastInfoLayout {
   final Rect bottomChart;
 
   double get topTitleTop => topChart.top - _titleOffset;
+  Rect get categoryControlChart =>
+      Rect.fromLTWH(topChart.left, topChart.top, topChart.width, 118);
+  Rect get categorySecondaryChart =>
+      Rect.fromLTWH(bottomChart.left, 222, bottomChart.width, 80);
 
   static StatsFastInfoLayout resolve(Size size) {
     final width = (size.width - _chartLeft * 2)
@@ -46,49 +50,25 @@ class StatsFastInfoSpec {
       StatsRenderMode.categoryScope => const StatsFastInfoSpec(
         charts: [
           StatsFastInfoChartMetadata(
-            title: '1. Előfordulás vs értékindex',
-            yAxisLabel: '0-100 index',
-            xAxisLabel: 'aktív napok',
-            legendItems: [
-              StatsFastInfoLegendItem(
-                label: 'előfordulás',
-                color: Color(0xFFEF4444),
-              ),
-              StatsFastInfoLegendItem(
-                label: 'értékindex',
-                color: Color(0xFF0EA5A4),
-              ),
-              StatsFastInfoLegendItem(
-                label: 'jó trend',
-                color: Color(0xFF10B981),
-              ),
-              StatsFastInfoLegendItem(label: 'risk', color: Color(0xFFF97316)),
-            ],
-          ),
-          StatsFastInfoChartMetadata(
-            title: 'Alt: Behavior MACD',
-            yAxisLabel: 'MACD',
-            xAxisLabel: 'napok',
+            title: '1. Kontroll histogram',
+            yAxisLabel: '50 = atlag',
+            xAxisLabel: 'honapok',
             legendItems: [
               StatsFastInfoLegendItem(
                 label: 'romlik',
                 color: Color(0xFFEF4444),
               ),
               StatsFastInfoLegendItem(label: 'javul', color: Color(0xFF22C55E)),
-              StatsFastInfoLegendItem(label: '0', color: AppColors.gray500),
+              StatsFastInfoLegendItem(label: '50', color: AppColors.gray500),
             ],
           ),
           StatsFastInfoChartMetadata(
-            title: '2. Havi scope Ft + impact line',
-            yAxisLabel: 'Ft / kiugrás',
-            xAxisLabel: 'hónapok',
+            title: '2. Ft/kiugras',
+            yAxisLabel: 'Ft',
+            xAxisLabel: 'honapok',
             legendItems: [
-              StatsFastInfoLegendItem(label: 'Top 1', color: Color(0xFF06B6D4)),
-              StatsFastInfoLegendItem(label: 'Top 2', color: Color(0xFF0EA5A4)),
-              StatsFastInfoLegendItem(label: 'Top 3', color: Color(0xFFF97316)),
-              StatsFastInfoLegendItem(label: 'Egyéb', color: AppColors.gray300),
               StatsFastInfoLegendItem(
-                label: 'Ft/kiugrás',
+                label: 'Ft/kiugras',
                 color: Color(0xFFF97316),
               ),
             ],
@@ -193,6 +173,20 @@ class StatsFastInfoChartMetadata {
   final List<StatsFastInfoLegendItem> legendItems;
 
   List<String> get legendLabels => [for (final item in legendItems) item.label];
+
+  StatsFastInfoChartMetadata copyWith({
+    String? title,
+    String? yAxisLabel,
+    String? xAxisLabel,
+    List<StatsFastInfoLegendItem>? legendItems,
+  }) {
+    return StatsFastInfoChartMetadata(
+      title: title ?? this.title,
+      yAxisLabel: yAxisLabel ?? this.yAxisLabel,
+      xAxisLabel: xAxisLabel ?? this.xAxisLabel,
+      legendItems: legendItems ?? this.legendItems,
+    );
+  }
 }
 
 class StatsFastInfoLegendItem {
@@ -264,39 +258,32 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     StatsFastInfoSpec spec,
   ) {
     final series = StatsCategoryScopeSeries.fromYearData(data);
-    final topChart = layout.topChart;
-    final pulseChart = layout.pulseChart;
-    final bottomChart = layout.bottomChart;
+    final topChart = layout.categoryControlChart;
+    final bottomChart = layout.categorySecondaryChart;
     _drawChartHeader(canvas, spec.charts[0], topChart);
     _drawGrid(canvas, topChart);
-    _drawRiskSegments(canvas, topChart, series.riskSegments);
-    _drawLine(
-      canvas,
-      topChart,
-      series.occurrence.map((point) => point.value).toList(),
-      const Color(0xFFEF4444),
-      maxValue: 100,
+    _drawControlBars(canvas, topChart, series.controlBars);
+    _drawAxisLabels(canvas, spec.charts[0], topChart, drawXAxisLabel: false);
+    _drawMonthLabels(canvas, topChart, series.monthLabels);
+    final secondaryMetadata = spec.charts[1].copyWith(
+      title: '2. ${series.secondaryMetricLabel}',
+      legendItems: [
+        StatsFastInfoLegendItem(
+          label: series.secondaryMetricLabel,
+          color: const Color(0xFFF97316),
+        ),
+      ],
     );
-    _drawLine(
+    _drawChartHeader(canvas, secondaryMetadata, bottomChart);
+    _drawGrid(canvas, bottomChart, horizontal: 2);
+    _drawSecondaryLine(canvas, bottomChart, series.secondaryLine);
+    _drawAxisLabels(
       canvas,
-      topChart,
-      series.valueIndex.map((point) => point.value).toList(),
-      const Color(0xFF0EA5A4),
-      maxValue: 100,
+      secondaryMetadata,
+      bottomChart,
+      drawXAxisLabel: false,
     );
-    _drawAxisLabels(canvas, spec.charts[0], topChart);
-    _drawChartHeader(canvas, spec.charts[1], pulseChart);
-    _drawSignedBars(
-      canvas,
-      pulseChart,
-      series.macd.map((bar) => bar.value).toList(),
-      positiveColor: const Color(0xFFEF4444),
-      negativeColor: const Color(0xFF22C55E),
-    );
-    _drawAxisLabels(canvas, spec.charts[1], pulseChart);
-    _drawChartHeader(canvas, spec.charts[2], bottomChart);
-    _drawMonthlyScopeBars(canvas, bottomChart, series.monthlyBars);
-    _drawAxisLabels(canvas, spec.charts[2], bottomChart);
+    _drawMonthLabels(canvas, bottomChart, series.monthLabels);
   }
 
   void _drawHeatmap(
@@ -409,8 +396,9 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
   void _drawAxisLabels(
     Canvas canvas,
     StatsFastInfoChartMetadata metadata,
-    Rect chart,
-  ) {
+    Rect chart, {
+    bool drawXAxisLabel = true,
+  }) {
     _drawText(
       canvas,
       metadata.yAxisLabel,
@@ -422,6 +410,7 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       ),
       maxWidth: 28,
     );
+    if (!drawXAxisLabel) return;
     final xPainter = _textPainter(
       metadata.xAxisLabel,
       const TextStyle(
@@ -435,6 +424,33 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       canvas,
       Offset(chart.right - xPainter.width, chart.bottom + 3),
     );
+  }
+
+  void _drawMonthLabels(Canvas canvas, Rect chart, List<String> labels) {
+    if (labels.isEmpty) return;
+    final textStyle = const TextStyle(
+      color: AppColors.gray500,
+      fontSize: 6.6,
+      fontWeight: FontWeight.w700,
+    );
+    final segmentWidth = labels.length <= 1
+        ? chart.width
+        : chart.width / (labels.length - 1);
+    for (var i = 0; i < labels.length; i += 1) {
+      final painter = _textPainter(
+        labels[i],
+        textStyle,
+        maxWidth: segmentWidth.clamp(18.0, 42.0),
+      );
+      final x = labels.length <= 1
+          ? chart.center.dx
+          : chart.left + chart.width * i / (labels.length - 1);
+      final left = (x - painter.width / 2).clamp(
+        chart.left,
+        chart.right - painter.width,
+      );
+      painter.paint(canvas, Offset(left, chart.bottom + 3));
+    }
   }
 
   void _drawText(
@@ -457,23 +473,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: maxWidth);
     return painter;
-  }
-
-  void _drawRiskSegments(
-    Canvas canvas,
-    Rect chart,
-    List<StatsRiskSegment> segments,
-  ) {
-    for (final segment in segments) {
-      final colorHex = segment.colorHex;
-      if (colorHex == null) continue;
-      final left = _xForIndex(chart, segment.startIndex, segments.length + 1);
-      final right = _xForIndex(chart, segment.endIndex, segments.length + 1);
-      canvas.drawRect(
-        Rect.fromLTRB(left, chart.top, right, chart.bottom),
-        Paint()..color = _color(colorHex).withValues(alpha: 0.20),
-      );
-    }
   }
 
   void _drawLine(
@@ -517,6 +516,89 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     );
   }
 
+  void _drawControlBars(Canvas canvas, Rect chart, List<StatsControlBar> bars) {
+    final baselineY = chart.bottom - chart.height * 0.5;
+    canvas.drawLine(
+      Offset(chart.left, baselineY),
+      Offset(chart.right, baselineY),
+      Paint()
+        ..color = AppColors.gray500.withValues(alpha: 0.55)
+        ..strokeWidth = 1.2,
+    );
+    if (bars.isEmpty) return;
+    final barWidth = (chart.width / (bars.length * 1.35)).clamp(1.1, 11.0);
+    for (var i = 0; i < bars.length; i += 1) {
+      final bar = bars[i];
+      final centerX = _xForBarIndex(chart, i, bars.length);
+      final normalized = ((bar.value - 50).abs() / 50).clamp(0.0, 1.0);
+      final height = math.max(1.0, chart.height * 0.48 * normalized);
+      final top = bar.value >= 50 ? baselineY - height : baselineY;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(centerX - barWidth / 2, top, barWidth, height),
+          const Radius.circular(1.8),
+        ),
+        Paint()..color = _color(bar.colorHex),
+      );
+    }
+  }
+
+  void _drawSecondaryLine(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+  ) {
+    if (points.isEmpty) return;
+    final values = points.map((point) => point.value).toList(growable: false);
+    final maxValue = values
+        .fold<double>(0, math.max)
+        .clamp(1.0, double.infinity);
+    final path = Path();
+    for (var i = 0; i < values.length; i += 1) {
+      final x = _xForIndex(chart, i, values.length);
+      final y =
+          chart.bottom - chart.height * (values[i] / maxValue).clamp(0.0, 1.0);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFFF97316)
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke,
+    );
+    final latest = values.last;
+    if (latest <= 0) return;
+    final label = '${(latest / 1000).toStringAsFixed(1)}k';
+    final labelPainter = _textPainter(
+      label,
+      const TextStyle(
+        color: Color(0xFFF97316),
+        fontSize: 8,
+        fontWeight: FontWeight.w800,
+      ),
+      maxWidth: 34,
+    );
+    final latestY =
+        chart.bottom - chart.height * (latest / maxValue).clamp(0.0, 1.0);
+    labelPainter.paint(
+      canvas,
+      Offset(
+        chart.right - labelPainter.width,
+        (latestY - labelPainter.height / 2).clamp(
+          chart.top,
+          chart.bottom - labelPainter.height,
+        ),
+      ),
+    );
+  }
+
   void _drawSignedBars(
     Canvas canvas,
     Rect chart,
@@ -549,99 +631,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
         Paint()..color = value >= 0 ? positiveColor : negativeColor,
       );
     }
-  }
-
-  void _drawMonthlyScopeBars(
-    Canvas canvas,
-    Rect chart,
-    List<StatsMonthlyScopeBar> bars,
-  ) {
-    _drawGrid(canvas, chart, horizontal: 2);
-    final maxValue = bars
-        .map((bar) => bar.totalAmount)
-        .fold<double>(0, math.max)
-        .clamp(1.0, double.infinity);
-    final barWidth = (chart.width / (bars.length * 1.8)).clamp(5.0, 18.0);
-    for (var i = 0; i < bars.length; i += 1) {
-      final bar = bars[i];
-      final centerX = _xForBarIndex(chart, i, bars.length);
-      var bottom = chart.bottom;
-      for (final segment in bar.segments) {
-        final height = chart.height * segment.amount / maxValue;
-        final rect = Rect.fromLTWH(
-          centerX - barWidth / 2,
-          bottom - height,
-          barWidth,
-          height,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(2)),
-          Paint()..color = _color(segment.colorHex),
-        );
-        bottom -= height;
-      }
-    }
-    _drawImpactLine(canvas, chart, bars);
-  }
-
-  void _drawImpactLine(
-    Canvas canvas,
-    Rect chart,
-    List<StatsMonthlyScopeBar> bars,
-  ) {
-    final impactValues = [
-      for (final bar in bars)
-        if (bar.impactValue != null) bar.impactValue!,
-    ];
-    if (impactValues.isEmpty) return;
-    final maxImpact = impactValues
-        .fold<double>(0, math.max)
-        .clamp(1.0, double.infinity);
-    final path = Path();
-    var started = false;
-    Offset? lastPoint;
-    for (var i = 0; i < bars.length; i += 1) {
-      final impact = bars[i].impactValue;
-      if (impact == null) continue;
-      final x = _xForBarIndex(chart, i, bars.length);
-      final y =
-          chart.bottom - chart.height * (impact / maxImpact).clamp(0.0, 1.0);
-      if (!started) {
-        path.moveTo(x, y);
-        started = true;
-      } else {
-        path.lineTo(x, y);
-      }
-      lastPoint = Offset(x, y);
-    }
-    if (!started) return;
-    final paint = Paint()
-      ..color = const Color(0xFFF97316)
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path, paint);
-    if (lastPoint == null) return;
-    final label = '${(impactValues.last / 1000).toStringAsFixed(1)}k';
-    final labelPainter = _textPainter(
-      label,
-      const TextStyle(
-        color: Color(0xFFF97316),
-        fontSize: 8,
-        fontWeight: FontWeight.w800,
-      ),
-      maxWidth: 32,
-    );
-    labelPainter.paint(
-      canvas,
-      Offset(
-        chart.right - labelPainter.width,
-        (lastPoint.dy - labelPainter.height / 2).clamp(
-          chart.top,
-          chart.bottom - labelPainter.height,
-        ),
-      ),
-    );
   }
 
   void _drawHeatMonthlyBars(
