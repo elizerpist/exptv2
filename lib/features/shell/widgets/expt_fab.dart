@@ -15,6 +15,7 @@ class ExptFab extends StatefulWidget {
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onLongPress,
     this.shape = ExptFabShape.circle,
+    this.size = AppDimensions.fabSize,
   });
 
   final VoidCallback onPressed;
@@ -22,6 +23,7 @@ class ExptFab extends StatefulWidget {
   final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onLongPress;
   final ExptFabShape shape;
+  final double size;
 
   @override
   State<ExptFab> createState() => _ExptFabState();
@@ -37,9 +39,7 @@ class _ExptFabState extends State<ExptFab> {
       enabled: widget.surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
         final borderRadius = BorderRadius.circular(
-          widget.shape == ExptFabShape.roundedSquare
-              ? 18
-              : AppDimensions.fabSize / 2,
+          widget.shape == ExptFabShape.roundedSquare ? 18 : widget.size / 2,
         );
         final shapeBorder = widget.shape == ExptFabShape.roundedSquare
             ? RoundedRectangleBorder(borderRadius: borderRadius)
@@ -52,8 +52,8 @@ class _ExptFabState extends State<ExptFab> {
           pressed: pressed,
           primary: true,
           primaryColor: widget.primaryColor,
-          width: AppDimensions.fabSize,
-          height: AppDimensions.fabSize,
+          width: widget.size,
+          height: widget.size,
           neutralShadow: const [
             BoxShadow(
               color: AppColors.fabShadow,
@@ -79,7 +79,7 @@ class _ExptFabState extends State<ExptFab> {
               child: Icon(
                 Icons.add,
                 color: AppColors.white,
-                size: AppDimensions.fabSize * AppDimensions.fabIconScale,
+                size: widget.size * AppDimensions.fabIconScale,
               ),
             ),
           ),

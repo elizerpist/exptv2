@@ -40,6 +40,9 @@ class ExpenseSettingsStore(context: Context) {
             "categoryCardSurfaceStyle" to prefs.getString(KEY_CATEGORY_CARD_SURFACE_STYLE, "neutralNeutral"),
             "categoryMenuPresentation" to prefs.getString(KEY_CATEGORY_MENU_PRESENTATION, "inline"),
             "shellNavigationLayout" to prefs.getString(KEY_SHELL_NAVIGATION_LAYOUT, "current"),
+            "fabShape" to prefs.getString(KEY_FAB_SHAPE, "circle"),
+            "fabSize" to prefs.getInt(KEY_FAB_SIZE, DEFAULT_FAB_SIZE)
+                .coerceIn(MIN_FAB_SIZE, MAX_FAB_SIZE),
             "categoryCardShadowEnabled" to prefs.getBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, true),
             "logboxShadowEnabled" to prefs.getBoolean(KEY_LOGBOX_SHADOW_ENABLED, false),
             "headerPillShadowEnabled" to prefs.getBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, true),
@@ -144,6 +147,11 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_CATEGORY_CARD_SURFACE_STYLE, args["categoryCardSurfaceStyle"]?.toString() ?: "neutralNeutral")
             .putString(KEY_CATEGORY_MENU_PRESENTATION, args["categoryMenuPresentation"]?.toString() ?: "inline")
             .putString(KEY_SHELL_NAVIGATION_LAYOUT, args["shellNavigationLayout"]?.toString() ?: "current")
+            .putString(KEY_FAB_SHAPE, args["fabShape"]?.toString() ?: "circle")
+            .putInt(
+                KEY_FAB_SIZE,
+                intArg(args["fabSize"], DEFAULT_FAB_SIZE, MIN_FAB_SIZE, MAX_FAB_SIZE)
+            )
             .putBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, boolArg(args["categoryCardShadowEnabled"], true))
             .putBoolean(KEY_LOGBOX_SHADOW_ENABLED, boolArg(args["logboxShadowEnabled"], false))
             .putBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, boolArg(args["headerPillShadowEnabled"], true))
@@ -558,6 +566,8 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_CATEGORY_CARD_SURFACE_STYLE = "categoryCardSurfaceStyle"
         private const val KEY_CATEGORY_MENU_PRESENTATION = "categoryMenuPresentation"
         private const val KEY_SHELL_NAVIGATION_LAYOUT = "shellNavigationLayout"
+        private const val KEY_FAB_SHAPE = "fabShape"
+        private const val KEY_FAB_SIZE = "fabSize"
         private const val KEY_CATEGORY_CARD_SHADOW_ENABLED = "categoryCardShadowEnabled"
         private const val KEY_LOGBOX_SHADOW_ENABLED = "logboxShadowEnabled"
         private const val KEY_HEADER_PILL_SHADOW_ENABLED = "headerPillShadowEnabled"
@@ -607,5 +617,8 @@ class ExpenseSettingsStore(context: Context) {
         private val DEFAULT_CENTER_BADGE_SLOT_SIZE_PERCENTS = listOf(100, 100, 100, 100, 100, 100, 100, 100, 100)
         private val DEFAULT_CENTER_BADGE_SLOT_X_OFFSETS = listOf(0, 0, 0, 0, 0, 0, 0, 0, 0)
         private const val DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY = 72
+        private const val DEFAULT_FAB_SIZE = 66
+        private const val MIN_FAB_SIZE = 52
+        private const val MAX_FAB_SIZE = 88
     }
 }

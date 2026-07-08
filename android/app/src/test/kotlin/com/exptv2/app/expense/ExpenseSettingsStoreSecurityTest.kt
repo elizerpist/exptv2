@@ -280,6 +280,35 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
+    fun themeSettingsPersistFabShapeAndSize() {
+        val defaults = store.loadThemeSettings()
+        assertEquals("circle", defaults["fabShape"])
+        assertEquals(66, defaults["fabSize"])
+
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "fabShape" to "roundedSquare",
+                "fabSize" to 80,
+            )
+        )
+
+        assertEquals("roundedSquare", updated["fabShape"])
+        assertEquals(80, updated["fabSize"])
+        assertEquals("roundedSquare", store.loadThemeSettings()["fabShape"])
+        assertEquals(80, store.loadThemeSettings()["fabSize"])
+
+        val clamped = store.updateThemeSettings(
+            mapOf(
+                "fabShape" to "circle",
+                "fabSize" to 999,
+            )
+        )
+
+        assertEquals("circle", clamped["fabShape"])
+        assertEquals(88, clamped["fabSize"])
+    }
+
+    @Test
     fun legacyThemeSettingsMigrateMissingProfileValues() {
         val prefs = context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
         prefs.edit()

@@ -56,9 +56,10 @@ class ExptShell extends StatefulWidget {
 
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   static const _rightFabBottomOffset = AppDimensions.bottomNavHeight + 24.0;
-  static const _rightFabDebugBottomOffset =
-      _rightFabBottomOffset + AppDimensions.fabSize + 12.0;
-  static const _rightFabLogBottomPadding = 168.0;
+  static double _rightFabDebugBottomOffset(double fabSize) =>
+      _rightFabBottomOffset + fabSize + 12.0;
+  static double _rightFabLogBottomPadding(double fabSize) =>
+      _rightFabBottomOffset + fabSize + 24.0;
 
   late AppTab _activeTab;
   late final TransactionStore _transactionStore;
@@ -162,11 +163,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final rightRoundedFab =
         _themeSettings.shellNavigationLayout ==
         ShellNavigationLayout.rightRoundedFab;
+    final fabSize = _themeSettings.fabSize.toDouble();
     return TransactionHomePage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       fastInfoConfig: _fastInfoConfig,
-      logBottomPadding: rightRoundedFab ? _rightFabLogBottomPadding : 96,
+      logBottomPadding: rightRoundedFab
+          ? _rightFabLogBottomPadding(fabSize)
+          : 96,
       onNotificationPressed: rightRoundedFab
           ? _handleHeaderNotificationPressed
           : null,
@@ -609,6 +613,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final shellLayout = expenseTheme.settings.shellNavigationLayout;
     final rightRoundedFab =
         shellLayout == ShellNavigationLayout.rightRoundedFab;
+    final fabSize = expenseTheme.settings.fabSize.toDouble();
+    final fabShape = expenseTheme.settings.fabShape.toExptFabShape;
     return [
       Positioned(
         left: 0,
@@ -633,7 +639,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           child: ExptFab(
             primaryColor: expenseTheme.accent,
             surfaceStyle: expenseTheme.buttonSurfaceStyle,
-            shape: ExptFabShape.roundedSquare,
+            shape: fabShape,
+            size: fabSize,
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,
           ),
@@ -647,6 +654,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             child: ExptFab(
               primaryColor: expenseTheme.accent,
               surfaceStyle: expenseTheme.buttonSurfaceStyle,
+              shape: fabShape,
+              size: fabSize,
               onPressed: _handleFabPressed,
               onLongPress: _handleFabLongPressed,
             ),
@@ -707,7 +716,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           if (!_homeBlockingOverlayOpen) ...shellNavigation,
           DebugFloatingButton(
             bottomOffset: rightRoundedFab
-                ? _rightFabDebugBottomOffset
+                ? _rightFabDebugBottomOffset(_themeSettings.fabSize.toDouble())
                 : AppDimensions.bottomNavHeight + 12,
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:
@@ -1083,6 +1092,13 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
+}
+
+extension on FabShape {
+  ExptFabShape get toExptFabShape => switch (this) {
+    FabShape.circle => ExptFabShape.circle,
+    FabShape.roundedSquare => ExptFabShape.roundedSquare,
+  };
 }
 
 class _CategorySheetSlot extends StatefulWidget {

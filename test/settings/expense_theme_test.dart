@@ -311,6 +311,37 @@ void main() {
     );
   });
 
+  test('fab shape and size parse, serialize, clamp, and copy', () {
+    final defaults = AppThemeSettings.defaults();
+    expect(defaults.fabShape, FabShape.circle);
+    expect(defaults.fabSize, 66);
+    expect(defaults.toMap()['fabShape'], 'circle');
+    expect(defaults.toMap()['fabSize'], 66);
+
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'fabShape': 'roundedSquare',
+      'fabSize': 80,
+    });
+
+    expect(settings.fabShape, FabShape.roundedSquare);
+    expect(settings.fabSize, 80);
+    expect(settings.toMap()['fabShape'], 'roundedSquare');
+    expect(settings.toMap()['fabSize'], 80);
+    expect(
+      AppThemeSettings.fromMap(const <String, Object?>{'fabSize': 999}).fabSize,
+      88,
+    );
+    expect(
+      AppThemeSettings.fromMap(const <String, Object?>{'fabSize': 1}).fabSize,
+      52,
+    );
+    expect(
+      settings.copyWith(fabShape: FabShape.circle, fabSize: 72).fabShape,
+      FabShape.circle,
+    );
+    expect(settings.copyWith(fabSize: 72).fabSize, 72);
+  });
+
   test('accent helpers resolve active background for all palettes', () {
     final turquoise = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     final pink = ExpenseTheme.fromSettings(

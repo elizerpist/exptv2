@@ -218,6 +218,8 @@ void main() {
       'boxColor': 'gray',
       'backheaderStyle': 'classic',
       'shellNavigationLayout': 'rightRoundedFab',
+      'fabShape': 'roundedSquare',
+      'fabSize': 80,
     };
 
     await tester.pumpWidget(buildApp());
@@ -234,6 +236,8 @@ void main() {
 
     final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
     expect(fabRect.left, greaterThan(280));
+    expect(fabRect.width, 80);
+    expect(fabRect.height, 80);
 
     final debugRect = tester.getRect(
       find.byKey(const ValueKey('debug-floating-button')),
@@ -756,6 +760,27 @@ void main() {
     expect(borderRadius.topRight.x, 18);
     expect(borderRadius.bottomLeft.x, 18);
     expect(borderRadius.bottomRight.x, 18);
+  });
+
+  testWidgets('FAB size controls surface and icon dimensions', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(
+              shape: ExptFabShape.circle,
+              size: 80,
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    expect(fabRect.width, 80);
+    expect(fabRect.height, 80);
+    expect(tester.widget<Icon>(find.byIcon(Icons.add)).size, 32);
   });
 
   testWidgets('FAB quick second tap dispatches another single tap', (

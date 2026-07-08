@@ -235,6 +235,27 @@ class ThemeOptionsPanel extends StatelessWidget {
                     color: AppColors.gray500,
                   ),
                 ),
+              _sectionTitle('FAB forma', 'A plusz gomb alakja:'),
+              for (final shape in FabShape.values)
+                SettingsRadioOption(
+                  key: ValueKey(
+                    shape == FabShape.circle
+                        ? 'theme-fab-shape-circle'
+                        : 'theme-fab-shape-rounded-square',
+                  ),
+                  title:
+                      '${shape.displayTitle}${settings.fabShape == shape ? ' (jelenlegi)' : ''}',
+                  description: shape.description,
+                  selected: settings.fabShape == shape,
+                  onTap: () => onChanged(settings.copyWith(fabShape: shape)),
+                  preview: Icon(
+                    shape == FabShape.circle
+                        ? Icons.add_circle_outline
+                        : Icons.rounded_corner,
+                    color: AppColors.gray500,
+                  ),
+                ),
+              _FabSizeControl(settings: settings, onChanged: onChanged),
               _sectionTitle(
                 'Kategória menü felülete',
                 'A kategória overlay háttérfelülete:',
@@ -645,6 +666,138 @@ class ThemeOptionsPanel extends StatelessWidget {
 
   AppTheme _legacyThemeForAppColor(AppColorMode value) {
     return value == AppColorMode.pink ? AppTheme.pink : AppTheme.turquoise;
+  }
+}
+
+class _FabSizeControl extends StatefulWidget {
+  const _FabSizeControl({required this.settings, required this.onChanged});
+
+  final AppThemeSettings settings;
+  final ValueChanged<AppThemeSettings> onChanged;
+
+  @override
+  State<_FabSizeControl> createState() => _FabSizeControlState();
+}
+
+class _FabSizeControlState extends State<_FabSizeControl> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.settings.fabSize.toString(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _FabSizeControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings.fabSize != widget.settings.fabSize) {
+      _syncText(widget.settings.fabSize);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.settings.fabSize.toDouble();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.gray200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'FAB méret',
+              style: TextStyle(
+                color: AppColors.gray800,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    key: const ValueKey('theme-fab-size-slider'),
+                    min: kFabSizeMin.toDouble(),
+                    max: kFabSizeMax.toDouble(),
+                    divisions: kFabSizeMax - kFabSizeMin,
+                    value: value,
+                    label: widget.settings.fabSize.toString(),
+                    activeColor: AppColors.primary,
+                    inactiveColor: AppColors.gray200,
+                    onChanged: _setSize,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 64,
+                  child: TextField(
+                    key: const ValueKey('theme-fab-size-input'),
+                    controller: _controller,
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 9,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.gray100,
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(999),
+                        borderSide: const BorderSide(color: AppColors.gray200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(999),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                    ),
+                    onChanged: _handleTextChanged,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setSize(double rawValue) {
+    final value = rawValue.round().clamp(kFabSizeMin, kFabSizeMax).toInt();
+    _syncText(value);
+    widget.onChanged(widget.settings.copyWith(fabSize: value));
+  }
+
+  void _handleTextChanged(String rawValue) {
+    final parsed = int.tryParse(rawValue.trim());
+    if (parsed == null) return;
+    _setSize(parsed.toDouble());
+  }
+
+  void _syncText(int value) {
+    final text = value.toString();
+    if (_controller.text == text) return;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 }
 

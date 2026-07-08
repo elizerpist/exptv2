@@ -275,6 +275,36 @@ enum ShellNavigationLayout {
   };
 }
 
+enum FabShape {
+  circle('circle'),
+  roundedSquare('roundedSquare');
+
+  const FabShape(this.nativeValue);
+  final String nativeValue;
+
+  static FabShape fromAny(Object? value) {
+    final raw = value?.toString();
+    return FabShape.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => FabShape.circle,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    FabShape.circle => 'Kör',
+    FabShape.roundedSquare => 'Rounded square',
+  };
+
+  String get description => switch (this) {
+    FabShape.circle => 'Kerek FAB forma.',
+    FabShape.roundedSquare => 'Lekerekített négyzet FAB forma.',
+  };
+}
+
+const kFabSizeDefault = 66;
+const kFabSizeMin = 52;
+const kFabSizeMax = 88;
+
 enum GhostLogboxBorderStyle {
   normal('normal'),
   dashed('dashed');
@@ -448,6 +478,8 @@ class AppThemeSettings {
         kCenterBadgeColoredBackgroundOpacityDefault,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
     this.shellNavigationLayout = ShellNavigationLayout.current,
+    this.fabShape = FabShape.circle,
+    this.fabSize = kFabSizeDefault,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
     this.headerPillShadowEnabled = true,
@@ -491,6 +523,8 @@ class AppThemeSettings {
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
       shellNavigationLayout: ShellNavigationLayout.current,
+      fabShape: FabShape.circle,
+      fabSize: kFabSizeDefault,
       categoryCardShadowEnabled: true,
       logboxShadowEnabled: false,
       headerPillShadowEnabled: true,
@@ -608,6 +642,13 @@ class AppThemeSettings {
       shellNavigationLayout: ShellNavigationLayout.fromAny(
         map['shellNavigationLayout'],
       ),
+      fabShape: FabShape.fromAny(map['fabShape']),
+      fabSize: _boundedInt(
+        map['fabSize'],
+        kFabSizeDefault,
+        min: kFabSizeMin,
+        max: kFabSizeMax,
+      ),
       categoryCardShadowEnabled: _bool(map['categoryCardShadowEnabled'], true),
       logboxShadowEnabled: _bool(map['logboxShadowEnabled'], false),
       headerPillShadowEnabled: _bool(map['headerPillShadowEnabled'], true),
@@ -647,6 +688,8 @@ class AppThemeSettings {
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
   final ShellNavigationLayout shellNavigationLayout;
+  final FabShape fabShape;
+  final int fabSize;
   final bool categoryCardShadowEnabled;
   final bool logboxShadowEnabled;
   final bool headerPillShadowEnabled;
@@ -698,6 +741,8 @@ class AppThemeSettings {
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
       'shellNavigationLayout': shellNavigationLayout.nativeValue,
+      'fabShape': fabShape.nativeValue,
+      'fabSize': fabSize,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
       'logboxShadowEnabled': logboxShadowEnabled,
       'headerPillShadowEnabled': headerPillShadowEnabled,
@@ -738,6 +783,8 @@ class AppThemeSettings {
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
     ShellNavigationLayout? shellNavigationLayout,
+    FabShape? fabShape,
+    int? fabSize,
     bool? categoryCardShadowEnabled,
     bool? logboxShadowEnabled,
     bool? headerPillShadowEnabled,
@@ -800,6 +847,10 @@ class AppThemeSettings {
           categoryMenuPresentation ?? this.categoryMenuPresentation,
       shellNavigationLayout:
           shellNavigationLayout ?? this.shellNavigationLayout,
+      fabShape: fabShape ?? this.fabShape,
+      fabSize: fabSize == null
+          ? this.fabSize
+          : fabSize.clamp(kFabSizeMin, kFabSizeMax).toInt(),
       categoryCardShadowEnabled:
           categoryCardShadowEnabled ?? this.categoryCardShadowEnabled,
       logboxShadowEnabled: logboxShadowEnabled ?? this.logboxShadowEnabled,
