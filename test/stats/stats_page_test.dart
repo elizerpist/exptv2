@@ -50,18 +50,58 @@ void main() {
   });
 
   testWidgets('stats FastInfo graph is a graph-only surface', (tester) async {
-    final data = StatsYearData.build(
-      year: 2026,
-      activeType: TransactionType.expense,
-      mode: StatsRenderMode.heatmap,
-      thresholdValue: 5000,
-      transactions: [
-        record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
-      ],
-      categories: [
-        category(id: 1, name: 'Bolt', type: TransactionType.expense),
-      ],
-      selectedCategoryIds: const {},
+    StatsYearData data(StatsRenderMode mode) {
+      return StatsYearData.build(
+        year: 2026,
+        activeType: TransactionType.expense,
+        mode: mode,
+        thresholdValue: 5000,
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+          record(id: 2, date: '2026-02-01', amount: -9000, categoryId: 1),
+        ],
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+        ],
+        selectedCategoryIds: const {},
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 328,
+            child: StatsFastInfoGraph(data: data(StatsRenderMode.heatmap)),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('stats-fastinfo-graph')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('stats-fastinfo-heatmap')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('stats-fastinfo-card')), findsNothing);
+    expect(find.byKey(const ValueKey('stats-fastinfo-pill')), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 328,
+            child: StatsFastInfoGraph(data: data(StatsRenderMode.closing)),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('stats-fastinfo-closing')),
+      findsOneWidget,
     );
 
     await tester.pumpWidget(
@@ -70,15 +110,18 @@ void main() {
           body: SizedBox(
             width: 390,
             height: 328,
-            child: StatsFastInfoGraph(data: data),
+            child: StatsFastInfoGraph(
+              data: data(StatsRenderMode.categoryScope),
+            ),
           ),
         ),
       ),
     );
 
-    expect(find.byKey(const ValueKey('stats-fastinfo-graph')), findsOneWidget);
-    expect(find.byKey(const ValueKey('stats-fastinfo-card')), findsNothing);
-    expect(find.byKey(const ValueKey('stats-fastinfo-pill')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('stats-fastinfo-categoryScope')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('stats scope sheet toggles multiple active-type categories', (
