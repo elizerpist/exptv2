@@ -23,7 +23,6 @@ import 'widgets/header_card/category_budget_stage.dart';
 import 'widgets/header_card/budget_target_editor_sheet.dart';
 import 'widgets/header_card/fast_info_panel.dart';
 import 'widgets/header_card/header_fast_info_surface.dart';
-import 'widgets/header_card/magnet_strip.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'models/limit_allocation_data.dart';
@@ -741,9 +740,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         cardColor: expenseTheme.headerCard,
         surfaceStyle: expenseTheme.contentSurfaceStyle,
         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
-        totalIncome: widget.store.activePeriodIncomeTotal,
-        totalExpense: widget.store.activePeriodExpenseTotal,
-        budgetProgress: _headerBudgetProgress(),
+        totalIncome: widget.store.totalIncomeAmount,
+        totalExpense: widget.store.totalExpenseAmount,
         budgetAllocation: _headerBudgetAllocation(),
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
@@ -772,25 +770,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     return 1 - fadeProgress;
   }
 
-  BudgetStripProgress? _headerBudgetProgress() {
-    final item = _activeBackheaderItem();
-    if (item == null) return null;
-    final overview = item.overview;
-    if (overview != null) {
-      return BudgetStripProgress(
-        hasLimit: overview.hasLimit,
-        spent: overview.amount,
-        limitAmount: overview.limitAmount,
-      );
-    }
-    final category = item.category!;
-    return BudgetStripProgress(
-      hasLimit: category.hasLimit,
-      spent: category.spent,
-      limitAmount: category.limitAmount,
-    );
-  }
-
   LimitAllocationData? _headerBudgetAllocation() {
     for (final overview in widget.store.overviewBudgetItems) {
       if (overview.kind != BudgetGoalKind.expenseBudget ||
@@ -804,18 +783,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       );
     }
     return null;
-  }
-
-  BackheaderBudgetItem? _activeBackheaderItem() {
-    final items = widget.store.backheaderBudgetItems;
-    if (items.isEmpty) return null;
-    final activeKey = _backheaderActiveKey;
-    if (activeKey != null) {
-      for (final item in items) {
-        if (item.key == activeKey) return item;
-      }
-    }
-    return items.first;
   }
 
   double _headerSlideVisualProgress() {

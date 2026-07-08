@@ -1,3 +1,4 @@
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/backheader_budget_item.dart';
 import 'package:exptv2/features/transactions/models/budget_goal_kind.dart';
@@ -362,10 +363,30 @@ void main() {
     },
   );
 
-  testWidgets('budget magnet strip follows the active swiped category limit', (
+  testWidgets('budget magnet strip follows all-time balance totals', (
     tester,
   ) async {
     final repository = FakeHomeLimitRepository.withBudgetAndCategoryLimits();
+    repository.transactions.addAll([
+      TransactionRecord.fromMap({
+        'id': 21,
+        'date': '2026.04.04',
+        'time': '12:00',
+        'merchant': 'Old salary',
+        'amount': 8000,
+        'userAssignedName': null,
+        'transactionCategoryID': 5,
+      }),
+      TransactionRecord.fromMap({
+        'id': 22,
+        'date': '2026.04.05',
+        'time': '12:00',
+        'merchant': 'Old shop',
+        'amount': -900,
+        'userAssignedName': null,
+        'transactionCategoryID': 6,
+      }),
+    ]);
     repository.limits = [
       CategoryLimit.fromMap({
         'id': 10,
@@ -423,9 +444,9 @@ void main() {
     expect(find.text('Food'), findsOneWidget);
     expect(
       fillRect.width,
-      moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
+      moreOrLessEquals(trackRect.width * 0.9, epsilon: 0.5),
     );
-    expect(decoration.color, const Color(0xffff8800));
+    expect(decoration.color, AppColors.gray500);
   });
 
   testWidgets('partitioned magnet strip uses shared budget allocation', (
