@@ -20,6 +20,8 @@ import '../transactions/widgets/header_card/transaction_header_card.dart';
 import '../transactions/widgets/header_card/transaction_header_metrics.dart';
 import '../transactions/widgets/summary_pill.dart';
 import '../transactions/widgets/transaction_type_pills.dart';
+import 'data/stats_category_scope_series.dart';
+import 'data/stats_closing_series.dart';
 import 'data/stats_year_data.dart';
 import 'widgets/stats_category_scope_sheet.dart';
 import 'widgets/stats_fast_info_graph.dart';
@@ -206,6 +208,7 @@ class _StatsPageState extends State<StatsPage>
     required ExpenseTheme expenseTheme,
     bool drawSurface = true,
   }) {
+    final visual = _headerVisual(data);
     return RepaintBoundary(
       child: TransactionHeaderCard(
         labelText: data.headerLabel,
@@ -218,6 +221,11 @@ class _StatsPageState extends State<StatsPage>
         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
         totalIncome: _yearTotal(TransactionType.income),
         totalExpense: _yearTotal(TransactionType.expense),
+        leadingChipText: _scopeChipText(data),
+        leadingChipColor: visual.chipColor,
+        magnetGradientColors: visual.gradientColors,
+        magnetMarkerPosition: visual.markerPosition,
+        magnetKey: 'stats-magnet-${data.mode.name}',
         drawSurface: drawSurface,
         onCategoryPressed: _openScopeSheet,
         onExpandPressed: () {},
@@ -245,6 +253,61 @@ class _StatsPageState extends State<StatsPage>
       }
     }
     return max;
+  }
+
+  String _scopeChipText(StatsYearData data) {
+    final selectedCount = data.selectedCategoryIds.length;
+    return selectedCount == 0 ? 'ALL' : selectedCount.toString();
+  }
+
+  _StatsHeaderVisual _headerVisual(StatsYearData data) {
+    return switch (data.mode) {
+      StatsRenderMode.categoryScope => _StatsHeaderVisual(
+        chipColor: const Color(0xFFF97316),
+        gradientColors: const [
+          Color(0xFFEF4444),
+          Color(0xFFF97316),
+          Color(0xFF10B981),
+        ],
+        markerPosition:
+            StatsCategoryScopeSeries.fromYearData(data).kontrollScore / 100,
+      ),
+      StatsRenderMode.heatmap => _StatsHeaderVisual(
+        chipColor: AppColors.primary,
+        gradientColors: const [
+          Color(0xFFE2E8F0),
+          Color(0xFFFFFFFF),
+          Color(0xFFDDF8FD),
+          Color(0xFF67E8F9),
+          Color(0xFF06B6D4),
+        ],
+        markerPosition: _heatConcentration(data),
+      ),
+      StatsRenderMode.closing => _StatsHeaderVisual(
+        chipColor: data.activeType == TransactionType.income
+            ? AppColors.income
+            : AppColors.expense,
+        gradientColors: const [
+          Color(0xFFEF4444),
+          Color(0xFFFEE2E2),
+          Color(0xFFFFFFFF),
+          Color(0xFFDCFCE7),
+          Color(0xFF22C55E),
+        ],
+        markerPosition: StatsClosingSeries.fromYearData(data).driftMarker,
+      ),
+    };
+  }
+
+  double _heatConcentration(StatsYearData data) {
+    var activeDays = 0;
+    for (final month in data.graphMonths) {
+      for (final day in month.days) {
+        if (day.scopeAmount > 0) activeDays += 1;
+      }
+    }
+    if (activeDays == 0) return 0;
+    return (data.totalThresholdHitDays / activeDays).clamp(0.0, 1.0).toDouble();
   }
 
   void _setActiveType(TransactionType type) {
@@ -355,6 +418,18 @@ class _StatsPageState extends State<StatsPage>
           .catchError((_) {}),
     );
   }
+}
+
+class _StatsHeaderVisual {
+  const _StatsHeaderVisual({
+    required this.chipColor,
+    required this.gradientColors,
+    required this.markerPosition,
+  });
+
+  final Color chipColor;
+  final List<Color> gradientColors;
+  final double markerPosition;
 }
 
 class _StatsFocusedMonthView extends StatelessWidget {

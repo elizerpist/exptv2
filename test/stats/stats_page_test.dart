@@ -154,6 +154,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('SCOPE TREND'), findsOneWidget);
+    expect(find.text('ALL'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('stats-magnet-categoryScope')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('summary-pill')), findsOneWidget);
     expect(find.text('Éves · 2026 · Kiadás'), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
@@ -203,6 +208,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('HEATMAP'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-magnet-heatmap')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('calendar-threshold-joystick-trigger')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stats-render-mode-closing')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HÓZÁRÁS'), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-magnet-closing')), findsOneWidget);
   });
 
   testWidgets('stats header category button opens scope sheet', (tester) async {

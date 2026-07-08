@@ -25,6 +25,11 @@ class TransactionHeaderCard extends StatelessWidget {
     this.totalExpense = 0,
     this.budgetProgress,
     this.budgetAllocation,
+    this.leadingChipText,
+    this.leadingChipColor,
+    this.magnetGradientColors,
+    this.magnetMarkerPosition,
+    this.magnetKey,
     this.fastInfoVisible = false,
     this.balanceHidden = false,
     this.showBalanceVisibilityButton = true,
@@ -50,6 +55,11 @@ class TransactionHeaderCard extends StatelessWidget {
   final double totalExpense;
   final BudgetStripProgress? budgetProgress;
   final LimitAllocationData? budgetAllocation;
+  final String? leadingChipText;
+  final Color? leadingChipColor;
+  final List<Color>? magnetGradientColors;
+  final double? magnetMarkerPosition;
+  final String? magnetKey;
   final bool fastInfoVisible;
   final bool balanceHidden;
   final bool showBalanceVisibilityButton;
@@ -135,35 +145,19 @@ class TransactionHeaderCard extends StatelessWidget {
                   height: TransactionHeaderMetrics.magnetHeight,
                   budgetProgress: budgetProgress,
                   budgetAllocation: budgetAllocation,
+                  customGradientColors: magnetGradientColors,
+                  customMarkerPosition: magnetMarkerPosition,
+                  customKey: magnetKey,
                 ),
               ),
             ),
             Positioned(
               top: TransactionHeaderMetrics.cameraTop,
               left: 30,
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(7),
-                child: InkWell(
-                  key: const ValueKey('header-budget-trigger-chip'),
-                  onTap: onExpandPressed,
-                  borderRadius: BorderRadius.circular(7),
-                  child: Container(
-                    width: 36,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFBBF24),
-                      borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: AppColors.white, width: 2),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: AppColors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
+              child: _HeaderLeadingChip(
+                text: leadingChipText,
+                color: leadingChipColor ?? const Color(0xFFFBBF24),
+                onPressed: onExpandPressed,
               ),
             ),
             Positioned(
@@ -344,6 +338,59 @@ class _HeaderCategoryButton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _HeaderLeadingChip extends StatelessWidget {
+  const _HeaderLeadingChip({
+    required this.text,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final String? text;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(7);
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        key: const ValueKey('header-budget-trigger-chip'),
+        onTap: onPressed,
+        borderRadius: radius,
+        child: Container(
+          key: text == null ? null : const ValueKey('header-scope-chip'),
+          width: 36,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: radius,
+            border: Border.all(color: AppColors.white, width: 2),
+          ),
+          alignment: Alignment.center,
+          child: text == null
+              ? const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.white,
+                  size: 20,
+                )
+              : Text(
+                  text!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+        ),
+      ),
     );
   }
 }

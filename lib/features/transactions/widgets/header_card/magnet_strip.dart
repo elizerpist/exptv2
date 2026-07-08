@@ -36,6 +36,9 @@ class MagnetStrip extends StatelessWidget {
     this.accent = AppColors.primary,
     this.budgetProgress,
     this.budgetAllocation,
+    this.customGradientColors,
+    this.customMarkerPosition,
+    this.customKey,
   });
 
   final MagnetType type;
@@ -45,6 +48,9 @@ class MagnetStrip extends StatelessWidget {
   final Color accent;
   final BudgetStripProgress? budgetProgress;
   final LimitAllocationData? budgetAllocation;
+  final List<Color>? customGradientColors;
+  final double? customMarkerPosition;
+  final String? customKey;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +59,18 @@ class MagnetStrip extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
+        final customGradient = customGradientColors;
+        if (customGradient != null && customGradient.isNotEmpty) {
+          return CustomPaint(
+            key: ValueKey(customKey ?? 'magnet-strip-custom'),
+            size: Size(width, height),
+            painter: _CustomMagnetStripPainter(
+              gradientColors: customGradient,
+              markerPosition: customMarkerPosition,
+              height: height,
+            ),
+          );
+        }
         if (type == MagnetType.budget) {
           return _BudgetMagnetProgressStrip(
             width: width,
@@ -79,6 +97,67 @@ class MagnetStrip extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _CustomMagnetStripPainter extends CustomPainter {
+  const _CustomMagnetStripPainter({
+    required this.gradientColors,
+    required this.markerPosition,
+    required this.height,
+  });
+
+  final List<Color> gradientColors;
+  final double? markerPosition;
+  final double height;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final trackHeight = MagnetStripPainter.visualTrackHeight(
+      MagnetType.fade,
+      height,
+    );
+    final rect = Rect.fromLTWH(
+      0,
+      size.height / 2 - trackHeight / 2,
+      size.width,
+      trackHeight,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+      Paint()
+        ..shader = LinearGradient(colors: gradientColors).createShader(rect),
+    );
+    final marker = markerPosition;
+    if (marker == null) return;
+    final markerX = rect.left + rect.width * marker.clamp(0.0, 1.0);
+    canvas.drawCircle(
+      Offset(markerX, rect.center.dy),
+      math.max(5, trackHeight * 1.05),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.16)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+    canvas.drawCircle(
+      Offset(markerX, rect.center.dy),
+      math.max(4, trackHeight * 0.82),
+      Paint()..color = AppColors.white,
+    );
+    canvas.drawCircle(
+      Offset(markerX, rect.center.dy),
+      math.max(4, trackHeight * 0.82),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = AppColors.gray500.withValues(alpha: 0.55),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CustomMagnetStripPainter oldDelegate) {
+    return oldDelegate.gradientColors != gradientColors ||
+        oldDelegate.markerPosition != markerPosition ||
+        oldDelegate.height != height;
   }
 }
 
