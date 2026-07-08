@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../transactions/models/transaction_category.dart';
 import '../../transactions/models/transaction_record.dart';
+import 'stats_scope_model.dart';
 
 enum StatsRenderMode { categoryScope, closing, heatmap }
 
@@ -79,10 +80,11 @@ class StatsYearData {
         .where((category) => category.normalizedType == activeType)
         .map((category) => category.transactionCategoryID)
         .toSet();
-    final scopedCategoryIds = selectedCategoryIds
-        .where(activeCategoryIds.contains)
-        .toSet();
-    final allActiveCategoriesSelected = scopedCategoryIds.isEmpty;
+    final scopeSelection = StatsScopeSelection.normalize(
+      selectedCategoryIds: selectedCategoryIds,
+      availableCategoryIds: activeCategoryIds,
+    );
+    final scopedCategoryIds = scopeSelection.selectedCategoryIds;
     final categoriesById = <int, TransactionCategory>{
       for (final category in categories)
         category.transactionCategoryID: category,
@@ -132,9 +134,7 @@ class StatsYearData {
           final amount = record.amount.abs();
           activeAmount += amount;
           final categoryId = record.transactionCategoryID;
-          final inScope =
-              allActiveCategoriesSelected ||
-              (categoryId != null && scopedCategoryIds.contains(categoryId));
+          final inScope = scopeSelection.includesCategory(categoryId);
           if (!inScope) continue;
           scopedAmount += amount;
           if (categoryId != null) {
