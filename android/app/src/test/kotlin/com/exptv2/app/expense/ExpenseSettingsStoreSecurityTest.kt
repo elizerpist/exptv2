@@ -263,6 +263,23 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
+    fun themeSettingsPersistShellNavigationLayout() {
+        assertEquals("current", store.loadThemeSettings()["shellNavigationLayout"])
+
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "shellNavigationLayout" to "rightRoundedFab",
+            )
+        )
+
+        assertEquals("rightRoundedFab", updated["shellNavigationLayout"])
+        assertEquals(
+            "rightRoundedFab",
+            store.loadThemeSettings()["shellNavigationLayout"],
+        )
+    }
+
+    @Test
     fun legacyThemeSettingsMigrateMissingProfileValues() {
         val prefs = context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
         prefs.edit()

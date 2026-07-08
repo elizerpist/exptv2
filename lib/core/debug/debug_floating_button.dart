@@ -9,17 +9,19 @@ class DebugFloatingButton extends StatelessWidget {
     super.key,
     this.recurringAlarmService,
     this.onRecurringChanged,
+    this.bottomOffset = AppDimensions.bottomNavHeight + 12,
   });
 
   final RecurringAlarmService? recurringAlarmService;
   final VoidCallback? onRecurringChanged;
+  final double bottomOffset;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
       key: const ValueKey('debug-floating-button-position'),
       right: 16,
-      bottom: AppDimensions.bottomNavHeight + 12,
+      bottom: bottomOffset,
       child: Material(
         color: const Color(0xFF1E293B),
         shape: const CircleBorder(),
@@ -27,11 +29,7 @@ class DebugFloatingButton extends StatelessWidget {
         child: IconButton(
           key: const ValueKey('debug-floating-button'),
           tooltip: 'Debug log',
-          icon: const Icon(
-            Icons.terminal,
-            size: 18,
-            color: Color(0xFF06B6D4),
-          ),
+          icon: const Icon(Icons.terminal, size: 18, color: Color(0xFF06B6D4)),
           onPressed: () => showDialog<void>(
             context: context,
             builder: (_) => DebugConsoleDialog(

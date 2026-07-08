@@ -235,6 +235,11 @@ void main() {
     final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
     expect(fabRect.left, greaterThan(280));
 
+    final debugRect = tester.getRect(
+      find.byKey(const ValueKey('debug-floating-button')),
+    );
+    expect(debugRect.bottom, lessThan(fabRect.top));
+
     final fabSurface = tester.widget<Container>(
       find.byKey(const ValueKey('expt-fab')),
     );

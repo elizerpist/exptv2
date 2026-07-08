@@ -56,6 +56,8 @@ class ExptShell extends StatefulWidget {
 
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   static const _rightFabBottomOffset = AppDimensions.bottomNavHeight + 24.0;
+  static const _rightFabDebugBottomOffset =
+      _rightFabBottomOffset + AppDimensions.fabSize + 12.0;
   static const _rightFabLogBottomPadding = 168.0;
 
   late AppTab _activeTab;
@@ -684,6 +686,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     _logThemeSurfaceOnce(expenseTheme);
     final shellNavigation = _buildShellNavigation(expenseTheme);
+    final rightRoundedFab =
+        _themeSettings.shellNavigationLayout ==
+        ShellNavigationLayout.rightRoundedFab;
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
@@ -701,6 +706,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           ),
           if (!_homeBlockingOverlayOpen) ...shellNavigation,
           DebugFloatingButton(
+            bottomOffset: rightRoundedFab
+                ? _rightFabDebugBottomOffset
+                : AppDimensions.bottomNavHeight + 12,
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:
                 _transactionStore.refreshAfterRecurringProcessing,

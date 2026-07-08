@@ -39,6 +39,7 @@ class ExpenseSettingsStore(context: Context) {
             "categoryCardColor" to prefs.getString(KEY_CATEGORY_CARD_COLOR, "lightgray"),
             "categoryCardSurfaceStyle" to prefs.getString(KEY_CATEGORY_CARD_SURFACE_STYLE, "neutralNeutral"),
             "categoryMenuPresentation" to prefs.getString(KEY_CATEGORY_MENU_PRESENTATION, "inline"),
+            "shellNavigationLayout" to prefs.getString(KEY_SHELL_NAVIGATION_LAYOUT, "current"),
             "categoryCardShadowEnabled" to prefs.getBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, true),
             "logboxShadowEnabled" to prefs.getBoolean(KEY_LOGBOX_SHADOW_ENABLED, false),
             "headerPillShadowEnabled" to prefs.getBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, true),
@@ -142,6 +143,7 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_CATEGORY_CARD_COLOR, args["categoryCardColor"]?.toString() ?: "lightgray")
             .putString(KEY_CATEGORY_CARD_SURFACE_STYLE, args["categoryCardSurfaceStyle"]?.toString() ?: "neutralNeutral")
             .putString(KEY_CATEGORY_MENU_PRESENTATION, args["categoryMenuPresentation"]?.toString() ?: "inline")
+            .putString(KEY_SHELL_NAVIGATION_LAYOUT, args["shellNavigationLayout"]?.toString() ?: "current")
             .putBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, boolArg(args["categoryCardShadowEnabled"], true))
             .putBoolean(KEY_LOGBOX_SHADOW_ENABLED, boolArg(args["logboxShadowEnabled"], false))
             .putBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, boolArg(args["headerPillShadowEnabled"], true))
@@ -555,6 +557,7 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_CATEGORY_CARD_COLOR = "categoryCardColor"
         private const val KEY_CATEGORY_CARD_SURFACE_STYLE = "categoryCardSurfaceStyle"
         private const val KEY_CATEGORY_MENU_PRESENTATION = "categoryMenuPresentation"
+        private const val KEY_SHELL_NAVIGATION_LAYOUT = "shellNavigationLayout"
         private const val KEY_CATEGORY_CARD_SHADOW_ENABLED = "categoryCardShadowEnabled"
         private const val KEY_LOGBOX_SHADOW_ENABLED = "logboxShadowEnabled"
         private const val KEY_HEADER_PILL_SHADOW_ENABLED = "headerPillShadowEnabled"
