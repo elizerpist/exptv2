@@ -1,8 +1,11 @@
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/features/stats/widgets/stats_category_scope_sheet.dart';
 import 'package:exptv2/features/stats/widgets/stats_fast_info_graph.dart';
 import 'package:exptv2/features/stats/widgets/stats_year_calendar.dart';
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/settings/theme/expense_theme.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -10,6 +13,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,6 +51,41 @@ void main() {
     for (var month = 1; month <= 12; month += 1) {
       expect(find.byKey(ValueKey('stats-month-hit-$month')), findsOneWidget);
     }
+  });
+
+  testWidgets('stats annual calendar accepts themed month card background', (
+    tester,
+  ) async {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.categoryScope,
+      thresholdValue: 5000,
+      transactions: const [],
+      categories: const [],
+      selectedCategoryIds: const {},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 600,
+            child: StatsYearCalendar(
+              data: data,
+              monthCardColor: AppColors.gray200,
+              onMonthSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final calendar = tester.widget<StatsYearCalendar>(
+      find.byType(StatsYearCalendar),
+    );
+    expect(calendar.monthCardColor, AppColors.gray200);
   });
 
   testWidgets('stats FastInfo graph is a graph-only surface', (tester) async {
@@ -122,6 +161,31 @@ void main() {
       find.byKey(const ValueKey('stats-fastinfo-categoryScope')),
       findsOneWidget,
     );
+  });
+
+  test(
+    'stats FastInfo layout starts below the status bar and keeps bottom',
+    () {
+      final layout = StatsFastInfoGraph.layoutForTesting(const Size(390, 328));
+
+      expect(layout.topTitleTop, greaterThanOrEqualTo(42));
+      expect(layout.topChart.top, greaterThanOrEqualTo(62));
+      expect(layout.bottomChart.bottom, moreOrLessEquals(302, epsilon: 0.01));
+      expect(layout.bottomChart.height, greaterThanOrEqualTo(52));
+    },
+  );
+
+  test('stats FastInfo chart metadata defines legends and axes per mode', () {
+    for (final mode in StatsRenderMode.values) {
+      final spec = StatsFastInfoGraph.specForTesting(mode);
+
+      expect(spec.charts, isNotEmpty, reason: mode.name);
+      for (final chart in spec.charts) {
+        expect(chart.legendLabels, isNotEmpty, reason: chart.title);
+        expect(chart.xAxisLabel, isNotEmpty, reason: chart.title);
+        expect(chart.yAxisLabel, isNotEmpty, reason: chart.title);
+      }
+    }
   });
 
   testWidgets('stats scope sheet toggles multiple active-type categories', (
@@ -242,6 +306,86 @@ void main() {
       find.byKey(const ValueKey('calendar-threshold-joystick-trigger')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('stats header uses main menu chip color and line magnet marker', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final strip = tester.widget<MagnetStrip>(find.byType(MagnetStrip));
+    expect(strip.customMarkerStyle, MagnetMarkerStyle.line);
+
+    final chip = tester.widget<Container>(
+      find.byKey(const ValueKey('header-scope-chip')),
+    );
+    final decoration = chip.decoration! as BoxDecoration;
+    expect(decoration.color, const Color(0xFFFBBF24));
+  });
+
+  testWidgets('stats page passes theme month card color into annual calendar', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        statsMonthCardColor: AppBoxColor.darkgray,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final calendar = tester.widget<StatsYearCalendar>(
+      find.byType(StatsYearCalendar),
+    );
+    expect(calendar.monthCardColor, AppColors.gray200);
   });
 
   testWidgets('stats joystick tap opens render mode selector', (tester) async {

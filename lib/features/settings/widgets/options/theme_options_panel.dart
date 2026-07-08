@@ -361,6 +361,28 @@ class ThemeOptionsPanel extends StatelessWidget {
                 AppColors.gray200,
               ),
               _sectionTitle(
+                'Statisztika monthcard',
+                'Az éves statisztika hónapkártyáinak háttérszíne:',
+              ),
+              _statsMonthCardColorOption(
+                'Fehér',
+                'Fehér statisztika monthcard háttér',
+                AppBoxColor.white,
+                AppColors.white,
+              ),
+              _statsMonthCardColorOption(
+                'Szürke',
+                'Szürke statisztika monthcard háttér',
+                AppBoxColor.gray,
+                AppColors.gray100,
+              ),
+              _statsMonthCardColorOption(
+                'Sötétebb szürke',
+                'Erősebb szürke statisztika monthcard háttér',
+                AppBoxColor.darkgray,
+                AppColors.gray200,
+              ),
+              _sectionTitle(
                 'Árnyékok',
                 'Normál felületek külső árnyékainak kapcsolása:',
               ),
@@ -615,6 +637,23 @@ class ThemeOptionsPanel extends StatelessWidget {
       description: description,
       selected: settings.categoryCardColor == value,
       onTap: () => onChanged(settings.copyWith(categoryCardColor: value)),
+      preview: _ColorPreview(color: color),
+    );
+  }
+
+  Widget _statsMonthCardColorOption(
+    String title,
+    String description,
+    AppBoxColor value,
+    Color color,
+  ) {
+    return SettingsRadioOption(
+      key: ValueKey('theme-stats-month-card-color-${value.nativeValue}'),
+      title:
+          '$title${settings.statsMonthCardColor == value ? ' (jelenlegi)' : ''}',
+      description: description,
+      selected: settings.statsMonthCardColor == value,
+      onTap: () => onChanged(settings.copyWith(statsMonthCardColor: value)),
       preview: _ColorPreview(color: color),
     );
   }

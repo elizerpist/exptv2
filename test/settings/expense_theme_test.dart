@@ -342,6 +342,35 @@ void main() {
     expect(settings.copyWith(fabSize: 72).fabSize, 72);
   });
 
+  test('stats month card color parses serializes copies and resolves', () {
+    final defaults = AppThemeSettings.defaults();
+    expect(defaults.statsMonthCardColor, AppBoxColor.white);
+    expect(defaults.toMap()['statsMonthCardColor'], 'white');
+
+    final settings = AppThemeSettings.fromMap(const <String, Object?>{
+      'statsMonthCardColor': 'darkgray',
+    });
+
+    expect(settings.statsMonthCardColor, AppBoxColor.darkgray);
+    expect(settings.toMap()['statsMonthCardColor'], 'darkgray');
+    expect(
+      settings
+          .copyWith(statsMonthCardColor: AppBoxColor.gray)
+          .statsMonthCardColor,
+      AppBoxColor.gray,
+    );
+    expect(
+      ExpenseTheme.fromSettings(settings).statsMonthCard,
+      AppColors.gray200,
+    );
+    expect(
+      ExpenseTheme.fromSettings(
+        settings.copyWith(statsMonthCardColor: AppBoxColor.gray),
+      ).statsMonthCard,
+      AppColors.gray100,
+    );
+  });
+
   test('accent helpers resolve active background for all palettes', () {
     final turquoise = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
     final pink = ExpenseTheme.fromSettings(

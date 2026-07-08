@@ -457,6 +457,7 @@ class AppThemeSettings {
     required this.categoryCardSurfaceStyle,
     required this.backheaderStyle,
     required this.appColor,
+    this.statsMonthCardColor = AppBoxColor.white,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.centerPartitionRingEnabled = false,
     this.centerBadgeDiscEnabled = true,
@@ -503,6 +504,7 @@ class AppThemeSettings {
       categoryCardColor: AppBoxColor.gray,
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
+      statsMonthCardColor: AppBoxColor.white,
       centerBackheaderDesign: BackheaderCenterDesign.neutral,
       centerPartitionRingEnabled: false,
       centerBadgeDiscEnabled: true,
@@ -580,6 +582,9 @@ class AppThemeSettings {
         ExpenseSurfaceInteraction.neutralNeutral,
       ),
       backheaderStyle: BackheaderStyle.fromAny(map['backheaderStyle']),
+      statsMonthCardColor: _hasValue(map['statsMonthCardColor'])
+          ? AppBoxColor.fromAny(map['statsMonthCardColor'])
+          : AppBoxColor.white,
       centerBackheaderDesign: BackheaderCenterDesign.fromAny(
         map['centerBackheaderDesign'],
       ),
@@ -671,6 +676,7 @@ class AppThemeSettings {
   final AppBoxColor categoryCardColor;
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
   final BackheaderStyle backheaderStyle;
+  final AppBoxColor statsMonthCardColor;
   final BackheaderCenterDesign centerBackheaderDesign;
   final bool centerPartitionRingEnabled;
   final bool centerBadgeDiscEnabled;
@@ -722,6 +728,7 @@ class AppThemeSettings {
       'categoryCardColor': categoryCardColor.nativeValue,
       'categoryCardSurfaceStyle': categoryCardSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
+      'statsMonthCardColor': statsMonthCardColor.nativeValue,
       'centerBackheaderDesign': centerBackheaderDesign.nativeValue,
       'centerPartitionRingEnabled': centerPartitionRingEnabled,
       'centerBadgeDiscEnabled': centerBadgeDiscEnabled,
@@ -766,6 +773,7 @@ class AppThemeSettings {
     AppBoxColor? categoryCardColor,
     ExpenseSurfaceInteraction? categoryCardSurfaceStyle,
     BackheaderStyle? backheaderStyle,
+    AppBoxColor? statsMonthCardColor,
     BackheaderCenterDesign? centerBackheaderDesign,
     bool? centerPartitionRingEnabled,
     bool? centerBadgeDiscEnabled,
@@ -809,6 +817,7 @@ class AppThemeSettings {
       categoryCardSurfaceStyle:
           categoryCardSurfaceStyle ?? this.categoryCardSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
+      statsMonthCardColor: statsMonthCardColor ?? this.statsMonthCardColor,
       centerBackheaderDesign:
           centerBackheaderDesign ?? this.centerBackheaderDesign,
       centerPartitionRingEnabled:

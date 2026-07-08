@@ -16,6 +16,7 @@ import '../transactions/widgets/calendar_menu/calendar_value_slider_panel.dart';
 import '../transactions/widgets/calendar_menu/focused_month_canvas.dart';
 import '../transactions/widgets/calendar_menu/month_stats_charts.dart';
 import '../transactions/widgets/header_card/header_fast_info_surface.dart';
+import '../transactions/widgets/header_card/magnet_strip.dart';
 import '../transactions/widgets/header_card/transaction_header_card.dart';
 import '../transactions/widgets/header_card/transaction_header_metrics.dart';
 import '../transactions/widgets/summary_pill.dart';
@@ -146,6 +147,7 @@ class _StatsPageState extends State<StatsPage>
                         child: focusedMonth == null
                             ? StatsYearCalendar(
                                 data: data,
+                                monthCardColor: resolvedTheme.statsMonthCard,
                                 onMonthSelected: _selectMonth,
                               )
                             : _StatsFocusedMonthView(
@@ -222,9 +224,10 @@ class _StatsPageState extends State<StatsPage>
         totalIncome: _yearTotal(TransactionType.income),
         totalExpense: _yearTotal(TransactionType.expense),
         leadingChipText: _scopeChipText(data),
-        leadingChipColor: visual.chipColor,
+        leadingChipColor: const Color(0xFFFBBF24),
         magnetGradientColors: visual.gradientColors,
         magnetMarkerPosition: visual.markerPosition,
+        magnetMarkerStyle: MagnetMarkerStyle.line,
         magnetKey: 'stats-magnet-${data.mode.name}',
         drawSurface: drawSurface,
         onCategoryPressed: _openScopeSheet,
@@ -263,7 +266,6 @@ class _StatsPageState extends State<StatsPage>
   _StatsHeaderVisual _headerVisual(StatsYearData data) {
     return switch (data.mode) {
       StatsRenderMode.categoryScope => _StatsHeaderVisual(
-        chipColor: const Color(0xFFF97316),
         gradientColors: const [
           Color(0xFFEF4444),
           Color(0xFFF97316),
@@ -273,7 +275,6 @@ class _StatsPageState extends State<StatsPage>
             StatsCategoryScopeSeries.fromYearData(data).kontrollScore / 100,
       ),
       StatsRenderMode.heatmap => _StatsHeaderVisual(
-        chipColor: AppColors.primary,
         gradientColors: const [
           Color(0xFFE2E8F0),
           Color(0xFFFFFFFF),
@@ -284,9 +285,6 @@ class _StatsPageState extends State<StatsPage>
         markerPosition: _heatConcentration(data),
       ),
       StatsRenderMode.closing => _StatsHeaderVisual(
-        chipColor: data.activeType == TransactionType.income
-            ? AppColors.income
-            : AppColors.expense,
         gradientColors: const [
           Color(0xFFEF4444),
           Color(0xFFFEE2E2),
@@ -422,12 +420,10 @@ class _StatsPageState extends State<StatsPage>
 
 class _StatsHeaderVisual {
   const _StatsHeaderVisual({
-    required this.chipColor,
     required this.gradientColors,
     required this.markerPosition,
   });
 
-  final Color chipColor;
   final List<Color> gradientColors;
   final double markerPosition;
 }

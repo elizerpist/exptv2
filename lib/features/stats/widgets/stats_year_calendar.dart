@@ -13,10 +13,12 @@ class StatsYearCalendar extends StatelessWidget {
   const StatsYearCalendar({
     super.key,
     required this.data,
+    this.monthCardColor = AppColors.gray50,
     this.onMonthSelected,
   });
 
   final StatsYearData data;
+  final Color monthCardColor;
   final ValueChanged<StatsMonthData>? onMonthSelected;
 
   @override
@@ -45,6 +47,7 @@ class StatsYearCalendar extends StatelessWidget {
                     painter: _StatsYearCalendarPainter(
                       data: data,
                       layout: layout,
+                      monthCardColor: monthCardColor,
                     ),
                   ),
                 ),
@@ -70,10 +73,15 @@ class StatsYearCalendar extends StatelessWidget {
 }
 
 class _StatsYearCalendarPainter extends CustomPainter {
-  const _StatsYearCalendarPainter({required this.data, required this.layout});
+  const _StatsYearCalendarPainter({
+    required this.data,
+    required this.layout,
+    required this.monthCardColor,
+  });
 
   final StatsYearData data;
   final CalendarCanvasLayout layout;
+  final Color monthCardColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -90,7 +98,7 @@ class _StatsYearCalendarPainter extends CustomPainter {
       3,
       true,
     );
-    canvas.drawRRect(rrect, Paint()..color = AppColors.gray50);
+    canvas.drawRRect(rrect, Paint()..color = monthCardColor);
     canvas.drawRRect(
       rrect,
       Paint()
@@ -249,6 +257,8 @@ class _StatsYearCalendarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_StatsYearCalendarPainter oldDelegate) {
-    return oldDelegate.data != data || oldDelegate.layout.size != layout.size;
+    return oldDelegate.data != data ||
+        oldDelegate.layout.size != layout.size ||
+        oldDelegate.monthCardColor != monthCardColor;
   }
 }

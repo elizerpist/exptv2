@@ -23,7 +23,12 @@ void main() {
       find.byKey(const ValueKey('debug-floating-button')),
     );
     final screenSize = tester.view.physicalSize / tester.view.devicePixelRatio;
-    expect(buttonRect.right, moreOrLessEquals(screenSize.width - 16));
+    final positioned = tester.widget<Positioned>(
+      find.byKey(const ValueKey('debug-floating-button-position')),
+    );
+    expect(positioned.left, 16);
+    expect(positioned.right, isNull);
+    expect(buttonRect.left, moreOrLessEquals(16));
     expect(
       buttonRect.bottom,
       moreOrLessEquals(screenSize.height - AppDimensions.bottomNavHeight - 12),
@@ -48,8 +53,13 @@ void main() {
             case 'loadRecurringAlarmDebugState':
               return <String, Object?>{
                 'overrideMillis': null,
-                'effectiveMillis': DateTime(2026, 5, 31, 0, 1)
-                    .millisecondsSinceEpoch,
+                'effectiveMillis': DateTime(
+                  2026,
+                  5,
+                  31,
+                  0,
+                  1,
+                ).millisecondsSinceEpoch,
                 'usingOverride': false,
                 'logs': <String>['[RecurringAlarm] sync start'],
               };
@@ -67,8 +77,13 @@ void main() {
             case 'scheduleRecurringDebugTestAlarm':
               return <String, Object?>{
                 'overrideMillis': null,
-                'effectiveMillis': DateTime(2026, 5, 31, 0, 1)
-                    .millisecondsSinceEpoch,
+                'effectiveMillis': DateTime(
+                  2026,
+                  5,
+                  31,
+                  0,
+                  1,
+                ).millisecondsSinceEpoch,
                 'usingOverride': false,
                 'logs': <String>['[RecurringAlarm] debug test alarm scheduled'],
               };

@@ -20,7 +20,7 @@ class DebugFloatingButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned(
       key: const ValueKey('debug-floating-button-position'),
-      right: 16,
+      left: 16,
       bottom: bottomOffset,
       child: Material(
         color: const Color(0xFF1E293B),

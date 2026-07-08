@@ -28,6 +28,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.leadingChipColor,
     this.magnetGradientColors,
     this.magnetMarkerPosition,
+    this.magnetMarkerStyle = MagnetMarkerStyle.circle,
     this.magnetKey,
     this.fastInfoVisible = false,
     this.balanceHidden = false,
@@ -59,6 +60,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final Color? leadingChipColor;
   final List<Color>? magnetGradientColors;
   final double? magnetMarkerPosition;
+  final MagnetMarkerStyle magnetMarkerStyle;
   final String? magnetKey;
   final bool fastInfoVisible;
   final bool balanceHidden;
@@ -148,6 +150,7 @@ class TransactionHeaderCard extends StatelessWidget {
                   budgetAllocation: budgetAllocation,
                   customGradientColors: magnetGradientColors,
                   customMarkerPosition: magnetMarkerPosition,
+                  customMarkerStyle: magnetMarkerStyle,
                   customKey: magnetKey,
                 ),
               ),

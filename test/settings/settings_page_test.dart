@@ -390,6 +390,19 @@ void main() {
     expect(find.byKey(const ValueKey('theme-fab-size-input')), findsOneWidget);
     expect(find.text('Kategória menü felülete'), findsOneWidget);
     expect(find.text('Kategória kártyák felülete'), findsOneWidget);
+    expect(find.text('Statisztika monthcard'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('theme-stats-month-card-color-white')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-stats-month-card-color-gray')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-stats-month-card-color-darkgray')),
+      findsOneWidget,
+    );
     expect(find.text('Árnyékok'), findsOneWidget);
     expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
     expect(find.text('Pink'), findsOneWidget);
@@ -532,15 +545,32 @@ void main() {
       ExpenseSurfaceInteraction.raisedInset,
     );
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
     );
     expect(updated.last.categoryMenuColor, AppBoxColor.darkgray);
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-category-card-color-white')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('theme-category-card-color-white')),
     );
     expect(updated.last.categoryCardColor, AppBoxColor.white);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('theme-stats-month-card-color-darkgray')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-stats-month-card-color-darkgray')),
+    );
+    expect(updated.last.statsMonthCardColor, AppBoxColor.darkgray);
 
     await tester.tap(find.text('Pink'));
     expect(updated.last.appColor, AppColorMode.pink);

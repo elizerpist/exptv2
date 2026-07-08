@@ -25,6 +25,7 @@ class ExpenseTheme {
     required this.ghostLogboxSurfaceStyle,
     required this.categoryMenu,
     required this.categoryCard,
+    required this.statsMonthCard,
     required this.categoryMenuSurfaceStyle,
     required this.categoryCardSurfaceStyle,
   });
@@ -49,6 +50,7 @@ class ExpenseTheme {
   final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
   final Color categoryMenu;
   final Color categoryCard;
+  final Color statsMonthCard;
   final ExpenseSurfaceInteraction categoryMenuSurfaceStyle;
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
 
@@ -95,13 +97,15 @@ class ExpenseTheme {
       buttonSurfaceStyle: settings.buttonSurfaceStyle,
       contentSurfaceStyle: settings.contentSurfaceStyle,
       bottomNavSurfaceStyle: settings.buttonSurfaceStyle,
-      forcedInsetSurfaceStyle: settings.contentSurfaceStyle ==
+      forcedInsetSurfaceStyle:
+          settings.contentSurfaceStyle ==
               ExpenseSurfaceInteraction.neutralNeutral
           ? ExpenseSurfaceInteraction.neutralNeutral
           : ExpenseSurfaceInteraction.insetInset,
       ghostLogboxSurfaceStyle: settings.ghostLogboxSurfaceStyle,
       categoryMenu: _boxColor(settings.categoryMenuColor),
       categoryCard: _boxColor(settings.categoryCardColor),
+      statsMonthCard: _boxColor(settings.statsMonthCardColor),
       categoryMenuSurfaceStyle: settings.categoryMenuSurfaceStyle,
       categoryCardSurfaceStyle: settings.categoryCardSurfaceStyle,
     );

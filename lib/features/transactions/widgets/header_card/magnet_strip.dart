@@ -6,6 +6,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../models/limit_allocation_data.dart';
 
+enum MagnetMarkerStyle { circle, line }
+
 class MagnetStrip extends StatelessWidget {
   static const defaultHeight = 157.5;
 
@@ -19,6 +21,7 @@ class MagnetStrip extends StatelessWidget {
     this.budgetAllocation,
     this.customGradientColors,
     this.customMarkerPosition,
+    this.customMarkerStyle = MagnetMarkerStyle.circle,
     this.customKey,
   });
 
@@ -30,6 +33,7 @@ class MagnetStrip extends StatelessWidget {
   final LimitAllocationData? budgetAllocation;
   final List<Color>? customGradientColors;
   final double? customMarkerPosition;
+  final MagnetMarkerStyle customMarkerStyle;
   final String? customKey;
 
   @override
@@ -47,6 +51,7 @@ class MagnetStrip extends StatelessWidget {
             painter: _CustomMagnetStripPainter(
               gradientColors: customGradient,
               markerPosition: customMarkerPosition,
+              markerStyle: customMarkerStyle,
               height: height,
             ),
           );
@@ -85,11 +90,13 @@ class _CustomMagnetStripPainter extends CustomPainter {
   const _CustomMagnetStripPainter({
     required this.gradientColors,
     required this.markerPosition,
+    required this.markerStyle,
     required this.height,
   });
 
   final List<Color> gradientColors;
   final double? markerPosition;
+  final MagnetMarkerStyle markerStyle;
   final double height;
 
   @override
@@ -112,6 +119,38 @@ class _CustomMagnetStripPainter extends CustomPainter {
     final marker = markerPosition;
     if (marker == null) return;
     final markerX = rect.left + rect.width * marker.clamp(0.0, 1.0);
+    if (markerStyle == MagnetMarkerStyle.line) {
+      final center = Offset(markerX, rect.center.dy);
+      final lineHeight = math.max(16, trackHeight + 10).toDouble();
+      final shadowRect = Rect.fromCenter(
+        center: center,
+        width: 5,
+        height: lineHeight + 2,
+      );
+      final markerRect = Rect.fromCenter(
+        center: center,
+        width: 3,
+        height: lineHeight,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(shadowRect, const Radius.circular(2.5)),
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.16)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(markerRect, const Radius.circular(1.5)),
+        Paint()..color = AppColors.white,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(markerRect, const Radius.circular(1.5)),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = AppColors.gray500.withValues(alpha: 0.55),
+      );
+      return;
+    }
     canvas.drawCircle(
       Offset(markerX, rect.center.dy),
       math.max(5, trackHeight * 1.05),
@@ -138,6 +177,7 @@ class _CustomMagnetStripPainter extends CustomPainter {
   bool shouldRepaint(covariant _CustomMagnetStripPainter oldDelegate) {
     return oldDelegate.gradientColors != gradientColors ||
         oldDelegate.markerPosition != markerPosition ||
+        oldDelegate.markerStyle != markerStyle ||
         oldDelegate.height != height;
   }
 }
