@@ -37,10 +37,28 @@ class CategoryBudgetStage extends StatefulWidget {
     this.backheaderStyle = BackheaderStyle.classic,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.centerPartitionRingEnabled = false,
+    this.centerBadgeDiscEnabled = true,
+    this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeOverlapMaskEnabled = false,
+    this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
+    this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
+    this.centerBadgeWhiteProgressOpacities =
+        kCenterBadgeWhiteProgressOpacityDefaults,
+    this.centerBadgeColoredFillOpacities =
+        kCenterBadgeColoredFillOpacityDefaults,
+    this.centerBadgeColoredIconOpacities =
+        kCenterBadgeColoredIconOpacityDefaults,
+    this.centerBadgeColoredProgressOpacities =
+        kCenterBadgeColoredProgressOpacityDefaults,
+    this.centerBadgeSlotSizePercents = kCenterBadgeSlotSizePercentDefaults,
+    this.centerBadgeSlotXOffsets = kCenterBadgeSlotXOffsetDefaults,
+    this.centerBadgeColoredBackgroundOpacity =
+        kCenterBadgeColoredBackgroundOpacityDefault,
     this.backgroundColor = AppColors.gray100,
     this.activeKey,
     this.onActiveItemChanged,
     this.onItemTap,
+    this.onCenterBackgroundTap,
     this.bars,
     this.onBarTap,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
@@ -58,10 +76,23 @@ class CategoryBudgetStage extends StatefulWidget {
   final BackheaderStyle backheaderStyle;
   final BackheaderCenterDesign centerBackheaderDesign;
   final bool centerPartitionRingEnabled;
+  final bool centerBadgeDiscEnabled;
+  final CenterBadgeBorderMode centerBadgeBorderMode;
+  final bool centerBadgeOverlapMaskEnabled;
+  final List<int> centerBadgeWhiteDiscOpacities;
+  final List<int> centerBadgeWhiteIconOpacities;
+  final List<int> centerBadgeWhiteProgressOpacities;
+  final List<int> centerBadgeColoredFillOpacities;
+  final List<int> centerBadgeColoredIconOpacities;
+  final List<int> centerBadgeColoredProgressOpacities;
+  final List<int> centerBadgeSlotSizePercents;
+  final List<int> centerBadgeSlotXOffsets;
+  final int centerBadgeColoredBackgroundOpacity;
   final Color backgroundColor;
   final String? activeKey;
   final ValueChanged<BackheaderBudgetItem>? onActiveItemChanged;
   final ValueChanged<BackheaderBudgetItem>? onItemTap;
+  final VoidCallback? onCenterBackgroundTap;
   final ExpenseSurfaceInteraction surfaceStyle;
   final List<OverviewBudgetData> overviewItems;
   final Map<String, double> pendingAmountsByKey;
@@ -396,6 +427,21 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
         backgroundColor: widget.backgroundColor,
         centerDesign: widget.centerBackheaderDesign,
         centerPartitionRingEnabled: widget.centerPartitionRingEnabled,
+        centerBadgeDiscEnabled: widget.centerBadgeDiscEnabled,
+        centerBadgeBorderMode: widget.centerBadgeBorderMode,
+        centerBadgeOverlapMaskEnabled: widget.centerBadgeOverlapMaskEnabled,
+        centerBadgeWhiteDiscOpacities: widget.centerBadgeWhiteDiscOpacities,
+        centerBadgeWhiteIconOpacities: widget.centerBadgeWhiteIconOpacities,
+        centerBadgeWhiteProgressOpacities:
+            widget.centerBadgeWhiteProgressOpacities,
+        centerBadgeColoredFillOpacities: widget.centerBadgeColoredFillOpacities,
+        centerBadgeColoredIconOpacities: widget.centerBadgeColoredIconOpacities,
+        centerBadgeColoredProgressOpacities:
+            widget.centerBadgeColoredProgressOpacities,
+        centerBadgeSlotSizePercents: widget.centerBadgeSlotSizePercents,
+        centerBadgeSlotXOffsets: widget.centerBadgeSlotXOffsets,
+        centerBadgeColoredBackgroundOpacity:
+            widget.centerBadgeColoredBackgroundOpacity,
         centerPartitionAllocation: centerPartitionAllocation,
         centerDragOffset: isCenterBadgeBudget ? _dragDx : 0,
         orbitPartitionBar: isOrbitBudget
@@ -547,7 +593,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
               child: GestureDetector(
                 key: const ValueKey('backheader-experimental-surface'),
                 behavior: HitTestBehavior.opaque,
-                onTap: isCenterBadgeBudget ? null : () => _tap(current),
+                onTap: isCenterBadgeBudget
+                    ? widget.onCenterBackgroundTap
+                    : () => _tap(current),
                 onHorizontalDragStart: isOrbitBudget || isCenterBadgeBudget
                     ? null
                     : (_) {

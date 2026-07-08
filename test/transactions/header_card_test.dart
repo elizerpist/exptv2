@@ -140,6 +140,39 @@ void main() {
     expect(find.byIcon(Icons.account_balance_wallet_outlined), findsOneWidget);
   });
 
+  testWidgets('header notification bell renders unread badge and opens', (
+    tester,
+  ) async {
+    var opened = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '123 Ft',
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+            onNotificationPressed: () => opened = true,
+            notificationUnreadCount: 4,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('header-notification-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('header-notification-unread-badge')),
+      findsOneWidget,
+    );
+    expect(find.text('4'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('header-notification-button')));
+    expect(opened, isTrue);
+  });
+
   testWidgets('header renders taller magnet strip height', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

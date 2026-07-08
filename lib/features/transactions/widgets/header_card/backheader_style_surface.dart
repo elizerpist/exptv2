@@ -36,6 +36,23 @@ class BackheaderStyleSurface extends StatelessWidget {
     this.centerHasLimit = false,
     this.centerProgressColor = AppColors.primary,
     this.centerPartitionRingEnabled = false,
+    this.centerBadgeDiscEnabled = true,
+    this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeOverlapMaskEnabled = false,
+    this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
+    this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
+    this.centerBadgeWhiteProgressOpacities =
+        kCenterBadgeWhiteProgressOpacityDefaults,
+    this.centerBadgeColoredFillOpacities =
+        kCenterBadgeColoredFillOpacityDefaults,
+    this.centerBadgeColoredIconOpacities =
+        kCenterBadgeColoredIconOpacityDefaults,
+    this.centerBadgeColoredProgressOpacities =
+        kCenterBadgeColoredProgressOpacityDefaults,
+    this.centerBadgeSlotSizePercents = kCenterBadgeSlotSizePercentDefaults,
+    this.centerBadgeSlotXOffsets = kCenterBadgeSlotXOffsetDefaults,
+    this.centerBadgeColoredBackgroundOpacity =
+        kCenterBadgeColoredBackgroundOpacityDefault,
     this.centerPartitionAllocation,
     this.centerDragOffset = 0,
     this.centerPeriodLabel,
@@ -92,6 +109,18 @@ class BackheaderStyleSurface extends StatelessWidget {
   final bool centerHasLimit;
   final Color centerProgressColor;
   final bool centerPartitionRingEnabled;
+  final bool centerBadgeDiscEnabled;
+  final CenterBadgeBorderMode centerBadgeBorderMode;
+  final bool centerBadgeOverlapMaskEnabled;
+  final List<int> centerBadgeWhiteDiscOpacities;
+  final List<int> centerBadgeWhiteIconOpacities;
+  final List<int> centerBadgeWhiteProgressOpacities;
+  final List<int> centerBadgeColoredFillOpacities;
+  final List<int> centerBadgeColoredIconOpacities;
+  final List<int> centerBadgeColoredProgressOpacities;
+  final List<int> centerBadgeSlotSizePercents;
+  final List<int> centerBadgeSlotXOffsets;
+  final int centerBadgeColoredBackgroundOpacity;
   final LimitAllocationData? centerPartitionAllocation;
   final double centerDragOffset;
   final String? centerPeriodLabel;
@@ -133,10 +162,11 @@ class BackheaderStyleSurface extends StatelessWidget {
     final color = current.category?.color ?? _overviewColor;
     final amountText = orbitAmountText ?? current.amountText;
     final segments = _segmentColors;
+    final surfaceColor = _background(color);
     return DecoratedBox(
       key: ValueKey('backheader-style-${style.nativeValue}'),
       decoration: BoxDecoration(
-        color: _background(color),
+        color: surfaceColor,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Stack(
@@ -173,6 +203,18 @@ class BackheaderStyleSurface extends StatelessWidget {
               hasLimit: centerHasLimit,
               progressColor: centerProgressColor,
               partitionRingEnabled: centerPartitionRingEnabled,
+              badgeDiscEnabled: centerBadgeDiscEnabled,
+              borderMode: centerBadgeBorderMode,
+              overlapMaskEnabled: centerBadgeOverlapMaskEnabled,
+              overlapMaskColor: surfaceColor,
+              whiteDiscOpacities: centerBadgeWhiteDiscOpacities,
+              whiteIconOpacities: centerBadgeWhiteIconOpacities,
+              whiteProgressOpacities: centerBadgeWhiteProgressOpacities,
+              coloredFillOpacities: centerBadgeColoredFillOpacities,
+              coloredIconOpacities: centerBadgeColoredIconOpacities,
+              coloredProgressOpacities: centerBadgeColoredProgressOpacities,
+              slotSizePercents: centerBadgeSlotSizePercents,
+              slotXOffsets: centerBadgeSlotXOffsets,
               partitionAllocation: centerPartitionAllocation,
               periodLabel: centerPeriodLabel,
               actions: centerActions,
@@ -237,7 +279,14 @@ class BackheaderStyleSurface extends StatelessWidget {
     BackheaderStyle.orbitBudget => color,
     BackheaderStyle.centerBadgeBudget
         when centerDesign == BackheaderCenterDesign.colored =>
-      Color.alphaBlend(color.withValues(alpha: 0.72), backgroundColor),
+      Color.alphaBlend(
+        color.withValues(
+          alpha:
+              centerBadgeColoredBackgroundOpacity.clamp(0, 100).toDouble() /
+              100,
+        ),
+        backgroundColor,
+      ),
     _ => backgroundColor,
   };
 
@@ -521,6 +570,18 @@ class _CenterBadgeBudget extends StatelessWidget {
     required this.hasLimit,
     required this.progressColor,
     required this.partitionRingEnabled,
+    required this.badgeDiscEnabled,
+    required this.borderMode,
+    required this.overlapMaskEnabled,
+    required this.overlapMaskColor,
+    required this.whiteDiscOpacities,
+    required this.whiteIconOpacities,
+    required this.whiteProgressOpacities,
+    required this.coloredFillOpacities,
+    required this.coloredIconOpacities,
+    required this.coloredProgressOpacities,
+    required this.slotSizePercents,
+    required this.slotXOffsets,
     required this.partitionAllocation,
     required this.periodLabel,
     required this.actions,
@@ -564,6 +625,18 @@ class _CenterBadgeBudget extends StatelessWidget {
   final bool hasLimit;
   final Color progressColor;
   final bool partitionRingEnabled;
+  final bool badgeDiscEnabled;
+  final CenterBadgeBorderMode borderMode;
+  final bool overlapMaskEnabled;
+  final Color overlapMaskColor;
+  final List<int> whiteDiscOpacities;
+  final List<int> whiteIconOpacities;
+  final List<int> whiteProgressOpacities;
+  final List<int> coloredFillOpacities;
+  final List<int> coloredIconOpacities;
+  final List<int> coloredProgressOpacities;
+  final List<int> slotSizePercents;
+  final List<int> slotXOffsets;
   final LimitAllocationData? partitionAllocation;
   final String? periodLabel;
   final Widget? actions;
@@ -600,7 +673,7 @@ class _CenterBadgeBudget extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final amountTop = safeTop + 8;
-    final railTop = safeTop + 21;
+    final railTop = safeTop + 19;
     final amountColor = coloredDesign ? AppColors.white : AppColors.gray800;
     final titleColor = coloredDesign ? AppColors.white : AppColors.gray700;
     final periodColor = coloredDesign
@@ -671,6 +744,18 @@ class _CenterBadgeBudget extends StatelessWidget {
                 progressColor: ringColor,
                 ringTrackColor: ringTrackColor,
                 partitionRingEnabled: partitionRingEnabled,
+                badgeDiscEnabled: badgeDiscEnabled,
+                borderMode: borderMode,
+                overlapMaskEnabled: overlapMaskEnabled,
+                overlapMaskColor: overlapMaskColor,
+                whiteDiscOpacities: whiteDiscOpacities,
+                whiteIconOpacities: whiteIconOpacities,
+                whiteProgressOpacities: whiteProgressOpacities,
+                coloredFillOpacities: coloredFillOpacities,
+                coloredIconOpacities: coloredIconOpacities,
+                coloredProgressOpacities: coloredProgressOpacities,
+                slotSizePercents: slotSizePercents,
+                slotXOffsets: slotXOffsets,
                 partitionAllocation: partitionAllocation,
                 titleColor: titleColor,
                 previousEdge: previousEdge,
@@ -766,6 +851,18 @@ class _CenterBadgeWheel extends StatelessWidget {
     required this.progressColor,
     required this.ringTrackColor,
     required this.partitionRingEnabled,
+    required this.badgeDiscEnabled,
+    required this.borderMode,
+    required this.overlapMaskEnabled,
+    required this.overlapMaskColor,
+    required this.whiteDiscOpacities,
+    required this.whiteIconOpacities,
+    required this.whiteProgressOpacities,
+    required this.coloredFillOpacities,
+    required this.coloredIconOpacities,
+    required this.coloredProgressOpacities,
+    required this.slotSizePercents,
+    required this.slotXOffsets,
     required this.partitionAllocation,
     required this.titleColor,
     required this.previousEdge,
@@ -794,13 +891,14 @@ class _CenterBadgeWheel extends StatelessWidget {
 
   static const width = 386.0;
   static const _activeSize = 78.0 * 1.15;
-  static const _innerPreviewSize = 48.0 * 1.10 * 1.10 * 1.10;
-  static const _outerPreviewSize = 40.0 * 1.10 * 1.10 * 1.10;
-  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10 * 1.10;
-  static const _edgePreviewSize = 28.0 * 1.10 * 1.10 * 1.10;
-  static const _slotSpacing = 68.0;
+  static const _innerPreviewSize = 48.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _outerPreviewSize = 40.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _farthestPreviewSize = 34.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _edgePreviewSize = 28.0 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10;
+  static const _slotSpacing = 73.1;
+  static const _innerVisualSpacing = _slotSpacing - 2.0;
   static const _compressedOuterSpacing = 38.0;
-  static const _titleTop = 82.0;
+  static const _titleTop = 86.0;
 
   final BackheaderBudgetItem current;
   final List<BackheaderBudgetItem> items;
@@ -812,6 +910,18 @@ class _CenterBadgeWheel extends StatelessWidget {
   final Color progressColor;
   final Color ringTrackColor;
   final bool partitionRingEnabled;
+  final bool badgeDiscEnabled;
+  final CenterBadgeBorderMode borderMode;
+  final bool overlapMaskEnabled;
+  final Color overlapMaskColor;
+  final List<int> whiteDiscOpacities;
+  final List<int> whiteIconOpacities;
+  final List<int> whiteProgressOpacities;
+  final List<int> coloredFillOpacities;
+  final List<int> coloredIconOpacities;
+  final List<int> coloredProgressOpacities;
+  final List<int> slotSizePercents;
+  final List<int> slotXOffsets;
   final LimitAllocationData? partitionAllocation;
   final Color titleColor;
   final BackheaderBudgetItem? previousEdge;
@@ -917,8 +1027,23 @@ class _CenterBadgeWheel extends StatelessWidget {
   ) {
     final logicalOffset = offset + dragOffset / _slotSpacing;
     final distance = logicalOffset.abs().clamp(0.0, 4.0).toDouble();
-    final centerX = width / 2 + _visualOffsetForLogical(logicalOffset);
-    final size = _sizeForDistance(distance);
+    final slotSizeFactor =
+        _slotValueForLogical(slotSizePercents, logicalOffset, fallback: 100) /
+        100;
+    final centerX =
+        width / 2 +
+        _visualOffsetForLogical(logicalOffset) +
+        _slotValueForLogical(slotXOffsets, logicalOffset, fallback: 0);
+    final size = _sizeForDistance(distance) * slotSizeFactor;
+    final fillOpacity = coloredDesign
+        ? _layerOpacityForDistance(whiteDiscOpacities, distance)
+        : _layerOpacityForDistance(coloredFillOpacities, distance);
+    final iconOpacity = coloredDesign
+        ? _layerOpacityForDistance(whiteIconOpacities, distance)
+        : _layerOpacityForDistance(coloredIconOpacities, distance);
+    final progressOpacity = coloredDesign
+        ? _layerOpacityForDistance(whiteProgressOpacities, distance)
+        : _layerOpacityForDistance(coloredProgressOpacities, distance);
     return _CenterWheelSlotData(
       offset: offset,
       item: item,
@@ -926,7 +1051,9 @@ class _CenterBadgeWheel extends StatelessWidget {
       centerX: centerX,
       distance: distance,
       size: size,
-      opacity: _opacityForDistance(distance),
+      fillOpacity: fillOpacity,
+      iconOpacity: iconOpacity,
+      progressOpacity: progressOpacity,
       progress: offset == 0 ? progress : _progressForItem(item),
       hasLimit: offset == 0 ? hasLimit : _hasLimitForItem(item),
       progressColor: offset == 0 ? progressColor : _progressColorForItem(item),
@@ -958,12 +1085,18 @@ class _CenterBadgeWheel extends StatelessWidget {
         active: active,
         coloredDesign: coloredDesign,
         size: slot.size,
-        opacity: slot.opacity,
+        fillOpacity: slot.fillOpacity,
+        iconOpacity: slot.iconOpacity,
+        progressOpacity: slot.progressOpacity,
         color: active ? currentColor : slot.color,
         progress: slot.progress,
         hasLimit: slot.hasLimit,
         progressColor: coloredDesign ? AppColors.white : slot.progressColor,
         ringTrackColor: ringTrackColor,
+        badgeDiscEnabled: badgeDiscEnabled,
+        borderMode: borderMode,
+        overlapMaskEnabled: overlapMaskEnabled,
+        overlapMaskColor: overlapMaskColor,
         partitionAllocation: active && partitionRingEnabled
             ? partitionAllocation
             : null,
@@ -994,19 +1127,47 @@ class _CenterBadgeWheel extends StatelessWidget {
     return _lerp(_farthestPreviewSize, _edgePreviewSize, distance - 3);
   }
 
-  double _opacityForDistance(double distance) {
-    if (distance <= 0) return 1;
-    if (distance <= 1) return _lerp(1, 0.72, distance);
-    if (distance <= 2) return _lerp(0.72, 0.58, distance - 1);
-    if (distance <= 3) return _lerp(0.58, 0.48, distance - 2);
-    return _lerp(0.48, 0.42, distance - 3);
+  double _layerOpacityForDistance(List<int> values, double distance) {
+    final clamped = distance.clamp(0.0, 4.0).toDouble();
+    final lowIndex = clamped.floor().clamp(0, 4).toInt();
+    final highIndex = clamped.ceil().clamp(0, 4).toInt();
+    final low = _opacityAt(values, lowIndex);
+    final high = _opacityAt(values, highIndex);
+    if (lowIndex == highIndex) return low;
+    return _lerp(low, high, clamped - lowIndex);
+  }
+
+  double _opacityAt(List<int> values, int index) {
+    const fallback = 1.0;
+    if (index >= values.length) return fallback;
+    return values[index].clamp(0, 100).toDouble() / 100;
+  }
+
+  double _slotValueForLogical(
+    List<int> values,
+    double logicalOffset, {
+    required int fallback,
+  }) {
+    final clamped = logicalOffset.clamp(-4.0, 4.0).toDouble() + 4;
+    final lowIndex = clamped.floor().clamp(0, 8).toInt();
+    final highIndex = clamped.ceil().clamp(0, 8).toInt();
+    final low = _slotValueAt(values, lowIndex, fallback: fallback);
+    final high = _slotValueAt(values, highIndex, fallback: fallback);
+    if (lowIndex == highIndex) return low;
+    return _lerp(low, high, clamped - lowIndex);
+  }
+
+  double _slotValueAt(List<int> values, int index, {required int fallback}) {
+    if (index >= values.length) return fallback.toDouble();
+    return values[index].toDouble();
   }
 
   double _visualOffsetForLogical(double logicalOffset) {
     final distance = logicalOffset.abs();
-    if (distance <= 1) return logicalOffset * _slotSpacing;
+    if (distance <= 1) return logicalOffset * _innerVisualSpacing;
     final sign = logicalOffset < 0 ? -1.0 : 1.0;
-    return sign * (_slotSpacing + (distance - 1) * _compressedOuterSpacing);
+    return sign *
+        (_innerVisualSpacing + (distance - 1) * _compressedOuterSpacing);
   }
 
   Color _colorForItem(BackheaderBudgetItem item) {
@@ -1065,7 +1226,9 @@ class _CenterWheelSlotData {
     required this.centerX,
     required this.distance,
     required this.size,
-    required this.opacity,
+    required this.fillOpacity,
+    required this.iconOpacity,
+    required this.progressOpacity,
     required this.progress,
     required this.hasLimit,
     required this.progressColor,
@@ -1078,7 +1241,9 @@ class _CenterWheelSlotData {
   final double centerX;
   final double distance;
   final double size;
-  final double opacity;
+  final double fillOpacity;
+  final double iconOpacity;
+  final double progressOpacity;
   final double progress;
   final bool hasLimit;
   final Color progressColor;
@@ -1088,14 +1253,20 @@ class _CenterWheelSlotData {
 BoxDecoration _centerBadgeDecoration({
   required Color color,
   required bool coloredDesign,
+  required bool badgeDiscEnabled,
+  required double fillOpacity,
 }) {
   if (!coloredDesign) {
-    return BoxDecoration(color: color, shape: BoxShape.circle);
+    return BoxDecoration(
+      color: color.withValues(alpha: fillOpacity),
+      shape: BoxShape.circle,
+    );
   }
   return BoxDecoration(
-    color: AppColors.white.withValues(alpha: 0.18),
+    color: badgeDiscEnabled
+        ? AppColors.white.withValues(alpha: fillOpacity)
+        : Colors.transparent,
     shape: BoxShape.circle,
-    border: Border.all(color: AppColors.white.withValues(alpha: 0.22)),
   );
 }
 
@@ -1108,11 +1279,17 @@ class _CenterBadgeVisual extends StatelessWidget {
     required this.color,
     required this.coloredDesign,
     required this.size,
-    required this.opacity,
+    required this.fillOpacity,
+    required this.iconOpacity,
+    required this.progressOpacity,
     required this.progress,
     required this.hasLimit,
     required this.progressColor,
     required this.ringTrackColor,
+    required this.badgeDiscEnabled,
+    required this.borderMode,
+    required this.overlapMaskEnabled,
+    required this.overlapMaskColor,
     required this.partitionAllocation,
     required this.onTap,
     required this.onBadgeLongPressStart,
@@ -1132,11 +1309,17 @@ class _CenterBadgeVisual extends StatelessWidget {
   final Color color;
   final bool coloredDesign;
   final double size;
-  final double opacity;
+  final double fillOpacity;
+  final double iconOpacity;
+  final double progressOpacity;
   final double progress;
   final bool hasLimit;
   final Color progressColor;
   final Color ringTrackColor;
+  final bool badgeDiscEnabled;
+  final CenterBadgeBorderMode borderMode;
+  final bool overlapMaskEnabled;
+  final Color overlapMaskColor;
   final LimitAllocationData? partitionAllocation;
   final VoidCallback? onTap;
   final GestureLongPressStartCallback? onBadgeLongPressStart;
@@ -1156,77 +1339,102 @@ class _CenterBadgeVisual extends StatelessWidget {
     final fillKey = active
         ? const ValueKey('backheader-center-budget-button')
         : ValueKey('backheader-center-preview-fill-$previewSlotName');
+    final maskKey = active
+        ? const ValueKey('backheader-center-overlap-mask')
+        : ValueKey('backheader-center-preview-overlap-mask-$previewSlotName');
+    final showProgressTrack =
+        hasLimit || borderMode == CenterBadgeBorderMode.always;
+    final iconColor = AppColors.white.withValues(alpha: iconOpacity);
+    final effectiveProgressColor = coloredDesign
+        ? progressColor.withValues(alpha: progressOpacity)
+        : progressColor.withValues(alpha: progressOpacity);
+    final effectiveTrackColor = coloredDesign
+        ? AppColors.white.withValues(alpha: 0.34 * progressOpacity)
+        : ringTrackColor.withValues(alpha: progressOpacity);
 
-    return Opacity(
-      opacity: opacity,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (partitionAllocation != null)
-              SizedBox(
-                width: partitionSize,
-                height: partitionSize,
-                child: CustomPaint(
-                  key: const ValueKey('backheader-center-partition-ring'),
-                  painter: _CenterBadgePartitionRingPainter(
-                    allocation: partitionAllocation!,
-                  ),
-                ),
-              ),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onTap,
-              onLongPressStart: active ? onBadgeLongPressStart : null,
-              onLongPressMoveUpdate: active ? onBadgeLongPressMoveUpdate : null,
-              onLongPressEnd: active ? onBadgeLongPressEnd : null,
-              onLongPressCancel: active ? onBadgeLongPressCancel : null,
-              child: Container(
-                key: fillKey,
-                width: fillSize,
-                height: fillSize,
-                decoration: _centerBadgeDecoration(
-                  color: color,
-                  coloredDesign: coloredDesign,
-                ),
-                alignment: Alignment.center,
-                child: Stack(
-                  fit: StackFit.expand,
-                  alignment: Alignment.center,
-                  children: [
-                    CustomPaint(
-                      key: progressKey,
-                      painter: _CenterBadgeProgressRingPainter(
-                        progress: hasLimit ? progress : 0,
-                        color: progressColor,
-                        trackColor: ringTrackColor,
-                        showFill: hasLimit,
-                      ),
-                    ),
-                    Center(
-                      child: item.category == null
-                          ? Icon(
-                              _overviewIcon(item.overview?.kind),
-                              color: AppColors.white,
-                              size: iconSize,
-                            )
-                          : CategorySlotIcon(
-                              slot: item.category!.iconSlot,
-                              color: AppColors.white,
-                              size: iconSize,
-                              listenForSlotChanges: false,
-                            ),
-                    ),
-                  ],
+    final visual = SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (overlapMaskEnabled)
+            SizedBox(
+              width: fillSize,
+              height: fillSize,
+              child: DecoratedBox(
+                key: maskKey,
+                decoration: BoxDecoration(
+                  color: overlapMaskColor,
+                  shape: BoxShape.circle,
                 ),
               ),
             ),
-          ],
-        ),
+          if (partitionAllocation != null)
+            SizedBox(
+              width: partitionSize,
+              height: partitionSize,
+              child: CustomPaint(
+                key: const ValueKey('backheader-center-partition-ring'),
+                painter: _CenterBadgePartitionRingPainter(
+                  allocation: partitionAllocation!,
+                ),
+              ),
+            ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onLongPressStart: active ? onBadgeLongPressStart : null,
+            onLongPressMoveUpdate: active ? onBadgeLongPressMoveUpdate : null,
+            onLongPressEnd: active ? onBadgeLongPressEnd : null,
+            onLongPressCancel: active ? onBadgeLongPressCancel : null,
+            child: Container(
+              key: fillKey,
+              width: fillSize,
+              height: fillSize,
+              decoration: _centerBadgeDecoration(
+                color: color,
+                coloredDesign: coloredDesign,
+                badgeDiscEnabled: badgeDiscEnabled,
+                fillOpacity: fillOpacity,
+              ),
+              alignment: Alignment.center,
+              child: Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    key: progressKey,
+                    painter: _CenterBadgeProgressRingPainter(
+                      progress: hasLimit ? progress : 0,
+                      color: effectiveProgressColor,
+                      trackColor: effectiveTrackColor,
+                      showTrack: showProgressTrack,
+                      showFill: hasLimit,
+                    ),
+                  ),
+                  Center(
+                    child: item.category == null
+                        ? Icon(
+                            _overviewIcon(item.overview?.kind),
+                            color: iconColor,
+                            size: iconSize,
+                          )
+                        : CategorySlotIcon(
+                            slot: item.category!.iconSlot,
+                            color: iconColor,
+                            size: iconSize,
+                            listenForSlotChanges: false,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+    return visual;
   }
 
   IconData _overviewIcon(BudgetGoalKind? kind) {
@@ -1287,23 +1495,28 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
     required this.progress,
     required this.color,
     required this.trackColor,
+    required this.showTrack,
     required this.showFill,
   });
 
   final double progress;
   final Color color;
   final Color trackColor;
+  final bool showTrack;
   final bool showFill;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (!showTrack && !showFill) return;
     final rect = (Offset.zero & size).deflate(_centerBadgeRingStrokeWidth / 2);
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _centerBadgeRingStrokeWidth
-      ..strokeCap = StrokeCap.round
-      ..color = trackColor;
-    canvas.drawArc(rect, 0, 6.283185307179586, false, track);
+    if (showTrack) {
+      final track = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _centerBadgeRingStrokeWidth
+        ..strokeCap = StrokeCap.round
+        ..color = trackColor;
+      canvas.drawArc(rect, 0, 6.283185307179586, false, track);
+    }
     if (!showFill) return;
     final fill = Paint()
       ..style = PaintingStyle.stroke
@@ -1324,6 +1537,7 @@ class _CenterBadgeProgressRingPainter extends CustomPainter {
     return oldDelegate.progress != progress ||
         oldDelegate.color != color ||
         oldDelegate.trackColor != trackColor ||
+        oldDelegate.showTrack != showTrack ||
         oldDelegate.showFill != showFill;
   }
 }

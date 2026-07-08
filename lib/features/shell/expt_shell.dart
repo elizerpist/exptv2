@@ -17,6 +17,7 @@ import '../settings/models/fast_info_config.dart';
 import '../settings/settings_page.dart';
 import '../settings/state/push_notification_log_store.dart';
 import '../settings/widgets/push_log/push_notification_event_sheet.dart';
+import '../settings/widgets/options/backheader_style_options_panel.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -32,6 +33,7 @@ import '../transactions/widgets/category_menu/category_editor_sheet.dart';
 import '../transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/recurring_manager_sheet.dart';
+import '../transactions/widgets/slide_up_menu_card.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
@@ -53,6 +55,12 @@ class ExptShell extends StatefulWidget {
 }
 
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
+  static const _rightFabBottomOffset = AppDimensions.bottomNavHeight + 24.0;
+  static double _rightFabDebugBottomOffset(double fabSize) =>
+      _rightFabBottomOffset + fabSize + 12.0;
+  static double _rightFabLogBottomPadding(double fabSize) =>
+      _rightFabBottomOffset + fabSize + 24.0;
+
   late AppTab _activeTab;
   late final TransactionStore _transactionStore;
   late final NotificationStore _notificationStore;
@@ -66,6 +74,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
+  Timer? _homeThemeSettingsSaveDebounce;
+  var _homeThemeSettingsRevision = 0;
   late StatsPage _statsPage;
 
   @override
@@ -98,6 +108,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
+    _homeThemeSettingsSaveDebounce?.cancel();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     _notificationStore.removeListener(_handleNotificationStoreChanged);
@@ -149,10 +160,21 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   TransactionHomePage _buildTransactionHomePage() {
+    final rightRoundedFab =
+        _themeSettings.shellNavigationLayout ==
+        ShellNavigationLayout.rightRoundedFab;
+    final fabSize = _themeSettings.fabSize.toDouble();
     return TransactionHomePage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       fastInfoConfig: _fastInfoConfig,
+      logBottomPadding: rightRoundedFab
+          ? _rightFabLogBottomPadding(fabSize)
+          : 96,
+      onNotificationPressed: rightRoundedFab
+          ? _handleHeaderNotificationPressed
+          : null,
+      notificationUnreadCount: _notificationStore.unreadCount,
       onEditTransaction: _openEditTransaction,
       onDeleteTransactionRequested: _confirmDeleteTransaction,
       onBlockingOverlayChanged: _setHomeBlockingOverlay,
@@ -175,6 +197,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       },
       onEditCategoryEditorRequested: (category) {
         _sheetHostKey.currentState?.openCategory(initialCategory: category);
+      },
+      onThemeSettingsChanged: (settings) {
+        _queueHomeThemeSettings(settings);
+      },
+      onBackheaderLiveTunerRequested: () {
+        _sheetHostKey.currentState?.openBackheaderLiveTuner();
       },
       budgetEditorActiveKey: _budgetEditorActiveKey,
     );
@@ -268,7 +296,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         widget.store.allEvents.map((event) => event.id),
       ),
     );
-    setState(() {});
+    setState(() {
+      _transactionHomePage = _buildTransactionHomePage();
+    });
   }
 
   Future<void> _refreshNotificationsAfterTransactionChange() async {
@@ -287,6 +317,32 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     DebugConsole.log(
       '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
     );
+  }
+
+  void _queueHomeThemeSettings(AppThemeSettings settings) {
+    _homeThemeSettingsRevision += 1;
+    final revision = _homeThemeSettingsRevision;
+    _applyThemeSettings(settings);
+    _homeThemeSettingsSaveDebounce?.cancel();
+    _homeThemeSettingsSaveDebounce = Timer(
+      const Duration(milliseconds: 180),
+      () => unawaited(_persistHomeThemeSettings(settings, revision)),
+    );
+  }
+
+  Future<void> _persistHomeThemeSettings(
+    AppThemeSettings settings,
+    int revision,
+  ) async {
+    try {
+      final confirmed = await widget.nativeBridge.expenseUpdateThemeSettings(
+        settings,
+      );
+      if (!mounted || revision != _homeThemeSettingsRevision) return;
+      _applyThemeSettings(confirmed);
+    } catch (error) {
+      DebugConsole.log('[ThemeSurface] home live update failed: $error');
+    }
   }
 
   void _applyFastInfoConfig(FastInfoConfig config) {
@@ -415,6 +471,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       '[SlideUpMenu] RecurringManager shell open requested source=fabLongPress',
     );
     _sheetHostKey.currentState?.openRecurring();
+  }
+
+  void _handleHeaderNotificationPressed() {
+    DebugConsole.log('[Notification] header bell open requested');
+    _selectTab(AppTab.notifications);
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
@@ -549,6 +610,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   List<Widget> _buildShellNavigation(ExpenseTheme expenseTheme) {
+    final shellLayout = expenseTheme.settings.shellNavigationLayout;
+    final rightRoundedFab =
+        shellLayout == ShellNavigationLayout.rightRoundedFab;
+    final fabSize = expenseTheme.settings.fabSize.toDouble();
+    final fabShape = expenseTheme.settings.fabShape.toExptFabShape;
     return [
       Positioned(
         left: 0,
@@ -562,22 +628,39 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           accentLightColor: expenseTheme.accentLight,
           activeBackgroundColor: expenseTheme.activeBackground,
           unreadNotificationCount: _notificationStore.unreadCount,
+          layout: shellLayout,
           onTabSelected: _selectTab,
         ),
       ),
-      Positioned(
-        left: 0,
-        right: 0,
-        bottom: AppDimensions.fabBottom,
-        child: Center(
+      if (rightRoundedFab)
+        Positioned(
+          right: 20,
+          bottom: _rightFabBottomOffset,
           child: ExptFab(
             primaryColor: expenseTheme.accent,
             surfaceStyle: expenseTheme.buttonSurfaceStyle,
+            shape: fabShape,
+            size: fabSize,
             onPressed: _handleFabPressed,
             onLongPress: _handleFabLongPressed,
           ),
+        )
+      else
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: AppDimensions.fabBottom,
+          child: Center(
+            child: ExptFab(
+              primaryColor: expenseTheme.accent,
+              surfaceStyle: expenseTheme.buttonSurfaceStyle,
+              shape: fabShape,
+              size: fabSize,
+              onPressed: _handleFabPressed,
+              onLongPress: _handleFabLongPressed,
+            ),
+          ),
         ),
-      ),
     ];
   }
 
@@ -612,6 +695,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     _logThemeSurfaceOnce(expenseTheme);
     final shellNavigation = _buildShellNavigation(expenseTheme);
+    final rightRoundedFab =
+        _themeSettings.shellNavigationLayout ==
+        ShellNavigationLayout.rightRoundedFab;
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
@@ -629,6 +715,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           ),
           if (!_homeBlockingOverlayOpen) ...shellNavigation,
           DebugFloatingButton(
+            bottomOffset: rightRoundedFab
+                ? _rightFabDebugBottomOffset(_themeSettings.fabSize.toDouble())
+                : AppDimensions.bottomNavHeight + 12,
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:
                 _transactionStore.refreshAfterRecurringProcessing,
@@ -643,6 +732,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               resolveNotificationEventId:
                   widget.nativeBridge.expenseNotificationEventIdForTransaction,
               onOpenNotificationEvent: _openNotificationEventFromTransaction,
+              onThemeSettingsChanged: _queueHomeThemeSettings,
             ),
           ),
         ],
@@ -669,7 +759,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         'card=${settings.cardColor.nativeValue} '
         'box=${settings.boxColor.nativeValue} '
         'magnet=${settings.magnetType.nativeValue} '
-        'backheader=${settings.backheaderStyle.nativeValue}';
+        'backheader=${settings.backheaderStyle.nativeValue} '
+        'nav=${settings.shellNavigationLayout.nativeValue}';
   }
 
   String _hex(Color color) {
@@ -693,6 +784,7 @@ class _ShellSheetHost extends StatefulWidget {
     required this.expenseTheme,
     required this.resolveNotificationEventId,
     required this.onOpenNotificationEvent,
+    required this.onThemeSettingsChanged,
   });
 
   final TransactionStore store;
@@ -701,6 +793,7 @@ class _ShellSheetHost extends StatefulWidget {
   final ExpenseTheme expenseTheme;
   final Future<int?> Function(int transactionId) resolveNotificationEventId;
   final Future<void> Function(int eventId) onOpenNotificationEvent;
+  final ValueChanged<AppThemeSettings> onThemeSettingsChanged;
 
   @override
   State<_ShellSheetHost> createState() => _ShellSheetHostState();
@@ -711,6 +804,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   final _categorySlotKey = GlobalKey<_CategorySheetSlotState>();
   final _recurringSlotKey = GlobalKey<_RecurringSheetSlotState>();
   final _budgetSlotKey = GlobalKey<_BudgetTargetSheetSlotState>();
+  final _backheaderTunerSlotKey = GlobalKey<_BackheaderLiveTunerSlotState>();
 
   void openTransaction({
     required DateTime requestedAt,
@@ -720,6 +814,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _transactionSlotKey.currentState?.open(
       requestedAt: requestedAt,
       source: source,
@@ -731,6 +826,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _transactionSlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.open(initialCategory: initialCategory);
   }
 
@@ -738,7 +834,16 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _transactionSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _recurringSlotKey.currentState?.open(requestedAt: DateTime.now());
+  }
+
+  void openBackheaderLiveTuner() {
+    _transactionSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.open();
   }
 
   void openBudgetTargetEditor(
@@ -749,6 +854,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _transactionSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.open(
       item,
       requestedAt: requestedAt,
@@ -769,6 +875,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
   }
 
   @override
@@ -807,8 +914,100 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             expenseTheme: widget.expenseTheme,
           ),
         ),
+        Positioned.fill(
+          child: _BackheaderLiveTunerSlot(
+            key: _backheaderTunerSlotKey,
+            expenseTheme: widget.expenseTheme,
+            onThemeSettingsChanged: widget.onThemeSettingsChanged,
+          ),
+        ),
       ],
     );
+  }
+}
+
+class _BackheaderLiveTunerSlot extends StatefulWidget {
+  const _BackheaderLiveTunerSlot({
+    super.key,
+    required this.expenseTheme,
+    required this.onThemeSettingsChanged,
+  });
+
+  final ExpenseTheme expenseTheme;
+  final ValueChanged<AppThemeSettings> onThemeSettingsChanged;
+
+  @override
+  State<_BackheaderLiveTunerSlot> createState() =>
+      _BackheaderLiveTunerSlotState();
+}
+
+class _BackheaderLiveTunerSlotState extends State<_BackheaderLiveTunerSlot> {
+  var _open = false;
+  AppThemeSettings? _draftSettings;
+
+  void open() {
+    setState(() {
+      _open = true;
+      _draftSettings = widget.expenseTheme.settings;
+    });
+    DebugConsole.log('[BackheaderTuner] shell open');
+  }
+
+  void close() {
+    if (!_open && _draftSettings == null) return;
+    setState(() {
+      _open = false;
+      _draftSettings = null;
+    });
+    DebugConsole.log('[BackheaderTuner] shell closed');
+  }
+
+  @override
+  void didUpdateWidget(covariant _BackheaderLiveTunerSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_open) {
+      _draftSettings = null;
+    } else {
+      _draftSettings ??= widget.expenseTheme.settings;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = _draftSettings ?? widget.expenseTheme.settings;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final panelHeight = (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
+    return SlideUpMenuCard(
+      cardKey: const ValueKey('backheader-live-tuner-slide-card'),
+      debugLabel: 'BackheaderLiveTuner',
+      visible: _open,
+      panelHeight: panelHeight,
+      showFocusVeil: false,
+      dismissOnVeilTap: false,
+      dragFromHandleOnly: true,
+      dragHandleExtent: 72,
+      verticalDragBias: 1.2,
+      onDismissed: close,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: ColoredBox(
+          key: const ValueKey('backheader-live-tuner-panel'),
+          color: widget.expenseTheme.fieldSurface,
+          child: BackheaderStyleOptionsPanel(
+            settings: settings,
+            onChanged: _updateDraftSettings,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _updateDraftSettings(AppThemeSettings settings) {
+    setState(() => _draftSettings = settings);
+    widget.onThemeSettingsChanged(settings);
   }
 }
 
@@ -893,6 +1092,13 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
+}
+
+extension on FabShape {
+  ExptFabShape get toExptFabShape => switch (this) {
+    FabShape.circle => ExptFabShape.circle,
+    FabShape.roundedSquare => ExptFabShape.roundedSquare,
+  };
 }
 
 class _CategorySheetSlot extends StatefulWidget {

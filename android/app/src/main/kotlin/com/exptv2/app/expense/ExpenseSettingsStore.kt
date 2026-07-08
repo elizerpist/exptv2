@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlin.math.roundToInt
 
 class ExpenseSettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
@@ -38,6 +39,10 @@ class ExpenseSettingsStore(context: Context) {
             "categoryCardColor" to prefs.getString(KEY_CATEGORY_CARD_COLOR, "lightgray"),
             "categoryCardSurfaceStyle" to prefs.getString(KEY_CATEGORY_CARD_SURFACE_STYLE, "neutralNeutral"),
             "categoryMenuPresentation" to prefs.getString(KEY_CATEGORY_MENU_PRESENTATION, "inline"),
+            "shellNavigationLayout" to prefs.getString(KEY_SHELL_NAVIGATION_LAYOUT, "current"),
+            "fabShape" to prefs.getString(KEY_FAB_SHAPE, "circle"),
+            "fabSize" to prefs.getInt(KEY_FAB_SIZE, DEFAULT_FAB_SIZE)
+                .coerceIn(MIN_FAB_SIZE, MAX_FAB_SIZE),
             "categoryCardShadowEnabled" to prefs.getBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, true),
             "logboxShadowEnabled" to prefs.getBoolean(KEY_LOGBOX_SHADOW_ENABLED, false),
             "headerPillShadowEnabled" to prefs.getBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, true),
@@ -56,6 +61,58 @@ class ExpenseSettingsStore(context: Context) {
             "centerPartitionRingEnabled" to prefs.getBoolean(
                 KEY_CENTER_PARTITION_RING_ENABLED,
                 false,
+            ),
+            "centerBadgeDiscEnabled" to prefs.getBoolean(
+                KEY_CENTER_BADGE_DISC_ENABLED,
+                true,
+            ),
+            "centerBadgeBorderMode" to prefs.getString(
+                KEY_CENTER_BADGE_BORDER_MODE,
+                "limitOnly",
+            ),
+            "centerBadgeOverlapMaskEnabled" to prefs.getBoolean(
+                KEY_CENTER_BADGE_OVERLAP_MASK_ENABLED,
+                false,
+            ),
+            "centerBadgeWhiteDiscOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_WHITE_DISC_OPACITIES,
+                DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES,
+            ),
+            "centerBadgeWhiteIconOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_WHITE_ICON_OPACITIES,
+                DEFAULT_CENTER_BADGE_WHITE_ICON_OPACITIES,
+            ),
+            "centerBadgeWhiteProgressOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+                DEFAULT_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+            ),
+            "centerBadgeColoredFillOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_COLORED_FILL_OPACITIES,
+                DEFAULT_CENTER_BADGE_COLORED_FILL_OPACITIES,
+            ),
+            "centerBadgeColoredIconOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_COLORED_ICON_OPACITIES,
+                DEFAULT_CENTER_BADGE_COLORED_ICON_OPACITIES,
+            ),
+            "centerBadgeColoredProgressOpacities" to loadOpacityList(
+                KEY_CENTER_BADGE_COLORED_PROGRESS_OPACITIES,
+                DEFAULT_CENTER_BADGE_COLORED_PROGRESS_OPACITIES,
+            ),
+            "centerBadgeSlotSizePercents" to loadIntList(
+                KEY_CENTER_BADGE_SLOT_SIZE_PERCENTS,
+                DEFAULT_CENTER_BADGE_SLOT_SIZE_PERCENTS,
+                min = 50,
+                max = 180,
+            ),
+            "centerBadgeSlotXOffsets" to loadIntList(
+                KEY_CENTER_BADGE_SLOT_X_OFFSETS,
+                DEFAULT_CENTER_BADGE_SLOT_X_OFFSETS,
+                min = -64,
+                max = 64,
+            ),
+            "centerBadgeColoredBackgroundOpacity" to prefs.getInt(
+                KEY_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
+                DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
             ),
             "designProfile" to (
                 prefs.getString(KEY_DESIGN_PROFILE, null)?.takeIf { it.isNotBlank() }
@@ -89,6 +146,12 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_CATEGORY_CARD_COLOR, args["categoryCardColor"]?.toString() ?: "lightgray")
             .putString(KEY_CATEGORY_CARD_SURFACE_STYLE, args["categoryCardSurfaceStyle"]?.toString() ?: "neutralNeutral")
             .putString(KEY_CATEGORY_MENU_PRESENTATION, args["categoryMenuPresentation"]?.toString() ?: "inline")
+            .putString(KEY_SHELL_NAVIGATION_LAYOUT, args["shellNavigationLayout"]?.toString() ?: "current")
+            .putString(KEY_FAB_SHAPE, args["fabShape"]?.toString() ?: "circle")
+            .putInt(
+                KEY_FAB_SIZE,
+                intArg(args["fabSize"], DEFAULT_FAB_SIZE, MIN_FAB_SIZE, MAX_FAB_SIZE)
+            )
             .putBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, boolArg(args["categoryCardShadowEnabled"], true))
             .putBoolean(KEY_LOGBOX_SHADOW_ENABLED, boolArg(args["logboxShadowEnabled"], false))
             .putBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, boolArg(args["headerPillShadowEnabled"], true))
@@ -131,6 +194,102 @@ class ExpenseSettingsStore(context: Context) {
             .putBoolean(
                 KEY_CENTER_PARTITION_RING_ENABLED,
                 boolArg(args["centerPartitionRingEnabled"], false)
+            )
+            .putBoolean(
+                KEY_CENTER_BADGE_DISC_ENABLED,
+                boolArg(args["centerBadgeDiscEnabled"], true)
+            )
+            .putString(
+                KEY_CENTER_BADGE_BORDER_MODE,
+                args["centerBadgeBorderMode"]?.toString()?.takeIf { it.isNotBlank() }
+                    ?: "limitOnly"
+            )
+            .putBoolean(
+                KEY_CENTER_BADGE_OVERLAP_MASK_ENABLED,
+                boolArg(args["centerBadgeOverlapMaskEnabled"], false)
+            )
+            .putString(
+                KEY_CENTER_BADGE_WHITE_DISC_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeWhiteDiscOpacities"],
+                        DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_WHITE_ICON_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeWhiteIconOpacities"],
+                        DEFAULT_CENTER_BADGE_WHITE_ICON_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeWhiteProgressOpacities"],
+                        DEFAULT_CENTER_BADGE_WHITE_PROGRESS_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_COLORED_FILL_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeColoredFillOpacities"],
+                        DEFAULT_CENTER_BADGE_COLORED_FILL_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_COLORED_ICON_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeColoredIconOpacities"],
+                        DEFAULT_CENTER_BADGE_COLORED_ICON_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_COLORED_PROGRESS_OPACITIES,
+                JSONArray(
+                    opacityListArg(
+                        args["centerBadgeColoredProgressOpacities"],
+                        DEFAULT_CENTER_BADGE_COLORED_PROGRESS_OPACITIES,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_SLOT_SIZE_PERCENTS,
+                JSONArray(
+                    intListArg(
+                        args["centerBadgeSlotSizePercents"],
+                        DEFAULT_CENTER_BADGE_SLOT_SIZE_PERCENTS,
+                        min = 50,
+                        max = 180,
+                    ),
+                ).toString(),
+            )
+            .putString(
+                KEY_CENTER_BADGE_SLOT_X_OFFSETS,
+                JSONArray(
+                    intListArg(
+                        args["centerBadgeSlotXOffsets"],
+                        DEFAULT_CENTER_BADGE_SLOT_X_OFFSETS,
+                        min = -64,
+                        max = 64,
+                    ),
+                ).toString(),
+            )
+            .putInt(
+                KEY_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
+                opacityArg(
+                    args["centerBadgeColoredBackgroundOpacity"],
+                    DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY,
+                ),
             )
             .remove(KEY_DESIGN_PROFILE)
             .putString(
@@ -270,6 +429,55 @@ class ExpenseSettingsStore(context: Context) {
         else -> default
     }
 
+    private fun loadOpacityList(key: String, default: List<Int>): List<Int> {
+        return loadIntList(key, default, min = 0, max = 100)
+    }
+
+    private fun loadIntList(
+        key: String,
+        default: List<Int>,
+        min: Int,
+        max: Int,
+    ): List<Int> {
+        val raw = prefs.getString(key, null) ?: return default
+        val values = runCatching { jsonArrayToList(JSONArray(raw)) }.getOrNull()
+            ?: return default
+        return intListArg(values, default, min, max)
+    }
+
+    private fun opacityListArg(value: Any?, default: List<Int>): List<Int> {
+        return intListArg(value, default, min = 0, max = 100)
+    }
+
+    private fun intListArg(
+        value: Any?,
+        default: List<Int>,
+        min: Int,
+        max: Int,
+    ): List<Int> {
+        val values = when (value) {
+            is List<*> -> value
+            is JSONArray -> jsonArrayToList(value)
+            else -> null
+        }
+        return default.mapIndexed { index, fallback ->
+            intArg(values?.getOrNull(index), fallback, min, max)
+        }
+    }
+
+    private fun opacityArg(value: Any?, default: Int): Int {
+        return intArg(value, default, min = 0, max = 100)
+    }
+
+    private fun intArg(value: Any?, default: Int, min: Int, max: Int): Int {
+        val parsed = when (value) {
+            is Number -> value.toDouble()
+            is String -> value.trim().toDoubleOrNull()
+            else -> null
+        } ?: return default
+        return parsed.roundToInt().coerceIn(min, max)
+    }
+
     private fun jsonObjectToMap(json: JSONObject): Map<String, Any?> {
         return json.keys().asSequence().associateWith { key -> jsonValue(json.get(key)) }
     }
@@ -357,6 +565,9 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_CATEGORY_CARD_COLOR = "categoryCardColor"
         private const val KEY_CATEGORY_CARD_SURFACE_STYLE = "categoryCardSurfaceStyle"
         private const val KEY_CATEGORY_MENU_PRESENTATION = "categoryMenuPresentation"
+        private const val KEY_SHELL_NAVIGATION_LAYOUT = "shellNavigationLayout"
+        private const val KEY_FAB_SHAPE = "fabShape"
+        private const val KEY_FAB_SIZE = "fabSize"
         private const val KEY_CATEGORY_CARD_SHADOW_ENABLED = "categoryCardShadowEnabled"
         private const val KEY_LOGBOX_SHADOW_ENABLED = "logboxShadowEnabled"
         private const val KEY_HEADER_PILL_SHADOW_ENABLED = "headerPillShadowEnabled"
@@ -373,6 +584,18 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BACKHEADER_STYLE = "backheaderStyle"
         private const val KEY_CENTER_BACKHEADER_DESIGN = "centerBackheaderDesign"
         private const val KEY_CENTER_PARTITION_RING_ENABLED = "centerPartitionRingEnabled"
+        private const val KEY_CENTER_BADGE_DISC_ENABLED = "centerBadgeDiscEnabled"
+        private const val KEY_CENTER_BADGE_BORDER_MODE = "centerBadgeBorderMode"
+        private const val KEY_CENTER_BADGE_OVERLAP_MASK_ENABLED = "centerBadgeOverlapMaskEnabled"
+        private const val KEY_CENTER_BADGE_WHITE_DISC_OPACITIES = "centerBadgeWhiteDiscOpacities"
+        private const val KEY_CENTER_BADGE_WHITE_ICON_OPACITIES = "centerBadgeWhiteIconOpacities"
+        private const val KEY_CENTER_BADGE_WHITE_PROGRESS_OPACITIES = "centerBadgeWhiteProgressOpacities"
+        private const val KEY_CENTER_BADGE_COLORED_FILL_OPACITIES = "centerBadgeColoredFillOpacities"
+        private const val KEY_CENTER_BADGE_COLORED_ICON_OPACITIES = "centerBadgeColoredIconOpacities"
+        private const val KEY_CENTER_BADGE_COLORED_PROGRESS_OPACITIES = "centerBadgeColoredProgressOpacities"
+        private const val KEY_CENTER_BADGE_SLOT_SIZE_PERCENTS = "centerBadgeSlotSizePercents"
+        private const val KEY_CENTER_BADGE_SLOT_X_OFFSETS = "centerBadgeSlotXOffsets"
+        private const val KEY_CENTER_BADGE_COLORED_BACKGROUND_OPACITY = "centerBadgeColoredBackgroundOpacity"
         private const val KEY_DESIGN_PROFILE = "designProfile"
         private const val KEY_APP_COLOR = "appColor"
         private const val KEY_FAST_INFO = "fastInfoConfig"
@@ -385,5 +608,17 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_SECURITY_PIN_SALT = "securityPinSalt"
         private const val KEY_SECURITY_PIN_HASH = "securityPinHash"
         private const val KEY_SECURITY_BIOMETRIC_ENABLED = "securityBiometricEnabled"
+        private val DEFAULT_CENTER_BADGE_WHITE_DISC_OPACITIES = listOf(18, 13, 10, 9, 8)
+        private val DEFAULT_CENTER_BADGE_WHITE_ICON_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private val DEFAULT_CENTER_BADGE_WHITE_PROGRESS_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private val DEFAULT_CENTER_BADGE_COLORED_FILL_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private val DEFAULT_CENTER_BADGE_COLORED_ICON_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private val DEFAULT_CENTER_BADGE_COLORED_PROGRESS_OPACITIES = listOf(100, 72, 58, 48, 42)
+        private val DEFAULT_CENTER_BADGE_SLOT_SIZE_PERCENTS = listOf(100, 100, 100, 100, 100, 100, 100, 100, 100)
+        private val DEFAULT_CENTER_BADGE_SLOT_X_OFFSETS = listOf(0, 0, 0, 0, 0, 0, 0, 0, 0)
+        private const val DEFAULT_CENTER_BADGE_COLORED_BACKGROUND_OPACITY = 72
+        private const val DEFAULT_FAB_SIZE = 66
+        private const val MIN_FAB_SIZE = 52
+        private const val MAX_FAB_SIZE = 88
     }
 }

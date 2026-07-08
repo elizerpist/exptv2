@@ -31,9 +31,14 @@ enum BackheaderStyle {
   const BackheaderStyle(this.nativeValue);
   final String nativeValue;
 
+  static const selectableValues = <BackheaderStyle>[
+    BackheaderStyle.classic,
+    BackheaderStyle.centerBadgeBudget,
+  ];
+
   static BackheaderStyle fromAny(Object? value) {
     final raw = value?.toString();
-    return BackheaderStyle.values.firstWhere(
+    return selectableValues.firstWhere(
       (item) => item.nativeValue == raw,
       orElse: () => BackheaderStyle.classic,
     );
@@ -82,6 +87,46 @@ enum BackheaderCenterDesign {
       'Kategóriaszínű, orbit jellegű háttér fehér badge veil elemekkel.',
   };
 }
+
+enum CenterBadgeBorderMode {
+  limitOnly('limitOnly'),
+  always('always');
+
+  const CenterBadgeBorderMode(this.nativeValue);
+  final String nativeValue;
+
+  static CenterBadgeBorderMode fromAny(Object? value) {
+    final raw = value?.toString();
+    return CenterBadgeBorderMode.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => CenterBadgeBorderMode.limitOnly,
+    );
+  }
+}
+
+const kCenterBadgeWhiteDiscOpacityDefaults = <int>[18, 13, 10, 9, 8];
+const kCenterBadgeWhiteIconOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeWhiteProgressOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredFillOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredIconOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredProgressOpacityDefaults = <int>[100, 72, 58, 48, 42];
+const kCenterBadgeColoredBackgroundOpacityDefault = 72;
+const kCenterBadgeSlotSizePercentDefaults = <int>[
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+  100,
+];
+const kCenterBadgeSlotXOffsetDefaults = <int>[0, 0, 0, 0, 0, 0, 0, 0, 0];
+const kCenterBadgeSlotSizePercentMin = 50;
+const kCenterBadgeSlotSizePercentMax = 180;
+const kCenterBadgeSlotXOffsetMin = -64;
+const kCenterBadgeSlotXOffsetMax = 64;
 
 enum AppCardColor {
   white('white'),
@@ -201,6 +246,64 @@ enum CategoryMenuPresentation {
     );
   }
 }
+
+enum ShellNavigationLayout {
+  current('current'),
+  rightRoundedFab('rightRoundedFab');
+
+  const ShellNavigationLayout(this.nativeValue);
+  final String nativeValue;
+
+  static ShellNavigationLayout fromAny(Object? value) {
+    final raw = value?.toString();
+    return ShellNavigationLayout.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => ShellNavigationLayout.current,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    ShellNavigationLayout.current => 'A - Jelenlegi',
+    ShellNavigationLayout.rightRoundedFab => 'B - 3 menü + jobb FAB',
+  };
+
+  String get description => switch (this) {
+    ShellNavigationLayout.current =>
+      'Négy bottom-nav elem, középen kerek FAB, értesítések a navban.',
+    ShellNavigationLayout.rightRoundedFab =>
+      'Három bottom-nav elem, jobb alsó rounded-square FAB, értesítés a headerben.',
+  };
+}
+
+enum FabShape {
+  circle('circle'),
+  roundedSquare('roundedSquare');
+
+  const FabShape(this.nativeValue);
+  final String nativeValue;
+
+  static FabShape fromAny(Object? value) {
+    final raw = value?.toString();
+    return FabShape.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => FabShape.circle,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    FabShape.circle => 'Kör',
+    FabShape.roundedSquare => 'Rounded square',
+  };
+
+  String get description => switch (this) {
+    FabShape.circle => 'Kerek FAB forma.',
+    FabShape.roundedSquare => 'Lekerekített négyzet FAB forma.',
+  };
+}
+
+const kFabSizeDefault = 66;
+const kFabSizeMin = 52;
+const kFabSizeMax = 88;
 
 enum GhostLogboxBorderStyle {
   normal('normal'),
@@ -356,7 +459,27 @@ class AppThemeSettings {
     required this.appColor,
     this.centerBackheaderDesign = BackheaderCenterDesign.neutral,
     this.centerPartitionRingEnabled = false,
+    this.centerBadgeDiscEnabled = true,
+    this.centerBadgeBorderMode = CenterBadgeBorderMode.limitOnly,
+    this.centerBadgeOverlapMaskEnabled = false,
+    this.centerBadgeWhiteDiscOpacities = kCenterBadgeWhiteDiscOpacityDefaults,
+    this.centerBadgeWhiteIconOpacities = kCenterBadgeWhiteIconOpacityDefaults,
+    this.centerBadgeWhiteProgressOpacities =
+        kCenterBadgeWhiteProgressOpacityDefaults,
+    this.centerBadgeColoredFillOpacities =
+        kCenterBadgeColoredFillOpacityDefaults,
+    this.centerBadgeColoredIconOpacities =
+        kCenterBadgeColoredIconOpacityDefaults,
+    this.centerBadgeColoredProgressOpacities =
+        kCenterBadgeColoredProgressOpacityDefaults,
+    this.centerBadgeSlotSizePercents = kCenterBadgeSlotSizePercentDefaults,
+    this.centerBadgeSlotXOffsets = kCenterBadgeSlotXOffsetDefaults,
+    this.centerBadgeColoredBackgroundOpacity =
+        kCenterBadgeColoredBackgroundOpacityDefault,
     this.categoryMenuPresentation = CategoryMenuPresentation.inline,
+    this.shellNavigationLayout = ShellNavigationLayout.current,
+    this.fabShape = FabShape.circle,
+    this.fabSize = kFabSizeDefault,
     this.categoryCardShadowEnabled = true,
     this.logboxShadowEnabled = false,
     this.headerPillShadowEnabled = true,
@@ -382,8 +505,26 @@ class AppThemeSettings {
       backheaderStyle: BackheaderStyle.classic,
       centerBackheaderDesign: BackheaderCenterDesign.neutral,
       centerPartitionRingEnabled: false,
+      centerBadgeDiscEnabled: true,
+      centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
+      centerBadgeOverlapMaskEnabled: false,
+      centerBadgeWhiteDiscOpacities: kCenterBadgeWhiteDiscOpacityDefaults,
+      centerBadgeWhiteIconOpacities: kCenterBadgeWhiteIconOpacityDefaults,
+      centerBadgeWhiteProgressOpacities:
+          kCenterBadgeWhiteProgressOpacityDefaults,
+      centerBadgeColoredFillOpacities: kCenterBadgeColoredFillOpacityDefaults,
+      centerBadgeColoredIconOpacities: kCenterBadgeColoredIconOpacityDefaults,
+      centerBadgeColoredProgressOpacities:
+          kCenterBadgeColoredProgressOpacityDefaults,
+      centerBadgeSlotSizePercents: kCenterBadgeSlotSizePercentDefaults,
+      centerBadgeSlotXOffsets: kCenterBadgeSlotXOffsetDefaults,
+      centerBadgeColoredBackgroundOpacity:
+          kCenterBadgeColoredBackgroundOpacityDefault,
       appColor: AppColorMode.turquoise,
       categoryMenuPresentation: CategoryMenuPresentation.inline,
+      shellNavigationLayout: ShellNavigationLayout.current,
+      fabShape: FabShape.circle,
+      fabSize: kFabSizeDefault,
       categoryCardShadowEnabled: true,
       logboxShadowEnabled: false,
       headerPillShadowEnabled: true,
@@ -446,9 +587,67 @@ class AppThemeSettings {
         map['centerPartitionRingEnabled'],
         false,
       ),
+      centerBadgeDiscEnabled: _bool(map['centerBadgeDiscEnabled'], true),
+      centerBadgeBorderMode: CenterBadgeBorderMode.fromAny(
+        map['centerBadgeBorderMode'],
+      ),
+      centerBadgeOverlapMaskEnabled: _bool(
+        map['centerBadgeOverlapMaskEnabled'],
+        false,
+      ),
+      centerBadgeWhiteDiscOpacities: _opacityList(
+        map['centerBadgeWhiteDiscOpacities'],
+        kCenterBadgeWhiteDiscOpacityDefaults,
+      ),
+      centerBadgeWhiteIconOpacities: _opacityList(
+        map['centerBadgeWhiteIconOpacities'],
+        kCenterBadgeWhiteIconOpacityDefaults,
+      ),
+      centerBadgeWhiteProgressOpacities: _opacityList(
+        map['centerBadgeWhiteProgressOpacities'],
+        kCenterBadgeWhiteProgressOpacityDefaults,
+      ),
+      centerBadgeColoredFillOpacities: _opacityList(
+        map['centerBadgeColoredFillOpacities'],
+        kCenterBadgeColoredFillOpacityDefaults,
+      ),
+      centerBadgeColoredIconOpacities: _opacityList(
+        map['centerBadgeColoredIconOpacities'],
+        kCenterBadgeColoredIconOpacityDefaults,
+      ),
+      centerBadgeColoredProgressOpacities: _opacityList(
+        map['centerBadgeColoredProgressOpacities'],
+        kCenterBadgeColoredProgressOpacityDefaults,
+      ),
+      centerBadgeSlotSizePercents: _intList(
+        map['centerBadgeSlotSizePercents'],
+        kCenterBadgeSlotSizePercentDefaults,
+        min: kCenterBadgeSlotSizePercentMin,
+        max: kCenterBadgeSlotSizePercentMax,
+      ),
+      centerBadgeSlotXOffsets: _intList(
+        map['centerBadgeSlotXOffsets'],
+        kCenterBadgeSlotXOffsetDefaults,
+        min: kCenterBadgeSlotXOffsetMin,
+        max: kCenterBadgeSlotXOffsetMax,
+      ),
+      centerBadgeColoredBackgroundOpacity: _opacityPercent(
+        map['centerBadgeColoredBackgroundOpacity'],
+        kCenterBadgeColoredBackgroundOpacityDefault,
+      ),
       appColor: _appColorFromMap(map),
       categoryMenuPresentation: CategoryMenuPresentation.fromAny(
         map['categoryMenuPresentation'],
+      ),
+      shellNavigationLayout: ShellNavigationLayout.fromAny(
+        map['shellNavigationLayout'],
+      ),
+      fabShape: FabShape.fromAny(map['fabShape']),
+      fabSize: _boundedInt(
+        map['fabSize'],
+        kFabSizeDefault,
+        min: kFabSizeMin,
+        max: kFabSizeMax,
       ),
       categoryCardShadowEnabled: _bool(map['categoryCardShadowEnabled'], true),
       logboxShadowEnabled: _bool(map['logboxShadowEnabled'], false),
@@ -474,8 +673,23 @@ class AppThemeSettings {
   final BackheaderStyle backheaderStyle;
   final BackheaderCenterDesign centerBackheaderDesign;
   final bool centerPartitionRingEnabled;
+  final bool centerBadgeDiscEnabled;
+  final CenterBadgeBorderMode centerBadgeBorderMode;
+  final bool centerBadgeOverlapMaskEnabled;
+  final List<int> centerBadgeWhiteDiscOpacities;
+  final List<int> centerBadgeWhiteIconOpacities;
+  final List<int> centerBadgeWhiteProgressOpacities;
+  final List<int> centerBadgeColoredFillOpacities;
+  final List<int> centerBadgeColoredIconOpacities;
+  final List<int> centerBadgeColoredProgressOpacities;
+  final List<int> centerBadgeSlotSizePercents;
+  final List<int> centerBadgeSlotXOffsets;
+  final int centerBadgeColoredBackgroundOpacity;
   final AppColorMode appColor;
   final CategoryMenuPresentation categoryMenuPresentation;
+  final ShellNavigationLayout shellNavigationLayout;
+  final FabShape fabShape;
+  final int fabSize;
   final bool categoryCardShadowEnabled;
   final bool logboxShadowEnabled;
   final bool headerPillShadowEnabled;
@@ -510,8 +724,25 @@ class AppThemeSettings {
       'backheaderStyle': backheaderStyle.nativeValue,
       'centerBackheaderDesign': centerBackheaderDesign.nativeValue,
       'centerPartitionRingEnabled': centerPartitionRingEnabled,
+      'centerBadgeDiscEnabled': centerBadgeDiscEnabled,
+      'centerBadgeBorderMode': centerBadgeBorderMode.nativeValue,
+      'centerBadgeOverlapMaskEnabled': centerBadgeOverlapMaskEnabled,
+      'centerBadgeWhiteDiscOpacities': centerBadgeWhiteDiscOpacities,
+      'centerBadgeWhiteIconOpacities': centerBadgeWhiteIconOpacities,
+      'centerBadgeWhiteProgressOpacities': centerBadgeWhiteProgressOpacities,
+      'centerBadgeColoredFillOpacities': centerBadgeColoredFillOpacities,
+      'centerBadgeColoredIconOpacities': centerBadgeColoredIconOpacities,
+      'centerBadgeColoredProgressOpacities':
+          centerBadgeColoredProgressOpacities,
+      'centerBadgeSlotSizePercents': centerBadgeSlotSizePercents,
+      'centerBadgeSlotXOffsets': centerBadgeSlotXOffsets,
+      'centerBadgeColoredBackgroundOpacity':
+          centerBadgeColoredBackgroundOpacity,
       'appColor': appColor.nativeValue,
       'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
+      'shellNavigationLayout': shellNavigationLayout.nativeValue,
+      'fabShape': fabShape.nativeValue,
+      'fabSize': fabSize,
       'categoryCardShadowEnabled': categoryCardShadowEnabled,
       'logboxShadowEnabled': logboxShadowEnabled,
       'headerPillShadowEnabled': headerPillShadowEnabled,
@@ -537,8 +768,23 @@ class AppThemeSettings {
     BackheaderStyle? backheaderStyle,
     BackheaderCenterDesign? centerBackheaderDesign,
     bool? centerPartitionRingEnabled,
+    bool? centerBadgeDiscEnabled,
+    CenterBadgeBorderMode? centerBadgeBorderMode,
+    bool? centerBadgeOverlapMaskEnabled,
+    List<int>? centerBadgeWhiteDiscOpacities,
+    List<int>? centerBadgeWhiteIconOpacities,
+    List<int>? centerBadgeWhiteProgressOpacities,
+    List<int>? centerBadgeColoredFillOpacities,
+    List<int>? centerBadgeColoredIconOpacities,
+    List<int>? centerBadgeColoredProgressOpacities,
+    List<int>? centerBadgeSlotSizePercents,
+    List<int>? centerBadgeSlotXOffsets,
+    int? centerBadgeColoredBackgroundOpacity,
     AppColorMode? appColor,
     CategoryMenuPresentation? categoryMenuPresentation,
+    ShellNavigationLayout? shellNavigationLayout,
+    FabShape? fabShape,
+    int? fabSize,
     bool? categoryCardShadowEnabled,
     bool? logboxShadowEnabled,
     bool? headerPillShadowEnabled,
@@ -567,9 +813,44 @@ class AppThemeSettings {
           centerBackheaderDesign ?? this.centerBackheaderDesign,
       centerPartitionRingEnabled:
           centerPartitionRingEnabled ?? this.centerPartitionRingEnabled,
+      centerBadgeDiscEnabled:
+          centerBadgeDiscEnabled ?? this.centerBadgeDiscEnabled,
+      centerBadgeBorderMode:
+          centerBadgeBorderMode ?? this.centerBadgeBorderMode,
+      centerBadgeOverlapMaskEnabled:
+          centerBadgeOverlapMaskEnabled ?? this.centerBadgeOverlapMaskEnabled,
+      centerBadgeWhiteDiscOpacities:
+          centerBadgeWhiteDiscOpacities ?? this.centerBadgeWhiteDiscOpacities,
+      centerBadgeWhiteIconOpacities:
+          centerBadgeWhiteIconOpacities ?? this.centerBadgeWhiteIconOpacities,
+      centerBadgeWhiteProgressOpacities:
+          centerBadgeWhiteProgressOpacities ??
+          this.centerBadgeWhiteProgressOpacities,
+      centerBadgeColoredFillOpacities:
+          centerBadgeColoredFillOpacities ??
+          this.centerBadgeColoredFillOpacities,
+      centerBadgeColoredIconOpacities:
+          centerBadgeColoredIconOpacities ??
+          this.centerBadgeColoredIconOpacities,
+      centerBadgeColoredProgressOpacities:
+          centerBadgeColoredProgressOpacities ??
+          this.centerBadgeColoredProgressOpacities,
+      centerBadgeSlotSizePercents:
+          centerBadgeSlotSizePercents ?? this.centerBadgeSlotSizePercents,
+      centerBadgeSlotXOffsets:
+          centerBadgeSlotXOffsets ?? this.centerBadgeSlotXOffsets,
+      centerBadgeColoredBackgroundOpacity:
+          centerBadgeColoredBackgroundOpacity ??
+          this.centerBadgeColoredBackgroundOpacity,
       appColor: appColor ?? this.appColor,
       categoryMenuPresentation:
           categoryMenuPresentation ?? this.categoryMenuPresentation,
+      shellNavigationLayout:
+          shellNavigationLayout ?? this.shellNavigationLayout,
+      fabShape: fabShape ?? this.fabShape,
+      fabSize: fabSize == null
+          ? this.fabSize
+          : fabSize.clamp(kFabSizeMin, kFabSizeMax).toInt(),
       categoryCardShadowEnabled:
           categoryCardShadowEnabled ?? this.categoryCardShadowEnabled,
       logboxShadowEnabled: logboxShadowEnabled ?? this.logboxShadowEnabled,
@@ -611,5 +892,42 @@ class AppThemeSettings {
       return normalized == '1' || normalized == 'true';
     }
     return fallback;
+  }
+
+  static List<int> _opacityList(Object? value, List<int> fallback) {
+    return _intList(value, fallback, min: 0, max: 100);
+  }
+
+  static List<int> _intList(
+    Object? value,
+    List<int> fallback, {
+    required int min,
+    required int max,
+  }) {
+    final source = value is Iterable ? value.toList(growable: false) : null;
+    return List<int>.generate(fallback.length, (index) {
+      if (source == null || index >= source.length) return fallback[index];
+      return _boundedInt(source[index], fallback[index], min: min, max: max);
+    }, growable: false);
+  }
+
+  static int _opacityPercent(Object? value, int fallback) {
+    return _boundedInt(value, fallback, min: 0, max: 100);
+  }
+
+  static int _boundedInt(
+    Object? value,
+    int fallback, {
+    required int min,
+    required int max,
+  }) {
+    num? parsed;
+    if (value is num) {
+      parsed = value;
+    } else if (value is String) {
+      parsed = num.tryParse(value.trim());
+    }
+    if (parsed == null) return fallback;
+    return parsed.round().clamp(min, max).toInt();
   }
 }

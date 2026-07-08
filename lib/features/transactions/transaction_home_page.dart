@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
+import '../settings/widgets/options/backheader_style_options_panel.dart';
 import 'data/limit_allocation_manager.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
@@ -22,7 +23,6 @@ import 'widgets/header_card/category_budget_stage.dart';
 import 'widgets/header_card/budget_target_editor_sheet.dart';
 import 'widgets/header_card/fast_info_panel.dart';
 import 'widgets/header_card/header_fast_info_surface.dart';
-import 'widgets/header_card/magnet_strip.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'models/limit_allocation_data.dart';
@@ -30,6 +30,7 @@ import 'widgets/search_pill.dart';
 import 'widgets/slide_up_menu_card.dart';
 import 'widgets/slide_up_panel_metrics.dart';
 import 'widgets/summary_pill.dart';
+import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_log_list.dart';
 import 'widgets/transaction_type_pills.dart';
 
@@ -54,6 +55,11 @@ class TransactionHomePage extends StatefulWidget {
     this.onFocusedSheetDismissRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
+    this.onThemeSettingsChanged,
+    this.onBackheaderLiveTunerRequested,
+    this.onNotificationPressed,
+    this.notificationUnreadCount = 0,
+    this.logBottomPadding = 96,
     this.budgetEditorActiveKey,
   });
 
@@ -69,6 +75,11 @@ class TransactionHomePage extends StatefulWidget {
   final VoidCallback? onFocusedSheetDismissRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
+  final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
+  final VoidCallback? onBackheaderLiveTunerRequested;
+  final VoidCallback? onNotificationPressed;
+  final int notificationUnreadCount;
+  final double logBottomPadding;
   final ValueNotifier<String?>? budgetEditorActiveKey;
 
   @override
@@ -90,6 +101,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   DateTime? _budgetEditorOpenRequestedAt;
   final _budgetEditorPendingAmountsByKey = <String, double>{};
   var _categoryEditorOpen = false;
+  var _backheaderLiveTunerOpen = false;
   var _blockingOverlayNotified = false;
   TransactionCategory? _editingCategory;
   int? _lastHomeBuildEntriesLogged;
@@ -263,6 +275,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       onResetMerchantName: _resetTransactionNamesByMerchant,
                       hasMore: widget.store.hasMoreVisibleDisplayLogEntries,
                       onLoadMore: widget.store.loadMoreVisibleDisplayLogEntries,
+                      bottomPadding: widget.logBottomPadding,
                     ),
                   ),
                 ],
@@ -338,6 +351,32 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         expenseTheme.settings.centerBackheaderDesign,
                     centerPartitionRingEnabled:
                         expenseTheme.settings.centerPartitionRingEnabled,
+                    centerBadgeDiscEnabled:
+                        expenseTheme.settings.centerBadgeDiscEnabled,
+                    centerBadgeBorderMode:
+                        expenseTheme.settings.centerBadgeBorderMode,
+                    centerBadgeOverlapMaskEnabled:
+                        expenseTheme.settings.centerBadgeOverlapMaskEnabled,
+                    centerBadgeWhiteDiscOpacities:
+                        expenseTheme.settings.centerBadgeWhiteDiscOpacities,
+                    centerBadgeWhiteIconOpacities:
+                        expenseTheme.settings.centerBadgeWhiteIconOpacities,
+                    centerBadgeWhiteProgressOpacities:
+                        expenseTheme.settings.centerBadgeWhiteProgressOpacities,
+                    centerBadgeColoredFillOpacities:
+                        expenseTheme.settings.centerBadgeColoredFillOpacities,
+                    centerBadgeColoredIconOpacities:
+                        expenseTheme.settings.centerBadgeColoredIconOpacities,
+                    centerBadgeColoredProgressOpacities: expenseTheme
+                        .settings
+                        .centerBadgeColoredProgressOpacities,
+                    centerBadgeSlotSizePercents:
+                        expenseTheme.settings.centerBadgeSlotSizePercents,
+                    centerBadgeSlotXOffsets:
+                        expenseTheme.settings.centerBadgeSlotXOffsets,
+                    centerBadgeColoredBackgroundOpacity: expenseTheme
+                        .settings
+                        .centerBadgeColoredBackgroundOpacity,
                     backgroundColor: expenseTheme.appBackground,
                     items: widget.store.backheaderBudgetItems,
                     categoryBars: widget.store.categoryBudgetBars,
@@ -349,6 +388,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     onActiveItemChanged: _setBackheaderActiveItem,
                     onItemTap: _openBudgetTargetEditor,
+                    onCenterBackgroundTap: _openBackheaderLiveTuner,
                     onOrbitCloseRequested: () {
                       if (_headerExpanded) unawaited(_collapseHeader());
                     },
@@ -447,6 +487,32 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                     selectedSurfaceStyle: expenseTheme.forcedInsetSurfaceStyle,
                     accentColor: expenseTheme.accent,
+                  ),
+                ),
+              if (_backheaderLiveTunerOpen)
+                Positioned.fill(
+                  child: SlideUpMenuCard(
+                    cardKey: const ValueKey('backheader-live-tuner-slide-card'),
+                    debugLabel: 'BackheaderLiveTuner',
+                    panelHeight: _backheaderTunerPanelHeight(context),
+                    showFocusVeil: false,
+                    dismissOnVeilTap: false,
+                    dragFromHandleOnly: true,
+                    dragHandleExtent: 72,
+                    verticalDragBias: 1.2,
+                    onDismissed: _closeBackheaderLiveTuner,
+                    child: SafeArea(
+                      top: false,
+                      bottom: false,
+                      child: ColoredBox(
+                        key: const ValueKey('backheader-live-tuner-panel'),
+                        color: expenseTheme.fieldSurface,
+                        child: BackheaderStyleOptionsPanel(
+                          settings: expenseTheme.settings,
+                          onChanged: _updateBackheaderLiveThemeSettings,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               if (budgetHostItem != null)
@@ -642,6 +708,13 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     return SlideUpPanelMetrics.fullHeight(context);
   }
 
+  double _backheaderTunerPanelHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
+  }
+
   void _notifyBlockingOverlay(bool active) {
     if (_blockingOverlayNotified == active) return;
     _blockingOverlayNotified = active;
@@ -667,9 +740,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         cardColor: expenseTheme.headerCard,
         surfaceStyle: expenseTheme.contentSurfaceStyle,
         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
-        totalIncome: widget.store.activePeriodIncomeTotal,
-        totalExpense: widget.store.activePeriodExpenseTotal,
-        budgetProgress: _headerBudgetProgress(),
+        totalIncome: widget.store.totalIncomeAmount,
+        totalExpense: widget.store.totalExpenseAmount,
         budgetAllocation: _headerBudgetAllocation(),
         fastInfoVisible: visibleFastInfoExtent > 0,
         balanceHidden: _balanceHidden,
@@ -680,6 +752,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           setState(() => _balanceHidden = !_balanceHidden);
         },
         onCategoryPressed: _openCategoryMenu,
+        onNotificationPressed: widget.onNotificationPressed,
+        notificationUnreadCount: widget.notificationUnreadCount,
         onVerticalDragUpdate: _handleHeaderDragUpdate,
         onVerticalDragEnd: _handleHeaderDragEnd,
         onExpandPressed: _toggleHeaderExpanded,
@@ -696,25 +770,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     return 1 - fadeProgress;
   }
 
-  BudgetStripProgress? _headerBudgetProgress() {
-    final item = _activeBackheaderItem();
-    if (item == null) return null;
-    final overview = item.overview;
-    if (overview != null) {
-      return BudgetStripProgress(
-        hasLimit: overview.hasLimit,
-        spent: overview.amount,
-        limitAmount: overview.limitAmount,
-      );
-    }
-    final category = item.category!;
-    return BudgetStripProgress(
-      hasLimit: category.hasLimit,
-      spent: category.spent,
-      limitAmount: category.limitAmount,
-    );
-  }
-
   LimitAllocationData? _headerBudgetAllocation() {
     for (final overview in widget.store.overviewBudgetItems) {
       if (overview.kind != BudgetGoalKind.expenseBudget ||
@@ -728,18 +783,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       );
     }
     return null;
-  }
-
-  BackheaderBudgetItem? _activeBackheaderItem() {
-    final items = widget.store.backheaderBudgetItems;
-    if (items.isEmpty) return null;
-    final activeKey = _backheaderActiveKey;
-    if (activeKey != null) {
-      for (final item in items) {
-        if (item.key == activeKey) return item;
-      }
-    }
-    return items.first;
   }
 
   double _headerSlideVisualProgress() {
@@ -810,6 +853,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         _categoryEditorOpen = false;
         _editingCategory = null;
       }
+      _backheaderLiveTunerOpen = false;
       _budgetEditorItem = null;
     });
   }
@@ -866,6 +910,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openBudgetTargetEditor(BackheaderBudgetItem item) {
+    if (_backheaderLiveTunerOpen) {
+      setState(() => _backheaderLiveTunerOpen = false);
+    }
     final requestedAt = DateTime.now();
     DebugConsole.log(
       '[BudgetTargetEditor] open from backheader key=${item.key} '
@@ -896,6 +943,33 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _budgetEditorOpenRequestedAt = null;
       _budgetEditorPendingAmountsByKey.clear();
     });
+  }
+
+  void _openBackheaderLiveTuner() {
+    final settings =
+        widget.expenseTheme?.settings ?? AppThemeSettings.defaults();
+    if (!_headerExpanded ||
+        settings.backheaderStyle != BackheaderStyle.centerBadgeBudget) {
+      return;
+    }
+    if (widget.onBackheaderLiveTunerRequested != null) {
+      DebugConsole.log('[BackheaderTuner] request shell host from background');
+      widget.onBackheaderLiveTunerRequested!();
+      return;
+    }
+    if (_backheaderLiveTunerOpen) return;
+    setState(() => _backheaderLiveTunerOpen = true);
+    DebugConsole.log('[BackheaderTuner] open from backheader background');
+  }
+
+  void _closeBackheaderLiveTuner() {
+    if (!_backheaderLiveTunerOpen) return;
+    setState(() => _backheaderLiveTunerOpen = false);
+    DebugConsole.log('[BackheaderTuner] closed');
+  }
+
+  void _updateBackheaderLiveThemeSettings(AppThemeSettings settings) {
+    widget.onThemeSettingsChanged?.call(settings);
   }
 
   void _setBudgetEditorPendingAmount(BackheaderBudgetItem item, double amount) {

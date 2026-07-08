@@ -4,25 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
-import '../../data/limit_manager.dart';
 import '../../models/limit_allocation_data.dart';
-
-class BudgetStripProgress {
-  const BudgetStripProgress({
-    required this.hasLimit,
-    required this.spent,
-    required this.limitAmount,
-  });
-
-  final bool hasLimit;
-  final double spent;
-  final double limitAmount;
-
-  bool get visible => hasLimit && limitAmount > 0;
-  double get factor =>
-      visible ? (spent / limitAmount).clamp(0.0, 1.0).toDouble() : 0.0;
-  Color get fillColor => LimitManager.progressColor(spent, limitAmount);
-}
 
 class MagnetStrip extends StatelessWidget {
   static const defaultHeight = 157.5;
@@ -34,7 +16,6 @@ class MagnetStrip extends StatelessWidget {
     required this.totalExpense,
     this.height = defaultHeight,
     this.accent = AppColors.primary,
-    this.budgetProgress,
     this.budgetAllocation,
     this.customGradientColors,
     this.customMarkerPosition,
@@ -46,7 +27,6 @@ class MagnetStrip extends StatelessWidget {
   final double totalExpense;
   final double height;
   final Color accent;
-  final BudgetStripProgress? budgetProgress;
   final LimitAllocationData? budgetAllocation;
   final List<Color>? customGradientColors;
   final double? customMarkerPosition;
@@ -75,7 +55,8 @@ class MagnetStrip extends StatelessWidget {
           return _BudgetMagnetProgressStrip(
             width: width,
             height: height,
-            progress: budgetProgress,
+            totalIncome: totalIncome,
+            totalExpense: totalExpense,
           );
         }
         if (type == MagnetType.partitionedBudget) {
@@ -241,23 +222,21 @@ class _BudgetMagnetProgressStrip extends StatelessWidget {
   const _BudgetMagnetProgressStrip({
     required this.width,
     required this.height,
-    required this.progress,
+    required this.totalIncome,
+    required this.totalExpense,
   });
 
   final double width;
   final double height;
-  final BudgetStripProgress? progress;
+  final double totalIncome;
+  final double totalExpense;
 
   @override
   Widget build(BuildContext context) {
-    final resolved = progress;
-    if (resolved == null || !resolved.visible) {
-      return SizedBox(
-        key: const ValueKey('magnet-strip-budget'),
-        width: width,
-        height: height,
-      );
-    }
+    final factor = MagnetStripPainter.balanceProgressFactor(
+      totalIncome,
+      totalExpense,
+    );
     return SizedBox(
       key: const ValueKey('magnet-strip-budget'),
       width: width,
@@ -282,11 +261,11 @@ class _BudgetMagnetProgressStrip extends StatelessWidget {
                 ),
                 FractionallySizedBox(
                   alignment: Alignment.centerLeft,
-                  widthFactor: resolved.factor,
+                  widthFactor: factor,
                   child: DecoratedBox(
                     key: const ValueKey('magnet-budget-progress-fill'),
                     decoration: BoxDecoration(
-                      color: resolved.fillColor,
+                      color: MagnetStripPainter.referenceGray,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -313,10 +292,33 @@ class MagnetStripPainter extends CustomPainter {
   final double totalExpense;
   final Color accent;
 
+  static const referenceGray = AppColors.gray500;
+  static const _softTransitionFraction = 0.16;
+
   static double incomeRatio(double totalIncome, double totalExpense) {
     final total = totalIncome.abs() + totalExpense.abs();
     if (total <= 0) return 0.5;
-    return (totalIncome.abs() / total).clamp(0.05, 0.95).toDouble();
+    return (totalIncome.abs() / total).clamp(0.0, 1.0).toDouble();
+  }
+
+  static double balanceProgressFactor(double totalIncome, double totalExpense) {
+    return incomeRatio(totalIncome, totalExpense);
+  }
+
+  static List<double> softBalanceStops(double ratio) {
+    final center = ratio.clamp(0.0, 1.0).toDouble();
+    final halfTransition = _softTransitionFraction / 2;
+    return <double>[
+      0,
+      (center - halfTransition).clamp(0.0, 1.0).toDouble(),
+      (center + halfTransition).clamp(0.0, 1.0).toDouble(),
+      1,
+    ];
+  }
+
+  static List<double> grayFadeStops(double ratio) {
+    final center = ratio.clamp(0.0, 1.0).toDouble();
+    return <double>[0, center, 1];
   }
 
   static List<Color> gradientColorsFor(MagnetType type) {
@@ -327,7 +329,7 @@ class MagnetStripPainter extends CustomPainter {
         AppColors.expense,
         AppColors.expense,
       ],
-      MagnetType.budget => const [AppColors.expense, AppColors.income],
+      MagnetType.budget => const [referenceGray, referenceGray],
       MagnetType.magnetcard => const [AppColors.gray500, AppColors.gray500],
       MagnetType.adaptive => const [AppColors.income, AppColors.income],
       MagnetType.partitionedBudget => const [
@@ -356,7 +358,7 @@ class MagnetStripPainter extends CustomPainter {
     );
 
     if (type == MagnetType.magnetcard) {
-      _paintMagnetCard(canvas, size, ratio);
+      _paintGrayFade(canvas, rect, ratio);
       return;
     }
 
@@ -410,30 +412,25 @@ class MagnetStripPainter extends CustomPainter {
       RRect.fromRectAndRadius(rect, const Radius.circular(2)),
       Paint()
         ..shader = LinearGradient(
-          colors: gradientColorsFor(type),
+          colors: const [
+            AppColors.income,
+            AppColors.income,
+            AppColors.expense,
+            AppColors.expense,
+          ],
+          stops: softBalanceStops(ratio),
         ).createShader(rect),
     );
   }
 
-  void _paintMagnetCard(Canvas canvas, Size size, double ratio) {
-    final paint = Paint()
-      ..color = AppColors.gray800.withValues(alpha: 0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.0, visualTrackHeight(type, size.height) / 8);
-    final slabHeight = visualTrackHeight(type, size.height);
-    final rect = Rect.fromLTWH(
-      0,
-      size.height / 2 - slabHeight / 2,
-      size.width,
-      slabHeight,
-    );
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(2));
-    canvas.drawRRect(rrect, paint);
-    final markerX = size.width * ratio;
-    canvas.drawLine(
-      Offset(markerX, rect.top),
-      Offset(markerX, rect.bottom),
-      paint,
+  void _paintGrayFade(Canvas canvas, Rect rect, double ratio) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+      Paint()
+        ..shader = LinearGradient(
+          colors: const [referenceGray, referenceGray, Color(0x0064748B)],
+          stops: grayFadeStops(ratio),
+        ).createShader(rect),
     );
   }
 

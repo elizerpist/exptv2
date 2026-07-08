@@ -25,7 +25,7 @@ void main() {
     );
   });
 
-  testWidgets('magnetcard renders marker mode without gradient fill', (
+  testWidgets('magnetcard renders gray fade strip', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -69,8 +69,37 @@ void main() {
 
   test('magnet strip uses app income expense ratio math', () {
     expect(MagnetStripPainter.incomeRatio(80, -20), 0.8);
-    expect(MagnetStripPainter.incomeRatio(0, -20), 0.05);
-    expect(MagnetStripPainter.incomeRatio(20, 0), 0.95);
+    expect(MagnetStripPainter.incomeRatio(0, -20), 0);
+    expect(MagnetStripPainter.incomeRatio(20, 0), 1);
+  });
+
+  test('fade magnet centers its soft transition at the balance ratio', () {
+    expect(MagnetStripPainter.softBalanceStops(0.9), [
+      0,
+      moreOrLessEquals(0.82, epsilon: 0.001),
+      moreOrLessEquals(0.98, epsilon: 0.001),
+      1,
+    ]);
+    expect(MagnetStripPainter.softBalanceStops(0.02), [
+      0,
+      0,
+      moreOrLessEquals(0.10, epsilon: 0.001),
+      1,
+    ]);
+  });
+
+  test(
+    'gray magnet fade uses the expt0926 reference gray and center point',
+    () {
+      expect(MagnetStripPainter.referenceGray, AppColors.gray500);
+      expect(MagnetStripPainter.grayFadeStops(0.65), [0, 0.65, 1]);
+    },
+  );
+
+  test('balance progress factor shrinks as expense share grows', () {
+    expect(MagnetStripPainter.balanceProgressFactor(900, -100), 0.9);
+    expect(MagnetStripPainter.balanceProgressFactor(100, -900), 0.1);
+    expect(MagnetStripPainter.balanceProgressFactor(0, 0), 0.5);
   });
 
   test('magnet strip fade uses income and expense colors', () {
@@ -101,7 +130,7 @@ void main() {
     }
   });
 
-  testWidgets('budget magnet strip renders React-style limit progress', (
+  testWidgets('budget magnet strip renders gray balance progress', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -111,14 +140,9 @@ void main() {
             width: 200,
             child: MagnetStrip(
               type: MagnetType.budget,
-              totalIncome: 0,
-              totalExpense: 0,
+              totalIncome: 300,
+              totalExpense: -100,
               height: 35,
-              budgetProgress: BudgetStripProgress(
-                hasLimit: true,
-                spent: 80,
-                limitAmount: 100,
-              ),
             ),
           ),
         ),
@@ -145,9 +169,9 @@ void main() {
     );
     expect(
       fillRect.width,
-      moreOrLessEquals(trackRect.width * 0.8, epsilon: 0.5),
+      moreOrLessEquals(trackRect.width * 0.75, epsilon: 0.5),
     );
-    expect(decoration.color, const Color(0xffff8800));
+    expect(decoration.color, AppColors.gray500);
   });
 
   testWidgets('partitioned magnet renders allocation in original strip shape', (

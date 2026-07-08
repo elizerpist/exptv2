@@ -23,7 +23,6 @@ class TransactionHeaderCard extends StatelessWidget {
     this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.totalIncome = 0,
     this.totalExpense = 0,
-    this.budgetProgress,
     this.budgetAllocation,
     this.leadingChipText,
     this.leadingChipColor,
@@ -35,6 +34,8 @@ class TransactionHeaderCard extends StatelessWidget {
     this.showBalanceVisibilityButton = true,
     this.drawSurface = true,
     this.onBalanceVisibilityPressed,
+    this.onNotificationPressed,
+    this.notificationUnreadCount = 0,
     this.slideProgress,
     this.contentOpacity,
   });
@@ -53,7 +54,6 @@ class TransactionHeaderCard extends StatelessWidget {
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final double totalIncome;
   final double totalExpense;
-  final BudgetStripProgress? budgetProgress;
   final LimitAllocationData? budgetAllocation;
   final String? leadingChipText;
   final Color? leadingChipColor;
@@ -65,6 +65,8 @@ class TransactionHeaderCard extends StatelessWidget {
   final bool showBalanceVisibilityButton;
   final bool drawSurface;
   final VoidCallback? onBalanceVisibilityPressed;
+  final VoidCallback? onNotificationPressed;
+  final int notificationUnreadCount;
   final double? slideProgress;
   final double? contentOpacity;
 
@@ -143,7 +145,6 @@ class TransactionHeaderCard extends StatelessWidget {
                   totalExpense: totalExpense,
                   accent: accent,
                   height: TransactionHeaderMetrics.magnetHeight,
-                  budgetProgress: budgetProgress,
                   budgetAllocation: budgetAllocation,
                   customGradientColors: magnetGradientColors,
                   customMarkerPosition: magnetMarkerPosition,
@@ -232,6 +233,15 @@ class TransactionHeaderCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (onNotificationPressed != null)
+              Positioned(
+                top: TransactionHeaderMetrics.titleTop - 4,
+                right: 25,
+                child: _HeaderNotificationButton(
+                  unreadCount: notificationUnreadCount,
+                  onPressed: onNotificationPressed!,
+                ),
+              ),
           ],
         ),
       ),
@@ -266,6 +276,81 @@ class TransactionHeaderCard extends StatelessWidget {
       height: height,
       width: double.infinity,
       child: slidingHeader,
+    );
+  }
+}
+
+class _HeaderNotificationButton extends StatelessWidget {
+  const _HeaderNotificationButton({
+    required this.unreadCount,
+    required this.onPressed,
+  });
+
+  final int unreadCount;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            key: const ValueKey('header-notification-button'),
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.white.withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.gray200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.10),
+                    offset: const Offset(0, 2),
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.notifications_none,
+                color: AppColors.gray800,
+                size: 19,
+              ),
+            ),
+          ),
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            key: const ValueKey('header-notification-unread-badge'),
+            top: -4,
+            right: -4,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: AppColors.expense,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: AppColors.white, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -18,6 +18,7 @@ import 'package:exptv2/features/transactions/widgets/header_card/category_limit_
 import 'package:exptv2/features/transactions/widgets/header_card/category_limit_slider.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
+import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -639,9 +640,13 @@ void main() {
       expect(badgeRect.top - amountRect.bottom, lessThanOrEqualTo(18));
       expect(
         badgeRect.top,
-        moreOrLessEquals(surfaceRect.top + 67.5, epsilon: 0.75),
+        moreOrLessEquals(surfaceRect.top + 65.5, epsilon: 0.75),
       );
       expect(title.style?.fontSize, greaterThanOrEqualTo(14));
+      expect(
+        titleRect.top,
+        moreOrLessEquals(surfaceRect.top + 140, epsilon: 0.75),
+      );
       expect(titleRect.top, greaterThanOrEqualTo(badgeRect.bottom + 2));
       expect(titleRect.bottom, lessThanOrEqualTo(handleRect.top - 10));
       expect(
@@ -850,19 +855,19 @@ void main() {
     );
     expect(
       tester.getSize(previousEdge).width,
-      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(28 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousFarthest).width,
-      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(34 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousOuter).width,
-      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(40 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester.getSize(previousInner).width,
-      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
+      moreOrLessEquals(48 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10, epsilon: 0.1),
     );
     expect(
       tester
@@ -883,55 +888,66 @@ void main() {
     );
     expect(
       activeFillRect.left - previousInnerFillRect.right,
-      moreOrLessEquals(11, epsilon: 0.8),
+      moreOrLessEquals(9, epsilon: 0.8),
     );
     expect(
       nextInnerFillRect.left - activeFillRect.right,
-      moreOrLessEquals(11, epsilon: 0.8),
+      moreOrLessEquals(9, epsilon: 0.8),
     );
     expect(
       tester
-          .widget<Opacity>(
+          .widget<CategorySlotIcon>(
             find.descendant(
               of: previousFarthest,
-              matching: find.byType(Opacity),
+              matching: find.byType(CategorySlotIcon),
             ),
           )
-          .opacity,
-      lessThan(
-        tester
-            .widget<Opacity>(
-              find.descendant(
-                of: previousOuter,
-                matching: find.byType(Opacity),
-              ),
-            )
-            .opacity,
-      ),
+          .color,
+      AppColors.white.withValues(alpha: 0.48),
     );
     expect(
       tester
-          .widget<Opacity>(
-            find.descendant(of: nextInner, matching: find.byType(Opacity)),
+          .widget<CategorySlotIcon>(
+            find.descendant(
+              of: previousOuter,
+              matching: find.byType(CategorySlotIcon),
+            ),
           )
-          .opacity,
-      greaterThanOrEqualTo(0.60),
+          .color,
+      AppColors.white.withValues(alpha: 0.58),
     );
     expect(
       tester
-          .widget<Opacity>(
-            find.descendant(of: nextOuter, matching: find.byType(Opacity)),
+          .widget<CategorySlotIcon>(
+            find.descendant(
+              of: nextInner,
+              matching: find.byType(CategorySlotIcon),
+            ),
           )
-          .opacity,
-      greaterThanOrEqualTo(0.42),
+          .color,
+      AppColors.white.withValues(alpha: 0.72),
     );
     expect(
       tester
-          .widget<Opacity>(
-            find.descendant(of: nextEdge, matching: find.byType(Opacity)),
+          .widget<CategorySlotIcon>(
+            find.descendant(
+              of: nextOuter,
+              matching: find.byType(CategorySlotIcon),
+            ),
           )
-          .opacity,
-      greaterThanOrEqualTo(0.42),
+          .color,
+      AppColors.white.withValues(alpha: 0.58),
+    );
+    expect(
+      tester
+          .widget<CategorySlotIcon>(
+            find.descendant(
+              of: nextEdge,
+              matching: find.byType(CategorySlotIcon),
+            ),
+          )
+          .color,
+      AppColors.white.withValues(alpha: 0.42),
     );
 
     expect(selected.last, 'Home');
@@ -1983,6 +1999,481 @@ void main() {
       paints
         ..arc(color: AppColors.white.withValues(alpha: 0.34))
         ..arc(color: AppColors.white),
+    );
+  });
+
+  testWidgets(
+    'centerBadgeBudget colored design uses custom white layer opacities',
+    (tester) async {
+      const backgroundColor = Color(0xffeef3f7);
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.colored,
+                centerBadgeWhiteDiscOpacities: const [25, 20, 15, 10, 5],
+                centerBadgeWhiteIconOpacities: const [88, 77, 66, 55, 44],
+                centerBadgeWhiteProgressOpacities: const [55, 45, 35, 25, 15],
+                centerBadgeColoredBackgroundOpacity: 64,
+                backgroundColor: backgroundColor,
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final surface = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      expect(
+        (surface.decoration as BoxDecoration).color,
+        Color.alphaBlend(food.color.withValues(alpha: 0.64), backgroundColor),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect(
+        (button.decoration as BoxDecoration).color,
+        AppColors.white.withValues(alpha: 0.25),
+      );
+
+      final icon = tester.widget<CategorySlotIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('backheader-center-budget-button')),
+          matching: find.byType(CategorySlotIcon),
+        ),
+      );
+      expect(icon.color, AppColors.white.withValues(alpha: 0.88));
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints
+          ..arc(color: AppColors.white.withValues(alpha: 0.34 * 0.55))
+          ..arc(color: AppColors.white.withValues(alpha: 0.55)),
+      );
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget neutral design ignores white opacity controls',
+    (tester) async {
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.neutral,
+                centerBadgeWhiteDiscOpacities: const [5, 5, 5, 5, 5],
+                centerBadgeWhiteIconOpacities: const [5, 5, 5, 5, 5],
+                centerBadgeWhiteProgressOpacities: const [5, 5, 5, 5, 5],
+                centerBadgeColoredBackgroundOpacity: 5,
+                backgroundColor: const Color(0xffeef3f7),
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final surface = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-style-centerBadgeBudget')),
+      );
+      expect(
+        (surface.decoration as BoxDecoration).color,
+        const Color(0xffeef3f7),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect((button.decoration as BoxDecoration).color, food.color);
+
+      final icon = tester.widget<CategorySlotIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('backheader-center-budget-button')),
+          matching: find.byType(CategorySlotIcon),
+        ),
+      );
+      expect(icon.color, AppColors.white);
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget neutral design applies colored opacity controls',
+    (tester) async {
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.neutral,
+                centerBadgeColoredFillOpacities: const [44, 50, 60, 70, 80],
+                centerBadgeColoredIconOpacities: const [55, 50, 45, 40, 35],
+                centerBadgeColoredProgressOpacities: const [66, 60, 54, 48, 42],
+                backgroundColor: const Color(0xffeef3f7),
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect(
+        (button.decoration as BoxDecoration).color,
+        food.color.withValues(alpha: 0.44),
+      );
+
+      final icon = tester.widget<CategorySlotIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('backheader-center-budget-button')),
+          matching: find.byType(CategorySlotIcon),
+        ),
+      );
+      expect(icon.color, AppColors.white.withValues(alpha: 0.55));
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints
+          ..arc(color: AppColors.gray300.withValues(alpha: 0.66))
+          ..arc(color: food.color.withValues(alpha: 0.66)),
+      );
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget applies custom slot size and x offset controls',
+    (tester) async {
+      final bars = [
+        barFixture(6, 'Food', 10, 100),
+        barFixture(7, 'Travel', 20, 100),
+        barFixture(8, 'Books', 30, 100),
+        barFixture(9, 'Health', 40, 100),
+        barFixture(10, 'Home', 50, 100),
+        barFixture(11, 'Rent', 60, 100),
+        barFixture(12, 'Gifts', 70, 100),
+        barFixture(13, 'Pets', 80, 100),
+        barFixture(14, 'Garden', 90, 100),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBadgeSlotSizePercents: const [
+                  80,
+                  90,
+                  100,
+                  110,
+                  120,
+                  130,
+                  140,
+                  150,
+                  160,
+                ],
+                centerBadgeSlotXOffsets: const [0, 0, 0, 6, 0, -6, 0, 0, 0],
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final activeFill = find.byKey(
+        const ValueKey('backheader-center-budget-button'),
+      );
+      final previousInnerFill = find.byKey(
+        const ValueKey('backheader-center-preview-fill-previous-1'),
+      );
+      final nextInnerFill = find.byKey(
+        const ValueKey('backheader-center-preview-fill-next-1'),
+      );
+
+      expect(
+        tester.getSize(activeFill).width,
+        moreOrLessEquals(58 * 1.15 * 1.20, epsilon: 0.1),
+      );
+      expect(
+        tester.getSize(previousInnerFill).width,
+        moreOrLessEquals(
+          58 * (48 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10 / 78) * 1.10,
+          epsilon: 0.1,
+        ),
+      );
+      expect(
+        tester.getSize(nextInnerFill).width,
+        moreOrLessEquals(
+          58 * (48 * 1.10 * 1.10 * 1.10 * 1.10 * 1.10 / 78) * 1.30,
+          epsilon: 0.1,
+        ),
+      );
+
+      final activeRect = tester.getRect(activeFill);
+      final previousRect = tester.getRect(previousInnerFill);
+      final nextRect = tester.getRect(nextInnerFill);
+      expect(activeRect.left - previousRect.right, lessThan(9));
+      expect(nextRect.left - activeRect.right, lessThan(9));
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget colored design can mask translucent badge overlaps',
+    (tester) async {
+      const backgroundColor = Color(0xffeef3f7);
+      final food = barFixture(6, 'Food', 100, 500);
+      final travel = barFixture(7, 'Travel', 25, 100);
+      final books = barFixture(8, 'Books', 30, 100);
+      final health = barFixture(9, 'Health', 20, 100);
+      final home = barFixture(10, 'Home', 15, 100);
+      final bars = [food, travel, books, health, home];
+      final expectedSurface = Color.alphaBlend(
+        food.color.withValues(alpha: 0.64),
+        backgroundColor,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.colored,
+                centerBadgeOverlapMaskEnabled: true,
+                centerBadgeColoredBackgroundOpacity: 64,
+                backgroundColor: backgroundColor,
+                items: bars.map(BackheaderBudgetItem.category).toList(),
+                categoryBars: bars,
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final activeMask = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('backheader-center-overlap-mask')),
+      );
+      expect((activeMask.decoration as BoxDecoration).color, expectedSurface);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('backheader-center-overlap-mask')),
+        ),
+        tester.getSize(
+          find.byKey(const ValueKey('backheader-center-budget-button')),
+        ),
+      );
+      expect(
+        find.byKey(
+          const ValueKey('backheader-center-preview-overlap-mask-next-1'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('backheader-center-preview-overlap-mask-next-1'),
+          ),
+        ),
+        tester.getSize(
+          find.byKey(const ValueKey('backheader-center-preview-fill-next-1')),
+        ),
+      );
+    },
+  );
+
+  testWidgets('centerBadgeBudget neutral design applies overlap mask switch', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 500);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              centerBackheaderDesign: BackheaderCenterDesign.neutral,
+              centerBadgeOverlapMaskEnabled: true,
+              backgroundColor: const Color(0xffeef3f7),
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-center-overlap-mask')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey('backheader-center-overlap-mask')),
+      ),
+      tester.getSize(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      ),
+    );
+  });
+
+  testWidgets(
+    'centerBadgeBudget can hide colored white badge disc independently',
+    (tester) async {
+      const backgroundColor = Color(0xffeef3f7);
+      final food = barFixture(6, 'Food', 100, 500);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 340,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                centerBackheaderDesign: BackheaderCenterDesign.colored,
+                centerBadgeDiscEnabled: false,
+                backgroundColor: backgroundColor,
+                items: [BackheaderBudgetItem.category(food)],
+                categoryBars: [food],
+                activeKey: BackheaderBudgetItem.category(food).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final button = tester.widget<Container>(
+        find.byKey(const ValueKey('backheader-center-budget-button')),
+      );
+      expect((button.decoration as BoxDecoration).color, Colors.transparent);
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints
+          ..arc(color: AppColors.white.withValues(alpha: 0.34))
+          ..arc(color: AppColors.white),
+      );
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget limit-only border distinguishes no-limit from zero progress limit',
+    (tester) async {
+      final noLimit = barFixture(6, 'No limit', 0, 0);
+      final zeroProgressLimit = barFixture(7, 'Zero limit spend', 0, 500);
+
+      Future<void> pumpActive(BackheaderBudgetItem activeItem) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 390,
+                height: 340,
+                child: CategoryBudgetStage(
+                  backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                  centerBackheaderDesign: BackheaderCenterDesign.colored,
+                  centerBadgeBorderMode: CenterBadgeBorderMode.limitOnly,
+                  backgroundColor: const Color(0xffeef3f7),
+                  items: [
+                    BackheaderBudgetItem.category(noLimit),
+                    BackheaderBudgetItem.category(zeroProgressLimit),
+                  ],
+                  categoryBars: [noLimit, zeroProgressLimit],
+                  activeKey: activeItem.key,
+                  onItemTap: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await pumpActive(BackheaderBudgetItem.category(noLimit));
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        isNot(paints..arc(color: AppColors.white.withValues(alpha: 0.34))),
+      );
+
+      await pumpActive(BackheaderBudgetItem.category(zeroProgressLimit));
+      expect(
+        find.byKey(const ValueKey('backheader-center-progress-ring')),
+        paints..arc(color: AppColors.white.withValues(alpha: 0.34)),
+      );
+    },
+  );
+
+  testWidgets('centerBadgeBudget always border mode keeps no-limit track', (
+    tester,
+  ) async {
+    final noLimit = barFixture(6, 'No limit', 0, 0);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 340,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              centerBackheaderDesign: BackheaderCenterDesign.colored,
+              centerBadgeBorderMode: CenterBadgeBorderMode.always,
+              backgroundColor: const Color(0xffeef3f7),
+              items: [BackheaderBudgetItem.category(noLimit)],
+              categoryBars: [noLimit],
+              activeKey: BackheaderBudgetItem.category(noLimit).key,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('backheader-center-progress-ring')),
+      paints..arc(color: AppColors.white.withValues(alpha: 0.34)),
     );
   });
 

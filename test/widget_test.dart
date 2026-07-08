@@ -202,6 +202,56 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
+  testWidgets('B shell layout moves notifications to header and FAB right', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'shellNavigationLayout': 'rightRoundedFab',
+      'fabShape': 'roundedSquare',
+      'fabSize': 80,
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Főoldal'), findsOneWidget);
+    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Beállítások'), findsOneWidget);
+    expect(find.text('Értesítések'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('header-notification-button')),
+      findsOneWidget,
+    );
+
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    expect(fabRect.left, greaterThan(280));
+    expect(fabRect.width, 80);
+    expect(fabRect.height, 80);
+
+    final debugRect = tester.getRect(
+      find.byKey(const ValueKey('debug-floating-button')),
+    );
+    expect(debugRect.bottom, lessThan(fabRect.top));
+
+    final fabSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('expt-fab')),
+    );
+    final decoration = fabSurface.decoration as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+    expect(borderRadius.topLeft.x, 18);
+  });
+
   testWidgets('shell keeps the body stable while the keyboard opens', (
     tester,
   ) async {
@@ -210,6 +260,70 @@ void main() {
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.resizeToAvoidBottomInset, isFalse);
+  });
+
+  testWidgets('backheader live tuner covers bottom nav from shell overlay', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'centerBadgeBudget',
+    };
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('summary-pill')),
+      const Offset(0, -90),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('header-budget-trigger-chip')));
+    await tester.pumpAndSettle();
+
+    final surfaceTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey('backheader-experimental-surface')),
+    );
+    await tester.tapAt(surfaceTopLeft + const Offset(24, 96));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
+      findsOneWidget,
+    );
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('backheader-live-tuner-slide-card')),
+    );
+    final summaryRect = tester.getRect(
+      find.byKey(const ValueKey('summary-pill')),
+    );
+    final navRect = tester.getRect(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    expect(sheetRect.top, lessThan(navRect.top));
+    expect(sheetRect.bottom, greaterThanOrEqualTo(navRect.bottom));
+    expect(sheetRect.top, greaterThanOrEqualTo(summaryRect.top - 1));
+    expect(sheetRect.top, lessThanOrEqualTo(summaryRect.top + 4));
+
+    final scrollRect = tester.getRect(
+      find.byKey(const ValueKey('settings-backheader-style-scroll')),
+    );
+    expect(scrollRect.top, greaterThanOrEqualTo(sheetRect.top));
+    expect(scrollRect.bottom, lessThanOrEqualTo(sheetRect.bottom));
+
+    await tester.tap(find.text('Beállítások'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
   });
 
   testWidgets('bottom nav taps switch secondary pages', (tester) async {
@@ -625,6 +739,50 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
 
     expect(singleTaps, 1);
+  });
+
+  testWidgets('FAB can render as rounded square', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(shape: ExptFabShape.roundedSquare, onPressed: () {}),
+          ),
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('expt-fab')),
+    );
+    final decoration = surface.decoration as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+
+    expect(borderRadius.topLeft.x, 18);
+    expect(borderRadius.topRight.x, 18);
+    expect(borderRadius.bottomLeft.x, 18);
+    expect(borderRadius.bottomRight.x, 18);
+  });
+
+  testWidgets('FAB size controls surface and icon dimensions', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(
+              shape: ExptFabShape.circle,
+              size: 80,
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    expect(fabRect.width, 80);
+    expect(fabRect.height, 80);
+    expect(tester.widget<Icon>(find.byIcon(Icons.add)).size, 32);
   });
 
   testWidgets('FAB quick second tap dispatches another single tap', (
@@ -1230,19 +1388,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Jelenlegi bar rendszer (jelenlegi)'), findsOneWidget);
-    expect(find.text('C - Hero Token'), findsOneWidget);
-    expect(find.text('D - Orbit Budget'), findsOneWidget);
+    expect(find.text('C - Hero Token'), findsNothing);
+    expect(find.text('D - Orbit Budget'), findsNothing);
+    expect(find.text('E - Center Badge Budget'), findsOneWidget);
     expect(find.text('A - Color Field Partition'), findsNothing);
     expect(find.text('B - Partition Dashboard'), findsNothing);
     expect(find.text('E - Mosaic Budget'), findsNothing);
     expect(find.text('F - Ledger Strip'), findsNothing);
 
-    await tester.ensureVisible(find.text('D - Orbit Budget'));
+    await tester.ensureVisible(find.text('E - Center Badge Budget'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('D - Orbit Budget'));
+    await tester.tap(find.text('E - Center Badge Budget'));
     await tester.pumpAndSettle();
 
-    expect(updatedThemeSettings.single['backheaderStyle'], 'orbitBudget');
+    expect(updatedThemeSettings.single['backheaderStyle'], 'centerBadgeBudget');
   });
 
   testWidgets('settings contains push parser profiles and app picker', (

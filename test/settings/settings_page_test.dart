@@ -379,6 +379,15 @@ void main() {
     );
     expect(find.text('App színe'), findsOneWidget);
     expect(find.text('Kategória menü mód'), findsOneWidget);
+    expect(find.text('Navigáció'), findsOneWidget);
+    expect(find.text('A - Jelenlegi (jelenlegi)'), findsOneWidget);
+    expect(find.text('B - 3 menü + jobb FAB'), findsOneWidget);
+    expect(find.text('FAB forma'), findsOneWidget);
+    expect(find.text('Kör (jelenlegi)'), findsOneWidget);
+    expect(find.text('Rounded square'), findsOneWidget);
+    expect(find.text('FAB méret'), findsOneWidget);
+    expect(find.byKey(const ValueKey('theme-fab-size-slider')), findsOneWidget);
+    expect(find.byKey(const ValueKey('theme-fab-size-input')), findsOneWidget);
     expect(find.text('Kategória menü felülete'), findsOneWidget);
     expect(find.text('Kategória kártyák felülete'), findsOneWidget);
     expect(find.text('Árnyékok'), findsOneWidget);
@@ -444,6 +453,33 @@ void main() {
       updated.last.categoryMenuPresentation,
       CategoryMenuPresentation.slideUpSheet,
     );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-shell-navigation-right-rounded-fab')),
+    );
+    expect(
+      updated.last.shellNavigationLayout,
+      ShellNavigationLayout.rightRoundedFab,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-fab-shape-rounded-square')),
+    );
+    expect(updated.last.fabShape, FabShape.roundedSquare);
+
+    final fabSizeSlider = tester.widget<Slider>(
+      find.byKey(const ValueKey('theme-fab-size-slider')),
+    );
+    expect(fabSizeSlider.min, 52);
+    expect(fabSizeSlider.max, 88);
+    expect(fabSizeSlider.value, 66);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('theme-fab-size-input')),
+      '80',
+    );
+    await tester.pump();
+    expect(updated.last.fabSize, 80);
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('theme-category-card-shadow-off')),

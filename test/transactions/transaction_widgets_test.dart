@@ -593,6 +593,29 @@ void main() {
     expect(find.text('2025.09.25'), findsOneWidget);
   });
 
+  testWidgets('log list accepts custom bottom padding', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          height: 400,
+          child: TransactionLogList(
+            records: [sampleRecord()],
+            categories: [sampleCategory()],
+            bottomPadding: 168,
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => true,
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final listView = tester.widget<ListView>(find.byType(ListView));
+    final padding = listView.padding! as EdgeInsets;
+    expect(padding.bottom, 168);
+  });
+
   testWidgets('log list uses prebuilt entries and category index', (
     tester,
   ) async {

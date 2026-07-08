@@ -102,9 +102,12 @@ class ExpenseSettingsStoreSecurityTest {
                 "boxColor" to "gray",
                 "buttonSurfaceStyle" to "neutralNeutral",
                 "contentSurfaceStyle" to "neutralNeutral",
-                "backheaderStyle" to "orbitBudget",
+                "backheaderStyle" to "centerBadgeBudget",
                 "centerBackheaderDesign" to "colored",
                 "centerPartitionRingEnabled" to true,
+                "centerBadgeDiscEnabled" to false,
+                "centerBadgeBorderMode" to "always",
+                "centerBadgeOverlapMaskEnabled" to true,
                 "designProfile" to "neumorphism",
                 "appColor" to "pink",
             )
@@ -115,14 +118,60 @@ class ExpenseSettingsStoreSecurityTest {
         assertEquals("pink", updated["appColor"])
         assertEquals("colored", updated["centerBackheaderDesign"])
         assertEquals(true, updated["centerPartitionRingEnabled"])
+        assertEquals(false, updated["centerBadgeDiscEnabled"])
+        assertEquals("always", updated["centerBadgeBorderMode"])
+        assertEquals(true, updated["centerBadgeOverlapMaskEnabled"])
         assertEquals("normal", store.loadThemeSettings()["designProfile"])
         assertEquals("colored", store.loadThemeSettings()["centerBackheaderDesign"])
         assertEquals(true, store.loadThemeSettings()["centerPartitionRingEnabled"])
+        assertEquals(false, store.loadThemeSettings()["centerBadgeDiscEnabled"])
+        assertEquals("always", store.loadThemeSettings()["centerBadgeBorderMode"])
+        assertEquals(true, store.loadThemeSettings()["centerBadgeOverlapMaskEnabled"])
         assertEquals(
             null,
             context.getSharedPreferences("expense_settings", Context.MODE_PRIVATE)
                 .getString("designProfile", null)
         )
+    }
+
+    @Test
+    fun themeSettingsPersistCenterBadgeOpacityControls() {
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "backheaderStyle" to "centerBadgeBudget",
+                "centerBackheaderDesign" to "colored",
+                "centerBadgeWhiteDiscOpacities" to listOf(20, 30, 40, 50, 60),
+                "centerBadgeWhiteIconOpacities" to listOf(100, 90, 80, 70, 60),
+                "centerBadgeWhiteProgressOpacities" to listOf(55, 45, 35, 25, 15),
+                "centerBadgeColoredFillOpacities" to listOf(99, 88, 77, 66, 55),
+                "centerBadgeColoredIconOpacities" to listOf(91, 82, 73, 64, 55),
+                "centerBadgeColoredProgressOpacities" to listOf(81, 72, 63, 54, 45),
+                "centerBadgeSlotSizePercents" to listOf(90, 91, 92, 93, 94, 95, 96, 97, 98),
+                "centerBadgeSlotXOffsets" to listOf(-8, -6, -4, -2, 0, 2, 4, 6, 8),
+                "centerBadgeColoredBackgroundOpacity" to 64,
+            )
+        )
+
+        assertEquals(listOf(20, 30, 40, 50, 60), updated["centerBadgeWhiteDiscOpacities"])
+        assertEquals(listOf(100, 90, 80, 70, 60), updated["centerBadgeWhiteIconOpacities"])
+        assertEquals(listOf(55, 45, 35, 25, 15), updated["centerBadgeWhiteProgressOpacities"])
+        assertEquals(listOf(99, 88, 77, 66, 55), updated["centerBadgeColoredFillOpacities"])
+        assertEquals(listOf(91, 82, 73, 64, 55), updated["centerBadgeColoredIconOpacities"])
+        assertEquals(listOf(81, 72, 63, 54, 45), updated["centerBadgeColoredProgressOpacities"])
+        assertEquals(listOf(90, 91, 92, 93, 94, 95, 96, 97, 98), updated["centerBadgeSlotSizePercents"])
+        assertEquals(listOf(-8, -6, -4, -2, 0, 2, 4, 6, 8), updated["centerBadgeSlotXOffsets"])
+        assertEquals(64, updated["centerBadgeColoredBackgroundOpacity"])
+
+        val loaded = store.loadThemeSettings()
+        assertEquals(listOf(20, 30, 40, 50, 60), loaded["centerBadgeWhiteDiscOpacities"])
+        assertEquals(listOf(100, 90, 80, 70, 60), loaded["centerBadgeWhiteIconOpacities"])
+        assertEquals(listOf(55, 45, 35, 25, 15), loaded["centerBadgeWhiteProgressOpacities"])
+        assertEquals(listOf(99, 88, 77, 66, 55), loaded["centerBadgeColoredFillOpacities"])
+        assertEquals(listOf(91, 82, 73, 64, 55), loaded["centerBadgeColoredIconOpacities"])
+        assertEquals(listOf(81, 72, 63, 54, 45), loaded["centerBadgeColoredProgressOpacities"])
+        assertEquals(listOf(90, 91, 92, 93, 94, 95, 96, 97, 98), loaded["centerBadgeSlotSizePercents"])
+        assertEquals(listOf(-8, -6, -4, -2, 0, 2, 4, 6, 8), loaded["centerBadgeSlotXOffsets"])
+        assertEquals(64, loaded["centerBadgeColoredBackgroundOpacity"])
     }
 
     @Test
@@ -211,6 +260,52 @@ class ExpenseSettingsStoreSecurityTest {
         assertEquals(false, loaded["headerPillShadowEnabled"])
         assertEquals(false, loaded["summaryPillShadowEnabled"])
         assertEquals(false, loaded["searchPillShadowEnabled"])
+    }
+
+    @Test
+    fun themeSettingsPersistShellNavigationLayout() {
+        assertEquals("current", store.loadThemeSettings()["shellNavigationLayout"])
+
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "shellNavigationLayout" to "rightRoundedFab",
+            )
+        )
+
+        assertEquals("rightRoundedFab", updated["shellNavigationLayout"])
+        assertEquals(
+            "rightRoundedFab",
+            store.loadThemeSettings()["shellNavigationLayout"],
+        )
+    }
+
+    @Test
+    fun themeSettingsPersistFabShapeAndSize() {
+        val defaults = store.loadThemeSettings()
+        assertEquals("circle", defaults["fabShape"])
+        assertEquals(66, defaults["fabSize"])
+
+        val updated = store.updateThemeSettings(
+            mapOf(
+                "fabShape" to "roundedSquare",
+                "fabSize" to 80,
+            )
+        )
+
+        assertEquals("roundedSquare", updated["fabShape"])
+        assertEquals(80, updated["fabSize"])
+        assertEquals("roundedSquare", store.loadThemeSettings()["fabShape"])
+        assertEquals(80, store.loadThemeSettings()["fabSize"])
+
+        val clamped = store.updateThemeSettings(
+            mapOf(
+                "fabShape" to "circle",
+                "fabSize" to 999,
+            )
+        )
+
+        assertEquals("circle", clamped["fabShape"])
+        assertEquals(88, clamped["fabSize"])
     }
 
     @Test

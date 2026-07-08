@@ -40,6 +40,7 @@ class TransactionLogList extends StatefulWidget {
     this.onResetMerchantName,
     this.onLoadMore,
     this.hasMore = false,
+    this.bottomPadding = 96,
   });
 
   final List<TransactionRecord> records;
@@ -61,6 +62,7 @@ class TransactionLogList extends StatefulWidget {
   final TransactionRecordAction? onResetMerchantName;
   final VoidCallback? onLoadMore;
   final bool hasMore;
+  final double bottomPadding;
 
   @override
   State<TransactionLogList> createState() => _TransactionLogListState();
@@ -119,7 +121,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
         itemExtentBuilder: (index, _) => _extentFor(logEntries[index]),
         addAutomaticKeepAlives: false,
         addSemanticIndexes: false,
-        padding: const EdgeInsets.only(bottom: 96),
+        padding: EdgeInsets.only(bottom: widget.bottomPadding),
         itemCount: logEntries.length,
         itemBuilder: (context, index) {
           final entry = logEntries[index];

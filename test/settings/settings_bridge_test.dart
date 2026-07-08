@@ -302,7 +302,7 @@ void main() {
       settings.themeSettings.ghostLogboxSettings.expectedLabelEnabled,
       isTrue,
     );
-    expect(settings.themeSettings.backheaderStyle, BackheaderStyle.heroToken);
+    expect(settings.themeSettings.backheaderStyle, BackheaderStyle.classic);
     expect(
       settings.themeSettings.categoryMenuPresentation,
       CategoryMenuPresentation.slideUpSheet,
@@ -347,9 +347,31 @@ void main() {
         'categoryMenuSurfaceStyle': 'insetInset',
         'categoryCardColor': 'white',
         'categoryCardSurfaceStyle': 'raisedInset',
-        'backheaderStyle': 'orbitBudget',
+        'backheaderStyle': 'centerBadgeBudget',
         'centerBackheaderDesign': 'colored',
         'centerPartitionRingEnabled': true,
+        'centerBadgeDiscEnabled': false,
+        'centerBadgeBorderMode': 'always',
+        'centerBadgeOverlapMaskEnabled': true,
+        'centerBadgeWhiteDiscOpacities': <Object?>[20, 30, 40, 50, 60],
+        'centerBadgeWhiteIconOpacities': <Object?>[100, 90, 80, 70, 60],
+        'centerBadgeWhiteProgressOpacities': <Object?>[55, 45, 35, 25, 15],
+        'centerBadgeColoredFillOpacities': <Object?>[99, 88, 77, 66, 55],
+        'centerBadgeColoredIconOpacities': <Object?>[91, 82, 73, 64, 55],
+        'centerBadgeColoredProgressOpacities': <Object?>[81, 72, 63, 54, 45],
+        'centerBadgeSlotSizePercents': <Object?>[
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+        ],
+        'centerBadgeSlotXOffsets': <Object?>[-8, -6, -4, -2, 0, 2, 4, 6, 8],
+        'centerBadgeColoredBackgroundOpacity': 64,
         'appColor': 'pink',
         'categoryMenuPresentation': 'slideUpSheet',
         'categoryCardShadowEnabled': false,
@@ -373,6 +395,28 @@ void main() {
     expect(updated.ghostLogboxSettings.expectedLabelEnabled, isFalse);
     expect(updated.centerBackheaderDesign, BackheaderCenterDesign.colored);
     expect(updated.toMap()['centerPartitionRingEnabled'], isTrue);
+    expect(updated.centerBadgeDiscEnabled, isFalse);
+    expect(updated.centerBadgeBorderMode, CenterBadgeBorderMode.always);
+    expect(updated.centerBadgeOverlapMaskEnabled, isTrue);
+    expect(updated.centerBadgeWhiteDiscOpacities, [20, 30, 40, 50, 60]);
+    expect(updated.centerBadgeWhiteIconOpacities, [100, 90, 80, 70, 60]);
+    expect(updated.centerBadgeWhiteProgressOpacities, [55, 45, 35, 25, 15]);
+    expect(updated.centerBadgeColoredFillOpacities, [99, 88, 77, 66, 55]);
+    expect(updated.centerBadgeColoredIconOpacities, [91, 82, 73, 64, 55]);
+    expect(updated.centerBadgeColoredProgressOpacities, [81, 72, 63, 54, 45]);
+    expect(updated.centerBadgeSlotSizePercents, [
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+    ]);
+    expect(updated.centerBadgeSlotXOffsets, [-8, -6, -4, -2, 0, 2, 4, 6, 8]);
+    expect(updated.centerBadgeColoredBackgroundOpacity, 64);
     expect(calls.single.method, 'expenseUpdateThemeSettings');
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
@@ -396,9 +440,37 @@ void main() {
     );
     expect(ghostPayload['textTone'], 'gray');
     expect(ghostPayload['expectedLabelEnabled'], isFalse);
-    expect(payload['backheaderStyle'], 'orbitBudget');
+    expect(payload['backheaderStyle'], 'centerBadgeBudget');
     expect(payload['centerBackheaderDesign'], 'colored');
     expect(payload['centerPartitionRingEnabled'], isTrue);
+    expect(payload['centerBadgeDiscEnabled'], isFalse);
+    expect(payload['centerBadgeBorderMode'], 'always');
+    expect(payload['centerBadgeOverlapMaskEnabled'], isTrue);
+    expect(payload['centerBadgeWhiteDiscOpacities'], [20, 30, 40, 50, 60]);
+    expect(payload['centerBadgeWhiteIconOpacities'], [100, 90, 80, 70, 60]);
+    expect(payload['centerBadgeWhiteProgressOpacities'], [55, 45, 35, 25, 15]);
+    expect(payload['centerBadgeColoredFillOpacities'], [99, 88, 77, 66, 55]);
+    expect(payload['centerBadgeColoredIconOpacities'], [91, 82, 73, 64, 55]);
+    expect(payload['centerBadgeColoredProgressOpacities'], [
+      81,
+      72,
+      63,
+      54,
+      45,
+    ]);
+    expect(payload['centerBadgeSlotSizePercents'], [
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+    ]);
+    expect(payload['centerBadgeSlotXOffsets'], [-8, -6, -4, -2, 0, 2, 4, 6, 8]);
+    expect(payload['centerBadgeColoredBackgroundOpacity'], 64);
     expect(payload.containsKey('designProfile'), isFalse);
     expect(payload.containsKey('nightMode'), isFalse);
     expect(payload['appColor'], 'pink');
@@ -420,6 +492,18 @@ void main() {
       expect(
         AppThemeSettings.fromMap(const <String, Object?>{
           'backheaderStyle': 'mosaicBudget',
+        }).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{
+          'backheaderStyle': 'heroToken',
+        }).backheaderStyle,
+        BackheaderStyle.classic,
+      );
+      expect(
+        AppThemeSettings.fromMap(const <String, Object?>{
+          'backheaderStyle': 'orbitBudget',
         }).backheaderStyle,
         BackheaderStyle.classic,
       );
