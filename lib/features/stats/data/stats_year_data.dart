@@ -121,6 +121,7 @@ class StatsYearData {
       var thresholdHitDays = 0;
       var hotDays = 0;
       var transactionCount = 0;
+      final scopeCategoryTotals = <int, double>{};
 
       for (var day = 1; day <= daysInMonth; day += 1) {
         final date = DateTime(year, month, day);
@@ -139,6 +140,11 @@ class StatsYearData {
           scopedAmount += amount;
           if (categoryId != null) {
             categoryAmounts.update(
+              categoryId,
+              (value) => value + amount,
+              ifAbsent: () => amount,
+            );
+            scopeCategoryTotals.update(
               categoryId,
               (value) => value + amount,
               ifAbsent: () => amount,
@@ -187,6 +193,7 @@ class StatsYearData {
           activeTotal: monthTotal,
           scopeTotal: scopeTotal,
           closingAmount: monthTotal,
+          scopeCategoryTotals: Map.unmodifiable(scopeCategoryTotals),
           thresholdHitDays: thresholdHitDays,
           hotDays: hotDays,
           transactionCount: transactionCount,
@@ -371,6 +378,7 @@ class StatsMonthData {
     required this.activeTotal,
     required this.scopeTotal,
     required this.closingAmount,
+    required this.scopeCategoryTotals,
     required this.thresholdHitDays,
     required this.hotDays,
     required this.transactionCount,
@@ -385,6 +393,7 @@ class StatsMonthData {
   final double activeTotal;
   final double scopeTotal;
   final double closingAmount;
+  final Map<int, double> scopeCategoryTotals;
   final int thresholdHitDays;
   final int hotDays;
   final int transactionCount;
