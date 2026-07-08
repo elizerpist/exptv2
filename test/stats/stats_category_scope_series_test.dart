@@ -35,6 +35,36 @@ void main() {
     expect(series.secondaryLine, hasLength(3));
   });
 
+  test('expense orange line smooths rolling Ft per threshold hit', () {
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 5000,
+      dailyScopeAmounts: const [6000, 2000, 14000],
+    );
+
+    expect(series.secondaryMetricLabel, 'Ft/kiugras');
+    expect(series.dynamicEmaPeriod, 18);
+    _expectCloseValues(series.secondaryLine.map((point) => point.value), const [
+      6000,
+      6000,
+      6421.0526315789475,
+    ]);
+  });
+
+  test('threshold zero orange line smooths rolling Ft per active day', () {
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 0,
+      dailyScopeAmounts: const [2000, 0, 6000],
+    );
+
+    expect(series.secondaryMetricLabel, 'Ft/aktiv nap');
+    expect(series.dynamicEmaPeriod, 18);
+    _expectCloseValues(series.secondaryLine.map((point) => point.value), const [
+      2000,
+      2000,
+      2210.5263157894738,
+    ]);
+  });
+
   test(
     'income scope uses monthly buckets and keeps orange Ft per active day',
     () {
@@ -216,6 +246,14 @@ void main() {
       expect(series.latestImpactLabel, '10.0k');
     },
   );
+}
+
+void _expectCloseValues(Iterable<double> actual, List<double> expected) {
+  final actualList = actual.toList(growable: false);
+  expect(actualList, hasLength(expected.length));
+  for (var i = 0; i < expected.length; i += 1) {
+    expect(actualList[i], closeTo(expected[i], 0.0001), reason: 'index $i');
+  }
 }
 
 TransactionRecord record({

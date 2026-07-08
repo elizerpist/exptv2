@@ -262,8 +262,13 @@ class StatsCategoryScopeSeries {
             .toDouble(),
     ];
     final smoothedControl = _ema(rawControl, emaPeriod);
-    final secondaryValues = _ema(impactRaw, emaPeriod);
-    final referenceValues = impactRaw.where((value) => value > 0);
+    final secondaryRawValues = _expenseSecondaryRawValues(
+      threshold: threshold,
+      dailyScopeAmounts: dailyScopeAmounts,
+      window: emaPeriod,
+    );
+    final secondaryValues = _ema(secondaryRawValues, emaPeriod);
+    final referenceValues = secondaryRawValues.where((value) => value > 0);
     return _StatsCategoryControlData(
       controlBars: [
         for (var i = 0; i < smoothedControl.length; i += 1)
@@ -284,6 +289,41 @@ class StatsCategoryScopeSeries {
       secondaryReferenceAmount: _average(referenceValues),
       dynamicEmaPeriod: emaPeriod,
     );
+  }
+
+  static List<double> _expenseSecondaryRawValues({
+    required double threshold,
+    required List<double> dailyScopeAmounts,
+    required int window,
+  }) {
+    final thresholdEnabled = threshold > 0;
+    return [
+      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
+        _expenseSecondaryRawValue(
+          thresholdEnabled: thresholdEnabled,
+          threshold: threshold,
+          windowAmounts: _rollingWindow(dailyScopeAmounts, i, window),
+        ),
+    ];
+  }
+
+  static double _expenseSecondaryRawValue({
+    required bool thresholdEnabled,
+    required double threshold,
+    required List<double> windowAmounts,
+  }) {
+    var numerator = 0.0;
+    var denominator = 0;
+    for (final amount in windowAmounts) {
+      final active = amount > 0;
+      final included = thresholdEnabled
+          ? amount >= threshold && active
+          : active;
+      if (!included) continue;
+      numerator += amount;
+      denominator += 1;
+    }
+    return denominator > 0 ? numerator / denominator : 0;
   }
 
   static _StatsCategoryControlData _incomeControlData({
