@@ -268,48 +268,44 @@ class _SearchPillState extends State<SearchPill> {
     return TextFieldTapRegion(
       child: Material(
         color: Colors.transparent,
-        child: Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (_) => _requestFocus(),
-          child: ValueListenableBuilder<bool>(
-            valueListenable: _focused,
-            child: content,
-            builder: (context, focused, child) {
-              return ExpensePressable(
-                enabled: widget.surfaceStyle.hasPressEffect,
-                forcePressed: focused && widget.surfaceStyle.hasPressEffect,
-                builder: (context, pressed) {
-                  return ExpenseSurfaceContainer(
-                    surfaceKey: const ValueKey('search-pill-container'),
-                    style: widget.surfaceStyle,
-                    color: widget.surfaceColor,
-                    borderRadius: BorderRadius.circular(25),
-                    pressed: pressed,
-                    margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                    constraints: const BoxConstraints(minHeight: 46),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    neutralBorder: Border.all(
-                      color: focused ? widget.accentColor : AppColors.gray200,
-                      width: focused ? 1.5 : 1,
-                    ),
-                    neutralShadow: widget.shadowEnabled
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              offset: const Offset(0, 2),
-                              blurRadius: 3,
-                            ),
-                          ]
-                        : null,
-                    child: child ?? const SizedBox.shrink(),
-                  );
-                },
-              );
-            },
-          ),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _focused,
+          child: content,
+          builder: (context, focused, child) {
+            return ExpensePressable(
+              enabled: widget.surfaceStyle.hasPressEffect,
+              forcePressed: focused && widget.surfaceStyle.hasPressEffect,
+              builder: (context, pressed) {
+                return ExpenseSurfaceContainer(
+                  surfaceKey: const ValueKey('search-pill-container'),
+                  style: widget.surfaceStyle,
+                  color: widget.surfaceColor,
+                  borderRadius: BorderRadius.circular(25),
+                  pressed: pressed,
+                  margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                  constraints: const BoxConstraints(minHeight: 46),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  neutralBorder: Border.all(
+                    color: focused ? widget.accentColor : AppColors.gray200,
+                    width: focused ? 1.5 : 1,
+                  ),
+                  neutralShadow: widget.shadowEnabled
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            offset: const Offset(0, 2),
+                            blurRadius: 3,
+                          ),
+                        ]
+                      : null,
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+            );
+          },
         ),
       ),
     );

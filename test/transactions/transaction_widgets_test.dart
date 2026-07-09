@@ -429,7 +429,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.tap(find.byKey(const ValueKey('search-pill-text-wrapper')));
     await tester.pump(ExpenseSurface.pressDuration);
 
     BoxDecoration surfaceDecoration() =>
@@ -553,6 +553,35 @@ void main() {
     expect(cleared, ['6']);
   });
 
+  testWidgets('vendor list button does not focus the search text field', (
+    tester,
+  ) async {
+    var vendorPressed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(
+          query: '',
+          onQueryChanged: (_) {},
+          filteredCount: 0,
+          onVendorListPressed: () => vendorPressed = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pump();
+
+    final textField = tester.widget<TextField>(find.byType(TextField));
+    expect(vendorPressed, isTrue);
+    expect(textField.focusNode?.hasFocus, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-text-wrapper')));
+    await tester.pump();
+
+    final focusedField = tester.widget<TextField>(find.byType(TextField));
+    expect(focusedField.focusNode?.hasFocus, isTrue);
+  });
+
   testWidgets('search pill highlights only the outer border when focused', (
     tester,
   ) async {
@@ -587,7 +616,7 @@ void main() {
 
     final fieldBefore = tester.widget<TextField>(find.byType(TextField));
 
-    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.tap(find.byKey(const ValueKey('search-pill-text-wrapper')));
     await tester.pump();
 
     final fieldAfter = tester.widget<TextField>(find.byType(TextField));
@@ -607,7 +636,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.tap(find.byKey(const ValueKey('search-pill-text-wrapper')));
     await tester.pump();
     await tester.pump();
 
@@ -639,7 +668,7 @@ void main() {
     expect(requestLogs, hasLength(1));
   });
 
-  testWidgets('search pill focuses from the whole pill and unfocuses outside', (
+  testWidgets('search pill text area focuses and unfocuses outside', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -659,7 +688,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('search-pill-container')));
+    await tester.tap(find.byKey(const ValueKey('search-pill-text-wrapper')));
     await tester.pump();
 
     var container = tester.widget<Container>(
