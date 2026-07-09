@@ -25,22 +25,19 @@ void main() {
     );
   });
 
-  test(
-    'threshold zero labels the orange line as active-day intensity index',
-    () {
-      final series = StatsCategoryScopeSeries.fromDailySamples(
-        threshold: 0,
-        dailyScopeAmounts: const [2000, 0, 3000],
-      );
+  test('threshold zero labels the orange line as activity trend index', () {
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 0,
+      dailyScopeAmounts: const [2000, 0, 3000],
+    );
 
-      expect(series.secondaryMetricLabel, 'aktiv nap index');
-      expect(series.secondaryLine, hasLength(3));
-      expect(
-        series.secondaryLine.map((point) => point.value),
-        everyElement(inInclusiveRange(0, 100)),
-      );
-    },
-  );
+    expect(series.secondaryMetricLabel, 'aktivitas index');
+    expect(series.secondaryLine, hasLength(3));
+    expect(
+      series.secondaryLine.map((point) => point.value),
+      everyElement(inInclusiveRange(0, 100)),
+    );
+  });
 
   test('expense orange line smooths normalized spike severity index', () {
     final series = StatsCategoryScopeSeries.fromDailySamples(
@@ -61,22 +58,68 @@ void main() {
     );
   });
 
-  test(
-    'threshold zero orange line smooths normalized active-day intensity',
-    () {
-      final series = StatsCategoryScopeSeries.fromDailySamples(
-        threshold: 0,
-        dailyScopeAmounts: const [2000, 0, 6000],
-      );
+  test('threshold zero orange line smooths rolling activity pressure', () {
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 0,
+      dailyScopeAmounts: const [2000, 0, 6000],
+    );
 
-      expect(series.secondaryMetricLabel, 'aktiv nap index');
-      expect(series.dynamicEmaPeriod, 18);
-      _expectCloseValues(
-        series.secondaryLine.map((point) => point.value),
-        const [50, 50, 55.26315789473684],
-      );
-    },
-  );
+    expect(series.secondaryMetricLabel, 'aktivitas index');
+    expect(series.dynamicEmaPeriod, 18);
+    expect(
+      series.secondaryLine.map((point) => point.value),
+      everyElement(inInclusiveRange(0, 100)),
+    );
+    expect(
+      series.secondaryLine.last.value,
+      greaterThan(series.secondaryLine.first.value),
+    );
+  });
+
+  test('threshold zero expense trend uses rolling behavior pressure', () {
+    final samples = <double>[
+      ..._periodicAmounts(dayCount: 120, every: 3, amount: 5000),
+      ..._periodicAmounts(dayCount: 120, every: 7, amount: 11000),
+      ..._periodicAmounts(dayCount: 120, every: 14, amount: 3000),
+    ];
+
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 0,
+      dailyScopeAmounts: samples,
+    );
+    final controlValues = series.controlBars
+        .map((bar) => bar.value)
+        .toList(growable: false);
+    final secondaryValues = series.secondaryLine
+        .map((point) => point.value)
+        .toList(growable: false);
+    final firstThird = _average(controlValues.skip(30).take(70));
+    final middleThird = _average(controlValues.skip(150).take(70));
+    final finalThird = _average(controlValues.skip(290).take(60));
+    final firstSecondary = _average(secondaryValues.skip(30).take(70));
+    final middleSecondary = _average(secondaryValues.skip(150).take(70));
+    final finalSecondary = _average(secondaryValues.skip(290).take(60));
+
+    expect(firstThird, greaterThan(55));
+    expect(middleThird, greaterThan(firstThird - 18));
+    expect(finalThird, lessThan(45));
+    expect(finalThird, lessThan(middleThird - 18));
+    expect(
+      controlValues.map((value) => value.round()).toSet().length,
+      greaterThan(8),
+      reason: 'threshold 0 should draw a trend curve, not a flat plateau',
+    );
+    expect(
+      series.controlBars.take(120).any((bar) => bar.colorHex == '#EF4444'),
+      isTrue,
+    );
+    expect(
+      series.controlBars.skip(280).any((bar) => bar.colorHex == '#22C55E'),
+      isTrue,
+    );
+    expect(middleSecondary, greaterThan(firstSecondary - 18));
+    expect(finalSecondary, lessThan(middleSecondary - 20));
+  });
 
   test(
     'income scope uses income-health bars and normalized deviation line',
@@ -267,6 +310,27 @@ void _expectCloseValues(Iterable<double> actual, List<double> expected) {
   for (var i = 0; i < expected.length; i += 1) {
     expect(actualList[i], closeTo(expected[i], 0.0001), reason: 'index $i');
   }
+}
+
+List<double> _periodicAmounts({
+  required int dayCount,
+  required int every,
+  required double amount,
+}) {
+  return [
+    for (var day = 0; day < dayCount; day += 1)
+      if (day % every == 0) amount else 0,
+  ];
+}
+
+double _average(Iterable<double> values) {
+  var sum = 0.0;
+  var count = 0;
+  for (final value in values) {
+    sum += value;
+    count += 1;
+  }
+  return count == 0 ? 0 : sum / count;
 }
 
 TransactionRecord record({

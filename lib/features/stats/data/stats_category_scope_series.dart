@@ -240,12 +240,18 @@ class StatsCategoryScopeSeries {
         .where((amount) => amount > 0)
         .length;
     final emaPeriod = _dynamicEmaPeriod(activeScopeDays);
+    if (!thresholdEnabled) {
+      return _thresholdlessExpenseControlData(
+        dailyScopeAmounts: dailyScopeAmounts,
+        emaPeriod: emaPeriod,
+      );
+    }
     final frequencyRaw = <double>[];
     final valueRaw = <double>[];
     final impactRaw = <double>[];
     for (final amount in dailyScopeAmounts) {
       final active = amount > 0;
-      final hit = thresholdEnabled ? amount >= threshold && active : active;
+      final hit = amount >= threshold && active;
       frequencyRaw.add(hit ? 1 : 0);
       valueRaw.add(active ? amount : 0);
       impactRaw.add(hit ? amount : 0);
@@ -290,6 +296,78 @@ class StatsCategoryScopeSeries {
           ? 'kiugras index'
           : 'aktiv nap index',
       secondaryReferenceAmount: _average(referenceValues),
+      dynamicEmaPeriod: emaPeriod,
+      kontrollScore: _scoreFromPressure(smoothedControl),
+    );
+  }
+
+  static _StatsCategoryControlData _thresholdlessExpenseControlData({
+    required List<double> dailyScopeAmounts,
+    required int emaPeriod,
+  }) {
+    final behaviorWindow = math.max(21, emaPeriod * 3);
+    final activeCounts = <double>[];
+    final rollingTotals = <double>[];
+    final activeAverages = <double>[];
+    for (var i = 0; i < dailyScopeAmounts.length; i += 1) {
+      final windowAmounts = _rollingWindow(
+        dailyScopeAmounts,
+        i,
+        behaviorWindow,
+      );
+      var activeCount = 0;
+      var total = 0.0;
+      for (final amount in windowAmounts) {
+        if (amount <= 0) continue;
+        activeCount += 1;
+        total += amount;
+      }
+      activeCounts.add(activeCount.toDouble());
+      rollingTotals.add(total);
+      activeAverages.add(activeCount == 0 ? 0 : total / activeCount);
+    }
+    final activeCountReference = _average(activeCounts);
+    final totalReference = _average(rollingTotals);
+    final activeAverageReference = _average(
+      activeAverages.where((value) => value > 0),
+    );
+    final rawControl = <double>[
+      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
+        (50 *
+                (0.15 * _ratio(activeCounts[i], activeCountReference) +
+                    0.55 * _ratio(rollingTotals[i], totalReference) +
+                    0.30 * _ratio(activeAverages[i], activeAverageReference)))
+            .clamp(0, 100)
+            .toDouble(),
+    ];
+    final secondaryRaw = <double>[
+      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
+        (50 *
+                (0.75 * _ratio(rollingTotals[i], totalReference) +
+                    0.25 * _ratio(activeCounts[i], activeCountReference)))
+            .clamp(0, 100)
+            .toDouble(),
+    ];
+    final smoothedControl = _ema(rawControl, emaPeriod);
+    final secondaryValues = _ema(secondaryRaw, emaPeriod);
+    return _StatsCategoryControlData(
+      controlBars: [
+        for (var i = 0; i < smoothedControl.length; i += 1)
+          StatsControlBar(
+            index: i,
+            value: smoothedControl[i],
+            colorHex: _controlColor(
+              activeType: TransactionType.expense,
+              value: smoothedControl[i],
+            ),
+          ),
+      ],
+      secondaryLine: [
+        for (var i = 0; i < secondaryValues.length; i += 1)
+          StatsSeriesPoint(index: i, value: secondaryValues[i]),
+      ],
+      secondaryMetricLabel: 'aktivitas index',
+      secondaryReferenceAmount: totalReference,
       dynamicEmaPeriod: emaPeriod,
       kontrollScore: _scoreFromPressure(smoothedControl),
     );
