@@ -236,115 +236,66 @@ class StatsCategoryScopeSeries {
       );
     }
     final thresholdEnabled = threshold > 0;
-    final activeScopeDays = dailyScopeAmounts
-        .where((amount) => amount > 0)
+    final focusScopeDays = dailyScopeAmounts
+        .where(
+          (amount) => amount > 0 && (!thresholdEnabled || amount >= threshold),
+        )
         .length;
-    final emaPeriod = _dynamicEmaPeriod(activeScopeDays);
-    if (!thresholdEnabled) {
-      return _thresholdlessExpenseControlData(
-        dailyScopeAmounts: dailyScopeAmounts,
-        emaPeriod: emaPeriod,
-      );
-    }
-    final frequencyRaw = <double>[];
-    final valueRaw = <double>[];
-    final impactRaw = <double>[];
-    for (final amount in dailyScopeAmounts) {
-      final active = amount > 0;
-      final hit = amount >= threshold && active;
-      frequencyRaw.add(hit ? 1 : 0);
-      valueRaw.add(active ? amount : 0);
-      impactRaw.add(hit ? amount : 0);
-    }
-    final frequencyAverage = _average(frequencyRaw);
-    final valueAverage = _average(valueRaw);
-    final impactAverage = _average(impactRaw);
-    final rawControl = <double>[
-      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        (50 *
-                (0.35 * _ratio(frequencyRaw[i], frequencyAverage) +
-                    0.35 * _ratio(valueRaw[i], valueAverage) +
-                    0.30 * _ratio(impactRaw[i], impactAverage)))
-            .clamp(0, 100)
-            .toDouble(),
-    ];
-    final smoothedControl = _ema(rawControl, emaPeriod);
-    final secondaryRawValues = _expenseSecondaryIndexValues(
+    final emaPeriod = _dynamicEmaPeriod(focusScopeDays);
+    return _rollingExpenseControlData(
       threshold: threshold,
       dailyScopeAmounts: dailyScopeAmounts,
-      window: emaPeriod,
-    );
-    final secondaryValues = _ema(secondaryRawValues, emaPeriod);
-    final referenceValues = secondaryRawValues.where((value) => value > 0);
-    return _StatsCategoryControlData(
-      controlBars: [
-        for (var i = 0; i < smoothedControl.length; i += 1)
-          StatsControlBar(
-            index: i,
-            value: smoothedControl[i],
-            colorHex: _controlColor(
-              activeType: TransactionType.expense,
-              value: smoothedControl[i],
-            ),
-          ),
-      ],
-      secondaryLine: [
-        for (var i = 0; i < secondaryValues.length; i += 1)
-          StatsSeriesPoint(index: i, value: secondaryValues[i]),
-      ],
-      secondaryMetricLabel: thresholdEnabled
-          ? 'kiugras index'
-          : 'aktiv nap index',
-      secondaryReferenceAmount: _average(referenceValues),
-      dynamicEmaPeriod: emaPeriod,
-      kontrollScore: _scoreFromPressure(smoothedControl),
+      emaPeriod: emaPeriod,
     );
   }
 
-  static _StatsCategoryControlData _thresholdlessExpenseControlData({
+  static _StatsCategoryControlData _rollingExpenseControlData({
+    required double threshold,
     required List<double> dailyScopeAmounts,
     required int emaPeriod,
   }) {
+    final thresholdEnabled = threshold > 0;
     final behaviorWindow = math.max(21, emaPeriod * 3);
-    final activeCounts = <double>[];
-    final rollingTotals = <double>[];
-    final activeAverages = <double>[];
+    final focusCounts = <double>[];
+    final focusTotals = <double>[];
+    final focusAverages = <double>[];
     for (var i = 0; i < dailyScopeAmounts.length; i += 1) {
       final windowAmounts = _rollingWindow(
         dailyScopeAmounts,
         i,
         behaviorWindow,
       );
-      var activeCount = 0;
+      var focusCount = 0;
       var total = 0.0;
       for (final amount in windowAmounts) {
         if (amount <= 0) continue;
-        activeCount += 1;
+        if (thresholdEnabled && amount < threshold) continue;
+        focusCount += 1;
         total += amount;
       }
-      activeCounts.add(activeCount.toDouble());
-      rollingTotals.add(total);
-      activeAverages.add(activeCount == 0 ? 0 : total / activeCount);
+      focusCounts.add(focusCount.toDouble());
+      focusTotals.add(total);
+      focusAverages.add(focusCount == 0 ? 0 : total / focusCount);
     }
-    final activeCountReference = _average(activeCounts);
-    final totalReference = _average(rollingTotals);
-    final activeAverageReference = _average(
-      activeAverages.where((value) => value > 0),
+    final focusCountReference = _average(focusCounts);
+    final totalReference = _average(focusTotals);
+    final focusAverageReference = _average(
+      focusAverages.where((value) => value > 0),
     );
     final rawControl = <double>[
       for (var i = 0; i < dailyScopeAmounts.length; i += 1)
         (50 *
-                (0.15 * _ratio(activeCounts[i], activeCountReference) +
-                    0.55 * _ratio(rollingTotals[i], totalReference) +
-                    0.30 * _ratio(activeAverages[i], activeAverageReference)))
+                (0.15 * _ratio(focusCounts[i], focusCountReference) +
+                    0.55 * _ratio(focusTotals[i], totalReference) +
+                    0.30 * _ratio(focusAverages[i], focusAverageReference)))
             .clamp(0, 100)
             .toDouble(),
     ];
     final secondaryRaw = <double>[
       for (var i = 0; i < dailyScopeAmounts.length; i += 1)
         (50 *
-                (0.75 * _ratio(rollingTotals[i], totalReference) +
-                    0.25 * _ratio(activeCounts[i], activeCountReference)))
+                (0.75 * _ratio(focusTotals[i], totalReference) +
+                    0.25 * _ratio(focusCounts[i], focusCountReference)))
             .clamp(0, 100)
             .toDouble(),
     ];
@@ -366,64 +317,13 @@ class StatsCategoryScopeSeries {
         for (var i = 0; i < secondaryValues.length; i += 1)
           StatsSeriesPoint(index: i, value: secondaryValues[i]),
       ],
-      secondaryMetricLabel: 'aktivitas index',
+      secondaryMetricLabel: thresholdEnabled
+          ? 'kiugras index'
+          : 'aktivitas index',
       secondaryReferenceAmount: totalReference,
       dynamicEmaPeriod: emaPeriod,
       kontrollScore: _scoreFromPressure(smoothedControl),
     );
-  }
-
-  static List<double> _expenseSecondaryIndexValues({
-    required double threshold,
-    required List<double> dailyScopeAmounts,
-    required int window,
-  }) {
-    final thresholdEnabled = threshold > 0;
-    if (!thresholdEnabled) {
-      return _activeIntensityIndexValues(dailyScopeAmounts);
-    }
-    return [
-      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        _expenseSpikeSeverityIndex(
-          threshold: threshold,
-          windowAmounts: _rollingWindow(dailyScopeAmounts, i, window),
-        ),
-    ];
-  }
-
-  static double _expenseSpikeSeverityIndex({
-    required double threshold,
-    required List<double> windowAmounts,
-  }) {
-    if (threshold <= 0) return 0;
-    var severityTotal = 0.0;
-    var hitCount = 0;
-    for (final amount in windowAmounts) {
-      if (amount < threshold || amount <= 0) continue;
-      severityTotal += ((amount - threshold) / threshold * 100)
-          .clamp(0, 100)
-          .toDouble();
-      hitCount += 1;
-    }
-    return hitCount > 0 ? severityTotal / hitCount : 0;
-  }
-
-  static List<double> _activeIntensityIndexValues(List<double> amounts) {
-    final activeAmounts = amounts.where((amount) => amount > 0).toList();
-    if (amounts.isEmpty) return const <double>[];
-    if (activeAmounts.isEmpty) return List<double>.filled(amounts.length, 0);
-    final minActive = activeAmounts.fold<double>(activeAmounts.first, math.min);
-    final maxActive = activeAmounts.fold<double>(activeAmounts.first, math.max);
-    final spread = maxActive - minActive;
-    return [
-      for (final amount in amounts)
-        if (amount <= 0)
-          50
-        else if (spread <= 0)
-          50
-        else
-          (50 + 50 * ((amount - minActive) / spread)).clamp(50, 100).toDouble(),
-    ];
   }
 
   static _StatsCategoryControlData _incomeControlData({

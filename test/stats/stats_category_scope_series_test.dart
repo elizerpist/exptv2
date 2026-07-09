@@ -14,7 +14,7 @@ void main() {
       ],
     );
 
-    expect(series.dynamicEmaPeriod, 8);
+    expect(series.dynamicEmaPeriod, 16);
     expect(series.controlBars, hasLength(31));
     expect(series.controlBars.any((bar) => bar.colorHex == '#EF4444'), isTrue);
     expect(series.controlBars.any((bar) => bar.colorHex == '#22C55E'), isTrue);
@@ -39,7 +39,7 @@ void main() {
     );
   });
 
-  test('expense orange line smooths normalized spike severity index', () {
+  test('expense orange line follows rolling focus pressure', () {
     final series = StatsCategoryScopeSeries.fromDailySamples(
       threshold: 5000,
       dailyScopeAmounts: const [6000, 2000, 14000],
@@ -48,9 +48,9 @@ void main() {
     expect(series.secondaryMetricLabel, 'kiugras index');
     expect(series.dynamicEmaPeriod, 18);
     _expectCloseValues(series.secondaryLine.map((point) => point.value), const [
-      20,
-      20,
-      24.210526315789473,
+      30.46875,
+      30.46875,
+      36.63651315789474,
     ]);
     expect(
       series.secondaryLine.map((point) => point.value),
@@ -119,6 +119,53 @@ void main() {
     );
     expect(middleSecondary, greaterThan(firstSecondary - 18));
     expect(finalSecondary, lessThan(middleSecondary - 20));
+  });
+
+  test('sparse positive threshold also uses rolling behavior pressure', () {
+    final samples = <double>[
+      ..._periodicAmounts(dayCount: 120, every: 3, amount: 5000),
+      ..._periodicAmounts(dayCount: 120, every: 7, amount: 11000),
+      ..._periodicAmounts(dayCount: 120, every: 14, amount: 3000),
+    ];
+
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 10000,
+      dailyScopeAmounts: samples,
+    );
+    final controlValues = series.controlBars
+        .map((bar) => bar.value)
+        .toList(growable: false);
+    final secondaryValues = series.secondaryLine
+        .map((point) => point.value)
+        .toList(growable: false);
+    final firstThird = _average(controlValues.skip(30).take(70));
+    final middleThird = _average(controlValues.skip(150).take(70));
+    final finalThird = _average(controlValues.skip(290).take(60));
+    final firstSecondary = _average(secondaryValues.skip(30).take(70));
+    final middleSecondary = _average(secondaryValues.skip(150).take(70));
+    final finalSecondary = _average(secondaryValues.skip(290).take(60));
+
+    expect(middleThird, greaterThan(firstThird + 15));
+    expect(middleThird, greaterThan(55));
+    expect(finalThird, lessThan(middleThird - 25));
+    expect(
+      controlValues.map((value) => value.round()).toSet().length,
+      greaterThan(8),
+      reason: 'sparse threshold hits should still draw a smooth curve',
+    );
+    expect(
+      series.controlBars
+          .skip(130)
+          .take(110)
+          .any((bar) => bar.colorHex == '#EF4444'),
+      isTrue,
+    );
+    expect(
+      series.controlBars.skip(280).any((bar) => bar.colorHex == '#22C55E'),
+      isTrue,
+    );
+    expect(middleSecondary, greaterThan(firstSecondary + 15));
+    expect(finalSecondary, lessThan(middleSecondary - 25));
   });
 
   test(
@@ -232,7 +279,7 @@ void main() {
       series.valueIndex.last.value,
       greaterThan(series.valueIndex.first.value),
     );
-    expect(series.kontrollScore, lessThan(65));
+    expect(series.kontrollScore, lessThan(70));
   });
 
   test(
