@@ -122,8 +122,8 @@ class ThemeOptionsPanel extends StatelessWidget {
                 ),
               ),
               _surfaceOption(
-                key: const ValueKey('theme-button-surface-neutral-inset'),
-                title: 'Neutrális-befelé',
+                key: const ValueKey('theme-button-surface-neumorph'),
+                title: 'Neumorph',
                 description: 'Sík gomb, érintéskor benyomott hatással',
                 selected:
                     settings.buttonSurfaceStyle ==
@@ -135,51 +135,37 @@ class ThemeOptionsPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              _surfaceOption(
-                key: const ValueKey('theme-button-surface-neumorph'),
-                title: 'Neumorph',
-                description:
-                    'Kiemelt gombfelület benyomott érintési állapottal',
-                selected:
-                    settings.buttonSurfaceStyle ==
-                    ExpenseSurfaceInteraction.raisedInset,
-                previewStyle: ExpenseSurfaceInteraction.raisedInset,
-                onTap: () => onChanged(
-                  settings.copyWith(
-                    buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-                  ),
-                ),
-              ),
               _sectionTitle(
-                'Logboxok felülete',
-                'A tartalmi kártyák és tranzakció logboxok stílusa:',
+                'Summary pill nyomása',
+                'Az összesítő pill saját tap effektje:',
               ),
               _surfaceOption(
-                key: const ValueKey('theme-logbox-surface-normal'),
+                key: const ValueKey('theme-summary-pill-surface-normal'),
                 title: 'Normál',
-                description: 'Eredeti sík logbox felület',
+                description: 'Eredeti sík summary pill',
                 selected:
-                    settings.contentSurfaceStyle ==
+                    settings.summaryPillSurfaceStyle ==
                     ExpenseSurfaceInteraction.neutralNeutral,
                 previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
                 onTap: () => onChanged(
                   settings.copyWith(
-                    contentSurfaceStyle:
+                    summaryPillSurfaceStyle:
                         ExpenseSurfaceInteraction.neutralNeutral,
                   ),
                 ),
               ),
               _surfaceOption(
-                key: const ValueKey('theme-logbox-surface-neumorph'),
+                key: const ValueKey('theme-summary-pill-surface-neumorph'),
                 title: 'Neumorph',
-                description: 'Befelé mélyített logbox felület',
+                description: 'Sík summary pill, tapre benyomódó hatással',
                 selected:
-                    settings.contentSurfaceStyle ==
-                    ExpenseSurfaceInteraction.insetInset,
-                previewStyle: ExpenseSurfaceInteraction.insetInset,
+                    settings.summaryPillSurfaceStyle ==
+                    ExpenseSurfaceInteraction.neutralInset,
+                previewStyle: ExpenseSurfaceInteraction.neutralInset,
                 onTap: () => onChanged(
                   settings.copyWith(
-                    contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+                    summaryPillSurfaceStyle:
+                        ExpenseSurfaceInteraction.neutralInset,
                   ),
                 ),
               ),
@@ -202,37 +188,7 @@ class ThemeOptionsPanel extends StatelessWidget {
               ),
               _sectionTitle(
                 'Kategória kártyák felülete',
-                'A kategória cardok háttérszíne és mélysége:',
-              ),
-              _surfaceOption(
-                key: const ValueKey('theme-category-card-surface-normal'),
-                title: 'Normál',
-                description: 'Sík kategória kártyák',
-                selected:
-                    settings.categoryCardSurfaceStyle ==
-                    ExpenseSurfaceInteraction.neutralNeutral,
-                previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
-                onTap: () => onChanged(
-                  settings.copyWith(
-                    categoryCardSurfaceStyle:
-                        ExpenseSurfaceInteraction.neutralNeutral,
-                  ),
-                ),
-              ),
-              _surfaceOption(
-                key: const ValueKey('theme-category-card-surface-neumorph'),
-                title: 'Neumorph',
-                description: 'Kiemelt kategória kártyák',
-                selected:
-                    settings.categoryCardSurfaceStyle ==
-                    ExpenseSurfaceInteraction.raisedInset,
-                previewStyle: ExpenseSurfaceInteraction.raisedInset,
-                onTap: () => onChanged(
-                  settings.copyWith(
-                    categoryCardSurfaceStyle:
-                        ExpenseSurfaceInteraction.raisedInset,
-                  ),
-                ),
+                'A kategória cardok háttérszíne:',
               ),
               _categoryCardColorOption(
                 'Fehér',

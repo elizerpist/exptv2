@@ -292,7 +292,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                         expenseTheme.contentSurfaceStyle,
                                   ),
                                   if (_error != null) ...[
-                                    const SizedBox(height: 12),
                                     Text(
                                       _error!,
                                       style: const TextStyle(

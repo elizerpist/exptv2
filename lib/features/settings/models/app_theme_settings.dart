@@ -380,6 +380,7 @@ class AppThemeSettings {
     required this.boxColor,
     required this.buttonSurfaceStyle,
     required this.contentSurfaceStyle,
+    required this.summaryPillSurfaceStyle,
     required this.ghostLogboxSurfaceStyle,
     required this.ghostLogboxSettings,
     required this.categoryMenuColor,
@@ -419,6 +420,7 @@ class AppThemeSettings {
       boxColor: AppBoxColor.gray,
       buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      summaryPillSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSettings: GhostLogboxSettings.defaults(),
       categoryMenuColor: AppBoxColor.gray,
@@ -460,26 +462,27 @@ class AppThemeSettings {
       theme: AppTheme.fromAny(map['theme']),
       backgroundColor: AppBackgroundColor.fromAny(map['backgroundColor']),
       boxColor: AppBoxColor.fromAny(map['boxColor']),
-      buttonSurfaceStyle: _surfaceFromMap(
+      buttonSurfaceStyle: _buttonSurfaceFromMap(
         map,
         'buttonSurfaceStyle',
         legacyProfile == AppDesignProfile.neumorphism
-            ? ExpenseSurfaceInteraction.raisedInset
+            ? ExpenseSurfaceInteraction.neutralInset
             : ExpenseSurfaceInteraction.neutralNeutral,
       ),
       contentSurfaceStyle: _surfaceFromMap(
         map,
         'contentSurfaceStyle',
-        legacyProfile == AppDesignProfile.neumorphism
-            ? ExpenseSurfaceInteraction.insetInset
-            : ExpenseSurfaceInteraction.neutralNeutral,
+        ExpenseSurfaceInteraction.neutralNeutral,
+      ),
+      summaryPillSurfaceStyle: _surfaceFromMap(
+        map,
+        'summaryPillSurfaceStyle',
+        ExpenseSurfaceInteraction.neutralNeutral,
       ),
       ghostLogboxSurfaceStyle: _surfaceFromMap(
         map,
         'ghostLogboxSurfaceStyle',
-        legacyProfile == AppDesignProfile.neumorphism
-            ? ExpenseSurfaceInteraction.insetInset
-            : ExpenseSurfaceInteraction.neutralNeutral,
+        ExpenseSurfaceInteraction.neutralNeutral,
       ),
       ghostLogboxSettings: GhostLogboxSettings.fromMap(
         map['ghostLogboxSettings'] is Map
@@ -569,6 +572,7 @@ class AppThemeSettings {
   final AppBoxColor boxColor;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction contentSurfaceStyle;
+  final ExpenseSurfaceInteraction summaryPillSurfaceStyle;
   final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
   final GhostLogboxSettings ghostLogboxSettings;
   final AppBoxColor categoryMenuColor;
@@ -594,11 +598,7 @@ class AppThemeSettings {
   final int fabSize;
 
   AppDesignProfile get designProfile {
-    final looksNeumorphic =
-        buttonSurfaceStyle == ExpenseSurfaceInteraction.raisedInset &&
-        contentSurfaceStyle == ExpenseSurfaceInteraction.insetInset &&
-        ghostLogboxSurfaceStyle == ExpenseSurfaceInteraction.insetInset;
-    return looksNeumorphic
+    return buttonSurfaceStyle == ExpenseSurfaceInteraction.neutralInset
         ? AppDesignProfile.neumorphism
         : AppDesignProfile.normal;
   }
@@ -612,6 +612,7 @@ class AppThemeSettings {
       'boxColor': boxColor.nativeValue,
       'buttonSurfaceStyle': buttonSurfaceStyle.nativeValue,
       'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
+      'summaryPillSurfaceStyle': summaryPillSurfaceStyle.nativeValue,
       'ghostLogboxSurfaceStyle': ghostLogboxSurfaceStyle.nativeValue,
       'ghostLogboxSettings': ghostLogboxSettings.toMap(),
       'categoryMenuColor': categoryMenuColor.nativeValue,
@@ -648,6 +649,7 @@ class AppThemeSettings {
     AppBoxColor? boxColor,
     ExpenseSurfaceInteraction? buttonSurfaceStyle,
     ExpenseSurfaceInteraction? contentSurfaceStyle,
+    ExpenseSurfaceInteraction? summaryPillSurfaceStyle,
     ExpenseSurfaceInteraction? ghostLogboxSurfaceStyle,
     GhostLogboxSettings? ghostLogboxSettings,
     AppBoxColor? categoryMenuColor,
@@ -680,6 +682,8 @@ class AppThemeSettings {
       boxColor: boxColor ?? this.boxColor,
       buttonSurfaceStyle: buttonSurfaceStyle ?? this.buttonSurfaceStyle,
       contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
+      summaryPillSurfaceStyle:
+          summaryPillSurfaceStyle ?? this.summaryPillSurfaceStyle,
       ghostLogboxSurfaceStyle:
           ghostLogboxSurfaceStyle ?? this.ghostLogboxSurfaceStyle,
       ghostLogboxSettings: ghostLogboxSettings ?? this.ghostLogboxSettings,
@@ -740,6 +744,17 @@ class AppThemeSettings {
   ) {
     if (!_hasValue(map[key])) return fallback;
     return ExpenseSurfaceInteraction.fromAny(map[key]);
+  }
+
+  static ExpenseSurfaceInteraction _buttonSurfaceFromMap(
+    Map<dynamic, dynamic> map,
+    String key,
+    ExpenseSurfaceInteraction fallback,
+  ) {
+    final surface = _surfaceFromMap(map, key, fallback);
+    return surface == ExpenseSurfaceInteraction.raisedInset
+        ? ExpenseSurfaceInteraction.neutralInset
+        : surface;
   }
 
   static AppColorMode _appColorFromMap(Map<dynamic, dynamic> map) {

@@ -8,9 +8,9 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
-import 'package:exptv2/features/transactions/widgets/category_menu/category_card.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_menu_panel.dart';
+import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -287,6 +287,71 @@ void main() {
     );
   });
 
+  testWidgets('vendor sheet drag is disabled while vendor list is scrolled', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = FakeTransactionRepository();
+    repository.transactions
+      ..clear()
+      ..addAll([
+        for (var index = 0; index < 30; index += 1)
+          TransactionRecord.fromMap({
+            'id': index + 1,
+            'date': '2025.09.25',
+            'time': '20:30:00',
+            'merchant': 'Vendor $index',
+            'amount': -100 - index,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+      ]);
+    final store = TransactionStore(repository);
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 919,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    SlideUpMenuCard vendorSheet() => tester.widget<SlideUpMenuCard>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('vendor-filter-slide-card')),
+        matching: find.byType(SlideUpMenuCard),
+      ),
+    );
+
+    expect(vendorSheet().canDragFrom, isNotNull);
+    expect(vendorSheet().canDragFrom!(Offset.zero, Offset.zero, 0, 32), isTrue);
+
+    await tester.drag(
+      find.byKey(const ValueKey('vendor-filter-list')),
+      const Offset(0, -420),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      vendorSheet().canDragFrom!(Offset.zero, Offset.zero, 0, 32),
+      isFalse,
+    );
+  });
+
   testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {
@@ -446,7 +511,7 @@ void main() {
   });
 
   testWidgets(
-    'selected category card keeps border-only neumorph state until apply',
+    'selected category card stays inset without active border until apply',
     (tester) async {
       Set<int>? applied;
       const accent = Color(0xFF06B6D4);
@@ -461,7 +526,8 @@ void main() {
               activeCategory: null,
               selectedCategoryIds: const <int>{},
               onApply: (ids) => applied = ids,
-              cardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
               accentColor: accent,
               onSelect: (_) {},
               onModify: (_) {},
@@ -476,10 +542,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('category-card-6')));
       await tester.pumpAndSettle();
 
-      final activeBorder = tester.widget<CategoryActiveBorder>(
+      expect(
         find.byKey(const ValueKey('category-card-active-border-6')),
+        findsNothing,
       );
-      expect(activeBorder.color, accent);
+      final cardSurface = tester.widget<Container>(
+        find.byKey(const ValueKey('category-card-surface-6')),
+      );
+      expect((cardSurface.decoration! as BoxDecoration).boxShadow, isNull);
       expect(applied, isNull);
 
       await tester.tap(

@@ -662,6 +662,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           store: _notificationStore,
           expenseTheme: expenseTheme,
           active: false,
+          onBack: () => _selectTab(AppTab.home),
         );
       case AppTab.settings:
         return SettingsPage(

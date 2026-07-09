@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
+import 'ambulance_header_veil.dart';
 import 'transaction_header_metrics.dart';
 
 class HeaderFastInfoSurface extends StatelessWidget {
@@ -13,6 +14,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
     required this.header,
     this.cardColor = AppColors.gray100,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.ambulanceSkin = false,
   }) : visibleFastInfoExtentListenable = null;
 
   const HeaderFastInfoSurface.listenable({
@@ -22,6 +24,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
     required this.header,
     this.cardColor = AppColors.gray100,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
+    this.ambulanceSkin = false,
   }) : visibleFastInfoExtent = 0;
 
   final double visibleFastInfoExtent;
@@ -30,6 +33,7 @@ class HeaderFastInfoSurface extends StatelessWidget {
   final Widget header;
   final Color cardColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final bool ambulanceSkin;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +52,10 @@ class HeaderFastInfoSurface extends StatelessWidget {
         .clamp(0.0, TransactionHeaderMetrics.fastInfoHeight)
         .toDouble();
     final showFastInfo = extent > 1.0;
+    final resolvedCardColor = ambulanceSkin ? AppColors.white : cardColor;
+    const headerBorderRadius = BorderRadius.vertical(
+      bottom: Radius.circular(24),
+    );
     return Positioned(
       top: -TransactionHeaderMetrics.fastInfoHeight + extent,
       left: 0,
@@ -55,8 +63,8 @@ class HeaderFastInfoSurface extends StatelessWidget {
       child: ExpenseSurfaceContainer(
         surfaceKey: const ValueKey('header-fast-info-surface'),
         style: surfaceStyle,
-        color: cardColor,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+        color: resolvedCardColor,
+        borderRadius: headerBorderRadius,
         animatePress: false,
         clipContent: false,
         neutralShadow: [
@@ -74,6 +82,15 @@ class HeaderFastInfoSurface extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
+              if (ambulanceSkin)
+                const Positioned.fill(
+                  child: AmbulanceHeaderVeil(
+                    opacityKey: ValueKey(
+                      'header-ambulance-fast-info-yellow-veil',
+                    ),
+                    borderRadius: headerBorderRadius,
+                  ),
+                ),
               Positioned(
                 top: TransactionHeaderMetrics.fastInfoHeight,
                 left: 0,

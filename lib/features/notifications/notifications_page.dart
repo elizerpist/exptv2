@@ -18,12 +18,14 @@ class NotificationsPage extends StatefulWidget {
     this.store,
     this.expenseTheme,
     this.active = true,
+    this.onBack,
   });
 
   final NativeBridge nativeBridge;
   final NotificationStore? store;
   final ExpenseTheme? expenseTheme;
   final bool active;
+  final VoidCallback? onBack;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -114,11 +116,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
         return Column(
           children: [
             const SizedBox(height: 36),
-            NotificationMonthHeader(
-              selectedMonth: _store.selectedMonth,
-              hasCards: _store.visibleCards.isNotEmpty,
-              onMonthShift: _store.shiftMonth,
-              onClear: _store.clearVisibleMonth,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  IconButton(
+                    key: const ValueKey('notification-menu-back-button'),
+                    onPressed: widget.onBack,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: AppColors.gray700,
+                    tooltip: 'Vissza',
+                  ),
+                  Expanded(
+                    child: NotificationMonthHeader(
+                      selectedMonth: _store.selectedMonth,
+                      hasCards: _store.visibleCards.isNotEmpty,
+                      onMonthShift: _store.shiftMonth,
+                      onClear: _store.clearVisibleMonth,
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
             ),
             Expanded(
               child: groups.isEmpty

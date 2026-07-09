@@ -21,6 +21,20 @@ import '../models/transaction_record.dart';
 import '../models/transaction_summary.dart';
 import 'fast_info_metrics_resolver.dart';
 
+class VendorFilterSummary {
+  const VendorFilterSummary({
+    required this.name,
+    required this.total,
+    required this.count,
+    this.colorHex,
+  });
+
+  final String name;
+  final double total;
+  final int count;
+  final String? colorHex;
+}
+
 class TransactionStore extends ChangeNotifier {
   TransactionStore(
     this._repository, {
@@ -81,6 +95,8 @@ class TransactionStore extends ChangeNotifier {
   String get searchQuery => _filter.searchQuery;
   String? get merchantFilter => _filter.merchant;
   String? get merchantFilterColorHex => _filter.merchantColorHex;
+  Set<String> get activeMerchantFilters =>
+      Set.unmodifiable(_filter.effectiveMerchants);
   Set<int> get activeCategoryIds =>
       Set.unmodifiable(_filter.effectiveCategoryIds);
 
@@ -100,6 +116,8 @@ class TransactionStore extends ChangeNotifier {
 
   Map<int, int> get categoryTransactionCounts => _categoryTransactionCounts;
   Map<int, TransactionCategory> get categoriesById => _categoriesById;
+  List<VendorFilterSummary> get vendorFilterSummaries =>
+      _vendorFilterSummariesFor(_filter.type);
 
   List<TransactionCategory> get categories => _categoriesView;
   List<TransactionRecord> get transactions => _transactionsView;
@@ -228,10 +246,14 @@ class TransactionStore extends ChangeNotifier {
         '${_hungarianMonth(reference.month)} ${reference.year}',
     };
     final parts = <String>[base];
-    final merchant = _filter.merchant;
-    if (merchant != null) parts.add(merchant);
-    final category = activeCategory;
-    if (category != null) parts.add(category.name);
+    final merchants = _filter.effectiveMerchants;
+    if (merchants.length == 1) {
+      parts.add(merchants.first);
+    } else if (merchants.length > 1) {
+      parts.add('${merchants.length} vendor');
+    }
+    final categoryLabel = activeCategoryFilterLabel;
+    if (categoryLabel != null) parts.add(categoryLabel);
     return parts.join(' · ');
   }
 
@@ -245,9 +267,9 @@ class TransactionStore extends ChangeNotifier {
 
   String _filterCacheKey(TransactionFilter filter) {
     final query = filter.searchQuery.trim().toLowerCase();
-    final merchant = filter.merchant?.trim() ?? '';
+    final merchantKey = filter.effectiveMerchants.toList()..sort();
     final categoryKey = filter.effectiveCategoryIds.toList()..sort();
-    return '${_windowCacheKey(filter.type)}|c=${categoryKey.join(',')}|m=$merchant|q=$query';
+    return '${_windowCacheKey(filter.type)}|c=${categoryKey.join(',')}|m=${merchantKey.join(',')}|q=$query';
   }
 
   List<TransactionCategory> _activeCategoriesFor(TransactionType type) {
@@ -283,7 +305,7 @@ class TransactionStore extends ChangeNotifier {
     final cached = _visibleTransactionsCache[key];
     if (cached != null) return cached;
     final query = filter.searchQuery.trim().toLowerCase();
-    final merchant = filter.merchant?.trim();
+    final merchants = filter.effectiveMerchants;
     final rows = List<TransactionRecord>.unmodifiable(
       _windowedTransactionsFor(filter.type).where((record) {
         final categoryIds = filter.effectiveCategoryIds;
@@ -291,7 +313,8 @@ class TransactionStore extends ChangeNotifier {
             !categoryIds.contains(record.transactionCategoryID)) {
           return false;
         }
-        if (merchant != null && record.displayMerchant != merchant) {
+        if (merchants.isNotEmpty &&
+            !merchants.contains(record.displayMerchant)) {
           return false;
         }
         if (query.isNotEmpty &&
@@ -320,7 +343,7 @@ class TransactionStore extends ChangeNotifier {
       return rows;
     }
     final query = filter.searchQuery.trim().toLowerCase();
-    final merchant = filter.merchant?.trim();
+    final merchants = filter.effectiveMerchants;
     final rows = List<RecurringGhostRecord>.unmodifiable(
       _activeGhostSource.where((ghost) {
         if (ghost.isActivated) return false;
@@ -331,7 +354,9 @@ class TransactionStore extends ChangeNotifier {
         if (categoryIds.isNotEmpty && !categoryIds.contains(ghost.categoryId)) {
           return false;
         }
-        if (merchant != null && ghost.name != merchant) return false;
+        if (merchants.isNotEmpty && !merchants.contains(ghost.name)) {
+          return false;
+        }
         if (query.isNotEmpty && !ghost.name.toLowerCase().contains(query)) {
           return false;
         }
@@ -527,6 +552,39 @@ class TransactionStore extends ChangeNotifier {
     return value;
   }
 
+  List<VendorFilterSummary> _vendorFilterSummariesFor(TransactionType type) {
+    final totals = <String, double>{};
+    final counts = <String, int>{};
+    final colors = <String, String?>{};
+    for (final record in _windowedTransactionsFor(type)) {
+      final name = record.displayMerchant.trim();
+      if (name.isEmpty) continue;
+      totals[name] = (totals[name] ?? 0) + record.amount.abs();
+      counts[name] = (counts[name] ?? 0) + 1;
+      colors.putIfAbsent(name, () {
+        final categoryId = record.transactionCategoryID;
+        if (categoryId == null) return null;
+        final category = _categoriesById[categoryId];
+        return category?.slotColorHex;
+      });
+    }
+    final rows =
+        [
+          for (final entry in totals.entries)
+            VendorFilterSummary(
+              name: entry.key,
+              total: entry.value,
+              count: counts[entry.key] ?? 0,
+              colorHex: colors[entry.key],
+            ),
+        ]..sort((left, right) {
+          final totalOrder = right.total.compareTo(left.total);
+          if (totalOrder != 0) return totalOrder;
+          return left.name.compareTo(right.name);
+        });
+    return List<VendorFilterSummary>.unmodifiable(rows);
+  }
+
   void _invalidateViewCaches() {
     _activeCategoriesCache.clear();
     _windowedTransactionsCache.clear();
@@ -651,7 +709,7 @@ class TransactionStore extends ChangeNotifier {
     final unchanged =
         _filter.type == type &&
         _filter.effectiveCategoryIds.isEmpty &&
-        _filter.merchant == null &&
+        _filter.effectiveMerchants.isEmpty &&
         _filter.searchQuery.isEmpty;
     if (unchanged) return;
     final stopwatch = Stopwatch()..start();
@@ -697,6 +755,17 @@ class TransactionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearCategoryFilterId(int categoryId) {
+    final nextIds = {..._filter.effectiveCategoryIds}..remove(categoryId);
+    _resetVisibleDisplayWindow();
+    _filter = _filter.copyWith(
+      clearCategory: nextIds.isEmpty,
+      categoryIds: nextIds.isEmpty ? null : Set<int>.unmodifiable(nextIds),
+    );
+    _prewarmActiveView('category-chip-clear');
+    notifyListeners();
+  }
+
   void setSearchQuery(String value) {
     _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(searchQuery: value);
@@ -705,9 +774,12 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void setMerchantFilter(String merchant, {String? colorHex}) {
+    final value = merchant.trim();
+    if (value.isEmpty) return;
     _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(
-      merchant: merchant,
+      merchant: value,
+      merchantFilters: <String>{value},
       merchantColorHex: colorHex,
       searchQuery: '',
     );
@@ -715,10 +787,45 @@ class TransactionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearMerchantFilter() {
+  void setMerchantFilters(Set<String> merchants) {
+    final values = merchants
+        .map((merchant) => merchant.trim())
+        .where((merchant) => merchant.isNotEmpty)
+        .toSet();
     _resetVisibleDisplayWindow();
-    _filter = _filter.copyWith(clearMerchant: true);
-    _prewarmActiveView('merchant-clear');
+    if (values.isEmpty) {
+      _filter = _filter.copyWith(clearMerchant: true, searchQuery: '');
+    } else {
+      _filter = _filter.copyWith(
+        merchant: values.length == 1 ? values.first : null,
+        merchantFilters: Set<String>.unmodifiable(values),
+        merchantColorHex: null,
+        searchQuery: '',
+      );
+    }
+    _prewarmActiveView('merchant-multi-filter');
+    notifyListeners();
+  }
+
+  void clearMerchantFilter([String? merchant]) {
+    if (merchant == null) {
+      _resetVisibleDisplayWindow();
+      _filter = _filter.copyWith(clearMerchant: true);
+      _prewarmActiveView('merchant-clear');
+      notifyListeners();
+      return;
+    }
+    final nextValues = {..._filter.effectiveMerchants}..remove(merchant.trim());
+    _resetVisibleDisplayWindow();
+    if (nextValues.isEmpty) {
+      _filter = _filter.copyWith(clearMerchant: true);
+    } else {
+      _filter = _filter.copyWith(
+        merchant: nextValues.length == 1 ? nextValues.first : null,
+        merchantFilters: Set<String>.unmodifiable(nextValues),
+      );
+    }
+    _prewarmActiveView('merchant-chip-clear');
     notifyListeners();
   }
 
@@ -773,6 +880,25 @@ class TransactionStore extends ChangeNotifier {
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
     await _finishSummaryChange('summary-native-picker', generation);
+  }
+
+  Future<void> setSummaryYear(int year) async {
+    _summaryWindow = SummaryWindow.yearly;
+    _periodReferenceDate = DateTime(year);
+    _prepareGhostProjectionForActiveWindow();
+    _invalidateViewCaches();
+    final generation = ++_summaryChangeGeneration;
+    notifyListeners();
+    await _finishSummaryChange('summary-year-picker', generation);
+  }
+
+  Future<void> setSummaryAllTime() async {
+    _summaryWindow = SummaryWindow.allTime;
+    _prepareGhostProjectionForActiveWindow();
+    _invalidateViewCaches();
+    final generation = ++_summaryChangeGeneration;
+    notifyListeners();
+    await _finishSummaryChange('summary-all-picker', generation);
   }
 
   Future<void> _finishSummaryChange(String reason, int generation) async {

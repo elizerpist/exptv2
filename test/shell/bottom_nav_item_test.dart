@@ -31,6 +31,28 @@ void main() {
     );
   });
 
+  testWidgets('bottom nav background remains white regardless of theme color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: ExptBottomNav(
+            activeTab: AppTab.home,
+            surfaceColor: AppColors.gray200,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final nav = tester.widget<Container>(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    final decoration = nav.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.white);
+  });
+
   testWidgets(
     'bottom nav highlights tapped tab immediately and logs tap path',
     (tester) async {

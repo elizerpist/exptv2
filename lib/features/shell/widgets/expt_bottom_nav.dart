@@ -74,7 +74,7 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
     return ExpenseSurfaceContainer(
       surfaceKey: const ValueKey('expt-bottom-nav'),
       style: widget.surfaceStyle,
-      color: widget.surfaceColor,
+      color: AppColors.white,
       borderRadius: BorderRadius.zero,
       animatePress: false,
       height: AppDimensions.bottomNavHeight,
@@ -98,7 +98,7 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
     return BottomNavItem(
       tab: tab,
       active: _optimisticActiveTab == tab,
-      surfaceColor: widget.surfaceColor,
+      surfaceColor: AppColors.white,
       surfaceStyle: widget.surfaceStyle,
       accentColor: widget.accentColor,
       accentLightColor: widget.accentLightColor,

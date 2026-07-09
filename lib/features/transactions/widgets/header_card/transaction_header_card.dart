@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../models/limit_allocation_data.dart';
+import 'ambulance_header_veil.dart';
 import 'magnet_strip.dart';
 import 'transaction_header_metrics.dart';
 
@@ -81,9 +82,10 @@ class TransactionHeaderCard extends StatelessWidget {
     final visibleBalanceText = balanceHidden ? '••••••• Ft' : balanceText;
     final resolvedContentOpacity = contentOpacity ?? (expanded ? 0.0 : 1.0);
     final ambulanceSkin = magnetType == MagnetType.ambulanceSkin;
-    final resolvedCardColor = ambulanceSkin
-        ? const Color(0xFFF3C542)
-        : cardColor;
+    final resolvedCardColor = ambulanceSkin ? AppColors.white : cardColor;
+    const headerBorderRadius = BorderRadius.vertical(
+      bottom: Radius.circular(24),
+    );
 
     Widget headerContentOpacity(Widget child) {
       if (contentOpacity != null) {
@@ -113,9 +115,7 @@ class TransactionHeaderCard extends StatelessWidget {
                   surfaceKey: const ValueKey('transaction-header-surface'),
                   style: surfaceStyle,
                   color: resolvedCardColor,
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(24),
-                  ),
+                  borderRadius: headerBorderRadius,
                   animatePress: false,
                   clipContent: false,
                   neutralShadow: [
@@ -126,7 +126,21 @@ class TransactionHeaderCard extends StatelessWidget {
                     ),
                   ],
                   profile: ExpenseSurfaceProfile.headerCard,
-                  child: const SizedBox.expand(),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const SizedBox.expand(),
+                      if (ambulanceSkin)
+                        const Positioned.fill(
+                          child: AmbulanceHeaderVeil(
+                            opacityKey: ValueKey(
+                              'header-ambulance-yellow-veil',
+                            ),
+                            borderRadius: headerBorderRadius,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             const Positioned(

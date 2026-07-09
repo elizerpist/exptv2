@@ -135,6 +135,56 @@ void main() {
       expect(incomeData.graphMonths.map((month) => month.month), [4, 5, 6]);
     },
   );
+
+  test('summary scope filters all-time yearly and monthly totals', () {
+    final transactions = [
+      record(id: 1, date: '2025-12-01', amount: -3000, categoryId: 1),
+      record(id: 2, date: '2026-05-01', amount: -7000, categoryId: 1),
+      record(id: 3, date: '2026-06-01', amount: -11000, categoryId: 1),
+      record(id: 4, date: '2026-06-02', amount: 50000, categoryId: 2),
+    ];
+    final categories = [
+      category(id: 1, name: 'Bolt', type: TransactionType.expense),
+      category(id: 2, name: 'Fizetés', type: TransactionType.income),
+    ];
+
+    final allTime = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.categoryScope,
+      thresholdValue: 5000,
+      transactions: transactions,
+      categories: categories,
+      selectedCategoryIds: const {},
+      summaryScope: StatsSummaryScope.allTime,
+    );
+    final yearly = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.categoryScope,
+      thresholdValue: 5000,
+      transactions: transactions,
+      categories: categories,
+      selectedCategoryIds: const {},
+    );
+    final monthly = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.categoryScope,
+      thresholdValue: 5000,
+      transactions: transactions,
+      categories: categories,
+      selectedCategoryIds: const {},
+      summaryScope: StatsSummaryScope.monthly,
+      month: 6,
+    );
+
+    expect(allTime.summaryTotal, 21000);
+    expect(yearly.summaryTotal, 18000);
+    expect(monthly.summaryTotal, 11000);
+    expect(monthly.months[4].activeTotal, 0);
+    expect(monthly.months[5].activeTotal, 11000);
+  });
 }
 
 TransactionRecord record({

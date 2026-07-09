@@ -391,6 +391,29 @@ void main() {
     },
   );
 
+  test(
+    'store applies multiple vendor filters and clears them individually',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      await store.start();
+
+      store.setMerchantFilters({'Rrr', 'Test Store'});
+
+      expect(store.activeMerchantFilters, {'Rrr', 'Test Store'});
+      expect(store.visibleTransactions.length, 3);
+      expect(store.activeSummaryTitle, contains('2 vendor'));
+      expect(
+        store.vendorFilterSummaries.map((summary) => summary.name),
+        containsAll(<String>['Rrr', 'Test Store']),
+      );
+
+      store.clearMerchantFilter('Rrr');
+
+      expect(store.activeMerchantFilters, {'Test Store'});
+      expect(store.visibleTransactions.single.displayMerchant, 'Test Store');
+    },
+  );
+
   test('active summary is calculated from visible filtered records', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();

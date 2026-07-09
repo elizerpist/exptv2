@@ -20,6 +20,7 @@ class ExpenseTheme {
     required this.border,
     required this.buttonSurfaceStyle,
     required this.contentSurfaceStyle,
+    required this.summaryPillSurfaceStyle,
     required this.bottomNavSurfaceStyle,
     required this.forcedInsetSurfaceStyle,
     required this.ghostLogboxSurfaceStyle,
@@ -44,6 +45,7 @@ class ExpenseTheme {
   final Color border;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ExpenseSurfaceInteraction contentSurfaceStyle;
+  final ExpenseSurfaceInteraction summaryPillSurfaceStyle;
   final ExpenseSurfaceInteraction bottomNavSurfaceStyle;
   final ExpenseSurfaceInteraction forcedInsetSurfaceStyle;
   final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
@@ -62,6 +64,10 @@ class ExpenseTheme {
 
   factory ExpenseTheme.fromSettings(AppThemeSettings settings) {
     final accentFamily = _dayAccentFamily(settings);
+    final buttonSurfaceStyle =
+        settings.buttonSurfaceStyle == ExpenseSurfaceInteraction.raisedInset
+        ? ExpenseSurfaceInteraction.neutralInset
+        : settings.buttonSurfaceStyle;
     return ExpenseTheme(
       settings: settings,
       accent: accentFamily.accent,
@@ -92,19 +98,16 @@ class ExpenseTheme {
       textSecondary: AppColors.gray600,
       textMuted: AppColors.gray500,
       border: AppColors.gray200,
-      buttonSurfaceStyle: settings.buttonSurfaceStyle,
-      contentSurfaceStyle: settings.contentSurfaceStyle,
-      bottomNavSurfaceStyle: settings.buttonSurfaceStyle,
-      forcedInsetSurfaceStyle:
-          settings.contentSurfaceStyle ==
-              ExpenseSurfaceInteraction.neutralNeutral
-          ? ExpenseSurfaceInteraction.neutralNeutral
-          : ExpenseSurfaceInteraction.insetInset,
-      ghostLogboxSurfaceStyle: settings.ghostLogboxSurfaceStyle,
+      buttonSurfaceStyle: buttonSurfaceStyle,
+      contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      summaryPillSurfaceStyle: settings.summaryPillSurfaceStyle,
+      bottomNavSurfaceStyle: buttonSurfaceStyle,
+      forcedInsetSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+      ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       categoryMenu: _boxColor(settings.categoryMenuColor),
       categoryCard: _boxColor(settings.categoryCardColor),
       statsMonthCard: _boxColor(settings.statsMonthCardColor),
-      categoryCardSurfaceStyle: settings.categoryCardSurfaceStyle,
+      categoryCardSurfaceStyle: buttonSurfaceStyle,
     );
   }
 

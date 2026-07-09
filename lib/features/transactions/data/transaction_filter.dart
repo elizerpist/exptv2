@@ -6,6 +6,7 @@ class TransactionFilter {
     this.searchQuery = '',
     this.merchant,
     this.merchantColorHex,
+    this.merchantFilters = const <String>{},
     this.categoryId,
     this.categoryIds = const <int>{},
   });
@@ -14,8 +15,16 @@ class TransactionFilter {
   final String searchQuery;
   final String? merchant;
   final String? merchantColorHex;
+  final Set<String> merchantFilters;
   final int? categoryId;
   final Set<int> categoryIds;
+
+  Set<String> get effectiveMerchants {
+    if (merchantFilters.isNotEmpty) return merchantFilters;
+    final value = merchant?.trim();
+    if (value == null || value.isEmpty) return const <String>{};
+    return <String>{value};
+  }
 
   Set<int> get effectiveCategoryIds {
     if (categoryIds.isNotEmpty) return categoryIds;
@@ -29,6 +38,7 @@ class TransactionFilter {
     String? searchQuery,
     String? merchant,
     String? merchantColorHex,
+    Set<String>? merchantFilters,
     int? categoryId,
     Set<int>? categoryIds,
     bool clearMerchant = false,
@@ -49,6 +59,9 @@ class TransactionFilter {
       merchantColorHex: clearMerchant
           ? null
           : merchantColorHex ?? this.merchantColorHex,
+      merchantFilters: clearMerchant
+          ? const <String>{}
+          : merchantFilters ?? this.merchantFilters,
       categoryId: nextCategoryId,
       categoryIds: nextCategoryIds,
     );

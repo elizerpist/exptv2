@@ -24,6 +24,7 @@ import '../transactions/widgets/header_card/transaction_header_card.dart';
 import '../transactions/widgets/header_card/transaction_header_metrics.dart';
 import '../transactions/widgets/slide_up_menu_card.dart';
 import '../transactions/widgets/summary_pill.dart';
+import '../transactions/widgets/summary_scope_picker_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/transaction_type_pills.dart';
 import 'data/stats_category_scope_series.dart';
@@ -55,6 +56,9 @@ class StatsPage extends StatefulWidget {
 class _StatsPageState extends State<StatsPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin<StatsPage> {
   late int _year;
+  late int _month;
+  var _yearScopeEnabled = true;
+  var _monthScopeEnabled = false;
   var _activeType = TransactionType.expense;
   var _renderMode = StatsRenderMode.categoryScope;
   var _thresholdValue = 5000.0;
@@ -71,6 +75,7 @@ class _StatsPageState extends State<StatsPage>
   void initState() {
     super.initState();
     _year = widget.store.currentDate.year;
+    _month = widget.store.currentDate.month;
     _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
       ..addListener(_syncHeaderPullFromController);
@@ -139,19 +144,15 @@ class _StatsPageState extends State<StatsPage>
                       onChanged: _setActiveType,
                     ),
                     SummaryPill(
-                      title: 'Éves · $_year · ${_activeType.label}',
+                      title: _summaryTitle(),
                       value: data.summaryValue,
                       surfaceColor: resolvedTheme.logBox,
-                      surfaceStyle: resolvedTheme.contentSurfaceStyle,
+                      surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
                       shadowEnabled: true,
-                      onIntervalSwipe: () {},
-                      onPeriodSwipe: (direction) {
-                        if (direction == 0) return;
-                        setState(() => _year += direction);
-                      },
-                      onResetToCurrentMonth: () {
-                        setState(() => _year = widget.store.currentDate.year);
-                      },
+                      onTap: _openSummaryScopePicker,
+                      onIntervalSwipe: _cycleSummaryScope,
+                      onPeriodSwipe: _shiftSummaryScope,
+                      onResetToCurrentMonth: _resetSummaryScope,
                     ),
                     const SizedBox(height: 16),
                     Expanded(
@@ -256,6 +257,12 @@ class _StatsPageState extends State<StatsPage>
       transactions: widget.store.transactions,
       categories: widget.store.categories,
       selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
+      summaryScope: !_yearScopeEnabled
+          ? StatsSummaryScope.allTime
+          : _monthScopeEnabled
+          ? StatsSummaryScope.monthly
+          : StatsSummaryScope.yearly,
+      month: _month,
       today: widget.store.currentDate,
     );
   }
@@ -369,8 +376,118 @@ class _StatsPageState extends State<StatsPage>
     setState(() => _activeType = type);
   }
 
+  String _summaryTitle() {
+    if (!_yearScopeEnabled) return 'Sum · ${_activeType.label}';
+    if (_monthScopeEnabled) {
+      return '${_monthName(_month)} $_year · ${_activeType.label}';
+    }
+    return 'Éves · $_year · ${_activeType.label}';
+  }
+
+  Future<void> _openSummaryScopePicker() async {
+    final selection = await showModalBottomSheet<SummaryScopeSelection>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SummaryScopePickerSheet(
+          initialSelection: SummaryScopeSelection(
+            yearEnabled: _yearScopeEnabled,
+            monthEnabled: _monthScopeEnabled,
+            year: _year,
+            month: _month,
+          ),
+          accentColor: _expenseTheme.accent,
+          buttonSurfaceStyle: _expenseTheme.buttonSurfaceStyle,
+          onApply: (selection) => Navigator.of(context).pop(selection),
+        );
+      },
+    );
+    if (!mounted || selection == null) return;
+    setState(() {
+      _yearScopeEnabled = selection.yearEnabled;
+      _monthScopeEnabled = selection.monthEnabled && selection.yearEnabled;
+      _year = selection.year;
+      _month = selection.month.clamp(1, 12).toInt();
+      if (!_monthScopeEnabled) _focusedMonth = null;
+      if (_monthScopeEnabled) _focusedMonth = _month;
+    });
+  }
+
+  void _cycleSummaryScope() {
+    setState(() {
+      if (_monthScopeEnabled) {
+        _yearScopeEnabled = false;
+        _monthScopeEnabled = false;
+        _focusedMonth = null;
+      } else if (_yearScopeEnabled) {
+        _monthScopeEnabled = true;
+        _focusedMonth = _month;
+      } else {
+        _yearScopeEnabled = true;
+        _monthScopeEnabled = false;
+        _focusedMonth = null;
+      }
+    });
+  }
+
+  void _shiftSummaryScope(int direction) {
+    if (direction == 0 || !_yearScopeEnabled) return;
+    setState(() {
+      if (_monthScopeEnabled) {
+        final nextMonth = _month + direction;
+        if (nextMonth < 1) {
+          _month = 12;
+          _year -= 1;
+        } else if (nextMonth > 12) {
+          _month = 1;
+          _year += 1;
+        } else {
+          _month = nextMonth;
+        }
+        _focusedMonth = _month;
+        return;
+      }
+      _year += direction;
+    });
+  }
+
+  void _resetSummaryScope() {
+    final now = widget.store.currentDate;
+    setState(() {
+      _yearScopeEnabled = true;
+      _monthScopeEnabled = true;
+      _year = now.year;
+      _month = now.month;
+      _focusedMonth = _month;
+    });
+  }
+
+  static String _monthName(int month) {
+    const names = [
+      'Január',
+      'Február',
+      'Március',
+      'Április',
+      'Május',
+      'Június',
+      'Július',
+      'Augusztus',
+      'Szeptember',
+      'Október',
+      'November',
+      'December',
+    ];
+    return names[(month - 1).clamp(0, 11)];
+  }
+
   void _selectMonth(StatsMonthData month) {
-    setState(() => _focusedMonth = month.month);
+    setState(() {
+      _yearScopeEnabled = true;
+      _monthScopeEnabled = true;
+      _month = month.month;
+      _focusedMonth = month.month;
+    });
   }
 
   void _openScopeSheet() {

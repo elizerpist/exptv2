@@ -6,6 +6,8 @@ import 'stats_scope_model.dart';
 
 enum StatsRenderMode { categoryScope, closing, heatmap }
 
+enum StatsSummaryScope { allTime, yearly, monthly }
+
 extension StatsRenderModeX on StatsRenderMode {
   String get title => switch (this) {
     StatsRenderMode.categoryScope => 'Kategória scope',
@@ -74,6 +76,8 @@ class StatsYearData {
     required List<TransactionRecord> transactions,
     required List<TransactionCategory> categories,
     required Set<int> selectedCategoryIds,
+    StatsSummaryScope summaryScope = StatsSummaryScope.yearly,
+    int? month,
     DateTime? today,
   }) {
     final activeCategoryIds = categories
@@ -90,22 +94,34 @@ class StatsYearData {
         category.transactionCategoryID: category,
     };
     final normalizedToday = _dateOnly(today ?? DateTime.now());
+    final targetMonth = (month ?? normalizedToday.month).clamp(1, 12).toInt();
     final byDate = <DateTime, List<TransactionRecord>>{};
     int? firstActiveMonth;
     int? lastActiveMonth;
     for (final record in transactions) {
       final parsed = _parseDate(record.normalizedDate);
-      if (parsed == null || parsed.year != year) continue;
+      if (parsed == null) continue;
+      final displayDate = _displayDateForScope(
+        parsed: parsed,
+        year: year,
+        month: targetMonth,
+        summaryScope: summaryScope,
+      );
+      if (displayDate == null) continue;
       final matchesType = _recordType(record) == activeType;
       if (!matchesType) continue;
       firstActiveMonth = firstActiveMonth == null
-          ? parsed.month
-          : (parsed.month < firstActiveMonth ? parsed.month : firstActiveMonth);
+          ? displayDate.month
+          : (displayDate.month < firstActiveMonth
+                ? displayDate.month
+                : firstActiveMonth);
       lastActiveMonth = lastActiveMonth == null
-          ? parsed.month
-          : (parsed.month > lastActiveMonth ? parsed.month : lastActiveMonth);
+          ? displayDate.month
+          : (displayDate.month > lastActiveMonth
+                ? displayDate.month
+                : lastActiveMonth);
       byDate
-          .putIfAbsent(_dateOnly(parsed), () => <TransactionRecord>[])
+          .putIfAbsent(_dateOnly(displayDate), () => <TransactionRecord>[])
           .add(record);
     }
 
@@ -210,8 +226,12 @@ class StatsYearData {
       0,
       (sum, month) => sum + month.thresholdHitDays,
     );
-    final graphStartMonth = firstActiveMonth ?? 1;
-    final graphEndMonth = lastActiveMonth ?? 12;
+    final graphStartMonth = summaryScope == StatsSummaryScope.monthly
+        ? targetMonth
+        : firstActiveMonth ?? 1;
+    final graphEndMonth = summaryScope == StatsSummaryScope.monthly
+        ? targetMonth
+        : lastActiveMonth ?? 12;
     final graphMonths = months
         .where(
           (month) =>
@@ -336,6 +356,25 @@ class StatsYearData {
 
   static TransactionType _recordType(TransactionRecord record) =>
       record.amount > 0 ? TransactionType.income : TransactionType.expense;
+
+  static DateTime? _displayDateForScope({
+    required DateTime parsed,
+    required int year,
+    required int month,
+    required StatsSummaryScope summaryScope,
+  }) {
+    return switch (summaryScope) {
+      StatsSummaryScope.yearly =>
+        parsed.year == year ? _dateOnly(parsed) : null,
+      StatsSummaryScope.monthly =>
+        parsed.year == year && parsed.month == month ? _dateOnly(parsed) : null,
+      StatsSummaryScope.allTime => DateTime(
+        year,
+        parsed.month,
+        parsed.day.clamp(1, DateTime(year, parsed.month + 1, 0).day).toInt(),
+      ),
+    };
+  }
 
   static int? _dominantCategoryId(Map<int, double> categoryAmounts) {
     int? id;

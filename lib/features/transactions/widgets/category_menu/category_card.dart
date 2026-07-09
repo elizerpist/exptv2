@@ -41,6 +41,7 @@ class CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeUsesInset = active && cardSurfaceStyle.hasPressEffect;
     return SizedBox(
       height: 150,
       child: Stack(
@@ -54,7 +55,7 @@ class CategoryCard extends StatelessWidget {
               onLongPress: _handleLongPress,
               child: ExpensePressable(
                 enabled: cardSurfaceStyle.hasPressEffect,
-                forcePressed: active,
+                forcePressed: activeUsesInset,
                 builder: (context, pressed) {
                   final radius = BorderRadius.circular(18);
                   return Stack(
@@ -102,7 +103,7 @@ class CategoryCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (active)
+                      if (active && !cardSurfaceStyle.hasPressEffect)
                         CategoryActiveBorder(
                           key: ValueKey(
                             'category-card-active-border-${category.transactionCategoryID}',
@@ -127,6 +128,7 @@ class CategoryCard extends StatelessWidget {
                     'category-icon-${category.transactionCategoryID}',
                   ),
                   enabled: avatarSurfaceStyle.hasPressEffect,
+                  forcePressed: active && avatarSurfaceStyle.hasPressEffect,
                   builder: (context, pressed) {
                     return ExpenseSurfaceContainer(
                       surfaceKey: ValueKey(

@@ -16,9 +16,12 @@ class SearchPill extends StatefulWidget {
     this.merchantFilter,
     this.merchantFilterColor,
     this.onClearMerchant,
+    this.merchantFilters = const <SearchPillFilter>[],
     this.categoryFilter,
     this.categoryFilterColor,
     this.onClearCategory,
+    this.categoryFilters = const <SearchPillFilter>[],
+    this.onVendorListPressed,
     this.accentColor = AppColors.primary,
     this.shadowEnabled = true,
   });
@@ -31,14 +34,31 @@ class SearchPill extends StatefulWidget {
   final String? merchantFilter;
   final Color? merchantFilterColor;
   final VoidCallback? onClearMerchant;
+  final List<SearchPillFilter> merchantFilters;
   final String? categoryFilter;
   final Color? categoryFilterColor;
   final VoidCallback? onClearCategory;
+  final List<SearchPillFilter> categoryFilters;
+  final VoidCallback? onVendorListPressed;
   final Color accentColor;
   final bool shadowEnabled;
 
   @override
   State<SearchPill> createState() => _SearchPillState();
+}
+
+class SearchPillFilter {
+  const SearchPillFilter({
+    required this.id,
+    required this.label,
+    required this.color,
+    required this.onClear,
+  });
+
+  final String id;
+  final String label;
+  final Color color;
+  final VoidCallback onClear;
 }
 
 class _SearchPillState extends State<SearchPill> {
@@ -131,40 +151,58 @@ class _SearchPillState extends State<SearchPill> {
 
   @override
   Widget build(BuildContext context) {
-    final hasMerchant = widget.merchantFilter != null;
-    final hasCategory = widget.categoryFilter != null;
+    final merchantFilters = widget.merchantFilters.isNotEmpty
+        ? widget.merchantFilters
+        : _legacyMerchantFilters();
+    final categoryFilters = widget.categoryFilters.isNotEmpty
+        ? widget.categoryFilters
+        : _legacyCategoryFilters();
+    final hasMerchant = merchantFilters.isNotEmpty;
+    final hasCategory = categoryFilters.isNotEmpty;
     final hasFilters = hasMerchant || hasCategory;
     final transparentInnerField = widget.surfaceStyle.hasPressEffect;
     final innerFillColor = transparentInnerField
         ? Colors.transparent
         : widget.surfaceColor;
     final capsules = <Widget>[
-      if (hasMerchant)
+      for (final filter in merchantFilters)
         _FilterCapsule(
-          capsuleKey: const ValueKey('search-pill-capsule-merchant'),
-          value: widget.merchantFilter!,
-          color: widget.accentColor,
+          capsuleKey: ValueKey('search-pill-capsule-merchant-${filter.id}'),
+          value: filter.label,
+          color: filter.color,
           surfaceStyle: widget.surfaceStyle,
-          onClear: widget.onClearMerchant,
+          onClear: filter.onClear,
         ),
-      if (hasCategory)
+      for (final filter in categoryFilters)
         _FilterCapsule(
-          capsuleKey: const ValueKey('search-pill-capsule-category'),
-          value: widget.categoryFilter!,
-          color: widget.categoryFilterColor ?? widget.accentColor,
+          capsuleKey: ValueKey('search-pill-capsule-category-${filter.id}'),
+          value: filter.label,
+          color: filter.color,
           surfaceStyle: widget.surfaceStyle,
-          onClear: widget.onClearCategory,
+          onClear: filter.onClear,
         ),
     ];
 
     final content = Row(
       children: [
-        const Icon(Icons.search, size: 16, color: AppColors.gray400),
+        SizedBox(
+          width: 32,
+          height: 32,
+          child: IconButton(
+            key: const ValueKey('search-pill-vendor-button'),
+            padding: EdgeInsets.zero,
+            iconSize: 18,
+            color: AppColors.gray400,
+            icon: const Icon(Icons.search),
+            tooltip: 'Vendor lista',
+            onPressed: widget.onVendorListPressed ?? _requestFocus,
+          ),
+        ),
         if (capsules.isNotEmpty) ...[
-          const SizedBox(width: 8),
-          Flexible(
-            flex: 3,
+          const SizedBox(width: 6),
+          Expanded(
             child: SingleChildScrollView(
+              key: const ValueKey('search-pill-capsule-scroll'),
               scrollDirection: Axis.horizontal,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -177,38 +215,53 @@ class _SearchPillState extends State<SearchPill> {
               ),
             ),
           ),
-        ],
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 1,
-          child: Container(
-            key: const ValueKey('search-pill-text-wrapper'),
-            decoration: BoxDecoration(color: innerFillColor),
-            child: DebugTextField(
-              debugLabel: 'SearchPill.query',
-              focusNode: _focusNode,
-              controller: _controller,
-              onChanged: widget.onQueryChanged,
-              onTap: _requestFocus,
-              onTapOutside: (_) => _focusNode.unfocus(),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                disabledBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                filled: true,
-                fillColor: innerFillColor,
-                contentPadding: EdgeInsets.zero,
-                hintText: hasFilters
-                    ? '${widget.filteredCount} tranzakció találva'
-                    : 'Keresés tranzakciók között...',
-                isDense: true,
+          const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 132),
+            child: Text(
+              '${widget.filteredCount} tranzakció',
+              key: const ValueKey('search-pill-filtered-count'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.gray500,
+                height: 1.1,
               ),
             ),
           ),
-        ),
+        ],
+        if (!hasFilters) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              key: const ValueKey('search-pill-text-wrapper'),
+              decoration: BoxDecoration(color: innerFillColor),
+              child: DebugTextField(
+                debugLabel: 'SearchPill.query',
+                focusNode: _focusNode,
+                controller: _controller,
+                onChanged: widget.onQueryChanged,
+                onTap: _requestFocus,
+                onTapOutside: (_) => _focusNode.unfocus(),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  filled: true,
+                  fillColor: innerFillColor,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: 'Keresés tranzakciók között...',
+                  isDense: true,
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
 
@@ -261,6 +314,34 @@ class _SearchPillState extends State<SearchPill> {
       ),
     );
   }
+
+  List<SearchPillFilter> _legacyMerchantFilters() {
+    final label = widget.merchantFilter;
+    final onClear = widget.onClearMerchant;
+    if (label == null || onClear == null) return const <SearchPillFilter>[];
+    return <SearchPillFilter>[
+      SearchPillFilter(
+        id: label,
+        label: label,
+        color: widget.accentColor,
+        onClear: onClear,
+      ),
+    ];
+  }
+
+  List<SearchPillFilter> _legacyCategoryFilters() {
+    final label = widget.categoryFilter;
+    final onClear = widget.onClearCategory;
+    if (label == null || onClear == null) return const <SearchPillFilter>[];
+    return <SearchPillFilter>[
+      SearchPillFilter(
+        id: label,
+        label: label,
+        color: widget.categoryFilterColor ?? widget.accentColor,
+        onClear: onClear,
+      ),
+    ];
+  }
 }
 
 class _FilterCapsule extends StatelessWidget {
@@ -285,7 +366,7 @@ class _FilterCapsule extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 64),
+          constraints: const BoxConstraints(maxWidth: 126),
           child: Text(
             value,
             style: const TextStyle(

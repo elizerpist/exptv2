@@ -266,7 +266,8 @@ void main() {
     expect(find.text('Téma Beállítások'), findsOneWidget);
     expect(find.text('Mágneskártya'), findsOneWidget);
     expect(find.text('Gombok felülete'), findsOneWidget);
-    expect(find.text('Logboxok felülete'), findsOneWidget);
+    expect(find.text('Logboxok felülete'), findsNothing);
+    expect(find.text('Summary pill nyomása'), findsOneWidget);
     expect(find.text('Design profil'), findsNothing);
 
     expect(find.text('Kategória sheet színe'), findsOneWidget);
@@ -362,14 +363,15 @@ void main() {
 
     expect(find.text('Design profil'), findsNothing);
     expect(find.text('Gombok felülete'), findsOneWidget);
-    expect(find.text('Logboxok felülete'), findsOneWidget);
+    expect(find.text('Logboxok felülete'), findsNothing);
+    expect(find.text('Summary pill nyomása'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('theme-button-surface-normal')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey('theme-button-surface-neutral-inset')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('theme-button-surface-neumorph')),
@@ -377,10 +379,18 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('theme-logbox-surface-normal')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('theme-logbox-surface-neumorph')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-summary-pill-surface-normal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-summary-pill-surface-neumorph')),
       findsOneWidget,
     );
     expect(find.text('App színe'), findsOneWidget);
@@ -419,20 +429,12 @@ void main() {
     expect(find.text('Neumorphism'), findsNothing);
 
     await tester.tap(
-      find.byKey(const ValueKey('theme-button-surface-neutral-inset')),
+      find.byKey(const ValueKey('theme-button-surface-neumorph')),
     );
     expect(
       updated.last.buttonSurfaceStyle,
       ExpenseSurfaceInteraction.neutralInset,
     );
-
-    await tester.tap(
-      find.byKey(const ValueKey('theme-button-surface-neumorph')),
-    );
-    expect(
-      updated.last.buttonSurfaceStyle,
-      ExpenseSurfaceInteraction.raisedInset,
-    );
     expect(
       updated.last.contentSurfaceStyle,
       ExpenseSurfaceInteraction.neutralNeutral,
@@ -443,19 +445,11 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(const ValueKey('theme-logbox-surface-neumorph')),
+      find.byKey(const ValueKey('theme-summary-pill-surface-neumorph')),
     );
     expect(
-      updated.last.buttonSurfaceStyle,
-      ExpenseSurfaceInteraction.neutralNeutral,
-    );
-    expect(
-      updated.last.contentSurfaceStyle,
-      ExpenseSurfaceInteraction.insetInset,
-    );
-    expect(
-      updated.last.ghostLogboxSurfaceStyle,
-      ExpenseSurfaceInteraction.neutralNeutral,
+      updated.last.summaryPillSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralInset,
     );
     expect(
       find.byKey(const ValueKey('theme-category-menu-surface-neumorph')),
@@ -512,12 +506,9 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('theme-category-card-surface-neumorph')),
-    );
     expect(
-      updated.last.categoryCardSurfaceStyle,
-      ExpenseSurfaceInteraction.raisedInset,
+      find.byKey(const ValueKey('theme-category-card-surface-neumorph')),
+      findsNothing,
     );
 
     expect(

@@ -32,8 +32,8 @@ void main() {
     expect(theme.headerCard, AppColors.gray200);
     expect(theme.appBackground, AppColors.gray200);
     expect(theme.logBox, AppColors.gray200);
-    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
-    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
     expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
     expect(settings.toMap()['contentSurfaceStyle'], 'neutralInset');
   });
@@ -89,11 +89,14 @@ void main() {
       'designProfile': 'neumorphism',
     });
 
-    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
-    expect(settings.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
+    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(
+      settings.contentSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
     expect(
       settings.ghostLogboxSurfaceStyle,
-      ExpenseSurfaceInteraction.insetInset,
+      ExpenseSurfaceInteraction.neutralNeutral,
     );
   });
 
@@ -202,17 +205,20 @@ void main() {
       ),
     );
 
-    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
-    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
-    expect(theme.ghostLogboxSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
-    expect(theme.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(theme.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
+    expect(theme.contentSurfaceStyle, ExpenseSurfaceInteraction.neutralNeutral);
+    expect(
+      theme.ghostLogboxSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralNeutral,
+    );
+    expect(theme.bottomNavSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
   });
 
   test(
     'legacy design profile getter reflects component surface compatibility only',
     () {
       final neumorph = AppThemeSettings.defaults().copyWith(
-        buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
         contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
         ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
       );
@@ -239,7 +245,7 @@ void main() {
 
   test('component surface settings copy independently', () {
     final settings = AppThemeSettings.defaults().copyWith(
-      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+      buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
       contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
@@ -247,13 +253,13 @@ void main() {
       categoryCardColor: AppBoxColor.white,
     );
 
-    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.raisedInset);
+    expect(settings.buttonSurfaceStyle, ExpenseSurfaceInteraction.neutralInset);
     expect(settings.contentSurfaceStyle, ExpenseSurfaceInteraction.insetInset);
     expect(
       settings.ghostLogboxSurfaceStyle,
       ExpenseSurfaceInteraction.neutralInset,
     );
-    expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
+    expect(settings.toMap()['buttonSurfaceStyle'], 'neutralInset');
     expect(settings.toMap()['contentSurfaceStyle'], 'insetInset');
     expect(settings.toMap()['ghostLogboxSurfaceStyle'], 'neutralInset');
     expect(settings.toMap().containsKey('categoryMenuSurfaceStyle'), isFalse);

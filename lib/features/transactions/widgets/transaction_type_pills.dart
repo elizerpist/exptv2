@@ -90,6 +90,7 @@ class _TransactionTypePill extends StatelessWidget {
     );
     return ExpensePressable(
       enabled: surfaceStyle.hasPressEffect,
+      forcePressed: active && surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
         return ExpenseSurfaceContainer(
           surfaceKey: ValueKey(

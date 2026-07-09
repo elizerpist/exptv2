@@ -258,7 +258,7 @@ void main() {
     expect(settings.themeSettings.cardColor, AppCardColor.lightgray);
     expect(
       settings.themeSettings.buttonSurfaceStyle,
-      ExpenseSurfaceInteraction.raisedInset,
+      ExpenseSurfaceInteraction.neutralInset,
     );
     expect(
       settings.themeSettings.contentSurfaceStyle,
@@ -316,7 +316,7 @@ void main() {
         'theme': 'Türkiz',
         'backgroundColor': 'white',
         'boxColor': 'gray',
-        'buttonSurfaceStyle': 'raisedInset',
+        'buttonSurfaceStyle': 'neutralInset',
         'contentSurfaceStyle': 'neutralInset',
         'ghostLogboxSurfaceStyle': 'insetInset',
         'ghostLogboxSettings': <String, Object?>{
@@ -399,7 +399,7 @@ void main() {
     final payload = calls.single.arguments as Map<dynamic, dynamic>;
     expect(payload['magnetType'], 'adaptive');
     expect(payload['cardColor'], 'darkgray');
-    expect(payload['buttonSurfaceStyle'], 'raisedInset');
+    expect(payload['buttonSurfaceStyle'], 'neutralInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
     expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
     expect(payload['categoryMenuColor'], 'gray');

@@ -89,6 +89,46 @@ void main() {
     expect(find.text('Limit elérve'), findsOneWidget);
   });
 
+  testWidgets('notification menu header back button calls callback', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'expenseListNotificationCards') {
+            return <Map<String, Object?>>[];
+          }
+          return null;
+        });
+
+    final bridge = NativeBridge(
+      methodChannel: channel,
+      eventChannel: const EventChannel('test/notifications_page_events'),
+    );
+    final store = NotificationStore(
+      NotificationRepository(bridge),
+      clock: () => DateTime(2026, 6, 3),
+    );
+    addTearDown(store.dispose);
+    var backPressed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsPage(
+          nativeBridge: bridge,
+          store: store,
+          active: true,
+          onBack: () => backPressed = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('notification-menu-back-button')),
+    );
+    expect(backPressed, isTrue);
+  });
+
   testWidgets('marks unread cards read when notifications tab becomes active', (
     tester,
   ) async {

@@ -10,6 +10,7 @@ import 'package:exptv2/features/transactions/widgets/category_menu/category_icon
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
+import 'package:exptv2/features/transactions/widgets/summary_scope_picker_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/themed_pill_field.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_box.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_log_list.dart';
@@ -275,6 +276,45 @@ void main() {
     expect(decoration.boxShadow, isNull);
   });
 
+  testWidgets('summary scope picker toggles year and month with drag', (
+    tester,
+  ) async {
+    SummaryScopeSelection? applied;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SummaryScopePickerSheet(
+            initialSelection: const SummaryScopeSelection(
+              yearEnabled: false,
+              monthEnabled: false,
+              year: 2026,
+              month: 5,
+            ),
+            accentColor: AppColors.primary,
+            buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onApply: (selection) => applied = selection,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('Hónap-summary-scope-switch')));
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const ValueKey('Év-summary-scope-drag-value')),
+      const Offset(0, -80),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('summary-scope-apply-button')));
+
+    expect(applied, isNotNull);
+    expect(applied!.yearEnabled, isTrue);
+    expect(applied!.monthEnabled, isTrue);
+    expect(applied!.year, greaterThan(2026));
+    expect(applied!.month, 5);
+  });
+
   testWidgets('search pill shows merchant filter capsule', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -288,7 +328,7 @@ void main() {
       ),
     );
 
-    expect(find.text('2 tranzakció találva'), findsOneWidget);
+    expect(find.text('2 tranzakció'), findsOneWidget);
     expect(find.text('Rrr'), findsOneWidget);
   });
 
@@ -422,13 +462,13 @@ void main() {
     );
 
     final merchantCapsule = tester.widget<Container>(
-      find.byKey(const ValueKey('search-pill-capsule-merchant')),
+      find.byKey(const ValueKey('search-pill-capsule-merchant-Rrr')),
     );
     final categoryCapsule = tester.widget<Container>(
-      find.byKey(const ValueKey('search-pill-capsule-category')),
+      find.byKey(const ValueKey('search-pill-capsule-category-Q')),
     );
 
-    expect(find.text('2 tranzakció találva'), findsOneWidget);
+    expect(find.text('2 tranzakció'), findsOneWidget);
     expect(find.text('Rrr'), findsOneWidget);
     expect(find.text('Q'), findsOneWidget);
     expect(
@@ -438,10 +478,61 @@ void main() {
     expect((categoryCapsule.decoration! as BoxDecoration).color, categoryColor);
 
     final categoryRight = tester
-        .getRect(find.byKey(const ValueKey('search-pill-capsule-category')))
+        .getRect(find.byKey(const ValueKey('search-pill-capsule-category-Q')))
         .right;
-    final inputLeft = tester.getRect(find.byType(TextField)).left;
-    expect(categoryRight, lessThan(inputLeft));
+    final countLeft = tester
+        .getRect(find.byKey(const ValueKey('search-pill-filtered-count')))
+        .left;
+    expect(categoryRight, lessThan(countLeft));
+  });
+
+  testWidgets('search pill renders multiple removable filter capsules', (
+    tester,
+  ) async {
+    final cleared = <String>[];
+    var vendorPressed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 390,
+          child: SearchPill(
+            query: '',
+            onQueryChanged: (_) {},
+            filteredCount: 34560,
+            categoryFilters: [
+              SearchPillFilter(
+                id: '6',
+                label: 'Élelmiszer',
+                color: AppColors.expense,
+                onClear: () => cleared.add('6'),
+              ),
+              SearchPillFilter(
+                id: '7',
+                label: 'Közlekedés',
+                color: AppColors.primary,
+                onClear: () => cleared.add('7'),
+              ),
+            ],
+            onVendorListPressed: () => vendorPressed = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('34560 tranzakció'), findsOneWidget);
+    expect(find.text('Élelmiszer'), findsOneWidget);
+    expect(find.text('Közlekedés'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('search-pill-capsule-scroll')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    expect(vendorPressed, isTrue);
+
+    await tester.tap(find.byIcon(Icons.close).first);
+    expect(cleared, ['6']);
   });
 
   testWidgets('search pill highlights only the outer border when focused', (

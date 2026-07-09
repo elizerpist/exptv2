@@ -65,8 +65,7 @@ void main() {
                 'biometricLabel': 'Ujjlenyomat elerheto',
               };
             case 'expenseVerifySecurityPin':
-              return (call.arguments as Map<dynamic, dynamic>)['pin'] ==
-                  '1234';
+              return (call.arguments as Map<dynamic, dynamic>)['pin'] == '1234';
             case 'expenseSetBiometricEnabled':
               return <String, Object?>{
                 'pinEnabled': true,
@@ -139,53 +138,56 @@ void main() {
     expect(methods, contains('expenseClearSecurityPin'));
   });
 
-  test('theme updates are optimistic and ignore stale native responses', () async {
-    await store.start();
+  test(
+    'theme updates are optimistic and ignore stale native responses',
+    () async {
+      await store.start();
 
-    final firstResponse = Completer<Map<String, Object?>>();
-    final secondResponse = Completer<Map<String, Object?>>();
-    themeUpdateResponses.addAll([firstResponse, secondResponse]);
+      final firstResponse = Completer<Map<String, Object?>>();
+      final secondResponse = Completer<Map<String, Object?>>();
+      themeUpdateResponses.addAll([firstResponse, secondResponse]);
 
-    final firstSettings = store.themeSettings.copyWith(
-      buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-    );
-    final firstFuture = store.updateThemeSettings(firstSettings);
-    await Future<void>.delayed(Duration.zero);
+      final firstSettings = store.themeSettings.copyWith(
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+      );
+      final firstFuture = store.updateThemeSettings(firstSettings);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(
-      store.themeSettings.buttonSurfaceStyle,
-      ExpenseSurfaceInteraction.raisedInset,
-    );
+      expect(
+        store.themeSettings.buttonSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralInset,
+      );
 
-    final secondSettings = store.themeSettings.copyWith(
-      contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
-    );
-    final secondFuture = store.updateThemeSettings(secondSettings);
-    await Future<void>.delayed(Duration.zero);
+      final secondSettings = store.themeSettings.copyWith(
+        contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
+      );
+      final secondFuture = store.updateThemeSettings(secondSettings);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(
-      store.themeSettings.buttonSurfaceStyle,
-      ExpenseSurfaceInteraction.raisedInset,
-    );
-    expect(
-      store.themeSettings.contentSurfaceStyle,
-      ExpenseSurfaceInteraction.insetInset,
-    );
+      expect(
+        store.themeSettings.buttonSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralInset,
+      );
+      expect(
+        store.themeSettings.contentSurfaceStyle,
+        ExpenseSurfaceInteraction.insetInset,
+      );
 
-    secondResponse.complete(secondSettings.toMap());
-    await secondFuture;
-    firstResponse.complete(firstSettings.toMap());
-    await firstFuture;
+      secondResponse.complete(secondSettings.toMap());
+      await secondFuture;
+      firstResponse.complete(firstSettings.toMap());
+      await firstFuture;
 
-    expect(
-      store.themeSettings.buttonSurfaceStyle,
-      ExpenseSurfaceInteraction.raisedInset,
-    );
-    expect(
-      store.themeSettings.contentSurfaceStyle,
-      ExpenseSurfaceInteraction.insetInset,
-    );
-  });
+      expect(
+        store.themeSettings.buttonSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralInset,
+      );
+      expect(
+        store.themeSettings.contentSurfaceStyle,
+        ExpenseSurfaceInteraction.insetInset,
+      );
+    },
+  );
 }
 
 Map<String, Object?> categoryRow({

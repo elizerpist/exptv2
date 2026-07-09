@@ -162,10 +162,11 @@ class _CategoryMenuPanelState extends State<CategoryMenuPanel> {
                             ? 'szűrés aktív'
                             : 'egyedi szűrő',
                         avatarLabel: 'ALL',
-                        avatarColor: const Color(0xFFFBBF24),
+                        avatarColor: widget.accentColor,
                         active: _selected.isEmpty,
                         surfaceColor: widget.cardSurfaceColor,
                         surfaceStyle: widget.cardSurfaceStyle,
+                        avatarSurfaceStyle: widget.avatarSurfaceStyle,
                         accentColor: widget.accentColor,
                         onTap: _selectAll,
                       );
@@ -180,6 +181,7 @@ class _CategoryMenuPanelState extends State<CategoryMenuPanel> {
                         active: false,
                         surfaceColor: widget.cardSurfaceColor,
                         surfaceStyle: widget.cardSurfaceStyle,
+                        avatarSurfaceStyle: widget.avatarSurfaceStyle,
                         accentColor: widget.accentColor,
                         onTap: widget.onAdd,
                       );
@@ -215,7 +217,7 @@ class _CategoryMenuPanelState extends State<CategoryMenuPanel> {
               buttonKey: const ValueKey('category-menu-apply-button'),
               label: 'Szűrőbeállítás',
               onPressed: _apply,
-              surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              surfaceStyle: widget.avatarSurfaceStyle,
               color: widget.accentColor,
               foregroundColor: AppColors.white,
             ),
@@ -281,6 +283,7 @@ class _CategoryUtilityCard extends StatelessWidget {
     required this.active,
     required this.surfaceColor,
     required this.surfaceStyle,
+    required this.avatarSurfaceStyle,
     required this.accentColor,
     required this.onTap,
     this.avatarLabel,
@@ -295,18 +298,20 @@ class _CategoryUtilityCard extends StatelessWidget {
   final bool active;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18);
+    final activeUsesInset = active && surfaceStyle.hasPressEffect;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: ExpensePressable(
         enabled: surfaceStyle.hasPressEffect,
-        forcePressed: active,
+        forcePressed: activeUsesInset,
         builder: (context, pressed) {
           return Stack(
             fit: StackFit.expand,
@@ -322,31 +327,36 @@ class _CategoryUtilityCard extends StatelessWidget {
                 neutralShadow: categoryNeutralShadow(surfaceStyle),
                 child: Column(
                   children: [
-                    Container(
-                      width: 65,
-                      height: 65,
-                      decoration: BoxDecoration(
-                        color: avatarColor,
-                        borderRadius: BorderRadius.circular(32.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            offset: const Offset(0, 2),
-                            blurRadius: 4,
+                    ExpensePressable(
+                      enabled: avatarSurfaceStyle.hasPressEffect,
+                      forcePressed: active && avatarSurfaceStyle.hasPressEffect,
+                      builder: (context, avatarPressed) {
+                        return ExpenseSurfaceContainer(
+                          surfaceKey: ValueKey(
+                            'category-utility-avatar-surface-$title',
                           ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: avatarLabel == null
-                          ? Icon(icon, color: AppColors.white, size: 34)
-                          : Text(
-                              avatarLabel!,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
+                          style: avatarSurfaceStyle,
+                          color: avatarColor,
+                          primary: true,
+                          primaryColor: avatarColor,
+                          borderRadius: BorderRadius.circular(32.5),
+                          pressed: avatarPressed,
+                          width: 65,
+                          height: 65,
+                          child: Center(
+                            child: avatarLabel == null
+                                ? Icon(icon, color: AppColors.white, size: 34)
+                                : Text(
+                                    avatarLabel!,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                          ),
+                        );
+                      },
                     ),
                     const Spacer(),
                     Text(
@@ -374,7 +384,7 @@ class _CategoryUtilityCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (active)
+              if (active && !surfaceStyle.hasPressEffect)
                 CategoryActiveBorder(
                   key: ValueKey('category-utility-active-border-$title'),
                   radius: radius,
