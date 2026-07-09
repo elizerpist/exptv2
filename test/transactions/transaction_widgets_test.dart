@@ -35,6 +35,24 @@ void main() {
     expect(selected, TransactionType.income);
   });
 
+  testWidgets('type pill tap writes a received telemetry event', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionTypePills(
+          activeType: TransactionType.expense,
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Bevétel'));
+
+    expect(DebugConsole.allText, contains('[Perf] TypePill tap target=income'));
+  });
+
   testWidgets('type pills can disable neutral shadows', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

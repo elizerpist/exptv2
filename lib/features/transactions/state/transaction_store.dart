@@ -706,13 +706,23 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void setActiveType(TransactionType type) {
+    final stopwatch = Stopwatch()..start();
+    DebugConsole.log(
+      '[Perf] TypeSwitch request type=${type.name} '
+      'from=${_filter.type.name}',
+    );
     final unchanged =
         _filter.type == type &&
         _filter.effectiveCategoryIds.isEmpty &&
         _filter.effectiveMerchants.isEmpty &&
         _filter.searchQuery.isEmpty;
-    if (unchanged) return;
-    final stopwatch = Stopwatch()..start();
+    if (unchanged) {
+      DebugConsole.log(
+        '[Perf] TypeSwitch skipped type=${type.name} reason=unchanged '
+        'elapsed=${stopwatch.elapsedMilliseconds}ms',
+      );
+      return;
+    }
     _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(
       type: type,
@@ -720,10 +730,19 @@ class TransactionStore extends ChangeNotifier {
       clearCategory: true,
       searchQuery: '',
     );
+    DebugConsole.log(
+      '[Perf] TypeSwitch state type=${type.name} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
     _prewarmActiveView('type-switch');
+    DebugConsole.log(
+      '[Perf] TypeSwitch notify type=${type.name} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
     notifyListeners();
     DebugConsole.log(
-      '[Perf] TypeSwitch type=${type.name} elapsed=${stopwatch.elapsedMilliseconds}ms',
+      '[Perf] TypeSwitch complete type=${type.name} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
   }
 

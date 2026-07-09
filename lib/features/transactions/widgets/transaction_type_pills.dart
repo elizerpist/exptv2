@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/debug/debug_console.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../settings/models/app_theme_settings.dart';
 import '../models/transaction_category.dart';
@@ -127,7 +128,10 @@ class _TransactionTypePill extends StatelessWidget {
                   : ExpenseSurface.transparentOverlayColor,
               splashColor: materialFeedback ? null : Colors.transparent,
               highlightColor: materialFeedback ? null : Colors.transparent,
-              onTap: () => onTap(type),
+              onTap: () {
+                DebugConsole.log('[Perf] TypePill tap target=${type.name}');
+                onTap(type);
+              },
               child: SizedBox(
                 height: TransactionMenuMetrics.typePillMinHeight,
                 child: Center(

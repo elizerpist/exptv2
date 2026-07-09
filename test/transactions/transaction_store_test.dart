@@ -1,4 +1,5 @@
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -54,6 +55,21 @@ void main() {
       store.activeSummary.formattedFor(TransactionType.income),
       '+5 555 Ft',
     );
+  });
+
+  test('active type switch writes a complete performance trace', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+    DebugConsole.clear();
+
+    store.setActiveType(TransactionType.income);
+
+    final logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] TypeSwitch request type=income'));
+    expect(logs, contains('[Perf] Store active view reason=type-switch'));
+    expect(logs, contains('[Perf] TypeSwitch notify type=income'));
+    expect(logs, contains('[Perf] TypeSwitch complete type=income'));
+    expect(logs, contains('elapsed='));
   });
 
   test('store exposes cached category index and display log entries', () async {
