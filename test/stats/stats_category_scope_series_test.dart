@@ -25,48 +25,61 @@ void main() {
     );
   });
 
-  test('threshold zero labels the orange line as Ft per active day', () {
-    final series = StatsCategoryScopeSeries.fromDailySamples(
-      threshold: 0,
-      dailyScopeAmounts: const [2000, 0, 3000],
-    );
+  test(
+    'threshold zero labels the orange line as active-day intensity index',
+    () {
+      final series = StatsCategoryScopeSeries.fromDailySamples(
+        threshold: 0,
+        dailyScopeAmounts: const [2000, 0, 3000],
+      );
 
-    expect(series.secondaryMetricLabel, 'Ft/aktiv nap');
-    expect(series.secondaryLine, hasLength(3));
-  });
+      expect(series.secondaryMetricLabel, 'aktiv nap index');
+      expect(series.secondaryLine, hasLength(3));
+      expect(
+        series.secondaryLine.map((point) => point.value),
+        everyElement(inInclusiveRange(0, 100)),
+      );
+    },
+  );
 
-  test('expense orange line smooths rolling Ft per threshold hit', () {
+  test('expense orange line smooths normalized spike severity index', () {
     final series = StatsCategoryScopeSeries.fromDailySamples(
       threshold: 5000,
       dailyScopeAmounts: const [6000, 2000, 14000],
     );
 
-    expect(series.secondaryMetricLabel, 'Ft/kiugras');
+    expect(series.secondaryMetricLabel, 'kiugras index');
     expect(series.dynamicEmaPeriod, 18);
     _expectCloseValues(series.secondaryLine.map((point) => point.value), const [
-      6000,
-      6000,
-      6421.0526315789475,
+      20,
+      20,
+      24.210526315789473,
     ]);
-  });
-
-  test('threshold zero orange line smooths rolling Ft per active day', () {
-    final series = StatsCategoryScopeSeries.fromDailySamples(
-      threshold: 0,
-      dailyScopeAmounts: const [2000, 0, 6000],
+    expect(
+      series.secondaryLine.map((point) => point.value),
+      everyElement(inInclusiveRange(0, 100)),
     );
-
-    expect(series.secondaryMetricLabel, 'Ft/aktiv nap');
-    expect(series.dynamicEmaPeriod, 18);
-    _expectCloseValues(series.secondaryLine.map((point) => point.value), const [
-      2000,
-      2000,
-      2210.5263157894738,
-    ]);
   });
 
   test(
-    'income scope uses monthly buckets and keeps orange Ft per active day',
+    'threshold zero orange line smooths normalized active-day intensity',
+    () {
+      final series = StatsCategoryScopeSeries.fromDailySamples(
+        threshold: 0,
+        dailyScopeAmounts: const [2000, 0, 6000],
+      );
+
+      expect(series.secondaryMetricLabel, 'aktiv nap index');
+      expect(series.dynamicEmaPeriod, 18);
+      _expectCloseValues(
+        series.secondaryLine.map((point) => point.value),
+        const [50, 50, 55.26315789473684],
+      );
+    },
+  );
+
+  test(
+    'income scope uses income-health bars and normalized deviation line',
     () {
       final data = StatsYearData.build(
         year: 2026,
@@ -90,23 +103,23 @@ void main() {
       final series = StatsCategoryScopeSeries.fromYearData(data);
 
       expect(series.monthLabels, ['Jan', 'Feb', 'Mar']);
-      expect(series.secondaryMetricLabel, 'Ft/aktiv nap');
-      expect(series.secondaryReferenceAmount, closeTo(166666.67, 0.01));
-      expect(series.secondaryLine.map((point) => point.value), [
-        300000,
-        75000,
-        400000,
-      ]);
+      expect(series.secondaryMetricLabel, 'elteres index');
+      expect(series.secondaryReferenceAmount, closeTo(333333.33, 0.01));
+      _expectCloseValues(
+        series.secondaryLine.map((point) => point.value),
+        const [24.0, 35.666666666666664, 32.22222222222222],
+      );
       expect(series.controlBars.map((bar) => bar.value), [
-        closeTo(45, 0.01),
-        closeTo(45, 0.01),
-        closeTo(60, 0.01),
+        closeTo(41.0, 0.01),
+        closeTo(69.75, 0.01),
+        closeTo(55.65, 0.01),
       ]);
       expect(series.controlBars.map((bar) => bar.colorHex), [
         '#EF4444',
-        '#EF4444',
+        '#22C55E',
         '#22C55E',
       ]);
+      expect(series.kontrollScore, closeTo(62.7, 0.01));
     },
   );
 

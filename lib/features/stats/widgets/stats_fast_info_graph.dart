@@ -56,18 +56,15 @@ class StatsFastInfoLayout {
         .toDouble();
     final categoryControlChart = Rect.fromLTWH(
       categoryChartLeft,
-      categoryPanel.top + 30,
+      categoryPanel.top + 48,
       categoryChartWidth,
-      (categoryPanel.height * 0.48).clamp(112.0, 132.0).toDouble(),
+      (categoryPanel.height - 84).clamp(180.0, 210.0).toDouble(),
     );
-    final categorySecondaryHeight = (categoryPanel.height * 0.19)
-        .clamp(44.0, 56.0)
-        .toDouble();
     final categorySecondaryChart = Rect.fromLTWH(
       categoryChartLeft,
-      categoryPanel.bottom - 22 - categorySecondaryHeight,
+      categoryPanel.bottom - 22,
       categoryChartWidth,
-      categorySecondaryHeight,
+      0,
     );
     return StatsFastInfoLayout(
       topChart: Rect.fromLTWH(_chartLeft, 66, width, 82),
@@ -91,8 +88,8 @@ class StatsFastInfoSpec {
       StatsRenderMode.categoryScope => const StatsFastInfoSpec(
         charts: [
           StatsFastInfoChartMetadata(
-            title: '1. Kontroll histogram',
-            yAxisLabel: '50 = atlag',
+            title: '1. Kontroll + kiugras',
+            yAxisLabel: 'index',
             xAxisLabel: 'honapok',
             legendItems: [
               StatsFastInfoLegendItem(
@@ -101,15 +98,8 @@ class StatsFastInfoSpec {
               ),
               StatsFastInfoLegendItem(label: 'javul', color: Color(0xFF22C55E)),
               StatsFastInfoLegendItem(label: '50', color: AppColors.gray500),
-            ],
-          ),
-          StatsFastInfoChartMetadata(
-            title: '2. Ft/kiugras',
-            yAxisLabel: 'Ft',
-            xAxisLabel: 'honapok',
-            legendItems: [
               StatsFastInfoLegendItem(
-                label: 'Ft/kiugras',
+                label: 'kiugras',
                 color: Color(0xFFF97316),
               ),
             ],
@@ -243,6 +233,8 @@ class StatsFastInfoVisualStyle {
     required this.legendMarkerWidth,
     required this.legendMarkerHeight,
     required this.secondaryLineSmoothingEnabled,
+    required this.secondaryLineDashed,
+    required this.controlVisualSensitivity,
     required this.categoryYAxisValueLabelCount,
   });
 
@@ -250,6 +242,8 @@ class StatsFastInfoVisualStyle {
   final double legendMarkerWidth;
   final double legendMarkerHeight;
   final bool secondaryLineSmoothingEnabled;
+  final bool secondaryLineDashed;
+  final double controlVisualSensitivity;
   final int categoryYAxisValueLabelCount;
 }
 
@@ -259,10 +253,12 @@ class StatsFastInfoGraph extends StatelessWidget {
   final StatsYearData data;
 
   static const visualStyle = StatsFastInfoVisualStyle(
-    legendFontSize: 8.64,
-    legendMarkerWidth: 7.2,
-    legendMarkerHeight: 3.6,
+    legendFontSize: 10.37,
+    legendMarkerWidth: 8.64,
+    legendMarkerHeight: 4.32,
     secondaryLineSmoothingEnabled: true,
+    secondaryLineDashed: true,
+    controlVisualSensitivity: 3.0,
     categoryYAxisValueLabelCount: 3,
   );
 
@@ -276,6 +272,16 @@ class StatsFastInfoGraph extends StatelessWidget {
 
   static StatsFastInfoVisualStyle visualStyleForTesting() {
     return visualStyle;
+  }
+
+  static double visualControlValueForTesting(double value) {
+    return _emphasizeControlValue(value);
+  }
+
+  static double _emphasizeControlValue(double value) {
+    return (50 + (value - 50) * visualStyle.controlVisualSensitivity)
+        .clamp(0, 100)
+        .toDouble();
   }
 
   @override
@@ -347,45 +353,31 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
   ) {
     final series = StatsCategoryScopeSeries.fromYearData(data);
     _drawCategoryPanel(canvas, layout.categoryPanel);
-    final topChart = layout.categoryControlChart;
-    final bottomChart = layout.categorySecondaryChart;
-    _drawChartHeader(canvas, spec.charts[0], topChart);
-    _drawGrid(canvas, topChart);
-    _drawControlBars(canvas, topChart, series.controlBars);
-    _drawControlAxisValueLabels(canvas, topChart);
-    _drawAxisLabels(
-      canvas,
-      spec.charts[0],
-      topChart,
-      drawXAxisLabel: false,
-      yAxisLabelLeft: layout.categoryAxisLabelLeft,
-      yAxisLabelTop: topChart.top - 14,
-      yAxisLabelWidth: topChart.left - layout.categoryAxisLabelLeft - 6,
-    );
-    _drawMonthLabels(canvas, topChart, series.monthLabels);
-    final secondaryMetadata = spec.charts[1].copyWith(
-      title: '2. ${series.secondaryMetricLabel}',
+    final chart = layout.categoryControlChart;
+    final metadata = spec.charts[0].copyWith(
       legendItems: [
+        ...spec.charts[0].legendItems.take(3),
         StatsFastInfoLegendItem(
           label: series.secondaryMetricLabel,
           color: const Color(0xFFF97316),
         ),
       ],
     );
-    _drawChartHeader(canvas, secondaryMetadata, bottomChart);
-    _drawGrid(canvas, bottomChart, horizontal: 2);
-    _drawAmountAxisValueLabels(canvas, bottomChart, series.secondaryLine);
-    _drawSecondaryLine(canvas, bottomChart, series.secondaryLine);
+    _drawChartHeader(canvas, metadata, chart);
+    _drawGrid(canvas, chart, horizontal: 4);
+    _drawControlBars(canvas, chart, series.controlBars);
+    _drawSecondaryIndexLine(canvas, chart, series.secondaryLine);
+    _drawControlAxisValueLabels(canvas, chart);
     _drawAxisLabels(
       canvas,
-      secondaryMetadata,
-      bottomChart,
+      metadata,
+      chart,
       drawXAxisLabel: false,
       yAxisLabelLeft: layout.categoryAxisLabelLeft,
-      yAxisLabelTop: bottomChart.top - 14,
-      yAxisLabelWidth: bottomChart.left - layout.categoryAxisLabelLeft - 6,
+      yAxisLabelTop: chart.top - 14,
+      yAxisLabelWidth: chart.left - layout.categoryAxisLabelLeft - 6,
     );
-    _drawMonthLabels(canvas, bottomChart, series.monthLabels);
+    _drawMonthLabels(canvas, chart, series.monthLabels);
   }
 
   void _drawHeatmap(
@@ -578,29 +570,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     ]);
   }
 
-  void _drawAmountAxisValueLabels(
-    Canvas canvas,
-    Rect chart,
-    List<StatsSeriesPoint> points,
-  ) {
-    final values = points.map((point) => point.value).toList(growable: false);
-    final maxValue = values.fold<double>(0, math.max);
-    if (maxValue <= 0) {
-      _drawYAxisValueLabels(canvas, chart, const [
-        _YAxisValueLabel(label: '0', normalizedValue: 0),
-      ]);
-      return;
-    }
-    _drawYAxisValueLabels(canvas, chart, [
-      _YAxisValueLabel(label: _formatAxisValue(maxValue), normalizedValue: 1),
-      _YAxisValueLabel(
-        label: _formatAxisValue(maxValue / 2),
-        normalizedValue: 0.5,
-      ),
-      const _YAxisValueLabel(label: '0', normalizedValue: 0),
-    ]);
-  }
-
   void _drawYAxisValueLabels(
     Canvas canvas,
     Rect chart,
@@ -703,10 +672,11 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     final barWidth = (chart.width / (bars.length * 1.35)).clamp(1.1, 11.0);
     for (var i = 0; i < bars.length; i += 1) {
       final bar = bars[i];
+      final visualValue = StatsFastInfoGraph._emphasizeControlValue(bar.value);
       final centerX = _xForBarIndex(chart, i, bars.length);
-      final normalized = ((bar.value - 50).abs() / 50).clamp(0.0, 1.0);
+      final normalized = ((visualValue - 50).abs() / 50).clamp(0.0, 1.0);
       final height = math.max(1.0, chart.height * 0.48 * normalized);
-      final top = bar.value >= 50 ? baselineY - height : baselineY;
+      final top = visualValue >= 50 ? baselineY - height : baselineY;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(centerX - barWidth / 2, top, barWidth, height),
@@ -717,50 +687,44 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     }
   }
 
-  void _drawSecondaryLine(
+  void _drawSecondaryIndexLine(
     Canvas canvas,
     Rect chart,
     List<StatsSeriesPoint> points,
   ) {
     if (points.isEmpty) return;
-    final values = points.map((point) => point.value).toList(growable: false);
-    final maxValue = values
-        .fold<double>(0, math.max)
-        .clamp(1.0, double.infinity);
-    final path = _smoothPathForValues(chart, values, maxValue);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = const Color(0xFFF97316)
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke,
-    );
-    final latest = values.last;
-    if (latest <= 0) return;
-    final label = '${(latest / 1000).toStringAsFixed(1)}k';
-    final labelPainter = _textPainter(
-      label,
-      const TextStyle(
-        color: Color(0xFFF97316),
-        fontSize: 8,
-        fontWeight: FontWeight.w800,
-      ),
-      maxWidth: 34,
-    );
-    final latestY =
-        chart.bottom - chart.height * (latest / maxValue).clamp(0.0, 1.0);
-    labelPainter.paint(
-      canvas,
-      Offset(
-        chart.right - labelPainter.width,
-        (latestY - labelPainter.height / 2).clamp(
-          chart.top,
-          chart.bottom - labelPainter.height,
-        ),
-      ),
-    );
+    final values = points
+        .map((point) => point.value.clamp(0, 100).toDouble())
+        .toList(growable: false);
+    final path = _smoothPathForValues(chart, values, 100);
+    final paint = Paint()
+      ..color = const Color(0xFFF97316)
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    if (!StatsFastInfoGraph.visualStyle.secondaryLineDashed) {
+      canvas.drawPath(path, paint);
+      return;
+    }
+    _drawDashedPath(canvas, path, paint, dash: 7, gap: 5);
+  }
+
+  void _drawDashedPath(
+    Canvas canvas,
+    Path path,
+    Paint paint, {
+    required double dash,
+    required double gap,
+  }) {
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = math.min(distance + dash, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + gap;
+      }
+    }
   }
 
   Path _smoothPathForValues(Rect chart, List<double> values, double maxValue) {
@@ -924,20 +888,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       if (value > max) max = value;
     }
     return max;
-  }
-
-  String _formatAxisValue(double value) {
-    if (value >= 1000000) {
-      final scaled = value / 1000000;
-      final decimals = scaled >= 10 ? 0 : 1;
-      return '${scaled.toStringAsFixed(decimals)}M';
-    }
-    if (value >= 1000) {
-      final scaled = value / 1000;
-      final decimals = scaled >= 10 ? 0 : 1;
-      return '${scaled.toStringAsFixed(decimals)}k';
-    }
-    return value.round().toString();
   }
 
   Color _color(String hex) {

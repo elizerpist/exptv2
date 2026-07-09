@@ -175,7 +175,7 @@ void main() {
     },
   );
 
-  test('category scope FastInfo layout uses one padded chart panel', () {
+  test('category scope FastInfo layout uses one large padded chart panel', () {
     final layout = StatsFastInfoGraph.layoutForTesting(const Size(390, 328));
 
     expect(layout.categoryPanel.left, greaterThanOrEqualTo(12));
@@ -192,26 +192,30 @@ void main() {
       layout.categoryAxisLabelLeft,
       lessThan(layout.categoryControlChart.left),
     );
+    expect(layout.categoryControlChart.top, greaterThanOrEqualTo(86));
+    expect(layout.categoryControlChart.height, greaterThanOrEqualTo(180));
     expect(
-      layout.categoryControlChart.height,
-      greaterThan(layout.categorySecondaryChart.height * 2),
-    );
-    expect(layout.categorySecondaryChart.height, lessThanOrEqualTo(56));
-    expect(
-      layout.categorySecondaryChart.bottom,
+      layout.categoryControlChart.bottom,
       lessThanOrEqualTo(layout.categoryPanel.bottom - 16),
     );
+    expect(layout.categorySecondaryChart.height, 0);
   });
 
   test(
-    'category scope FastInfo visual style matches the polished chart brief',
+    'category scope FastInfo visual style matches the unified chart brief',
     () {
       final style = StatsFastInfoGraph.visualStyleForTesting();
 
-      expect(style.legendFontSize, moreOrLessEquals(8.64, epsilon: 0.01));
-      expect(style.legendMarkerWidth, moreOrLessEquals(7.2, epsilon: 0.01));
-      expect(style.legendMarkerHeight, moreOrLessEquals(3.6, epsilon: 0.01));
+      expect(style.legendFontSize, moreOrLessEquals(10.37, epsilon: 0.01));
+      expect(style.legendMarkerWidth, moreOrLessEquals(8.64, epsilon: 0.01));
+      expect(style.legendMarkerHeight, moreOrLessEquals(4.32, epsilon: 0.01));
       expect(style.secondaryLineSmoothingEnabled, isTrue);
+      expect(style.secondaryLineDashed, isTrue);
+      expect(style.controlVisualSensitivity, moreOrLessEquals(3.0));
+      expect(
+        StatsFastInfoGraph.visualControlValueForTesting(60),
+        moreOrLessEquals(80),
+      );
       expect(style.categoryYAxisValueLabelCount, greaterThanOrEqualTo(2));
     },
   );
@@ -229,20 +233,16 @@ void main() {
     }
   });
 
-  test('category scope FastInfo metadata exposes the approved two charts', () {
+  test('category scope FastInfo metadata exposes the unified chart', () {
     final spec = StatsFastInfoGraph.specForTesting(
       StatsRenderMode.categoryScope,
     );
 
-    expect(spec.charts, hasLength(2));
-    expect(spec.charts[0].title, '1. Kontroll histogram');
-    expect(spec.charts[0].yAxisLabel, '50 = atlag');
+    expect(spec.charts, hasLength(1));
+    expect(spec.charts[0].title, '1. Kontroll + kiugras');
+    expect(spec.charts[0].yAxisLabel, 'index');
     expect(spec.charts[0].xAxisLabel, 'honapok');
-    expect(spec.charts[0].legendLabels, ['romlik', 'javul', '50']);
-    expect(spec.charts[1].title, '2. Ft/kiugras');
-    expect(spec.charts[1].yAxisLabel, 'Ft');
-    expect(spec.charts[1].xAxisLabel, 'honapok');
-    expect(spec.charts[1].legendLabels, ['Ft/kiugras']);
+    expect(spec.charts[0].legendLabels, ['romlik', 'javul', '50', 'kiugras']);
   });
 
   testWidgets('stats scope sheet toggles multiple active-type categories', (

@@ -107,7 +107,7 @@ class StatsCategoryScopeSeries {
       controlBars: const <StatsControlBar>[],
       secondaryLine: const <StatsSeriesPoint>[],
       monthLabels: const <String>[],
-      secondaryMetricLabel: 'Ft/kiugras',
+      secondaryMetricLabel: 'kiugras index',
       secondaryReferenceAmount: 0,
       dynamicEmaPeriod: 0,
     );
@@ -208,7 +208,7 @@ class StatsCategoryScopeSeries {
         occurrenceValues: occurrenceValues,
         valueIndexValues: valueIndexValues,
       ),
-      kontrollScore: _scoreFromPressure(pressureValues),
+      kontrollScore: controlData.kontrollScore,
       macd: _macd(pressureValues),
       monthlyBars: monthlyBars,
       latestImpactLabel: _latestImpactLabel(monthlyBars),
@@ -229,9 +229,10 @@ class StatsCategoryScopeSeries {
       return const _StatsCategoryControlData(
         controlBars: <StatsControlBar>[],
         secondaryLine: <StatsSeriesPoint>[],
-        secondaryMetricLabel: 'Ft/kiugras',
+        secondaryMetricLabel: 'kiugras index',
         secondaryReferenceAmount: 0,
         dynamicEmaPeriod: 0,
+        kontrollScore: 100,
       );
     }
     final thresholdEnabled = threshold > 0;
@@ -262,7 +263,7 @@ class StatsCategoryScopeSeries {
             .toDouble(),
     ];
     final smoothedControl = _ema(rawControl, emaPeriod);
-    final secondaryRawValues = _expenseSecondaryRawValues(
+    final secondaryRawValues = _expenseSecondaryIndexValues(
       threshold: threshold,
       dailyScopeAmounts: dailyScopeAmounts,
       window: emaPeriod,
@@ -285,45 +286,66 @@ class StatsCategoryScopeSeries {
         for (var i = 0; i < secondaryValues.length; i += 1)
           StatsSeriesPoint(index: i, value: secondaryValues[i]),
       ],
-      secondaryMetricLabel: thresholdEnabled ? 'Ft/kiugras' : 'Ft/aktiv nap',
+      secondaryMetricLabel: thresholdEnabled
+          ? 'kiugras index'
+          : 'aktiv nap index',
       secondaryReferenceAmount: _average(referenceValues),
       dynamicEmaPeriod: emaPeriod,
+      kontrollScore: _scoreFromPressure(smoothedControl),
     );
   }
 
-  static List<double> _expenseSecondaryRawValues({
+  static List<double> _expenseSecondaryIndexValues({
     required double threshold,
     required List<double> dailyScopeAmounts,
     required int window,
   }) {
     final thresholdEnabled = threshold > 0;
+    if (!thresholdEnabled) {
+      return _activeIntensityIndexValues(dailyScopeAmounts);
+    }
     return [
       for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        _expenseSecondaryRawValue(
-          thresholdEnabled: thresholdEnabled,
+        _expenseSpikeSeverityIndex(
           threshold: threshold,
           windowAmounts: _rollingWindow(dailyScopeAmounts, i, window),
         ),
     ];
   }
 
-  static double _expenseSecondaryRawValue({
-    required bool thresholdEnabled,
+  static double _expenseSpikeSeverityIndex({
     required double threshold,
     required List<double> windowAmounts,
   }) {
-    var numerator = 0.0;
-    var denominator = 0;
+    if (threshold <= 0) return 0;
+    var severityTotal = 0.0;
+    var hitCount = 0;
     for (final amount in windowAmounts) {
-      final active = amount > 0;
-      final included = thresholdEnabled
-          ? amount >= threshold && active
-          : active;
-      if (!included) continue;
-      numerator += amount;
-      denominator += 1;
+      if (amount < threshold || amount <= 0) continue;
+      severityTotal += ((amount - threshold) / threshold * 100)
+          .clamp(0, 100)
+          .toDouble();
+      hitCount += 1;
     }
-    return denominator > 0 ? numerator / denominator : 0;
+    return hitCount > 0 ? severityTotal / hitCount : 0;
+  }
+
+  static List<double> _activeIntensityIndexValues(List<double> amounts) {
+    final activeAmounts = amounts.where((amount) => amount > 0).toList();
+    if (amounts.isEmpty) return const <double>[];
+    if (activeAmounts.isEmpty) return List<double>.filled(amounts.length, 0);
+    final minActive = activeAmounts.fold<double>(activeAmounts.first, math.min);
+    final maxActive = activeAmounts.fold<double>(activeAmounts.first, math.max);
+    final spread = maxActive - minActive;
+    return [
+      for (final amount in amounts)
+        if (amount <= 0)
+          50
+        else if (spread <= 0)
+          50
+        else
+          (50 + 50 * ((amount - minActive) / spread)).clamp(50, 100).toDouble(),
+    ];
   }
 
   static _StatsCategoryControlData _incomeControlData({
@@ -333,35 +355,63 @@ class StatsCategoryScopeSeries {
       return const _StatsCategoryControlData(
         controlBars: <StatsControlBar>[],
         secondaryLine: <StatsSeriesPoint>[],
-        secondaryMetricLabel: 'Ft/aktiv nap',
+        secondaryMetricLabel: 'elteres index',
         secondaryReferenceAmount: 0,
         dynamicEmaPeriod: 0,
+        kontrollScore: 50,
       );
     }
     final monthlyTotals = [for (final month in graphMonths) month.scopeTotal];
     final monthlyReference = _average(monthlyTotals);
-    final secondaryValues = <double>[];
-    var activeDayTotal = 0;
-    var incomeTotal = 0.0;
-    for (final month in graphMonths) {
-      final activeDays = month.days.where((day) => day.scopeAmount > 0).length;
-      activeDayTotal += activeDays;
-      incomeTotal += month.scopeTotal;
-      secondaryValues.add(activeDays > 0 ? month.scopeTotal / activeDays : 0);
+    final activeDayCounts = [
+      for (final month in graphMonths)
+        month.days.where((day) => day.scopeAmount > 0).length.toDouble(),
+    ];
+    final activeDayReference = _average(
+      activeDayCounts.where((days) => days > 0),
+    );
+    final totalIndexes = [
+      for (final total in monthlyTotals)
+        (50 * _ratio(total, monthlyReference)).clamp(0, 100).toDouble(),
+    ];
+    final activeDayIndexes = [
+      for (final days in activeDayCounts)
+        (50 * _ratio(days, activeDayReference)).clamp(0, 100).toDouble(),
+    ];
+    final stabilityIndexes = <double>[];
+    for (var i = 0; i < totalIndexes.length; i += 1) {
+      if (i == 0) {
+        stabilityIndexes.add(50);
+        continue;
+      }
+      final delta = (totalIndexes[i] - totalIndexes[i - 1]).abs();
+      stabilityIndexes.add((100 - delta * 1.2).clamp(0, 100).toDouble());
     }
+    final incomeHealthValues = [
+      for (var i = 0; i < monthlyTotals.length; i += 1)
+        (0.55 * totalIndexes[i] +
+                0.25 * activeDayIndexes[i] +
+                0.20 * stabilityIndexes[i])
+            .clamp(0, 100)
+            .toDouble(),
+    ];
+    final rawDeviationValues = [
+      for (var i = 0; i < monthlyTotals.length; i += 1)
+        (0.65 * (totalIndexes[i] - 50).abs() * 2 +
+                0.35 * (activeDayIndexes[i] - 50).abs() * 2)
+            .clamp(0, 100)
+            .toDouble(),
+    ];
+    final secondaryValues = _ema(rawDeviationValues, 2);
     return _StatsCategoryControlData(
       controlBars: [
-        for (var i = 0; i < monthlyTotals.length; i += 1)
+        for (var i = 0; i < incomeHealthValues.length; i += 1)
           StatsControlBar(
             index: i,
-            value: (50 * _ratio(monthlyTotals[i], monthlyReference))
-                .clamp(0, 100)
-                .toDouble(),
+            value: incomeHealthValues[i],
             colorHex: _controlColor(
               activeType: TransactionType.income,
-              value: (50 * _ratio(monthlyTotals[i], monthlyReference))
-                  .clamp(0, 100)
-                  .toDouble(),
+              value: incomeHealthValues[i],
             ),
           ),
       ],
@@ -369,11 +419,10 @@ class StatsCategoryScopeSeries {
         for (var i = 0; i < secondaryValues.length; i += 1)
           StatsSeriesPoint(index: i, value: secondaryValues[i]),
       ],
-      secondaryMetricLabel: 'Ft/aktiv nap',
-      secondaryReferenceAmount: activeDayTotal > 0
-          ? incomeTotal / activeDayTotal
-          : 0,
+      secondaryMetricLabel: 'elteres index',
+      secondaryReferenceAmount: monthlyReference,
       dynamicEmaPeriod: 0,
+      kontrollScore: _scoreFromIncomeHealth(incomeHealthValues),
     );
   }
 
@@ -454,6 +503,18 @@ class StatsCategoryScopeSeries {
     final recent = _average(pressureValues.skip(split));
     final worseningPenalty = math.max(0, recent - prior) * 0.5;
     return (100 - recent - worseningPenalty).clamp(0, 100).toDouble();
+  }
+
+  static double _scoreFromIncomeHealth(List<double> incomeHealthValues) {
+    if (incomeHealthValues.isEmpty) return 50;
+    if (incomeHealthValues.length == 1) {
+      return incomeHealthValues.single.clamp(0, 100).toDouble();
+    }
+    final split = math.max(1, incomeHealthValues.length ~/ 2);
+    final prior = _average(incomeHealthValues.take(split));
+    final recent = _average(incomeHealthValues.skip(split));
+    final declinePenalty = math.max(0, prior - recent) * 0.5;
+    return (recent - declinePenalty).clamp(0, 100).toDouble();
   }
 
   static List<StatsMacdBar> _macd(
@@ -702,6 +763,7 @@ class _StatsCategoryControlData {
     required this.secondaryMetricLabel,
     required this.secondaryReferenceAmount,
     required this.dynamicEmaPeriod,
+    required this.kontrollScore,
   });
 
   final List<StatsControlBar> controlBars;
@@ -709,4 +771,5 @@ class _StatsCategoryControlData {
   final String secondaryMetricLabel;
   final double secondaryReferenceAmount;
   final int dynamicEmaPeriod;
+  final double kontrollScore;
 }
