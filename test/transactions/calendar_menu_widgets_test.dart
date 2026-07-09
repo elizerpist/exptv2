@@ -799,7 +799,7 @@ void main() {
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
     expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
-    expect(find.text('SCOPE TREND'), findsOneWidget);
+    expect(find.text('SCOPE SCORE'), findsOneWidget);
   });
 }
 
