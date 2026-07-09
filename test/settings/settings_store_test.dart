@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/data/settings_repository.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/state/settings_store.dart';
@@ -186,6 +187,39 @@ void main() {
         store.themeSettings.contentSurfaceStyle,
         ExpenseSurfaceInteraction.insetInset,
       );
+    },
+  );
+
+  test(
+    'summary pill surface survives native theme response without legacy key',
+    () async {
+      await store.start();
+      DebugConsole.clear();
+
+      final response = Completer<Map<String, Object?>>();
+      themeUpdateResponses.add(response);
+
+      final requested = store.themeSettings.copyWith(
+        summaryPillSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+      );
+      final future = store.updateThemeSettings(requested);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        store.themeSettings.summaryPillSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralInset,
+      );
+
+      final nativeResponse = Map<String, Object?>.from(requested.toMap())
+        ..remove('summaryPillSurfaceStyle');
+      response.complete(nativeResponse);
+      await future;
+
+      expect(
+        store.themeSettings.summaryPillSurfaceStyle,
+        ExpenseSurfaceInteraction.neutralInset,
+      );
+      expect(DebugConsole.allText, contains('summary=neutralInset'));
     },
   );
 }

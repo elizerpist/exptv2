@@ -36,6 +36,7 @@ void main() {
                   'boxColor': 'white',
                   'buttonSurfaceStyle': 'raisedInset',
                   'contentSurfaceStyle': 'insetInset',
+                  'summaryPillSurfaceStyle': 'neutralInset',
                   'ghostLogboxSurfaceStyle': 'insetInset',
                   'ghostLogboxSettings': <String, Object?>{
                     'borderStyle': 'dashed',
@@ -265,6 +266,10 @@ void main() {
       ExpenseSurfaceInteraction.insetInset,
     );
     expect(
+      settings.themeSettings.summaryPillSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralInset,
+    );
+    expect(
       settings.themeSettings.ghostLogboxSurfaceStyle,
       ExpenseSurfaceInteraction.insetInset,
     );
@@ -318,6 +323,7 @@ void main() {
         'boxColor': 'gray',
         'buttonSurfaceStyle': 'neutralInset',
         'contentSurfaceStyle': 'neutralInset',
+        'summaryPillSurfaceStyle': 'neutralInset',
         'ghostLogboxSurfaceStyle': 'insetInset',
         'ghostLogboxSettings': <String, Object?>{
           'borderStyle': 'normal',
@@ -362,6 +368,10 @@ void main() {
 
     expect(updated.magnetType, MagnetType.adaptive);
     expect(
+      updated.summaryPillSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralInset,
+    );
+    expect(
       updated.ghostLogboxSurfaceStyle,
       ExpenseSurfaceInteraction.insetInset,
     );
@@ -401,6 +411,7 @@ void main() {
     expect(payload['cardColor'], 'darkgray');
     expect(payload['buttonSurfaceStyle'], 'neutralInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
+    expect(payload['summaryPillSurfaceStyle'], 'neutralInset');
     expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
     expect(payload['categoryMenuColor'], 'gray');
     expect(payload['categoryCardColor'], 'white');

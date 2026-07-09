@@ -34,6 +34,7 @@ class ExpenseSettingsStore(context: Context) {
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
             "buttonSurfaceStyle" to prefs.getString(KEY_BUTTON_SURFACE_STYLE, "neutralNeutral"),
             "contentSurfaceStyle" to prefs.getString(KEY_CONTENT_SURFACE_STYLE, "neutralNeutral"),
+            "summaryPillSurfaceStyle" to prefs.getString(KEY_SUMMARY_PILL_SURFACE_STYLE, "neutralNeutral"),
             "categoryMenuColor" to categoryColor(prefs.getString(KEY_CATEGORY_MENU_COLOR, "gray")),
             "categoryCardColor" to categoryColor(prefs.getString(KEY_CATEGORY_CARD_COLOR, "gray")),
             "categoryCardSurfaceStyle" to prefs.getString(KEY_CATEGORY_CARD_SURFACE_STYLE, "neutralNeutral"),
@@ -120,6 +121,7 @@ class ExpenseSettingsStore(context: Context) {
         val theme = legacyTheme(args["theme"]?.toString())
         val buttonSurfaceStyle = args["buttonSurfaceStyle"]?.toString() ?: "neutralNeutral"
         val contentSurfaceStyle = args["contentSurfaceStyle"]?.toString() ?: "neutralNeutral"
+        val summaryPillSurfaceStyle = args["summaryPillSurfaceStyle"]?.toString() ?: "neutralNeutral"
         val ghostLogboxSurfaceStyle = args["ghostLogboxSurfaceStyle"]?.toString()?.takeIf { it.isNotBlank() }
             ?: legacyGhostLogboxSurfaceStyle(legacyDesignProfile(buttonSurfaceStyle, contentSurfaceStyle))
         val ghostLogboxSettings = args["ghostLogboxSettings"] as? Map<*, *> ?: emptyMap<Any?, Any?>()
@@ -132,6 +134,7 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_BOX_COLOR, args["boxColor"]?.toString() ?: "gray")
             .putString(KEY_BUTTON_SURFACE_STYLE, buttonSurfaceStyle)
             .putString(KEY_CONTENT_SURFACE_STYLE, contentSurfaceStyle)
+            .putString(KEY_SUMMARY_PILL_SURFACE_STYLE, summaryPillSurfaceStyle)
             .putString(KEY_CATEGORY_MENU_COLOR, categoryColor(args["categoryMenuColor"]))
             .putString(KEY_CATEGORY_CARD_COLOR, categoryColor(args["categoryCardColor"]))
             .putString(KEY_CATEGORY_CARD_SURFACE_STYLE, args["categoryCardSurfaceStyle"]?.toString() ?: "neutralNeutral")
@@ -546,6 +549,7 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BOX_COLOR = "boxColor"
         private const val KEY_BUTTON_SURFACE_STYLE = "buttonSurfaceStyle"
         private const val KEY_CONTENT_SURFACE_STYLE = "contentSurfaceStyle"
+        private const val KEY_SUMMARY_PILL_SURFACE_STYLE = "summaryPillSurfaceStyle"
         private const val KEY_CATEGORY_MENU_COLOR = "categoryMenuColor"
         private const val KEY_CATEGORY_CARD_COLOR = "categoryCardColor"
         private const val KEY_CATEGORY_CARD_SURFACE_STYLE = "categoryCardSurfaceStyle"

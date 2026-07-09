@@ -130,6 +130,7 @@ class SettingsStore extends ChangeNotifier {
   String _themeSignature() {
     return 'button=${_themeSettings.buttonSurfaceStyle.nativeValue} '
         'content=${_themeSettings.contentSurfaceStyle.nativeValue} '
+        'summary=${_themeSettings.summaryPillSurfaceStyle.nativeValue} '
         'bg=${_themeSettings.backgroundColor.nativeValue} '
         'card=${_themeSettings.cardColor.nativeValue} '
         'box=${_themeSettings.boxColor.nativeValue} '

@@ -180,6 +180,7 @@ class ExpenseSettingsStoreSecurityTest {
             mapOf(
                 "buttonSurfaceStyle" to "raisedInset",
                 "contentSurfaceStyle" to "insetInset",
+                "summaryPillSurfaceStyle" to "neutralInset",
                 "ghostLogboxSurfaceStyle" to "insetInset",
                 "ghostLogboxSettings" to mapOf(
                     "borderStyle" to "normal",
@@ -194,6 +195,7 @@ class ExpenseSettingsStoreSecurityTest {
         )
 
         val nested = updated["ghostLogboxSettings"] as Map<*, *>
+        assertEquals("neutralInset", updated["summaryPillSurfaceStyle"])
         assertEquals("insetInset", updated["ghostLogboxSurfaceStyle"])
         assertEquals("normal", nested["borderStyle"])
         assertEquals(false, nested["backgroundOpacityEnabled"])
@@ -205,6 +207,7 @@ class ExpenseSettingsStoreSecurityTest {
 
         val loaded = store.loadThemeSettings()
         val loadedNested = loaded["ghostLogboxSettings"] as Map<*, *>
+        assertEquals("neutralInset", loaded["summaryPillSurfaceStyle"])
         assertEquals("insetInset", loaded["ghostLogboxSurfaceStyle"])
         assertEquals("gray", loadedNested["textTone"])
         assertEquals(false, loadedNested["expectedLabelEnabled"])

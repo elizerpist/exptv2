@@ -461,11 +461,14 @@ class NativeBridge {
   Future<AppThemeSettings> expenseUpdateThemeSettings(
     AppThemeSettings settings,
   ) async {
+    final fallback = settings.toMap();
     final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateThemeSettings',
-      settings.toMap(),
+      fallback,
     );
-    return AppThemeSettings.fromMap(row ?? settings.toMap());
+    return AppThemeSettings.fromMap(
+      row == null ? fallback : <dynamic, dynamic>{...fallback, ...row},
+    );
   }
 
   Future<FastInfoConfig> expenseUpdateFastInfoConfig(
