@@ -178,10 +178,7 @@ void main() {
   test('legacy token backheader styles fall back to classic', () {
     expect(BackheaderStyle.fromAny('heroToken'), BackheaderStyle.classic);
     expect(BackheaderStyle.fromAny('orbitBudget'), BackheaderStyle.classic);
-    expect(
-      BackheaderStyle.fromAny('ambulanceSkin'),
-      BackheaderStyle.ambulanceSkin,
-    );
+    expect(BackheaderStyle.fromAny('ambulanceSkin'), BackheaderStyle.classic);
     expect(
       AppThemeSettings.fromMap(const <dynamic, dynamic>{
         'backheaderStyle': 'heroToken',
@@ -215,7 +212,7 @@ void main() {
     expect(find.text('C - Hero Token'), findsNothing);
     expect(find.text('D - Orbit Budget'), findsNothing);
     expect(find.text('E - Center Badge Budget'), findsOneWidget);
-    expect(find.text('Mentők skin'), findsOneWidget);
+    expect(find.text('Mentők skin'), findsNothing);
     expect(find.text('A - Color Field Partition'), findsNothing);
     expect(find.text('B - Partition Dashboard'), findsNothing);
     expect(find.text('E - Mosaic Budget'), findsNothing);
@@ -238,7 +235,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('backheader-style-preview-ambulanceSkin')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 

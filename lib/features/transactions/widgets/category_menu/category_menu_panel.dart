@@ -5,6 +5,41 @@ import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
 import 'category_card.dart';
 
+class CategoryMenuSheetRequest {
+  const CategoryMenuSheetRequest({
+    required this.cardKey,
+    required this.panelKey,
+    required this.debugLabel,
+    required this.topOffset,
+    required this.activeType,
+    required this.activeCategory,
+    required this.selectedCategoryIds,
+    required this.onSelect,
+    required this.onApply,
+    required this.onModify,
+    required this.onDelete,
+    required this.onAdd,
+    required this.onClosed,
+  });
+
+  final Key cardKey;
+  final Key panelKey;
+  final String debugLabel;
+  final double topOffset;
+  final TransactionType activeType;
+  final TransactionCategory? activeCategory;
+  final Set<int> selectedCategoryIds;
+  final ValueChanged<TransactionCategory> onSelect;
+  final ValueChanged<Set<int>> onApply;
+  final ValueChanged<TransactionCategory> onModify;
+  final ValueChanged<TransactionCategory> onDelete;
+  final VoidCallback onAdd;
+  final VoidCallback onClosed;
+}
+
+typedef CategoryMenuSheetRequested =
+    void Function(CategoryMenuSheetRequest request);
+
 class CategoryMenuPanel extends StatefulWidget {
   const CategoryMenuPanel({
     super.key,
@@ -24,7 +59,6 @@ class CategoryMenuPanel extends StatefulWidget {
     this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
-    this.activeBackgroundColor = AppColors.primaryActiveBackground,
     this.addButtonPlacement = CategoryMenuAddButtonPlacement.card,
   });
 
@@ -44,7 +78,6 @@ class CategoryMenuPanel extends StatefulWidget {
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
-  final Color activeBackgroundColor;
   final CategoryMenuAddButtonPlacement addButtonPlacement;
 
   @override
@@ -165,7 +198,6 @@ class _CategoryMenuPanelState extends State<CategoryMenuPanel> {
                       cardSurfaceStyle: widget.cardSurfaceStyle,
                       avatarSurfaceStyle: widget.avatarSurfaceStyle,
                       accentColor: widget.accentColor,
-                      activeBackgroundColor: widget.activeBackgroundColor,
                     );
                   },
                 ),
@@ -269,87 +301,89 @@ class _CategoryUtilityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18);
-    return ExpensePressable(
-      enabled: surfaceStyle.hasPressEffect,
-      forcePressed: active,
-      builder: (context, pressed) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: ExpenseSurfaceContainer(
-            surfaceKey: ValueKey('category-utility-surface-$title'),
-            style: surfaceStyle,
-            color: surfaceColor,
-            borderRadius: radius,
-            pressed: pressed,
-            padding: const EdgeInsets.fromLTRB(12, 15, 12, 18),
-            neutralBorder: Border.all(
-              color: active ? accentColor : AppColors.gray200,
-              width: active ? 2 : 1,
-            ),
-            neutralShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                offset: const Offset(0, 2),
-                blurRadius: 4,
-              ),
-            ],
-            child: Column(
-              children: [
-                Container(
-                  width: 65,
-                  height: 65,
-                  decoration: BoxDecoration(
-                    color: avatarColor,
-                    borderRadius: BorderRadius.circular(32.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        offset: const Offset(0, 2),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: avatarLabel == null
-                      ? Icon(icon, color: AppColors.white, size: 34)
-                      : Text(
-                          avatarLabel!,
-                          style: const TextStyle(
-                            color: AppColors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: ExpensePressable(
+        enabled: surfaceStyle.hasPressEffect,
+        forcePressed: active,
+        builder: (context, pressed) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              ExpenseSurfaceContainer(
+                surfaceKey: ValueKey('category-utility-surface-$title'),
+                style: surfaceStyle,
+                color: surfaceColor,
+                borderRadius: radius,
+                pressed: pressed,
+                padding: const EdgeInsets.fromLTRB(12, 15, 12, 18),
+                neutralBorder: Border.all(color: AppColors.gray200),
+                neutralShadow: categoryNeutralShadow(surfaceStyle),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 65,
+                      height: 65,
+                      decoration: BoxDecoration(
+                        color: avatarColor,
+                        borderRadius: BorderRadius.circular(32.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.12),
+                            offset: const Offset(0, 2),
+                            blurRadius: 4,
                           ),
-                        ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: avatarLabel == null
+                          ? Icon(icon, color: AppColors.white, size: 34)
+                          : Text(
+                              avatarLabel!,
+                              style: const TextStyle(
+                                color: AppColors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.gray800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.gray500,
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.gray800,
-                  ),
+              ),
+              if (active)
+                CategoryActiveBorder(
+                  key: ValueKey('category-utility-active-border-$title'),
+                  radius: radius,
+                  color: accentColor,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.gray500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }

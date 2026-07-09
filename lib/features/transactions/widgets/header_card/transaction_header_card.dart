@@ -80,7 +80,7 @@ class TransactionHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibleBalanceText = balanceHidden ? '••••••• Ft' : balanceText;
     final resolvedContentOpacity = contentOpacity ?? (expanded ? 0.0 : 1.0);
-    final ambulanceSkin = backheaderStyle == BackheaderStyle.ambulanceSkin;
+    final ambulanceSkin = magnetType == MagnetType.ambulanceSkin;
     final resolvedCardColor = ambulanceSkin
         ? const Color(0xFFF3C542)
         : cardColor;

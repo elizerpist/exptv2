@@ -163,143 +163,171 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               builder: (context) {
                 final actionBottomInset =
                     MediaQuery.paddingOf(context).bottom + 8;
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    SlideUpPanelMetrics.horizontalInset,
-                    14,
-                    SlideUpPanelMetrics.horizontalInset,
-                    actionBottomInset,
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (widget.visible) {
-                        _logContentMetrics(
-                          availableHeight: constraints.maxHeight,
-                          panelHeight: panelHeight,
-                          keyboardInset: 0,
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: 42,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: AppColors.gray200,
-                                borderRadius: BorderRadius.circular(2),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          SlideUpPanelMetrics.horizontalInset,
+                          14,
+                          SlideUpPanelMetrics.horizontalInset,
+                          0,
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (widget.visible) {
+                              _logContentMetrics(
+                                availableHeight: constraints.maxHeight,
+                                panelHeight: panelHeight,
+                                keyboardInset: 0,
+                              );
+                            }
+                            return SizedBox.expand(
+                              key: const ValueKey(
+                                'transaction-editor-scroll-body',
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            _title(type),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.gray800,
-                            ),
-                          ),
-                          if (_editing &&
-                              _linkedNotificationEventId != null) ...[
-                            const SizedBox(height: 6),
-                            Center(
-                              child: TextButton.icon(
-                                key: const ValueKey(
-                                  'transaction-open-notification-event',
-                                ),
-                                onPressed: _saving
-                                    ? null
-                                    : _openLinkedNotificationEvent,
-                                icon: const Icon(
-                                  Icons.notifications_active_outlined,
-                                  size: 18,
-                                ),
-                                label: const Text('Ugrás az üzenethez'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Center(
+                                    child: Container(
+                                      width: 42,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.gray200,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _title(type),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.gray800,
+                                    ),
+                                  ),
+                                  if (_editing &&
+                                      _linkedNotificationEventId != null) ...[
+                                    const SizedBox(height: 6),
+                                    Center(
+                                      child: TextButton.icon(
+                                        key: const ValueKey(
+                                          'transaction-open-notification-event',
+                                        ),
+                                        onPressed: _saving
+                                            ? null
+                                            : _openLinkedNotificationEvent,
+                                        icon: const Icon(
+                                          Icons.notifications_active_outlined,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Ugrás az üzenethez'),
+                                      ),
+                                    ),
+                                  ] else if (_editing &&
+                                      _notificationLinkLoading) ...[
+                                    const SizedBox(height: 6),
+                                    const Center(
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 14),
+                                  ThemedPillField(
+                                    debugLabel: '$debugLabel.name',
+                                    controller: _name,
+                                    focusNode: _nameFocus,
+                                    label: 'Tranzakció neve',
+                                    surfaceColor: expenseTheme.fieldSurface,
+                                    surfaceStyle:
+                                        expenseTheme.contentSurfaceStyle,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  AmountField(
+                                    controller: _amount,
+                                    focusNode: _amountFocus,
+                                    debugLabel: '$debugLabel.amount',
+                                    surfaceColor: expenseTheme.fieldSurface,
+                                    surfaceStyle:
+                                        expenseTheme.contentSurfaceStyle,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  CategorySelectorField(
+                                    selected: _category,
+                                    onTap: _openCategoryPicker,
+                                    surfaceColor: expenseTheme.fieldSurface,
+                                    surfaceStyle:
+                                        expenseTheme.contentSurfaceStyle,
+                                  ),
+                                  if (_categoryPickerOpen) ...[
+                                    const SizedBox(height: 8),
+                                    CategoryScrollPicker(
+                                      key: _categoryPickerBoundaryKey,
+                                      keyPrefix: 'transaction-category',
+                                      categories: categories,
+                                      selected: _category,
+                                      onSelected: _selectCategory,
+                                    ),
+                                  ],
+                                  const Spacer(),
+                                  DateTimeFields(
+                                    dateController: _date,
+                                    timeController: _time,
+                                    onPickDate: _pickDate,
+                                    onPickTime: _pickTime,
+                                    dateFocusNode: _dateFocus,
+                                    timeFocusNode: _timeFocus,
+                                    debugLabelPrefix: debugLabel,
+                                    surfaceColor: expenseTheme.fieldSurface,
+                                    surfaceStyle:
+                                        expenseTheme.contentSurfaceStyle,
+                                  ),
+                                  if (_error != null) ...[
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _error!,
+                                      style: const TextStyle(
+                                        color: AppColors.expense,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ),
-                          ] else if (_editing && _notificationLinkLoading) ...[
-                            const SizedBox(height: 6),
-                            const Center(
-                              child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          ThemedPillField(
-                            debugLabel: '$debugLabel.name',
-                            controller: _name,
-                            focusNode: _nameFocus,
-                            label: 'Tranzakció neve',
-                            surfaceColor: expenseTheme.fieldSurface,
-                            surfaceStyle: expenseTheme.contentSurfaceStyle,
-                          ),
-                          const SizedBox(height: 12),
-                          AmountField(
-                            controller: _amount,
-                            focusNode: _amountFocus,
-                            debugLabel: '$debugLabel.amount',
-                            surfaceColor: expenseTheme.fieldSurface,
-                            surfaceStyle: expenseTheme.contentSurfaceStyle,
-                          ),
-                          const SizedBox(height: 12),
-                          CategorySelectorField(
-                            selected: _category,
-                            onTap: _openCategoryPicker,
-                            surfaceColor: expenseTheme.fieldSurface,
-                            surfaceStyle: expenseTheme.contentSurfaceStyle,
-                          ),
-                          if (_categoryPickerOpen) ...[
-                            const SizedBox(height: 8),
-                            CategoryScrollPicker(
-                              key: _categoryPickerBoundaryKey,
-                              keyPrefix: 'transaction-category',
-                              categories: categories,
-                              selected: _category,
-                              onSelected: _selectCategory,
-                            ),
-                          ],
-                          const Spacer(),
-                          DateTimeFields(
-                            dateController: _date,
-                            timeController: _time,
-                            onPickDate: _pickDate,
-                            onPickTime: _pickTime,
-                            dateFocusNode: _dateFocus,
-                            timeFocusNode: _timeFocus,
-                            debugLabelPrefix: debugLabel,
-                            surfaceColor: expenseTheme.fieldSurface,
-                            surfaceStyle: expenseTheme.contentSurfaceStyle,
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _error!,
-                              style: const TextStyle(color: AppColors.expense),
-                            ),
-                          ],
-                          const SizedBox(height: 0),
-                          ExpenseSurfaceButton(
-                            buttonKey: const ValueKey(
-                              'transaction-save-button',
-                            ),
-                            label: 'Mentés',
-                            onPressed: _saving ? null : _save,
-                            saving: _saving,
-                            surfaceStyle: expenseTheme.buttonSurfaceStyle,
-                            color: expenseTheme.accent,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        SlideUpPanelMetrics.horizontalInset,
+                        0,
+                        SlideUpPanelMetrics.horizontalInset,
+                        actionBottomInset,
+                      ),
+                      child: SizedBox(
+                        key: const ValueKey('transaction-save-footer'),
+                        width: double.infinity,
+                        child: ExpenseSurfaceButton(
+                          buttonKey: const ValueKey('transaction-save-button'),
+                          label: 'Mentés',
+                          onPressed: _saving ? null : _save,
+                          saving: _saving,
+                          surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                          color: expenseTheme.accent,
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),

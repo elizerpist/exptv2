@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_card.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_menu_panel.dart';
 import 'package:flutter/material.dart';
@@ -409,6 +410,82 @@ void main() {
         find.byKey(const ValueKey('category-card-surface-6')),
       );
       expect((card.decoration! as BoxDecoration).boxShadow, isNull);
+    },
+  );
+
+  testWidgets('category card neumorph style uses raised card shadows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryMenuPanel(
+            activeType: TransactionType.expense,
+            categories: categoryFixtures,
+            categoryTransactionCounts: const {6: 3},
+            activeCategory: null,
+            cardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+            avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+            onSelect: (_) {},
+            onModify: (_) {},
+            onDelete: (_) {},
+            onAdd: () {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    final card = tester.widget<Container>(
+      find.byKey(const ValueKey('category-card-surface-6')),
+    );
+    final shadows = (card.decoration! as BoxDecoration).boxShadow;
+    expect(shadows, hasLength(2));
+    expect(shadows!.first.offset, const Offset(7, 7));
+    expect(shadows.first.blurRadius, 15);
+  });
+
+  testWidgets(
+    'selected category card keeps border-only neumorph state until apply',
+    (tester) async {
+      Set<int>? applied;
+      const accent = Color(0xFF06B6D4);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CategoryMenuPanel(
+              activeType: TransactionType.expense,
+              categories: categoryFixtures,
+              categoryTransactionCounts: const {6: 3},
+              activeCategory: null,
+              selectedCategoryIds: const <int>{},
+              onApply: (ids) => applied = ids,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              accentColor: accent,
+              onSelect: (_) {},
+              onModify: (_) {},
+              onDelete: (_) {},
+              onAdd: () {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('category-card-6')));
+      await tester.pumpAndSettle();
+
+      final activeBorder = tester.widget<CategoryActiveBorder>(
+        find.byKey(const ValueKey('category-card-active-border-6')),
+      );
+      expect(activeBorder.color, accent);
+      expect(applied, isNull);
+
+      await tester.tap(
+        find.byKey(const ValueKey('category-menu-apply-button')),
+      );
+      expect(applied, {6});
     },
   );
 

@@ -120,7 +120,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: TransactionHeaderCard(
-            backheaderStyle: BackheaderStyle.ambulanceSkin,
+            magnetType: MagnetType.ambulanceSkin,
             balanceText: '123 Ft',
             totalIncome: 300,
             totalExpense: -100,

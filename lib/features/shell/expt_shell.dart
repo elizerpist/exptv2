@@ -30,6 +30,7 @@ import '../transactions/transaction_home_page.dart';
 import '../transactions/widgets/add_transaction_sheet.dart';
 import '../transactions/widgets/category_menu/category_editor_panel.dart';
 import '../transactions/widgets/category_menu/category_editor_sheet.dart';
+import '../transactions/widgets/category_menu/category_menu_panel.dart';
 import '../transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/recurring_manager_sheet.dart';
@@ -182,6 +183,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onBudgetTargetEditorClosed: () {
         _sheetHostKey.currentState?.closeBudgetTargetEditor();
       },
+      onCategoryMenuRequested: (request) {
+        _sheetHostKey.currentState?.openCategoryPicker(request);
+      },
       onFocusedSheetDismissRequested: () {
         _sheetHostKey.currentState?.closeAll();
       },
@@ -209,6 +213,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     return StatsPage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
+      onCategoryMenuRequested: (request) {
+        _sheetHostKey.currentState?.openCategoryPicker(request);
+      },
       onAddCategoryEditorRequested: () {
         _sheetHostKey.currentState?.openCategory();
       },
@@ -776,6 +783,7 @@ class _ShellSheetHost extends StatefulWidget {
 
 class _ShellSheetHostState extends State<_ShellSheetHost> {
   final _transactionSlotKey = GlobalKey<_TransactionSheetSlotState>();
+  final _categoryPickerSlotKey = GlobalKey<_CategoryMenuPickerSlotState>();
   final _categorySlotKey = GlobalKey<_CategorySheetSlotState>();
   final _recurringSlotKey = GlobalKey<_RecurringSheetSlotState>();
   final _budgetSlotKey = GlobalKey<_BudgetTargetSheetSlotState>();
@@ -786,6 +794,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     required String source,
     TransactionRecord? transaction,
   }) {
+    _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -805,8 +814,18 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categorySlotKey.currentState?.open(initialCategory: initialCategory);
   }
 
+  void openCategoryPicker(CategoryMenuSheetRequest request) {
+    _transactionSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
+    _categoryPickerSlotKey.currentState?.open(request);
+  }
+
   void openRecurring() {
     _transactionSlotKey.currentState?.close();
+    _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
@@ -815,6 +834,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 
   void openBackheaderLiveTuner() {
     _transactionSlotKey.currentState?.close();
+    _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -827,6 +847,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     required bool headerExpanded,
   }) {
     _transactionSlotKey.currentState?.close();
+    _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
@@ -847,6 +868,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 
   void closeAll() {
     _transactionSlotKey.currentState?.close();
+    _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -864,6 +886,13 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
             expenseTheme: widget.expenseTheme,
             resolveNotificationEventId: widget.resolveNotificationEventId,
             onOpenNotificationEvent: widget.onOpenNotificationEvent,
+          ),
+        ),
+        Positioned.fill(
+          child: _CategoryMenuPickerSlot(
+            key: _categoryPickerSlotKey,
+            store: widget.store,
+            expenseTheme: widget.expenseTheme,
           ),
         ),
         Positioned.fill(
@@ -1066,6 +1095,97 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
   int _elapsedMs(DateTime? startedAt) {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+}
+
+class _CategoryMenuPickerSlot extends StatefulWidget {
+  const _CategoryMenuPickerSlot({
+    super.key,
+    required this.store,
+    required this.expenseTheme,
+  });
+
+  final TransactionStore store;
+  final ExpenseTheme expenseTheme;
+
+  @override
+  State<_CategoryMenuPickerSlot> createState() =>
+      _CategoryMenuPickerSlotState();
+}
+
+class _CategoryMenuPickerSlotState extends State<_CategoryMenuPickerSlot> {
+  CategoryMenuSheetRequest? _request;
+
+  void open(CategoryMenuSheetRequest request) {
+    setState(() => _request = request);
+    DebugConsole.log('[CategoryMenu] shell picker open ${request.debugLabel}');
+  }
+
+  void close({bool notify = true}) {
+    final request = _request;
+    if (request == null) return;
+    setState(() => _request = null);
+    if (notify) request.onClosed();
+    DebugConsole.log(
+      '[CategoryMenu] shell picker closed ${request.debugLabel}',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final request = _request;
+    if (request == null) return const SizedBox.shrink();
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final panelHeight = (screenHeight - request.topOffset)
+        .clamp(0.0, screenHeight)
+        .toDouble();
+    return ListenableBuilder(
+      listenable: widget.store,
+      builder: (context, _) {
+        return SlideUpMenuCard(
+          cardKey: request.cardKey,
+          debugLabel: request.debugLabel,
+          visible: true,
+          panelHeight: panelHeight,
+          onDismissed: () => close(),
+          dismissOnVeilTap: false,
+          focusVeilPassthroughTop: request.topOffset,
+          dragFromHandleOnly: true,
+          dragHandleExtent: 72,
+          verticalDragBias: 1.2,
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: CategoryMenuPanel(
+              key: request.panelKey,
+              activeType: request.activeType,
+              categories: widget.store.categories,
+              categoryTransactionCounts: widget.store.categoryTransactionCounts,
+              activeCategory: request.activeCategory,
+              selectedCategoryIds: request.selectedCategoryIds,
+              onSelect: (category) {
+                request.onSelect(category);
+                close(notify: false);
+              },
+              onApply: (ids) {
+                request.onApply(ids);
+                close(notify: false);
+              },
+              onModify: request.onModify,
+              onDelete: request.onDelete,
+              onAdd: request.onAdd,
+              onClose: () => close(),
+              surfaceColor: widget.expenseTheme.categoryMenu,
+              cardSurfaceColor: widget.expenseTheme.categoryCard,
+              cardSurfaceStyle: widget.expenseTheme.categoryCardSurfaceStyle,
+              avatarSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
+              accentColor: widget.expenseTheme.accent,
+              addButtonPlacement: CategoryMenuAddButtonPlacement.card,
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

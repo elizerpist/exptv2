@@ -19,7 +19,6 @@ class CategoryCard extends StatelessWidget {
     this.cardSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
-    this.activeBackgroundColor = AppColors.primaryActiveBackground,
   });
 
   final TransactionCategory category;
@@ -32,7 +31,6 @@ class CategoryCard extends StatelessWidget {
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
-  final Color activeBackgroundColor;
 
   bool get _hasTransactions => transactionCount > 0;
 
@@ -59,56 +57,60 @@ class CategoryCard extends StatelessWidget {
                 forcePressed: active,
                 builder: (context, pressed) {
                   final radius = BorderRadius.circular(18);
-                  return ExpenseSurfaceContainer(
-                    surfaceKey: ValueKey(
-                      'category-card-surface-${category.transactionCategoryID}',
-                    ),
-                    style: cardSurfaceStyle,
-                    color: surfaceColor,
-                    borderRadius: radius,
-                    pressed: pressed,
-                    padding: const EdgeInsets.fromLTRB(12, 82, 12, 14),
-                    neutralBorder: Border.all(
-                      color: active ? accentColor : AppColors.gray200,
-                      width: active ? 2 : 1,
-                    ),
-                    neutralShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        offset: const Offset(0, 2),
-                        blurRadius: 4,
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ExpenseSurfaceContainer(
+                        surfaceKey: ValueKey(
+                          'category-card-surface-${category.transactionCategoryID}',
+                        ),
+                        style: cardSurfaceStyle,
+                        color: surfaceColor,
+                        borderRadius: radius,
+                        pressed: pressed,
+                        padding: const EdgeInsets.fromLTRB(12, 82, 12, 14),
+                        neutralBorder: Border.all(color: AppColors.gray200),
+                        neutralShadow: categoryNeutralShadow(cardSurfaceStyle),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              category.name,
+                              key: ValueKey(
+                                'category-card-title-${category.transactionCategoryID}',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.gray800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '$transactionCount tranzakció',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.gray500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          category.name,
+                      if (active)
+                        CategoryActiveBorder(
                           key: ValueKey(
-                            'category-card-title-${category.transactionCategoryID}',
+                            'category-card-active-border-${category.transactionCategoryID}',
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gray800,
-                          ),
+                          radius: radius,
+                          color: accentColor,
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '$transactionCount tranzakció',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.gray500,
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   );
                 },
               ),
@@ -178,6 +180,40 @@ class CategoryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+List<BoxShadow>? categoryNeutralShadow(ExpenseSurfaceInteraction style) {
+  if (style != ExpenseSurfaceInteraction.neutralNeutral) return null;
+  return [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.12),
+      offset: const Offset(0, 2),
+      blurRadius: 4,
+    ),
+  ];
+}
+
+class CategoryActiveBorder extends StatelessWidget {
+  const CategoryActiveBorder({
+    super.key,
+    required this.radius,
+    required this.color,
+  });
+
+  final BorderRadius radius;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: color, width: 2),
+        ),
       ),
     );
   }

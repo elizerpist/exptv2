@@ -211,18 +211,18 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                     ),
                   ),
                 ),
-              if (widget.showFocusVeil &&
-                  widget.dismissOnVeilTap &&
-                  focusVeilTapTop < availableHeight)
+              if (widget.showFocusVeil && focusVeilTapTop < availableHeight)
                 Positioned(
                   top: focusVeilTapTop,
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _handleVeilTap,
-                  ),
+                  child: widget.dismissOnVeilTap
+                      ? GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _handleVeilTap,
+                        )
+                      : const AbsorbPointer(child: SizedBox.expand()),
                 ),
               Align(
                 alignment: Alignment.bottomCenter,
@@ -514,8 +514,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
         );
         return;
       }
-      if (absDy <= _axisLockSlop ||
-          absDy < absDx * widget.verticalDragBias) {
+      if (absDy <= _axisLockSlop || absDy < absDx * widget.verticalDragBias) {
         return;
       }
       _verticalDragAccepted = true;

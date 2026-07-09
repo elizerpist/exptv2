@@ -8,7 +8,8 @@ enum MagnetType {
   budget('budget'),
   magnetcard('magnetcard'),
   adaptive('adaptive'),
-  partitionedBudget('partitionedBudget');
+  partitionedBudget('partitionedBudget'),
+  ambulanceSkin('ambulanceSkin');
 
   const MagnetType(this.nativeValue);
   final String nativeValue;
@@ -26,8 +27,7 @@ enum BackheaderStyle {
   classic('classic'),
   heroToken('heroToken'),
   orbitBudget('orbitBudget'),
-  centerBadgeBudget('centerBadgeBudget'),
-  ambulanceSkin('ambulanceSkin');
+  centerBadgeBudget('centerBadgeBudget');
 
   const BackheaderStyle(this.nativeValue);
   final String nativeValue;
@@ -35,7 +35,6 @@ enum BackheaderStyle {
   static const selectableValues = <BackheaderStyle>[
     BackheaderStyle.classic,
     BackheaderStyle.centerBadgeBudget,
-    BackheaderStyle.ambulanceSkin,
   ];
 
   static BackheaderStyle fromAny(Object? value) {
@@ -51,7 +50,6 @@ enum BackheaderStyle {
     BackheaderStyle.heroToken => 'C - Hero Token',
     BackheaderStyle.orbitBudget => 'D - Orbit Budget',
     BackheaderStyle.centerBadgeBudget => 'E - Center Badge Budget',
-    BackheaderStyle.ambulanceSkin => 'Mentők skin',
   };
 
   String get description => switch (this) {
@@ -60,8 +58,6 @@ enum BackheaderStyle {
     BackheaderStyle.orbitBudget => 'Kategóriaszínű orbit/ring budget nézet',
     BackheaderStyle.centerBadgeBudget =>
       'Középső limit/budget badge élő progress ringgel',
-    BackheaderStyle.ambulanceSkin =>
-      'Mentőautó ihletésű sárga header narancs mágnescsíkkal',
   };
 }
 
@@ -454,8 +450,12 @@ class AppThemeSettings {
 
   factory AppThemeSettings.fromMap(Map<dynamic, dynamic> map) {
     final legacyProfile = AppDesignProfile.fromAny(map['designProfile']);
+    final legacyAmbulanceBackheader =
+        map['backheaderStyle']?.toString() == 'ambulanceSkin';
     return AppThemeSettings(
-      magnetType: MagnetType.fromAny(map['magnetType']),
+      magnetType: legacyAmbulanceBackheader
+          ? MagnetType.ambulanceSkin
+          : MagnetType.fromAny(map['magnetType']),
       cardColor: AppCardColor.fromAny(map['cardColor']),
       theme: AppTheme.fromAny(map['theme']),
       backgroundColor: AppBackgroundColor.fromAny(map['backgroundColor']),

@@ -567,11 +567,17 @@ void main() {
 
     expect(find.text('Budget vizualizáció'), findsOneWidget);
     expect(find.text('Partitioned budget mágnescsík'), findsOneWidget);
+    expect(find.text('Mentők mágnescsík'), findsOneWidget);
 
     await tester.tap(find.text('Partitioned budget mágnescsík'));
     await tester.pump();
 
     expect(updated.single.magnetType, MagnetType.partitionedBudget);
+
+    await tester.tap(find.text('Mentők mágnescsík'));
+    await tester.pump();
+
+    expect(updated.last.magnetType, MagnetType.ambulanceSkin);
   });
 
   testWidgets('permissions menu opens Android permission actions', (

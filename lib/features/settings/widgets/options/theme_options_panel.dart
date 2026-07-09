@@ -72,6 +72,17 @@ class ThemeOptionsPanel extends StatelessWidget {
               ),
               SettingsRadioOption(
                 title:
+                    'Mentők mágnescsík${settings.magnetType == MagnetType.ambulanceSkin ? ' (jelenlegi)' : ''}',
+                description:
+                    'Sárga kártya és narancs progress csík ferde sárga hasábokkal',
+                selected: settings.magnetType == MagnetType.ambulanceSkin,
+                onTap: () => onChanged(
+                  settings.copyWith(magnetType: MagnetType.ambulanceSkin),
+                ),
+                preview: const _MagnetPreview(type: MagnetType.ambulanceSkin),
+              ),
+              SettingsRadioOption(
+                title:
                     'Mágneskártya${settings.magnetType == MagnetType.magnetcard ? ' (jelenlegi)' : ''}',
                 description:
                     'Felső és alsó keret, egyenes vonal az egyenleg színével',

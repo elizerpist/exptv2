@@ -1084,10 +1084,49 @@ void main() {
     final saveRect = tester.getRect(
       find.byKey(const ValueKey('transaction-save-button')),
     );
+    final footerRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-save-footer')),
+    );
+    final bodyRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-editor-scroll-body')),
+    );
     final screenHeight =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
 
-    expect(screenHeight - saveRect.bottom, lessThanOrEqualTo(12));
+    expect(saveRect.bottom, moreOrLessEquals(screenHeight - 8, epsilon: 1));
+    expect(footerRect.bottom, moreOrLessEquals(screenHeight - 8, epsilon: 1));
+    expect(bodyRect.bottom, lessThanOrEqualTo(footerRect.top));
+  });
+
+  testWidgets('recurring manager keeps add rule button fixed above safe zone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    final saveRect = tester.getRect(
+      find.byKey(const ValueKey('recurring-manager-save')),
+    );
+    final footerRect = tester.getRect(
+      find.byKey(const ValueKey('recurring-manager-footer')),
+    );
+    final bodyRect = tester.getRect(
+      find.byKey(const ValueKey('recurring-manager-scroll-body')),
+    );
+
+    expect(saveRect.bottom, moreOrLessEquals(919 - 8, epsilon: 1));
+    expect(footerRect.bottom, moreOrLessEquals(919 - 8, epsilon: 1));
+    expect(bodyRect.bottom, lessThanOrEqualTo(footerRect.top));
   });
 
   testWidgets('category sheet keeps shell navigation controls visible', (
@@ -1118,42 +1157,90 @@ void main() {
     );
   });
 
-  testWidgets(
-    'slide-up category sheet leaves shell navigation controls visible',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 919);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-      themeSettingsOverride = <String, Object?>{
-        'magnetType': 'fade',
-        'cardColor': 'lightgray',
-        'theme': 'Türkiz',
-        'backgroundColor': 'gray',
-        'boxColor': 'gray',
-        'backheaderStyle': 'classic',
-      };
+  testWidgets('slide-up category sheet covers shell navigation hit area', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+    };
 
-      await tester.pumpWidget(buildApp());
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('header-category-button')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('category-menu-slide-card')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('category-menu-add-card')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
-      expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
-    },
-  );
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-menu-add-card')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+    );
+    final navRect = tester.getRect(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    expect(sheetRect.bottom, moreOrLessEquals(919, epsilon: 1));
+    expect(sheetRect.bottom, greaterThanOrEqualTo(navRect.bottom));
+
+    await tester.tap(find.text('Stats'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('stats-page')), findsNothing);
+  });
+
+  testWidgets('stats category sheet uses real screen bottom above shell nav', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Stats'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('stats-scope-slide-card')),
+    );
+    final navRect = tester.getRect(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    expect(sheetRect.bottom, moreOrLessEquals(919, epsilon: 1));
+    expect(sheetRect.bottom, greaterThanOrEqualTo(navRect.bottom));
+
+    await tester.tap(find.text('Főoldal'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
+  });
 
   testWidgets('add category sheet keeps the picker behind and covers nav', (
     tester,

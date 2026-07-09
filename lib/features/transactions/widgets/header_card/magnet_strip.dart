@@ -46,14 +46,8 @@ class MagnetStrip extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         final customGradient = customGradientColors;
-        if (ambulanceSkin) {
-          return _AmbulanceMagnetStrip(
-            width: width,
-            height: height,
-            totalIncome: totalIncome,
-            totalExpense: totalExpense,
-          );
-        }
+        final resolvedAmbulanceSkin =
+            ambulanceSkin || type == MagnetType.ambulanceSkin;
         if (customGradient != null && customGradient.isNotEmpty) {
           return CustomPaint(
             key: ValueKey(customKey ?? 'magnet-strip-custom'),
@@ -64,6 +58,14 @@ class MagnetStrip extends StatelessWidget {
               markerStyle: customMarkerStyle,
               height: height,
             ),
+          );
+        }
+        if (resolvedAmbulanceSkin) {
+          return _AmbulanceMagnetStrip(
+            width: width,
+            height: height,
+            totalIncome: totalIncome,
+            totalExpense: totalExpense,
           );
         }
         if (type == MagnetType.budget) {
@@ -472,6 +474,10 @@ class MagnetStripPainter extends CustomPainter {
         AppColors.income,
         Color(0xFFF59E0B),
         AppColors.expense,
+      ],
+      MagnetType.ambulanceSkin => const [
+        _AmbulanceMagnetStrip.yellow,
+        _AmbulanceMagnetStrip.orange,
       ],
       MagnetType.fade => const [AppColors.income, AppColors.expense],
     };

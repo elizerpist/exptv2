@@ -37,12 +37,14 @@ class StatsPage extends StatefulWidget {
     super.key,
     required this.store,
     this.expenseTheme,
+    this.onCategoryMenuRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
   });
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
+  final CategoryMenuSheetRequested? onCategoryMenuRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
 
@@ -203,6 +205,8 @@ class _StatsPageState extends State<StatsPage>
                       panelHeight: _scopePanelHeight(context),
                       onDismissed: _closeScopeSheet,
                       dismissOnVeilTap: false,
+                      focusVeilPassthroughTop:
+                          TransactionMenuMetrics.summaryPillTop,
                       dragFromHandleOnly: true,
                       dragHandleExtent: 72,
                       verticalDragBias: 1.2,
@@ -231,7 +235,6 @@ class _StatsPageState extends State<StatsPage>
                               resolvedTheme.categoryCardSurfaceStyle,
                           avatarSurfaceStyle: resolvedTheme.buttonSurfaceStyle,
                           accentColor: resolvedTheme.accent,
-                          activeBackgroundColor: resolvedTheme.activeBackground,
                         ),
                       ),
                     ),
@@ -371,6 +374,29 @@ class _StatsPageState extends State<StatsPage>
   }
 
   void _openScopeSheet() {
+    final externalPicker = widget.onCategoryMenuRequested;
+    if (externalPicker != null) {
+      setState(() => _scopeSheetOpen = false);
+      externalPicker(
+        CategoryMenuSheetRequest(
+          cardKey: const ValueKey('stats-scope-slide-card'),
+          panelKey: const ValueKey('stats-scope-sheet'),
+          debugLabel: 'StatsCategoryScope',
+          topOffset: TransactionMenuMetrics.summaryPillTop,
+          activeType: _activeType,
+          activeCategory: null,
+          selectedCategoryIds:
+              _selectedScopeByType[_activeType] ?? const <int>{},
+          onSelect: (_) {},
+          onApply: _applyScopeSelection,
+          onModify: _openModifyCategory,
+          onDelete: widget.store.deleteCategory,
+          onAdd: _openAddCategory,
+          onClosed: _closeScopeSheet,
+        ),
+      );
+      return;
+    }
     setState(() => _scopeSheetOpen = true);
   }
 

@@ -54,6 +54,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onBudgetTargetEditorRequested,
     this.onBudgetTargetEditorClosed,
     this.onFocusedSheetDismissRequested,
+    this.onCategoryMenuRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
     this.onThemeSettingsChanged,
@@ -75,6 +76,7 @@ class TransactionHomePage extends StatefulWidget {
   final BudgetTargetEditorRequest? onBudgetTargetEditorRequested;
   final VoidCallback? onBudgetTargetEditorClosed;
   final VoidCallback? onFocusedSheetDismissRequested;
+  final CategoryMenuSheetRequested? onCategoryMenuRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
@@ -413,6 +415,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     panelHeight: _menuPanelHeight(context),
                     onDismissed: _closeCategoryMenu,
                     dismissOnVeilTap: false,
+                    focusVeilPassthroughTop: TransactionMenuMetrics.overlayTop,
                     dragFromHandleOnly: true,
                     dragHandleExtent: 72,
                     verticalDragBias: 1.2,
@@ -438,7 +441,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
                         avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                         accentColor: expenseTheme.accent,
-                        activeBackgroundColor: expenseTheme.activeBackground,
                         addButtonPlacement: CategoryMenuAddButtonPlacement.card,
                       ),
                     ),
@@ -977,6 +979,42 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     _headerPullController.stop();
     _headerPullController.value = 0;
     widget.onBudgetTargetEditorClosed?.call();
+    final externalPicker = widget.onCategoryMenuRequested;
+    if (externalPicker != null) {
+      setState(() {
+        _headerExpanded = false;
+        _fastInfoExtent.value = 0;
+        _categoryMode = null;
+        _categoryEditorOpen = false;
+        _budgetEditorItem = null;
+        _editingCategory = null;
+      });
+      externalPicker(
+        CategoryMenuSheetRequest(
+          cardKey: const ValueKey('category-menu-slide-card'),
+          panelKey: const ValueKey('category-picker-panel'),
+          debugLabel: 'CategoryMenu',
+          topOffset: TransactionMenuMetrics.overlayTop,
+          activeType: widget.store.activeType,
+          activeCategory: widget.store.activeCategory,
+          selectedCategoryIds: widget.store.activeCategoryIds,
+          onSelect: _selectCategory,
+          onApply: _applyCategoryFilters,
+          onModify: _openModifyCategory,
+          onDelete: _deleteCategory,
+          onAdd: _openAddCategory,
+          onClosed: _closeCategoryMenu,
+        ),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        DebugConsole.log(
+          '[CategoryMenu] shell request first frame '
+          'elapsed=${_elapsedMs(requestedAt)}ms',
+        );
+      });
+      return;
+    }
     setState(() {
       if (closing) {
         _categoryMode = null;
@@ -1006,6 +1044,16 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   void _openAddCategory() {
     final externalEditor = widget.onAddCategoryEditorRequested;
+    if (externalEditor != null) {
+      setState(() {
+        _categoryMode = null;
+        _categoryEditorOpen = false;
+        _editingCategory = null;
+        _budgetEditorItem = null;
+      });
+      externalEditor();
+      return;
+    }
     setState(() {
       _categoryMode = CategoryOverlayMode.picker;
       _categoryEditorOpen = externalEditor == null;

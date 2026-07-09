@@ -423,6 +423,51 @@ void main() {
     expect(decoration.color, const Color(0xFFFBBF24));
   });
 
+  testWidgets('stats custom magnet is not overridden by ambulance theme', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        magnetType: MagnetType.ambulanceSkin,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('stats-magnet-categoryScope')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('magnet-strip-ambulanceSkin')),
+      findsNothing,
+    );
+  });
+
   testWidgets('stats page passes theme month card color into annual calendar', (
     tester,
   ) async {

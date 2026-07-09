@@ -27,7 +27,6 @@ class BackheaderStylePreview extends StatelessWidget {
 
   Color get _background => switch (style) {
     BackheaderStyle.orbitBudget => const Color(0xFF22C55E),
-    BackheaderStyle.ambulanceSkin => const Color(0xFFF3C542),
     _ => AppColors.gray100,
   };
 
@@ -74,34 +73,6 @@ class BackheaderStylePreview extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [_MiniDot(), SizedBox(width: 3), _MiniDot()],
-            ),
-          ),
-        ],
-      ),
-      BackheaderStyle.ambulanceSkin => Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _line(AppColors.gray800),
-          const SizedBox(height: 7),
-          SizedBox(
-            height: 8,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  const ColoredBox(color: Color(0xFFE87522)),
-                  Row(
-                    children: const [
-                      _MiniParallelogram(),
-                      SizedBox(width: 5),
-                      _MiniParallelogram(),
-                      SizedBox(width: 5),
-                      _MiniParallelogram(),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ),
         ],
@@ -153,22 +124,6 @@ class BackheaderStylePreview extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MiniParallelogram extends StatelessWidget {
-  const _MiniParallelogram();
-
-  @override
-  Widget build(BuildContext context) {
-    return Transform(
-      transform: Matrix4.skewX(-0.35),
-      child: const SizedBox(
-        width: 8,
-        height: 8,
-        child: ColoredBox(color: Color(0xFFFFD84D)),
       ),
     );
   }
