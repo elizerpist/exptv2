@@ -15,7 +15,10 @@ class CalendarJoystickRange {
     const min = 0.0;
     final safeFallback = fallbackMax > min ? fallbackMax : 50000.0;
     final sourceMax = math.max(currentValue, observedMax);
-    final rawMax = sourceMax > min ? sourceMax * 1.2 : safeFallback;
+    final rawMax = math.max(
+      sourceMax > min ? sourceMax * 1.2 : safeFallback,
+      safeFallback,
+    );
     final max = _niceCeil(rawMax);
     final step = _niceStep(max / 80);
     return CalendarJoystickRange(min: min, max: max, step: step);

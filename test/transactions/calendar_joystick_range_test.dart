@@ -40,6 +40,17 @@ void main() {
       expect(range.step, 1000);
     });
 
+    test('keeps fallback as minimum ceiling with sparse observed data', () {
+      final range = CalendarJoystickRange.adaptive(
+        currentValue: 5000,
+        observedMax: 6000,
+        fallbackMax: 50000,
+      );
+
+      expect(range.max, 50000);
+      expect(range.clamp(12000), 12000);
+    });
+
     test('snaps to the adaptive step and clamps to boundaries', () {
       final range = CalendarJoystickRange.adaptive(
         currentValue: 1000,

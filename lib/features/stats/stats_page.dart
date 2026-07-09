@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
@@ -12,6 +13,7 @@ import '../transactions/models/calendar_render_models.dart';
 import '../transactions/models/transaction_category.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
+import '../transactions/widgets/calendar_menu/calendar_joystick_range.dart';
 import '../transactions/widgets/calendar_menu/calendar_value_slider_panel.dart';
 import '../transactions/widgets/calendar_menu/focused_month_canvas.dart';
 import '../transactions/widgets/calendar_menu/month_stats_charts.dart';
@@ -179,7 +181,7 @@ class _StatsPageState extends State<StatsPage>
                   value: _thresholdValue,
                   observedMax: _observedMaxScopeAmount(data),
                   fallbackMax: 50000,
-                  onTap: _openRenderModeSelector,
+                  onTap: _openThresholdControlSheet,
                   onChanged: (value) {
                     setState(() => _thresholdValue = value);
                   },
@@ -343,17 +345,24 @@ class _StatsPageState extends State<StatsPage>
     });
   }
 
-  Future<void> _openRenderModeSelector() async {
+  Future<void> _openThresholdControlSheet() async {
+    final observedMax = _observedMaxScopeAmount(_buildStatsData());
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return _StatsRenderModeSheet(
+        return _StatsThresholdControlSheet(
           activeMode: _renderMode,
+          thresholdValue: _thresholdValue,
+          observedMax: observedMax,
+          fallbackMax: 50000,
           accentColor: _expenseTheme.accent,
-          onSelected: (mode) {
+          onModeSelected: (mode) {
             setState(() => _renderMode = mode);
-            Navigator.of(context).pop();
+          },
+          onThresholdChanged: (value) {
+            setState(() => _thresholdValue = value);
           },
         );
       },
@@ -575,57 +584,212 @@ class _StatsFocusedMonthView extends StatelessWidget {
   }
 }
 
-class _StatsRenderModeSheet extends StatelessWidget {
-  const _StatsRenderModeSheet({
+class _StatsThresholdControlSheet extends StatefulWidget {
+  const _StatsThresholdControlSheet({
     required this.activeMode,
+    required this.thresholdValue,
+    required this.observedMax,
+    required this.fallbackMax,
     required this.accentColor,
-    required this.onSelected,
+    required this.onModeSelected,
+    required this.onThresholdChanged,
   });
 
   final StatsRenderMode activeMode;
+  final double thresholdValue;
+  final double observedMax;
+  final double fallbackMax;
   final Color accentColor;
-  final ValueChanged<StatsRenderMode> onSelected;
+  final ValueChanged<StatsRenderMode> onModeSelected;
+  final ValueChanged<double> onThresholdChanged;
+
+  @override
+  State<_StatsThresholdControlSheet> createState() =>
+      _StatsThresholdControlSheetState();
+}
+
+class _StatsThresholdControlSheetState
+    extends State<_StatsThresholdControlSheet> {
+  late StatsRenderMode _activeMode;
+  late double _thresholdValue;
+  late final TextEditingController _amountController;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeMode = widget.activeMode;
+    _thresholdValue = _range.snap(widget.thresholdValue);
+    _amountController = TextEditingController(
+      text: _thresholdValue.toStringAsFixed(0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final range = _range;
     return Material(
-      key: const ValueKey('stats-render-mode-selector'),
+      key: const ValueKey('stats-threshold-sheet'),
       color: AppColors.gray100,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 26),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 42,
-                height: 4,
-                decoration: const BoxDecoration(
-                  color: AppColors.gray200,
-                  borderRadius: BorderRadius.all(Radius.circular(2)),
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.gray200,
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
               Row(
+                key: const ValueKey('stats-render-mode-selector'),
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   for (final mode in StatsRenderMode.values)
                     _StatsRenderModeButton(
                       mode: mode,
-                      active: mode == activeMode,
-                      accentColor: accentColor,
-                      onTap: () => onSelected(mode),
+                      active: mode == _activeMode,
+                      accentColor: widget.accentColor,
+                      onTap: () {
+                        setState(() => _activeMode = mode);
+                        widget.onModeSelected(mode);
+                      },
                     ),
                 ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Küszöb',
+                      style: TextStyle(
+                        color: AppColors.gray800,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    formatHuf(_thresholdValue),
+                    key: const ValueKey('stats-threshold-current-value'),
+                    style: const TextStyle(
+                      color: AppColors.gray800,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: widget.accentColor,
+                  inactiveTrackColor: AppColors.gray200,
+                  thumbColor: widget.accentColor,
+                  overlayColor: widget.accentColor.withValues(alpha: 0.16),
+                  trackHeight: 5,
+                ),
+                child: Slider(
+                  key: const ValueKey('stats-threshold-slider'),
+                  min: range.min,
+                  max: range.max,
+                  divisions: ((range.max - range.min) / range.step)
+                      .round()
+                      .clamp(1, 1000)
+                      .toInt(),
+                  value: range.clamp(_thresholdValue),
+                  onChanged: _setThreshold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(25),
+                  border: Border.all(color: AppColors.gray200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      offset: const Offset(0, 2),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                alignment: Alignment.center,
+                child: TextField(
+                  key: const ValueKey('stats-threshold-amount-input'),
+                  controller: _amountController,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.gray800,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isCollapsed: true,
+                    suffixText: 'Ft',
+                    suffixStyle: TextStyle(
+                      color: AppColors.gray500,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onSubmitted: _submitManualAmount,
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  CalendarJoystickRange get _range => CalendarJoystickRange.adaptive(
+    currentValue: widget.thresholdValue,
+    observedMax: widget.observedMax,
+    fallbackMax: widget.fallbackMax,
+  );
+
+  void _setThreshold(double value) {
+    final next = _range.snap(value);
+    if (next == _thresholdValue) return;
+    setState(() {
+      _thresholdValue = next;
+      _amountController.text = next.toStringAsFixed(0);
+    });
+    widget.onThresholdChanged(next);
+  }
+
+  void _submitManualAmount(String rawValue) {
+    final parsed = double.tryParse(rawValue);
+    if (parsed == null) {
+      _amountController.text = _thresholdValue.toStringAsFixed(0);
+      return;
+    }
+    _setThreshold(parsed);
   }
 }
 

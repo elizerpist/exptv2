@@ -5,7 +5,7 @@ import java.util.GregorianCalendar
 import java.util.Random
 
 object ExpenseSeedData {
-    const val version = 2026060801
+    const val version = 2026070901
 
     private const val seedStartYear = 2021
     private const val seedStartMonth = 6
@@ -30,6 +30,7 @@ object ExpenseSeedData {
         TransactionCategoryEntity(19, "Elofizetesek", "kiadás", 6, 12, "#475569", icon, null, true, 45000.0, true, true, null),
         TransactionCategoryEntity(20, "Etterem es kave", "kiadás", 13, 13, "#b45309", icon, null, true, 95000.0, true, true, null),
         TransactionCategoryEntity(21, "Egyeb", "kiadás", 14, 14, "#64748b", icon, null, true, 50000.0, true, true, null),
+        TransactionCategoryEntity(22, "Gyorsétterem", "kiadás", 15, 15, "#f97316", icon, null, true, 65000.0, true, true, null),
     )
 
     val transactions: List<ExpenseTransactionEntity> by lazy { buildTransactions() }
@@ -42,6 +43,14 @@ object ExpenseSeedData {
         val minAmount: Int,
         val maxAmount: Int,
         val weight: Int,
+    )
+
+    private data class FastFoodPeriod(
+        val months: IntRange,
+        val minCount: Int,
+        val randomExtraCount: Int,
+        val minAmount: Int,
+        val maxAmount: Int,
     )
 
     private val expenseTemplates = listOf(
@@ -57,6 +66,21 @@ object ExpenseSeedData {
         ExpenseTemplate(19, listOf("Netflix", "Spotify", "iCloud", "Google One", "HBO", "YouTube Premium"), 1290, 8990, 9),
         ExpenseTemplate(20, listOf("Kavezo", "Menza", "Wolt", "Foodora", "Etterem", "Pekseg"), 750, 18000, 24),
         ExpenseTemplate(21, listOf("Posta", "Ajandek", "Haztartas", "Allateledel", "Adomany"), 500, 45000, 10),
+    )
+
+    private val fastFoodPeriods = listOf(
+        FastFoodPeriod(1..4, 12, 5, 4300, 5700),
+        FastFoodPeriod(5..8, 5, 4, 8500, 13500),
+        FastFoodPeriod(9..12, 2, 3, 1800, 4200),
+    )
+
+    private val fastFoodMerchants = listOf(
+        "McDonald's",
+        "Burger King",
+        "KFC",
+        "Subway",
+        "Bamba Marha",
+        "Pizza Forte",
     )
 
     private fun buildTransactions(): List<ExpenseTransactionEntity> {
@@ -94,6 +118,7 @@ object ExpenseSeedData {
                     transactionCategoryID = template.categoryId,
                 )
             }
+            rows += buildFastFoodTransactions(year, month, days, idBase, random)
 
             val salary = 560000 + random.nextInt(160000)
             rows += ExpenseTransactionEntity(
@@ -139,6 +164,42 @@ object ExpenseSeedData {
             monthOffset += 1
         }
         return rows.sortedWith(compareByDescending<ExpenseTransactionEntity> { it.date }.thenByDescending { it.time }.thenByDescending { it.id })
+    }
+
+    private fun buildFastFoodTransactions(
+        year: Int,
+        month: Int,
+        days: Int,
+        idBase: Int,
+        random: Random,
+    ): List<ExpenseTransactionEntity> {
+        if (year != 2025) return emptyList()
+        val period = fastFoodPeriods.firstOrNull { month in it.months } ?: return emptyList()
+        val count = period.minCount + random.nextInt(period.randomExtraCount)
+        val rows = mutableListOf<ExpenseTransactionEntity>()
+        for (index in 1..count) {
+            val day = 1 + random.nextInt(days)
+            val hour = if (random.nextBoolean()) {
+                11 + random.nextInt(3)
+            } else {
+                18 + random.nextInt(4)
+            }
+            val minute = random.nextInt(60)
+            val amount = roundedAmount(random, period.minAmount, period.maxAmount)
+            rows += ExpenseTransactionEntity(
+                id = idBase + 900 + index,
+                date = "%04d.%02d.%02d".format(year, month, day),
+                time = "%02d:%02d".format(hour, minute),
+                latitude = null,
+                longitude = null,
+                address = "Seeded 2025 fast-food behavior sample",
+                merchant = fastFoodMerchants[random.nextInt(fastFoodMerchants.size)],
+                amount = -amount.toDouble(),
+                userAssignedName = null,
+                transactionCategoryID = 22,
+            )
+        }
+        return rows
     }
 
     private fun buildLimits(): List<CategoryLimitEntity> {

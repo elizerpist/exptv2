@@ -445,7 +445,9 @@ void main() {
     expect(calendar.monthCardColor, AppColors.gray200);
   });
 
-  testWidgets('stats joystick tap opens render mode selector', (tester) async {
+  testWidgets('stats joystick tap opens threshold control sheet', (
+    tester,
+  ) async {
     final store = TransactionStore(
       StatsRepository(
         categories: [
@@ -477,20 +479,36 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('stats-threshold-sheet')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('stats-render-mode-selector')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('stats-threshold-slider')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('stats-threshold-amount-input')),
+      findsOneWidget,
+    );
+    expect(find.text('5 000 Ft'), findsAtLeastNWidgets(1));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('stats-threshold-amount-input')),
+      '12000',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('12 000 Ft'), findsAtLeastNWidgets(1));
+
     await tester.tap(find.byKey(const ValueKey('stats-render-mode-heatmap')));
     await tester.pumpAndSettle();
 
     expect(find.text('HEATMAP'), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-magnet-heatmap')), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('calendar-threshold-joystick-trigger')),
-    );
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('stats-render-mode-closing')));
     await tester.pumpAndSettle();
 
