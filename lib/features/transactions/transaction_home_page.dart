@@ -390,6 +390,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         visibleFastInfoExtent: visibleFastInfoExtent,
                         cardColor: expenseTheme.headerCard,
                         surfaceStyle: expenseTheme.contentSurfaceStyle,
+                        ambulanceSkin:
+                            expenseTheme.settings.magnetType ==
+                            MagnetType.ambulanceSkin,
                         fastInfo: FastInfoPanel(
                           config:
                               widget.fastInfoConfig ??

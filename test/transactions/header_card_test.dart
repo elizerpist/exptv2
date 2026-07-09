@@ -1,4 +1,5 @@
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/transactions/widgets/header_card/header_fast_info_surface.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_menu_metrics.dart';
@@ -113,7 +114,7 @@ void main() {
     );
   });
 
-  testWidgets('ambulance skin uses yellow header and ambulance magnet', (
+  testWidgets('ambulance skin uses white header with yellow veil and magnet', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -136,7 +137,56 @@ void main() {
     );
     final decoration = surface.decoration as BoxDecoration;
 
-    expect(decoration.color, const Color(0xFFF3C542));
+    expect(decoration.color, Colors.white);
+    final veil = tester.widget<Opacity>(
+      find.byKey(const ValueKey('header-ambulance-yellow-veil')),
+    );
+    expect(veil.opacity, 0.5);
+    expect(
+      find.byKey(const ValueKey('magnet-strip-ambulanceSkin')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('ambulance skin colors resting fast info header surface', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              HeaderFastInfoSurface(
+                visibleFastInfoExtent: 0,
+                cardColor: Colors.white,
+                ambulanceSkin: true,
+                fastInfo: const SizedBox.shrink(),
+                header: TransactionHeaderCard(
+                  magnetType: MagnetType.ambulanceSkin,
+                  drawSurface: false,
+                  balanceText: '123 Ft',
+                  totalIncome: 300,
+                  totalExpense: -100,
+                  onCategoryPressed: () {},
+                  onExpandPressed: () {},
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('header-fast-info-surface')),
+    );
+    final decoration = surface.decoration as BoxDecoration;
+
+    expect(decoration.color, Colors.white);
+    final veil = tester.widget<Opacity>(
+      find.byKey(const ValueKey('header-ambulance-fast-info-yellow-veil')),
+    );
+    expect(veil.opacity, 0.5);
     expect(
       find.byKey(const ValueKey('magnet-strip-ambulanceSkin')),
       findsOneWidget,
