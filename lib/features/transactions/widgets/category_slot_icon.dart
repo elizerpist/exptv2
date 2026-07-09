@@ -53,7 +53,7 @@ class CategorySlotIcon extends StatelessWidget {
         builder: (context, snapshot) {
           final svg = snapshot.data;
           if (svg == null) {
-            return Icon(Icons.category_outlined, color: color, size: size);
+            return _iconPlaceholder();
           }
           return SvgPicture.string(
             svg,
@@ -61,8 +61,7 @@ class CategorySlotIcon extends StatelessWidget {
             height: size,
             fit: BoxFit.contain,
             colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-            placeholderBuilder: (context) =>
-                Icon(Icons.category_outlined, color: color, size: size),
+            placeholderBuilder: (context) => _iconPlaceholder(),
           );
         },
       );
@@ -73,9 +72,12 @@ class CategorySlotIcon extends StatelessWidget {
       height: size,
       fit: BoxFit.contain,
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      placeholderBuilder: (context) =>
-          Icon(Icons.category_outlined, color: color, size: size),
+      placeholderBuilder: (context) => _iconPlaceholder(),
     );
+  }
+
+  Widget _iconPlaceholder() {
+    return SizedBox.square(dimension: size);
   }
 }
 

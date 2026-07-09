@@ -904,6 +904,24 @@ void main() {
     expect(rewritten, contains('stroke-width="1.35"'));
   });
 
+  testWidgets('category slot icon does not flash material fallback icon', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CategorySlotIcon(
+          slot: 2,
+          color: AppColors.white,
+          size: 32,
+          strokeWidth: 1.35,
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.category_outlined), findsNothing);
+    expect(find.byType(CategorySlotIcon), findsOneWidget);
+  });
+
   testWidgets('log list renders uncategorized transaction question avatar', (
     tester,
   ) async {
