@@ -379,12 +379,12 @@ void main() {
     );
     expect(find.text('App színe'), findsOneWidget);
     expect(find.text('Kategória menü mód'), findsOneWidget);
-    expect(find.text('Navigáció'), findsOneWidget);
-    expect(find.text('A - Jelenlegi (jelenlegi)'), findsOneWidget);
-    expect(find.text('B - 3 menü + jobb FAB'), findsOneWidget);
-    expect(find.text('FAB forma'), findsOneWidget);
-    expect(find.text('Kör (jelenlegi)'), findsOneWidget);
-    expect(find.text('Rounded square'), findsOneWidget);
+    expect(find.text('Navigáció'), findsNothing);
+    expect(find.text('A - Jelenlegi (jelenlegi)'), findsNothing);
+    expect(find.text('B - 3 menü + jobb FAB'), findsNothing);
+    expect(find.text('FAB forma'), findsNothing);
+    expect(find.text('Kör (jelenlegi)'), findsNothing);
+    expect(find.text('Rounded square'), findsNothing);
     expect(find.text('FAB méret'), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-fab-size-slider')), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-fab-size-input')), findsOneWidget);
@@ -467,18 +467,19 @@ void main() {
       CategoryMenuPresentation.slideUpSheet,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('theme-shell-navigation-right-rounded-fab')),
+    expect(
+      find.byKey(const ValueKey('theme-shell-navigation-current')),
+      findsNothing,
     );
     expect(
-      updated.last.shellNavigationLayout,
-      ShellNavigationLayout.rightRoundedFab,
+      find.byKey(const ValueKey('theme-shell-navigation-right-rounded-fab')),
+      findsNothing,
     );
-
-    await tester.tap(
+    expect(find.byKey(const ValueKey('theme-fab-shape-circle')), findsNothing);
+    expect(
       find.byKey(const ValueKey('theme-fab-shape-rounded-square')),
+      findsNothing,
     );
-    expect(updated.last.fabShape, FabShape.roundedSquare);
 
     final fabSizeSlider = tester.widget<Slider>(
       find.byKey(const ValueKey('theme-fab-size-slider')),

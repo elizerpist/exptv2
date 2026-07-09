@@ -7,24 +7,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('notifications tab shows unread badge count', (tester) async {
+  testWidgets('bottom nav defaults to three items without notifications', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           bottomNavigationBar: ExptBottomNav(
             activeTab: AppTab.home,
-            unreadNotificationCount: 3,
             onTabSelected: (_) {},
           ),
         ),
       ),
     );
 
+    expect(find.text('Főoldal'), findsOneWidget);
+    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Beállítások'), findsOneWidget);
+    expect(find.text('Értesítések'), findsNothing);
     expect(
       find.byKey(const ValueKey('bottom-nav-notifications-unread-badge')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('3'), findsOneWidget);
   });
 
   testWidgets(
@@ -93,53 +97,6 @@ void main() {
 
     await gesture.up();
     await tester.pump();
-  });
-
-  testWidgets('notifications tab hides unread badge when count is zero', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          bottomNavigationBar: ExptBottomNav(
-            activeTab: AppTab.home,
-            unreadNotificationCount: 0,
-            onTabSelected: (_) {},
-          ),
-        ),
-      ),
-    );
-
-    expect(
-      find.byKey(const ValueKey('bottom-nav-notifications-unread-badge')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('right rounded FAB layout removes notifications nav item', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          bottomNavigationBar: ExptBottomNav(
-            activeTab: AppTab.home,
-            layout: ShellNavigationLayout.rightRoundedFab,
-            unreadNotificationCount: 3,
-            onTabSelected: (_) {},
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('Főoldal'), findsOneWidget);
-    expect(find.text('Stats'), findsOneWidget);
-    expect(find.text('Beállítások'), findsOneWidget);
-    expect(find.text('Értesítések'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('bottom-nav-notifications-unread-badge')),
-      findsNothing,
-    );
   });
 
   testWidgets('active bottom nav item rests normally for raised style', (

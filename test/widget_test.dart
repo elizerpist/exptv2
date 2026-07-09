@@ -197,12 +197,12 @@ void main() {
     expect(find.text('Test Store'), findsOneWidget);
     expect(find.text('Főoldal'), findsOneWidget);
     expect(find.text('Stats'), findsOneWidget);
-    expect(find.text('Értesítések'), findsOneWidget);
+    expect(find.text('Értesítések'), findsNothing);
     expect(find.text('Beállítások'), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
   });
 
-  testWidgets('B shell layout moves notifications to header and FAB right', (
+  testWidgets('shell layout keeps notifications in header and FAB right', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -217,8 +217,6 @@ void main() {
       'backgroundColor': 'gray',
       'boxColor': 'gray',
       'backheaderStyle': 'classic',
-      'shellNavigationLayout': 'rightRoundedFab',
-      'fabShape': 'roundedSquare',
       'fabSize': 80,
     };
 
@@ -337,7 +335,11 @@ void main() {
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
 
-    await tester.tap(find.text('Értesítések'));
+    await tester.tap(find.text('Főoldal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kiadás'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('header-notification-button')));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('notification-month-header')),
@@ -741,13 +743,11 @@ void main() {
     expect(singleTaps, 1);
   });
 
-  testWidgets('FAB can render as rounded square', (tester) async {
+  testWidgets('FAB renders as rounded square by default', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Center(
-            child: ExptFab(shape: ExptFabShape.roundedSquare, onPressed: () {}),
-          ),
+          body: Center(child: ExptFab(onPressed: () {})),
         ),
       ),
     );
@@ -768,13 +768,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Center(
-            child: ExptFab(
-              shape: ExptFabShape.circle,
-              size: 80,
-              onPressed: () {},
-            ),
-          ),
+          body: Center(child: ExptFab(size: 80, onPressed: () {})),
         ),
       ),
     );

@@ -160,20 +160,13 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   TransactionHomePage _buildTransactionHomePage() {
-    final rightRoundedFab =
-        _themeSettings.shellNavigationLayout ==
-        ShellNavigationLayout.rightRoundedFab;
     final fabSize = _themeSettings.fabSize.toDouble();
     return TransactionHomePage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       fastInfoConfig: _fastInfoConfig,
-      logBottomPadding: rightRoundedFab
-          ? _rightFabLogBottomPadding(fabSize)
-          : 96,
-      onNotificationPressed: rightRoundedFab
-          ? _handleHeaderNotificationPressed
-          : null,
+      logBottomPadding: _rightFabLogBottomPadding(fabSize),
+      onNotificationPressed: _handleHeaderNotificationPressed,
       notificationUnreadCount: _notificationStore.unreadCount,
       onEditTransaction: _openEditTransaction,
       onDeleteTransactionRequested: _confirmDeleteTransaction,
@@ -610,11 +603,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   List<Widget> _buildShellNavigation(ExpenseTheme expenseTheme) {
-    final shellLayout = expenseTheme.settings.shellNavigationLayout;
-    final rightRoundedFab =
-        shellLayout == ShellNavigationLayout.rightRoundedFab;
     final fabSize = expenseTheme.settings.fabSize.toDouble();
-    final fabShape = expenseTheme.settings.fabShape.toExptFabShape;
     return [
       Positioned(
         left: 0,
@@ -627,40 +616,20 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           accentColor: expenseTheme.accent,
           accentLightColor: expenseTheme.accentLight,
           activeBackgroundColor: expenseTheme.activeBackground,
-          unreadNotificationCount: _notificationStore.unreadCount,
-          layout: shellLayout,
           onTabSelected: _selectTab,
         ),
       ),
-      if (rightRoundedFab)
-        Positioned(
-          right: 20,
-          bottom: _rightFabBottomOffset,
-          child: ExptFab(
-            primaryColor: expenseTheme.accent,
-            surfaceStyle: expenseTheme.buttonSurfaceStyle,
-            shape: fabShape,
-            size: fabSize,
-            onPressed: _handleFabPressed,
-            onLongPress: _handleFabLongPressed,
-          ),
-        )
-      else
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: AppDimensions.fabBottom,
-          child: Center(
-            child: ExptFab(
-              primaryColor: expenseTheme.accent,
-              surfaceStyle: expenseTheme.buttonSurfaceStyle,
-              shape: fabShape,
-              size: fabSize,
-              onPressed: _handleFabPressed,
-              onLongPress: _handleFabLongPressed,
-            ),
-          ),
+      Positioned(
+        right: 20,
+        bottom: _rightFabBottomOffset,
+        child: ExptFab(
+          primaryColor: expenseTheme.accent,
+          surfaceStyle: expenseTheme.buttonSurfaceStyle,
+          size: fabSize,
+          onPressed: _handleFabPressed,
+          onLongPress: _handleFabLongPressed,
         ),
+      ),
     ];
   }
 
@@ -695,9 +664,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     _logThemeSurfaceOnce(expenseTheme);
     final shellNavigation = _buildShellNavigation(expenseTheme);
-    final rightRoundedFab =
-        _themeSettings.shellNavigationLayout ==
-        ShellNavigationLayout.rightRoundedFab;
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
@@ -715,9 +681,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           ),
           if (!_homeBlockingOverlayOpen) ...shellNavigation,
           DebugFloatingButton(
-            bottomOffset: rightRoundedFab
-                ? _rightFabDebugBottomOffset(_themeSettings.fabSize.toDouble())
-                : AppDimensions.bottomNavHeight + 12,
+            bottomOffset: _rightFabDebugBottomOffset(
+              _themeSettings.fabSize.toDouble(),
+            ),
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:
                 _transactionStore.refreshAfterRecurringProcessing,
@@ -759,8 +725,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         'card=${settings.cardColor.nativeValue} '
         'box=${settings.boxColor.nativeValue} '
         'magnet=${settings.magnetType.nativeValue} '
-        'backheader=${settings.backheaderStyle.nativeValue} '
-        'nav=${settings.shellNavigationLayout.nativeValue}';
+        'backheader=${settings.backheaderStyle.nativeValue}';
   }
 
   String _hex(Color color) {
@@ -1092,13 +1057,6 @@ class _TransactionSheetSlotState extends State<_TransactionSheetSlot> {
     if (startedAt == null) return 0;
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
-}
-
-extension on FabShape {
-  ExptFabShape get toExptFabShape => switch (this) {
-    FabShape.circle => ExptFabShape.circle,
-    FabShape.roundedSquare => ExptFabShape.roundedSquare,
-  };
 }
 
 class _CategorySheetSlot extends StatefulWidget {

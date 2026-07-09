@@ -17,8 +17,6 @@ class ExptBottomNav extends StatefulWidget {
     this.accentColor = AppColors.primary,
     this.accentLightColor = AppColors.primaryLight,
     this.activeBackgroundColor = AppColors.primaryActiveBackground,
-    this.unreadNotificationCount = 0,
-    this.layout = ShellNavigationLayout.current,
   });
 
   final AppTab activeTab;
@@ -28,8 +26,6 @@ class ExptBottomNav extends StatefulWidget {
   final Color accentColor;
   final Color accentLightColor;
   final Color activeBackgroundColor;
-  final int unreadNotificationCount;
-  final ShellNavigationLayout layout;
 
   @override
   State<ExptBottomNav> createState() => _ExptBottomNavState();
@@ -52,7 +48,7 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
     if (widget.activeTab != _optimisticActiveTab) {
       DebugConsole.log(
         '[Perf] BottomNav parent sync from=${_optimisticActiveTab.id} '
-        'to=${widget.activeTab.id} unread=${widget.unreadNotificationCount}',
+        'to=${widget.activeTab.id}',
       );
       _optimisticActiveTab = widget.activeTab;
     }
@@ -60,33 +56,20 @@ class _ExptBottomNavState extends State<ExptBottomNav> {
 
   @override
   Widget build(BuildContext context) {
-    final buildKey =
-        '${_optimisticActiveTab.id}|${widget.activeTab.id}|${widget.unreadNotificationCount}|${widget.layout.nativeValue}';
+    final buildKey = '${_optimisticActiveTab.id}|${widget.activeTab.id}';
     if (_lastLoggedBuildKey != buildKey) {
       _lastLoggedBuildKey = buildKey;
       DebugConsole.log(
         '[Perf] BottomNav build active=${_optimisticActiveTab.id} '
-        'parent=${widget.activeTab.id} unread=${widget.unreadNotificationCount} '
-        'layout=${widget.layout.nativeValue}',
+        'parent=${widget.activeTab.id}',
       );
     }
 
-    final children = widget.layout == ShellNavigationLayout.rightRoundedFab
-        ? <Widget>[
-            _buildItem(AppTab.home),
-            _buildItem(AppTab.stats),
-            _buildItem(AppTab.settings),
-          ]
-        : <Widget>[
-            _buildItem(AppTab.home),
-            _buildItem(AppTab.stats),
-            const Expanded(child: SizedBox.shrink()),
-            _buildItem(
-              AppTab.notifications,
-              badgeCount: widget.unreadNotificationCount,
-            ),
-            _buildItem(AppTab.settings),
-          ];
+    final children = <Widget>[
+      _buildItem(AppTab.home),
+      _buildItem(AppTab.stats),
+      _buildItem(AppTab.settings),
+    ];
 
     return ExpenseSurfaceContainer(
       surfaceKey: const ValueKey('expt-bottom-nav'),

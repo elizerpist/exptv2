@@ -5,8 +5,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../settings/models/app_theme_settings.dart';
 
-enum ExptFabShape { circle, roundedSquare }
-
 class ExptFab extends StatefulWidget {
   const ExptFab({
     super.key,
@@ -14,7 +12,6 @@ class ExptFab extends StatefulWidget {
     this.primaryColor = AppColors.primary,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onLongPress,
-    this.shape = ExptFabShape.circle,
     this.size = AppDimensions.fabSize,
   });
 
@@ -22,7 +19,6 @@ class ExptFab extends StatefulWidget {
   final Color primaryColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onLongPress;
-  final ExptFabShape shape;
   final double size;
 
   @override
@@ -38,12 +34,8 @@ class _ExptFabState extends State<ExptFab> {
     return ExpensePressable(
       enabled: widget.surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
-        final borderRadius = BorderRadius.circular(
-          widget.shape == ExptFabShape.roundedSquare ? 18 : widget.size / 2,
-        );
-        final shapeBorder = widget.shape == ExptFabShape.roundedSquare
-            ? RoundedRectangleBorder(borderRadius: borderRadius)
-            : const CircleBorder();
+        final borderRadius = BorderRadius.circular(18);
+        final shapeBorder = RoundedRectangleBorder(borderRadius: borderRadius);
         return ExpenseSurfaceContainer(
           surfaceKey: const ValueKey('expt-fab'),
           style: widget.surfaceStyle,

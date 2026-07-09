@@ -263,48 +263,33 @@ class ExpenseSettingsStoreSecurityTest {
     }
 
     @Test
-    fun themeSettingsPersistShellNavigationLayout() {
-        assertEquals("current", store.loadThemeSettings()["shellNavigationLayout"])
-
-        val updated = store.updateThemeSettings(
-            mapOf(
-                "shellNavigationLayout" to "rightRoundedFab",
-            )
-        )
-
-        assertEquals("rightRoundedFab", updated["shellNavigationLayout"])
-        assertEquals(
-            "rightRoundedFab",
-            store.loadThemeSettings()["shellNavigationLayout"],
-        )
-    }
-
-    @Test
-    fun themeSettingsPersistFabShapeAndSize() {
+    fun themeSettingsDoNotPersistShellNavigationLayoutOrFabShape() {
         val defaults = store.loadThemeSettings()
-        assertEquals("circle", defaults["fabShape"])
+        assertFalse(defaults.containsKey("shellNavigationLayout"))
+        assertFalse(defaults.containsKey("fabShape"))
         assertEquals(66, defaults["fabSize"])
 
         val updated = store.updateThemeSettings(
             mapOf(
+                "shellNavigationLayout" to "current",
                 "fabShape" to "roundedSquare",
                 "fabSize" to 80,
             )
         )
 
-        assertEquals("roundedSquare", updated["fabShape"])
+        assertFalse(updated.containsKey("shellNavigationLayout"))
+        assertFalse(updated.containsKey("fabShape"))
         assertEquals(80, updated["fabSize"])
-        assertEquals("roundedSquare", store.loadThemeSettings()["fabShape"])
+        assertFalse(store.loadThemeSettings().containsKey("shellNavigationLayout"))
+        assertFalse(store.loadThemeSettings().containsKey("fabShape"))
         assertEquals(80, store.loadThemeSettings()["fabSize"])
 
         val clamped = store.updateThemeSettings(
             mapOf(
-                "fabShape" to "circle",
                 "fabSize" to 999,
             )
         )
 
-        assertEquals("circle", clamped["fabShape"])
         assertEquals(88, clamped["fabSize"])
     }
 

@@ -134,7 +134,6 @@ class SettingsStore extends ChangeNotifier {
         'card=${_themeSettings.cardColor.nativeValue} '
         'box=${_themeSettings.boxColor.nativeValue} '
         'magnet=${_themeSettings.magnetType.nativeValue} '
-        'backheader=${_themeSettings.backheaderStyle.nativeValue} '
-        'nav=${_themeSettings.shellNavigationLayout.nativeValue}';
+        'backheader=${_themeSettings.backheaderStyle.nativeValue}';
   }
 }
