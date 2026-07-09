@@ -175,6 +175,47 @@ void main() {
     },
   );
 
+  test('category scope FastInfo layout uses one padded chart panel', () {
+    final layout = StatsFastInfoGraph.layoutForTesting(const Size(390, 328));
+
+    expect(layout.categoryPanel.left, greaterThanOrEqualTo(12));
+    expect(layout.categoryPanel.right, lessThanOrEqualTo(378));
+    expect(
+      layout.categoryControlChart.left - layout.categoryPanel.left,
+      greaterThanOrEqualTo(48),
+    );
+    expect(
+      layout.categoryAxisLabelLeft,
+      greaterThan(layout.categoryPanel.left),
+    );
+    expect(
+      layout.categoryAxisLabelLeft,
+      lessThan(layout.categoryControlChart.left),
+    );
+    expect(
+      layout.categoryControlChart.height,
+      greaterThan(layout.categorySecondaryChart.height * 2),
+    );
+    expect(layout.categorySecondaryChart.height, lessThanOrEqualTo(56));
+    expect(
+      layout.categorySecondaryChart.bottom,
+      lessThanOrEqualTo(layout.categoryPanel.bottom - 16),
+    );
+  });
+
+  test(
+    'category scope FastInfo visual style matches the polished chart brief',
+    () {
+      final style = StatsFastInfoGraph.visualStyleForTesting();
+
+      expect(style.legendFontSize, moreOrLessEquals(8.64, epsilon: 0.01));
+      expect(style.legendMarkerWidth, moreOrLessEquals(7.2, epsilon: 0.01));
+      expect(style.legendMarkerHeight, moreOrLessEquals(3.6, epsilon: 0.01));
+      expect(style.secondaryLineSmoothingEnabled, isTrue);
+      expect(style.categoryYAxisValueLabelCount, greaterThanOrEqualTo(2));
+    },
+  );
+
   test('stats FastInfo chart metadata defines legends and axes per mode', () {
     for (final mode in StatsRenderMode.values) {
       final spec = StatsFastInfoGraph.specForTesting(mode);

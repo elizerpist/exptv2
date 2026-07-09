@@ -13,29 +13,70 @@ class StatsFastInfoLayout {
     required this.topChart,
     required this.pulseChart,
     required this.bottomChart,
+    required this.categoryPanel,
+    required this.categoryControlChart,
+    required this.categorySecondaryChart,
+    required this.categoryAxisLabelLeft,
   });
 
   static const _chartLeft = 34.0;
   static const _titleOffset = 24.0;
+  static const _categoryPanelHorizontalPadding = 14.0;
 
   final Rect topChart;
   final Rect pulseChart;
   final Rect bottomChart;
+  final Rect categoryPanel;
+  final Rect categoryControlChart;
+  final Rect categorySecondaryChart;
+  final double categoryAxisLabelLeft;
 
   double get topTitleTop => topChart.top - _titleOffset;
-  Rect get categoryControlChart =>
-      Rect.fromLTWH(topChart.left, topChart.top, topChart.width, 118);
-  Rect get categorySecondaryChart =>
-      Rect.fromLTWH(bottomChart.left, 222, bottomChart.width, 80);
 
   static StatsFastInfoLayout resolve(Size size) {
     final width = (size.width - _chartLeft * 2)
         .clamp(1.0, double.infinity)
         .toDouble();
+    final categoryPanelLeft = _categoryPanelHorizontalPadding;
+    final categoryPanelWidth =
+        (size.width - _categoryPanelHorizontalPadding * 2)
+            .clamp(1.0, double.infinity)
+            .toDouble();
+    final categoryPanel = Rect.fromLTWH(
+      categoryPanelLeft,
+      42,
+      categoryPanelWidth,
+      (size.height - 60).clamp(1.0, double.infinity).toDouble(),
+    );
+    final categoryAxisLabelLeft = categoryPanel.left + 12;
+    final categoryChartLeft = categoryPanel.left + 52;
+    final categoryChartRight = categoryPanel.right - 14;
+    final categoryChartWidth = (categoryChartRight - categoryChartLeft)
+        .clamp(1.0, double.infinity)
+        .toDouble();
+    final categoryControlChart = Rect.fromLTWH(
+      categoryChartLeft,
+      categoryPanel.top + 30,
+      categoryChartWidth,
+      (categoryPanel.height * 0.48).clamp(112.0, 132.0).toDouble(),
+    );
+    final categorySecondaryHeight = (categoryPanel.height * 0.19)
+        .clamp(44.0, 56.0)
+        .toDouble();
+    final categorySecondaryChart = Rect.fromLTWH(
+      categoryChartLeft,
+      categoryPanel.bottom - 22 - categorySecondaryHeight,
+      categoryChartWidth,
+      categorySecondaryHeight,
+    );
     return StatsFastInfoLayout(
       topChart: Rect.fromLTWH(_chartLeft, 66, width, 82),
       pulseChart: Rect.fromLTWH(_chartLeft, 176, width, 38),
       bottomChart: Rect.fromLTWH(_chartLeft, 246, width, 56),
+      categoryPanel: categoryPanel,
+      categoryControlChart: categoryControlChart,
+      categorySecondaryChart: categorySecondaryChart,
+      categoryAxisLabelLeft: categoryAxisLabelLeft,
     );
   }
 }
@@ -196,10 +237,34 @@ class StatsFastInfoLegendItem {
   final Color color;
 }
 
+class StatsFastInfoVisualStyle {
+  const StatsFastInfoVisualStyle({
+    required this.legendFontSize,
+    required this.legendMarkerWidth,
+    required this.legendMarkerHeight,
+    required this.secondaryLineSmoothingEnabled,
+    required this.categoryYAxisValueLabelCount,
+  });
+
+  final double legendFontSize;
+  final double legendMarkerWidth;
+  final double legendMarkerHeight;
+  final bool secondaryLineSmoothingEnabled;
+  final int categoryYAxisValueLabelCount;
+}
+
 class StatsFastInfoGraph extends StatelessWidget {
   const StatsFastInfoGraph({super.key, required this.data});
 
   final StatsYearData data;
+
+  static const visualStyle = StatsFastInfoVisualStyle(
+    legendFontSize: 8.64,
+    legendMarkerWidth: 7.2,
+    legendMarkerHeight: 3.6,
+    secondaryLineSmoothingEnabled: true,
+    categoryYAxisValueLabelCount: 3,
+  );
 
   static StatsFastInfoLayout layoutForTesting(Size size) {
     return StatsFastInfoLayout.resolve(size);
@@ -207,6 +272,10 @@ class StatsFastInfoGraph extends StatelessWidget {
 
   static StatsFastInfoSpec specForTesting(StatsRenderMode mode) {
     return StatsFastInfoSpec.forMode(mode);
+  }
+
+  static StatsFastInfoVisualStyle visualStyleForTesting() {
+    return visualStyle;
   }
 
   @override
@@ -252,18 +321,47 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     }
   }
 
+  void _drawCategoryPanel(Canvas canvas, Rect panel) {
+    final rrect = RRect.fromRectAndRadius(panel, const Radius.circular(14));
+    final shadowPath = Path()..addRRect(rrect);
+    canvas.drawShadow(
+      shadowPath,
+      Colors.black.withValues(alpha: 0.08),
+      4,
+      false,
+    );
+    canvas.drawRRect(rrect, Paint()..color = Colors.white);
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = AppColors.gray200.withValues(alpha: 0.85)
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
   void _drawCategoryScope(
     Canvas canvas,
     StatsFastInfoLayout layout,
     StatsFastInfoSpec spec,
   ) {
     final series = StatsCategoryScopeSeries.fromYearData(data);
+    _drawCategoryPanel(canvas, layout.categoryPanel);
     final topChart = layout.categoryControlChart;
     final bottomChart = layout.categorySecondaryChart;
     _drawChartHeader(canvas, spec.charts[0], topChart);
     _drawGrid(canvas, topChart);
     _drawControlBars(canvas, topChart, series.controlBars);
-    _drawAxisLabels(canvas, spec.charts[0], topChart, drawXAxisLabel: false);
+    _drawControlAxisValueLabels(canvas, topChart);
+    _drawAxisLabels(
+      canvas,
+      spec.charts[0],
+      topChart,
+      drawXAxisLabel: false,
+      yAxisLabelLeft: layout.categoryAxisLabelLeft,
+      yAxisLabelTop: topChart.top - 14,
+      yAxisLabelWidth: topChart.left - layout.categoryAxisLabelLeft - 6,
+    );
     _drawMonthLabels(canvas, topChart, series.monthLabels);
     final secondaryMetadata = spec.charts[1].copyWith(
       title: '2. ${series.secondaryMetricLabel}',
@@ -276,12 +374,16 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     );
     _drawChartHeader(canvas, secondaryMetadata, bottomChart);
     _drawGrid(canvas, bottomChart, horizontal: 2);
+    _drawAmountAxisValueLabels(canvas, bottomChart, series.secondaryLine);
     _drawSecondaryLine(canvas, bottomChart, series.secondaryLine);
     _drawAxisLabels(
       canvas,
       secondaryMetadata,
       bottomChart,
       drawXAxisLabel: false,
+      yAxisLabelLeft: layout.categoryAxisLabelLeft,
+      yAxisLabelTop: bottomChart.top - 14,
+      yAxisLabelWidth: bottomChart.left - layout.categoryAxisLabelLeft - 6,
     );
     _drawMonthLabels(canvas, bottomChart, series.monthLabels);
   }
@@ -372,23 +474,35 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     for (final item in items) {
       final labelPainter = _textPainter(
         item.label,
-        const TextStyle(
+        TextStyle(
           color: AppColors.gray500,
-          fontSize: 7.2,
+          fontSize: StatsFastInfoGraph.visualStyle.legendFontSize,
           fontWeight: FontWeight.w600,
         ),
         maxWidth: chart.width,
       );
-      final itemWidth = 9 + labelPainter.width + 8;
+      final itemWidth =
+          StatsFastInfoGraph.visualStyle.legendMarkerWidth +
+          4 +
+          labelPainter.width +
+          8;
       if (x + itemWidth > maxX) break;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(x, y + 5, 6, 3),
+          Rect.fromLTWH(
+            x,
+            y + 5,
+            StatsFastInfoGraph.visualStyle.legendMarkerWidth,
+            StatsFastInfoGraph.visualStyle.legendMarkerHeight,
+          ),
           const Radius.circular(1.5),
         ),
         Paint()..color = item.color,
       );
-      labelPainter.paint(canvas, Offset(x + 9, y));
+      labelPainter.paint(
+        canvas,
+        Offset(x + StatsFastInfoGraph.visualStyle.legendMarkerWidth + 4, y),
+      );
       x += itemWidth;
     }
   }
@@ -398,17 +512,20 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     StatsFastInfoChartMetadata metadata,
     Rect chart, {
     bool drawXAxisLabel = true,
+    double? yAxisLabelLeft,
+    double? yAxisLabelTop,
+    double? yAxisLabelWidth,
   }) {
     _drawText(
       canvas,
       metadata.yAxisLabel,
-      Offset(chart.left - 30, chart.top + 1),
+      Offset(yAxisLabelLeft ?? chart.left - 30, yAxisLabelTop ?? chart.top + 1),
       const TextStyle(
         color: AppColors.gray500,
         fontSize: 7,
         fontWeight: FontWeight.w600,
       ),
-      maxWidth: 28,
+      maxWidth: yAxisLabelWidth ?? 28,
     );
     if (!drawXAxisLabel) return;
     final xPainter = _textPainter(
@@ -450,6 +567,63 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
         chart.right - painter.width,
       );
       painter.paint(canvas, Offset(left, chart.bottom + 3));
+    }
+  }
+
+  void _drawControlAxisValueLabels(Canvas canvas, Rect chart) {
+    _drawYAxisValueLabels(canvas, chart, const [
+      _YAxisValueLabel(label: '100', normalizedValue: 1),
+      _YAxisValueLabel(label: '50', normalizedValue: 0.5),
+      _YAxisValueLabel(label: '0', normalizedValue: 0),
+    ]);
+  }
+
+  void _drawAmountAxisValueLabels(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+  ) {
+    final values = points.map((point) => point.value).toList(growable: false);
+    final maxValue = values.fold<double>(0, math.max);
+    if (maxValue <= 0) {
+      _drawYAxisValueLabels(canvas, chart, const [
+        _YAxisValueLabel(label: '0', normalizedValue: 0),
+      ]);
+      return;
+    }
+    _drawYAxisValueLabels(canvas, chart, [
+      _YAxisValueLabel(label: _formatAxisValue(maxValue), normalizedValue: 1),
+      _YAxisValueLabel(
+        label: _formatAxisValue(maxValue / 2),
+        normalizedValue: 0.5,
+      ),
+      const _YAxisValueLabel(label: '0', normalizedValue: 0),
+    ]);
+  }
+
+  void _drawYAxisValueLabels(
+    Canvas canvas,
+    Rect chart,
+    List<_YAxisValueLabel> labels,
+  ) {
+    final style = const TextStyle(
+      color: AppColors.gray500,
+      fontSize: 6.8,
+      fontWeight: FontWeight.w700,
+    );
+    for (final label in labels) {
+      final painter = _textPainter(label.label, style, maxWidth: 34);
+      final y = chart.bottom - chart.height * label.normalizedValue;
+      painter.paint(
+        canvas,
+        Offset(
+          chart.left - painter.width - 5,
+          (y - painter.height / 2).clamp(
+            chart.top,
+            chart.bottom - painter.height,
+          ),
+        ),
+      );
     }
   }
 
@@ -553,17 +727,7 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     final maxValue = values
         .fold<double>(0, math.max)
         .clamp(1.0, double.infinity);
-    final path = Path();
-    for (var i = 0; i < values.length; i += 1) {
-      final x = _xForIndex(chart, i, values.length);
-      final y =
-          chart.bottom - chart.height * (values[i] / maxValue).clamp(0.0, 1.0);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
+    final path = _smoothPathForValues(chart, values, maxValue);
     canvas.drawPath(
       path,
       Paint()
@@ -597,6 +761,42 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
         ),
       ),
     );
+  }
+
+  Path _smoothPathForValues(Rect chart, List<double> values, double maxValue) {
+    final offsets = [
+      for (var i = 0; i < values.length; i += 1)
+        Offset(
+          _xForIndex(chart, i, values.length),
+          chart.bottom - chart.height * (values[i] / maxValue).clamp(0.0, 1.0),
+        ),
+    ];
+    final path = Path();
+    if (offsets.isEmpty) return path;
+    path.moveTo(offsets.first.dx, offsets.first.dy);
+    if (!StatsFastInfoGraph.visualStyle.secondaryLineSmoothingEnabled ||
+        offsets.length < 3) {
+      for (final offset in offsets.skip(1)) {
+        path.lineTo(offset.dx, offset.dy);
+      }
+      return path;
+    }
+    for (var i = 0; i < offsets.length - 1; i += 1) {
+      final p0 = i == 0 ? offsets[i] : offsets[i - 1];
+      final p1 = offsets[i];
+      final p2 = offsets[i + 1];
+      final p3 = i + 2 < offsets.length ? offsets[i + 2] : p2;
+      final c1 = Offset(
+        p1.dx + (p2.dx - p0.dx) / 6,
+        p1.dy + (p2.dy - p0.dy) / 6,
+      );
+      final c2 = Offset(
+        p2.dx - (p3.dx - p1.dx) / 6,
+        p2.dy - (p3.dy - p1.dy) / 6,
+      );
+      path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
+    }
+    return path;
   }
 
   void _drawSignedBars(
@@ -726,6 +926,20 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     return max;
   }
 
+  String _formatAxisValue(double value) {
+    if (value >= 1000000) {
+      final scaled = value / 1000000;
+      final decimals = scaled >= 10 ? 0 : 1;
+      return '${scaled.toStringAsFixed(decimals)}M';
+    }
+    if (value >= 1000) {
+      final scaled = value / 1000;
+      final decimals = scaled >= 10 ? 0 : 1;
+      return '${scaled.toStringAsFixed(decimals)}k';
+    }
+    return value.round().toString();
+  }
+
   Color _color(String hex) {
     final normalized = hex.replaceFirst('#', '');
     return Color(int.parse('FF$normalized', radix: 16));
@@ -735,4 +949,11 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
   bool shouldRepaint(_StatsFastInfoGraphPainter oldDelegate) {
     return oldDelegate.data != data;
   }
+}
+
+class _YAxisValueLabel {
+  const _YAxisValueLabel({required this.label, required this.normalizedValue});
+
+  final String label;
+  final double normalizedValue;
 }
