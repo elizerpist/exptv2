@@ -385,6 +385,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsMenu.pushLog => PushNotificationLogPage(
         nativeBridge: widget.nativeBridge,
         parserStore: widget.store,
+        onBack: _backFromActiveMenu,
         onOpenTransaction: widget.onOpenTransaction,
       ),
       _SettingsMenu.permissions => PermissionsOptionsPanel(

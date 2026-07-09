@@ -1,3 +1,4 @@
+import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_metrics.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_menu_metrics.dart';
@@ -109,6 +110,36 @@ void main() {
     expect(
       find.byKey(const ValueKey('header-balance-visibility-button')),
       findsNothing,
+    );
+  });
+
+  testWidgets('ambulance skin uses yellow header and ambulance magnet', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            backheaderStyle: BackheaderStyle.ambulanceSkin,
+            balanceText: '123 Ft',
+            totalIncome: 300,
+            totalExpense: -100,
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    final surface = tester.widget<Container>(
+      find.byKey(const ValueKey('transaction-header-surface')),
+    );
+    final decoration = surface.decoration as BoxDecoration;
+
+    expect(decoration.color, const Color(0xFFF3C542));
+    expect(
+      find.byKey(const ValueKey('magnet-strip-ambulanceSkin')),
+      findsOneWidget,
     );
   });
 

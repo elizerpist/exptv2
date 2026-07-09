@@ -1,7 +1,6 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
-import 'package:exptv2/features/stats/widgets/stats_category_scope_sheet.dart';
 import 'package:exptv2/features/stats/widgets/stats_fast_info_graph.dart';
 import 'package:exptv2/features/stats/widgets/stats_year_calendar.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
@@ -13,6 +12,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_menu_panel.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -252,7 +252,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: StatsCategoryScopeSheet(
+          body: CategoryMenuPanel(
+            key: const ValueKey('stats-scope-sheet'),
             activeType: TransactionType.expense,
             categories: [
               category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
@@ -260,28 +261,38 @@ void main() {
               category(id: 4, name: 'Bolt', type: TransactionType.expense),
               category(id: 3, name: 'Fizetés', type: TransactionType.income),
             ],
+            categoryTransactionCounts: const {},
+            activeCategory: null,
             selectedCategoryIds: const {},
-            accentColor: const Color(0xFF06B6D4),
+            onSelect: (_) {},
             onApply: (ids) => applied = ids,
+            onModify: (_) {},
+            onDelete: (_) {},
+            onAdd: () {},
+            onClose: () {},
+            accentColor: const Color(0xFF06B6D4),
           ),
         ),
       ),
     );
 
     expect(find.byKey(const ValueKey('stats-scope-sheet')), findsOneWidget);
-    expect(find.byKey(const ValueKey('stats-scope-all')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-menu-all-card')),
+      findsOneWidget,
+    );
     expect(find.text('Minden kategória'), findsOneWidget);
     expect(find.text('Gyorskaja'), findsOneWidget);
     expect(find.text('Ruha'), findsOneWidget);
     expect(find.text('Bolt'), findsOneWidget);
     expect(find.text('Fizetés'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('stats-scope-category-1')));
-    await tester.tap(find.byKey(const ValueKey('stats-scope-category-2')));
+    await tester.tap(find.byKey(const ValueKey('category-card-1')));
+    await tester.tap(find.byKey(const ValueKey('category-card-2')));
     await tester.pump();
     expect(find.byKey(const ValueKey('stats-scope-sheet')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('stats-scope-apply')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
     expect(applied, {1, 2});
   });
 
@@ -292,24 +303,32 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: StatsCategoryScopeSheet(
+          body: CategoryMenuPanel(
+            key: const ValueKey('stats-scope-sheet'),
             activeType: TransactionType.expense,
             categories: [
               category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
               category(id: 2, name: 'Ruha', type: TransactionType.expense),
             ],
+            categoryTransactionCounts: const {},
+            activeCategory: null,
             selectedCategoryIds: const {},
-            accentColor: const Color(0xFF06B6D4),
+            onSelect: (_) {},
             onApply: (ids) => applied = ids,
+            onModify: (_) {},
+            onDelete: (_) {},
+            onAdd: () {},
+            onClose: () {},
+            accentColor: const Color(0xFF06B6D4),
           ),
         ),
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('stats-scope-category-1')));
-    await tester.tap(find.byKey(const ValueKey('stats-scope-category-2')));
+    await tester.tap(find.byKey(const ValueKey('category-card-1')));
+    await tester.tap(find.byKey(const ValueKey('category-card-2')));
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('stats-scope-apply')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
 
     expect(applied, isEmpty);
   });
@@ -548,8 +567,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('stats-scope-sheet')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('stats-scope-category-1')));
-    await tester.tap(find.byKey(const ValueKey('stats-scope-apply')));
+    await tester.ensureVisible(find.byKey(const ValueKey('category-card-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('category-card-1')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Gyorskaja'), findsAtLeastNWidgets(1));

@@ -76,14 +76,26 @@ class TransactionStore extends ChangeNotifier {
   String? get error => _error;
   TransactionType get activeType => _filter.type;
   SummaryWindow get summaryWindow => _summaryWindow;
+  DateTime get summaryReferenceDate => _periodReferenceDate;
   DateTime get currentDate => _clock();
   String get searchQuery => _filter.searchQuery;
   String? get merchantFilter => _filter.merchant;
   String? get merchantFilterColorHex => _filter.merchantColorHex;
+  Set<int> get activeCategoryIds =>
+      Set.unmodifiable(_filter.effectiveCategoryIds);
+
   TransactionCategory? get activeCategory {
-    final id = _filter.categoryId;
-    if (id == null) return null;
+    final ids = _filter.effectiveCategoryIds;
+    if (ids.length != 1) return null;
+    final id = ids.first;
     return _categoriesById[id];
+  }
+
+  String? get activeCategoryFilterLabel {
+    final ids = _filter.effectiveCategoryIds;
+    if (ids.isEmpty) return null;
+    if (ids.length == 1) return activeCategory?.name;
+    return '${ids.length} kategória';
   }
 
   Map<int, int> get categoryTransactionCounts => _categoryTransactionCounts;
@@ -234,7 +246,8 @@ class TransactionStore extends ChangeNotifier {
   String _filterCacheKey(TransactionFilter filter) {
     final query = filter.searchQuery.trim().toLowerCase();
     final merchant = filter.merchant?.trim() ?? '';
-    return '${_windowCacheKey(filter.type)}|c=${filter.categoryId ?? 0}|m=$merchant|q=$query';
+    final categoryKey = filter.effectiveCategoryIds.toList()..sort();
+    return '${_windowCacheKey(filter.type)}|c=${categoryKey.join(',')}|m=$merchant|q=$query';
   }
 
   List<TransactionCategory> _activeCategoriesFor(TransactionType type) {
@@ -273,8 +286,9 @@ class TransactionStore extends ChangeNotifier {
     final merchant = filter.merchant?.trim();
     final rows = List<TransactionRecord>.unmodifiable(
       _windowedTransactionsFor(filter.type).where((record) {
-        if (filter.categoryId != null &&
-            record.transactionCategoryID != filter.categoryId) {
+        final categoryIds = filter.effectiveCategoryIds;
+        if (categoryIds.isNotEmpty &&
+            !categoryIds.contains(record.transactionCategoryID)) {
           return false;
         }
         if (merchant != null && record.displayMerchant != merchant) {
@@ -313,8 +327,8 @@ class TransactionStore extends ChangeNotifier {
         if (_ghostIsBeforeCurrentMonth(ghost)) return false;
         if (ghost.type != filter.type) return false;
         if (!_ghostInActiveWindow(ghost, periodKey: periodKey)) return false;
-        if (filter.categoryId != null &&
-            ghost.categoryId != filter.categoryId) {
+        final categoryIds = filter.effectiveCategoryIds;
+        if (categoryIds.isNotEmpty && !categoryIds.contains(ghost.categoryId)) {
           return false;
         }
         if (merchant != null && ghost.name != merchant) return false;
@@ -636,7 +650,7 @@ class TransactionStore extends ChangeNotifier {
   void setActiveType(TransactionType type) {
     final unchanged =
         _filter.type == type &&
-        _filter.categoryId == null &&
+        _filter.effectiveCategoryIds.isEmpty &&
         _filter.merchant == null &&
         _filter.searchQuery.isEmpty;
     if (unchanged) return;
@@ -656,10 +670,20 @@ class TransactionStore extends ChangeNotifier {
   }
 
   void setCategoryFilter(TransactionCategory category) {
+    setCategoryFilters(
+      type: category.normalizedType,
+      categoryIds: <int>{category.transactionCategoryID},
+    );
+  }
+
+  void setCategoryFilters({
+    required TransactionType type,
+    required Set<int> categoryIds,
+  }) {
     _resetVisibleDisplayWindow();
     _filter = _filter.copyWith(
-      type: category.normalizedType,
-      categoryId: category.transactionCategoryID,
+      type: type,
+      categoryIds: Set<int>.unmodifiable(categoryIds),
       searchQuery: '',
     );
     _prewarmActiveView('category-filter');
@@ -739,6 +763,16 @@ class TransactionStore extends ChangeNotifier {
     _invalidateViewCaches();
     final generation = ++_summaryChangeGeneration;
     await _finishSummaryChange('summary-reset', generation);
+  }
+
+  Future<void> setSummaryMonth(int year, int month) async {
+    final boundedMonth = month.clamp(1, 12).toInt();
+    _summaryWindow = SummaryWindow.monthly;
+    _periodReferenceDate = DateTime(year, boundedMonth);
+    _prepareGhostProjectionForActiveWindow();
+    _invalidateViewCaches();
+    final generation = ++_summaryChangeGeneration;
+    await _finishSummaryChange('summary-native-picker', generation);
   }
 
   Future<void> _finishSummaryChange(String reason, int generation) async {
@@ -1000,8 +1034,14 @@ class TransactionStore extends ChangeNotifier {
       category.transactionCategoryID,
     );
     if (deleted) {
-      if (_filter.categoryId == category.transactionCategoryID) {
+      final categoryIds = _filter.effectiveCategoryIds;
+      if (categoryIds.contains(category.transactionCategoryID)) {
+        final nextIds = {...categoryIds}
+          ..remove(category.transactionCategoryID);
         _filter = _filter.copyWith(clearCategory: true);
+        if (nextIds.isNotEmpty) {
+          _filter = _filter.copyWith(categoryIds: nextIds);
+        }
       }
       await _reload();
     }

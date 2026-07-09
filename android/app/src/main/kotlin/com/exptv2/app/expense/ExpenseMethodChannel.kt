@@ -1,6 +1,10 @@
 package com.exptv2.app.expense
 
 import android.content.Context
+import android.app.AlertDialog
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.NumberPicker
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -12,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 import kotlin.coroutines.resume
 
 class ExpenseMethodChannel(
@@ -84,6 +89,9 @@ class ExpenseMethodChannel(
             }
             "expenseAuthenticateBiometric" -> scope.launchResult(result) {
                 withContext(Dispatchers.Main) { authenticateBiometric() }
+            }
+            "expensePickYearMonth" -> scope.launchResult(result) {
+                withContext(Dispatchers.Main) { pickYearMonth(call.argumentsMap()) }
             }
             "expenseListNotificationCards" -> scope.launchResult(result) {
                 repository.listNotificationCards()
@@ -257,6 +265,77 @@ class ExpenseMethodChannel(
         prompt.authenticate(info)
         continuation.invokeOnCancellation { prompt.cancelAuthentication() }
     }
+
+    private suspend fun pickYearMonth(args: Map<*, *>): Map<String, Int>? =
+        suspendCancellableCoroutine { continuation ->
+            val now = Calendar.getInstance()
+            val currentYear = now.get(Calendar.YEAR)
+            val initialYear = (args["year"] as? Number)?.toInt()
+                ?: args["year"]?.toString()?.toIntOrNull()
+                ?: currentYear
+            val initialMonth = (args["month"] as? Number)?.toInt()
+                ?: args["month"]?.toString()?.toIntOrNull()
+                ?: (now.get(Calendar.MONTH) + 1)
+            val yearPicker = NumberPicker(activity).apply {
+                minValue = 1970
+                maxValue = currentYear + 10
+                value = initialYear.coerceIn(minValue, maxValue)
+                wrapSelectorWheel = false
+            }
+            val monthNames = arrayOf(
+                "Január",
+                "Február",
+                "Március",
+                "Április",
+                "Május",
+                "Június",
+                "Július",
+                "Augusztus",
+                "Szeptember",
+                "Október",
+                "November",
+                "December",
+            )
+            val monthPicker = NumberPicker(activity).apply {
+                minValue = 1
+                maxValue = 12
+                displayedValues = monthNames
+                value = initialMonth.coerceIn(1, 12)
+                wrapSelectorWheel = true
+            }
+            val content = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(32, 8, 32, 0)
+                addView(
+                    monthPicker,
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+                )
+                addView(
+                    yearPicker,
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+                )
+            }
+            val dialog = AlertDialog.Builder(activity)
+                .setTitle("Időszak")
+                .setView(content)
+                .setPositiveButton("OK") { _, _ ->
+                    if (continuation.isActive) {
+                        continuation.resume(
+                            mapOf("year" to yearPicker.value, "month" to monthPicker.value),
+                        )
+                    }
+                }
+                .setNegativeButton("Mégse") { _, _ ->
+                    if (continuation.isActive) continuation.resume(null)
+                }
+                .setOnCancelListener {
+                    if (continuation.isActive) continuation.resume(null)
+                }
+                .create()
+            continuation.invokeOnCancellation { dialog.dismiss() }
+            dialog.show()
+        }
 
     private fun CoroutineScope.launchResult(result: MethodChannel.Result, block: suspend () -> Any?) {
         launch {

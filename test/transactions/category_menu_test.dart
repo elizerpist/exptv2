@@ -46,21 +46,28 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('category-menu-add-button')),
+      find.byKey(const ValueKey('category-menu-all-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-menu-add-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('category-menu-apply-button')),
       findsOneWidget,
     );
     expect(find.text('Q'), findsOneWidget);
     expect(find.text('Salary'), findsNothing);
 
-    await tester.tap(
-      find.byKey(const ValueKey('category-card-6')),
-      warnIfMissed: false,
-    );
+    await tester.tap(find.byKey(const ValueKey('category-card-6')));
     expect(selected?.name, 'Q');
 
     selected = null;
     modified = null;
-    await tester.tap(find.byKey(const ValueKey('category-icon-6')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('category-icon-6'))),
+    );
     expect(selected?.name, 'Q');
     expect(modified, isNull);
 
@@ -74,7 +81,7 @@ void main() {
     expect(deleted, isNull);
 
     expect(addPressed, isFalse);
-    await tester.tap(find.byKey(const ValueKey('category-menu-add-button')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-add-card')));
     expect(addPressed, isTrue);
   });
 
@@ -100,10 +107,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Válassz kategóriát'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('category-card-6')),
-      warnIfMissed: false,
-    );
+    await _scrollCategoryCardIntoView(tester, 6);
+    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
     await tester.pumpAndSettle();
 
     expect(store.activeCategory?.name, 'Q');
@@ -120,11 +126,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     final store = TransactionStore(FakeTransactionRepository());
-    final theme = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
-      ),
-    );
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
 
     await tester.pumpWidget(
       MaterialApp(
@@ -151,7 +153,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('category-menu-add-pill')),
+      find.byKey(const ValueKey('category-menu-add-card')),
       findsOneWidget,
     );
 
@@ -159,10 +161,10 @@ void main() {
       find.byKey(const ValueKey('category-menu-slide-card')),
     );
     final addRect = tester.getRect(
-      find.byKey(const ValueKey('category-menu-add-pill')),
+      find.byKey(const ValueKey('category-menu-add-card')),
     );
     expect(sheetRect.bottom, moreOrLessEquals(919, epsilon: 1));
-    expect(addRect.bottom, greaterThan(sheetRect.bottom - 82));
+    expect(addRect.top, greaterThan(sheetRect.top));
 
     final shortDrag = await tester.startGesture(
       sheetRect.topCenter + const Offset(0, 24),
@@ -177,7 +179,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('category-menu-add-pill')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-add-card')));
     await tester.pumpAndSettle();
 
     expect(
@@ -200,11 +202,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     final store = TransactionStore(FakeTransactionRepository());
-    final theme = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
-      ),
-    );
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
 
     await tester.pumpWidget(
       MaterialApp(
@@ -225,12 +223,12 @@ void main() {
     final body = tester.getRect(
       find.byKey(const ValueKey('category-menu-scroll-body')),
     );
-    final addPill = tester.getRect(
-      find.byKey(const ValueKey('category-menu-add-pill')),
+    final applyButton = tester.getRect(
+      find.byKey(const ValueKey('category-menu-apply-button')),
     );
 
-    expect(body.bottom, lessThan(addPill.top));
-    expect(addPill.top - body.bottom, greaterThanOrEqualTo(20));
+    expect(body.bottom, lessThan(applyButton.top));
+    expect(applyButton.top - body.bottom, greaterThanOrEqualTo(0));
   });
 
   testWidgets('slide-up category menu drags only from the handler', (
@@ -243,11 +241,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     final store = TransactionStore(FakeTransactionRepository());
-    final theme = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
-      ),
-    );
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
 
     await tester.pumpWidget(
       MaterialApp(
@@ -292,15 +286,11 @@ void main() {
     );
   });
 
-  testWidgets('slide-up category menu closes on select and drag gestures', (
+  testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {
     final store = TransactionStore(FakeTransactionRepository());
-    final theme = ExpenseTheme.fromSettings(
-      AppThemeSettings.defaults().copyWith(
-        categoryMenuPresentation: CategoryMenuPresentation.slideUpSheet,
-      ),
-    );
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
 
     await tester.pumpWidget(
       MaterialApp(
@@ -317,10 +307,14 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('category-card-6')),
-      warnIfMissed: false,
+    await _scrollCategoryCardIntoView(tester, 6);
+    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
     );
+    await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
     await tester.pumpAndSettle();
 
     expect(store.activeCategory?.name, 'Q');
@@ -418,43 +412,41 @@ void main() {
     },
   );
 
-  testWidgets(
-    'category cards can disable neutral shadow and thin icon stroke',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CategoryMenuPanel(
-              activeType: TransactionType.expense,
-              categories: categoryFixtures,
-              categoryTransactionCounts: const {6: 3},
-              activeCategory: null,
-              cardShadowEnabled: false,
-              onSelect: (_) {},
-              onModify: (_) {},
-              onDelete: (_) {},
-              onAdd: () {},
-              onClose: () {},
-            ),
+  testWidgets('category cards keep neutral shadow and thin icon stroke', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CategoryMenuPanel(
+            activeType: TransactionType.expense,
+            categories: categoryFixtures,
+            categoryTransactionCounts: const {6: 3},
+            activeCategory: null,
+            onSelect: (_) {},
+            onModify: (_) {},
+            onDelete: (_) {},
+            onAdd: () {},
+            onClose: () {},
           ),
         ),
-      );
+      ),
+    );
 
-      final card = tester.widget<Container>(
-        find.byKey(const ValueKey('category-card-surface-6')),
-      );
-      expect((card.decoration! as BoxDecoration).boxShadow, isNull);
+    final card = tester.widget<Container>(
+      find.byKey(const ValueKey('category-card-surface-6')),
+    );
+    expect((card.decoration! as BoxDecoration).boxShadow, isNotEmpty);
 
-      final badge = tester.widget<CategoryIconBadge>(
-        find.descendant(
-          of: find.byKey(const ValueKey('category-icon-surface-6')),
-          matching: find.byType(CategoryIconBadge),
-        ),
-      );
-      expect(badge.iconSize, 44);
-      expect(badge.iconStrokeWidth, 1.35);
-    },
-  );
+    final badge = tester.widget<CategoryIconBadge>(
+      find.descendant(
+        of: find.byKey(const ValueKey('category-icon-surface-6')),
+        matching: find.byType(CategoryIconBadge),
+      ),
+    );
+    expect(badge.iconSize, 44);
+    expect(badge.iconStrokeWidth, 1.35);
+  });
 }
 
 final categoryFixtures = <TransactionCategory>[
@@ -583,4 +575,9 @@ double _slideCardTranslationY(WidgetTester tester) {
     find.byKey(const ValueKey('slide-up-menu-transform')),
   );
   return transform.transform.getTranslation().y;
+}
+
+Future<void> _scrollCategoryCardIntoView(WidgetTester tester, int id) async {
+  await tester.ensureVisible(find.byKey(ValueKey('category-card-$id')));
+  await tester.pumpAndSettle();
 }

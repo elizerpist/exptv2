@@ -23,6 +23,7 @@ class MagnetStrip extends StatelessWidget {
     this.customMarkerPosition,
     this.customMarkerStyle = MagnetMarkerStyle.circle,
     this.customKey,
+    this.ambulanceSkin = false,
   });
 
   final MagnetType type;
@@ -35,6 +36,7 @@ class MagnetStrip extends StatelessWidget {
   final double? customMarkerPosition;
   final MagnetMarkerStyle customMarkerStyle;
   final String? customKey;
+  final bool ambulanceSkin;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +46,14 @@ class MagnetStrip extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         final customGradient = customGradientColors;
+        if (ambulanceSkin) {
+          return _AmbulanceMagnetStrip(
+            width: width,
+            height: height,
+            totalIncome: totalIncome,
+            totalExpense: totalExpense,
+          );
+        }
         if (customGradient != null && customGradient.isNotEmpty) {
           return CustomPaint(
             key: ValueKey(customKey ?? 'magnet-strip-custom'),
@@ -84,6 +94,92 @@ class MagnetStrip extends StatelessWidget {
       },
     );
   }
+}
+
+class _AmbulanceMagnetStrip extends StatelessWidget {
+  const _AmbulanceMagnetStrip({
+    required this.width,
+    required this.height,
+    required this.totalIncome,
+    required this.totalExpense,
+  });
+
+  static const orange = Color(0xFFE87522);
+  static const yellow = Color(0xFFFFD84D);
+
+  final double width;
+  final double height;
+  final double totalIncome;
+  final double totalExpense;
+
+  @override
+  Widget build(BuildContext context) {
+    final factor = MagnetStripPainter.balanceProgressFactor(
+      totalIncome,
+      totalExpense,
+    );
+    return SizedBox(
+      key: const ValueKey('magnet-strip-ambulanceSkin'),
+      width: width,
+      height: height,
+      child: Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: SizedBox(
+            key: const ValueKey('magnet-ambulance-progress-track'),
+            width: width,
+            height: MagnetStripPainter.visualTrackHeight(
+              MagnetType.fade,
+              height,
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: orange.withValues(alpha: 0.22),
+                  ),
+                ),
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: factor,
+                  child: CustomPaint(
+                    key: const ValueKey('magnet-ambulance-progress-fill'),
+                    painter: const _AmbulanceStripePainter(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AmbulanceStripePainter extends CustomPainter {
+  const _AmbulanceStripePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final orangePaint = Paint()..color = _AmbulanceMagnetStrip.orange;
+    canvas.drawRect(Offset.zero & size, orangePaint);
+    final yellowPaint = Paint()..color = _AmbulanceMagnetStrip.yellow;
+    const stripeWidth = 14.0;
+    const gap = 22.0;
+    for (var left = -stripeWidth; left < size.width + gap; left += gap) {
+      final path = Path()
+        ..moveTo(left + 5, 0)
+        ..lineTo(left + stripeWidth, 0)
+        ..lineTo(left + stripeWidth - 5, size.height)
+        ..lineTo(left, size.height)
+        ..close();
+      canvas.drawPath(path, yellowPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AmbulanceStripePainter oldDelegate) => false;
 }
 
 class _CustomMagnetStripPainter extends CustomPainter {

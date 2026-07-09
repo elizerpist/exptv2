@@ -99,196 +99,190 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
         : widget.activeType == TransactionType.income
         ? 'Új bevételi kategória'
         : 'Új kiadási kategória';
-    return Column(
+    return Stack(
       children: [
-        const SizedBox(height: 20),
-        Center(
-          child: Container(
-            width: 42,
-            height: 4,
-            decoration: const BoxDecoration(
-              color: AppColors.gray200,
-              borderRadius: BorderRadius.all(Radius.circular(2)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 50,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.gray800,
+        Column(
+          children: [
+            const SizedBox(height: 20),
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: AppColors.gray200,
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
-              if (_editing && widget.onDelete != null)
-                Positioned(
-                  right: 12,
-                  child: IconButton(
-                    key: const ValueKey('category-editor-delete-button'),
-                    onPressed: () => widget.onDelete!(widget.initialCategory!),
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: AppColors.expense,
-                    ),
-                    splashRadius: 22,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 50,
+              child: Center(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.gray800,
                   ),
                 ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 15, 20, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Kategória neve',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.gray500,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ThemedPillField(
-                  fieldKey: const ValueKey('category-name-input'),
-                  debugLabel: 'CategoryEditor.name',
-                  controller: _name,
-                  focusNode: _nameFocus,
-                  label: 'Kategória neve',
-                  surfaceColor: widget.surfaceColor,
-                  surfaceStyle: widget.bodySurfaceStyle,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 28),
-                Row(
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 15, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      _page == 0 ? 'Válassz színt' : 'Válassz ikont',
-                      style: const TextStyle(
+                    const Text(
+                      'Kategória neve',
+                      style: TextStyle(
                         fontSize: 14,
                         color: AppColors.gray500,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const Spacer(),
-                    SizedBox.square(
-                      dimension: 32,
-                      child: IconButton(
-                        key: const ValueKey('category-slot-toggle-button'),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 32,
-                          height: 32,
-                        ),
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.gray100,
-                          foregroundColor: AppColors.gray700,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: const BorderSide(color: AppColors.gray200),
+                    const SizedBox(height: 10),
+                    ThemedPillField(
+                      fieldKey: const ValueKey('category-name-input'),
+                      debugLabel: 'CategoryEditor.name',
+                      controller: _name,
+                      focusNode: _nameFocus,
+                      label: 'Kategória neve',
+                      surfaceColor: widget.surfaceColor,
+                      surfaceStyle: widget.bodySurfaceStyle,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        Text(
+                          _page == 0 ? 'Válassz színt' : 'Válassz ikont',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.gray500,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        onPressed: _toggleSlotPage,
-                        icon: Icon(
-                          _page == 0
-                              ? Icons.grid_view_rounded
-                              : Icons.palette_outlined,
-                          size: 17,
+                        const Spacer(),
+                        SizedBox.square(
+                          dimension: 32,
+                          child: IconButton(
+                            key: const ValueKey('category-slot-toggle-button'),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 32,
+                              height: 32,
+                            ),
+                            style: IconButton.styleFrom(
+                              backgroundColor: AppColors.gray100,
+                              foregroundColor: AppColors.gray700,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: const BorderSide(
+                                  color: AppColors.gray200,
+                                ),
+                              ),
+                            ),
+                            onPressed: _toggleSlotPage,
+                            icon: Icon(
+                              _page == 0
+                                  ? Icons.grid_view_rounded
+                                  : Icons.palette_outlined,
+                              size: 17,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      key: const ValueKey('category-slot-page-view'),
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragStart: _startSlotPageDrag,
+                      onHorizontalDragUpdate: _updateSlotPageDrag,
+                      onHorizontalDragCancel: _resetSlotPageDrag,
+                      onHorizontalDragEnd: _endSlotPageDrag,
+                      child: SizedBox(
+                        height: 170,
+                        child: AnimatedContainer(
+                          key: const ValueKey('category-slot-page-transform'),
+                          duration: _slotPageDragging
+                              ? Duration.zero
+                              : const Duration(milliseconds: 160),
+                          curve: Curves.easeOutCubic,
+                          transform: Matrix4.translationValues(_visualDx, 0, 0),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 120),
+                            child: _page == 0
+                                ? CategorySlotGrid.colors(
+                                    key: const ValueKey('color-slot-grid'),
+                                    selectedSlot: _colorSlot,
+                                    surfaceStyle: widget.buttonSurfaceStyle,
+                                    selectedSurfaceStyle:
+                                        widget.selectedSurfaceStyle,
+                                    accentColor: widget.accentColor,
+                                    onSelected: (slot) =>
+                                        setState(() => _colorSlot = slot),
+                                  )
+                                : CategorySlotGrid.icons(
+                                    key: const ValueKey('icon-slot-grid'),
+                                    selectedSlot: _iconSlot,
+                                    surfaceStyle: widget.buttonSurfaceStyle,
+                                    selectedSurfaceStyle:
+                                        widget.selectedSurfaceStyle,
+                                    accentColor: widget.accentColor,
+                                    onSelected: (slot) =>
+                                        setState(() => _iconSlot = slot),
+                                    onLongPressed: _openIconSelector,
+                                  ),
+                          ),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Előnézet',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.gray500,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    CategoryPreviewPill(
+                      name: _name.text,
+                      colorSlot: _colorSlot,
+                      iconSlot: _iconSlot,
+                      surfaceColor: widget.surfaceColor,
+                      bodySurfaceStyle: widget.bodySurfaceStyle,
+                      avatarSurfaceStyle: widget.buttonSurfaceStyle,
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: AppColors.expense),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    ExpenseSurfaceButton(
+                      buttonKey: const ValueKey('category-save-button'),
+                      label: 'Mentés',
+                      onPressed: _save,
+                      surfaceStyle: widget.buttonSurfaceStyle,
+                      color: widget.accentColor,
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                GestureDetector(
-                  key: const ValueKey('category-slot-page-view'),
-                  behavior: HitTestBehavior.opaque,
-                  onHorizontalDragStart: _startSlotPageDrag,
-                  onHorizontalDragUpdate: _updateSlotPageDrag,
-                  onHorizontalDragCancel: _resetSlotPageDrag,
-                  onHorizontalDragEnd: _endSlotPageDrag,
-                  child: SizedBox(
-                    height: 170,
-                    child: AnimatedContainer(
-                      key: const ValueKey('category-slot-page-transform'),
-                      duration: _slotPageDragging
-                          ? Duration.zero
-                          : const Duration(milliseconds: 160),
-                      curve: Curves.easeOutCubic,
-                      transform: Matrix4.translationValues(_visualDx, 0, 0),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 120),
-                        child: _page == 0
-                            ? CategorySlotGrid.colors(
-                                key: const ValueKey('color-slot-grid'),
-                                selectedSlot: _colorSlot,
-                                surfaceStyle: widget.buttonSurfaceStyle,
-                                selectedSurfaceStyle:
-                                    widget.selectedSurfaceStyle,
-                                accentColor: widget.accentColor,
-                                onSelected: (slot) =>
-                                    setState(() => _colorSlot = slot),
-                              )
-                            : CategorySlotGrid.icons(
-                                key: const ValueKey('icon-slot-grid'),
-                                selectedSlot: _iconSlot,
-                                surfaceStyle: widget.buttonSurfaceStyle,
-                                selectedSurfaceStyle:
-                                    widget.selectedSurfaceStyle,
-                                accentColor: widget.accentColor,
-                                onSelected: (slot) =>
-                                    setState(() => _iconSlot = slot),
-                                onLongPressed: _openIconSelector,
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Előnézet',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.gray500,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                CategoryPreviewPill(
-                  name: _name.text,
-                  colorSlot: _colorSlot,
-                  iconSlot: _iconSlot,
-                  surfaceColor: widget.surfaceColor,
-                  bodySurfaceStyle: widget.bodySurfaceStyle,
-                  avatarSurfaceStyle: widget.buttonSurfaceStyle,
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: AppColors.expense),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                ExpenseSurfaceButton(
-                  buttonKey: const ValueKey('category-save-button'),
-                  label: 'Mentés',
-                  onPressed: _save,
-                  surfaceStyle: widget.buttonSurfaceStyle,
-                  color: widget.accentColor,
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
+        if (_editing && widget.onDelete != null)
+          _CategoryEditorFloatingDeleteButton(
+            onPressed: () => widget.onDelete!(widget.initialCategory!),
+          ),
       ],
     );
   }
@@ -401,6 +395,45 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
         type: widget.initialCategory?.normalizedType ?? widget.activeType,
         colorSlot: _colorSlot,
         iconSlot: _iconSlot,
+      ),
+    );
+  }
+}
+
+class _CategoryEditorFloatingDeleteButton extends StatelessWidget {
+  const _CategoryEditorFloatingDeleteButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 38,
+      right: 20,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              offset: const Offset(0, 2),
+              blurRadius: 5,
+            ),
+          ],
+        ),
+        child: IconButton(
+          key: const ValueKey('category-editor-delete-button'),
+          onPressed: onPressed,
+          icon: const Icon(Icons.delete_outline, color: AppColors.expense),
+          splashRadius: 22,
+          style: IconButton.styleFrom(
+            backgroundColor: AppColors.white,
+            foregroundColor: AppColors.expense,
+            shape: const CircleBorder(
+              side: BorderSide(color: AppColors.gray200),
+            ),
+          ),
+        ),
       ),
     );
   }

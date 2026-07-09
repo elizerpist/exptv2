@@ -16,11 +16,13 @@ class PushNotificationLogPage extends StatefulWidget {
     super.key,
     required this.nativeBridge,
     required this.parserStore,
+    this.onBack,
     this.onOpenTransaction,
   });
 
   final NativeBridge nativeBridge;
   final EventStore parserStore;
+  final VoidCallback? onBack;
   final Future<void> Function(int transactionId)? onOpenTransaction;
 
   @override
@@ -66,6 +68,7 @@ class _PushNotificationLogPageState extends State<PushNotificationLogPage> {
               onMonthChanged: (month) => unawaited(_setMonth(month)),
               onSearchChanged: (query) => unawaited(_setSearch(query)),
               onStatusChanged: (status) => unawaited(_setStatus(status)),
+              onBack: widget.onBack,
             ),
             Expanded(child: _buildBody()),
           ],
@@ -175,6 +178,7 @@ class _FilterHeader extends StatelessWidget {
     required this.onMonthChanged,
     required this.onSearchChanged,
     required this.onStatusChanged,
+    this.onBack,
   });
 
   final PushNotificationLogQuery query;
@@ -183,6 +187,7 @@ class _FilterHeader extends StatelessWidget {
   final ValueChanged<int?> onMonthChanged;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<PushNotificationLogStatus> onStatusChanged;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -205,33 +210,46 @@ class _FilterHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              key: const ValueKey('push-log-search'),
-              controller: searchController,
-              onChanged: onSearchChanged,
-              decoration: InputDecoration(
-                hintText: 'Keresés',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                isDense: true,
-                filled: true,
-                fillColor: AppColors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+            Row(
+              children: [
+                IconButton(
+                  key: const ValueKey('push-log-back-button'),
+                  onPressed: onBack ?? () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: 'Vissza',
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.gray200),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('push-log-search'),
+                    controller: searchController,
+                    onChanged: onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Keresés',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppColors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.gray200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.gray200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                    ),
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.gray200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.primary),
-                ),
-              ),
+              ],
             ),
             const SizedBox(height: 10),
             Row(

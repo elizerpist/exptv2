@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
@@ -19,7 +20,6 @@ class CategoryCard extends StatelessWidget {
     this.avatarSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.accentColor = AppColors.primary,
     this.activeBackgroundColor = AppColors.primaryActiveBackground,
-    this.shadowEnabled = true,
   });
 
   final TransactionCategory category;
@@ -33,9 +33,13 @@ class CategoryCard extends StatelessWidget {
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
   final Color activeBackgroundColor;
-  final bool shadowEnabled;
 
   bool get _hasTransactions => transactionCount > 0;
+
+  void _handleLongPress() {
+    HapticFeedback.mediumImpact();
+    onModify(category);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,38 +49,36 @@ class CategoryCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: ExpensePressable(
-              enabled: cardSurfaceStyle.hasPressEffect,
-              builder: (context, pressed) {
-                final radius = BorderRadius.circular(18);
-                return GestureDetector(
-                  key: ValueKey(
-                    'category-card-${category.transactionCategoryID}',
-                  ),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onSelect(category),
-                  onLongPress: () => onModify(category),
-                  child: ExpenseSurfaceContainer(
+            child: GestureDetector(
+              key: ValueKey('category-card-${category.transactionCategoryID}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onSelect(category),
+              onLongPress: _handleLongPress,
+              child: ExpensePressable(
+                enabled: cardSurfaceStyle.hasPressEffect,
+                forcePressed: active,
+                builder: (context, pressed) {
+                  final radius = BorderRadius.circular(18);
+                  return ExpenseSurfaceContainer(
                     surfaceKey: ValueKey(
                       'category-card-surface-${category.transactionCategoryID}',
                     ),
                     style: cardSurfaceStyle,
-                    color: active ? activeBackgroundColor : surfaceColor,
+                    color: surfaceColor,
                     borderRadius: radius,
                     pressed: pressed,
-                    padding: const EdgeInsets.fromLTRB(12, 85, 12, 18),
+                    padding: const EdgeInsets.fromLTRB(12, 82, 12, 14),
                     neutralBorder: Border.all(
                       color: active ? accentColor : AppColors.gray200,
+                      width: active ? 2 : 1,
                     ),
-                    neutralShadow: shadowEnabled
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              offset: const Offset(0, 2),
-                              blurRadius: 4,
-                            ),
-                          ]
-                        : null,
+                    neutralShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        offset: const Offset(0, 2),
+                        blurRadius: 4,
+                      ),
+                    ],
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -107,9 +109,9 @@ class CategoryCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
           Positioned(
@@ -117,14 +119,11 @@ class CategoryCard extends StatelessWidget {
             left: 0,
             right: 0,
             child: Center(
-              child: GestureDetector(
-                key: ValueKey(
-                  'category-icon-${category.transactionCategoryID}',
-                ),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSelect(category),
-                onLongPress: () => onModify(category),
+              child: IgnorePointer(
                 child: ExpensePressable(
+                  key: ValueKey(
+                    'category-icon-${category.transactionCategoryID}',
+                  ),
                   enabled: avatarSurfaceStyle.hasPressEffect,
                   builder: (context, pressed) {
                     return ExpenseSurfaceContainer(

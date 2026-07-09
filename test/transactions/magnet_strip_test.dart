@@ -25,9 +25,7 @@ void main() {
     );
   });
 
-  testWidgets('magnetcard renders gray fade strip', (
-    tester,
-  ) async {
+  testWidgets('magnetcard renders gray fade strip', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -172,6 +170,50 @@ void main() {
       moreOrLessEquals(trackRect.width * 0.75, epsilon: 0.5),
     );
     expect(decoration.color, AppColors.gray500);
+  });
+
+  testWidgets('ambulance magnet keeps progress math behind striped fill', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: MagnetStrip(
+              type: MagnetType.fade,
+              totalIncome: 300,
+              totalExpense: -100,
+              height: 35,
+              ambulanceSkin: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-ambulance-progress-track')),
+    );
+    final fillRect = tester.getRect(
+      find.byKey(const ValueKey('magnet-ambulance-progress-fill')),
+    );
+
+    expect(
+      find.byKey(const ValueKey('magnet-strip-ambulanceSkin')),
+      findsOneWidget,
+    );
+    expect(
+      trackRect.height,
+      moreOrLessEquals(
+        MagnetStripPainter.visualTrackHeight(MagnetType.fade, 35),
+        epsilon: 0.1,
+      ),
+    );
+    expect(
+      fillRect.width,
+      moreOrLessEquals(trackRect.width * 0.75, epsilon: 0.5),
+    );
   });
 
   testWidgets('partitioned magnet renders allocation in original strip shape', (

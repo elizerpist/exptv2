@@ -17,6 +17,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.labelText = 'Egyenleg',
     this.expanded = false,
     this.magnetType = MagnetType.fade,
+    this.backheaderStyle = BackheaderStyle.classic,
     this.accent = AppColors.primary,
     this.cardColor = AppColors.gray100,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
@@ -49,6 +50,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final String labelText;
   final bool expanded;
   final MagnetType magnetType;
+  final BackheaderStyle backheaderStyle;
   final Color accent;
   final Color cardColor;
   final ExpenseSurfaceInteraction surfaceStyle;
@@ -78,6 +80,10 @@ class TransactionHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibleBalanceText = balanceHidden ? '••••••• Ft' : balanceText;
     final resolvedContentOpacity = contentOpacity ?? (expanded ? 0.0 : 1.0);
+    final ambulanceSkin = backheaderStyle == BackheaderStyle.ambulanceSkin;
+    final resolvedCardColor = ambulanceSkin
+        ? const Color(0xFFF3C542)
+        : cardColor;
 
     Widget headerContentOpacity(Widget child) {
       if (contentOpacity != null) {
@@ -106,7 +112,7 @@ class TransactionHeaderCard extends StatelessWidget {
                 child: ExpenseSurfaceContainer(
                   surfaceKey: const ValueKey('transaction-header-surface'),
                   style: surfaceStyle,
-                  color: cardColor,
+                  color: resolvedCardColor,
                   borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(24),
                   ),
@@ -148,6 +154,7 @@ class TransactionHeaderCard extends StatelessWidget {
                   accent: accent,
                   height: TransactionHeaderMetrics.magnetHeight,
                   budgetAllocation: budgetAllocation,
+                  ambulanceSkin: ambulanceSkin,
                   customGradientColors: magnetGradientColors,
                   customMarkerPosition: magnetMarkerPosition,
                   customMarkerStyle: magnetMarkerStyle,

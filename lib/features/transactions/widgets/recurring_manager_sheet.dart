@@ -162,7 +162,7 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                         SlideUpPanelMetrics.horizontalInset,
                         8,
                         SlideUpPanelMetrics.horizontalInset,
-                        MediaQuery.paddingOf(context).bottom + 28,
+                        MediaQuery.paddingOf(context).bottom + 112,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -248,30 +248,6 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                             ),
                           ],
                           const SizedBox(height: 14),
-                          ExpenseSurfaceButton(
-                            buttonKey: const ValueKey('recurring-manager-save'),
-                            onPressed: _saving ? null : _save,
-                            icon: _editing == null
-                                ? Icons.add_rounded
-                                : Icons.save_outlined,
-                            label: _editing == null
-                                ? 'Szabály hozzáadása'
-                                : 'Szabály mentése',
-                            saving: _saving,
-                            surfaceStyle: expenseTheme.buttonSurfaceStyle,
-                            color: expenseTheme.accent,
-                          ),
-                          if (_editing != null) ...[
-                            const SizedBox(height: 8),
-                            TextButton(
-                              key: const ValueKey(
-                                'recurring-manager-cancel-edit',
-                              ),
-                              onPressed: _resetForm,
-                              child: const Text('Szerkesztés megszakítása'),
-                            ),
-                          ],
-                          const SizedBox(height: 22),
                           _RuleCollection(
                             rules: widget.store.recurringRules,
                             categories: widget.store.categories,
@@ -283,6 +259,41 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                         ],
                       ),
                     ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    SlideUpPanelMetrics.horizontalInset,
+                    0,
+                    SlideUpPanelMetrics.horizontalInset,
+                    MediaQuery.paddingOf(context).bottom + 8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ExpenseSurfaceButton(
+                        buttonKey: const ValueKey('recurring-manager-save'),
+                        onPressed: _saving ? null : _save,
+                        icon: _editing == null
+                            ? Icons.add_rounded
+                            : Icons.save_outlined,
+                        label: _editing == null
+                            ? 'Szabály hozzáadása'
+                            : 'Szabály mentése',
+                        saving: _saving,
+                        surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                        color: expenseTheme.accent,
+                      ),
+                      if (_editing != null) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          key: const ValueKey('recurring-manager-cancel-edit'),
+                          onPressed: _resetForm,
+                          child: const Text('Szerkesztés megszakítása'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],

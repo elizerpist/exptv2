@@ -35,6 +35,13 @@ class ExpenseSettingsPayload {
   final SecuritySettings securitySettings;
 }
 
+class NativeYearMonthSelection {
+  const NativeYearMonthSelection({required this.year, required this.month});
+
+  final int year;
+  final int month;
+}
+
 int? _nullableNativeInt(Object? value) {
   if (value == null) return null;
   if (value is int) return value;
@@ -146,6 +153,28 @@ class NativeBridge {
       'getStatus',
     );
     return ServiceStatus.fromMap(map ?? <dynamic, dynamic>{});
+  }
+
+  Future<NativeYearMonthSelection?> expensePickYearMonth({
+    required int year,
+    required int month,
+  }) async {
+    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expensePickYearMonth',
+      {'year': year, 'month': month},
+    );
+    if (map == null) return null;
+    int readInt(String key, int fallback) {
+      final value = map[key];
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? fallback;
+    }
+
+    return NativeYearMonthSelection(
+      year: readInt('year', year),
+      month: readInt('month', month),
+    );
   }
 
   Future<List<InstalledApp>> listInstalledApps() async {

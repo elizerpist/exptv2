@@ -26,7 +26,6 @@ class ExpenseTheme {
     required this.categoryMenu,
     required this.categoryCard,
     required this.statsMonthCard,
-    required this.categoryMenuSurfaceStyle,
     required this.categoryCardSurfaceStyle,
   });
 
@@ -51,7 +50,6 @@ class ExpenseTheme {
   final Color categoryMenu;
   final Color categoryCard;
   final Color statsMonthCard;
-  final ExpenseSurfaceInteraction categoryMenuSurfaceStyle;
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
 
   Color resolvePrimary(Color color) {
@@ -106,7 +104,6 @@ class ExpenseTheme {
       categoryMenu: _boxColor(settings.categoryMenuColor),
       categoryCard: _boxColor(settings.categoryCardColor),
       statsMonthCard: _boxColor(settings.statsMonthCardColor),
-      categoryMenuSurfaceStyle: settings.categoryMenuSurfaceStyle,
       categoryCardSurfaceStyle: settings.categoryCardSurfaceStyle,
     );
   }

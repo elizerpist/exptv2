@@ -17,24 +17,34 @@ import '../transactions/widgets/calendar_menu/calendar_joystick_range.dart';
 import '../transactions/widgets/calendar_menu/calendar_value_slider_panel.dart';
 import '../transactions/widgets/calendar_menu/focused_month_canvas.dart';
 import '../transactions/widgets/calendar_menu/month_stats_charts.dart';
+import '../transactions/widgets/category_menu/category_menu_panel.dart';
 import '../transactions/widgets/header_card/header_fast_info_surface.dart';
 import '../transactions/widgets/header_card/magnet_strip.dart';
 import '../transactions/widgets/header_card/transaction_header_card.dart';
 import '../transactions/widgets/header_card/transaction_header_metrics.dart';
+import '../transactions/widgets/slide_up_menu_card.dart';
 import '../transactions/widgets/summary_pill.dart';
+import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/transaction_type_pills.dart';
 import 'data/stats_category_scope_series.dart';
 import 'data/stats_closing_series.dart';
 import 'data/stats_year_data.dart';
-import 'widgets/stats_category_scope_sheet.dart';
 import 'widgets/stats_fast_info_graph.dart';
 import 'widgets/stats_year_calendar.dart';
 
 class StatsPage extends StatefulWidget {
-  const StatsPage({super.key, required this.store, this.expenseTheme});
+  const StatsPage({
+    super.key,
+    required this.store,
+    this.expenseTheme,
+    this.onAddCategoryEditorRequested,
+    this.onEditCategoryEditorRequested,
+  });
 
   final TransactionStore store;
   final ExpenseTheme? expenseTheme;
+  final VoidCallback? onAddCategoryEditorRequested;
+  final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
 
   @override
   State<StatsPage> createState() => _StatsPageState();
@@ -47,6 +57,7 @@ class _StatsPageState extends State<StatsPage>
   var _renderMode = StatsRenderMode.categoryScope;
   var _thresholdValue = 5000.0;
   int? _focusedMonth;
+  var _scopeSheetOpen = false;
   late final ValueNotifier<double> _fastInfoExtent;
   late final AnimationController _headerPullController;
   final _selectedScopeByType = <TransactionType, Set<int>>{
@@ -122,8 +133,7 @@ class _StatsPageState extends State<StatsPage>
                       surfaceColor: resolvedTheme.logBox,
                       surfaceStyle: resolvedTheme.buttonSurfaceStyle,
                       accentColor: resolvedTheme.accent,
-                      shadowEnabled:
-                          resolvedTheme.settings.headerPillShadowEnabled,
+                      shadowEnabled: true,
                       onChanged: _setActiveType,
                     ),
                     SummaryPill(
@@ -131,8 +141,7 @@ class _StatsPageState extends State<StatsPage>
                       value: data.summaryValue,
                       surfaceColor: resolvedTheme.logBox,
                       surfaceStyle: resolvedTheme.contentSurfaceStyle,
-                      shadowEnabled:
-                          resolvedTheme.settings.summaryPillShadowEnabled,
+                      shadowEnabled: true,
                       onIntervalSwipe: () {},
                       onPeriodSwipe: (direction) {
                         if (direction == 0) return;
@@ -186,6 +195,47 @@ class _StatsPageState extends State<StatsPage>
                     setState(() => _thresholdValue = value);
                   },
                 ),
+                if (_scopeSheetOpen)
+                  Positioned.fill(
+                    child: SlideUpMenuCard(
+                      cardKey: const ValueKey('stats-scope-slide-card'),
+                      debugLabel: 'StatsCategoryScope',
+                      panelHeight: _scopePanelHeight(context),
+                      onDismissed: _closeScopeSheet,
+                      dismissOnVeilTap: false,
+                      dragFromHandleOnly: true,
+                      dragHandleExtent: 72,
+                      verticalDragBias: 1.2,
+                      child: SafeArea(
+                        top: false,
+                        bottom: false,
+                        child: CategoryMenuPanel(
+                          key: const ValueKey('stats-scope-sheet'),
+                          activeType: _activeType,
+                          categories: widget.store.categories,
+                          categoryTransactionCounts:
+                              widget.store.categoryTransactionCounts,
+                          activeCategory: null,
+                          selectedCategoryIds:
+                              _selectedScopeByType[_activeType] ??
+                              const <int>{},
+                          onSelect: (_) {},
+                          onApply: _applyScopeSelection,
+                          onModify: _openModifyCategory,
+                          onDelete: widget.store.deleteCategory,
+                          onAdd: _openAddCategory,
+                          onClose: _closeScopeSheet,
+                          surfaceColor: resolvedTheme.categoryMenu,
+                          cardSurfaceColor: resolvedTheme.categoryCard,
+                          cardSurfaceStyle:
+                              resolvedTheme.categoryCardSurfaceStyle,
+                          avatarSurfaceStyle: resolvedTheme.buttonSurfaceStyle,
+                          accentColor: resolvedTheme.accent,
+                          activeBackgroundColor: resolvedTheme.activeBackground,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             );
           },
@@ -219,6 +269,7 @@ class _StatsPageState extends State<StatsPage>
         balanceText: data.headerValue,
         showBalanceVisibilityButton: false,
         magnetType: MagnetType.fade,
+        backheaderStyle: expenseTheme.settings.backheaderStyle,
         accent: expenseTheme.accent,
         cardColor: expenseTheme.headerCard,
         surfaceStyle: expenseTheme.contentSurfaceStyle,
@@ -319,30 +370,35 @@ class _StatsPageState extends State<StatsPage>
     setState(() => _focusedMonth = month.month);
   }
 
-  Future<void> _openScopeSheet() async {
-    final result = await showModalBottomSheet<Set<int>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final height = MediaQuery.sizeOf(context).height * 0.72;
-        return SizedBox(
-          height: height,
-          child: StatsCategoryScopeSheet(
-            activeType: _activeType,
-            categories: widget.store.categories,
-            selectedCategoryIds:
-                _selectedScopeByType[_activeType] ?? const <int>{},
-            accentColor: _expenseTheme.accent,
-            onApply: (ids) => Navigator.of(context).pop(ids),
-          ),
-        );
-      },
-    );
-    if (!mounted || result == null) return;
+  void _openScopeSheet() {
+    setState(() => _scopeSheetOpen = true);
+  }
+
+  void _closeScopeSheet() {
+    if (!_scopeSheetOpen) return;
+    setState(() => _scopeSheetOpen = false);
+  }
+
+  void _applyScopeSelection(Set<int> ids) {
     setState(() {
-      _selectedScopeByType[_activeType] = result;
+      _selectedScopeByType[_activeType] = ids;
+      _scopeSheetOpen = false;
     });
+  }
+
+  void _openAddCategory() {
+    widget.onAddCategoryEditorRequested?.call();
+  }
+
+  void _openModifyCategory(TransactionCategory category) {
+    widget.onEditCategoryEditorRequested?.call(category);
+  }
+
+  double _scopePanelHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.summaryPillTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   Future<void> _openThresholdControlSheet() async {

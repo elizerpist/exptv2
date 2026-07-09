@@ -9,6 +9,7 @@ import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
 import '../settings/models/fast_info_config.dart';
 import '../settings/widgets/options/backheader_style_options_panel.dart';
+import '../../services/native_bridge.dart';
 import 'data/limit_allocation_manager.dart';
 import 'models/transaction_category.dart';
 import 'models/transaction_record.dart';
@@ -16,7 +17,6 @@ import 'models/budget_goal_kind.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
-import 'widgets/category_menu/category_menu_overlay.dart';
 import 'widgets/category_menu/category_menu_panel.dart';
 import 'models/backheader_budget_item.dart';
 import 'widgets/header_card/category_budget_stage.dart';
@@ -28,7 +28,6 @@ import 'widgets/header_card/transaction_header_card.dart';
 import 'models/limit_allocation_data.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/slide_up_menu_card.dart';
-import 'widgets/slide_up_panel_metrics.dart';
 import 'widgets/summary_pill.dart';
 import 'widgets/transaction_menu_metrics.dart';
 import 'widgets/transaction_log_list.dart';
@@ -40,6 +39,8 @@ typedef BudgetTargetEditorRequest =
       required DateTime requestedAt,
       required bool headerExpanded,
     });
+
+enum CategoryOverlayMode { picker }
 
 class TransactionHomePage extends StatefulWidget {
   const TransactionHomePage({
@@ -57,6 +58,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onEditCategoryEditorRequested,
     this.onThemeSettingsChanged,
     this.onBackheaderLiveTunerRequested,
+    this.onPickSummaryMonth,
     this.onNotificationPressed,
     this.notificationUnreadCount = 0,
     this.logBottomPadding = 96,
@@ -77,6 +79,8 @@ class TransactionHomePage extends StatefulWidget {
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final VoidCallback? onBackheaderLiveTunerRequested;
+  final Future<NativeYearMonthSelection?> Function(DateTime initial)?
+  onPickSummaryMonth;
   final VoidCallback? onNotificationPressed;
   final int notificationUnreadCount;
   final double logBottomPadding;
@@ -184,9 +188,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final visibleGhostTransactions =
               widget.store.visibleGhostTransactions;
           final visibleLogEntries = widget.store.visibleDisplayLogEntries;
-          final categoryMenuIsSlide =
-              expenseTheme.settings.categoryMenuPresentation ==
-              CategoryMenuPresentation.slideUpSheet;
           _logHomeBuildFrame(
             startedAt: homeBuildStartedAt,
             entryCount: visibleLogEntries.length,
@@ -195,7 +196,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           );
           _notifyBlockingOverlay(
             _categoryEditorOpen ||
-                (_categoryMode != null && categoryMenuIsSlide) ||
                 (_budgetEditorItem != null &&
                     widget.onBudgetTargetEditorRequested == null),
           );
@@ -215,8 +215,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     surfaceColor: expenseTheme.logBox,
                     surfaceStyle: expenseTheme.buttonSurfaceStyle,
                     accentColor: expenseTheme.accent,
-                    shadowEnabled:
-                        expenseTheme.settings.headerPillShadowEnabled,
+                    shadowEnabled: true,
                     onChanged: _setActiveType,
                   ),
                   SummaryPill(
@@ -226,8 +225,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     ),
                     surfaceColor: expenseTheme.logBox,
                     surfaceStyle: expenseTheme.contentSurfaceStyle,
-                    shadowEnabled:
-                        expenseTheme.settings.summaryPillShadowEnabled,
+                    shadowEnabled: true,
+                    onTap: _pickSummaryMonth,
                     onIntervalSwipe: () {
                       widget.store.cycleSummaryWindow();
                     },
@@ -244,11 +243,12 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     surfaceColor: expenseTheme.logBox,
                     surfaceStyle: expenseTheme.contentSurfaceStyle,
                     merchantFilter: widget.store.merchantFilter,
-                    categoryFilter: widget.store.activeCategory?.name,
-                    categoryFilterColor: widget.store.activeCategory?.slotColor,
+                    categoryFilter: widget.store.activeCategoryFilterLabel,
+                    categoryFilterColor:
+                        widget.store.activeCategory?.slotColor ??
+                        const Color(0xFFFBBF24),
                     accentColor: expenseTheme.accent,
-                    shadowEnabled:
-                        expenseTheme.settings.searchPillShadowEnabled,
+                    shadowEnabled: true,
                     filteredCount: visibleTransactions.length,
                     onClearMerchant: widget.store.clearMerchantFilter,
                     onClearCategory: widget.store.clearCategoryFilter,
@@ -264,7 +264,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       surfaceStyle: expenseTheme.contentSurfaceStyle,
                       avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                       ghostSurfaceStyle: expenseTheme.ghostLogboxSurfaceStyle,
-                      shadowEnabled: expenseTheme.settings.logboxShadowEnabled,
+                      shadowEnabled: true,
                       ghostLogboxSettings:
                           expenseTheme.settings.ghostLogboxSettings,
                       onFastFilter: _setMerchantFastFilter,
@@ -280,68 +280,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   ),
                 ],
               ),
-              if (_categoryMode != null && !categoryMenuIsSlide)
-                CategoryMenuOverlay(
-                  store: widget.store,
-                  onClose: _closeCategoryMenu,
-                  onAdd: _openAddCategory,
-                  onModify: _openModifyCategory,
-                  onSelect: _selectCategory,
-                  onDelete: _deleteCategory,
-                  surfaceColor: expenseTheme.categoryMenu,
-                  menuSurfaceStyle: expenseTheme.categoryMenuSurfaceStyle,
-                  cardSurfaceColor: expenseTheme.categoryCard,
-                  cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
-                  avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
-                  accentColor: expenseTheme.accent,
-                  activeBackgroundColor: expenseTheme.activeBackground,
-                  cardShadowEnabled:
-                      expenseTheme.settings.categoryCardShadowEnabled,
-                ),
-              if (_categoryMode != null && categoryMenuIsSlide)
-                Positioned.fill(
-                  child: SlideUpMenuCard(
-                    cardKey: const ValueKey('category-menu-slide-card'),
-                    debugLabel: 'CategoryMenu',
-                    panelHeight: _menuPanelHeight(context),
-                    onDismissed: _closeCategoryMenu,
-                    dismissOnVeilTap: false,
-                    dragFromHandleOnly: true,
-                    dragHandleExtent: 72,
-                    verticalDragBias: 1.2,
-                    child: SafeArea(
-                      top: false,
-                      bottom: false,
-                      child: ColoredBox(
-                        color: expenseTheme.categoryMenu,
-                        child: CategoryMenuPanel(
-                          key: const ValueKey('category-picker-panel'),
-                          activeType: widget.store.activeType,
-                          categories: widget.store.categories,
-                          categoryTransactionCounts:
-                              widget.store.categoryTransactionCounts,
-                          activeCategory: widget.store.activeCategory,
-                          onSelect: _selectCategory,
-                          onModify: _openModifyCategory,
-                          onDelete: _deleteCategory,
-                          onAdd: _openAddCategory,
-                          onClose: _closeCategoryMenu,
-                          surfaceColor: expenseTheme.categoryMenu,
-                          cardSurfaceColor: expenseTheme.categoryCard,
-                          cardSurfaceStyle:
-                              expenseTheme.categoryCardSurfaceStyle,
-                          avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
-                          accentColor: expenseTheme.accent,
-                          activeBackgroundColor: expenseTheme.activeBackground,
-                          addButtonPlacement:
-                              CategoryMenuAddButtonPlacement.bottomPill,
-                          cardShadowEnabled:
-                              expenseTheme.settings.categoryCardShadowEnabled,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               AnimatedBuilder(
                 animation: _headerSlideController,
                 child: RepaintBoundary(
@@ -467,6 +405,45 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                   );
                 },
               ),
+              if (_categoryMode != null)
+                Positioned.fill(
+                  child: SlideUpMenuCard(
+                    cardKey: const ValueKey('category-menu-slide-card'),
+                    debugLabel: 'CategoryMenu',
+                    panelHeight: _menuPanelHeight(context),
+                    onDismissed: _closeCategoryMenu,
+                    dismissOnVeilTap: false,
+                    dragFromHandleOnly: true,
+                    dragHandleExtent: 72,
+                    verticalDragBias: 1.2,
+                    child: SafeArea(
+                      top: false,
+                      bottom: false,
+                      child: CategoryMenuPanel(
+                        key: const ValueKey('category-picker-panel'),
+                        activeType: widget.store.activeType,
+                        categories: widget.store.categories,
+                        categoryTransactionCounts:
+                            widget.store.categoryTransactionCounts,
+                        activeCategory: widget.store.activeCategory,
+                        selectedCategoryIds: widget.store.activeCategoryIds,
+                        onSelect: _selectCategory,
+                        onApply: _applyCategoryFilters,
+                        onModify: _openModifyCategory,
+                        onDelete: _deleteCategory,
+                        onAdd: _openAddCategory,
+                        onClose: _closeCategoryMenu,
+                        surfaceColor: expenseTheme.categoryMenu,
+                        cardSurfaceColor: expenseTheme.categoryCard,
+                        cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
+                        avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+                        accentColor: expenseTheme.accent,
+                        activeBackgroundColor: expenseTheme.activeBackground,
+                        addButtonPlacement: CategoryMenuAddButtonPlacement.card,
+                      ),
+                    ),
+                  ),
+                ),
               if (_categoryEditorOpen)
                 Positioned(
                   top: 0,
@@ -705,7 +682,10 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   double _menuPanelHeight(BuildContext context) {
-    return SlideUpPanelMetrics.fullHeight(context);
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
   }
 
   double _backheaderTunerPanelHeight(BuildContext context) {
@@ -736,6 +716,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
         balanceText: widget.store.totalBalanceText,
         expanded: _headerExpanded,
         magnetType: expenseTheme.settings.magnetType,
+        backheaderStyle: expenseTheme.settings.backheaderStyle,
         accent: expenseTheme.accent,
         cardColor: expenseTheme.headerCard,
         surfaceStyle: expenseTheme.contentSurfaceStyle,
@@ -1058,6 +1039,22 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   void _selectCategory(TransactionCategory category) {
     widget.store.setCategoryFilter(category);
     _closeCategoryMenu();
+  }
+
+  void _applyCategoryFilters(Set<int> categoryIds) {
+    widget.store.setCategoryFilters(
+      type: widget.store.activeType,
+      categoryIds: categoryIds,
+    );
+    _closeCategoryMenu();
+  }
+
+  Future<void> _pickSummaryMonth() async {
+    final picker = widget.onPickSummaryMonth;
+    if (picker == null) return;
+    final selection = await picker(widget.store.summaryReferenceDate);
+    if (!mounted || selection == null) return;
+    await widget.store.setSummaryMonth(selection.year, selection.month);
   }
 
   Future<void> _saveCategory(

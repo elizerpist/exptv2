@@ -242,7 +242,6 @@ void main() {
       buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
       contentSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
-      categoryMenuSurfaceStyle: ExpenseSurfaceInteraction.insetInset,
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
       categoryMenuColor: AppBoxColor.darkgray,
       categoryCardColor: AppBoxColor.white,
@@ -257,20 +256,20 @@ void main() {
     expect(settings.toMap()['buttonSurfaceStyle'], 'raisedInset');
     expect(settings.toMap()['contentSurfaceStyle'], 'insetInset');
     expect(settings.toMap()['ghostLogboxSurfaceStyle'], 'neutralInset');
-    expect(settings.toMap()['categoryMenuSurfaceStyle'], 'insetInset');
+    expect(settings.toMap().containsKey('categoryMenuSurfaceStyle'), isFalse);
     expect(settings.toMap()['categoryCardSurfaceStyle'], 'raisedInset');
-    expect(settings.toMap()['categoryMenuColor'], 'darkgray');
+    expect(settings.toMap()['categoryMenuColor'], 'gray');
     expect(settings.toMap()['categoryCardColor'], 'white');
   });
 
-  test('category menu presentation and shadow toggles parse and serialize', () {
+  test('obsolete category presentation and shadow toggles are ignored', () {
     final defaults = AppThemeSettings.defaults();
-    expect(defaults.toMap()['categoryMenuPresentation'], 'inline');
-    expect(defaults.toMap()['categoryCardShadowEnabled'], isTrue);
-    expect(defaults.toMap()['logboxShadowEnabled'], isFalse);
-    expect(defaults.toMap()['headerPillShadowEnabled'], isTrue);
-    expect(defaults.toMap()['summaryPillShadowEnabled'], isTrue);
-    expect(defaults.toMap()['searchPillShadowEnabled'], isTrue);
+    expect(defaults.toMap().containsKey('categoryMenuPresentation'), isFalse);
+    expect(defaults.toMap().containsKey('categoryCardShadowEnabled'), isFalse);
+    expect(defaults.toMap().containsKey('logboxShadowEnabled'), isFalse);
+    expect(defaults.toMap().containsKey('headerPillShadowEnabled'), isFalse);
+    expect(defaults.toMap().containsKey('summaryPillShadowEnabled'), isFalse);
+    expect(defaults.toMap().containsKey('searchPillShadowEnabled'), isFalse);
 
     final settings = AppThemeSettings.fromMap(const <String, Object?>{
       'categoryMenuPresentation': 'slideUpSheet',
@@ -281,12 +280,12 @@ void main() {
       'searchPillShadowEnabled': false,
     });
 
-    expect(settings.toMap()['categoryMenuPresentation'], 'slideUpSheet');
-    expect(settings.toMap()['categoryCardShadowEnabled'], isFalse);
-    expect(settings.toMap()['logboxShadowEnabled'], isFalse);
-    expect(settings.toMap()['headerPillShadowEnabled'], isFalse);
-    expect(settings.toMap()['summaryPillShadowEnabled'], isFalse);
-    expect(settings.toMap()['searchPillShadowEnabled'], isFalse);
+    expect(settings.toMap().containsKey('categoryMenuPresentation'), isFalse);
+    expect(settings.toMap().containsKey('categoryCardShadowEnabled'), isFalse);
+    expect(settings.toMap().containsKey('logboxShadowEnabled'), isFalse);
+    expect(settings.toMap().containsKey('headerPillShadowEnabled'), isFalse);
+    expect(settings.toMap().containsKey('summaryPillShadowEnabled'), isFalse);
+    expect(settings.toMap().containsKey('searchPillShadowEnabled'), isFalse);
   });
 
   test('shell navigation and fab shape are no longer theme settings', () {

@@ -197,6 +197,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onBackheaderLiveTunerRequested: () {
         _sheetHostKey.currentState?.openBackheaderLiveTuner();
       },
+      onPickSummaryMonth: (initial) => widget.nativeBridge.expensePickYearMonth(
+        year: initial.year,
+        month: initial.month,
+      ),
       budgetEditorActiveKey: _budgetEditorActiveKey,
     );
   }
@@ -205,6 +209,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     return StatsPage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
+      onAddCategoryEditorRequested: () {
+        _sheetHostKey.currentState?.openCategory();
+      },
+      onEditCategoryEditorRequested: (category) {
+        _sheetHostKey.currentState?.openCategory(initialCategory: category);
+      },
     );
   }
 

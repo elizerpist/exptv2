@@ -215,26 +215,25 @@ class ExpenseSettingsStoreSecurityTest {
         val updated = store.updateThemeSettings(
             mapOf(
                 "categoryMenuColor" to "darkgray",
-                "categoryMenuSurfaceStyle" to "insetInset",
                 "categoryCardColor" to "white",
                 "categoryCardSurfaceStyle" to "raisedInset",
             )
         )
 
-        assertEquals("darkgray", updated["categoryMenuColor"])
-        assertEquals("insetInset", updated["categoryMenuSurfaceStyle"])
+        assertEquals("gray", updated["categoryMenuColor"])
+        assertFalse(updated.containsKey("categoryMenuSurfaceStyle"))
         assertEquals("white", updated["categoryCardColor"])
         assertEquals("raisedInset", updated["categoryCardSurfaceStyle"])
 
         val loaded = store.loadThemeSettings()
-        assertEquals("darkgray", loaded["categoryMenuColor"])
-        assertEquals("insetInset", loaded["categoryMenuSurfaceStyle"])
+        assertEquals("gray", loaded["categoryMenuColor"])
+        assertFalse(loaded.containsKey("categoryMenuSurfaceStyle"))
         assertEquals("white", loaded["categoryCardColor"])
         assertEquals("raisedInset", loaded["categoryCardSurfaceStyle"])
     }
 
     @Test
-    fun themeSettingsPersistCategoryPresentationAndShadowControls() {
+    fun themeSettingsIgnoreRemovedCategoryPresentationAndShadowControls() {
         val updated = store.updateThemeSettings(
             mapOf(
                 "categoryMenuPresentation" to "slideUpSheet",
@@ -246,20 +245,20 @@ class ExpenseSettingsStoreSecurityTest {
             )
         )
 
-        assertEquals("slideUpSheet", updated["categoryMenuPresentation"])
-        assertEquals(false, updated["categoryCardShadowEnabled"])
-        assertEquals(true, updated["logboxShadowEnabled"])
-        assertEquals(false, updated["headerPillShadowEnabled"])
-        assertEquals(false, updated["summaryPillShadowEnabled"])
-        assertEquals(false, updated["searchPillShadowEnabled"])
+        assertFalse(updated.containsKey("categoryMenuPresentation"))
+        assertFalse(updated.containsKey("categoryCardShadowEnabled"))
+        assertFalse(updated.containsKey("logboxShadowEnabled"))
+        assertFalse(updated.containsKey("headerPillShadowEnabled"))
+        assertFalse(updated.containsKey("summaryPillShadowEnabled"))
+        assertFalse(updated.containsKey("searchPillShadowEnabled"))
 
         val loaded = store.loadThemeSettings()
-        assertEquals("slideUpSheet", loaded["categoryMenuPresentation"])
-        assertEquals(false, loaded["categoryCardShadowEnabled"])
-        assertEquals(true, loaded["logboxShadowEnabled"])
-        assertEquals(false, loaded["headerPillShadowEnabled"])
-        assertEquals(false, loaded["summaryPillShadowEnabled"])
-        assertEquals(false, loaded["searchPillShadowEnabled"])
+        assertFalse(loaded.containsKey("categoryMenuPresentation"))
+        assertFalse(loaded.containsKey("categoryCardShadowEnabled"))
+        assertFalse(loaded.containsKey("logboxShadowEnabled"))
+        assertFalse(loaded.containsKey("headerPillShadowEnabled"))
+        assertFalse(loaded.containsKey("summaryPillShadowEnabled"))
+        assertFalse(loaded.containsKey("searchPillShadowEnabled"))
     }
 
     @Test

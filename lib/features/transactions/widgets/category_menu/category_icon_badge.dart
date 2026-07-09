@@ -35,7 +35,7 @@ class CategoryIconBadge extends StatelessWidget {
         backgroundColor ??
         category?.slotColor ??
         CategoryColorManager.color(colorSlot);
-    final resolvedIconSlot = iconSlot ?? category?.iconSlot;
+    final resolvedIconSlot = iconSlot ?? category?.iconSlot ?? 0;
     return Container(
       width: size,
       height: size,

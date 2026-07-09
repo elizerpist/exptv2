@@ -904,35 +904,40 @@ void main() {
     expect(saveTop - dateBottom, lessThanOrEqualTo(amountTop - nameBottom + 2));
   });
 
-  testWidgets('transaction editor save button aligns with category editor', (
-    tester,
-  ) async {
-    await tester.pumpWidget(buildApp());
-    await tester.pumpAndSettle();
+  testWidgets(
+    'transaction editor save button aligns with category filter action',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
 
-    await _tapFab(tester);
-    final transactionSaveBottom = tester
-        .getRect(find.byKey(const ValueKey('transaction-save-button')))
-        .bottom;
+      await _tapFab(tester);
+      final transactionSaveBottom = tester
+          .getRect(find.byKey(const ValueKey('transaction-save-button')))
+          .bottom;
 
-    await tester.tap(find.byKey(const ValueKey('slide-up-menu-veil')));
-    await tester.pumpAndSettle();
+      final transactionCardTopLeft = tester.getTopLeft(
+        find.byKey(const ValueKey('transaction-editor-card')),
+      );
+      final closeGesture = await tester.startGesture(
+        transactionCardTopLeft + const Offset(200, 24),
+      );
+      await closeGesture.moveBy(const Offset(0, 140));
+      await closeGesture.up();
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-category-button')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('category-menu-add-button')));
-    await tester.pumpAndSettle();
+      final categoryActionBottom = tester
+          .getRect(find.byKey(const ValueKey('category-menu-apply-button')))
+          .bottom;
 
-    final categorySaveBottom = tester
-        .getRect(find.byKey(const ValueKey('category-save-button')))
-        .bottom;
-
-    expect(
-      transactionSaveBottom,
-      moreOrLessEquals(categorySaveBottom, epsilon: 4),
-    );
-  });
+      expect(
+        transactionSaveBottom,
+        moreOrLessEquals(categoryActionBottom, epsilon: 4),
+      );
+    },
+  );
 
   testWidgets('transaction editor logs text focus performance', (tester) async {
     await tester.pumpWidget(buildApp());
@@ -979,7 +984,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('transaction-category-popup')),
       findsNothing,
@@ -1065,7 +1073,7 @@ void main() {
     expect(find.text('Q'), findsWidgets);
   });
 
-  testWidgets('transaction editor keeps date row close to category selector', (
+  testWidgets('transaction editor keeps save button above the safe zone', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -1073,17 +1081,16 @@ void main() {
 
     await _tapFab(tester);
 
-    final selectorRect = tester.getRect(
-      find.byKey(const ValueKey('transaction-category-selector')),
+    final saveRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-save-button')),
     );
-    final dateRect = tester.getRect(
-      find.byKey(const ValueKey('transaction-date-picker-button')),
-    );
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
 
-    expect(dateRect.top - selectorRect.bottom, lessThanOrEqualTo(24));
+    expect(screenHeight - saveRect.bottom, lessThanOrEqualTo(12));
   });
 
-  testWidgets('category overlay keeps shell navigation controls visible', (
+  testWidgets('category sheet keeps shell navigation controls visible', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -1094,7 +1101,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
 
@@ -1103,47 +1113,47 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('category-menu-add-button')),
+      find.byKey(const ValueKey('category-menu-add-card')),
       findsOneWidget,
     );
   });
 
-  testWidgets('slide-up category sheet hides shell navigation controls', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 919);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-    themeSettingsOverride = <String, Object?>{
-      'magnetType': 'fade',
-      'cardColor': 'lightgray',
-      'theme': 'Türkiz',
-      'backgroundColor': 'gray',
-      'boxColor': 'gray',
-      'backheaderStyle': 'classic',
-      'categoryMenuPresentation': 'slideUpSheet',
-    };
+  testWidgets(
+    'slide-up category sheet leaves shell navigation controls visible',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 919);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      themeSettingsOverride = <String, Object?>{
+        'magnetType': 'fade',
+        'cardColor': 'lightgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'gray',
+        'boxColor': 'gray',
+        'backheaderStyle': 'classic',
+      };
 
-    await tester.pumpWidget(buildApp());
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('header-category-button')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('category-menu-slide-card')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('category-menu-add-pill')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
-    expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
-  });
+      expect(
+        find.byKey(const ValueKey('category-menu-slide-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('category-menu-add-card')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    },
+  );
 
   testWidgets('add category sheet keeps the picker behind and covers nav', (
     tester,
@@ -1161,18 +1171,26 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('header-category-button')));
     await tester.pumpAndSettle();
 
-    final overlayRect = tester.getRect(
-      find.byKey(const ValueKey('category-menu-overlay')),
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
     );
-    final addButtonRect = tester.getRect(
-      find.byKey(const ValueKey('category-menu-add-button')),
+    final allCardRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-all-card')),
     );
-    expect(addButtonRect.right, greaterThan(overlayRect.right - 56));
+    final addCardRect = tester.getRect(
+      find.byKey(const ValueKey('category-menu-add-card')),
+    );
+    expect(sheetRect.top, lessThan(allCardRect.top));
+    expect(addCardRect.top, moreOrLessEquals(allCardRect.top, epsilon: 1));
+    expect(addCardRect.left, greaterThan(allCardRect.left));
 
-    await tester.tap(find.byKey(const ValueKey('category-menu-add-button')));
+    await tester.tap(find.byKey(const ValueKey('category-menu-add-card')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('category-editor-slide-card')),
       findsOneWidget,
@@ -1194,7 +1212,10 @@ void main() {
       find.byKey(const ValueKey('category-editor-slide-card')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('category-menu-overlay')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('transaction editor is focused and aligned to summary pill', (

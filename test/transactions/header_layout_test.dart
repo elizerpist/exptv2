@@ -1,4 +1,3 @@
-import 'package:exptv2/core/theme/app_dimensions.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
@@ -247,7 +246,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final pickerTop = tester
-          .getRect(find.byKey(const ValueKey('category-menu-overlay')))
+          .getRect(find.byKey(const ValueKey('category-menu-slide-card')))
           .top;
       expect(pickerTop, moreOrLessEquals(summaryTop, epsilon: 1.1));
 
@@ -260,7 +259,7 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey('category-menu-add-button')),
+        find.byKey(const ValueKey('category-menu-add-card')),
         findsOneWidget,
       );
     },
@@ -292,28 +291,20 @@ void main() {
       await tester.pumpAndSettle();
 
       final pickerRect = tester.getRect(
-        find.byKey(const ValueKey('category-menu-overlay')),
+        find.byKey(const ValueKey('category-menu-slide-card')),
       );
-      final widgets = tester.allWidgets.toList();
-      final pickerPaintIndex = widgets.indexWhere(
-        (widget) => widget.key == const ValueKey('category-menu-overlay'),
-      );
-      final headerPaintIndex = widgets.indexWhere(
-        (widget) => widget.key == const ValueKey('transaction-header-card'),
-      );
-      expect(headerPaintIndex, greaterThan(pickerPaintIndex));
       expect(
         pickerRect.bottom,
-        moreOrLessEquals(
-          _screenHeight(tester) - AppDimensions.bottomNavHeight,
-          epsilon: 1.1,
-        ),
+        moreOrLessEquals(_screenHeight(tester), epsilon: 1.1),
       );
 
       await tester.tap(find.byKey(const ValueKey('header-category-button')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('category-menu-overlay')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('category-menu-slide-card')),
+        findsNothing,
+      );
     },
   );
 
@@ -339,7 +330,12 @@ void main() {
           .top;
       await tester.tap(find.byKey(const ValueKey('header-category-button')));
       await tester.pumpAndSettle();
-      await tester.longPress(find.byKey(const ValueKey('category-icon-6')));
+      await tester.ensureVisible(find.byKey(const ValueKey('category-card-6')));
+      await tester.pumpAndSettle();
+      await tester.longPress(
+        find.byKey(const ValueKey('category-card-6')),
+        warnIfMissed: false,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Kategória módosítása'), findsOneWidget);
@@ -621,7 +617,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('category-menu-overlay')),
+        find.byKey(const ValueKey('category-menu-slide-card')),
         findsOneWidget,
       );
       expect(find.text('Food'), findsOneWidget);
@@ -631,7 +627,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('category-menu-overlay')),
+        find.byKey(const ValueKey('category-menu-slide-card')),
         findsOneWidget,
       );
       expect(find.text('Salary'), findsOneWidget);

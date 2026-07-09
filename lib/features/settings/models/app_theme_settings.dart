@@ -26,7 +26,8 @@ enum BackheaderStyle {
   classic('classic'),
   heroToken('heroToken'),
   orbitBudget('orbitBudget'),
-  centerBadgeBudget('centerBadgeBudget');
+  centerBadgeBudget('centerBadgeBudget'),
+  ambulanceSkin('ambulanceSkin');
 
   const BackheaderStyle(this.nativeValue);
   final String nativeValue;
@@ -34,6 +35,7 @@ enum BackheaderStyle {
   static const selectableValues = <BackheaderStyle>[
     BackheaderStyle.classic,
     BackheaderStyle.centerBadgeBudget,
+    BackheaderStyle.ambulanceSkin,
   ];
 
   static BackheaderStyle fromAny(Object? value) {
@@ -49,6 +51,7 @@ enum BackheaderStyle {
     BackheaderStyle.heroToken => 'C - Hero Token',
     BackheaderStyle.orbitBudget => 'D - Orbit Budget',
     BackheaderStyle.centerBadgeBudget => 'E - Center Badge Budget',
+    BackheaderStyle.ambulanceSkin => 'Mentők skin',
   };
 
   String get description => switch (this) {
@@ -57,6 +60,8 @@ enum BackheaderStyle {
     BackheaderStyle.orbitBudget => 'Kategóriaszínű orbit/ring budget nézet',
     BackheaderStyle.centerBadgeBudget =>
       'Középső limit/budget badge élő progress ringgel',
+    BackheaderStyle.ambulanceSkin =>
+      'Mentőautó ihletésű sárga header narancs mágnescsíkkal',
   };
 }
 
@@ -231,22 +236,6 @@ enum AppBoxColor {
   }
 }
 
-enum CategoryMenuPresentation {
-  inline('inline'),
-  slideUpSheet('slideUpSheet');
-
-  const CategoryMenuPresentation(this.nativeValue);
-  final String nativeValue;
-
-  static CategoryMenuPresentation fromAny(Object? value) {
-    final raw = value?.toString();
-    return CategoryMenuPresentation.values.firstWhere(
-      (item) => item.nativeValue == raw,
-      orElse: () => CategoryMenuPresentation.inline,
-    );
-  }
-}
-
 const kFabSizeDefault = 66;
 const kFabSizeMin = 52;
 const kFabSizeMax = 88;
@@ -398,7 +387,6 @@ class AppThemeSettings {
     required this.ghostLogboxSurfaceStyle,
     required this.ghostLogboxSettings,
     required this.categoryMenuColor,
-    required this.categoryMenuSurfaceStyle,
     required this.categoryCardColor,
     required this.categoryCardSurfaceStyle,
     required this.backheaderStyle,
@@ -423,13 +411,7 @@ class AppThemeSettings {
     this.centerBadgeSlotXOffsets = kCenterBadgeSlotXOffsetDefaults,
     this.centerBadgeColoredBackgroundOpacity =
         kCenterBadgeColoredBackgroundOpacityDefault,
-    this.categoryMenuPresentation = CategoryMenuPresentation.inline,
     this.fabSize = kFabSizeDefault,
-    this.categoryCardShadowEnabled = true,
-    this.logboxShadowEnabled = false,
-    this.headerPillShadowEnabled = true,
-    this.summaryPillShadowEnabled = true,
-    this.searchPillShadowEnabled = true,
   });
 
   factory AppThemeSettings.defaults() {
@@ -444,7 +426,6 @@ class AppThemeSettings {
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSettings: GhostLogboxSettings.defaults(),
       categoryMenuColor: AppBoxColor.gray,
-      categoryMenuSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       categoryCardColor: AppBoxColor.gray,
       categoryCardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       backheaderStyle: BackheaderStyle.classic,
@@ -467,13 +448,7 @@ class AppThemeSettings {
       centerBadgeColoredBackgroundOpacity:
           kCenterBadgeColoredBackgroundOpacityDefault,
       appColor: AppColorMode.turquoise,
-      categoryMenuPresentation: CategoryMenuPresentation.inline,
       fabSize: kFabSizeDefault,
-      categoryCardShadowEnabled: true,
-      logboxShadowEnabled: false,
-      headerPillShadowEnabled: true,
-      summaryPillShadowEnabled: true,
-      searchPillShadowEnabled: true,
     );
   }
 
@@ -511,13 +486,8 @@ class AppThemeSettings {
             ? Map<dynamic, dynamic>.from(map['ghostLogboxSettings'] as Map)
             : null,
       ),
-      categoryMenuColor: AppBoxColor.fromAny(map['categoryMenuColor']),
-      categoryMenuSurfaceStyle: _surfaceFromMap(
-        map,
-        'categoryMenuSurfaceStyle',
-        ExpenseSurfaceInteraction.neutralNeutral,
-      ),
-      categoryCardColor: AppBoxColor.fromAny(map['categoryCardColor']),
+      categoryMenuColor: _categoryBoxColorFromAny(map['categoryMenuColor']),
+      categoryCardColor: _categoryBoxColorFromAny(map['categoryCardColor']),
       categoryCardSurfaceStyle: _surfaceFromMap(
         map,
         'categoryCardSurfaceStyle',
@@ -583,20 +553,12 @@ class AppThemeSettings {
         kCenterBadgeColoredBackgroundOpacityDefault,
       ),
       appColor: _appColorFromMap(map),
-      categoryMenuPresentation: CategoryMenuPresentation.fromAny(
-        map['categoryMenuPresentation'],
-      ),
       fabSize: _boundedInt(
         map['fabSize'],
         kFabSizeDefault,
         min: kFabSizeMin,
         max: kFabSizeMax,
       ),
-      categoryCardShadowEnabled: _bool(map['categoryCardShadowEnabled'], true),
-      logboxShadowEnabled: _bool(map['logboxShadowEnabled'], false),
-      headerPillShadowEnabled: _bool(map['headerPillShadowEnabled'], true),
-      summaryPillShadowEnabled: _bool(map['summaryPillShadowEnabled'], true),
-      searchPillShadowEnabled: _bool(map['searchPillShadowEnabled'], true),
     );
   }
 
@@ -610,7 +572,6 @@ class AppThemeSettings {
   final ExpenseSurfaceInteraction ghostLogboxSurfaceStyle;
   final GhostLogboxSettings ghostLogboxSettings;
   final AppBoxColor categoryMenuColor;
-  final ExpenseSurfaceInteraction categoryMenuSurfaceStyle;
   final AppBoxColor categoryCardColor;
   final ExpenseSurfaceInteraction categoryCardSurfaceStyle;
   final BackheaderStyle backheaderStyle;
@@ -630,13 +591,7 @@ class AppThemeSettings {
   final List<int> centerBadgeSlotXOffsets;
   final int centerBadgeColoredBackgroundOpacity;
   final AppColorMode appColor;
-  final CategoryMenuPresentation categoryMenuPresentation;
   final int fabSize;
-  final bool categoryCardShadowEnabled;
-  final bool logboxShadowEnabled;
-  final bool headerPillShadowEnabled;
-  final bool summaryPillShadowEnabled;
-  final bool searchPillShadowEnabled;
 
   AppDesignProfile get designProfile {
     final looksNeumorphic =
@@ -660,7 +615,6 @@ class AppThemeSettings {
       'ghostLogboxSurfaceStyle': ghostLogboxSurfaceStyle.nativeValue,
       'ghostLogboxSettings': ghostLogboxSettings.toMap(),
       'categoryMenuColor': categoryMenuColor.nativeValue,
-      'categoryMenuSurfaceStyle': categoryMenuSurfaceStyle.nativeValue,
       'categoryCardColor': categoryCardColor.nativeValue,
       'categoryCardSurfaceStyle': categoryCardSurfaceStyle.nativeValue,
       'backheaderStyle': backheaderStyle.nativeValue,
@@ -682,13 +636,7 @@ class AppThemeSettings {
       'centerBadgeColoredBackgroundOpacity':
           centerBadgeColoredBackgroundOpacity,
       'appColor': appColor.nativeValue,
-      'categoryMenuPresentation': categoryMenuPresentation.nativeValue,
       'fabSize': fabSize,
-      'categoryCardShadowEnabled': categoryCardShadowEnabled,
-      'logboxShadowEnabled': logboxShadowEnabled,
-      'headerPillShadowEnabled': headerPillShadowEnabled,
-      'summaryPillShadowEnabled': summaryPillShadowEnabled,
-      'searchPillShadowEnabled': searchPillShadowEnabled,
     };
   }
 
@@ -703,7 +651,6 @@ class AppThemeSettings {
     ExpenseSurfaceInteraction? ghostLogboxSurfaceStyle,
     GhostLogboxSettings? ghostLogboxSettings,
     AppBoxColor? categoryMenuColor,
-    ExpenseSurfaceInteraction? categoryMenuSurfaceStyle,
     AppBoxColor? categoryCardColor,
     ExpenseSurfaceInteraction? categoryCardSurfaceStyle,
     BackheaderStyle? backheaderStyle,
@@ -723,13 +670,7 @@ class AppThemeSettings {
     List<int>? centerBadgeSlotXOffsets,
     int? centerBadgeColoredBackgroundOpacity,
     AppColorMode? appColor,
-    CategoryMenuPresentation? categoryMenuPresentation,
     int? fabSize,
-    bool? categoryCardShadowEnabled,
-    bool? logboxShadowEnabled,
-    bool? headerPillShadowEnabled,
-    bool? summaryPillShadowEnabled,
-    bool? searchPillShadowEnabled,
   }) {
     return AppThemeSettings(
       magnetType: magnetType ?? this.magnetType,
@@ -742,10 +683,12 @@ class AppThemeSettings {
       ghostLogboxSurfaceStyle:
           ghostLogboxSurfaceStyle ?? this.ghostLogboxSurfaceStyle,
       ghostLogboxSettings: ghostLogboxSettings ?? this.ghostLogboxSettings,
-      categoryMenuColor: categoryMenuColor ?? this.categoryMenuColor,
-      categoryMenuSurfaceStyle:
-          categoryMenuSurfaceStyle ?? this.categoryMenuSurfaceStyle,
-      categoryCardColor: categoryCardColor ?? this.categoryCardColor,
+      categoryMenuColor: categoryMenuColor == null
+          ? this.categoryMenuColor
+          : _categoryBoxColorFromAny(categoryMenuColor.nativeValue),
+      categoryCardColor: categoryCardColor == null
+          ? this.categoryCardColor
+          : _categoryBoxColorFromAny(categoryCardColor.nativeValue),
       categoryCardSurfaceStyle:
           categoryCardSurfaceStyle ?? this.categoryCardSurfaceStyle,
       backheaderStyle: backheaderStyle ?? this.backheaderStyle,
@@ -784,20 +727,9 @@ class AppThemeSettings {
           centerBadgeColoredBackgroundOpacity ??
           this.centerBadgeColoredBackgroundOpacity,
       appColor: appColor ?? this.appColor,
-      categoryMenuPresentation:
-          categoryMenuPresentation ?? this.categoryMenuPresentation,
       fabSize: fabSize == null
           ? this.fabSize
           : fabSize.clamp(kFabSizeMin, kFabSizeMax).toInt(),
-      categoryCardShadowEnabled:
-          categoryCardShadowEnabled ?? this.categoryCardShadowEnabled,
-      logboxShadowEnabled: logboxShadowEnabled ?? this.logboxShadowEnabled,
-      headerPillShadowEnabled:
-          headerPillShadowEnabled ?? this.headerPillShadowEnabled,
-      summaryPillShadowEnabled:
-          summaryPillShadowEnabled ?? this.summaryPillShadowEnabled,
-      searchPillShadowEnabled:
-          searchPillShadowEnabled ?? this.searchPillShadowEnabled,
     );
   }
 
@@ -815,6 +747,12 @@ class AppThemeSettings {
       return AppColorMode.fromAny(map['appColor']);
     }
     return AppColorMode.fromAny(map['theme']);
+  }
+
+  static AppBoxColor _categoryBoxColorFromAny(Object? value) {
+    return AppBoxColor.fromAny(value) == AppBoxColor.white
+        ? AppBoxColor.white
+        : AppBoxColor.gray;
   }
 
   static bool _hasValue(Object? value) {

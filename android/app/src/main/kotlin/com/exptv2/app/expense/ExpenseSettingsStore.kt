@@ -34,18 +34,11 @@ class ExpenseSettingsStore(context: Context) {
             "boxColor" to prefs.getString(KEY_BOX_COLOR, "gray"),
             "buttonSurfaceStyle" to prefs.getString(KEY_BUTTON_SURFACE_STYLE, "neutralNeutral"),
             "contentSurfaceStyle" to prefs.getString(KEY_CONTENT_SURFACE_STYLE, "neutralNeutral"),
-            "categoryMenuColor" to prefs.getString(KEY_CATEGORY_MENU_COLOR, "lightgray"),
-            "categoryMenuSurfaceStyle" to prefs.getString(KEY_CATEGORY_MENU_SURFACE_STYLE, "neutralNeutral"),
-            "categoryCardColor" to prefs.getString(KEY_CATEGORY_CARD_COLOR, "lightgray"),
+            "categoryMenuColor" to categoryColor(prefs.getString(KEY_CATEGORY_MENU_COLOR, "gray")),
+            "categoryCardColor" to categoryColor(prefs.getString(KEY_CATEGORY_CARD_COLOR, "gray")),
             "categoryCardSurfaceStyle" to prefs.getString(KEY_CATEGORY_CARD_SURFACE_STYLE, "neutralNeutral"),
-            "categoryMenuPresentation" to prefs.getString(KEY_CATEGORY_MENU_PRESENTATION, "inline"),
             "fabSize" to prefs.getInt(KEY_FAB_SIZE, DEFAULT_FAB_SIZE)
                 .coerceIn(MIN_FAB_SIZE, MAX_FAB_SIZE),
-            "categoryCardShadowEnabled" to prefs.getBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, true),
-            "logboxShadowEnabled" to prefs.getBoolean(KEY_LOGBOX_SHADOW_ENABLED, false),
-            "headerPillShadowEnabled" to prefs.getBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, true),
-            "summaryPillShadowEnabled" to prefs.getBoolean(KEY_SUMMARY_PILL_SHADOW_ENABLED, true),
-            "searchPillShadowEnabled" to prefs.getBoolean(KEY_SEARCH_PILL_SHADOW_ENABLED, true),
             "ghostLogboxSurfaceStyle" to (
                 prefs.getString(KEY_GHOST_LOGBOX_SURFACE_STYLE, null)?.takeIf { it.isNotBlank() }
                     ?: legacyGhostLogboxSurfaceStyle()
@@ -139,20 +132,13 @@ class ExpenseSettingsStore(context: Context) {
             .putString(KEY_BOX_COLOR, args["boxColor"]?.toString() ?: "gray")
             .putString(KEY_BUTTON_SURFACE_STYLE, buttonSurfaceStyle)
             .putString(KEY_CONTENT_SURFACE_STYLE, contentSurfaceStyle)
-            .putString(KEY_CATEGORY_MENU_COLOR, args["categoryMenuColor"]?.toString() ?: "lightgray")
-            .putString(KEY_CATEGORY_MENU_SURFACE_STYLE, args["categoryMenuSurfaceStyle"]?.toString() ?: "neutralNeutral")
-            .putString(KEY_CATEGORY_CARD_COLOR, args["categoryCardColor"]?.toString() ?: "lightgray")
+            .putString(KEY_CATEGORY_MENU_COLOR, categoryColor(args["categoryMenuColor"]))
+            .putString(KEY_CATEGORY_CARD_COLOR, categoryColor(args["categoryCardColor"]))
             .putString(KEY_CATEGORY_CARD_SURFACE_STYLE, args["categoryCardSurfaceStyle"]?.toString() ?: "neutralNeutral")
-            .putString(KEY_CATEGORY_MENU_PRESENTATION, args["categoryMenuPresentation"]?.toString() ?: "inline")
             .putInt(
                 KEY_FAB_SIZE,
                 intArg(args["fabSize"], DEFAULT_FAB_SIZE, MIN_FAB_SIZE, MAX_FAB_SIZE)
             )
-            .putBoolean(KEY_CATEGORY_CARD_SHADOW_ENABLED, boolArg(args["categoryCardShadowEnabled"], true))
-            .putBoolean(KEY_LOGBOX_SHADOW_ENABLED, boolArg(args["logboxShadowEnabled"], false))
-            .putBoolean(KEY_HEADER_PILL_SHADOW_ENABLED, boolArg(args["headerPillShadowEnabled"], true))
-            .putBoolean(KEY_SUMMARY_PILL_SHADOW_ENABLED, boolArg(args["summaryPillShadowEnabled"], true))
-            .putBoolean(KEY_SEARCH_PILL_SHADOW_ENABLED, boolArg(args["searchPillShadowEnabled"], true))
             .putString(KEY_GHOST_LOGBOX_SURFACE_STYLE, ghostLogboxSurfaceStyle)
             .putString(
                 KEY_GHOST_LOGBOX_BORDER_STYLE,
@@ -425,6 +411,10 @@ class ExpenseSettingsStore(context: Context) {
         else -> default
     }
 
+    private fun categoryColor(value: Any?): String {
+        return if (value?.toString() == "white") "white" else "gray"
+    }
+
     private fun loadOpacityList(key: String, default: List<Int>): List<Int> {
         return loadIntList(key, default, min = 0, max = 100)
     }
@@ -557,16 +547,9 @@ class ExpenseSettingsStore(context: Context) {
         private const val KEY_BUTTON_SURFACE_STYLE = "buttonSurfaceStyle"
         private const val KEY_CONTENT_SURFACE_STYLE = "contentSurfaceStyle"
         private const val KEY_CATEGORY_MENU_COLOR = "categoryMenuColor"
-        private const val KEY_CATEGORY_MENU_SURFACE_STYLE = "categoryMenuSurfaceStyle"
         private const val KEY_CATEGORY_CARD_COLOR = "categoryCardColor"
         private const val KEY_CATEGORY_CARD_SURFACE_STYLE = "categoryCardSurfaceStyle"
-        private const val KEY_CATEGORY_MENU_PRESENTATION = "categoryMenuPresentation"
         private const val KEY_FAB_SIZE = "fabSize"
-        private const val KEY_CATEGORY_CARD_SHADOW_ENABLED = "categoryCardShadowEnabled"
-        private const val KEY_LOGBOX_SHADOW_ENABLED = "logboxShadowEnabled"
-        private const val KEY_HEADER_PILL_SHADOW_ENABLED = "headerPillShadowEnabled"
-        private const val KEY_SUMMARY_PILL_SHADOW_ENABLED = "summaryPillShadowEnabled"
-        private const val KEY_SEARCH_PILL_SHADOW_ENABLED = "searchPillShadowEnabled"
         private const val KEY_GHOST_LOGBOX_SURFACE_STYLE = "ghostLogboxSurfaceStyle"
         private const val KEY_GHOST_LOGBOX_BORDER_STYLE = "ghostLogboxBorderStyle"
         private const val KEY_GHOST_LOGBOX_BACKGROUND_OPACITY_ENABLED = "ghostLogboxBackgroundOpacityEnabled"

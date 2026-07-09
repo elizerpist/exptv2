@@ -161,9 +161,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             bottom: false,
             child: Builder(
               builder: (context) {
-                final actionBottomInset = _categoryPickerOpen
-                    ? SlideUpPanelMetrics.transactionClosedActionBottomInset + 18
-                    : SlideUpPanelMetrics.transactionClosedActionBottomInset - 5;
+                final actionBottomInset =
+                    MediaQuery.paddingOf(context).bottom + 8;
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     SlideUpPanelMetrics.horizontalInset,
@@ -203,7 +202,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               color: AppColors.gray800,
                             ),
                           ),
-                          if (_editing && _linkedNotificationEventId != null) ...[
+                          if (_editing &&
+                              _linkedNotificationEventId != null) ...[
                             const SizedBox(height: 6),
                             Center(
                               child: TextButton.icon(
@@ -226,7 +226,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               child: SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             ),
                           ],
@@ -264,10 +266,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               onSelected: _selectCategory,
                             ),
                           ],
-                          if (_categoryPickerOpen)
-                            const Spacer()
-                          else
-                            const SizedBox(height: 10),
+                          const Spacer(),
                           DateTimeFields(
                             dateController: _date,
                             timeController: _time,

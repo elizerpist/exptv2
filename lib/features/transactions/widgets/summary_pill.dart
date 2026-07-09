@@ -13,6 +13,7 @@ class SummaryPill extends StatefulWidget {
     required this.onIntervalSwipe,
     required this.onPeriodSwipe,
     required this.onResetToCurrentMonth,
+    this.onTap,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.shadowEnabled = true,
@@ -23,6 +24,7 @@ class SummaryPill extends StatefulWidget {
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final bool shadowEnabled;
+  final VoidCallback? onTap;
   final VoidCallback onIntervalSwipe;
   final ValueChanged<int> onPeriodSwipe;
   final VoidCallback onResetToCurrentMonth;
@@ -157,6 +159,7 @@ class _SummaryPillState extends State<SummaryPill>
   Widget build(BuildContext context) {
     return GestureDetector(
       key: const ValueKey('summary-pill'),
+      onTap: widget.onTap,
       onDoubleTap: widget.onResetToCurrentMonth,
       onHorizontalDragStart: (_) => _startDrag(),
       onHorizontalDragUpdate: _handleHorizontalDragUpdate,

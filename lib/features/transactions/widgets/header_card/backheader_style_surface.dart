@@ -247,6 +247,10 @@ class BackheaderStyleSurface extends StatelessWidget {
               onHandlePointerUp: onCenterHandlePointerUp,
               onHandlePointerCancel: onCenterHandlePointerCancel,
             ),
+            BackheaderStyle.ambulanceSkin => _AmbulanceBackheader(
+              current: current,
+              amountText: amountText,
+            ),
             BackheaderStyle.classic => const SizedBox.shrink(),
           },
           if (items.length > 1 &&
@@ -277,6 +281,7 @@ class BackheaderStyleSurface extends StatelessWidget {
 
   Color _background(Color color) => switch (style) {
     BackheaderStyle.orbitBudget => color,
+    BackheaderStyle.ambulanceSkin => const Color(0xFFF3C542),
     BackheaderStyle.centerBadgeBudget
         when centerDesign == BackheaderCenterDesign.colored =>
       Color.alphaBlend(
@@ -305,6 +310,89 @@ class BackheaderStyleSurface extends StatelessWidget {
       if (!colors.contains(color)) colors.add(color);
     }
     return colors.take(6).toList();
+  }
+}
+
+class _AmbulanceBackheader extends StatelessWidget {
+  const _AmbulanceBackheader({required this.current, required this.amountText});
+
+  final BackheaderBudgetItem current;
+  final String amountText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      key: const ValueKey('backheader-style-ambulanceSkin-content'),
+      children: [
+        Positioned(
+          top: 56,
+          left: 28,
+          right: 28,
+          child: Text(
+            current.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.gray900,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              height: 1.05,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 86,
+          left: 28,
+          right: 28,
+          child: Text(
+            amountText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.gray800,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 40,
+          child: SizedBox(
+            height: 18,
+            child: CustomPaint(painter: const _AmbulanceBackheaderStripe()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AmbulanceBackheaderStripe extends CustomPainter {
+  const _AmbulanceBackheaderStripe();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFFE87522),
+    );
+    final paint = Paint()..color = const Color(0xFFFFD84D);
+    for (var left = -14.0; left < size.width + 24; left += 28) {
+      final path = Path()
+        ..moveTo(left + 6, 0)
+        ..lineTo(left + 18, 0)
+        ..lineTo(left + 12, size.height)
+        ..lineTo(left, size.height)
+        ..close();
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AmbulanceBackheaderStripe oldDelegate) {
+    return false;
   }
 }
 

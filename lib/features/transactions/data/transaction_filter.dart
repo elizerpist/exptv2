@@ -7,6 +7,7 @@ class TransactionFilter {
     this.merchant,
     this.merchantColorHex,
     this.categoryId,
+    this.categoryIds = const <int>{},
   });
 
   final TransactionType type;
@@ -14,6 +15,14 @@ class TransactionFilter {
   final String? merchant;
   final String? merchantColorHex;
   final int? categoryId;
+  final Set<int> categoryIds;
+
+  Set<int> get effectiveCategoryIds {
+    if (categoryIds.isNotEmpty) return categoryIds;
+    final id = categoryId;
+    if (id == null) return const <int>{};
+    return <int>{id};
+  }
 
   TransactionFilter copyWith({
     TransactionType? type,
@@ -21,9 +30,18 @@ class TransactionFilter {
     String? merchant,
     String? merchantColorHex,
     int? categoryId,
+    Set<int>? categoryIds,
     bool clearMerchant = false,
     bool clearCategory = false,
   }) {
+    final nextCategoryIds = clearCategory
+        ? const <int>{}
+        : categoryIds ?? this.categoryIds;
+    final nextCategoryId = clearCategory
+        ? null
+        : categoryIds != null
+        ? (categoryIds.length == 1 ? categoryIds.first : null)
+        : categoryId ?? this.categoryId;
     return TransactionFilter(
       type: type ?? this.type,
       searchQuery: searchQuery ?? this.searchQuery,
@@ -31,7 +49,8 @@ class TransactionFilter {
       merchantColorHex: clearMerchant
           ? null
           : merchantColorHex ?? this.merchantColorHex,
-      categoryId: clearCategory ? null : categoryId ?? this.categoryId,
+      categoryId: nextCategoryId,
+      categoryIds: nextCategoryIds,
     );
   }
 }

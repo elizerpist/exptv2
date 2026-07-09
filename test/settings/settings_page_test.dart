@@ -269,13 +269,19 @@ void main() {
     expect(find.text('Logboxok felülete'), findsOneWidget);
     expect(find.text('Design profil'), findsNothing);
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
-      120,
-      scrollable: find.byType(Scrollable).last,
+    expect(find.text('Kategória sheet színe'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('theme-category-menu-color-white')),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
-    expect(find.text('Sötétebb szürke'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('theme-category-menu-color-gray')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
+      findsNothing,
+    );
 
     await tester.scrollUntilVisible(
       find.text('Sötétebb szürke box'),
@@ -378,7 +384,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('App színe'), findsOneWidget);
-    expect(find.text('Kategória menü mód'), findsOneWidget);
+    expect(find.text('Kategória menü mód'), findsNothing);
     expect(find.text('Navigáció'), findsNothing);
     expect(find.text('A - Jelenlegi (jelenlegi)'), findsNothing);
     expect(find.text('B - 3 menü + jobb FAB'), findsNothing);
@@ -388,7 +394,7 @@ void main() {
     expect(find.text('FAB méret'), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-fab-size-slider')), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-fab-size-input')), findsOneWidget);
-    expect(find.text('Kategória menü felülete'), findsOneWidget);
+    expect(find.text('Kategória sheet színe'), findsOneWidget);
     expect(find.text('Kategória kártyák felülete'), findsOneWidget);
     expect(find.text('Statisztika monthcard'), findsOneWidget);
     expect(
@@ -403,7 +409,7 @@ void main() {
       find.byKey(const ValueKey('theme-stats-month-card-color-darkgray')),
       findsOneWidget,
     );
-    expect(find.text('Árnyékok'), findsOneWidget);
+    expect(find.text('Árnyékok'), findsNothing);
     expect(find.text('Türkiz (jelenlegi)'), findsOneWidget);
     expect(find.text('Pink'), findsOneWidget);
     expect(find.text('Éjszakai mód'), findsNothing);
@@ -451,20 +457,13 @@ void main() {
       updated.last.ghostLogboxSurfaceStyle,
       ExpenseSurfaceInteraction.neutralNeutral,
     );
-    await tester.tap(
+    expect(
       find.byKey(const ValueKey('theme-category-menu-surface-neumorph')),
+      findsNothing,
     );
     expect(
-      updated.last.categoryMenuSurfaceStyle,
-      ExpenseSurfaceInteraction.insetInset,
-    );
-
-    await tester.tap(
       find.byKey(const ValueKey('theme-category-menu-presentation-slide')),
-    );
-    expect(
-      updated.last.categoryMenuPresentation,
-      CategoryMenuPresentation.slideUpSheet,
+      findsNothing,
     );
 
     expect(
@@ -495,48 +494,23 @@ void main() {
     await tester.pump();
     expect(updated.last.fabSize, 80);
 
-    await tester.ensureVisible(
+    expect(
       find.byKey(const ValueKey('theme-category-card-shadow-off')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('theme-category-card-shadow-off')),
-    );
-    expect(updated.last.categoryCardShadowEnabled, isFalse);
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('theme-logbox-shadow-off')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('theme-logbox-shadow-off')));
-    expect(updated.last.logboxShadowEnabled, isFalse);
-
-    await tester.ensureVisible(
+    expect(find.byKey(const ValueKey('theme-logbox-shadow-off')), findsNothing);
+    expect(
       find.byKey(const ValueKey('theme-header-pill-shadow-off')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('theme-header-pill-shadow-off')),
-    );
-    expect(updated.last.headerPillShadowEnabled, isFalse);
-
-    await tester.ensureVisible(
+    expect(
       find.byKey(const ValueKey('theme-summary-pill-shadow-off')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('theme-summary-pill-shadow-off')),
-    );
-    expect(updated.last.summaryPillShadowEnabled, isFalse);
-
-    await tester.ensureVisible(
+    expect(
       find.byKey(const ValueKey('theme-search-pill-shadow-off')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('theme-search-pill-shadow-off')),
-    );
-    expect(updated.last.searchPillShadowEnabled, isFalse);
 
     await tester.tap(
       find.byKey(const ValueKey('theme-category-card-surface-neumorph')),
@@ -546,14 +520,10 @@ void main() {
       ExpenseSurfaceInteraction.raisedInset,
     );
 
-    await tester.ensureVisible(
+    expect(
       find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('theme-category-menu-color-darkgray')),
-    );
-    expect(updated.last.categoryMenuColor, AppBoxColor.darkgray);
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('theme-category-card-color-white')),
