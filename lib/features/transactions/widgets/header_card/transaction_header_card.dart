@@ -182,6 +182,7 @@ class TransactionHeaderCard extends StatelessWidget {
               child: _HeaderLeadingChip(
                 text: leadingChipText,
                 color: leadingChipColor ?? const Color(0xFFFBBF24),
+                surfaceStyle: buttonSurfaceStyle,
                 onPressed: onExpandPressed,
               ),
             ),
@@ -448,16 +449,66 @@ class _HeaderLeadingChip extends StatelessWidget {
   const _HeaderLeadingChip({
     required this.text,
     required this.color,
+    required this.surfaceStyle,
     required this.onPressed,
   });
 
   final String? text;
   final Color color;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(7);
+    Widget chipContent({Key? key}) {
+      return Center(
+        key: key,
+        child: text == null
+            ? const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AppColors.white,
+                size: 20,
+              )
+            : Text(
+                text!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+      );
+    }
+
+    if (surfaceStyle.hasPressEffect) {
+      return ExpensePressable(
+        enabled: true,
+        builder: (context, pressed) {
+          return GestureDetector(
+            key: const ValueKey('header-budget-trigger-chip'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: ExpenseSurfaceContainer(
+              surfaceKey: const ValueKey('header-budget-trigger-chip-surface'),
+              style: surfaceStyle,
+              color: color,
+              primary: true,
+              primaryColor: color,
+              borderRadius: radius,
+              pressed: pressed,
+              width: 36,
+              height: 28,
+              child: chipContent(
+                key: text == null ? null : const ValueKey('header-scope-chip'),
+              ),
+            ),
+          );
+        },
+      );
+    }
     return Material(
       color: Colors.transparent,
       borderRadius: radius,
@@ -474,23 +525,7 @@ class _HeaderLeadingChip extends StatelessWidget {
             borderRadius: radius,
             border: Border.all(color: AppColors.white, width: 2),
           ),
-          alignment: Alignment.center,
-          child: text == null
-              ? const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  color: AppColors.white,
-                  size: 20,
-                )
-              : Text(
-                  text!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+          child: chipContent(),
         ),
       ),
     );

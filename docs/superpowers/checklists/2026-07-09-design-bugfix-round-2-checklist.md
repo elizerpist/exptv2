@@ -201,7 +201,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: when global button neumorphism is inactive, header chip tap keeps the normal non-neumorph visual behavior.
 - Acceptance condition: the tap action assigned to the header chip still fires exactly once and is not delayed or swallowed by the press animation.
 - Verification method: add/update widget tests that enable global button neumorphism, tap a header chip, assert the momentary pressed state/style is applied and then released, then disable neumorphism and assert the chip uses the normal tap style.
-- Status: NOT DONE
+- Status: DONE
 
 ## Template
 

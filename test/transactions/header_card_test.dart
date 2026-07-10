@@ -274,6 +274,67 @@ void main() {
     expect(restingDecoration, expectedRestingDecoration);
   });
 
+  testWidgets('header budget chip uses momentary neumorph press surface', (
+    tester,
+  ) async {
+    var expandCount = 0;
+    const chipColor = Color(0xFFFBBF24);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '123 Ft',
+            buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onCategoryPressed: () {},
+            onExpandPressed: () => expandCount += 1,
+          ),
+        ),
+      ),
+    );
+
+    final chip = find.byKey(const ValueKey('header-budget-trigger-chip'));
+    final surface = find.byKey(
+      const ValueKey('header-budget-trigger-chip-surface'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(chip));
+    await tester.pump();
+
+    expect(expandCount, 0);
+    final pressedDecoration =
+        tester.widget<Container>(surface).decoration! as BoxDecoration;
+    expect(
+      pressedDecoration,
+      ExpenseSurface.decoration(
+        style: ExpenseSurfaceInteraction.neutralInset,
+        color: chipColor,
+        borderRadius: BorderRadius.circular(7),
+        pressed: true,
+        primary: true,
+        primaryColor: chipColor,
+      ),
+    );
+
+    await gesture.up();
+    await tester.pump();
+    expect(expandCount, 1);
+
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(ExpenseSurface.pressDuration);
+    final restingDecoration =
+        tester.widget<Container>(surface).decoration! as BoxDecoration;
+    expect(
+      restingDecoration,
+      ExpenseSurface.decoration(
+        style: ExpenseSurfaceInteraction.neutralInset,
+        color: chipColor,
+        borderRadius: BorderRadius.circular(7),
+        primary: true,
+        primaryColor: chipColor,
+      ),
+    );
+  });
+
   testWidgets('header notification bell renders unread badge and opens', (
     tester,
   ) async {
