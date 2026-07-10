@@ -1,3 +1,4 @@
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/header_fast_info_surface.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/transaction_header_card.dart';
@@ -219,6 +220,58 @@ void main() {
     final decoration = chipContainer.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFFFBBF24));
     expect(find.byIcon(Icons.account_balance_wallet_outlined), findsOneWidget);
+  });
+
+  testWidgets('header category button uses add category avatar press surface', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHeaderCard(
+            balanceText: '123 Ft',
+            accent: AppColors.primary,
+            buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+            onCategoryPressed: () {},
+            onExpandPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    final button = find.byKey(const ValueKey('header-category-button'));
+    final surface = find.byKey(
+      const ValueKey('header-category-button-surface'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(button));
+    await tester.pump();
+
+    final pressedDecoration =
+        tester.widget<Container>(surface).decoration! as BoxDecoration;
+    final expectedPressedDecoration = ExpenseSurface.decoration(
+      style: ExpenseSurfaceInteraction.raisedInset,
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(24),
+      pressed: true,
+      primary: true,
+      primaryColor: AppColors.primary,
+    );
+    expect(pressedDecoration, expectedPressedDecoration);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(ExpenseSurface.pressDuration);
+
+    final restingDecoration =
+        tester.widget<Container>(surface).decoration! as BoxDecoration;
+    final expectedRestingDecoration = ExpenseSurface.decoration(
+      style: ExpenseSurfaceInteraction.raisedInset,
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(24),
+      primary: true,
+      primaryColor: AppColors.primary,
+    );
+    expect(restingDecoration, expectedRestingDecoration);
   });
 
   testWidgets('header notification bell renders unread badge and opens', (

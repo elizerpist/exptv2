@@ -173,7 +173,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the visual response remains momentary only and returns to normal after tap release.
 - Acceptance condition: normal/non-neumorph button mode still uses the normal button response without introducing the white outer glow.
 - Verification method: inspect and reuse/extract the add-new-category round avatar tap style for the header category button; add/update widget or golden-style tests that tap the header category button and assert no white glow decoration is applied while the shared pressed-state style is active.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-014 - Add/Edit transaction mentés gomb és date/time pillek közti padding root-cause elemzéssel
 

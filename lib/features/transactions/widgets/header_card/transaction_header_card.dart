@@ -405,18 +405,11 @@ class _HeaderCategoryButton extends StatelessWidget {
           color: primaryColor,
           borderRadius: radius,
           pressed: pressed,
-          primary: false,
+          primary: true,
           primaryColor: primaryColor,
           width: 48,
           height: 48,
           clipContent: false,
-          neutralShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              offset: const Offset(0, 10),
-              blurRadius: 20,
-            ),
-          ],
           child: Material(
             color: Colors.transparent,
             borderRadius: radius,
