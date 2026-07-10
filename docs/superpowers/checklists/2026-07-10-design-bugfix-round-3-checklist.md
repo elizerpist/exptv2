@@ -161,8 +161,8 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the selector must participate in the global neumorph design setting: when global neumorph is active, active/inactive pills use the same neumorph surface behavior as the transaction type selector; when inactive, normal mode remains normal.
 - Acceptance condition: switching between `Idő` and `Push` still updates the recurring trigger mode correctly and does not break the recurring form fields tied to each mode.
 - Acceptance condition: active/inactive colors, text contrast, sizing, and spacing must match the transaction type pill design closely enough that the two selectors read as the same component family.
-- Verification method: inspect/reuse the transaction type pill component or shared style; add/update widget tests that render the recurring sheet in normal and global neumorph modes, assert selected/inactive `Idő`/`Push` pill colors/surface styles match the `Bevétel`/`Kiadás` selector rules, and verify switching trigger modes still changes form state.
-- Status: NOT DONE
+- Verification method: reused the transaction type pill surface pattern (`ExpensePressable` + `ExpenseSurfaceContainer`) for the recurring `Idő`/`Push` trigger selector; updated widget tests in global `buttonSurfaceStyle=neutralInset` mode to compare active recurring trigger surface/text with the active transaction type pill, verify inactive gray styling, and verify switching to `Push` still changes the form state. Ran recurring manager open/trigger/body-scroll tests and targeted analyze for `recurring_manager_sheet.dart` and `widget_test.dart`.
+- Status: DONE
 
 ### BUG3-011 - Category/Vendor sheet külső tap cancel slide-down bezárással
 

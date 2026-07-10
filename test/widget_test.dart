@@ -620,32 +620,66 @@ void main() {
     expect(find.byKey(const ValueKey('recurring-manager-card')), findsNothing);
   });
 
-  testWidgets('recurring trigger pills use the same active primary color', (
+  testWidgets('recurring trigger pills use transaction type pill styling', (
     tester,
   ) async {
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'buttonSurfaceStyle': 'neutralInset',
+    };
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
     await tester.longPress(find.byKey(const ValueKey('expt-fab')));
     await tester.pumpAndSettle();
 
-    Color triggerBorderColor(String key) {
-      final container = tester.widget<AnimatedContainer>(
-        find.descendant(
-          of: find.byKey(ValueKey(key)),
-          matching: find.byType(AnimatedContainer),
-        ),
-      );
-      final decoration = container.decoration! as BoxDecoration;
-      return (decoration.border! as Border).top.color;
+    BoxDecoration surfaceDecoration(String key) {
+      final container = tester.widget<Container>(find.byKey(ValueKey(key)));
+      return container.decoration! as BoxDecoration;
     }
 
-    expect(triggerBorderColor('recurring-trigger-date'), AppColors.primary);
+    Text labelText(String key, String label) {
+      return tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.text(label),
+        ),
+      );
+    }
+
+    final dateSurface = surfaceDecoration('recurring-trigger-date-surface');
+    final pushSurface = surfaceDecoration('recurring-trigger-push-surface');
+    final expenseSurface = surfaceDecoration(
+      'transaction-type-pill-expense-surface',
+    );
+    expect(dateSurface, expenseSurface);
+    expect((pushSurface.border! as Border).top.color, AppColors.gray200);
+    expect(
+      labelText('recurring-trigger-date', 'Idő').style?.color,
+      AppColors.white,
+    );
+    expect(
+      labelText('recurring-trigger-push', 'Push').style?.color,
+      AppColors.gray500,
+    );
 
     await tester.tap(find.byKey(const ValueKey('recurring-trigger-push')));
     await tester.pumpAndSettle();
 
-    expect(triggerBorderColor('recurring-trigger-push'), AppColors.primary);
+    final selectedPushSurface = surfaceDecoration(
+      'recurring-trigger-push-surface',
+    );
+    expect(selectedPushSurface, expenseSurface);
+    expect(
+      labelText('recurring-trigger-push', 'Push').style?.color,
+      AppColors.white,
+    );
+    expect(find.byKey(const ValueKey('recurring-push-day')), findsOneWidget);
   });
 
   testWidgets('recurring manager body scroll never becomes sheet drag', (

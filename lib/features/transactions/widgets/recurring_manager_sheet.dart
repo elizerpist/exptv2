@@ -172,6 +172,8 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
                             _TriggerSelector(
                               selected: _triggerType,
                               accentColor: expenseTheme.accent,
+                              surfaceColor: expenseTheme.fieldSurface,
+                              surfaceStyle: expenseTheme.buttonSurfaceStyle,
                               onChanged: (value) {
                                 setState(() => _triggerType = value);
                               },
@@ -699,11 +701,15 @@ class _TriggerSelector extends StatelessWidget {
   const _TriggerSelector({
     required this.selected,
     required this.accentColor,
+    required this.surfaceColor,
+    required this.surfaceStyle,
     required this.onChanged,
   });
 
   final RecurringTriggerType selected;
   final Color accentColor;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final ValueChanged<RecurringTriggerType> onChanged;
 
   @override
@@ -716,6 +722,8 @@ class _TriggerSelector extends StatelessWidget {
               triggerType: type,
               selected: selected == type,
               accentColor: accentColor,
+              surfaceColor: surfaceColor,
+              surfaceStyle: surfaceStyle,
               onTap: () => onChanged(type),
             ),
           ),
@@ -732,39 +740,78 @@ class _TriggerChoice extends StatelessWidget {
     required this.triggerType,
     required this.selected,
     required this.accentColor,
+    required this.surfaceColor,
+    required this.surfaceStyle,
     required this.onTap,
   });
 
   final RecurringTriggerType triggerType;
   final bool selected;
   final Color accentColor;
+  final Color surfaceColor;
+  final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      key: ValueKey('recurring-trigger-${triggerType.nativeValue}'),
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        height: 42,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? accentColor.withValues(alpha: 0.12)
-              : AppColors.gray100,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? accentColor : AppColors.gray200),
-        ),
-        child: Text(
-          triggerType.label,
-          style: TextStyle(
-            color: selected ? accentColor : AppColors.gray600,
-            fontWeight: FontWeight.w800,
+    final radius = BorderRadius.circular(25);
+    final materialFeedback = ExpenseSurface.materialFeedbackEnabled(
+      surfaceStyle,
+    );
+    return ExpensePressable(
+      enabled: surfaceStyle.hasPressEffect,
+      forcePressed: selected && surfaceStyle.hasPressEffect,
+      builder: (context, pressed) {
+        return ExpenseSurfaceContainer(
+          surfaceKey: ValueKey(
+            'recurring-trigger-${triggerType.nativeValue}-surface',
           ),
-        ),
-      ),
+          style: surfaceStyle,
+          color: surfaceColor,
+          borderRadius: radius,
+          pressed: pressed,
+          primary: selected,
+          primaryColor: accentColor,
+          constraints: const BoxConstraints(minHeight: 42),
+          neutralBorder: Border.all(
+            color: selected ? accentColor : AppColors.gray200,
+          ),
+          neutralShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: selected ? 0.1 : 0.08),
+              offset: const Offset(0, 2),
+              blurRadius: selected ? 3 : 4,
+            ),
+          ],
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: InkWell(
+              key: ValueKey('recurring-trigger-${triggerType.nativeValue}'),
+              borderRadius: radius,
+              overlayColor: materialFeedback
+                  ? null
+                  : ExpenseSurface.transparentOverlayColor,
+              splashColor: materialFeedback ? null : Colors.transparent,
+              highlightColor: materialFeedback ? null : Colors.transparent,
+              onTap: onTap,
+              child: SizedBox(
+                height: 42,
+                child: Center(
+                  child: Text(
+                    triggerType.label,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: selected ? AppColors.white : AppColors.gray500,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
