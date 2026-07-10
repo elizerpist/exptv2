@@ -84,7 +84,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: vendor sheet open/close animation affects only the vendor sheet; FAB and bottom navigation must not run their own hide/show slide animation in response.
 - Acceptance condition: vendor sheet overlay behavior matches the existing category sheet behavior for background FAB/bottom nav retention and coverage.
 - Verification method: inspect category sheet overlay implementation and mirror the relevant shell/overlay handling; add/update widget tests that open vendor sheet, assert bottom nav and FAB are still present, assert vendor sheet bottom covers their hit area/rect, and assert shell nav/FAB transforms do not move during vendor sheet open/close.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-007 - Vendor sheet saját search pill és keyboard-safe fixed card layout
 

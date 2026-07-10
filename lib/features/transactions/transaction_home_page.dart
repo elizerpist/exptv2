@@ -57,6 +57,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onBudgetTargetEditorClosed,
     this.onFocusedSheetDismissRequested,
     this.onCategoryMenuRequested,
+    this.onVendorSheetRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
     this.onThemeSettingsChanged,
@@ -79,6 +80,7 @@ class TransactionHomePage extends StatefulWidget {
   final VoidCallback? onBudgetTargetEditorClosed;
   final VoidCallback? onFocusedSheetDismissRequested;
   final CategoryMenuSheetRequested? onCategoryMenuRequested;
+  final VoidCallback? onVendorSheetRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
@@ -472,7 +474,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     child: SafeArea(
                       top: false,
                       bottom: false,
-                      child: _VendorFilterPanel(
+                      child: VendorFilterPanel(
                         summaries: widget.store.vendorFilterSummaries,
                         selectedVendors: _pendingVendorFilters,
                         scrollController: _vendorListScrollController,
@@ -1168,6 +1170,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _openVendorSheet() {
+    final externalVendorSheet = widget.onVendorSheetRequested;
+    if (externalVendorSheet != null) {
+      externalVendorSheet();
+      return;
+    }
     setState(() {
       _pendingVendorFilters = {...widget.store.activeMerchantFilters};
       _vendorSheetOpen = true;
@@ -1339,8 +1346,8 @@ class _TransactionListHeader extends StatelessWidget {
   }
 }
 
-class _VendorFilterPanel extends StatelessWidget {
-  const _VendorFilterPanel({
+class VendorFilterPanel extends StatelessWidget {
+  const VendorFilterPanel({
     required this.summaries,
     required this.selectedVendors,
     required this.scrollController,

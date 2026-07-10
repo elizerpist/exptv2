@@ -186,6 +186,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onCategoryMenuRequested: (request) {
         _sheetHostKey.currentState?.openCategoryPicker(request);
       },
+      onVendorSheetRequested: () {
+        _sheetHostKey.currentState?.openVendorFilter();
+      },
       onFocusedSheetDismissRequested: () {
         _sheetHostKey.currentState?.closeAll();
       },
@@ -785,6 +788,7 @@ class _ShellSheetHost extends StatefulWidget {
 class _ShellSheetHostState extends State<_ShellSheetHost> {
   final _transactionSlotKey = GlobalKey<_TransactionSheetSlotState>();
   final _categoryPickerSlotKey = GlobalKey<_CategoryMenuPickerSlotState>();
+  final _vendorFilterSlotKey = GlobalKey<_VendorFilterSheetSlotState>();
   final _categorySlotKey = GlobalKey<_CategorySheetSlotState>();
   final _recurringSlotKey = GlobalKey<_RecurringSheetSlotState>();
   final _budgetSlotKey = GlobalKey<_BudgetTargetSheetSlotState>();
@@ -796,6 +800,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     TransactionRecord? transaction,
   }) {
     _categoryPickerSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -809,6 +814,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 
   void openCategory({TransactionCategory? initialCategory}) {
     _transactionSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
@@ -817,6 +823,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
 
   void openCategoryPicker(CategoryMenuSheetRequest request) {
     _transactionSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -824,9 +831,20 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categoryPickerSlotKey.currentState?.open(request);
   }
 
+  void openVendorFilter() {
+    _transactionSlotKey.currentState?.close();
+    _categoryPickerSlotKey.currentState?.close();
+    _categorySlotKey.currentState?.close();
+    _recurringSlotKey.currentState?.close();
+    _budgetSlotKey.currentState?.close();
+    _backheaderTunerSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.open();
+  }
+
   void openRecurring() {
     _transactionSlotKey.currentState?.close();
     _categoryPickerSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
@@ -836,6 +854,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   void openBackheaderLiveTuner() {
     _transactionSlotKey.currentState?.close();
     _categoryPickerSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -849,6 +868,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   }) {
     _transactionSlotKey.currentState?.close();
     _categoryPickerSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
@@ -870,6 +890,7 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
   void closeAll() {
     _transactionSlotKey.currentState?.close();
     _categoryPickerSlotKey.currentState?.close();
+    _vendorFilterSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
@@ -892,6 +913,13 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
         Positioned.fill(
           child: _CategoryMenuPickerSlot(
             key: _categoryPickerSlotKey,
+            store: widget.store,
+            expenseTheme: widget.expenseTheme,
+          ),
+        ),
+        Positioned.fill(
+          child: _VendorFilterSheetSlot(
+            key: _vendorFilterSlotKey,
             store: widget.store,
             expenseTheme: widget.expenseTheme,
           ),
@@ -1187,6 +1215,108 @@ class _CategoryMenuPickerSlotState extends State<_CategoryMenuPickerSlot> {
         );
       },
     );
+  }
+}
+
+class _VendorFilterSheetSlot extends StatefulWidget {
+  const _VendorFilterSheetSlot({
+    super.key,
+    required this.store,
+    required this.expenseTheme,
+  });
+
+  final TransactionStore store;
+  final ExpenseTheme expenseTheme;
+
+  @override
+  State<_VendorFilterSheetSlot> createState() => _VendorFilterSheetSlotState();
+}
+
+class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
+  final _scrollController = ScrollController();
+  var _open = false;
+  Set<String> _pendingVendorFilters = const <String>{};
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void open() {
+    setState(() {
+      _pendingVendorFilters = {...widget.store.activeMerchantFilters};
+      _open = true;
+    });
+    DebugConsole.log('[VendorFilter] shell open');
+  }
+
+  void close() {
+    if (!_open) return;
+    setState(() => _open = false);
+    DebugConsole.log('[VendorFilter] shell closed');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final panelHeight = (screenHeight - TransactionMenuMetrics.overlayTop)
+        .clamp(0.0, screenHeight)
+        .toDouble();
+    return ListenableBuilder(
+      listenable: widget.store,
+      builder: (context, _) {
+        return SlideUpMenuCard(
+          cardKey: const ValueKey('vendor-filter-slide-card'),
+          debugLabel: 'VendorFilter',
+          visible: _open,
+          panelHeight: panelHeight,
+          onDismissed: close,
+          dismissOnVeilTap: false,
+          focusVeilPassthroughTop: TransactionMenuMetrics.summaryPillTop,
+          canDragFrom: _canDragVendorSheet,
+          dragFromHandleOnly: true,
+          dragHandleExtent: 72,
+          verticalDragBias: 1.2,
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: VendorFilterPanel(
+              summaries: widget.store.vendorFilterSummaries,
+              selectedVendors: _pendingVendorFilters,
+              scrollController: _scrollController,
+              accentColor: widget.expenseTheme.accent,
+              buttonSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
+              onToggle: _togglePendingVendorFilter,
+              onApply: _applyVendorFilters,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  bool _canDragVendorSheet(
+    Offset globalPosition,
+    Offset startGlobalPosition,
+    double gestureDx,
+    double gestureDy,
+  ) {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.offset <= 0.5;
+  }
+
+  void _togglePendingVendorFilter(String vendor) {
+    setState(() {
+      final next = {..._pendingVendorFilters};
+      if (!next.add(vendor)) next.remove(vendor);
+      _pendingVendorFilters = next;
+    });
+  }
+
+  void _applyVendorFilters() {
+    widget.store.setMerchantFilters(_pendingVendorFilters);
+    close();
   }
 }
 

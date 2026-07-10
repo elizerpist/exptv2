@@ -324,6 +324,52 @@ void main() {
     expect(find.byKey(const ValueKey('settings-page')), findsNothing);
   });
 
+  testWidgets('vendor sheet covers bottom nav and FAB without hiding them', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 919);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('vendor-filter-slide-card')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+
+    final sheetRect = tester.getRect(
+      find.byKey(const ValueKey('vendor-filter-slide-card')),
+    );
+    final navRect = tester.getRect(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    expect(sheetRect.top, lessThan(navRect.top));
+    expect(sheetRect.bottom, greaterThanOrEqualTo(navRect.bottom));
+    expect(sheetRect.top, lessThan(fabRect.bottom));
+    expect(sheetRect.bottom, greaterThanOrEqualTo(fabRect.bottom));
+
+    await tester.tapAt(fabRect.center);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('vendor-filter-slide-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('add-transaction-sheet-card')),
+      findsNothing,
+    );
+  });
+
   testWidgets('bottom nav taps switch secondary pages', (tester) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
