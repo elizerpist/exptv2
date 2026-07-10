@@ -290,9 +290,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                       onSelected: _selectCategory,
                                     ),
                                   ],
-                                  const SizedBox(
-                                    height: _transactionFormFieldGap,
-                                  ),
+                                  if (_categoryPickerOpen)
+                                    const Spacer()
+                                  else
+                                    const SizedBox(
+                                      height: _transactionFormFieldGap,
+                                    ),
                                   DateTimeFields(
                                     dateController: _date,
                                     timeController: _time,

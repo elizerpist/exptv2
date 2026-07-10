@@ -27,7 +27,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the `Mentés` button must keep the clear padding above it that was fixed in BUG2-014 and must remain directly above the bottom safe zone/footer.
 - Acceptance condition: the fix must apply to both add-new and edit transaction sheets, income and expense modes, with and without keyboard visible.
 - Acceptance condition: the fix must not reintroduce overflow, clipping, or full-sheet scrolling in the closed transaction editor layout.
-- Verification method: inspect the approved screenshot and current layout; update/add widget tests that measure top/title-to-name spacing, name-to-amount spacing, amount-to-category spacing, category-to-date/time spacing, and date/time-to-save spacing; verify the form keeps consistent spacing and the closed panel height change preserves the top gap; run transaction editor and slide-up sheet regression tests.
+- Verification method: inspect the approved screenshot and current layout; update/add widget tests that measure top/title-to-name spacing, name-to-amount spacing, amount-to-category spacing, category-to-date/time spacing, and date/time-to-save spacing; verify the form keeps consistent spacing, the closed panel height change preserves the top gap, and the inline category picker keeps the date/time row plus save footer anchored while open; run transaction editor and slide-up sheet regression tests.
 - Status: DONE
 
 ### BUG3-002 - Logbox header bal oldali felesleges dátum eltávolítása
