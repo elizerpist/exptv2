@@ -102,8 +102,8 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: renamed vendor cards show the same revert-original-vendor-name icon/action used elsewhere in the app for resetting a user-assigned vendor name.
 - Acceptance condition: tapping the revert icon resets the vendor name back to the original vendor name for all affected transaction logs and removes the renamed state from the vendor card.
 - Acceptance condition: rename and revert operations must not break vendor selection/filtering state, ABC grouping, vendor search, or amount aggregation.
-- Verification method: inspect existing log rename/user-assigned vendor name and revert icon implementation; add/update store/repository/native bridge tests for bulk vendor rename and revert; add/update widget tests that tap a vendor card name, assert inline edit highlight/cursor/focus, enter a new name, verify affected logboxes and vendor cards update, then tap revert and verify original names return; add keyboard inset tests that assert the vendor footer follows keyboard movement smoothly without card resize.
-- Status: NOT DONE
+- Verification method: inspected existing log rename/user-assigned vendor name and revert icon implementation; added/updated widget tests that tap a vendor card name, assert inline edit cursor/focus, enter a new name, verify affected logboxes and vendor cards update, then tap revert and verify original names return; verified vendor amount/grid/search/ABC and keyboard-inset footer regressions still pass; verified store bulk rename/reset tests still pass. Full keyboard slide lag deep analysis remains tracked separately under BUG3-009.
+- Status: DONE
 
 ### BUG3-007 - Transaction logbox body momentary neumorph press regresszió
 

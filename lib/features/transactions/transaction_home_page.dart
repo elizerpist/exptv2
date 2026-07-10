@@ -487,6 +487,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                         onToggle: _togglePendingVendorFilter,
+                        onRename: _renameVendorFilterSummary,
+                        onResetName: _resetVendorFilterSummary,
                         onApply: _applyVendorFilters,
                       ),
                     ),
@@ -1210,6 +1212,41 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     });
   }
 
+  Future<void> _renameVendorFilterSummary(
+    VendorFilterSummary summary,
+    String userAssignedName,
+  ) async {
+    final previousName = summary.name.trim();
+    final nextName = userAssignedName.trim();
+    if (nextName.isEmpty) return;
+    await widget.store.renameTransactionsByOriginalMerchant(
+      summary.originalName,
+      nextName,
+    );
+    if (!mounted) return;
+    setState(() {
+      final nextFilters = {..._pendingVendorFilters};
+      if (nextFilters.remove(previousName)) nextFilters.add(nextName);
+      _pendingVendorFilters = nextFilters;
+    });
+  }
+
+  Future<void> _resetVendorFilterSummary(VendorFilterSummary summary) async {
+    final previousName = summary.name.trim();
+    final nextName = summary.originalName.trim();
+    await widget.store.resetTransactionNamesByOriginalMerchant(
+      summary.originalName,
+    );
+    if (!mounted) return;
+    setState(() {
+      final nextFilters = {..._pendingVendorFilters};
+      if (nextFilters.remove(previousName) && nextName.isNotEmpty) {
+        nextFilters.add(nextName);
+      }
+      _pendingVendorFilters = nextFilters;
+    });
+  }
+
   void _applyVendorFilters() {
     widget.store.setMerchantFilters(_pendingVendorFilters);
     _closeVendorSheet();
@@ -1340,6 +1377,8 @@ class VendorFilterPanel extends StatefulWidget {
     required this.avatarSurfaceStyle,
     required this.buttonSurfaceStyle,
     required this.onToggle,
+    required this.onRename,
+    required this.onResetName,
     required this.onApply,
   });
 
@@ -1353,6 +1392,9 @@ class VendorFilterPanel extends StatefulWidget {
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ValueChanged<String> onToggle;
+  final Future<void> Function(VendorFilterSummary summary, String name)
+  onRename;
+  final Future<void> Function(VendorFilterSummary summary) onResetName;
   final VoidCallback onApply;
 
   @override
@@ -1469,6 +1511,8 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
                                     avatarSurfaceStyle:
                                         widget.avatarSurfaceStyle,
                                     onTap: () => widget.onToggle(summary.name),
+                                    onRename: widget.onRename,
+                                    onResetName: widget.onResetName,
                                   );
                                 },
                               ),
@@ -1509,7 +1553,9 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
     if (needle.isEmpty) return widget.summaries;
     return [
       for (final summary in widget.summaries)
-        if (summary.name.toLowerCase().contains(needle)) summary,
+        if (summary.name.toLowerCase().contains(needle) ||
+            summary.originalName.toLowerCase().contains(needle))
+          summary,
     ];
   }
 
@@ -1715,7 +1761,7 @@ class _VendorSearchPill extends StatelessWidget {
   }
 }
 
-class _VendorFilterRow extends StatelessWidget {
+class _VendorFilterRow extends StatefulWidget {
   const _VendorFilterRow({
     required this.summary,
     required this.selected,
@@ -1725,6 +1771,8 @@ class _VendorFilterRow extends StatelessWidget {
     required this.cardSurfaceStyle,
     required this.avatarSurfaceStyle,
     required this.onTap,
+    required this.onRename,
+    required this.onResetName,
   });
 
   final VendorFilterSummary summary;
@@ -1735,23 +1783,114 @@ class _VendorFilterRow extends StatelessWidget {
   final ExpenseSurfaceInteraction cardSurfaceStyle;
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final VoidCallback onTap;
+  final Future<void> Function(VendorFilterSummary summary, String name)
+  onRename;
+  final Future<void> Function(VendorFilterSummary summary) onResetName;
+
+  @override
+  State<_VendorFilterRow> createState() => _VendorFilterRowState();
+}
+
+class _VendorFilterRowState extends State<_VendorFilterRow> {
+  late final TextEditingController _nameController;
+  late final FocusNode _nameFocusNode;
+  var _editingName = false;
+  var _savingName = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.summary.name);
+    _nameFocusNode = FocusNode()..addListener(_handleNameFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _VendorFilterRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_editingName && widget.summary.name != oldWidget.summary.name) {
+      _setControllerText(widget.summary.name);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameFocusNode
+      ..removeListener(_handleNameFocusChanged)
+      ..dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _handleNameFocusChanged() {
+    if (!_nameFocusNode.hasFocus && _editingName && !_savingName) {
+      unawaited(_commitNameEdit());
+    }
+  }
+
+  void _beginNameEdit() {
+    if (_savingName) return;
+    setState(() {
+      _editingName = true;
+      _setControllerText(widget.summary.name);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _nameFocusNode.requestFocus();
+    });
+  }
+
+  Future<void> _commitNameEdit() async {
+    if (!_editingName || _savingName) return;
+    final nextName = _nameController.text.trim();
+    final currentName = widget.summary.name.trim();
+    if (nextName.isEmpty || nextName == currentName) {
+      if (!mounted) return;
+      setState(() {
+        _editingName = false;
+        _setControllerText(widget.summary.name);
+      });
+      return;
+    }
+    setState(() => _savingName = true);
+    await widget.onRename(widget.summary, nextName);
+    if (!mounted) return;
+    setState(() {
+      _editingName = false;
+      _savingName = false;
+    });
+  }
+
+  Future<void> _resetName() async {
+    if (_savingName) return;
+    await widget.onResetName(widget.summary);
+  }
+
+  void _setControllerText(String value) {
+    _nameController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final avatarColor = summary.colorHex == null
-        ? accentColor
-        : AppColors.fromHex(summary.colorHex!);
-    final amountColor = activeType == TransactionType.income
+    final avatarColor = widget.summary.colorHex == null
+        ? widget.accentColor
+        : AppColors.fromHex(widget.summary.colorHex!);
+    final amountColor = widget.activeType == TransactionType.income
         ? AppColors.income
         : AppColors.expense;
-    final amountPrefix = activeType == TransactionType.income ? '+' : '-';
-    final activeUsesInset = selected && cardSurfaceStyle.hasPressEffect;
+    final amountPrefix = widget.activeType == TransactionType.income
+        ? '+'
+        : '-';
+    final activeUsesInset =
+        widget.selected && widget.cardSurfaceStyle.hasPressEffect;
     final avatarCardOffset = ExpenseSurface.pressOffset(
-      style: cardSurfaceStyle,
+      style: widget.cardSurfaceStyle,
       pressed: activeUsesInset,
     );
     return SizedBox(
-      key: ValueKey('vendor-filter-row-${summary.name}'),
+      key: ValueKey('vendor-filter-row-${widget.summary.name}'),
       height: 150,
       child: Stack(
         clipBehavior: Clip.none,
@@ -1759,9 +1898,9 @@ class _VendorFilterRow extends StatelessWidget {
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: onTap,
+              onTap: _editingName ? null : widget.onTap,
               child: ExpensePressable(
-                enabled: cardSurfaceStyle.hasPressEffect,
+                enabled: widget.cardSurfaceStyle.hasPressEffect,
                 forcePressed: activeUsesInset,
                 builder: (context, pressed) {
                   final radius = BorderRadius.circular(18);
@@ -1770,34 +1909,26 @@ class _VendorFilterRow extends StatelessWidget {
                     children: [
                       ExpenseSurfaceContainer(
                         surfaceKey: ValueKey(
-                          'vendor-filter-row-surface-${summary.name}',
+                          'vendor-filter-row-surface-${widget.summary.name}',
                         ),
-                        style: cardSurfaceStyle,
-                        color: cardSurfaceColor,
+                        style: widget.cardSurfaceStyle,
+                        color: widget.cardSurfaceColor,
                         borderRadius: radius,
                         pressed: pressed,
                         padding: const EdgeInsets.fromLTRB(10, 82, 10, 12),
                         neutralBorder: Border.all(color: AppColors.gray200),
-                        neutralShadow: categoryNeutralShadow(cardSurfaceStyle),
+                        neutralShadow: categoryNeutralShadow(
+                          widget.cardSurfaceStyle,
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Text(
-                              summary.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.gray800,
-                              ),
-                            ),
+                            _nameArea(),
                             const SizedBox(height: 6),
                             Text(
-                              '$amountPrefix${formatHuf(summary.total)}',
+                              '$amountPrefix${formatHuf(widget.summary.total)}',
                               key: ValueKey(
-                                'vendor-filter-amount-${summary.name}',
+                                'vendor-filter-amount-${widget.summary.name}',
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1811,10 +1942,11 @@ class _VendorFilterRow extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (selected && !cardSurfaceStyle.hasPressEffect)
+                      if (widget.selected &&
+                          !widget.cardSurfaceStyle.hasPressEffect)
                         CategoryActiveBorder(
                           radius: radius,
-                          color: accentColor,
+                          color: widget.accentColor,
                         ),
                     ],
                   );
@@ -1836,15 +1968,19 @@ class _VendorFilterRow extends StatelessWidget {
                 },
                 child: IgnorePointer(
                   child: ExpensePressable(
-                    key: ValueKey('vendor-filter-avatar-${summary.name}'),
-                    enabled: avatarSurfaceStyle.hasPressEffect,
-                    forcePressed: selected && avatarSurfaceStyle.hasPressEffect,
+                    key: ValueKey(
+                      'vendor-filter-avatar-${widget.summary.name}',
+                    ),
+                    enabled: widget.avatarSurfaceStyle.hasPressEffect,
+                    forcePressed:
+                        widget.selected &&
+                        widget.avatarSurfaceStyle.hasPressEffect,
                     builder: (context, avatarPressed) {
                       return ExpenseSurfaceContainer(
                         surfaceKey: ValueKey(
-                          'vendor-filter-avatar-surface-${summary.name}',
+                          'vendor-filter-avatar-surface-${widget.summary.name}',
                         ),
-                        style: avatarSurfaceStyle,
+                        style: widget.avatarSurfaceStyle,
                         color: avatarColor,
                         primary: true,
                         primaryColor: avatarColor,
@@ -1854,7 +1990,7 @@ class _VendorFilterRow extends StatelessWidget {
                         height: 65,
                         child: Center(
                           child: Text(
-                            _initials(summary.name),
+                            _initials(widget.summary.name),
                             maxLines: 1,
                             overflow: TextOverflow.clip,
                             style: const TextStyle(
@@ -1871,7 +2007,92 @@ class _VendorFilterRow extends StatelessWidget {
               ),
             ),
           ),
+          if (widget.summary.hasCustomName)
+            Positioned(
+              top: 7,
+              right: 7,
+              child: IconButton(
+                key: ValueKey(
+                  'vendor-filter-reset-${widget.summary.originalName}',
+                ),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                onPressed: _resetName,
+                icon: const Icon(Icons.restart_alt, size: 17),
+                color: AppColors.gray500,
+                tooltip: 'Eredeti vendor név',
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _nameArea() {
+    if (_editingName) {
+      return Container(
+        key: ValueKey(
+          'vendor-filter-name-editor-${widget.summary.originalName}',
+        ),
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: AppColors.white.withValues(alpha: 0.84),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: widget.accentColor, width: 1.4),
+        ),
+        child: TextField(
+          key: ValueKey(
+            'vendor-filter-name-input-${widget.summary.originalName}',
+          ),
+          controller: _nameController,
+          focusNode: _nameFocusNode,
+          textAlign: TextAlign.center,
+          textInputAction: TextInputAction.done,
+          cursorColor: widget.accentColor,
+          maxLines: 1,
+          onSubmitted: (_) => unawaited(_commitNameEdit()),
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.only(bottom: 8),
+          ),
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: AppColors.gray800,
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      key: ValueKey('vendor-filter-name-${widget.summary.name}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: _beginNameEdit,
+      child: SizedBox(
+        height: 30,
+        child: Center(
+          child: Text(
+            widget.summary.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.gray800,
+            ),
+          ),
+        ),
       ),
     );
   }

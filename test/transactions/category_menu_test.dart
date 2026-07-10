@@ -818,6 +818,145 @@ void main() {
     expect(incomeAmount.style?.color, AppColors.income);
   });
 
+  testWidgets(
+    'vendor name edits inline, refreshes matching logs, and can reset',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 919);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = FakeTransactionRepository();
+      repository.transactions
+        ..clear()
+        ..addAll([
+          TransactionRecord.fromMap({
+            'id': 1,
+            'date': '2025.09.25',
+            'time': '20:30:00',
+            'merchant': 'Test Store',
+            'amount': -500,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+          TransactionRecord.fromMap({
+            'id': 2,
+            'date': '2025.09.25',
+            'time': '20:31:00',
+            'merchant': 'Test Store',
+            'amount': -700,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+          TransactionRecord.fromMap({
+            'id': 3,
+            'date': '2025.09.25',
+            'time': '20:32:00',
+            'merchant': 'Other Shop',
+            'amount': -900,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+        ]);
+      final store = TransactionStore(repository);
+      final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 919,
+              child: TransactionHomePage(store: store, expenseTheme: theme),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('vendor-filter-name-Test Store')),
+      );
+      await tester.pumpAndSettle();
+
+      final inputFinder = find.byKey(
+        const ValueKey('vendor-filter-name-input-Test Store'),
+      );
+      expect(inputFinder, findsOneWidget);
+      final input = tester.widget<TextField>(inputFinder);
+      expect(input.controller?.selection.baseOffset, 'Test Store'.length);
+
+      await tester.enterText(inputFinder, 'Fresh Mart');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(repository.renameArgs, ['Test Store', 'Fresh Mart']);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('transaction-logbox-name-text-1')),
+            )
+            .data,
+        'Fresh Mart',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('transaction-logbox-name-text-2')),
+            )
+            .data,
+        'Fresh Mart',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('transaction-logbox-name-text-3')),
+            )
+            .data,
+        'Other Shop',
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Fresh Mart')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-amount-Fresh Mart')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-reset-Test Store')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('vendor-filter-reset-Test Store')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.resetMerchant, 'Test Store');
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('transaction-logbox-name-text-1')),
+            )
+            .data,
+        'Test Store',
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Test Store')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-reset-Test Store')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {
@@ -1124,6 +1263,9 @@ final categoryFixtures = <TransactionCategory>[
 ];
 
 class FakeTransactionRepository extends TransactionRepositoryContract {
+  final renameArgs = <String>[];
+  String? resetMerchant;
+
   final transactions = <TransactionRecord>[
     TransactionRecord.fromMap({
       'id': 1,
@@ -1190,11 +1332,36 @@ class FakeTransactionRepository extends TransactionRepositoryContract {
   Future<int> renameTransactionsByMerchant(
     String originalMerchant,
     String userAssignedName,
-  ) async => throw UnimplementedError();
+  ) async {
+    renameArgs
+      ..add(originalMerchant)
+      ..add(userAssignedName);
+    var count = 0;
+    for (var index = 0; index < transactions.length; index += 1) {
+      final transaction = transactions[index];
+      if (transaction.merchant != originalMerchant) continue;
+      final map = transaction.toMap();
+      map['userAssignedName'] = userAssignedName;
+      transactions[index] = TransactionRecord.fromMap(map);
+      count += 1;
+    }
+    return count;
+  }
 
   @override
-  Future<int> resetTransactionNamesByMerchant(String originalMerchant) async =>
-      throw UnimplementedError();
+  Future<int> resetTransactionNamesByMerchant(String originalMerchant) async {
+    resetMerchant = originalMerchant;
+    var count = 0;
+    for (var index = 0; index < transactions.length; index += 1) {
+      final transaction = transactions[index];
+      if (transaction.merchant != originalMerchant) continue;
+      final map = transaction.toMap();
+      map['userAssignedName'] = null;
+      transactions[index] = TransactionRecord.fromMap(map);
+      count += 1;
+    }
+    return count;
+  }
 
   @override
   Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({

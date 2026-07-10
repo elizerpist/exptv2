@@ -24,15 +24,19 @@ import 'fast_info_metrics_resolver.dart';
 class VendorFilterSummary {
   const VendorFilterSummary({
     required this.name,
+    required this.originalName,
     required this.total,
     required this.count,
     this.colorHex,
+    this.hasCustomName = false,
   });
 
   final String name;
+  final String originalName;
   final double total;
   final int count;
   final String? colorHex;
+  final bool hasCustomName;
 }
 
 class TransactionStore extends ChangeNotifier {
@@ -555,13 +559,28 @@ class TransactionStore extends ChangeNotifier {
   List<VendorFilterSummary> _vendorFilterSummariesFor(TransactionType type) {
     final totals = <String, double>{};
     final counts = <String, int>{};
+    final displayNames = <String, String>{};
+    final customNames = <String, bool>{};
     final colors = <String, String?>{};
     for (final record in _windowedTransactionsFor(type)) {
-      final name = record.displayMerchant.trim();
-      if (name.isEmpty) continue;
-      totals[name] = (totals[name] ?? 0) + record.amount.abs();
-      counts[name] = (counts[name] ?? 0) + 1;
-      colors.putIfAbsent(name, () {
+      final originalName = record.merchant.trim();
+      final displayName = record.displayMerchant.trim();
+      final key = originalName.isEmpty ? displayName : originalName;
+      final name = displayName.isEmpty ? key : displayName;
+      if (key.isEmpty || name.isEmpty) continue;
+      totals[key] = (totals[key] ?? 0) + record.amount.abs();
+      counts[key] = (counts[key] ?? 0) + 1;
+      final assignedName = record.userAssignedName?.trim();
+      if (assignedName != null &&
+          assignedName.isNotEmpty &&
+          assignedName != originalName) {
+        displayNames[key] = assignedName;
+        customNames[key] = true;
+      } else {
+        displayNames.putIfAbsent(key, () => name);
+        customNames.putIfAbsent(key, () => false);
+      }
+      colors.putIfAbsent(key, () {
         final categoryId = record.transactionCategoryID;
         if (categoryId == null) return null;
         final category = _categoriesById[categoryId];
@@ -572,10 +591,12 @@ class TransactionStore extends ChangeNotifier {
         [
           for (final entry in totals.entries)
             VendorFilterSummary(
-              name: entry.key,
+              name: displayNames[entry.key] ?? entry.key,
+              originalName: entry.key,
               total: entry.value,
               count: counts[entry.key] ?? 0,
               colorHex: colors[entry.key],
+              hasCustomName: customNames[entry.key] ?? false,
             ),
         ]..sort((left, right) {
           final totalOrder = right.total.compareTo(left.total);
@@ -1047,33 +1068,89 @@ class TransactionStore extends ChangeNotifier {
   Future<int> renameTransactionsByMerchant(
     TransactionRecord transaction,
     String userAssignedName,
-  ) async {
-    DebugConsole.log(
-      '[Transactions] rename ${transaction.merchant} -> $userAssignedName',
-    );
-    final count = await _repository.renameTransactionsByMerchant(
+  ) {
+    return renameTransactionsByOriginalMerchant(
       transaction.merchant,
       userAssignedName,
     );
-    await _reload();
-    DebugConsole.log(
-      '[Transactions] renamed $count rows for ${transaction.merchant}',
+  }
+
+  Future<int> renameTransactionsByOriginalMerchant(
+    String originalMerchant,
+    String userAssignedName,
+  ) async {
+    final merchant = originalMerchant.trim();
+    final assignedName = userAssignedName.trim();
+    if (merchant.isEmpty || assignedName.isEmpty) return 0;
+    final previousDisplayNames = _displayNamesForOriginalMerchant(merchant);
+    DebugConsole.log('[Transactions] rename $merchant -> $assignedName');
+    final count = await _repository.renameTransactionsByMerchant(
+      merchant,
+      assignedName,
     );
+    _replaceActiveMerchantFilters(previousDisplayNames, assignedName);
+    await _reload();
+    DebugConsole.log('[Transactions] renamed $count rows for $merchant');
     return count;
   }
 
-  Future<int> resetTransactionNamesByMerchant(
-    TransactionRecord transaction,
+  Future<int> resetTransactionNamesByMerchant(TransactionRecord transaction) {
+    return resetTransactionNamesByOriginalMerchant(transaction.merchant);
+  }
+
+  Future<int> resetTransactionNamesByOriginalMerchant(
+    String originalMerchant,
   ) async {
-    DebugConsole.log('[Transactions] reset name ${transaction.merchant}');
-    final count = await _repository.resetTransactionNamesByMerchant(
-      transaction.merchant,
-    );
+    final merchant = originalMerchant.trim();
+    if (merchant.isEmpty) return 0;
+    final previousDisplayNames = _displayNamesForOriginalMerchant(merchant);
+    DebugConsole.log('[Transactions] reset name $merchant');
+    final count = await _repository.resetTransactionNamesByMerchant(merchant);
+    _replaceActiveMerchantFilters(previousDisplayNames, merchant);
     await _reload();
-    DebugConsole.log(
-      '[Transactions] reset $count rows for ${transaction.merchant}',
-    );
+    DebugConsole.log('[Transactions] reset $count rows for $merchant');
     return count;
+  }
+
+  Set<String> _displayNamesForOriginalMerchant(String originalMerchant) {
+    final merchant = originalMerchant.trim();
+    if (merchant.isEmpty) return const <String>{};
+    final names = <String>{};
+    for (final transaction in _transactions) {
+      if (transaction.merchant.trim() != merchant) continue;
+      final displayName = transaction.displayMerchant.trim();
+      if (displayName.isNotEmpty) names.add(displayName);
+    }
+    return names.isEmpty ? <String>{merchant} : names;
+  }
+
+  void _replaceActiveMerchantFilters(
+    Set<String> previousDisplayNames,
+    String nextDisplayName,
+  ) {
+    final nextName = nextDisplayName.trim();
+    if (nextName.isEmpty || previousDisplayNames.isEmpty) return;
+    final currentFilters = _filter.effectiveMerchants;
+    if (currentFilters.isEmpty) return;
+    final nextFilters = <String>{};
+    var changed = false;
+    for (final filterName in currentFilters) {
+      if (previousDisplayNames.contains(filterName)) {
+        nextFilters.add(nextName);
+        changed = true;
+      } else {
+        nextFilters.add(filterName);
+      }
+    }
+    if (!changed || setEquals(currentFilters, nextFilters)) return;
+    _resetVisibleDisplayWindow();
+    _filter = _filter.copyWith(
+      merchant: nextFilters.length == 1 ? nextFilters.first : null,
+      merchantFilters: Set<String>.unmodifiable(nextFilters),
+      merchantColorHex: nextFilters.length == 1
+          ? _filter.merchantColorHex
+          : null,
+    );
   }
 
   Future<void> loadRecurringRules() async {
