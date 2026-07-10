@@ -41,7 +41,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: removing the left label must not shift the centered transaction count away from the horizontal center.
 - Acceptance condition: all filter/scope states that show the transaction count header must keep the same centered count behavior without rendering the removed left date placeholder.
 - Verification method: add/update widget tests that assert `transaction-list-header-count` is centered and visible while the header date placeholder is absent; verify real log date section headers still render where transactions are grouped by date.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG3-003 - Logbox fehér ikon villanás és külön újrarender megszüntetése
 

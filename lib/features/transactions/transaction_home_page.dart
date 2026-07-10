@@ -260,7 +260,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     onVendorListPressed: _openVendorSheet,
                   ),
                   _TransactionListHeader(
-                    date: _listHeaderDate(visibleTransactions),
                     transactionCount: visibleTransactions.length,
                   ),
                   Expanded(
@@ -1213,17 +1212,6 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     _closeVendorSheet();
   }
 
-  String _listHeaderDate(List<TransactionRecord> records) {
-    if (records.isEmpty) return widget.store.activePeriodLabel;
-    return _spacedDate(records.first.date);
-  }
-
-  String _spacedDate(String raw) {
-    final normalized = raw.trim().replaceAll('-', '.');
-    final parts = normalized.split('.').where((part) => part.isNotEmpty);
-    return parts.join(' ');
-  }
-
   ExpenseTheme get _expenseTheme =>
       widget.expenseTheme ??
       ExpenseTheme.fromSettings(AppThemeSettings.defaults());
@@ -1300,12 +1288,8 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 }
 
 class _TransactionListHeader extends StatelessWidget {
-  const _TransactionListHeader({
-    required this.date,
-    required this.transactionCount,
-  });
+  const _TransactionListHeader({required this.transactionCount});
 
-  final String date;
   final int transactionCount;
 
   @override
@@ -1323,16 +1307,6 @@ class _TransactionListHeader extends StatelessWidget {
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
-            Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                date,
-                key: const ValueKey('transaction-list-header-date'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style,
-              ),
-            ),
             Center(
               heightFactor: 1,
               child: Text(

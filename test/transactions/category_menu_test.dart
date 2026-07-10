@@ -142,13 +142,17 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('transaction-list-header-date')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('transaction-list-header-count')),
       findsOneWidget,
     );
-    expect(find.text('2025 09 25'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('transaction-date-group-2025.09.25')),
+      findsOneWidget,
+    );
+    expect(find.text('2025.09.25'), findsOneWidget);
     expect(find.text('1 tranzakció'), findsOneWidget);
   });
 
