@@ -10,7 +10,6 @@ class SearchPill extends StatefulWidget {
     super.key,
     required this.query,
     required this.onQueryChanged,
-    required this.filteredCount,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.merchantFilter,
@@ -28,7 +27,6 @@ class SearchPill extends StatefulWidget {
 
   final String query;
   final ValueChanged<String> onQueryChanged;
-  final int filteredCount;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final String? merchantFilter;
@@ -212,22 +210,6 @@ class _SearchPillState extends State<SearchPill> {
                     capsules[index],
                   ],
                 ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 132),
-            child: Text(
-              '${widget.filteredCount} tranzakció',
-              key: const ValueKey('search-pill-filtered-count'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.gray500,
-                height: 1.1,
               ),
             ),
           ),

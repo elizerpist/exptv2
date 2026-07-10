@@ -255,8 +255,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     categoryFilters: _categorySearchFilters(),
                     accentColor: expenseTheme.accent,
                     shadowEnabled: true,
-                    filteredCount: visibleTransactions.length,
                     onVendorListPressed: _openVendorSheet,
+                  ),
+                  _TransactionListHeader(
+                    date: _listHeaderDate(visibleTransactions),
+                    transactionCount: visibleTransactions.length,
                   ),
                   Expanded(
                     child: TransactionLogList(
@@ -1199,6 +1202,17 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     _closeVendorSheet();
   }
 
+  String _listHeaderDate(List<TransactionRecord> records) {
+    if (records.isEmpty) return widget.store.activePeriodLabel;
+    return _spacedDate(records.first.date);
+  }
+
+  String _spacedDate(String raw) {
+    final normalized = raw.trim().replaceAll('-', '.');
+    final parts = normalized.split('.').where((part) => part.isNotEmpty);
+    return parts.join(' ');
+  }
+
   ExpenseTheme get _expenseTheme =>
       widget.expenseTheme ??
       ExpenseTheme.fromSettings(AppThemeSettings.defaults());
@@ -1271,6 +1285,57 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _editingCategory = null;
       _categoryMode = CategoryOverlayMode.picker;
     });
+  }
+}
+
+class _TransactionListHeader extends StatelessWidget {
+  const _TransactionListHeader({
+    required this.date,
+    required this.transactionCount,
+  });
+
+  final String date;
+  final int transactionCount;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      color: AppColors.gray500,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    );
+    return SizedBox(
+      key: const ValueKey('transaction-list-header'),
+      height: 28,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                date,
+                key: const ValueKey('transaction-list-header-date'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+            Center(
+              heightFactor: 1,
+              child: Text(
+                '$transactionCount tranzakció',
+                key: const ValueKey('transaction-list-header-count'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

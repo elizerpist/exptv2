@@ -117,6 +117,40 @@ void main() {
     expect(find.text('Test Store'), findsOneWidget);
   });
 
+  testWidgets('home shows listed transaction count below search pill', (
+    tester,
+  ) async {
+    final store = TransactionStore(FakeTransactionRepository());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('search-pill-filtered-count')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('transaction-list-header-date')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('transaction-list-header-count')),
+      findsOneWidget,
+    );
+    expect(find.text('2025 09 25'), findsOneWidget);
+    expect(find.text('1 tranzakció'), findsOneWidget);
+  });
+
   testWidgets('slide-up category menu keeps picker behind add editor', (
     tester,
   ) async {

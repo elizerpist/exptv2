@@ -340,13 +340,34 @@ void main() {
           query: '',
           onQueryChanged: (_) {},
           merchantFilter: 'Rrr',
-          filteredCount: 2,
           onClearMerchant: () {},
         ),
       ),
     );
 
-    expect(find.text('2 tranzakció'), findsOneWidget);
+    expect(find.text('2 tranzakció'), findsNothing);
+    expect(find.text('Rrr'), findsOneWidget);
+  });
+
+  testWidgets('search pill does not render the transaction count', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPill(
+          query: '',
+          onQueryChanged: (_) {},
+          merchantFilter: 'Rrr',
+          onClearMerchant: () {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('search-pill-filtered-count')),
+      findsNothing,
+    );
+    expect(find.text('2 tranzakció'), findsNothing);
     expect(find.text('Rrr'), findsOneWidget);
   });
 
@@ -356,7 +377,6 @@ void main() {
         home: SearchPill(
           query: '',
           onQueryChanged: (_) {},
-          filteredCount: 0,
           surfaceColor: AppColors.gray200,
           surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
         ),
@@ -376,7 +396,6 @@ void main() {
         home: SearchPill(
           query: '',
           onQueryChanged: (_) {},
-          filteredCount: 0,
           shadowEnabled: false,
         ),
       ),
@@ -397,7 +416,6 @@ void main() {
         home: SearchPill(
           query: '',
           onQueryChanged: (_) {},
-          filteredCount: 0,
           surfaceColor: AppColors.gray200,
           surfaceStyle: ExpenseSurfaceInteraction.insetInset,
         ),
@@ -422,7 +440,6 @@ void main() {
         home: SearchPill(
           query: '',
           onQueryChanged: (_) {},
-          filteredCount: 0,
           surfaceColor: AppColors.gray200,
           surfaceStyle: ExpenseSurfaceInteraction.neutralInset,
         ),
@@ -472,7 +489,6 @@ void main() {
           merchantFilterColor: merchantColor,
           categoryFilter: 'Q',
           categoryFilterColor: categoryColor,
-          filteredCount: 2,
           onClearMerchant: () {},
           onClearCategory: () {},
         ),
@@ -486,7 +502,7 @@ void main() {
       find.byKey(const ValueKey('search-pill-capsule-category-Q')),
     );
 
-    expect(find.text('2 tranzakció'), findsOneWidget);
+    expect(find.text('2 tranzakció'), findsNothing);
     expect(find.text('Rrr'), findsOneWidget);
     expect(find.text('Q'), findsOneWidget);
     expect(
@@ -495,13 +511,13 @@ void main() {
     );
     expect((categoryCapsule.decoration! as BoxDecoration).color, categoryColor);
 
-    final categoryRight = tester
-        .getRect(find.byKey(const ValueKey('search-pill-capsule-category-Q')))
+    final scrollRight = tester
+        .getRect(find.byKey(const ValueKey('search-pill-capsule-scroll')))
         .right;
-    final countLeft = tester
-        .getRect(find.byKey(const ValueKey('search-pill-filtered-count')))
-        .left;
-    expect(categoryRight, lessThan(countLeft));
+    final containerRight = tester
+        .getRect(find.byKey(const ValueKey('search-pill-container')))
+        .right;
+    expect(scrollRight, greaterThan(containerRight - 80));
   });
 
   testWidgets('search pill renders multiple removable filter capsules', (
@@ -517,7 +533,6 @@ void main() {
           child: SearchPill(
             query: '',
             onQueryChanged: (_) {},
-            filteredCount: 34560,
             categoryFilters: [
               SearchPillFilter(
                 id: '6',
@@ -538,7 +553,7 @@ void main() {
       ),
     );
 
-    expect(find.text('34560 tranzakció'), findsOneWidget);
+    expect(find.text('34560 tranzakció'), findsNothing);
     expect(find.text('Élelmiszer'), findsOneWidget);
     expect(find.text('Közlekedés'), findsOneWidget);
     expect(
@@ -562,7 +577,6 @@ void main() {
         home: SearchPill(
           query: '',
           onQueryChanged: (_) {},
-          filteredCount: 0,
           onVendorListPressed: () => vendorPressed = true,
         ),
       ),
@@ -587,7 +601,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+        home: SearchPill(query: '', onQueryChanged: (_) {}),
       ),
     );
 
@@ -610,7 +624,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+        home: SearchPill(query: '', onQueryChanged: (_) {}),
       ),
     );
 
@@ -632,7 +646,7 @@ void main() {
     DebugConsole.clear();
     await tester.pumpWidget(
       MaterialApp(
-        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+        home: SearchPill(query: '', onQueryChanged: (_) {}),
       ),
     );
 
@@ -652,7 +666,7 @@ void main() {
     DebugConsole.clear();
     await tester.pumpWidget(
       MaterialApp(
-        home: SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+        home: SearchPill(query: '', onQueryChanged: (_) {}),
       ),
     );
 
@@ -676,7 +690,7 @@ void main() {
         home: Scaffold(
           body: Column(
             children: [
-              SearchPill(query: '', onQueryChanged: (_) {}, filteredCount: 0),
+              SearchPill(query: '', onQueryChanged: (_) {}),
               const SizedBox(
                 key: ValueKey('search-pill-outside-target'),
                 height: 120,
