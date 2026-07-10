@@ -41,6 +41,7 @@ class NativeImeSheetHost(
     private var previousSoftInputMode: Int? = null
     private var frameSeq = 0L
     private var lastLoggedImePx = Int.MIN_VALUE
+    private val closeState = NativeImeSheetCloseStateMachine()
 
     fun attachMainChannel(channel: MethodChannel) {
         mainChannel = channel
@@ -98,10 +99,12 @@ class NativeImeSheetHost(
             previousSoftInputMode = activity.window.attributes.softInputMode
         }
         activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        closeState.markOpened()
         frameSeq = 0L
         lastLoggedImePx = Int.MIN_VALUE
         root.visibility = View.VISIBLE
         root.bringToFront()
+        sheetContainer?.translationY = NativeImeSheetMotion.translationYForIme(currentImeBottomPx())
         ViewCompat.requestApplyInsets(root)
         publish(logMessage)
         if (flutterView == null || engineMode != sheetMode) {
@@ -118,23 +121,35 @@ class NativeImeSheetHost(
     }
 
     private fun closeSheet(logMessage: String) {
+        val imeBottomPx = currentImeBottomPx()
         val shouldNotifyMain =
             sheetMode == SheetMode.ADD_TRANSACTION && overlay?.visibility == View.VISIBLE
-        hideKeyboard()
-        sheetContainer?.translationY = 0f
-        overlay?.visibility = View.GONE
-        restoreSoftInputMode()
-        if (shouldNotifyMain) {
-            mainChannel?.invokeMethod(
-                "sheetClosed",
-                mapOf("mode" to sheetMode.channelValue, "type" to activeTransactionType),
-            )
+        val action = closeState.requestClose(
+            visible = overlay?.visibility == View.VISIBLE,
+            imeBottomPx = imeBottomPx,
+            notifyMain = shouldNotifyMain,
+        )
+        publish(
+            "$logMessage requested ime=$imeBottomPx phase=${closeState.phase} " +
+                "notify=$shouldNotifyMain token=${action.token}",
+        )
+        if (action.hideKeyboard) {
+            clearSheetFocus()
+            hideKeyboard()
         }
-        publish(logMessage)
+        if (action.scheduleTimeout) {
+            publish(
+                "[NativeImeSheet] close waiting for ime hide " +
+                    "ime=$imeBottomPx token=${action.token}",
+            )
+            scheduleCloseTimeout(action.token)
+        }
+        applyCloseAction(action)
     }
 
     fun dispose() {
-        closeSheet("[NativeImeSheet] dispose")
+        closeState.forceClosed()
+        finishClose(reason = "dispose", notifyMain = false)
         destroyFlutterContent()
         val root = overlay
         if (root?.parent is ViewGroup) {
@@ -178,6 +193,13 @@ class NativeImeSheetHost(
                 Gravity.BOTTOM,
             ),
         )
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val imeBottomPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val translation = NativeImeSheetMotion.translationYForIme(imeBottomPx)
+            sheet.translationY = translation
+            applyCloseAction(closeState.onImeProgress(imeBottomPx))
+            insets
+        }
         ViewCompat.setWindowInsetsAnimationCallback(
             root,
             object : WindowInsetsAnimationCompat.Callback(
@@ -204,6 +226,7 @@ class NativeImeSheetHost(
                     val translation = NativeImeSheetMotion.translationYForIme(imeBottomPx)
                     sheet.translationY = translation
                     logProgress(imeBottomPx, translation)
+                    applyCloseAction(closeState.onImeProgress(imeBottomPx))
                     return insets
                 }
 
@@ -215,6 +238,7 @@ class NativeImeSheetHost(
                         publish(
                             "[NativeImeSheet] ime end ime=$imeBottomPx translation=$translation",
                         )
+                        applyCloseAction(closeState.onImeEnd(imeBottomPx))
                     }
                 }
             },
@@ -333,10 +357,55 @@ class NativeImeSheetHost(
         return insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
     }
 
+    private fun scheduleCloseTimeout(token: Long) {
+        activity.window.decorView.postDelayed(
+            {
+                val action = closeState.onTimeout(token)
+                if (action.finish) {
+                    publish(
+                        "[NativeImeSheet] close timeout fired token=$token " +
+                            "ime=${currentImeBottomPx()}",
+                    )
+                }
+                applyCloseAction(action)
+            },
+            closeTimeoutMs,
+        )
+    }
+
+    private fun applyCloseAction(action: NativeImeSheetCloseStateMachine.Action) {
+        if (!action.finish) return
+        finishClose(reason = action.reason, notifyMain = action.notifyMain)
+    }
+
+    private fun finishClose(reason: String, notifyMain: Boolean) {
+        val imeBottomPx = currentImeBottomPx()
+        sheetContainer?.translationY = 0f
+        overlay?.visibility = View.GONE
+        restoreSoftInputMode()
+        publish(
+            "[NativeImeSheet] close complete reason=$reason ime=$imeBottomPx " +
+                "notify=$notifyMain",
+        )
+        if (notifyMain) {
+            mainChannel?.invokeMethod(
+                "sheetClosed",
+                mapOf("mode" to sheetMode.channelValue, "type" to activeTransactionType),
+            )
+        }
+    }
+
     private fun restoreSoftInputMode() {
         val previous = previousSoftInputMode ?: return
         activity.window.setSoftInputMode(previous)
         previousSoftInputMode = null
+    }
+
+    private fun clearSheetFocus() {
+        flutterView?.clearFocus()
+        sheetContainer?.clearFocus()
+        overlay?.clearFocus()
+        activity.currentFocus?.clearFocus()
     }
 
     private fun hideKeyboard() {
@@ -378,5 +447,6 @@ class NativeImeSheetHost(
     private companion object {
         const val channelName = "exptv2/native_ime_sheet"
         const val logTag = "NativeImeSheet"
+        const val closeTimeoutMs = 700L
     }
 }
