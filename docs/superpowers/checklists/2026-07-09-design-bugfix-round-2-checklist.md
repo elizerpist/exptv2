@@ -148,7 +148,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the behavior applies to regular category cards, the `All`/select-all card, and the add-new-category card if it participates in the same card style.
 - Acceptance condition: normal mode behavior remains unchanged: normal selected category cards use the configured highlight border rule, while neumorph selected category cards use permanent inward press without highlight border.
 - Verification method: reuse or mirror the vendor card pressed-state implementation for category cards; add/update widget or golden-style tests that compare avatar/card transform/depth state for selected neumorph category cards and assert avatar wrapper receives the pressed state together with the card.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-012 - Logcard neumorph momentary tap és avatar-only filter tap szétválasztása
 

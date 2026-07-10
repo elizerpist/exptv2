@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
+import 'package:exptv2/features/transactions/widgets/category_menu/category_card.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_menu_panel.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
@@ -951,6 +952,40 @@ void main() {
       expect(applied, {6});
     },
   );
+
+  testWidgets('selected category avatar follows the card neumorph offset', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 180,
+            height: 180,
+            child: CategoryCard(
+              category: categoryFixtures.last,
+              transactionCount: 3,
+              active: true,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              onSelect: (_) {},
+              onModify: (_) {},
+              onDelete: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final cardTop = tester
+        .getTopLeft(find.byKey(const ValueKey('category-card-surface-6')))
+        .dy;
+    final avatarTop = tester
+        .getTopLeft(find.byKey(const ValueKey('category-icon-surface-6')))
+        .dy;
+    expect(avatarTop - cardTop, moreOrLessEquals(15, epsilon: 0.1));
+  });
 
   testWidgets('category cards keep neutral shadow and thin icon stroke', (
     tester,

@@ -42,6 +42,10 @@ class CategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeUsesInset = active && cardSurfaceStyle.hasPressEffect;
+    final avatarCardOffset = ExpenseSurface.pressOffset(
+      style: cardSurfaceStyle,
+      pressed: activeUsesInset,
+    );
     return SizedBox(
       height: 150,
       child: Stack(
@@ -122,36 +126,44 @@ class CategoryCard extends StatelessWidget {
             left: 0,
             right: 0,
             child: Center(
-              child: IgnorePointer(
-                child: ExpensePressable(
-                  key: ValueKey(
-                    'category-icon-${category.transactionCategoryID}',
+              child: TweenAnimationBuilder<Offset>(
+                tween: Tween<Offset>(begin: Offset.zero, end: avatarCardOffset),
+                duration: ExpenseSurface.pressDuration,
+                curve: Curves.easeOut,
+                builder: (context, value, child) {
+                  return Transform.translate(offset: value, child: child);
+                },
+                child: IgnorePointer(
+                  child: ExpensePressable(
+                    key: ValueKey(
+                      'category-icon-${category.transactionCategoryID}',
+                    ),
+                    enabled: avatarSurfaceStyle.hasPressEffect,
+                    forcePressed: active && avatarSurfaceStyle.hasPressEffect,
+                    builder: (context, pressed) {
+                      return ExpenseSurfaceContainer(
+                        surfaceKey: ValueKey(
+                          'category-icon-surface-${category.transactionCategoryID}',
+                        ),
+                        style: avatarSurfaceStyle,
+                        color: category.slotColor,
+                        primary: true,
+                        primaryColor: category.slotColor,
+                        borderRadius: BorderRadius.circular(32.5),
+                        pressed: pressed,
+                        width: 65,
+                        height: 65,
+                        child: CategoryIconBadge(
+                          category: category,
+                          backgroundColor: Colors.transparent,
+                          size: 65,
+                          iconSize: 44,
+                          iconStrokeWidth: 1.35,
+                          showShadow: false,
+                        ),
+                      );
+                    },
                   ),
-                  enabled: avatarSurfaceStyle.hasPressEffect,
-                  forcePressed: active && avatarSurfaceStyle.hasPressEffect,
-                  builder: (context, pressed) {
-                    return ExpenseSurfaceContainer(
-                      surfaceKey: ValueKey(
-                        'category-icon-surface-${category.transactionCategoryID}',
-                      ),
-                      style: avatarSurfaceStyle,
-                      color: category.slotColor,
-                      primary: true,
-                      primaryColor: category.slotColor,
-                      borderRadius: BorderRadius.circular(32.5),
-                      pressed: pressed,
-                      width: 65,
-                      height: 65,
-                      child: CategoryIconBadge(
-                        category: category,
-                        backgroundColor: Colors.transparent,
-                        size: 65,
-                        iconSize: 44,
-                        iconStrokeWidth: 1.35,
-                        showShadow: false,
-                      ),
-                    );
-                  },
                 ),
               ),
             ),
