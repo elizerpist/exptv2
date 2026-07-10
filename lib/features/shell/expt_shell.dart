@@ -59,6 +59,7 @@ class ExptShell extends StatefulWidget {
 
 class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   static const _rightFabBottomOffset = AppDimensions.bottomNavHeight + 24.0;
+  static const _nativeSheetCloseSettleDelay = Duration(milliseconds: 360);
   static double _rightFabDebugBottomOffset(double fabSize) =>
       _rightFabBottomOffset + fabSize + 12.0;
   static double _rightFabLogBottomPadding(double fabSize) =>
@@ -77,6 +78,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
+  var _nativeAddTransactionSheetOpen = false;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
   var _homeThemeSettingsRevision = 0;
@@ -101,6 +103,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     _nativeImeSheetBridge = NativeImeSheetBridge(
       onTransactionCommitted: _handleNativeTransactionCommitted,
+      onSheetClosed: _handleNativeSheetClosed,
     );
     unawaited(_transactionStore.start());
     _transactionHomePage = _buildTransactionHomePage();
@@ -138,6 +141,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final inset = keyboard.inset;
     final previous = _lastKeyboardInset;
     _lastKeyboardInset = inset;
+    if (_nativeAddTransactionSheetOpen) {
+      return;
+    }
     DebugConsole.log(
       '[Perf] Keyboard metrics changed inset=${inset.toStringAsFixed(1)} '
       'previous=${previous.toStringAsFixed(1)} '
@@ -339,6 +345,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   Future<void> _handleNativeTransactionCommitted() async {
+    DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh queued');
+    await Future<void>.delayed(_nativeSheetCloseSettleDelay);
+    if (!mounted) return;
     DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh start');
     await _transactionStore.refreshAfterRecurringProcessing();
     if (!mounted) return;
@@ -347,6 +356,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _statsPage = _buildStatsPage();
     });
     DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh end');
+  }
+
+  Future<void> _handleNativeSheetClosed() async {
+    _nativeAddTransactionSheetOpen = false;
+    DebugConsole.log('[NativeImeSheet] sheet closed acknowledged');
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
@@ -511,12 +525,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     if (!mounted) return;
     if (openedNative) {
+      _nativeAddTransactionSheetOpen = true;
       DebugConsole.log(
         '[NativeImeSheet] AddTransaction native open dispatched '
         'elapsed=${_elapsedMs(requestedAt)}ms',
       );
       return;
     }
+    _nativeAddTransactionSheetOpen = false;
     DebugConsole.log(
       '[NativeImeSheet] AddTransaction native unavailable fallback=flutter '
       'elapsed=${_elapsedMs(requestedAt)}ms',

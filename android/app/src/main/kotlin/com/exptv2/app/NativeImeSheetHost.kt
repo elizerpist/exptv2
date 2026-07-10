@@ -55,8 +55,10 @@ class NativeImeSheetHost(
                 }
                 "openAddTransaction" -> {
                     val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
-                    openAddTransaction(args["type"]?.toString())
                     result.success(true)
+                    activity.window.decorView.post {
+                        openAddTransaction(args["type"]?.toString())
+                    }
                 }
                 else -> result.notImplemented()
             }
@@ -91,15 +93,19 @@ class NativeImeSheetHost(
         val root = ensureOverlay()
         updateSheetHeight()
         if (contentStale) destroyFlutterContent()
-        ensureFlutterContent()
         if (previousSoftInputMode == null) {
             previousSoftInputMode = activity.window.attributes.softInputMode
         }
         activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        frameSeq = 0L
+        lastLoggedImePx = Int.MIN_VALUE
         root.visibility = View.VISIBLE
         root.bringToFront()
         ViewCompat.requestApplyInsets(root)
         publish(logMessage)
+        if (flutterView == null || engineMode != sheetMode) {
+            root.postDelayed({ ensureFlutterContent() }, 16L)
+        }
     }
 
     fun closeProbe() {
@@ -111,12 +117,17 @@ class NativeImeSheetHost(
     }
 
     private fun closeSheet(logMessage: String) {
+        val shouldNotifyMain =
+            sheetMode == SheetMode.ADD_TRANSACTION && overlay?.visibility == View.VISIBLE
         hideKeyboard()
         sheetContainer?.translationY = 0f
         overlay?.visibility = View.GONE
         restoreSoftInputMode()
-        if (sheetMode == SheetMode.ADD_TRANSACTION) {
-            destroyFlutterContent()
+        if (shouldNotifyMain) {
+            mainChannel?.invokeMethod(
+                "sheetClosed",
+                mapOf("mode" to sheetMode.channelValue, "type" to activeTransactionType),
+            )
         }
         publish(logMessage)
     }
@@ -149,6 +160,7 @@ class NativeImeSheetHost(
         val sheet = FrameLayout(activity).apply {
             isClickable = true
             isFocusable = false
+            setBackgroundColor(Color.WHITE)
         }
         root.addView(
             backdrop,
@@ -282,12 +294,12 @@ class NativeImeSheetHost(
                             "[NativeImeSheet] AddTransaction committed " +
                                 "source=sheet type=$activeTransactionType",
                         )
+                        result.success(null)
+                        closeSheet("[NativeImeSheet] AddTransaction close after commit")
                         mainChannel?.invokeMethod(
                             "transactionCommitted",
                             mapOf("type" to activeTransactionType),
                         )
-                        result.success(null)
-                        closeSheet("[NativeImeSheet] AddTransaction close after commit")
                     }
                     else -> result.notImplemented()
                 }

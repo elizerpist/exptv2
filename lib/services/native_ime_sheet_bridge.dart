@@ -6,21 +6,27 @@ class NativeImeSheetBridge {
   NativeImeSheetBridge({
     MethodChannel? methodChannel,
     Future<void> Function()? onTransactionCommitted,
+    Future<void> Function()? onSheetClosed,
   }) : _methodChannel =
            methodChannel ?? const MethodChannel('exptv2/native_ime_sheet'),
-       _onTransactionCommitted = onTransactionCommitted {
-    if (_onTransactionCommitted != null) {
+       _onTransactionCommitted = onTransactionCommitted,
+       _onSheetClosed = onSheetClosed {
+    if (_onTransactionCommitted != null || _onSheetClosed != null) {
       _methodChannel.setMethodCallHandler(_handleNativeCall);
     }
   }
 
   final MethodChannel _methodChannel;
   final Future<void> Function()? _onTransactionCommitted;
+  final Future<void> Function()? _onSheetClosed;
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     switch (call.method) {
       case 'transactionCommitted':
         await _onTransactionCommitted?.call();
+        return null;
+      case 'sheetClosed':
+        await _onSheetClosed?.call();
         return null;
       default:
         throw MissingPluginException(
@@ -67,7 +73,7 @@ class NativeImeSheetBridge {
   }
 
   void dispose() {
-    if (_onTransactionCommitted != null) {
+    if (_onTransactionCommitted != null || _onSheetClosed != null) {
       _methodChannel.setMethodCallHandler(null);
     }
   }

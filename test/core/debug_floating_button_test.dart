@@ -216,4 +216,30 @@ void main() {
 
     expect(commits, 1);
   });
+
+  testWidgets('native IME bridge handles sheet closed callback', (
+    tester,
+  ) async {
+    const channel = MethodChannel('test/native_ime_sheet_closed');
+    var closes = 0;
+    final bridge = NativeImeSheetBridge(
+      methodChannel: channel,
+      onSheetClosed: () async {
+        closes += 1;
+      },
+    );
+    addTearDown(bridge.dispose);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'test/native_ime_sheet_closed',
+          const StandardMethodCodec().encodeMethodCall(
+            const MethodCall('sheetClosed'),
+          ),
+          (_) {},
+        );
+    await tester.pump();
+
+    expect(closes, 1);
+  });
 }

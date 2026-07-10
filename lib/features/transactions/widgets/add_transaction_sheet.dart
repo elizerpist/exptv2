@@ -34,6 +34,7 @@ class AddTransactionSheet extends StatefulWidget {
     this.onOpenNotificationEvent,
     this.nativeHostMode = false,
     this.onSaved,
+    this.reloadAfterSave = true,
   });
 
   final TransactionStore store;
@@ -46,6 +47,7 @@ class AddTransactionSheet extends StatefulWidget {
   final Future<void> Function(int eventId)? onOpenNotificationEvent;
   final bool nativeHostMode;
   final FutureOr<void> Function()? onSaved;
+  final bool reloadAfterSave;
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -789,6 +791,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           categoryId: category.transactionCategoryID,
           date: date,
           time: time,
+          reloadAfterSave: widget.reloadAfterSave,
         );
       } else {
         final originalMerchant = initial.merchant.trim();

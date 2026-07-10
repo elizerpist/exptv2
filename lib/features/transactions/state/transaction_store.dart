@@ -787,6 +787,31 @@ class TransactionStore extends ChangeNotifier {
     return _startFuture!;
   }
 
+  void startAddTransactionForm({
+    required List<TransactionCategory> categories,
+    required TransactionType type,
+  }) {
+    _loading = false;
+    _error = null;
+    _startCompleted = true;
+    _startFuture = null;
+    _filter = TransactionFilter(type: type);
+    _categories = List<TransactionCategory>.unmodifiable(categories);
+    _transactions = const <TransactionRecord>[];
+    _replaceRecurringGhostTransactions(const <RecurringGhostRecord>[]);
+    _recurringRules = const <RecurringRule>[];
+    _limits = const <CategoryLimit>[];
+    _rebuildPublicViews();
+    _rebuildDerivedIndexes();
+    _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
+    DebugConsole.log(
+      '[NativeImeSheet] AddTransaction lightweight store ready '
+      'type=${type.name} categories=${_categories.length}',
+    );
+    notifyListeners();
+  }
+
   Future<void> _loadInitialData() async {
     var success = false;
     _loading = true;
@@ -1046,6 +1071,7 @@ class TransactionStore extends ChangeNotifier {
     required int categoryId,
     required String date,
     required String time,
+    bool reloadAfterSave = true,
   }) async {
     await _repository.addTransaction({
       'merchant': merchant,
@@ -1055,6 +1081,10 @@ class TransactionStore extends ChangeNotifier {
       'date': date,
       'time': time,
     });
+    if (!reloadAfterSave) {
+      _scheduleNotificationRefresh();
+      return;
+    }
     await _reload(notify: false);
     await _projectRecurringGhostsForActiveWindow(notify: false);
     notifyListeners();

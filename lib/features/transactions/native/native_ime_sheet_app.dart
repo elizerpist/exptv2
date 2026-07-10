@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart' as core_theme;
+import '../../../core/theme/app_colors.dart';
+import '../../../core/debug/debug_console.dart';
 import '../../../services/native_bridge.dart';
 import '../../../services/native_ime_sheet_bridge.dart';
 import '../../diagnostics/native_ime_sheet_probe.dart';
@@ -59,6 +61,7 @@ class _NativeImeSheetBootstrapState extends State<_NativeImeSheetBootstrap> {
 
   Future<void> _load() async {
     try {
+      final stopwatch = Stopwatch()..start();
       final state = await _sheetBridge.getInitialState();
       final mode = state['mode']?.toString() ?? 'probe';
       final type = TransactionTypeX.fromAny(state['type']);
@@ -72,9 +75,15 @@ class _NativeImeSheetBootstrapState extends State<_NativeImeSheetBootstrap> {
         return;
       }
 
-      final settings = await _nativeBridge.expenseLoadSettings();
-      await _store.start();
-      _store.setActiveType(type);
+      final settingsFuture = _nativeBridge.expenseLoadSettings();
+      final categoriesFuture = _nativeBridge.expenseListCategories();
+      final settings = await settingsFuture;
+      final categories = await categoriesFuture;
+      _store.startAddTransactionForm(categories: categories, type: type);
+      DebugConsole.log(
+        '[NativeImeSheet] AddTransaction bootstrap lightweight '
+        'categories=${categories.length} elapsed=${stopwatch.elapsedMilliseconds}ms',
+      );
       if (!mounted) return;
       setState(() {
         _mode = mode;
@@ -94,7 +103,7 @@ class _NativeImeSheetBootstrapState extends State<_NativeImeSheetBootstrap> {
   Widget build(BuildContext context) {
     if (!_loaded) {
       return const Material(
-        color: Colors.transparent,
+        color: AppColors.white,
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -125,6 +134,7 @@ class _NativeImeSheetBootstrapState extends State<_NativeImeSheetBootstrap> {
             ExpenseTheme.fromSettings(AppThemeSettings.defaults()),
         onClose: () => unawaited(_sheetBridge.closeSheet()),
         onSaved: _sheetBridge.notifyTransactionCommitted,
+        reloadAfterSave: false,
       ),
     );
   }
