@@ -1058,6 +1058,95 @@ void main() {
     );
   });
 
+  testWidgets('category sheet outside tap cancels with slide-down', (
+    tester,
+  ) async {
+    final store = TransactionStore(FakeTransactionRepository());
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('header-category-button')));
+    await tester.pumpAndSettle();
+    await _scrollCategoryCardIntoView(tester, 6);
+    await tester.tap(find.byKey(const ValueKey('category-card-6')));
+    await tester.pump();
+    expect(store.activeCategory, isNull);
+
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+
+    expect(
+      _slideCardTranslationY(tester),
+      greaterThan(0),
+      reason: DebugConsole.allText,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('category-menu-slide-card')),
+      findsNothing,
+    );
+    expect(store.activeCategory, isNull);
+  });
+
+  testWidgets('vendor sheet outside tap cancels with slide-down', (
+    tester,
+  ) async {
+    final store = TransactionStore(FakeTransactionRepository());
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('vendor-filter-row-Test Store')),
+    );
+    await tester.pump();
+    expect(store.activeMerchantFilters, isEmpty);
+
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+
+    expect(
+      _slideCardTranslationY(tester),
+      greaterThan(0),
+      reason: DebugConsole.allText,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('vendor-filter-slide-card')),
+      findsNothing,
+    );
+    expect(store.activeMerchantFilters, isEmpty);
+  });
+
   testWidgets(
     'category cards use inset body and raised avatar in neumorphism',
     (tester) async {

@@ -176,8 +176,8 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: explicit apply/select actions still apply as before and are not treated as cancel.
 - Acceptance condition: tapping inside the sheet, including search fields, lists, cards, footer buttons, drag handles, and inline edit fields, must not accidentally dismiss the sheet.
 - Acceptance condition: bottom nav/FAB/background controls must not receive their action while the outside tap is being used to cancel the open sheet, unless existing add-new-category behavior explicitly allows it after dismissal.
-- Verification method: inspect add-new-category outside-tap dismissal implementation and mirror the relevant slide-down/cancel behavior; add/update widget tests that open category and vendor sheets, tap outside, assert slide-down transform/dismiss animation starts, pending selections are discarded, and inside-sheet taps do not dismiss.
-- Status: NOT DONE
+- Verification method: mirrored the existing `SlideUpMenuCard` veil-tap dismiss path for category picker and vendor sheets in both home and shell hosts; set the outside veil to cover the full app surface while the sheet card remains on top for inside interactions. Added widget tests that open category/vendor sheets, make pending selections, tap outside, assert the slide-down transform starts, assert the sheet disappears after the animation, and assert pending category/vendor filters are discarded. Ran full `test/transactions/category_menu_test.dart` and targeted analyze for home/shell/category menu tests.
+- Status: DONE
 
 ## Template
 
