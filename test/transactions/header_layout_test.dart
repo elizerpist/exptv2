@@ -266,7 +266,7 @@ void main() {
   );
 
   testWidgets(
-    'header category button toggles the full height category picker',
+    'header category button opens and outside header tap cancels the category picker',
     (tester) async {
       final previousFatalHitTest = WidgetController.hitTestWarningShouldBeFatal;
       WidgetController.hitTestWarningShouldBeFatal = true;
@@ -298,7 +298,9 @@ void main() {
         moreOrLessEquals(_screenHeight(tester), epsilon: 1.1),
       );
 
-      await tester.tap(find.byKey(const ValueKey('header-category-button')));
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('header-category-button'))),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -597,7 +599,7 @@ void main() {
   });
 
   testWidgets(
-    'category picker stays open and refreshes when active type changes',
+    'category picker outside tap on type pill cancels without changing type',
     (tester) async {
       final store = TransactionStore(HeaderLayoutRepository());
       await tester.pumpWidget(
@@ -623,15 +625,14 @@ void main() {
       expect(find.text('Food'), findsOneWidget);
       expect(find.text('Salary'), findsNothing);
 
-      await tester.tap(find.text('Bevétel'));
+      await tester.tapAt(tester.getCenter(find.text('Bevétel')));
       await tester.pumpAndSettle();
 
       expect(
         find.byKey(const ValueKey('category-menu-slide-card')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text('Salary'), findsOneWidget);
-      expect(find.text('Food'), findsNothing);
+      expect(store.activeType, TransactionType.expense);
     },
   );
 
