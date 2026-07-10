@@ -14,6 +14,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import io.flutter.FlutterInjector
+import io.flutter.embedding.android.FlutterTextureView
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -235,7 +236,7 @@ class NativeImeSheetHost(
         if (flutterView != null && engineMode == sheetMode) return
         destroyFlutterContent()
         val engine = ensureFlutterEngine()
-        val view = FlutterView(activity).apply {
+        val view = FlutterView(activity, FlutterTextureView(activity)).apply {
             attachToFlutterEngine(engine)
         }
         sheet.addView(

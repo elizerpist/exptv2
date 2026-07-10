@@ -2,6 +2,11 @@ import 'dart:async';
 
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/native/native_ime_sheet_app.dart';
+import 'package:exptv2/features/transactions/data/transaction_repository.dart';
+import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/state/transaction_store.dart';
+import 'package:exptv2/features/transactions/widgets/add_transaction_sheet.dart';
+import 'package:exptv2/services/native_bridge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,29 +24,32 @@ void main() {
         .setMockMethodCallHandler(dataChannel, null);
   });
 
-  testWidgets('native sheet startup uses a visible sheet-colored loading layer', (
-    tester,
-  ) async {
-    final pendingInitialState = Completer<Map<String, Object?>>();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(nativeSheetChannel, (call) async {
-          if (call.method == 'getInitialState') {
-            return pendingInitialState.future;
-          }
-          return null;
-        });
+  testWidgets(
+    'native sheet startup uses a visible sheet-colored loading layer',
+    (tester) async {
+      final pendingInitialState = Completer<Map<String, Object?>>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeSheetChannel, (call) async {
+            if (call.method == 'getInitialState') {
+              return pendingInitialState.future;
+            }
+            return null;
+          });
 
-    await tester.pumpWidget(const NativeImeSheetApp());
-    await tester.pump();
+      await tester.pumpWidget(const NativeImeSheetApp());
+      await tester.pump();
 
-    final loadingMaterial = tester.widget<Material>(
-      find.descendant(
-        of: find.byType(NativeImeSheetApp),
-        matching: find.byType(Material),
-      ).first,
-    );
-    expect(loadingMaterial.color, AppColors.white);
-  });
+      final loadingMaterial = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(NativeImeSheetApp),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(loadingMaterial.color, AppColors.white);
+    },
+  );
 
   testWidgets('native add transaction content does not load full bootstrap', (
     tester,
@@ -159,6 +167,66 @@ void main() {
     expect(savedTransactions, hasLength(1));
     expect(savedTransactions.single['merchant'], 'Native save');
     expect(bootstrapCalls, 0);
+  });
+
+  testWidgets('native hosted add transaction avoids keyboard overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(460, 1024);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewPadding = const FakeViewPadding(bottom: 24);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 252);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetViewPadding();
+      tester.view.resetViewInsets();
+    });
+
+    final store = TransactionStore(TransactionRepository(NativeBridge()));
+    store.startAddTransactionForm(
+      categories: _categoryPayload().map(TransactionCategory.fromMap).toList(),
+      type: TransactionType.expense,
+    );
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            width: 460,
+            height: 401,
+            child: AddTransactionSheet(
+              store: store,
+              nativeHostMode: true,
+              reloadAfterSave: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final exception = tester.takeException();
+    expect(exception, isNull);
+    final dateRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-date-picker-button')),
+    );
+    final timeRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-time-picker-button')),
+    );
+    final saveRect = tester.getRect(
+      find.byKey(const ValueKey('transaction-save-footer')),
+    );
+    final dateTimeBottom = dateRect.bottom > timeRect.bottom
+        ? dateRect.bottom
+        : timeRect.bottom;
+    expect(saveRect.top - dateTimeBottom, greaterThanOrEqualTo(0));
+    expect(
+      find.byKey(const ValueKey('transaction-save-button')),
+      findsOneWidget,
+    );
   });
 }
 

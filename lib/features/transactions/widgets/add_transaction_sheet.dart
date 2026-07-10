@@ -174,7 +174,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           child: Builder(
             builder: (context) {
               final actionBottomInset =
-                  MediaQuery.viewPaddingOf(context).bottom + 8;
+                  widget.nativeHostMode && _keyboardVisible(context)
+                  ? 8.0
+                  : MediaQuery.viewPaddingOf(context).bottom + 8;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -204,141 +206,146 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               actionBottomInset: actionBottomInset,
                             );
                           }
+                          final formFields = Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Center(
+                                child: Container(
+                                  width: 42,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.gray200,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _title(type),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.gray800,
+                                ),
+                              ),
+                              if (_editing &&
+                                  _linkedNotificationEventId != null) ...[
+                                const SizedBox(height: 6),
+                                Center(
+                                  child: TextButton.icon(
+                                    key: const ValueKey(
+                                      'transaction-open-notification-event',
+                                    ),
+                                    onPressed: _saving
+                                        ? null
+                                        : _openLinkedNotificationEvent,
+                                    icon: const Icon(
+                                      Icons.notifications_active_outlined,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Ugrás az üzenethez'),
+                                  ),
+                                ),
+                              ] else if (_editing &&
+                                  _notificationLinkLoading) ...[
+                                const SizedBox(height: 6),
+                                const Center(
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 14),
+                              ThemedPillField(
+                                debugLabel: '$debugLabel.name',
+                                controller: _name,
+                                focusNode: _nameFocus,
+                                label: 'Tranzakció neve',
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.never,
+                                surfaceColor: expenseTheme.fieldSurface,
+                                surfaceStyle: expenseTheme.contentSurfaceStyle,
+                              ),
+                              const SizedBox(height: _transactionFormFieldGap),
+                              AmountField(
+                                controller: _amount,
+                                focusNode: _amountFocus,
+                                debugLabel: '$debugLabel.amount',
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.never,
+                                surfaceColor: expenseTheme.fieldSurface,
+                                surfaceStyle: expenseTheme.contentSurfaceStyle,
+                              ),
+                              const SizedBox(height: _transactionFormFieldGap),
+                              CategorySelectorField(
+                                selected: _category,
+                                onTap: _openCategoryPicker,
+                                surfaceColor: expenseTheme.fieldSurface,
+                                surfaceStyle: expenseTheme.contentSurfaceStyle,
+                              ),
+                              if (_categoryPickerOpen) ...[
+                                const SizedBox(height: 8),
+                                CategoryScrollPicker(
+                                  key: _categoryPickerBoundaryKey,
+                                  keyPrefix: 'transaction-category',
+                                  categories: categories,
+                                  selected: _category,
+                                  onSelected: _selectCategory,
+                                ),
+                              ],
+                              if (_categoryPickerOpen && !widget.nativeHostMode)
+                                const Spacer()
+                              else
+                                const SizedBox(
+                                  height: _transactionFormFieldGap,
+                                ),
+                              DateTimeFields(
+                                dateFieldKey: _dateFieldKey,
+                                timeFieldKey: _timeFieldKey,
+                                dateController: _date,
+                                timeController: _time,
+                                onPickDate: _pickDate,
+                                onPickTime: _pickTime,
+                                dateFocusNode: _dateFocus,
+                                timeFocusNode: _timeFocus,
+                                debugLabelPrefix: debugLabel,
+                                surfaceColor: expenseTheme.fieldSurface,
+                                surfaceStyle: expenseTheme.contentSurfaceStyle,
+                              ),
+                              if (_error != null) ...[
+                                Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: AppColors.expense,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                          final body = widget.nativeHostMode
+                              ? ClipRect(
+                                  child: SingleChildScrollView(
+                                    keyboardDismissBehavior:
+                                        ScrollViewKeyboardDismissBehavior
+                                            .manual,
+                                    physics: const ClampingScrollPhysics(),
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: formFields,
+                                  ),
+                                )
+                              : formFields;
                           return SizedBox.expand(
                             key: const ValueKey(
                               'transaction-editor-scroll-body',
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Center(
-                                  child: Container(
-                                    width: 42,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.gray200,
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  _title(type),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.gray800,
-                                  ),
-                                ),
-                                if (_editing &&
-                                    _linkedNotificationEventId != null) ...[
-                                  const SizedBox(height: 6),
-                                  Center(
-                                    child: TextButton.icon(
-                                      key: const ValueKey(
-                                        'transaction-open-notification-event',
-                                      ),
-                                      onPressed: _saving
-                                          ? null
-                                          : _openLinkedNotificationEvent,
-                                      icon: const Icon(
-                                        Icons.notifications_active_outlined,
-                                        size: 18,
-                                      ),
-                                      label: const Text('Ugrás az üzenethez'),
-                                    ),
-                                  ),
-                                ] else if (_editing &&
-                                    _notificationLinkLoading) ...[
-                                  const SizedBox(height: 6),
-                                  const Center(
-                                    child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 14),
-                                ThemedPillField(
-                                  debugLabel: '$debugLabel.name',
-                                  controller: _name,
-                                  focusNode: _nameFocus,
-                                  label: 'Tranzakció neve',
-                                  floatingLabelBehavior:
-                                      FloatingLabelBehavior.never,
-                                  surfaceColor: expenseTheme.fieldSurface,
-                                  surfaceStyle:
-                                      expenseTheme.contentSurfaceStyle,
-                                ),
-                                const SizedBox(
-                                  height: _transactionFormFieldGap,
-                                ),
-                                AmountField(
-                                  controller: _amount,
-                                  focusNode: _amountFocus,
-                                  debugLabel: '$debugLabel.amount',
-                                  floatingLabelBehavior:
-                                      FloatingLabelBehavior.never,
-                                  surfaceColor: expenseTheme.fieldSurface,
-                                  surfaceStyle:
-                                      expenseTheme.contentSurfaceStyle,
-                                ),
-                                const SizedBox(
-                                  height: _transactionFormFieldGap,
-                                ),
-                                CategorySelectorField(
-                                  selected: _category,
-                                  onTap: _openCategoryPicker,
-                                  surfaceColor: expenseTheme.fieldSurface,
-                                  surfaceStyle:
-                                      expenseTheme.contentSurfaceStyle,
-                                ),
-                                if (_categoryPickerOpen) ...[
-                                  const SizedBox(height: 8),
-                                  CategoryScrollPicker(
-                                    key: _categoryPickerBoundaryKey,
-                                    keyPrefix: 'transaction-category',
-                                    categories: categories,
-                                    selected: _category,
-                                    onSelected: _selectCategory,
-                                  ),
-                                ],
-                                if (_categoryPickerOpen)
-                                  const Spacer()
-                                else
-                                  const SizedBox(
-                                    height: _transactionFormFieldGap,
-                                  ),
-                                DateTimeFields(
-                                  dateFieldKey: _dateFieldKey,
-                                  timeFieldKey: _timeFieldKey,
-                                  dateController: _date,
-                                  timeController: _time,
-                                  onPickDate: _pickDate,
-                                  onPickTime: _pickTime,
-                                  dateFocusNode: _dateFocus,
-                                  timeFocusNode: _timeFocus,
-                                  debugLabelPrefix: debugLabel,
-                                  surfaceColor: expenseTheme.fieldSurface,
-                                  surfaceStyle:
-                                      expenseTheme.contentSurfaceStyle,
-                                ),
-                                if (_error != null) ...[
-                                  Text(
-                                    _error!,
-                                    style: const TextStyle(
-                                      color: AppColors.expense,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                            child: body,
                           );
                         },
                       ),
@@ -437,6 +444,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _stablePanelSignature = signature;
     }
     return _stablePanelHeight!;
+  }
+
+  bool _keyboardVisible(BuildContext context) {
+    return MediaQuery.viewInsetsOf(context).bottom > 0.5 ||
+        KeyboardInsetReader.rawOf(context) > 0.5;
   }
 
   void _logFirstBuild(double panelHeight, int categoryCount) {

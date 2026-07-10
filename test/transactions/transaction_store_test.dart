@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
@@ -71,6 +73,44 @@ void main() {
     expect(logs, contains('[Perf] TypeSwitch complete type=income'));
     expect(logs, contains('elapsed='));
   });
+
+  test(
+    'store can defer startup notify and prewarm during native sheet motion',
+    () async {
+      final repository = _PausedBootstrapRepository();
+      final store = TransactionStore(repository);
+      addTearDown(store.dispose);
+      var notifications = 0;
+      store.addListener(() {
+        notifications += 1;
+      });
+      DebugConsole.clear();
+
+      store.suspendUiUpdates();
+      final startFuture = store.start();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.loadCount, 1);
+      expect(notifications, 0);
+
+      repository.release();
+      await startFuture;
+
+      expect(notifications, 0);
+      expect(
+        DebugConsole.allText,
+        isNot(contains('[Perf] Store prewarm reason=start')),
+      );
+
+      store.resumeUiUpdates();
+
+      expect(notifications, 1);
+      expect(
+        DebugConsole.allText,
+        contains('[Perf] Store prewarm reason=start'),
+      );
+    },
+  );
 
   test('store exposes cached category index and display log entries', () async {
     final store = TransactionStore(FakeTransactionRepository());
@@ -990,5 +1030,27 @@ class FakeTransactionRepository extends TransactionRepositoryContract {
       count += 1;
     }
     return count;
+  }
+}
+
+class _PausedBootstrapRepository extends FakeTransactionRepository {
+  final _releaseCompleter = Completer<void>();
+
+  void release() {
+    if (!_releaseCompleter.isCompleted) {
+      _releaseCompleter.complete();
+    }
+  }
+
+  @override
+  Future<TransactionBootstrap> loadBootstrap() async {
+    loadCount += 1;
+    await _releaseCompleter.future;
+    return TransactionBootstrap(
+      categories: categories,
+      transactions: transactions,
+      limits: limits,
+      recurringGhostTransactions: recurringGhostTransactions,
+    );
   }
 }

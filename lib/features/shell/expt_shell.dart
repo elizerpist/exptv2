@@ -79,6 +79,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
   var _nativeAddTransactionSheetOpen = false;
+  var _nativeSheetStoreSuspended = false;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
   var _homeThemeSettingsRevision = 0;
@@ -345,7 +346,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   Future<void> _handleNativeTransactionCommitted() async {
-    DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh queued');
+    DebugConsole.log(
+      '[NativeImeSheet] AddTransaction committed refresh queued',
+    );
     await Future<void>.delayed(_nativeSheetCloseSettleDelay);
     if (!mounted) return;
     DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh start');
@@ -360,7 +363,20 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   Future<void> _handleNativeSheetClosed() async {
     _nativeAddTransactionSheetOpen = false;
+    _resumeStoreForNativeSheet();
     DebugConsole.log('[NativeImeSheet] sheet closed acknowledged');
+  }
+
+  void _suspendStoreForNativeSheet() {
+    if (_nativeSheetStoreSuspended) return;
+    _nativeSheetStoreSuspended = true;
+    _transactionStore.suspendUiUpdates();
+  }
+
+  void _resumeStoreForNativeSheet() {
+    if (!_nativeSheetStoreSuspended) return;
+    _nativeSheetStoreSuspended = false;
+    _transactionStore.resumeUiUpdates();
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
@@ -520,10 +536,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   Future<void> _openAddTransactionNativeFirst(DateTime requestedAt) async {
     _sheetHostKey.currentState?.closeAll();
+    _suspendStoreForNativeSheet();
     final openedNative = await _nativeImeSheetBridge.openAddTransaction(
       type: _transactionStore.activeType,
     );
-    if (!mounted) return;
+    if (!mounted) {
+      _resumeStoreForNativeSheet();
+      return;
+    }
     if (openedNative) {
       _nativeAddTransactionSheetOpen = true;
       DebugConsole.log(
@@ -532,6 +552,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       );
       return;
     }
+    _resumeStoreForNativeSheet();
     _nativeAddTransactionSheetOpen = false;
     DebugConsole.log(
       '[NativeImeSheet] AddTransaction native unavailable fallback=flutter '

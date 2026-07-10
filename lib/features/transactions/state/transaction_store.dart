@@ -81,6 +81,9 @@ class TransactionStore extends ChangeNotifier {
   var _loading = false;
   var _startCompleted = false;
   Future<void>? _startFuture;
+  var _uiUpdateSuspendDepth = 0;
+  var _pendingUiNotify = false;
+  final _pendingPrewarmReasons = <String>[];
   String? _error;
   List<TransactionCategory> _categories = [];
   List<TransactionRecord> _transactions = [];
@@ -787,6 +790,24 @@ class TransactionStore extends ChangeNotifier {
     return _startFuture!;
   }
 
+  void suspendUiUpdates() {
+    _uiUpdateSuspendDepth += 1;
+  }
+
+  void resumeUiUpdates() {
+    if (_uiUpdateSuspendDepth == 0) return;
+    _uiUpdateSuspendDepth -= 1;
+    if (_uiUpdateSuspendDepth > 0) return;
+    final reasons = List<String>.from(_pendingPrewarmReasons);
+    _pendingPrewarmReasons.clear();
+    for (final reason in reasons) {
+      _prewarmCriticalCaches(reason);
+    }
+    if (!_pendingUiNotify) return;
+    _pendingUiNotify = false;
+    notifyListeners();
+  }
+
   void startAddTransactionForm({
     required List<TransactionCategory> categories,
     required TransactionType type,
@@ -816,7 +837,7 @@ class TransactionStore extends ChangeNotifier {
     var success = false;
     _loading = true;
     _error = null;
-    notifyListeners();
+    _notifyListenersOrDefer();
     try {
       final payload = await _repository.loadBootstrap();
       _categories = payload.categories;
@@ -830,7 +851,7 @@ class TransactionStore extends ChangeNotifier {
       _rebuildDerivedIndexes();
       _invalidateViewCaches();
       _invalidateFastInfoMetrics();
-      _prewarmCriticalCaches('start');
+      _prewarmCriticalCachesOrDefer('start');
       success = true;
     } catch (error) {
       _error = error.toString();
@@ -838,7 +859,27 @@ class TransactionStore extends ChangeNotifier {
       _startCompleted = success;
       _startFuture = null;
       _loading = false;
-      notifyListeners();
+      _notifyListenersOrDefer();
+    }
+  }
+
+  bool get _uiUpdatesSuspended => _uiUpdateSuspendDepth > 0;
+
+  void _notifyListenersOrDefer() {
+    if (_uiUpdatesSuspended) {
+      _pendingUiNotify = true;
+      return;
+    }
+    notifyListeners();
+  }
+
+  void _prewarmCriticalCachesOrDefer(String reason) {
+    if (!_uiUpdatesSuspended) {
+      _prewarmCriticalCaches(reason);
+      return;
+    }
+    if (!_pendingPrewarmReasons.contains(reason)) {
+      _pendingPrewarmReasons.add(reason);
     }
   }
 
