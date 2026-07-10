@@ -1068,6 +1068,48 @@ void main() {
     expect(categoryTaps, 1);
   });
 
+  testWidgets('logbox body press moves the card and avatar together', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: record,
+          category: category,
+          surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+          onTap: (_) {},
+          onCategoryFilter: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final cardFinder = find.byKey(
+      ValueKey('transaction-logbox-content-${record.id}'),
+    );
+    final cardRect = tester.getRect(cardFinder);
+
+    final gesture = await tester.startGesture(
+      cardRect.topLeft + const Offset(68, 20),
+    );
+    await tester.pump(ExpenseSurface.pressDuration);
+
+    final pressedDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    expect(pressedDecoration.boxShadow, isNull);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final releasedDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    expect(releasedDecoration.boxShadow, isNotNull);
+  });
+
   testWidgets('transaction log rows do not build swipe overlays while idle', (
     tester,
   ) async {

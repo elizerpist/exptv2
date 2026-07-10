@@ -161,7 +161,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the avatar filter behavior remains functional: tapping the avatar still applies the category/vendor filter behavior currently assigned to the avatar.
 - Acceptance condition: gesture hit areas do not conflict; taps on avatar are consumed by the avatar path, taps outside avatar on the card body are consumed by the card path.
 - Verification method: add/update widget tests that tap the log card body and assert card plus avatar pressed state are active momentarily, then tap the avatar and assert only avatar pressed state and avatar filter callback fire while full card press/callback stays inactive.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-013 - Header card category gomb animációja egyezzen az add-new-category avatar tappal
 
