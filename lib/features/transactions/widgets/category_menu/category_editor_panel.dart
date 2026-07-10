@@ -291,9 +291,18 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
     final label = _editing ? 'EditCategory' : 'AddCategory';
     if (_nameFocus.hasFocus) {
       _focusStartedAt = DateTime.now();
+      DebugConsole.log(
+        '[KeyboardFlow] $label focus request field=name '
+        'keyboard=${_keyboardInsetText()}',
+      );
       DebugConsole.log('[Perf] $label focus field=name active=true');
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_nameFocus.hasFocus) return;
+        DebugConsole.log(
+          '[KeyboardFlow] $label focus frame field=name '
+          'keyboard=${_keyboardInsetText()} '
+          'elapsed=${_elapsedMs(_focusStartedAt)}ms',
+        );
         DebugConsole.log(
           '[Perf] $label focus frame field=name elapsed=${_elapsedMs(_focusStartedAt)}ms',
         );
@@ -303,7 +312,17 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
     DebugConsole.log(
       '[Perf] $label focus field=name active=false elapsed=${_elapsedMs(_focusStartedAt)}ms',
     );
+    DebugConsole.log(
+      '[KeyboardFlow] $label focus clear field=name '
+      'keyboard=${_keyboardInsetText()} '
+      'elapsed=${_elapsedMs(_focusStartedAt)}ms',
+    );
     _focusStartedAt = null;
+  }
+
+  String _keyboardInsetText() {
+    return (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0)
+        .toStringAsFixed(1);
   }
 
   int _elapsedMs(DateTime? startedAt) {

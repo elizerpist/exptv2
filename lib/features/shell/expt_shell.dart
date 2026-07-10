@@ -1245,6 +1245,8 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
   }
 
   void open() {
+    DebugConsole.clear();
+    DebugConsole.log('[KeyboardFlow] VendorFilter debug cleared');
     setState(() {
       _pendingVendorFilters = {...widget.store.activeMerchantFilters};
       _open = true;
@@ -1279,7 +1281,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
           dragFromHandleOnly: true,
           dragHandleExtent: 72,
           verticalDragBias: 1.2,
-          keyboardAvoidance: false,
+          keyboardAvoidance: true,
           child: SafeArea(
             top: false,
             bottom: false,
@@ -1294,6 +1296,8 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
               avatarSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
               buttonSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
               onToggle: _togglePendingVendorFilter,
+              onRename: _renameVendorFilterSummary,
+              onResetName: _resetVendorFilterSummary,
               onApply: _applyVendorFilters,
             ),
           ),
@@ -1317,6 +1321,41 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
       final next = {..._pendingVendorFilters};
       if (!next.add(vendor)) next.remove(vendor);
       _pendingVendorFilters = next;
+    });
+  }
+
+  Future<void> _renameVendorFilterSummary(
+    VendorFilterSummary summary,
+    String userAssignedName,
+  ) async {
+    final previousName = summary.name.trim();
+    final nextName = userAssignedName.trim();
+    if (nextName.isEmpty) return;
+    await widget.store.renameTransactionsByOriginalMerchant(
+      summary.originalName,
+      nextName,
+    );
+    if (!mounted) return;
+    setState(() {
+      final nextFilters = {..._pendingVendorFilters};
+      if (nextFilters.remove(previousName)) nextFilters.add(nextName);
+      _pendingVendorFilters = nextFilters;
+    });
+  }
+
+  Future<void> _resetVendorFilterSummary(VendorFilterSummary summary) async {
+    final previousName = summary.name.trim();
+    final nextName = summary.originalName.trim();
+    await widget.store.resetTransactionNamesByOriginalMerchant(
+      summary.originalName,
+    );
+    if (!mounted) return;
+    setState(() {
+      final nextFilters = {..._pendingVendorFilters};
+      if (nextFilters.remove(previousName) && nextName.isNotEmpty) {
+        nextFilters.add(nextName);
+      }
+      _pendingVendorFilters = nextFilters;
     });
   }
 
@@ -1345,6 +1384,9 @@ class _CategorySheetSlotState extends State<_CategorySheetSlot> {
   TransactionCategory? _initialCategory;
 
   void open({TransactionCategory? initialCategory}) {
+    final label = initialCategory == null ? 'AddCategory' : 'EditCategory';
+    DebugConsole.clear();
+    DebugConsole.log('[KeyboardFlow] $label debug cleared');
     setState(() {
       _open = true;
       _initialCategory = initialCategory;

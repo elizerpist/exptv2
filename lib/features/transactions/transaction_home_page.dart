@@ -472,7 +472,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     dragFromHandleOnly: true,
                     dragHandleExtent: 72,
                     verticalDragBias: 1.2,
-                    keyboardAvoidance: false,
+                    keyboardAvoidance: true,
                     child: SafeArea(
                       top: false,
                       bottom: false,
@@ -931,6 +931,11 @@ class _TransactionHomePageState extends State<TransactionHomePage>
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
+  void _clearKeyboardDebug(String label) {
+    DebugConsole.clear();
+    DebugConsole.log('[KeyboardFlow] $label debug cleared');
+  }
+
   BackheaderBudgetItem? _defaultBudgetEditorItem() {
     final items = widget.store.backheaderBudgetItems;
     if (items.isEmpty) return null;
@@ -1102,6 +1107,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       externalEditor();
       return;
     }
+    _clearKeyboardDebug('AddCategory');
     setState(() {
       _categoryMode = CategoryOverlayMode.picker;
       _categoryEditorOpen = externalEditor == null;
@@ -1117,6 +1123,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       externalEditor(category);
       return;
     }
+    _clearKeyboardDebug('EditCategory');
     setState(() {
       _categoryMode = null;
       _categoryEditorOpen = true;
@@ -1183,6 +1190,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       externalVendorSheet();
       return;
     }
+    _clearKeyboardDebug('VendorFilter');
     setState(() {
       _pendingVendorFilters = {...widget.store.activeMerchantFilters};
       _vendorSheetOpen = true;
@@ -1404,6 +1412,7 @@ class VendorFilterPanel extends StatefulWidget {
 class _VendorFilterPanelState extends State<VendorFilterPanel> {
   late final TextEditingController _searchController;
   var _query = '';
+  double? _lastLoggedKeyboardInset;
 
   @override
   void initState() {
@@ -1417,13 +1426,33 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
     super.dispose();
   }
 
+  void _logKeyboardLayout(
+    double keyboardInset,
+    double safeBottomInset,
+    double listBottomPadding,
+  ) {
+    if (_lastLoggedKeyboardInset == keyboardInset) return;
+    _lastLoggedKeyboardInset = keyboardInset;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[KeyboardFlow] VendorFilter keyboard '
+        'inset=${keyboardInset.toStringAsFixed(1)} '
+        'footerBottom=0.0 '
+        'listPadding=${listBottomPadding.toStringAsFixed(1)} '
+        'safe=${safeBottomInset.toStringAsFixed(1)}',
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final safeBottomInset = MediaQuery.paddingOf(context).bottom + 8;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final visibleSummaries = _visibleSummaries();
     final visibleSections = _sectionedItems(visibleSummaries);
-    final listBottomPadding = 84 + safeBottomInset + keyboardInset;
+    final listBottomPadding = 84 + safeBottomInset;
+    _logKeyboardLayout(keyboardInset, safeBottomInset, listBottomPadding);
     return ColoredBox(
       color: AppColors.white,
       child: Stack(
@@ -1526,7 +1555,7 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: keyboardInset,
+            bottom: 0,
             child: ColoredBox(
               key: const ValueKey('vendor-filter-footer'),
               color: AppColors.white,
@@ -1829,6 +1858,11 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
 
   void _beginNameEdit() {
     if (_savingName) return;
+    DebugConsole.log(
+      '[KeyboardFlow] VendorFilter focus request '
+      'vendor=${widget.summary.originalName} '
+      'keyboard=${_keyboardInsetText()}',
+    );
     setState(() {
       _editingName = true;
       _setControllerText(widget.summary.name);
@@ -1836,6 +1870,11 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _nameFocusNode.requestFocus();
+      DebugConsole.log(
+        '[KeyboardFlow] VendorFilter focus frame '
+        'vendor=${widget.summary.originalName} '
+        'keyboard=${_keyboardInsetText()}',
+      );
     });
   }
 
@@ -1870,6 +1909,11 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
       text: value,
       selection: TextSelection.collapsed(offset: value.length),
     );
+  }
+
+  String _keyboardInsetText() {
+    return (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0)
+        .toStringAsFixed(1);
   }
 
   @override

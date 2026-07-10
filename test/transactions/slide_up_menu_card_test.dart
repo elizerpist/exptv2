@@ -77,7 +77,7 @@ void main() {
     },
   );
 
-  testWidgets('category editor sheet does not follow keyboard lift', (
+  testWidgets('category editor sheet follows keyboard lift without resizing', (
     tester,
   ) async {
     DebugConsole.clear();
@@ -107,10 +107,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(_slideCardTranslationY(tester), moreOrLessEquals(0, epsilon: 0.1));
+    expect(
+      _slideCardTranslationY(tester),
+      moreOrLessEquals(-180, epsilon: 0.1),
+    );
     expect(
       DebugConsole.allText,
-      isNot(contains('[SlideUpMenu] AddCategory keyboard lift inset=180.0')),
+      contains('[SlideUpMenu] AddCategory keyboard lift inset=180.0'),
     );
   });
 

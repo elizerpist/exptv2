@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/theme/expense_theme.dart';
@@ -428,6 +429,7 @@ void main() {
         ]);
       final store = TransactionStore(repository);
       final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+      DebugConsole.log('old keyboard noise');
 
       await tester.pumpWidget(
         MaterialApp(
@@ -477,7 +479,19 @@ void main() {
       final transform = tester.widget<Transform>(
         find.byKey(const ValueKey('slide-up-menu-transform')),
       );
-      expect(transform.transform.getTranslation().y, moreOrLessEquals(0));
+      expect(
+        transform.transform.getTranslation().y,
+        moreOrLessEquals(-180, epsilon: 0.1),
+      );
+      expect(DebugConsole.allText, isNot(contains('old keyboard noise')));
+      expect(
+        DebugConsole.allText,
+        contains('[KeyboardFlow] VendorFilter debug cleared'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[SlideUpMenu] VendorFilter keyboard lift inset=180.0'),
+      );
 
       final footerRect = tester.getRect(
         find.byKey(const ValueKey('vendor-filter-footer')),

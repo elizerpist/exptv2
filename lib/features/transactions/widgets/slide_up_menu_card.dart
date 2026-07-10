@@ -178,7 +178,12 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
           _keyboardInset = keyboardInset;
           _logLayout(availableHeight, panelHeight);
           if (widget.keyboardAvoidance) {
-            _logKeyboardLift(keyboardInset, panelHeight);
+            _logKeyboardLift(
+              rawKeyboardInset: rawKeyboardInset,
+              keyboardInset: keyboardInset,
+              panelHeight: panelHeight,
+              availableHeight: availableHeight,
+            );
           }
           final focusVeilTapTop = widget.focusVeilPassthroughTop
               .clamp(0.0, availableHeight)
@@ -418,7 +423,12 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     });
   }
 
-  void _logKeyboardLift(double keyboardInset, double panelHeight) {
+  void _logKeyboardLift({
+    required double rawKeyboardInset,
+    required double keyboardInset,
+    required double panelHeight,
+    required double availableHeight,
+  }) {
     if (_lastLoggedKeyboardInset == keyboardInset) return;
     _lastLoggedKeyboardInset = keyboardInset;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -426,8 +436,12 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
       DebugConsole.log(
         '[SlideUpMenu] $_debugLabel keyboard lift '
         'inset=${keyboardInset.toStringAsFixed(1)} '
+        'raw=${rawKeyboardInset.toStringAsFixed(1)} '
         'panel=${panelHeight.toStringAsFixed(1)} '
-        'transform=${(-keyboardInset).toStringAsFixed(1)}',
+        'available=${availableHeight.toStringAsFixed(1)} '
+        'transform=${(-keyboardInset).toStringAsFixed(1)} '
+        'entry=${_entry.value.toStringAsFixed(2)} '
+        'drag=${_dragDy.value.toStringAsFixed(1)}',
       );
     });
   }

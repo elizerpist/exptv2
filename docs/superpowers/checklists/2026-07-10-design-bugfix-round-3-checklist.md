@@ -147,8 +147,8 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the debug logging must be concise enough not to immediately flood the on-screen debug panel during normal use; repeated inset/frame logs should be throttled or emitted only on meaningful changes.
 - Acceptance condition: category editor sheet fixes must not break add/edit category form layout, icon selector flow, save button/footer safety, or sheet drag/dismiss behavior.
 - Acceptance condition: vendor sheet fixes must not break vendor search, inline rename from BUG3-006, grid layout from BUG3-004, ABC grouping, selection/apply behavior, or fixed-card keyboard-safe layout.
-- Verification method: clear debug console, reproduce category add/edit keyboard slide and vendor keyboard slide, capture readable timing logs, document root cause, implement fix, then repeat and compare logs; add/update widget tests simulating keyboard `viewInsets` for category and vendor sheets to assert card/footer positions update immediately and final offsets match the keyboard inset without card resize regressions.
-- Status: NOT DONE
+- Verification method: documented root cause: add/edit category and vendor sheets had `SlideUpMenuCard.keyboardAvoidance` disabled, so the card did not follow `MediaQuery.viewInsets`; vendor used a sheet-local footer `bottom: keyboardInset`, creating a separate timing path from the card. Implemented card-level keyboard lift for category editor and vendor sheets, removed vendor footer double compensation, and added concise keyboard-flow logs with debug-console clearing on sheet open. Updated widget tests simulating `viewInsets` to assert category editor and vendor sheet transforms match `-keyboardInset`, vendor footer remains keyboard-safe, old debug noise is cleared, and keyboard lift logs are emitted. Ran full `slide_up_menu_card_test.dart`, full `category_menu_test.dart`, and targeted analyze for shell/home/category editor/slide-up files.
+- Status: DONE
 
 ### BUG3-010 - Recurring transaction Idő/Push bináris selector type-pill design
 
