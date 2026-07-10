@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_dimensions.dart';
+import '../../services/native_ime_sheet_bridge.dart';
 import '../../services/recurring_alarm_service.dart';
 import 'debug_console.dart';
 
 class DebugFloatingButton extends StatelessWidget {
   const DebugFloatingButton({
     super.key,
+    this.nativeImeSheetBridge,
     this.recurringAlarmService,
     this.onRecurringChanged,
     this.bottomOffset = AppDimensions.bottomNavHeight + 12,
   });
 
+  final NativeImeSheetBridge? nativeImeSheetBridge;
   final RecurringAlarmService? recurringAlarmService;
   final VoidCallback? onRecurringChanged;
   final double bottomOffset;
@@ -33,6 +36,7 @@ class DebugFloatingButton extends StatelessWidget {
           onPressed: () => showDialog<void>(
             context: context,
             builder: (_) => DebugConsoleDialog(
+              nativeImeSheetBridge: nativeImeSheetBridge,
               recurringAlarmService: recurringAlarmService,
               onRecurringChanged: onRecurringChanged,
             ),

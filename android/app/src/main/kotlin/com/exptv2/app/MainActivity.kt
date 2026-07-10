@@ -30,6 +30,7 @@ import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterFragmentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var nativeImeSheetHost: NativeImeSheetHost? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -200,6 +201,18 @@ class MainActivity : FlutterFragmentActivity() {
         NativeKeyboardInsetChannel(this).attach(
             EventChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/keyboard_insets"),
         )
+        val imeSheetHost = nativeImeSheetHost ?: NativeImeSheetHost(this).also {
+            nativeImeSheetHost = it
+        }
+        imeSheetHost.attachMainChannel(
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/native_ime_sheet"),
+        )
+    }
+
+    override fun onDestroy() {
+        nativeImeSheetHost?.dispose()
+        nativeImeSheetHost = null
+        super.onDestroy()
     }
 
     private fun requestPostNotificationsOnFirstLaunch(): Boolean {

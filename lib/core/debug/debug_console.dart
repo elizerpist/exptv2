@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/native_ime_sheet_bridge.dart';
 import '../../services/recurring_alarm_service.dart';
-
 
 class _DebugConsoleNotifier extends ValueNotifier<int> {
   _DebugConsoleNotifier(super.value);
@@ -72,10 +72,12 @@ class DebugConsole {
 class DebugConsoleDialog extends StatefulWidget {
   const DebugConsoleDialog({
     super.key,
+    this.nativeImeSheetBridge,
     this.recurringAlarmService,
     this.onRecurringChanged,
   });
 
+  final NativeImeSheetBridge? nativeImeSheetBridge;
   final RecurringAlarmService? recurringAlarmService;
   final VoidCallback? onRecurringChanged;
 
@@ -87,7 +89,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   final TextEditingController _controller = TextEditingController();
   bool _copied = false;
   bool _alarmLoading = false;
+  bool _nativeImeLoading = false;
   String? _alarmError;
+  String? _nativeImeError;
   RecurringAlarmDebugState? _alarmState;
 
   @override
@@ -202,6 +206,24 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     });
   }
 
+  Future<void> _openNativeImeSheetProbe() async {
+    if (_nativeImeLoading) return;
+    final bridge = widget.nativeImeSheetBridge ?? NativeImeSheetBridge();
+    setState(() {
+      _nativeImeLoading = true;
+      _nativeImeError = null;
+    });
+    try {
+      await bridge.openProbe();
+      DebugConsole.log('[NativeImeSheet] Native IME probe open requested');
+    } catch (error) {
+      _nativeImeError = error.toString();
+      DebugConsole.log('[NativeImeSheet] probe open failed: $error');
+    } finally {
+      if (mounted) setState(() => _nativeImeLoading = false);
+    }
+  }
+
   Future<void> _runAlarmAction(
     Future<void> Function() action, {
     bool logSuccess = true,
@@ -244,11 +266,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.alarm,
-                size: 14,
-                color: Color(0xFFF59E0B),
-              ),
+              const Icon(Icons.alarm, size: 14, color: Color(0xFFF59E0B)),
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
@@ -336,7 +354,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
           ],
           if (logs.isNotEmpty) ...[
             const SizedBox(height: 6),
-            ...logs.reversed.take(3).map(
+            ...logs.reversed
+                .take(3)
+                .map(
                   (entry) => Text(
                     entry,
                     maxLines: 1,
@@ -349,6 +369,60 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   ),
                 ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNativeImeSheetPanel() {
+    return Container(
+      key: const ValueKey('debug-console-native-ime-section'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFF101827),
+        border: Border(bottom: BorderSide(color: Color(0xFF313244))),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.keyboard_alt_outlined,
+            size: 14,
+            color: Color(0xFF22D3EE),
+          ),
+          const SizedBox(width: 7),
+          const Expanded(
+            child: Text(
+              'Native IME sheet probe',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Color(0xFFE5E7EB),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (_nativeImeError != null)
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  _nativeImeError!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFF87171),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+            ),
+          _SmallDebugIconButton(
+            key: const ValueKey('native-ime-sheet-probe-open'),
+            icon: _nativeImeLoading ? Icons.hourglass_top : Icons.open_in_new,
+            tooltip: 'Open native IME sheet probe',
+            onPressed: _nativeImeLoading ? null : _openNativeImeSheetProbe,
+          ),
         ],
       ),
     );
@@ -420,6 +494,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
               ),
             ),
             const Divider(height: 1, color: Color(0xFF313244)),
+            _buildNativeImeSheetPanel(),
             _buildRecurringAlarmPanel(),
             Flexible(
               child: count == 0

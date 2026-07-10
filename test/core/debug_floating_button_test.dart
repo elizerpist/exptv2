@@ -1,6 +1,7 @@
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/debug/debug_floating_button.dart';
 import 'package:exptv2/core/theme/app_dimensions.dart';
+import 'package:exptv2/services/native_ime_sheet_bridge.dart';
 import 'package:exptv2/services/recurring_alarm_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -140,6 +141,51 @@ void main() {
     expect(
       DebugConsole.entries.any(
         (entry) => entry.contains('debug test alarm scheduled'),
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('debug console can open native IME sheet probe', (tester) async {
+    const channel = MethodChannel('test/native_ime_sheet_probe');
+    final calls = <MethodCall>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              DebugFloatingButton(
+                nativeImeSheetBridge: NativeImeSheetBridge(
+                  methodChannel: channel,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('native-ime-sheet-probe-open')));
+    await tester.pumpAndSettle();
+
+    expect(calls.map((call) => call.method), contains('openProbe'));
+    expect(
+      DebugConsole.entries.any(
+        (entry) => entry.contains('Native IME probe open requested'),
       ),
       isTrue,
     );
