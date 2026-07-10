@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
 import '../../../core/debug/debug_text_input.dart';
+import '../../../core/keyboard/keyboard_inset_follower.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../settings/models/app_theme_settings.dart';
 
@@ -101,19 +102,19 @@ class _SearchPillState extends State<SearchPill> {
       }
       _focusStartedAt = DateTime.now();
       DebugConsole.log(
-        '[Perf] SearchPill focus active=true keyboard=${_keyboardInsetText()}',
+        '[Perf] SearchPill focus active=true ${_keyboardTraceText()}',
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_focusNode.hasFocus) return;
         DebugConsole.log(
           '[Perf] SearchPill focus frame elapsed=${_elapsedMs(_focusStartedAt)}ms '
-          'keyboard=${_keyboardInsetText()}',
+          '${_keyboardTraceText()}',
         );
       });
     } else {
       DebugConsole.log(
         '[Perf] SearchPill focus active=false elapsed=${_elapsedMs(_focusStartedAt)}ms '
-        'keyboard=${_keyboardInsetText()}',
+        '${_keyboardTraceText()}',
       );
       _focusStartedAt = null;
       _focusRequestLoggedForCycle = false;
@@ -132,14 +133,19 @@ class _SearchPillState extends State<SearchPill> {
   void _logFocusRequest() {
     DebugConsole.log(
       '[Perf] SearchPill focus request active=${_focusNode.hasFocus} '
-      'keyboard=${_keyboardInsetText()}',
+      '${_keyboardTraceText()}',
     );
     _focusRequestLoggedForCycle = true;
   }
 
-  String _keyboardInsetText() {
-    return (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0)
-        .toStringAsFixed(1);
+  String _keyboardTraceText() {
+    final snapshot = KeyboardInsetReader.snapshotOf(context);
+    return 'keyboard=${snapshot.inset.toStringAsFixed(1)} '
+        'source=${snapshot.source} '
+        'phase=${snapshot.phase ?? 'none'} '
+        'seq=${snapshot.sequence?.toString() ?? 'n/a'} '
+        'ageMs=${snapshot.ageMs?.toString() ?? 'n/a'} '
+        'fallback=${snapshot.fallbackInset.toStringAsFixed(1)}';
   }
 
   int _elapsedMs(DateTime? startedAt) {

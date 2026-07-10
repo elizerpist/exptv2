@@ -157,6 +157,55 @@ void main() {
     expect(find.text('1 tranzakció'), findsOneWidget);
   });
 
+  testWidgets('home logs type switch and fastfilter first frames', (
+    tester,
+  ) async {
+    final store = TransactionStore(FakeTransactionRepository());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: TransactionHomePage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await tester.tap(find.text('Bevétel'));
+    await tester.pump();
+    await tester.pump();
+
+    var logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] TypePill tap target=income'));
+    expect(logs, contains('[Perf] Home type switch start target=income'));
+    expect(logs, contains('[Perf] TypeSwitch complete type=income'));
+    expect(logs, contains('[Perf] Home first frame reason=type-switch'));
+    expect(logs, contains('visibleTransactions=0'));
+
+    await tester.tap(find.text('Kiadás'));
+    await tester.pumpAndSettle();
+    DebugConsole.clear();
+
+    await tester.drag(
+      find.byKey(const ValueKey('transaction-logbox-1')),
+      const Offset(-120, 0),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    logs = DebugConsole.allText;
+    expect(logs, contains('[Perf] FastFilter start merchant=Test Store'));
+    expect(logs, contains('[Perf] Store active view reason=merchant-filter'));
+    expect(logs, contains('[Perf] FastFilter state merchant=Test Store'));
+    expect(logs, contains('[Perf] Home first frame reason=fastfilter'));
+    expect(logs, contains('visibleTransactions=1'));
+  });
+
   testWidgets('slide-up category menu keeps picker behind add editor', (
     tester,
   ) async {
@@ -431,25 +480,29 @@ void main() {
       final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
       DebugConsole.log('old keyboard noise');
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: MediaQuery(
-            data: const MediaQueryData(
-              size: Size(390, 919),
-              viewInsets: EdgeInsets.only(bottom: 180),
-            ),
-            child: Scaffold(
-              resizeToAvoidBottomInset: false,
-              body: SizedBox(
-                width: 390,
-                height: 919,
-                child: TransactionHomePage(store: store, expenseTheme: theme),
+      Future<void> pumpHome({required double keyboardInset}) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: const Size(390, 919),
+                viewInsets: EdgeInsets.only(bottom: keyboardInset),
+              ),
+              child: Scaffold(
+                resizeToAvoidBottomInset: false,
+                body: SizedBox(
+                  width: 390,
+                  height: 919,
+                  child: TransactionHomePage(store: store, expenseTheme: theme),
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await pumpHome(keyboardInset: 0);
 
       await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
       await tester.pumpAndSettle();
@@ -476,13 +529,60 @@ void main() {
         findsOneWidget,
       );
 
-      final transform = tester.widget<Transform>(
+      final transformBefore = tester.widget<Transform>(
         find.byKey(const ValueKey('slide-up-menu-transform')),
       );
-      expect(
-        transform.transform.getTranslation().y,
-        moreOrLessEquals(-180, epsilon: 0.1),
+      final cardRectBefore = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-slide-card')),
       );
+      final searchRectBefore = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-search-pill')),
+      );
+      final listRectBefore = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-list')),
+      );
+      final alphaRectBefore = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-row-Alpha Market')),
+      );
+      final footerRectBefore = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-footer')),
+      );
+
+      await pumpHome(keyboardInset: 180);
+
+      final transformAfter = tester.widget<Transform>(
+        find.byKey(const ValueKey('slide-up-menu-transform')),
+      );
+      final cardRectAfter = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-slide-card')),
+      );
+      final searchRectAfter = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-search-pill')),
+      );
+      final listRectAfter = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-list')),
+      );
+      final alphaRectAfter = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-row-Alpha Market')),
+      );
+      final footerRectAfter = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-footer')),
+      );
+
+      expect(
+        transformBefore.transform.getTranslation().y,
+        moreOrLessEquals(0, epsilon: 0.1),
+      );
+      expect(
+        transformAfter.transform.getTranslation().y,
+        moreOrLessEquals(0, epsilon: 0.1),
+      );
+      expect(cardRectAfter.top, moreOrLessEquals(cardRectBefore.top));
+      expect(searchRectAfter.top, moreOrLessEquals(searchRectBefore.top));
+      expect(listRectAfter.top, moreOrLessEquals(listRectBefore.top));
+      expect(alphaRectAfter.top, moreOrLessEquals(alphaRectBefore.top));
+      expect(footerRectAfter.top, lessThan(footerRectBefore.top));
+      expect(footerRectAfter.bottom, lessThanOrEqualTo(919 - 180));
       expect(DebugConsole.allText, isNot(contains('old keyboard noise')));
       expect(
         DebugConsole.allText,
@@ -490,13 +590,12 @@ void main() {
       );
       expect(
         DebugConsole.allText,
-        contains('[SlideUpMenu] VendorFilter keyboard lift inset=180.0'),
+        contains('[KeyboardFlow] VendorFilter keyboard frame'),
       );
-
-      final footerRect = tester.getRect(
-        find.byKey(const ValueKey('vendor-filter-footer')),
+      expect(
+        DebugConsole.allText,
+        isNot(contains('[SlideUpMenu] VendorFilter keyboard lift')),
       );
-      expect(footerRect.bottom, lessThanOrEqualTo(919 - 180));
 
       await tester.enterText(
         find.byKey(const ValueKey('vendor-filter-search-field')),
@@ -667,6 +766,61 @@ void main() {
     );
   });
 
+  testWidgets(
+    'vendor list virtualizes long sections instead of shrinkwrapping grids',
+    (tester) async {
+      final scrollController = ScrollController();
+      addTearDown(scrollController.dispose);
+      final summaries = [
+        for (var index = 0; index < 80; index++)
+          VendorFilterSummary(
+            name: 'Vendor ${index.toString().padLeft(2, '0')}',
+            originalName: 'Vendor ${index.toString().padLeft(2, '0')}',
+            total: 100 + index.toDouble(),
+            count: 1,
+            colorHex: '#dc2626',
+          ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 560,
+              child: VendorFilterPanel(
+                summaries: summaries,
+                selectedVendors: const <String>{},
+                activeType: TransactionType.expense,
+                scrollController: scrollController,
+                accentColor: AppColors.primary,
+                cardSurfaceColor: AppColors.gray100,
+                cardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+                onToggle: (_) {},
+                onRename: (_, _) async {},
+                onResetName: (_) async {},
+                onApply: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(GridView), findsNothing);
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Vendor 00')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Vendor 79')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('vendor cards use the same background color as category cards', (
     tester,
   ) async {
@@ -697,6 +851,313 @@ void main() {
     );
     final decoration = vendorSurface.decoration! as BoxDecoration;
     expect(decoration.color, theme.categoryCard);
+  });
+
+  testWidgets('vendor body press applies avatar neumorph in the same frame', (
+    tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 560,
+            child: VendorFilterPanel(
+              summaries: const [
+                VendorFilterSummary(
+                  name: 'Test Store',
+                  originalName: 'Test Store',
+                  total: 505,
+                  count: 1,
+                  colorHex: '#dc2626',
+                ),
+              ],
+              selectedVendors: const <String>{},
+              activeType: TransactionType.expense,
+              scrollController: scrollController,
+              accentColor: AppColors.primary,
+              cardSurfaceColor: AppColors.gray100,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              buttonSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              onToggle: (_) {},
+              onRename: (_, _) async {},
+              onResetName: (_) async {},
+              onApply: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final cardFinder = find.byKey(
+      const ValueKey('vendor-filter-row-surface-Test Store'),
+    );
+    final avatarFinder = find.byKey(
+      const ValueKey('vendor-filter-avatar-surface-Test Store'),
+    );
+    final releasedCardDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    final releasedAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    final cardRect = tester.getRect(cardFinder);
+
+    final gesture = await tester.startGesture(
+      cardRect.bottomCenter - const Offset(0, 36),
+    );
+    await tester.pump();
+
+    final pressedCardDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    final pressedAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    expect(pressedCardDecoration, isNot(releasedCardDecoration));
+    expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
+
+    await gesture.up();
+  });
+
+  testWidgets('vendor name editor stays centered on the original label', (
+    tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 560,
+            child: VendorFilterPanel(
+              summaries: const [
+                VendorFilterSummary(
+                  name: 'Test Store',
+                  originalName: 'Test Store',
+                  total: 505,
+                  count: 1,
+                  colorHex: '#dc2626',
+                ),
+              ],
+              selectedVendors: const <String>{},
+              activeType: TransactionType.expense,
+              scrollController: scrollController,
+              accentColor: AppColors.primary,
+              cardSurfaceColor: AppColors.gray100,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              onToggle: (_) {},
+              onRename: (_, _) async {},
+              onResetName: (_) async {},
+              onApply: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final labelCenter = tester
+        .getRect(find.byKey(const ValueKey('vendor-filter-name-Test Store')))
+        .center
+        .dy;
+
+    await tester.tap(
+      find.byKey(const ValueKey('vendor-filter-name-Test Store')),
+    );
+    await tester.pump();
+
+    final editorCenter = tester
+        .getRect(
+          find.byKey(const ValueKey('vendor-filter-name-editor-Test Store')),
+        )
+        .center
+        .dy;
+
+    expect(editorCenter, moreOrLessEquals(labelCenter, epsilon: 0.5));
+  });
+
+  testWidgets('vendor avatar renders category icon or gray question fallback', (
+    tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 560,
+            child: VendorFilterPanel(
+              summaries: const [
+                VendorFilterSummary(
+                  name: 'Icon Store',
+                  originalName: 'Icon Store',
+                  total: 505,
+                  count: 1,
+                  colorHex: '#dc2626',
+                  categoryIconSlot: 2,
+                ),
+                VendorFilterSummary(
+                  name: 'Fallback Store',
+                  originalName: 'Fallback Store',
+                  total: 100,
+                  count: 1,
+                ),
+              ],
+              selectedVendors: const <String>{},
+              activeType: TransactionType.expense,
+              scrollController: scrollController,
+              accentColor: AppColors.primary,
+              cardSurfaceColor: AppColors.gray100,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              onToggle: (_) {},
+              onRename: (_, _) async {},
+              onResetName: (_) async {},
+              onApply: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final iconBadge = tester.widget<CategoryIconBadge>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('vendor-filter-avatar-surface-Icon Store'),
+        ),
+        matching: find.byType(CategoryIconBadge),
+      ),
+    );
+    expect(iconBadge.iconSlot, 2);
+    expect(iconBadge.showQuestionMark, isFalse);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('vendor-filter-avatar-surface-Icon Store'),
+        ),
+        matching: find.text('I'),
+      ),
+      findsNothing,
+    );
+
+    final fallbackDecoration =
+        tester
+                .widget<Container>(
+                  find.byKey(
+                    const ValueKey(
+                      'vendor-filter-avatar-surface-Fallback Store',
+                    ),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(fallbackDecoration.color, AppColors.gray500);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('vendor-filter-avatar-surface-Fallback Store'),
+        ),
+        matching: find.byIcon(Icons.question_mark),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('vendor-filter-avatar-surface-Fallback Store'),
+        ),
+        matching: find.text('F'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('vendor card renders its summary scoped transaction count', (
+    tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 560,
+            child: VendorFilterPanel(
+              summaries: const [
+                VendorFilterSummary(
+                  name: 'Count Store',
+                  originalName: 'Count Store',
+                  total: 505,
+                  count: 2,
+                  colorHex: '#dc2626',
+                  categoryIconSlot: 2,
+                ),
+              ],
+              selectedVendors: const <String>{},
+              activeType: TransactionType.expense,
+              scrollController: scrollController,
+              accentColor: AppColors.primary,
+              cardSurfaceColor: AppColors.gray100,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              onToggle: (_) {},
+              onRename: (_, _) async {},
+              onResetName: (_) async {},
+              onApply: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('vendor-filter-transaction-count-Count Store')),
+      findsOneWidget,
+    );
+    expect(find.text('2 tranzakció'), findsOneWidget);
+  });
+
+  testWidgets('category card stays visible with zero scoped transactions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 560,
+            child: CategoryMenuPanel(
+              activeType: TransactionType.expense,
+              categories: categoryFixtures,
+              categoryTransactionCounts: const {},
+              activeCategory: null,
+              onSelect: (_) {},
+              onModify: (_) {},
+              onDelete: (_) {},
+              onAdd: () {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('category-card-6')), findsOneWidget);
+    expect(find.text('0 tranzakció'), findsOneWidget);
   });
 
   testWidgets('vendor cards are compact grid tiles under alphabetic headers', (
@@ -903,6 +1364,8 @@ void main() {
       expect(inputFinder, findsOneWidget);
       final input = tester.widget<TextField>(inputFinder);
       expect(input.controller?.selection.baseOffset, 'Test Store'.length);
+      expect(input.textAlignVertical, TextAlignVertical.center);
+      expect(input.decoration?.contentPadding, EdgeInsets.zero);
 
       await tester.enterText(inputFinder, 'Fresh Mart');
       await tester.testTextInput.receiveAction(TextInputAction.done);

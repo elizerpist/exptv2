@@ -1008,6 +1008,72 @@ void main() {
   });
 
   testWidgets(
+    'transaction editor keeps date-time and save gap stable while keyboard appears',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 919);
+      tester.view.devicePixelRatio = 1;
+      tester.view.viewPadding = const FakeViewPadding(bottom: 24);
+      tester.platformDispatcher.textScaleFactorTestValue = 0.8;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tester.view.resetPadding();
+        tester.view.resetViewPadding();
+        tester.view.resetViewInsets();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      await _tapFab(tester);
+
+      final panelHeightBefore = tester
+          .getRect(find.byKey(const ValueKey('transaction-editor-card')))
+          .height;
+      final gapBefore = _transactionEditorDateTimeSaveGap(tester);
+
+      tester.view.viewInsets = const FakeViewPadding(bottom: 180);
+      tester.view.padding = FakeViewPadding.zero;
+      await tester.pump();
+
+      final panelHeightAfter = tester
+          .getRect(find.byKey(const ValueKey('transaction-editor-card')))
+          .height;
+      final transformAfter = tester.widget<Transform>(
+        find.byKey(const ValueKey('slide-up-menu-transform')),
+      );
+      final cardRectAfter = tester.getRect(
+        find.byKey(const ValueKey('transaction-editor-card')),
+      );
+      final footerRectAfter = tester.getRect(
+        find.byKey(const ValueKey('transaction-save-footer')),
+      );
+
+      expect(panelHeightAfter, moreOrLessEquals(panelHeightBefore, epsilon: 1));
+      expect(
+        cardRectAfter.bottom - footerRectAfter.bottom,
+        moreOrLessEquals(32, epsilon: 1),
+      );
+      expect(
+        _transactionEditorDateTimeSaveGap(tester),
+        moreOrLessEquals(gapBefore, epsilon: 1),
+      );
+      expect(
+        transformAfter.transform.getTranslation().y,
+        moreOrLessEquals(-180, epsilon: 0.1),
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[KeyboardFlow] SlideUpMenu AddTransaction keyboard frame raw=180.0',
+        ),
+      );
+      expect(DebugConsole.allText, contains('lag=0.0'));
+    },
+  );
+
+  testWidgets(
     'transaction editor save button aligns with category filter action',
     (tester) async {
       await tester.pumpWidget(buildApp());
@@ -1231,6 +1297,48 @@ void main() {
     expect(footerRect.bottom, moreOrLessEquals(919 - 8, epsilon: 1));
     expect(bodyRect.bottom, lessThanOrEqualTo(footerRect.top));
   });
+
+  testWidgets(
+    'recurring manager keeps sheet fixed and lifts only footer for keyboard',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 919);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tester.view.resetViewInsets();
+      });
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+      await tester.pumpAndSettle();
+
+      final transformBefore = _slideCardTranslationY(tester);
+      final footerBefore = tester.getRect(
+        find.byKey(const ValueKey('recurring-manager-footer')),
+      );
+
+      tester.view.viewInsets = const FakeViewPadding(bottom: 180);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      final footerAfter = tester.getRect(
+        find.byKey(const ValueKey('recurring-manager-footer')),
+      );
+
+      expect(
+        _slideCardTranslationY(tester),
+        moreOrLessEquals(transformBefore, epsilon: 0.1),
+      );
+      expect(footerAfter.top, lessThan(footerBefore.top));
+      expect(
+        DebugConsole.allText,
+        contains('[KeyboardFlow] RecurringManager footer keyboard frame'),
+      );
+    },
+  );
 
   testWidgets('category sheet keeps shell navigation controls visible', (
     tester,
@@ -1948,4 +2056,17 @@ void _expectTransactionEditorGapsMatchFieldGap(WidgetTester tester) {
     moreOrLessEquals(fieldGap, epsilon: 1),
   );
   expect(saveTop - dateTimeBottom, moreOrLessEquals(fieldGap, epsilon: 1));
+}
+
+double _transactionEditorDateTimeSaveGap(WidgetTester tester) {
+  final dateRect = tester.getRect(find.widgetWithText(TextField, 'Dátum'));
+  final timeRect = tester.getRect(find.widgetWithText(TextField, 'Idő'));
+  final dateTimeBottom = [
+    dateRect.bottom,
+    timeRect.bottom,
+  ].reduce((value, element) => value > element ? value : element);
+  final saveTop = tester
+      .getRect(find.byKey(const ValueKey('transaction-save-button')))
+      .top;
+  return saveTop - dateTimeBottom;
 }

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/debug/debug_console.dart';
+
 class CategoryIconOption {
   const CategoryIconOption(this.name);
 
@@ -129,19 +131,31 @@ class CategoryIconManager {
   }
 
   static Future<void> load({SharedPreferences? preferences}) async {
+    final stopwatch = Stopwatch()..start();
+    DebugConsole.log(
+      '[IconLoad] prefs load start provided=${preferences != null}',
+    );
     final prefs = preferences ?? await SharedPreferences.getInstance();
     final raw = prefs.getString(_preferencesKey);
-    if (raw == null || raw.isEmpty) return;
+    if (raw == null || raw.isEmpty) {
+      _logLoadEnd(stopwatch, assignments: 0, status: 'empty');
+      return;
+    }
 
     final Object? decoded;
     try {
       decoded = jsonDecode(raw);
     } on FormatException {
+      _logLoadEnd(stopwatch, assignments: 0, status: 'invalid-json');
       return;
     }
-    if (decoded is! Map<String, dynamic>) return;
+    if (decoded is! Map<String, dynamic>) {
+      _logLoadEnd(stopwatch, assignments: 0, status: 'invalid-map');
+      return;
+    }
 
     final next = _defaultSlotIconNames();
+    var assignments = 0;
     for (final entry in decoded.entries) {
       final slot = int.tryParse(entry.key);
       final iconName = entry.value;
@@ -150,10 +164,12 @@ class CategoryIconManager {
       }
       if (!containsIconName(iconName)) continue;
       next[slot] = iconName;
+      assignments += 1;
     }
 
     _slotIconNames = next;
     _notifyChanged();
+    _logLoadEnd(stopwatch, assignments: assignments, status: 'loaded');
   }
 
   static Future<void> assignIconToSlot(
@@ -199,5 +215,16 @@ class CategoryIconManager {
 
   static void _notifyChanged() {
     _revision.value = _revision.value + 1;
+  }
+
+  static void _logLoadEnd(
+    Stopwatch stopwatch, {
+    required int assignments,
+    required String status,
+  }) {
+    DebugConsole.log(
+      '[IconLoad] prefs load end status=$status assignments=$assignments '
+      'revision=${_revision.value} elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
   }
 }

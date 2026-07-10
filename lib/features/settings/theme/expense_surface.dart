@@ -103,7 +103,8 @@ class ExpenseSurface {
         border: neutralShadow == null
             ? Border.all(color: Colors.white.withValues(alpha: 0.72))
             : null,
-        boxShadow: neutralShadow ??
+        boxShadow:
+            neutralShadow ??
             const <BoxShadow>[
               BoxShadow(
                 color: Color(0x5794A3B8),
@@ -746,7 +747,7 @@ void _logExpenseSurfaceDebug({
   required int innerShadowCount,
 }) {
   final label = _surfaceDebugLabel(key);
-  if (label == null || !_shouldLogSurface(label)) return;
+  if (label == null || !_shouldLogSurface(label, pressed: pressed)) return;
   final message =
       '[ThemeSurface] surface key=$label '
       'style=${style.nativeValue} profile=${profile.name} '
@@ -771,7 +772,11 @@ String? _surfaceDebugLabel(Key? key) {
   return null;
 }
 
-bool _shouldLogSurface(String label) {
+bool _shouldLogSurface(String label, {required bool pressed}) {
+  if (label.startsWith('transaction-logbox-content-') ||
+      label.startsWith('transaction-logbox-avatar-surface-')) {
+    return pressed;
+  }
   return label == 'expt-bottom-nav' ||
       label == 'expt-fab' ||
       label == 'summary-pill-container' ||
@@ -781,9 +786,7 @@ bool _shouldLogSurface(String label) {
       label == 'header-category-button-surface' ||
       label == 'header-expand-button-surface' ||
       (label.startsWith('bottom-nav-') && label.endsWith('-surface')) ||
-      label.startsWith('transaction-type-pill-') ||
-      label.startsWith('transaction-logbox-content-') ||
-      label.startsWith('transaction-logbox-avatar-surface-');
+      label.startsWith('transaction-type-pill-');
 }
 
 String _hex(Color color) {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/debug/debug_console.dart';
 import '../../core/debug/debug_floating_button.dart';
+import '../../core/keyboard/keyboard_inset_follower.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -127,33 +128,43 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void didChangeMetrics() {
     final startedAt = DateTime.now();
-    final inset = _platformKeyboardInset();
+    final keyboard = KeyboardInsetReader.snapshotOf(context);
+    final inset = keyboard.inset;
     final previous = _lastKeyboardInset;
     _lastKeyboardInset = inset;
     DebugConsole.log(
       '[Perf] Keyboard metrics changed inset=${inset.toStringAsFixed(1)} '
       'previous=${previous.toStringAsFixed(1)} '
       'delta=${(inset - previous).toStringAsFixed(1)} '
-      'activeTab=${_activeTab.id} homeOverlay=$_homeBlockingOverlayOpen',
+      'activeTab=${_activeTab.id} homeOverlay=$_homeBlockingOverlayOpen '
+      'source=${keyboard.source} phase=${keyboard.phase ?? 'none'} '
+      'seq=${keyboard.sequence?.toString() ?? 'n/a'} '
+      'ageMs=${keyboard.ageMs?.toString() ?? 'n/a'} '
+      'fallback=${keyboard.fallbackInset.toStringAsFixed(1)}',
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final frameKeyboard = KeyboardInsetReader.snapshotOf(context);
       DebugConsole.log(
-        '[Perf] Keyboard metrics frame inset=${_platformKeyboardInset().toStringAsFixed(1)} '
-        'elapsed=${_elapsedMs(startedAt)}ms activeTab=${_activeTab.id}',
+        '[Perf] Keyboard metrics frame inset=${frameKeyboard.inset.toStringAsFixed(1)} '
+        'elapsed=${_elapsedMs(startedAt)}ms activeTab=${_activeTab.id} '
+        'source=${frameKeyboard.source} '
+        'phase=${frameKeyboard.phase ?? 'none'} '
+        'seq=${frameKeyboard.sequence?.toString() ?? 'n/a'} '
+        'ageMs=${frameKeyboard.ageMs?.toString() ?? 'n/a'} '
+        'fallback=${frameKeyboard.fallbackInset.toStringAsFixed(1)}',
       );
     });
   }
 
-  double _platformKeyboardInset() {
-    final views = WidgetsBinding.instance.platformDispatcher.views;
-    if (views.isEmpty) return 0;
-    final view = views.first;
-    return view.viewInsets.bottom / view.devicePixelRatio;
-  }
-
-  double _contextKeyboardInset() {
-    return MediaQuery.maybeOf(context)?.viewInsets.bottom ?? _lastKeyboardInset;
+  String _contextKeyboardTrace() {
+    final keyboard = KeyboardInsetReader.snapshotOf(context);
+    return 'keyboard=${keyboard.inset.toStringAsFixed(1)} '
+        'source=${keyboard.source} '
+        'phase=${keyboard.phase ?? 'none'} '
+        'seq=${keyboard.sequence?.toString() ?? 'n/a'} '
+        'ageMs=${keyboard.ageMs?.toString() ?? 'n/a'} '
+        'fallback=${keyboard.fallbackInset.toStringAsFixed(1)}';
   }
 
   int _elapsedMs(DateTime startedAt) {
@@ -369,7 +380,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     if (_activeTab == tab) {
       DebugConsole.log(
         '[Perf] BottomNav tap ignored tab=${tab.id} '
-        'keyboard=${_contextKeyboardInset().toStringAsFixed(1)}',
+        '${_contextKeyboardTrace()}',
       );
       return;
     }
@@ -378,7 +389,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     DebugConsole.log(
       '[Perf] BottomNav tap from=${previous.id} to=${tab.id} '
       'homeOverlay=$_homeBlockingOverlayOpen '
-      'keyboard=${_contextKeyboardInset().toStringAsFixed(1)}',
+      '${_contextKeyboardTrace()}',
     );
     _sheetHostKey.currentState?.closeAll();
     DebugConsole.log(
@@ -409,7 +420,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       DebugConsole.log(
         '[Perf] BottomNav frame from=${previous.id} to=${tab.id} '
         'elapsed=${_elapsedMs(requestedAt)}ms '
-        'keyboard=${_contextKeyboardInset().toStringAsFixed(1)}',
+        '${_contextKeyboardTrace()}',
       );
     });
   }
@@ -1281,7 +1292,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
           dragFromHandleOnly: true,
           dragHandleExtent: 72,
           verticalDragBias: 1.2,
-          keyboardAvoidance: true,
+          keyboardAvoidance: false,
           child: SafeArea(
             top: false,
             bottom: false,

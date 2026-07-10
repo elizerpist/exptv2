@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_console.dart';
+import '../../../core/keyboard/keyboard_inset_follower.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../settings/models/app_theme_settings.dart';
 import '../../settings/theme/expense_theme.dart';
@@ -52,6 +53,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final _date = TextEditingController();
   final _time = TextEditingController();
   final _categoryPickerBoundaryKey = GlobalKey();
+  final _dateFieldKey = GlobalKey();
+  final _timeFieldKey = GlobalKey();
+  final _saveFooterProbeKey = GlobalKey();
   final _nameFocus = FocusNode();
   final _amountFocus = FocusNode();
   final _dateFocus = FocusNode();
@@ -65,6 +69,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   double? _lastLoggedPanelHeight;
   double? _lastLoggedContentHeight;
   double? _lastLoggedKeyboardInset;
+  String? _lastLoggedKeyboardSource;
+  double? _lastLoggedActionBottomInset;
+  String? _lastLayoutProbeSignature;
+  double? _stablePanelHeight;
+  String? _stablePanelSignature;
   String? _focusedField;
   DateTime? _focusStartedAt;
   var _firstBuildLogged = false;
@@ -97,6 +106,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _lastLoggedPanelHeight = null;
       _lastLoggedContentHeight = null;
       _lastLoggedKeyboardInset = null;
+      _lastLoggedKeyboardSource = null;
+      _lastLoggedActionBottomInset = null;
+      _lastLayoutProbeSignature = null;
+      _stablePanelHeight = null;
+      _stablePanelSignature = null;
       _linkedNotificationEventId = null;
       unawaited(_resolveNotificationLink());
     }
@@ -164,7 +178,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             child: Builder(
               builder: (context) {
                 final actionBottomInset =
-                    MediaQuery.paddingOf(context).bottom + 8;
+                    MediaQuery.viewPaddingOf(context).bottom + 8;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -179,10 +193,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             if (widget.visible) {
+                              final keyboard = KeyboardInsetReader.snapshotOf(
+                                context,
+                              );
                               _logContentMetrics(
                                 availableHeight: constraints.maxHeight,
                                 panelHeight: panelHeight,
-                                keyboardInset: 0,
+                                keyboardInset: keyboard.inset,
+                                keyboardSource: keyboard.source,
+                                keyboardPhase: keyboard.phase,
+                                keyboardSequence: keyboard.sequence,
+                                keyboardAgeMs: keyboard.ageMs,
+                                keyboardFallbackInset: keyboard.fallbackInset,
+                                actionBottomInset: actionBottomInset,
                               );
                             }
                             return SizedBox.expand(
@@ -297,6 +320,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                       height: _transactionFormFieldGap,
                                     ),
                                   DateTimeFields(
+                                    dateFieldKey: _dateFieldKey,
+                                    timeFieldKey: _timeFieldKey,
                                     dateController: _date,
                                     timeController: _time,
                                     onPickDate: _pickDate,
@@ -331,16 +356,21 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         SlideUpPanelMetrics.horizontalInset,
                         actionBottomInset,
                       ),
-                      child: SizedBox(
-                        key: const ValueKey('transaction-save-footer'),
-                        width: double.infinity,
-                        child: ExpenseSurfaceButton(
-                          buttonKey: const ValueKey('transaction-save-button'),
-                          label: 'Mentés',
-                          onPressed: _saving ? null : _save,
-                          saving: _saving,
-                          surfaceStyle: expenseTheme.buttonSurfaceStyle,
-                          color: expenseTheme.accent,
+                      child: KeyedSubtree(
+                        key: _saveFooterProbeKey,
+                        child: SizedBox(
+                          key: const ValueKey('transaction-save-footer'),
+                          width: double.infinity,
+                          child: ExpenseSurfaceButton(
+                            buttonKey: const ValueKey(
+                              'transaction-save-button',
+                            ),
+                            label: 'Mentés',
+                            onPressed: _saving ? null : _save,
+                            saving: _saving,
+                            surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                            color: expenseTheme.accent,
+                          ),
                         ),
                       ),
                     ),
@@ -361,8 +391,22 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
     final hasNotificationLinkRow =
         _notificationLinkLoading || _linkedNotificationEventId != null;
-    if (_categoryPickerOpen || !hasNotificationLinkRow) return baseHeight;
-    return (baseHeight + 22.0).clamp(0.0, MediaQuery.sizeOf(context).height);
+    final requestedHeight = _categoryPickerOpen || !hasNotificationLinkRow
+        ? baseHeight
+        : (baseHeight + 22.0).clamp(0.0, MediaQuery.sizeOf(context).height);
+    final signature = [
+      _categoryPickerOpen,
+      hasNotificationLinkRow,
+      MediaQuery.sizeOf(context).width.toStringAsFixed(1),
+    ].join('|');
+    final keyboardInset = KeyboardInsetReader.rawOf(context);
+    if (_stablePanelHeight == null ||
+        _stablePanelSignature != signature ||
+        keyboardInset <= 0.5) {
+      _stablePanelHeight = requestedHeight;
+      _stablePanelSignature = signature;
+    }
+    return _stablePanelHeight!;
   }
 
   void _logFirstBuild(double panelHeight, int categoryCount) {
@@ -432,13 +476,23 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     required double availableHeight,
     required double panelHeight,
     required double keyboardInset,
+    required String keyboardSource,
+    required String? keyboardPhase,
+    required int? keyboardSequence,
+    required int? keyboardAgeMs,
+    required double keyboardFallbackInset,
+    required double actionBottomInset,
   }) {
     if (_lastLoggedContentHeight == availableHeight &&
-        _lastLoggedKeyboardInset == keyboardInset) {
+        _lastLoggedKeyboardInset == keyboardInset &&
+        _lastLoggedKeyboardSource == keyboardSource &&
+        _lastLoggedActionBottomInset == actionBottomInset) {
       return;
     }
     _lastLoggedContentHeight = availableHeight;
     _lastLoggedKeyboardInset = keyboardInset;
+    _lastLoggedKeyboardSource = keyboardSource;
+    _lastLoggedActionBottomInset = actionBottomInset;
     final editing = _editing;
     final pickerOpen = _categoryPickerOpen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -448,9 +502,90 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         'panel=${panelHeight.toStringAsFixed(1)} '
         'content=${availableHeight.toStringAsFixed(1)} '
         'keyboard=${keyboardInset.toStringAsFixed(1)} picker=$pickerOpen '
+        'actionBottom=${actionBottomInset.toStringAsFixed(1)} '
+        'source=$keyboardSource '
+        'phase=${keyboardPhase ?? 'none'} '
+        'seq=${keyboardSequence?.toString() ?? 'n/a'} '
+        'ageMs=${keyboardAgeMs?.toString() ?? 'n/a'} '
+        'fallback=${keyboardFallbackInset.toStringAsFixed(1)} '
         'focus=${_focusedField ?? 'none'} focusElapsed=${_elapsedMs(_focusStartedAt)}ms',
       );
+      _logLayoutProbe(
+        panelHeight: panelHeight,
+        availableHeight: availableHeight,
+        keyboardInset: keyboardInset,
+        keyboardSource: keyboardSource,
+        keyboardPhase: keyboardPhase,
+        keyboardSequence: keyboardSequence,
+        keyboardAgeMs: keyboardAgeMs,
+        keyboardFallbackInset: keyboardFallbackInset,
+        actionBottomInset: actionBottomInset,
+      );
     });
+  }
+
+  void _logLayoutProbe({
+    required double panelHeight,
+    required double availableHeight,
+    required double keyboardInset,
+    required String keyboardSource,
+    required String? keyboardPhase,
+    required int? keyboardSequence,
+    required int? keyboardAgeMs,
+    required double keyboardFallbackInset,
+    required double actionBottomInset,
+  }) {
+    final dateBox = _renderBoxFor(_dateFieldKey);
+    final timeBox = _renderBoxFor(_timeFieldKey);
+    final saveBox = _renderBoxFor(_saveFooterProbeKey);
+    if (dateBox == null || timeBox == null || saveBox == null) return;
+    final dateRect = dateBox.localToGlobal(Offset.zero) & dateBox.size;
+    final timeRect = timeBox.localToGlobal(Offset.zero) & timeBox.size;
+    final saveRect = saveBox.localToGlobal(Offset.zero) & saveBox.size;
+    final dateTimeBottom = dateRect.bottom > timeRect.bottom
+        ? dateRect.bottom
+        : timeRect.bottom;
+    final saveGap = saveRect.top - dateTimeBottom;
+    final signature = [
+      panelHeight.toStringAsFixed(1),
+      availableHeight.toStringAsFixed(1),
+      keyboardInset.toStringAsFixed(1),
+      actionBottomInset.toStringAsFixed(1),
+      keyboardSource,
+      dateTimeBottom.toStringAsFixed(1),
+      saveRect.top.toStringAsFixed(1),
+      saveGap.toStringAsFixed(1),
+    ].join('|');
+    if (_lastLayoutProbeSignature == signature) return;
+    _lastLayoutProbeSignature = signature;
+    DebugConsole.log(
+      '[Perf] ${_editing ? 'EditTransaction' : 'AddTransaction'} layout-probe '
+      'panel=${panelHeight.toStringAsFixed(1)} '
+      'content=${availableHeight.toStringAsFixed(1)} '
+      'keyboard=${keyboardInset.toStringAsFixed(1)} '
+      'actionBottom=${actionBottomInset.toStringAsFixed(1)} '
+      'source=$keyboardSource '
+      'phase=${keyboardPhase ?? 'none'} '
+      'seq=${keyboardSequence?.toString() ?? 'n/a'} '
+      'ageMs=${keyboardAgeMs?.toString() ?? 'n/a'} '
+      'fallback=${keyboardFallbackInset.toStringAsFixed(1)} '
+      'dateBottom=${dateRect.bottom.toStringAsFixed(1)} '
+      'timeBottom=${timeRect.bottom.toStringAsFixed(1)} '
+      'saveTop=${saveRect.top.toStringAsFixed(1)} '
+      'saveGap=${saveGap.toStringAsFixed(1)} '
+      'stablePanel=${_stablePanelHeight?.toStringAsFixed(1) ?? 'n/a'} '
+      'focus=${_focusedField ?? 'none'}',
+    );
+  }
+
+  RenderBox? _renderBoxFor(GlobalKey key) {
+    final renderObject = key.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject;
   }
 
   Future<void> _resolveNotificationLink() async {
@@ -554,7 +689,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       '[SlideUpMenu] ${_editing ? 'EditTransaction' : 'AddTransaction'} '
       'category inline ${next ? 'open' : 'close'} requested',
     );
-    setState(() => _categoryPickerOpen = next);
+    setState(() {
+      _categoryPickerOpen = next;
+      _stablePanelHeight = null;
+      _stablePanelSignature = null;
+    });
   }
 
   void _selectCategory(TransactionCategory category) {
@@ -565,6 +704,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     setState(() {
       _category = category;
       _categoryPickerOpen = false;
+      _stablePanelHeight = null;
+      _stablePanelSignature = null;
     });
   }
 

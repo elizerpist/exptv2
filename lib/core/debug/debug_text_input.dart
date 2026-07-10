@@ -1,6 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../keyboard/keyboard_inset_follower.dart';
 import 'debug_console.dart';
+
+String _keyboardTraceText(
+  BuildContext context, {
+  String valueLabel = 'keyboard',
+}) {
+  final snapshot = KeyboardInsetReader.snapshotOf(context);
+  return '$valueLabel=${snapshot.inset.toStringAsFixed(1)} '
+      'source=${snapshot.source} '
+      'phase=${snapshot.phase ?? 'none'} '
+      'seq=${snapshot.sequence?.toString() ?? 'n/a'} '
+      'ageMs=${snapshot.ageMs?.toString() ?? 'n/a'} '
+      'fallback=${snapshot.fallbackInset.toStringAsFixed(1)}';
+}
 
 class DebugTextField extends StatefulWidget {
   const DebugTextField({
@@ -116,7 +130,7 @@ class _DebugTextFieldState extends State<DebugTextField> {
     _pointerDownAt = DateTime.now();
     DebugConsole.log(
       '[Perf] TextInput pointer label=${widget.debugLabel} '
-      'focused=${_focusNode.hasFocus} keyboard=${_keyboardInsetText()}',
+      'focused=${_focusNode.hasFocus} ${_keyboardTraceText(context)}',
     );
   }
 
@@ -127,14 +141,14 @@ class _DebugTextFieldState extends State<DebugTextField> {
       DebugConsole.log(
         '[Perf] TextInput focus label=${widget.debugLabel} active=true '
         'requestElapsed=${_elapsedMs(_pointerDownAt)}ms '
-        'keyboard=${_keyboardInsetText()}',
+        '${_keyboardTraceText(context)}',
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_focusNode.hasFocus) return;
         DebugConsole.log(
           '[Perf] TextInput focus frame label=${widget.debugLabel} '
           'elapsed=${_elapsedMs(_focusStartedAt)}ms '
-          'keyboard=${_keyboardInsetText()}',
+          '${_keyboardTraceText(context)}',
         );
       });
       return;
@@ -143,7 +157,7 @@ class _DebugTextFieldState extends State<DebugTextField> {
     DebugConsole.log(
       '[Perf] TextInput focus label=${widget.debugLabel} active=false '
       'elapsed=${_elapsedMs(_focusStartedAt)}ms '
-      'keyboard=${_keyboardInsetText()}',
+      '${_keyboardTraceText(context)}',
     );
     _focusStartedAt = null;
     _lastLoggedKeyboardInset = null;
@@ -157,7 +171,7 @@ class _DebugTextFieldState extends State<DebugTextField> {
     _lastLoggedKeyboardInset = inset;
     DebugConsole.log(
       '[Perf] TextInput keyboard label=${widget.debugLabel} '
-      'inset=${inset.toStringAsFixed(1)} active=true',
+      '${_keyboardTraceText(context, valueLabel: 'inset')} active=true',
     );
   }
 
@@ -167,10 +181,8 @@ class _DebugTextFieldState extends State<DebugTextField> {
   }
 
   double _keyboardInset() {
-    return MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0;
+    return KeyboardInsetReader.rawOf(context);
   }
-
-  String _keyboardInsetText() => _keyboardInset().toStringAsFixed(1);
 }
 
 class DebugTextFormField extends StatefulWidget {
@@ -275,7 +287,7 @@ class _DebugTextFormFieldState extends State<DebugTextFormField> {
     _pointerDownAt = DateTime.now();
     DebugConsole.log(
       '[Perf] TextInput pointer label=${widget.debugLabel} '
-      'focused=${_focusNode.hasFocus} keyboard=${_keyboardInsetText()}',
+      'focused=${_focusNode.hasFocus} ${_keyboardTraceText(context)}',
     );
   }
 
@@ -286,14 +298,14 @@ class _DebugTextFormFieldState extends State<DebugTextFormField> {
       DebugConsole.log(
         '[Perf] TextInput focus label=${widget.debugLabel} active=true '
         'requestElapsed=${_elapsedMs(_pointerDownAt)}ms '
-        'keyboard=${_keyboardInsetText()}',
+        '${_keyboardTraceText(context)}',
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_focusNode.hasFocus) return;
         DebugConsole.log(
           '[Perf] TextInput focus frame label=${widget.debugLabel} '
           'elapsed=${_elapsedMs(_focusStartedAt)}ms '
-          'keyboard=${_keyboardInsetText()}',
+          '${_keyboardTraceText(context)}',
         );
       });
       return;
@@ -302,7 +314,7 @@ class _DebugTextFormFieldState extends State<DebugTextFormField> {
     DebugConsole.log(
       '[Perf] TextInput focus label=${widget.debugLabel} active=false '
       'elapsed=${_elapsedMs(_focusStartedAt)}ms '
-      'keyboard=${_keyboardInsetText()}',
+      '${_keyboardTraceText(context)}',
     );
     _focusStartedAt = null;
     _lastLoggedKeyboardInset = null;
@@ -316,7 +328,7 @@ class _DebugTextFormFieldState extends State<DebugTextFormField> {
     _lastLoggedKeyboardInset = inset;
     DebugConsole.log(
       '[Perf] TextInput keyboard label=${widget.debugLabel} '
-      'inset=${inset.toStringAsFixed(1)} active=true',
+      '${_keyboardTraceText(context, valueLabel: 'inset')} active=true',
     );
   }
 
@@ -326,8 +338,6 @@ class _DebugTextFormFieldState extends State<DebugTextFormField> {
   }
 
   double _keyboardInset() {
-    return MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0;
+    return KeyboardInsetReader.rawOf(context);
   }
-
-  String _keyboardInsetText() => _keyboardInset().toStringAsFixed(1);
 }

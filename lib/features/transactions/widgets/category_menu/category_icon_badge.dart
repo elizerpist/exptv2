@@ -17,6 +17,7 @@ class CategoryIconBadge extends StatelessWidget {
     this.showShadow = true,
     this.showQuestionMark = false,
     this.iconStrokeWidth,
+    this.debugSource,
   });
 
   final TransactionCategory? category;
@@ -28,6 +29,7 @@ class CategoryIconBadge extends StatelessWidget {
   final bool showShadow;
   final bool showQuestionMark;
   final double? iconStrokeWidth;
+  final String? debugSource;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +62,7 @@ class CategoryIconBadge extends StatelessWidget {
               color: AppColors.white,
               size: iconSize,
               strokeWidth: iconStrokeWidth,
+              debugSource: debugSource,
             ),
     );
   }

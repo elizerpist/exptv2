@@ -196,6 +196,10 @@ class MainActivity : FlutterFragmentActivity() {
                     EventBroadcaster.detach()
                 }
             })
+
+        NativeKeyboardInsetChannel(this).attach(
+            EventChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/keyboard_insets"),
+        )
     }
 
     private fun requestPostNotificationsOnFirstLaunch(): Boolean {

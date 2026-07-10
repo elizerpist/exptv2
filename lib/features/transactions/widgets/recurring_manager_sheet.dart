@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/debug/debug_text_input.dart';
+import '../../../core/keyboard/keyboard_inset_follower.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/installed_app.dart';
 import '../../settings/models/app_theme_settings.dart';
@@ -132,183 +133,202 @@ class _RecurringManagerSheetState extends State<RecurringManagerSheet> {
           visible: widget.visible,
           openRequestedAt: widget.openRequestedAt,
           deferEntryAnimation: true,
+          keyboardAvoidance: false,
           dismissThreshold: 150,
           canDragFrom: _canDragFrom,
           onDismissed: widget.onClose,
           child: SafeArea(
             top: false,
             bottom: false,
-            child: Column(
-              children: [
-                const _SheetHandle(
-                  key: ValueKey('recurring-manager-drag-handle'),
-                ),
-                _TitleBar(
-                  title: _editing == null
-                      ? 'Ismétlődő ${activeType.label.toLowerCase()}'
-                      : 'Ismétlődő módosítása',
-                  subtitle: _editing == null
-                      ? '${activeType.label} a fő pill alapján'
-                      : _editing!.transactionType.label,
-                  onClose: widget.onClose,
-                ),
-                Expanded(
-                  child: SizedBox.expand(
-                    key: const ValueKey('recurring-manager-scroll-body'),
-                    child: KeyedSubtree(
-                      key: _bodyKey,
-                      child: SingleChildScrollView(
-                        key: const ValueKey('recurring-manager-scroll'),
-                        controller: _bodyScrollController,
-                        padding: EdgeInsets.fromLTRB(
-                          SlideUpPanelMetrics.horizontalInset,
-                          8,
-                          SlideUpPanelMetrics.horizontalInset,
-                          MediaQuery.paddingOf(context).bottom + 112,
+            child: KeyboardInsetFollower(
+              debugLabel: 'RecurringManager footer',
+              builder: (context, keyboard, child) {
+                final safeBottom = MediaQuery.paddingOf(context).bottom;
+                final keyboardInset = keyboard.effectiveInset;
+                return Column(
+                  children: [
+                    const _SheetHandle(
+                      key: ValueKey('recurring-manager-drag-handle'),
+                    ),
+                    _TitleBar(
+                      title: _editing == null
+                          ? 'Ismétlődő ${activeType.label.toLowerCase()}'
+                          : 'Ismétlődő módosítása',
+                      subtitle: _editing == null
+                          ? '${activeType.label} a fő pill alapján'
+                          : _editing!.transactionType.label,
+                      onClose: widget.onClose,
+                    ),
+                    Expanded(
+                      child: SizedBox.expand(
+                        key: const ValueKey('recurring-manager-scroll-body'),
+                        child: KeyedSubtree(
+                          key: _bodyKey,
+                          child: SingleChildScrollView(
+                            key: const ValueKey('recurring-manager-scroll'),
+                            controller: _bodyScrollController,
+                            padding: EdgeInsets.fromLTRB(
+                              SlideUpPanelMetrics.horizontalInset,
+                              8,
+                              SlideUpPanelMetrics.horizontalInset,
+                              safeBottom + 112 + keyboardInset,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _TriggerSelector(
+                                  selected: _triggerType,
+                                  accentColor: expenseTheme.accent,
+                                  surfaceColor: expenseTheme.fieldSurface,
+                                  surfaceStyle: expenseTheme.buttonSurfaceStyle,
+                                  onChanged: (value) {
+                                    setState(() => _triggerType = value);
+                                  },
+                                ),
+                                const SizedBox(height: 14),
+                                _CommonForm(
+                                  name: _name,
+                                  amount: _amount,
+                                  category: _category,
+                                  categoryPickerOpen: _categoryPickerOpen,
+                                  categories: categories,
+                                  surfaceColor: expenseTheme.fieldSurface,
+                                  surfaceStyle:
+                                      expenseTheme.contentSurfaceStyle,
+                                  onCategoryTap: () => setState(
+                                    () => _categoryPickerOpen =
+                                        !_categoryPickerOpen,
+                                  ),
+                                  onCategorySelected: (category) =>
+                                      setState(() {
+                                        _category = category;
+                                        _categoryPickerOpen = false;
+                                      }),
+                                ),
+                                const SizedBox(height: 12),
+                                if (_triggerType == RecurringTriggerType.date)
+                                  _DateScheduleRow(
+                                    dayController: _day,
+                                    timeController: _time,
+                                    surfaceColor: expenseTheme.fieldSurface,
+                                    surfaceStyle:
+                                        expenseTheme.contentSurfaceStyle,
+                                  )
+                                else
+                                  _PushScheduleRow(
+                                    day: _day,
+                                    app: _selectedApp,
+                                    appLabel: _appLabel,
+                                    appFilterText: _appFilterText,
+                                    errorText: _error == _appError
+                                        ? 'App kiválasztása szükséges'
+                                        : null,
+                                    surfaceColor: expenseTheme.fieldSurface,
+                                    surfaceStyle:
+                                        expenseTheme.contentSurfaceStyle,
+                                    onLoadInstalledApps:
+                                        widget.onLoadInstalledApps,
+                                    onAppSelected: _selectInstalledApp,
+                                  ),
+                                if (_triggerType ==
+                                    RecurringTriggerType.push) ...[
+                                  const SizedBox(height: 12),
+                                  _PushTrainingForm(
+                                    sample: _sample,
+                                    keyword: _keyword,
+                                    amountPattern: _amountPattern,
+                                    merchantPattern: _merchantPattern,
+                                    dateTolerance: _dateTolerance,
+                                    amountTolerancePercent:
+                                        _amountTolerancePercent,
+                                    amountToleranceMin: _amountToleranceMin,
+                                    activeType: activeType,
+                                    trainingMode: _trainingMode,
+                                    amountSelection: _amountSelection,
+                                    merchantSelection: _merchantSelection,
+                                    advancedOpen: _advancedOpen,
+                                    onAdvancedChanged: (value) =>
+                                        setState(() => _advancedOpen = value),
+                                    onChanged: () => setState(() {}),
+                                    onTrainingModeChanged: (value) =>
+                                        setState(() => _trainingMode = value),
+                                    onTokenSelected: _selectTrainingToken,
+                                  ),
+                                ],
+                                if (_error != null && _error != _appError) ...[
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _error!,
+                                    key: const ValueKey(
+                                      'recurring-manager-error',
+                                    ),
+                                    style: const TextStyle(
+                                      color: AppColors.expense,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 14),
+                                _RuleCollection(
+                                  rules: widget.store.recurringRules,
+                                  categories: widget.store.categories,
+                                  accentColor: expenseTheme.accent,
+                                  onEdit: _editRule,
+                                  onToggle: widget.store.toggleRecurringRule,
+                                  onDelete: widget.store.deleteRecurringRule,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        SlideUpPanelMetrics.horizontalInset,
+                        0,
+                        SlideUpPanelMetrics.horizontalInset,
+                        safeBottom + 8 + keyboardInset,
+                      ),
+                      child: SizedBox(
+                        key: const ValueKey('recurring-manager-footer'),
+                        width: double.infinity,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            _TriggerSelector(
-                              selected: _triggerType,
-                              accentColor: expenseTheme.accent,
-                              surfaceColor: expenseTheme.fieldSurface,
+                            ExpenseSurfaceButton(
+                              buttonKey: const ValueKey(
+                                'recurring-manager-save',
+                              ),
+                              onPressed: _saving ? null : _save,
+                              icon: _editing == null
+                                  ? Icons.add_rounded
+                                  : Icons.save_outlined,
+                              label: _editing == null
+                                  ? 'Szabály hozzáadása'
+                                  : 'Szabály mentése',
+                              saving: _saving,
                               surfaceStyle: expenseTheme.buttonSurfaceStyle,
-                              onChanged: (value) {
-                                setState(() => _triggerType = value);
-                              },
+                              color: expenseTheme.accent,
                             ),
-                            const SizedBox(height: 14),
-                            _CommonForm(
-                              name: _name,
-                              amount: _amount,
-                              category: _category,
-                              categoryPickerOpen: _categoryPickerOpen,
-                              categories: categories,
-                              surfaceColor: expenseTheme.fieldSurface,
-                              surfaceStyle: expenseTheme.contentSurfaceStyle,
-                              onCategoryTap: () => setState(
-                                () =>
-                                    _categoryPickerOpen = !_categoryPickerOpen,
-                              ),
-                              onCategorySelected: (category) => setState(() {
-                                _category = category;
-                                _categoryPickerOpen = false;
-                              }),
-                            ),
-                            const SizedBox(height: 12),
-                            if (_triggerType == RecurringTriggerType.date)
-                              _DateScheduleRow(
-                                dayController: _day,
-                                timeController: _time,
-                                surfaceColor: expenseTheme.fieldSurface,
-                                surfaceStyle: expenseTheme.contentSurfaceStyle,
-                              )
-                            else
-                              _PushScheduleRow(
-                                day: _day,
-                                app: _selectedApp,
-                                appLabel: _appLabel,
-                                appFilterText: _appFilterText,
-                                errorText: _error == _appError
-                                    ? 'App kiválasztása szükséges'
-                                    : null,
-                                surfaceColor: expenseTheme.fieldSurface,
-                                surfaceStyle: expenseTheme.contentSurfaceStyle,
-                                onLoadInstalledApps: widget.onLoadInstalledApps,
-                                onAppSelected: _selectInstalledApp,
-                              ),
-                            if (_triggerType == RecurringTriggerType.push) ...[
-                              const SizedBox(height: 12),
-                              _PushTrainingForm(
-                                sample: _sample,
-                                keyword: _keyword,
-                                amountPattern: _amountPattern,
-                                merchantPattern: _merchantPattern,
-                                dateTolerance: _dateTolerance,
-                                amountTolerancePercent: _amountTolerancePercent,
-                                amountToleranceMin: _amountToleranceMin,
-                                activeType: activeType,
-                                trainingMode: _trainingMode,
-                                amountSelection: _amountSelection,
-                                merchantSelection: _merchantSelection,
-                                advancedOpen: _advancedOpen,
-                                onAdvancedChanged: (value) =>
-                                    setState(() => _advancedOpen = value),
-                                onChanged: () => setState(() {}),
-                                onTrainingModeChanged: (value) =>
-                                    setState(() => _trainingMode = value),
-                                onTokenSelected: _selectTrainingToken,
-                              ),
-                            ],
-                            if (_error != null && _error != _appError) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                _error!,
-                                key: const ValueKey('recurring-manager-error'),
-                                style: const TextStyle(
-                                  color: AppColors.expense,
-                                  fontWeight: FontWeight.w600,
+                            if (_editing != null) ...[
+                              const SizedBox(height: 8),
+                              TextButton(
+                                key: const ValueKey(
+                                  'recurring-manager-cancel-edit',
                                 ),
+                                onPressed: _resetForm,
+                                child: const Text('Szerkesztés megszakítása'),
                               ),
                             ],
-                            const SizedBox(height: 14),
-                            _RuleCollection(
-                              rules: widget.store.recurringRules,
-                              categories: widget.store.categories,
-                              accentColor: expenseTheme.accent,
-                              onEdit: _editRule,
-                              onToggle: widget.store.toggleRecurringRule,
-                              onDelete: widget.store.deleteRecurringRule,
-                            ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    SlideUpPanelMetrics.horizontalInset,
-                    0,
-                    SlideUpPanelMetrics.horizontalInset,
-                    MediaQuery.paddingOf(context).bottom + 8,
-                  ),
-                  child: SizedBox(
-                    key: const ValueKey('recurring-manager-footer'),
-                    width: double.infinity,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ExpenseSurfaceButton(
-                          buttonKey: const ValueKey('recurring-manager-save'),
-                          onPressed: _saving ? null : _save,
-                          icon: _editing == null
-                              ? Icons.add_rounded
-                              : Icons.save_outlined,
-                          label: _editing == null
-                              ? 'Szabály hozzáadása'
-                              : 'Szabály mentése',
-                          saving: _saving,
-                          surfaceStyle: expenseTheme.buttonSurfaceStyle,
-                          color: expenseTheme.accent,
-                        ),
-                        if (_editing != null) ...[
-                          const SizedBox(height: 8),
-                          TextButton(
-                            key: const ValueKey(
-                              'recurring-manager-cancel-edit',
-                            ),
-                            onPressed: _resetForm,
-                            child: const Text('Szerkesztés megszakítása'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
         );

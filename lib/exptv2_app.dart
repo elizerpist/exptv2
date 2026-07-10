@@ -13,8 +13,30 @@ import 'features/transactions/sync/google_sheets_auth_client.dart';
 import 'features/transactions/sync/google_sheets_sync_controller.dart';
 import 'features/transactions/sync/google_sheets_sync_store.dart';
 import 'features/transactions/slots/category_icon_manager.dart';
+import 'features/transactions/widgets/category_slot_icon.dart';
 import 'services/native_bridge.dart';
 import 'state/event_store.dart';
+
+Future<void>? _categoryIconStartupFuture;
+var _categoryIconStartupReady = false;
+
+Future<void> bootstrapCategoryIconsForStartup({
+  SharedPreferences? preferences,
+}) {
+  if (_categoryIconStartupReady) return Future<void>.value();
+  final existing = _categoryIconStartupFuture;
+  if (existing != null) return existing;
+  final future = _loadAndWarmCategoryIcons(preferences: preferences);
+  _categoryIconStartupFuture = future;
+  return future;
+}
+
+Future<void> _loadAndWarmCategoryIcons({SharedPreferences? preferences}) async {
+  final prefs = preferences ?? await SharedPreferences.getInstance();
+  await CategoryIconManager.load(preferences: prefs);
+  await warmUpCategorySlotIconCache(strokeWidth: 1.35);
+  _categoryIconStartupReady = true;
+}
 
 class Exptv2App extends StatefulWidget {
   const Exptv2App({super.key, required this.store, required this.nativeBridge});
@@ -32,7 +54,7 @@ class _Exptv2AppState extends State<Exptv2App> {
   @override
   void initState() {
     super.initState();
-    unawaited(_initCategoryIconSlots());
+    unawaited(bootstrapCategoryIconsForStartup());
     unawaited(_initGoogleSheetsSync());
   }
 
@@ -40,11 +62,6 @@ class _Exptv2AppState extends State<Exptv2App> {
   void dispose() {
     _googleSheetsSyncController?.dispose();
     super.dispose();
-  }
-
-  Future<void> _initCategoryIconSlots() async {
-    final preferences = await SharedPreferences.getInstance();
-    await CategoryIconManager.load(preferences: preferences);
   }
 
   Future<void> _initGoogleSheetsSync() async {

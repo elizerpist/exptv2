@@ -430,6 +430,159 @@ void main() {
     },
   );
 
+  test(
+    'vendor summaries expose deterministic dominant category icon data',
+    () async {
+      final repository = FakeTransactionRepository();
+      repository.categories.add(
+        TransactionCategory.fromMap({
+          'transactionCategoryID': 7,
+          'name': 'Dominant',
+          'type': 'kiadás',
+          'colorSlot': 3,
+          'iconSlot': 4,
+          'backgroundColor': '#3b82f6',
+          'hasLimit': false,
+          'limitAmount': 0,
+          'alertActive': false,
+          'isCustomIcon': true,
+        }),
+      );
+      repository.transactions.addAll([
+        TransactionRecord.fromMap({
+          'id': 901,
+          'date': '2025.09.25',
+          'time': '21:00',
+          'merchant': 'Test Store',
+          'amount': -999,
+          'userAssignedName': null,
+          'transactionCategoryID': 7,
+        }),
+        TransactionRecord.fromMap({
+          'id': 902,
+          'date': '2025.09.25',
+          'time': '21:10',
+          'merchant': 'No Category',
+          'amount': -100,
+          'userAssignedName': null,
+          'transactionCategoryID': null,
+        }),
+      ]);
+      final store = TransactionStore(repository);
+      await store.start();
+
+      final dominant = store.vendorFilterSummaries.firstWhere(
+        (summary) => summary.name == 'Test Store',
+      );
+      expect(dominant.count, 2);
+      expect(dominant.categoryIconSlot, 4);
+      expect(dominant.colorHex, '#84cc16');
+
+      final fallback = store.vendorFilterSummaries.firstWhere(
+        (summary) => summary.name == 'No Category',
+      );
+      expect(fallback.categoryIconSlot, isNull);
+      expect(fallback.colorHex, isNull);
+    },
+  );
+
+  test('vendor summaries and category counts follow summary window', () async {
+    final repository = FakeTransactionRepository();
+    repository.categories.add(
+      TransactionCategory.fromMap({
+        'transactionCategoryID': 7,
+        'name': 'Scoped',
+        'type': 'kiadás',
+        'colorSlot': 3,
+        'iconSlot': 4,
+        'backgroundColor': '#84cc16',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      }),
+    );
+    repository.transactions.addAll([
+      TransactionRecord.fromMap({
+        'id': 903,
+        'date': '2024.02.10',
+        'time': '08:00',
+        'merchant': 'Old Shop',
+        'amount': -10,
+        'userAssignedName': null,
+        'transactionCategoryID': 7,
+      }),
+      TransactionRecord.fromMap({
+        'id': 904,
+        'date': '2025.02.10',
+        'time': '08:00',
+        'merchant': 'Year Shop',
+        'amount': -20,
+        'userAssignedName': null,
+        'transactionCategoryID': 7,
+      }),
+      TransactionRecord.fromMap({
+        'id': 905,
+        'date': '2025.10.10',
+        'time': '08:00',
+        'merchant': 'Other Month',
+        'amount': -30,
+        'userAssignedName': null,
+        'transactionCategoryID': 7,
+      }),
+      TransactionRecord.fromMap({
+        'id': 906,
+        'date': '2026.01.10',
+        'time': '08:00',
+        'merchant': 'Future Shop',
+        'amount': -40,
+        'userAssignedName': null,
+        'transactionCategoryID': 7,
+      }),
+    ]);
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2025, 9, 25, 12),
+    );
+    await store.start();
+
+    Set<String> vendorNames() =>
+        store.vendorFilterSummaries.map((summary) => summary.name).toSet();
+
+    expect(
+      vendorNames(),
+      containsAll([
+        'Test Store',
+        'Rrr',
+        'Old Shop',
+        'Year Shop',
+        'Other Month',
+        'Future Shop',
+      ]),
+    );
+    expect(store.categoryTransactionCounts[6], 3);
+    expect(store.categoryTransactionCounts[7], 4);
+
+    await store.setSummaryYear(2025);
+
+    expect(
+      vendorNames(),
+      containsAll(['Test Store', 'Rrr', 'Year Shop', 'Other Month']),
+    );
+    expect(vendorNames(), isNot(contains('Old Shop')));
+    expect(vendorNames(), isNot(contains('Future Shop')));
+    expect(store.categoryTransactionCounts[6], 3);
+    expect(store.categoryTransactionCounts[7], 2);
+
+    await store.setSummaryMonth(2025, 9);
+
+    expect(vendorNames(), containsAll(['Test Store', 'Rrr']));
+    expect(vendorNames(), isNot(contains('Year Shop')));
+    expect(vendorNames(), isNot(contains('Other Month')));
+    expect(store.categoryTransactionCounts[6], 3);
+    expect(store.categoryTransactionCounts[7] ?? 0, 0);
+  });
+
   test('active summary is calculated from visible filtered records', () async {
     final store = TransactionStore(FakeTransactionRepository());
     await store.start();

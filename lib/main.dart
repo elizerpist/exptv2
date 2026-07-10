@@ -6,7 +6,9 @@ import 'state/event_store.dart';
 
 export 'exptv2_app.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await bootstrapCategoryIconsForStartup();
   final bridge = NativeBridge();
   runApp(Exptv2App(store: EventStore(bridge), nativeBridge: bridge));
 }

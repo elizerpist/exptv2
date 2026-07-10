@@ -1,3 +1,4 @@
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:exptv2/features/transactions/slots/category_color_resolver.dart';
@@ -75,6 +76,24 @@ void main() {
       expect(CategoryIconManager.iconNameForSlot(4), 'pizza');
     },
   );
+
+  test('category icon manager logs preference load timing', () async {
+    final preferences = await SharedPreferences.getInstance();
+    await CategoryIconManager.assignIconToSlot(
+      4,
+      'pizza',
+      preferences: preferences,
+    );
+    CategoryIconManager.resetForTests();
+    DebugConsole.clear();
+
+    await CategoryIconManager.load(preferences: preferences);
+
+    expect(DebugConsole.allText, contains('[IconLoad] prefs load start'));
+    expect(DebugConsole.allText, contains('[IconLoad] prefs load end'));
+    expect(DebugConsole.allText, contains('assignments='));
+    expect(DebugConsole.allText, contains('elapsed='));
+  });
 
   test('transaction category reads slot colors through the manager', () {
     final category = TransactionCategory.fromMap({

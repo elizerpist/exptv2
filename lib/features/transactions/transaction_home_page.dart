@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
 import '../../core/debug/debug_console.dart';
+import '../../core/keyboard/keyboard_inset_follower.dart';
 import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
@@ -19,6 +20,7 @@ import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
 import 'widgets/category_menu/category_card.dart';
+import 'widgets/category_menu/category_icon_badge.dart';
 import 'widgets/category_menu/category_menu_panel.dart';
 import 'models/backheader_budget_item.dart';
 import 'widgets/header_card/category_budget_stage.dart';
@@ -471,7 +473,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     dragFromHandleOnly: true,
                     dragHandleExtent: 72,
                     verticalDragBias: 1.2,
-                    keyboardAvoidance: true,
+                    keyboardAvoidance: false,
                     child: SafeArea(
                       top: false,
                       bottom: false,
@@ -872,9 +874,24 @@ class _TransactionHomePageState extends State<TransactionHomePage>
   }
 
   void _setActiveType(TransactionType type) {
+    final stopwatch = Stopwatch()..start();
+    final beforeEntries = widget.store.visibleDisplayLogEntries.length;
+    final beforeTransactions = widget.store.visibleTransactions.length;
+    DebugConsole.log(
+      '[Perf] Home type switch start target=${type.name} '
+      'current=${widget.store.activeType.name} '
+      'entriesBefore=$beforeEntries transactionsBefore=$beforeTransactions',
+    );
     _headerPullController.stop();
     _headerPullController.value = 0;
     widget.store.setActiveType(type);
+    final afterEntries = widget.store.visibleDisplayLogEntries.length;
+    final afterTransactions = widget.store.visibleTransactions.length;
+    DebugConsole.log(
+      '[Perf] Home type switch state target=${type.name} '
+      'entriesAfter=$afterEntries transactionsAfter=$afterTransactions '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
     widget.onBudgetTargetEditorClosed?.call();
     widget.onFocusedSheetDismissRequested?.call();
     _fastInfoExtent.value = 0;
@@ -886,13 +903,44 @@ class _TransactionHomePageState extends State<TransactionHomePage>
       _backheaderLiveTunerOpen = false;
       _budgetEditorItem = null;
     });
+    _logFirstFrameAfterInteraction(reason: 'type-switch', stopwatch: stopwatch);
   }
 
   void _setMerchantFastFilter(
     TransactionRecord record,
     TransactionCategory? category,
   ) {
+    final stopwatch = Stopwatch()..start();
+    DebugConsole.log(
+      '[Perf] FastFilter start merchant=${record.displayMerchant} '
+      'category=${category?.name ?? 'none'}',
+    );
     widget.store.setMerchantFilter(record.displayMerchant);
+    DebugConsole.log(
+      '[Perf] FastFilter state merchant=${record.displayMerchant} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+    _logFirstFrameAfterInteraction(reason: 'fastfilter', stopwatch: stopwatch);
+  }
+
+  void _logFirstFrameAfterInteraction({
+    required String reason,
+    required Stopwatch stopwatch,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final visibleTransactions = widget.store.visibleTransactions.length;
+      final visibleGhosts = widget.store.visibleGhostTransactions.length;
+      final visibleEntries = widget.store.visibleDisplayLogEntries.length;
+      final elapsed = stopwatch.elapsedMilliseconds;
+      DebugConsole.log(
+        '[Perf] Home first frame reason=$reason '
+        'type=${widget.store.activeType.name} '
+        'visibleTransactions=$visibleTransactions '
+        'visibleGhosts=$visibleGhosts entries=$visibleEntries '
+        'elapsed=${elapsed}ms frameBudget=16ms jank=${elapsed > 48}',
+      );
+    });
   }
 
   Future<void> _renameTransactionsByMerchant(
@@ -1412,6 +1460,9 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
   late final TextEditingController _searchController;
   var _query = '';
   double? _lastLoggedKeyboardInset;
+  List<VendorFilterSummary>? _cachedModelSource;
+  String? _cachedModelQuery;
+  _VendorVisibleModel? _cachedModel;
 
   @override
   void initState() {
@@ -1425,21 +1476,41 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant VendorFilterPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.summaries, widget.summaries)) {
+      _cachedModelSource = null;
+      _cachedModelQuery = null;
+      _cachedModel = null;
+    }
+  }
+
   void _logKeyboardLayout(
-    double keyboardInset,
+    KeyboardInsetMetrics keyboard,
     double safeBottomInset,
     double listBottomPadding,
   ) {
+    final keyboardInset = keyboard.effectiveInset;
     if (_lastLoggedKeyboardInset == keyboardInset) return;
     _lastLoggedKeyboardInset = keyboardInset;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       DebugConsole.log(
         '[KeyboardFlow] VendorFilter keyboard '
+        'raw=${keyboard.rawInset.toStringAsFixed(1)} '
+        'animated=${keyboard.animatedInset.toStringAsFixed(1)} '
         'inset=${keyboardInset.toStringAsFixed(1)} '
-        'footerBottom=0.0 '
+        'lag=${keyboard.lag.toStringAsFixed(1)} '
+        'footerBottom=${keyboardInset.toStringAsFixed(1)} '
         'listPadding=${listBottomPadding.toStringAsFixed(1)} '
-        'safe=${safeBottomInset.toStringAsFixed(1)}',
+        'safe=${safeBottomInset.toStringAsFixed(1)} '
+        'source=${keyboard.source} '
+        'phase=${keyboard.phase ?? 'none'} '
+        'seq=${keyboard.sequence?.toString() ?? 'n/a'} '
+        'ageMs=${keyboard.ageMs?.toString() ?? 'n/a'} '
+        'fallback=${keyboard.fallbackInset.toStringAsFixed(1)} '
+        'nativeSource=${keyboard.nativeSource ?? 'n/a'}',
       );
     });
   }
@@ -1447,166 +1518,198 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
   @override
   Widget build(BuildContext context) {
     final safeBottomInset = MediaQuery.paddingOf(context).bottom + 8;
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final visibleSummaries = _visibleSummaries();
-    final visibleSections = _sectionedItems(visibleSummaries);
-    final listBottomPadding = 84 + safeBottomInset;
-    _logKeyboardLayout(keyboardInset, safeBottomInset, listBottomPadding);
-    return ColoredBox(
-      color: AppColors.white,
-      child: Stack(
-        children: [
-          Column(
+    return KeyboardInsetFollower(
+      debugLabel: 'VendorFilter',
+      builder: (context, keyboard, child) {
+        final keyboardInset = keyboard.effectiveInset;
+        final visibleModel = _visibleModel();
+        final listBottomPadding = 84 + safeBottomInset + keyboardInset;
+        _logKeyboardLayout(keyboard, safeBottomInset, listBottomPadding);
+        return ColoredBox(
+          color: AppColors.white,
+          child: Stack(
             children: [
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.gray200,
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
+              Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: const BoxDecoration(
+                        color: AppColors.gray200,
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(
+                    height: 46,
+                    child: Center(
+                      child: Text(
+                        'Vendor lista',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.gray800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _VendorSearchPill(
+                    controller: _searchController,
+                    count: visibleModel.count,
+                    surfaceStyle: widget.buttonSurfaceStyle,
+                    onChanged: (value) {
+                      setState(() {
+                        _query = value;
+                        _cachedModelSource = null;
+                        _cachedModelQuery = null;
+                        _cachedModel = null;
+                      });
+                    },
+                  ),
+                  Expanded(
+                    child: widget.summaries.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Nincs vendor az időszakban',
+                              style: TextStyle(color: AppColors.gray500),
+                            ),
+                          )
+                        : ListView.builder(
+                            key: const ValueKey('vendor-filter-list'),
+                            controller: widget.scrollController,
+                            padding: EdgeInsets.fromLTRB(
+                              20,
+                              8,
+                              20,
+                              listBottomPadding,
+                            ),
+                            itemCount: visibleModel.items.length,
+                            itemBuilder: (context, index) {
+                              final item = visibleModel.items[index];
+                              if (item.headerLabel != null) {
+                                return _VendorSectionHeader(
+                                  label: item.headerLabel!,
+                                );
+                              }
+                              final summaries = item.summaries;
+                              final left = summaries[0];
+                              final right = summaries.length > 1
+                                  ? summaries[1]
+                                  : null;
+                              return Padding(
+                                key: ValueKey('vendor-filter-rowpair-$index'),
+                                padding: const EdgeInsets.only(bottom: 15),
+                                child: SizedBox(
+                                  height: 150,
+                                  child: Row(
+                                    children: [
+                                      Expanded(child: _vendorCard(left)),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: right == null
+                                            ? const SizedBox.shrink()
+                                            : _vendorCard(right),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-              const SizedBox(
-                height: 46,
-                child: Center(
-                  child: Text(
-                    'Vendor lista',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.gray800,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: keyboardInset,
+                child: ColoredBox(
+                  key: const ValueKey('vendor-filter-footer'),
+                  color: AppColors.white,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, 12, 20, safeBottomInset),
+                    child: ExpenseSurfaceButton(
+                      buttonKey: const ValueKey('vendor-filter-apply-button'),
+                      label: 'Szűrőbeállítás',
+                      onPressed: widget.onApply,
+                      surfaceStyle: widget.buttonSurfaceStyle,
+                      color: widget.accentColor,
+                      foregroundColor: AppColors.white,
                     ),
                   ),
                 ),
               ),
-              _VendorSearchPill(
-                controller: _searchController,
-                count: visibleSummaries.length,
-                surfaceStyle: widget.buttonSurfaceStyle,
-                onChanged: (value) => setState(() => _query = value),
-              ),
-              Expanded(
-                child: widget.summaries.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Nincs vendor az időszakban',
-                          style: TextStyle(color: AppColors.gray500),
-                        ),
-                      )
-                    : ListView.builder(
-                        key: const ValueKey('vendor-filter-list'),
-                        controller: widget.scrollController,
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          8,
-                          20,
-                          listBottomPadding,
-                        ),
-                        itemCount: visibleSections.length,
-                        itemBuilder: (context, index) {
-                          final section = visibleSections[index];
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _VendorSectionHeader(label: section.label),
-                              GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: const EdgeInsets.only(bottom: 12),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      mainAxisSpacing: 15,
-                                      crossAxisSpacing: 14,
-                                      mainAxisExtent: 150,
-                                    ),
-                                itemCount: section.summaries.length,
-                                itemBuilder: (context, summaryIndex) {
-                                  final summary =
-                                      section.summaries[summaryIndex];
-                                  return _VendorFilterRow(
-                                    summary: summary,
-                                    selected: widget.selectedVendors.contains(
-                                      summary.name,
-                                    ),
-                                    activeType: widget.activeType,
-                                    accentColor: widget.accentColor,
-                                    cardSurfaceColor: widget.cardSurfaceColor,
-                                    cardSurfaceStyle: widget.cardSurfaceStyle,
-                                    avatarSurfaceStyle:
-                                        widget.avatarSurfaceStyle,
-                                    onTap: () => widget.onToggle(summary.name),
-                                    onRename: widget.onRename,
-                                    onResetName: widget.onResetName,
-                                  );
-                                },
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-              ),
             ],
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ColoredBox(
-              key: const ValueKey('vendor-filter-footer'),
-              color: AppColors.white,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 12, 20, safeBottomInset),
-                child: ExpenseSurfaceButton(
-                  buttonKey: const ValueKey('vendor-filter-apply-button'),
-                  label: 'Szűrőbeállítás',
-                  onPressed: widget.onApply,
-                  surfaceStyle: widget.buttonSurfaceStyle,
-                  color: widget.accentColor,
-                  foregroundColor: AppColors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  List<VendorFilterSummary> _visibleSummaries() {
-    final needle = _query.trim().toLowerCase();
-    if (needle.isEmpty) return widget.summaries;
-    return [
-      for (final summary in widget.summaries)
-        if (summary.name.toLowerCase().contains(needle) ||
-            summary.originalName.toLowerCase().contains(needle))
-          summary,
-    ];
+  Widget _vendorCard(VendorFilterSummary summary) {
+    return _VendorFilterRow(
+      summary: summary,
+      selected: widget.selectedVendors.contains(summary.name),
+      activeType: widget.activeType,
+      accentColor: widget.accentColor,
+      cardSurfaceColor: widget.cardSurfaceColor,
+      cardSurfaceStyle: widget.cardSurfaceStyle,
+      avatarSurfaceStyle: widget.avatarSurfaceStyle,
+      onTap: () => widget.onToggle(summary.name),
+      onRename: widget.onRename,
+      onResetName: widget.onResetName,
+    );
   }
 
-  List<_VendorListSection> _sectionedItems(
-    List<VendorFilterSummary> summaries,
-  ) {
-    final sorted = [...summaries]..sort(_compareVendorSummaries);
-    final sections = <_VendorListSection>[];
+  _VendorVisibleModel _visibleModel() {
+    final needle = _query.trim().toLowerCase();
+    final cached = _cachedModel;
+    if (cached != null &&
+        identical(_cachedModelSource, widget.summaries) &&
+        _cachedModelQuery == needle) {
+      return cached;
+    }
+    final visibleSummaries = needle.isEmpty
+        ? widget.summaries
+        : [
+            for (final summary in widget.summaries)
+              if (summary.name.toLowerCase().contains(needle) ||
+                  summary.originalName.toLowerCase().contains(needle))
+                summary,
+          ];
+    final sorted = [...visibleSummaries]..sort(_compareVendorSummaries);
+    final items = <_VendorListItem>[];
     String? previousGroup;
-    var groupSummaries = <VendorFilterSummary>[];
+    var rowSummaries = <VendorFilterSummary>[];
+    void flushRow() {
+      if (rowSummaries.isEmpty) return;
+      items.add(_VendorListItem.row(List.unmodifiable(rowSummaries)));
+      rowSummaries = <VendorFilterSummary>[];
+    }
+
     for (final summary in sorted) {
       final group = _vendorGroup(summary.name);
       if (previousGroup != null && group != previousGroup) {
-        sections.add(_VendorListSection(previousGroup, groupSummaries));
-        groupSummaries = <VendorFilterSummary>[];
+        flushRow();
+      }
+      if (previousGroup != group) {
+        items.add(_VendorListItem.header(group));
       }
       previousGroup = group;
-      groupSummaries.add(summary);
+      rowSummaries.add(summary);
+      if (rowSummaries.length == 2) flushRow();
     }
-    if (previousGroup != null) {
-      sections.add(_VendorListSection(previousGroup, groupSummaries));
-    }
-    return sections;
+    flushRow();
+    final model = _VendorVisibleModel(
+      count: visibleSummaries.length,
+      items: List.unmodifiable(items),
+    );
+    _cachedModelSource = widget.summaries;
+    _cachedModelQuery = needle;
+    _cachedModel = model;
+    return model;
   }
 
   int _compareVendorSummaries(
@@ -1679,10 +1782,21 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
   }
 }
 
-class _VendorListSection {
-  const _VendorListSection(this.label, this.summaries);
+class _VendorVisibleModel {
+  const _VendorVisibleModel({required this.count, required this.items});
 
-  final String label;
+  final int count;
+  final List<_VendorListItem> items;
+}
+
+class _VendorListItem {
+  const _VendorListItem.header(String label)
+    : headerLabel = label,
+      summaries = const <VendorFilterSummary>[];
+
+  const _VendorListItem.row(this.summaries) : headerLabel = null;
+
+  final String? headerLabel;
   final List<VendorFilterSummary> summaries;
 }
 
@@ -1822,8 +1936,10 @@ class _VendorFilterRow extends StatefulWidget {
 class _VendorFilterRowState extends State<_VendorFilterRow> {
   late final TextEditingController _nameController;
   late final FocusNode _nameFocusNode;
+  Timer? _cardReleaseTimer;
   var _editingName = false;
   var _savingName = false;
+  var _cardPressed = false;
 
   @override
   void initState() {
@@ -1842,11 +1958,31 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
 
   @override
   void dispose() {
+    _cardReleaseTimer?.cancel();
     _nameFocusNode
       ..removeListener(_handleNameFocusChanged)
       ..dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  void _pressCard() {
+    if (!widget.cardSurfaceStyle.hasPressEffect) return;
+    _cardReleaseTimer?.cancel();
+    _setCardPressed(true);
+  }
+
+  void _releaseCardSoon() {
+    if (!widget.cardSurfaceStyle.hasPressEffect) return;
+    _cardReleaseTimer?.cancel();
+    _cardReleaseTimer = Timer(const Duration(milliseconds: 120), () {
+      _setCardPressed(false);
+    });
+  }
+
+  void _setCardPressed(bool value) {
+    if (_cardPressed == value || !mounted) return;
+    setState(() => _cardPressed = value);
   }
 
   void _handleNameFocusChanged() {
@@ -1860,7 +1996,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
     DebugConsole.log(
       '[KeyboardFlow] VendorFilter focus request '
       'vendor=${widget.summary.originalName} '
-      'keyboard=${_keyboardInsetText()}',
+      '${_keyboardTraceText()}',
     );
     setState(() {
       _editingName = true;
@@ -1872,7 +2008,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
       DebugConsole.log(
         '[KeyboardFlow] VendorFilter focus frame '
         'vendor=${widget.summary.originalName} '
-        'keyboard=${_keyboardInsetText()}',
+        '${_keyboardTraceText()}',
       );
     });
   }
@@ -1910,14 +2046,22 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
     );
   }
 
-  String _keyboardInsetText() {
-    return (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0)
-        .toStringAsFixed(1);
+  String _keyboardTraceText() {
+    final snapshot = KeyboardInsetReader.snapshotOf(context);
+    return 'keyboard=${snapshot.inset.toStringAsFixed(1)} '
+        'source=${snapshot.source} '
+        'phase=${snapshot.phase ?? 'none'} '
+        'seq=${snapshot.sequence?.toString() ?? 'n/a'} '
+        'ageMs=${snapshot.ageMs?.toString() ?? 'n/a'} '
+        'fallback=${snapshot.fallbackInset.toStringAsFixed(1)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final avatarColor = widget.summary.colorHex == null
+    final hasCategoryIcon = widget.summary.categoryIconSlot != null;
+    final avatarColor = !hasCategoryIcon
+        ? AppColors.gray500
+        : widget.summary.colorHex == null
         ? widget.accentColor
         : AppColors.fromHex(widget.summary.colorHex!);
     final amountColor = widget.activeType == TransactionType.income
@@ -1928,9 +2072,10 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
         : '-';
     final activeUsesInset =
         widget.selected && widget.cardSurfaceStyle.hasPressEffect;
+    final cardPressed = activeUsesInset || _cardPressed;
     final avatarCardOffset = ExpenseSurface.pressOffset(
       style: widget.cardSurfaceStyle,
-      pressed: activeUsesInset,
+      pressed: cardPressed,
     );
     return SizedBox(
       key: ValueKey('vendor-filter-row-${widget.summary.name}'),
@@ -1939,61 +2084,83 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _editingName ? null : widget.onTap,
-              child: ExpensePressable(
-                enabled: widget.cardSurfaceStyle.hasPressEffect,
-                forcePressed: activeUsesInset,
-                builder: (context, pressed) {
-                  final radius = BorderRadius.circular(18);
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ExpenseSurfaceContainer(
-                        surfaceKey: ValueKey(
-                          'vendor-filter-row-surface-${widget.summary.name}',
-                        ),
-                        style: widget.cardSurfaceStyle,
-                        color: widget.cardSurfaceColor,
-                        borderRadius: radius,
-                        pressed: pressed,
-                        padding: const EdgeInsets.fromLTRB(10, 82, 10, 12),
-                        neutralBorder: Border.all(color: AppColors.gray200),
-                        neutralShadow: categoryNeutralShadow(
-                          widget.cardSurfaceStyle,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            _nameArea(),
-                            const SizedBox(height: 6),
-                            Text(
-                              '$amountPrefix${formatHuf(widget.summary.total)}',
-                              key: ValueKey(
-                                'vendor-filter-amount-${widget.summary.name}',
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) => _pressCard(),
+              onPointerUp: (_) => _releaseCardSoon(),
+              onPointerCancel: (_) => _releaseCardSoon(),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _editingName ? null : widget.onTap,
+                child: ExpensePressable(
+                  enabled: widget.cardSurfaceStyle.hasPressEffect,
+                  forcePressed: cardPressed,
+                  builder: (context, pressed) {
+                    final radius = BorderRadius.circular(18);
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ExpenseSurfaceContainer(
+                          surfaceKey: ValueKey(
+                            'vendor-filter-row-surface-${widget.summary.name}',
+                          ),
+                          style: widget.cardSurfaceStyle,
+                          color: widget.cardSurfaceColor,
+                          borderRadius: radius,
+                          pressed: pressed,
+                          padding: const EdgeInsets.fromLTRB(10, 76, 10, 12),
+                          neutralBorder: Border.all(color: AppColors.gray200),
+                          neutralShadow: categoryNeutralShadow(
+                            widget.cardSurfaceStyle,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              _nameArea(),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${widget.summary.count} tranzakció',
+                                key: ValueKey(
+                                  'vendor-filter-transaction-count-${widget.summary.name}',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  height: 1,
+                                  color: AppColors.gray500,
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: amountColor,
+                              const SizedBox(height: 2),
+                              Text(
+                                '$amountPrefix${formatHuf(widget.summary.total)}',
+                                key: ValueKey(
+                                  'vendor-filter-amount-${widget.summary.name}',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1,
+                                  fontWeight: FontWeight.w700,
+                                  color: amountColor,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      if (widget.selected &&
-                          !widget.cardSurfaceStyle.hasPressEffect)
-                        CategoryActiveBorder(
-                          radius: radius,
-                          color: widget.accentColor,
-                        ),
-                    ],
-                  );
-                },
+                        if (widget.selected &&
+                            !widget.cardSurfaceStyle.hasPressEffect)
+                          CategoryActiveBorder(
+                            radius: radius,
+                            color: widget.accentColor,
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -2016,8 +2183,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
                     ),
                     enabled: widget.avatarSurfaceStyle.hasPressEffect,
                     forcePressed:
-                        widget.selected &&
-                        widget.avatarSurfaceStyle.hasPressEffect,
+                        cardPressed && widget.avatarSurfaceStyle.hasPressEffect,
                     builder: (context, avatarPressed) {
                       return ExpenseSurfaceContainer(
                         surfaceKey: ValueKey(
@@ -2031,17 +2197,14 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
                         pressed: avatarPressed,
                         width: 65,
                         height: 65,
-                        child: Center(
-                          child: Text(
-                            _initials(widget.summary.name),
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                            style: const TextStyle(
-                              color: AppColors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
+                        child: CategoryIconBadge(
+                          iconSlot: widget.summary.categoryIconSlot,
+                          backgroundColor: Colors.transparent,
+                          size: 65,
+                          iconSize: 44,
+                          iconStrokeWidth: 1.35,
+                          showShadow: false,
+                          showQuestionMark: !hasCategoryIcon,
                         ),
                       );
                     },
@@ -2081,7 +2244,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
         key: ValueKey(
           'vendor-filter-name-editor-${widget.summary.originalName}',
         ),
-        height: 30,
+        height: 24,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: AppColors.white.withValues(alpha: 0.84),
@@ -2095,6 +2258,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
           controller: _nameController,
           focusNode: _nameFocusNode,
           textAlign: TextAlign.center,
+          textAlignVertical: TextAlignVertical.center,
           textInputAction: TextInputAction.done,
           cursorColor: widget.accentColor,
           maxLines: 1,
@@ -2107,10 +2271,11 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
             errorBorder: InputBorder.none,
             focusedErrorBorder: InputBorder.none,
             isDense: true,
-            contentPadding: EdgeInsets.only(bottom: 8),
+            contentPadding: EdgeInsets.zero,
           ),
           style: const TextStyle(
-            fontSize: 15,
+            fontSize: 14,
+            height: 1,
             fontWeight: FontWeight.w700,
             color: AppColors.gray800,
           ),
@@ -2122,7 +2287,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
       behavior: HitTestBehavior.opaque,
       onTap: _beginNameEdit,
       child: SizedBox(
-        height: 30,
+        height: 24,
         child: Center(
           child: Text(
             widget.summary.name,
@@ -2130,7 +2295,8 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 14,
+              height: 1,
               fontWeight: FontWeight.w700,
               color: AppColors.gray800,
             ),
@@ -2138,17 +2304,5 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
         ),
       ),
     );
-  }
-
-  static String _initials(String name) {
-    final words = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .toList();
-    if (words.isEmpty) return '?';
-    final first = words.first.characters.first.toUpperCase();
-    if (words.length == 1) return first;
-    return '$first${words.last.characters.first.toUpperCase()}';
   }
 }

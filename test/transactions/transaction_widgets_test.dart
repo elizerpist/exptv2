@@ -1073,6 +1073,7 @@ void main() {
   ) async {
     final record = sampleRecord();
     final category = sampleCategory();
+    var bodyTaps = 0;
     var categoryTaps = 0;
 
     await tester.pumpWidget(
@@ -1082,43 +1083,43 @@ void main() {
           category: category,
           surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
           avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          onTap: (_) => bodyTaps += 1,
           onCategoryFilter: (_) => categoryTaps += 1,
         ),
       ),
     );
+
+    final rowFinder = find.byKey(
+      ValueKey('transaction-logbox-content-${record.id}'),
+    );
+    final avatarSurfaceFinder = find.byKey(
+      ValueKey('transaction-logbox-avatar-surface-${record.id}'),
+    );
+    final releasedRowDecoration =
+        tester.widget<Container>(rowFinder).decoration! as BoxDecoration;
+    final releasedAvatarDecoration =
+        tester.widget<Container>(avatarSurfaceFinder).decoration!
+            as BoxDecoration;
 
     final gesture = await tester.startGesture(
       tester.getCenter(
         find.byKey(ValueKey('transaction-logbox-avatar-${record.id}')),
       ),
     );
-    await tester.pump(ExpenseSurface.pressDuration);
+    await tester.pump();
 
     final rowDecoration =
-        tester
-                .widget<Container>(
-                  find.byKey(
-                    ValueKey('transaction-logbox-content-${record.id}'),
-                  ),
-                )
-                .decoration!
-            as BoxDecoration;
+        tester.widget<Container>(rowFinder).decoration! as BoxDecoration;
     final avatarDecoration =
-        tester
-                .widget<Container>(
-                  find.byKey(
-                    ValueKey('transaction-logbox-avatar-surface-${record.id}'),
-                  ),
-                )
-                .decoration!
+        tester.widget<Container>(avatarSurfaceFinder).decoration!
             as BoxDecoration;
-    expect(rowDecoration.boxShadow, isNotNull);
-    expect(avatarDecoration.gradient, isNotNull);
-    expect(avatarDecoration.boxShadow, isNotNull);
+    expect(rowDecoration, releasedRowDecoration);
+    expect(avatarDecoration, isNot(releasedAvatarDecoration));
 
     await gesture.up();
     await tester.pumpAndSettle();
     expect(categoryTaps, 1);
+    expect(bodyTaps, 0);
   });
 
   testWidgets('logbox body press moves the card and avatar together', (
@@ -1127,6 +1128,7 @@ void main() {
     final record = sampleRecord();
     final category = sampleCategory();
     var bodyTaps = 0;
+    var categoryTaps = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1136,7 +1138,7 @@ void main() {
           surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
           avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
           onTap: (_) => bodyTaps += 1,
-          onCategoryFilter: (_) {},
+          onCategoryFilter: (_) => categoryTaps += 1,
         ),
       ),
     );
@@ -1149,32 +1151,88 @@ void main() {
       ValueKey('transaction-logbox-avatar-surface-${record.id}'),
     );
     final cardRect = tester.getRect(cardFinder);
+    final releasedDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
     final releasedAvatarDecoration =
         tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
 
     final gesture = await tester.startGesture(
-      cardRect.topLeft + const Offset(140, 36),
+      Offset(cardRect.right - 12, cardRect.top + 12),
     );
-    await tester.pump(ExpenseSurface.pressDuration);
+    await tester.pump();
 
     final pressedDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
     final pressedAvatarDecoration =
         tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
-    expect(pressedDecoration.boxShadow, isNull);
+    expect(pressedDecoration, isNot(releasedDecoration));
     expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
 
     await gesture.up();
     await tester.pumpAndSettle();
 
-    final releasedDecoration =
+    final finalDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
     final finalAvatarDecoration =
         tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
-    expect(releasedDecoration.boxShadow, isNotNull);
+    expect(finalDecoration.boxShadow, isNotNull);
     expect(finalAvatarDecoration, releasedAvatarDecoration);
     expect(bodyTaps, 1);
+    expect(categoryTaps, 0);
   });
+
+  testWidgets(
+    'body press drives avatar when only avatar surface is pressable',
+    (tester) async {
+      final record = sampleRecord();
+      final category = sampleCategory();
+      var bodyTaps = 0;
+      var categoryTaps = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TransactionLogBox(
+            record: record,
+            category: category,
+            surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+            avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onTap: (_) => bodyTaps += 1,
+            onCategoryFilter: (_) => categoryTaps += 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cardFinder = find.byKey(
+        ValueKey('transaction-logbox-content-${record.id}'),
+      );
+      final avatarFinder = find.byKey(
+        ValueKey('transaction-logbox-avatar-surface-${record.id}'),
+      );
+      final cardRect = tester.getRect(cardFinder);
+      final releasedDecoration =
+          tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+      final releasedAvatarDecoration =
+          tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+
+      final gesture = await tester.startGesture(
+        Offset(cardRect.right - 12, cardRect.top + 12),
+      );
+      await tester.pump();
+
+      final pressedDecoration =
+          tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+      final pressedAvatarDecoration =
+          tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+      expect(pressedDecoration, isNot(releasedDecoration));
+      expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(bodyTaps, 1);
+      expect(categoryTaps, 0);
+    },
+  );
 
   testWidgets('transaction log rows do not build swipe overlays while idle', (
     tester,
@@ -1603,6 +1661,116 @@ void main() {
 
     expect(categoryName, 'Rr');
   });
+
+  testWidgets('logbox surfaces do not spam debug logs while released', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+          surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+          onTap: (_) {},
+          onCategoryFilter: (_) {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      isNot(contains('surface key=transaction-logbox-content-250905')),
+    );
+    expect(
+      DebugConsole.allText,
+      isNot(contains('surface key=transaction-logbox-avatar-surface-250905')),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('transaction-logbox-content-250905')),
+    );
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      contains(
+        'surface key=transaction-logbox-content-250905 style=neutralInset',
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains(
+        'surface key=transaction-logbox-avatar-surface-250905 '
+        'style=neutralInset',
+      ),
+    );
+  });
+
+  testWidgets(
+    'logbox body tap renders neumorph body and avatar press together',
+    (tester) async {
+      DebugConsole.clear();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TransactionLogBox(
+            record: sampleRecord(),
+            category: sampleCategory(),
+            surfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+            avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onTap: (_) {},
+            onCategoryFilter: (_) {},
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('transaction-logbox-content-250905')),
+      );
+      await tester.pump();
+
+      expect(
+        DebugConsole.allText,
+        contains(
+          'surface key=transaction-logbox-content-250905 style=neutralInset',
+        ),
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          'surface key=transaction-logbox-content-250905 style=neutralInset '
+          'profile=standard color=#ffffffff primary=false pressed=true '
+          'offset=0,2',
+        ),
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          'surface key=transaction-logbox-avatar-surface-250905 '
+          'style=neutralInset profile=standard',
+        ),
+      );
+
+      DebugConsole.clear();
+      await tester.tap(
+        find.byKey(const ValueKey('transaction-logbox-avatar-250905')),
+      );
+      await tester.pump();
+
+      expect(
+        DebugConsole.allText,
+        isNot(
+          contains(
+            'surface key=transaction-logbox-content-250905 '
+            'style=neutralInset profile=standard color=#ffffffff '
+            'primary=false pressed=true',
+          ),
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'transaction logbox merchant name opens edit transaction not rename dialog',

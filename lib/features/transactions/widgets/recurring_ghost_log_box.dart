@@ -107,6 +107,7 @@ class RecurringGhostLogBox extends StatelessWidget {
       iconSize: 28,
       iconStrokeWidth: 1.35,
       showShadow: false,
+      debugSource: 'recurring-ghost-logbox',
     );
     return SizedBox.square(
       dimension: 46,

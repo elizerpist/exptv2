@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/debug/debug_console.dart';
+import '../../../../core/keyboard/keyboard_inset_follower.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
@@ -293,14 +294,14 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
       _focusStartedAt = DateTime.now();
       DebugConsole.log(
         '[KeyboardFlow] $label focus request field=name '
-        'keyboard=${_keyboardInsetText()}',
+        '${_keyboardTraceText()}',
       );
       DebugConsole.log('[Perf] $label focus field=name active=true');
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_nameFocus.hasFocus) return;
         DebugConsole.log(
           '[KeyboardFlow] $label focus frame field=name '
-          'keyboard=${_keyboardInsetText()} '
+          '${_keyboardTraceText()} '
           'elapsed=${_elapsedMs(_focusStartedAt)}ms',
         );
         DebugConsole.log(
@@ -314,15 +315,20 @@ class _CategoryEditorPanelState extends State<CategoryEditorPanel> {
     );
     DebugConsole.log(
       '[KeyboardFlow] $label focus clear field=name '
-      'keyboard=${_keyboardInsetText()} '
+      '${_keyboardTraceText()} '
       'elapsed=${_elapsedMs(_focusStartedAt)}ms',
     );
     _focusStartedAt = null;
   }
 
-  String _keyboardInsetText() {
-    return (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0)
-        .toStringAsFixed(1);
+  String _keyboardTraceText() {
+    final snapshot = KeyboardInsetReader.snapshotOf(context);
+    return 'keyboard=${snapshot.inset.toStringAsFixed(1)} '
+        'source=${snapshot.source} '
+        'phase=${snapshot.phase ?? 'none'} '
+        'seq=${snapshot.sequence?.toString() ?? 'n/a'} '
+        'ageMs=${snapshot.ageMs?.toString() ?? 'n/a'} '
+        'fallback=${snapshot.fallbackInset.toStringAsFixed(1)}';
   }
 
   int _elapsedMs(DateTime? startedAt) {

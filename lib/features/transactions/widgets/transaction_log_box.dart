@@ -68,6 +68,19 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   bool get _hasCustomName =>
       widget.record.userAssignedName?.trim().isNotEmpty ?? false;
 
+  bool get _bodyPressEnabled =>
+      widget.surfaceStyle.hasPressEffect ||
+      widget.avatarSurfaceStyle.hasPressEffect;
+
+  ExpenseSurfaceInteraction get _effectiveBodySurfaceStyle {
+    if (_bodyPressed &&
+        widget.surfaceStyle == ExpenseSurfaceInteraction.neutralNeutral &&
+        widget.avatarSurfaceStyle.hasPressEffect) {
+      return ExpenseSurfaceInteraction.neutralInset;
+    }
+    return widget.surfaceStyle;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -144,13 +157,13 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   }
 
   void _pressBody() {
-    if (!widget.surfaceStyle.hasPressEffect) return;
+    if (!_bodyPressEnabled) return;
     _bodyReleaseTimer?.cancel();
     _setBodyPressed(true);
   }
 
   void _releaseBodySoon() {
-    if (!widget.surfaceStyle.hasPressEffect) return;
+    if (!_bodyPressEnabled) return;
     _bodyReleaseTimer?.cancel();
     _bodyReleaseTimer = Timer(const Duration(milliseconds: 120), () {
       _setBodyPressed(false);
@@ -158,7 +171,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   }
 
   Widget _bodyPressRegion(Widget child) {
-    if (!widget.surfaceStyle.hasPressEffect) return child;
+    if (!_bodyPressEnabled) return child;
     return Listener(
       onPointerDown: (_) => _pressBody(),
       onPointerUp: (_) => _releaseBodySoon(),
@@ -205,6 +218,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
         iconStrokeWidth: 1.35,
         showShadow: false,
         showQuestionMark: uncategorized,
+        debugSource: 'transaction-logbox',
       );
     }
     return _avatarIcon!;
@@ -259,7 +273,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                         surfaceKey: ValueKey(
                           'transaction-logbox-content-${widget.record.id}',
                         ),
-                        style: widget.surfaceStyle,
+                        style: _effectiveBodySurfaceStyle,
                         color: widget.surfaceColor,
                         borderRadius: BorderRadius.circular(25),
                         pressed: _bodyPressed,

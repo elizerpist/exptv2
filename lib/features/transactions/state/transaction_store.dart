@@ -28,6 +28,7 @@ class VendorFilterSummary {
     required this.total,
     required this.count,
     this.colorHex,
+    this.categoryIconSlot,
     this.hasCustomName = false,
   });
 
@@ -36,7 +37,28 @@ class VendorFilterSummary {
   final double total;
   final int count;
   final String? colorHex;
+  final int? categoryIconSlot;
   final bool hasCustomName;
+}
+
+class _VendorCategoryRollup {
+  const _VendorCategoryRollup({
+    required this.category,
+    required this.total,
+    required this.count,
+  });
+
+  final TransactionCategory category;
+  final double total;
+  final int count;
+
+  _VendorCategoryRollup add(double amount) {
+    return _VendorCategoryRollup(
+      category: category,
+      total: total + amount,
+      count: count + 1,
+    );
+  }
 }
 
 class TransactionStore extends ChangeNotifier {
@@ -73,7 +95,7 @@ class TransactionStore extends ChangeNotifier {
   List<RecurringGhostRecord> _recurringGhostTransactionsView = const [];
   List<CategoryLimit> _limitsView = const [];
   Map<int, TransactionCategory> _categoriesById = const {};
-  Map<int, int> _categoryTransactionCounts = const {};
+  final _categoryTransactionCountsCache = <String, Map<int, int>>{};
   final _activeCategoriesCache = <TransactionType, List<TransactionCategory>>{};
   final _windowedTransactionsCache = <String, List<TransactionRecord>>{};
   final _visibleTransactionsCache = <String, List<TransactionRecord>>{};
@@ -118,7 +140,8 @@ class TransactionStore extends ChangeNotifier {
     return '${ids.length} kategória';
   }
 
-  Map<int, int> get categoryTransactionCounts => _categoryTransactionCounts;
+  Map<int, int> get categoryTransactionCounts =>
+      _categoryTransactionCountsFor(_filter.type);
   Map<int, TransactionCategory> get categoriesById => _categoriesById;
   List<VendorFilterSummary> get vendorFilterSummaries =>
       _vendorFilterSummariesFor(_filter.type);
@@ -301,6 +324,21 @@ class TransactionStore extends ChangeNotifier {
     );
     _windowedTransactionsCache[key] = rows;
     _logCacheBuild('windowed-${type.name}', key, stopwatch, rows.length);
+    return rows;
+  }
+
+  Map<int, int> _categoryTransactionCountsFor(TransactionType type) {
+    final key = _windowCacheKey(type);
+    final cached = _categoryTransactionCountsCache[key];
+    if (cached != null) return cached;
+    final counts = <int, int>{};
+    for (final transaction in _windowedTransactionsFor(type)) {
+      final categoryId = transaction.transactionCategoryID;
+      if (categoryId == null) continue;
+      counts.update(categoryId, (value) => value + 1, ifAbsent: () => 1);
+    }
+    final rows = Map<int, int>.unmodifiable(counts);
+    _categoryTransactionCountsCache[key] = rows;
     return rows;
   }
 
@@ -561,14 +599,15 @@ class TransactionStore extends ChangeNotifier {
     final counts = <String, int>{};
     final displayNames = <String, String>{};
     final customNames = <String, bool>{};
-    final colors = <String, String?>{};
+    final categoryRollups = <String, Map<int, _VendorCategoryRollup>>{};
     for (final record in _windowedTransactionsFor(type)) {
       final originalName = record.merchant.trim();
       final displayName = record.displayMerchant.trim();
       final key = originalName.isEmpty ? displayName : originalName;
       final name = displayName.isEmpty ? key : displayName;
       if (key.isEmpty || name.isEmpty) continue;
-      totals[key] = (totals[key] ?? 0) + record.amount.abs();
+      final amount = record.amount.abs();
+      totals[key] = (totals[key] ?? 0) + amount;
       counts[key] = (counts[key] ?? 0) + 1;
       final assignedName = record.userAssignedName?.trim();
       if (assignedName != null &&
@@ -580,24 +619,36 @@ class TransactionStore extends ChangeNotifier {
         displayNames.putIfAbsent(key, () => name);
         customNames.putIfAbsent(key, () => false);
       }
-      colors.putIfAbsent(key, () {
-        final categoryId = record.transactionCategoryID;
-        if (categoryId == null) return null;
-        final category = _categoriesById[categoryId];
-        return category?.slotColorHex;
-      });
+      final categoryId = record.transactionCategoryID;
+      final category = categoryId == null ? null : _categoriesById[categoryId];
+      if (category != null) {
+        final vendorCategories = categoryRollups.putIfAbsent(
+          key,
+          () => <int, _VendorCategoryRollup>{},
+        );
+        vendorCategories.update(
+          category.transactionCategoryID,
+          (rollup) => rollup.add(amount),
+          ifAbsent: () => _VendorCategoryRollup(
+            category: category,
+            total: amount,
+            count: 1,
+          ),
+        );
+      }
     }
     final rows =
         [
-          for (final entry in totals.entries)
-            VendorFilterSummary(
-              name: displayNames[entry.key] ?? entry.key,
-              originalName: entry.key,
+          for (final entry in totals.entries) ...[
+            _vendorSummaryFor(
+              key: entry.key,
               total: entry.value,
               count: counts[entry.key] ?? 0,
-              colorHex: colors[entry.key],
+              displayName: displayNames[entry.key] ?? entry.key,
               hasCustomName: customNames[entry.key] ?? false,
+              categoryRollups: categoryRollups[entry.key],
             ),
+          ],
         ]..sort((left, right) {
           final totalOrder = right.total.compareTo(left.total);
           if (totalOrder != 0) return totalOrder;
@@ -606,9 +657,49 @@ class TransactionStore extends ChangeNotifier {
     return List<VendorFilterSummary>.unmodifiable(rows);
   }
 
+  VendorFilterSummary _vendorSummaryFor({
+    required String key,
+    required double total,
+    required int count,
+    required String displayName,
+    required bool hasCustomName,
+    required Map<int, _VendorCategoryRollup>? categoryRollups,
+  }) {
+    final category = _dominantVendorCategory(categoryRollups);
+    return VendorFilterSummary(
+      name: displayName,
+      originalName: key,
+      total: total,
+      count: count,
+      colorHex: category?.slotColorHex,
+      categoryIconSlot: category?.iconSlot,
+      hasCustomName: hasCustomName,
+    );
+  }
+
+  TransactionCategory? _dominantVendorCategory(
+    Map<int, _VendorCategoryRollup>? rollups,
+  ) {
+    if (rollups == null || rollups.isEmpty) return null;
+    final ranked = rollups.values.toList()
+      ..sort((left, right) {
+        final totalOrder = right.total.compareTo(left.total);
+        if (totalOrder != 0) return totalOrder;
+        final countOrder = right.count.compareTo(left.count);
+        if (countOrder != 0) return countOrder;
+        final nameOrder = left.category.name.compareTo(right.category.name);
+        if (nameOrder != 0) return nameOrder;
+        return left.category.transactionCategoryID.compareTo(
+          right.category.transactionCategoryID,
+        );
+      });
+    return ranked.first.category;
+  }
+
   void _invalidateViewCaches() {
     _activeCategoriesCache.clear();
     _windowedTransactionsCache.clear();
+    _categoryTransactionCountsCache.clear();
     _visibleTransactionsCache.clear();
     _visibleGhostTransactionsCache.clear();
     _visibleLogEntriesCache.clear();
@@ -1442,13 +1533,6 @@ class TransactionStore extends ChangeNotifier {
       for (final category in _categories)
         category.transactionCategoryID: category,
     });
-    final counts = <int, int>{};
-    for (final transaction in _transactions) {
-      final categoryId = transaction.transactionCategoryID;
-      if (categoryId == null) continue;
-      counts.update(categoryId, (value) => value + 1, ifAbsent: () => 1);
-    }
-    _categoryTransactionCounts = Map.unmodifiable(counts);
   }
 
   bool _ghostIsBeforeCurrentMonth(RecurringGhostRecord ghost) {

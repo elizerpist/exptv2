@@ -1,4 +1,5 @@
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/core/keyboard/native_keyboard_insets.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_editor_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
@@ -118,6 +119,25 @@ void main() {
   });
 
   testWidgets(
+    'category editor keeps inner layout metrics stable while keyboard is open',
+    (tester) async {
+      final closed = await _pumpCategoryEditorMetrics(tester, keyboardInset: 0);
+      final open = await _pumpCategoryEditorMetrics(tester, keyboardInset: 180);
+
+      expect(open['sheetTop'], lessThan(closed['sheetTop']!));
+      for (final key in <String>[
+        'titleTop',
+        'nameTop',
+        'slotGridTop',
+        'previewTop',
+        'saveTop',
+      ]) {
+        expect(open[key], moreOrLessEquals(closed[key]!, epsilon: 0.1));
+      }
+    },
+  );
+
+  testWidgets(
     'slide card translates by keyboard inset without resizing panel',
     (tester) async {
       DebugConsole.clear();
@@ -158,6 +178,132 @@ void main() {
           '[SlideUpMenu] KeyboardMenu layout available=600.0 panel=260.0',
         ),
       );
+    },
+  );
+
+  testWidgets(
+    'slide card follows local IME session without rebuilding content',
+    (tester) async {
+      DebugConsole.clear();
+      NativeKeyboardInsets.instance.debugResetForTesting();
+      addTearDown(NativeKeyboardInsets.instance.debugResetForTesting);
+
+      var childBuilds = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(390, 600)),
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: SizedBox(
+                width: 390,
+                height: 600,
+                child: SlideUpMenuCard(
+                  cardKey: const ValueKey('test-slide-card'),
+                  debugLabel: 'SessionMenu',
+                  panelHeight: 260,
+                  child: Builder(
+                    builder: (context) {
+                      childBuilds++;
+                      return const SizedBox(height: 260);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_slideCardTranslationY(tester), moreOrLessEquals(0));
+      final stableChildBuilds = childBuilds;
+
+      final sessionStart = DateTime.now().add(const Duration(seconds: 1));
+      NativeKeyboardInsets.instance.debugSetSessionForTesting(
+        NativeKeyboardAnimationSession(
+          phase: KeyboardAnimationPhase.start,
+          sequence: 88,
+          startInset: 0,
+          endInset: 252,
+          currentInset: 0,
+          duration: const Duration(milliseconds: 200),
+          fraction: 0,
+          receivedAt: DateTime.now(),
+          startedAt: sessionStart,
+          nativeSource: 'WindowInsetsAnimation',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final sessionTranslation = _slideCardTranslationY(tester);
+      expect(sessionTranslation, lessThan(-40));
+      expect(sessionTranslation, greaterThan(-252));
+      expect(childBuilds, stableChildBuilds);
+      expect(
+        RegExp(
+          r'SessionMenu keyboard lift .*source=local-ime-session',
+        ).allMatches(DebugConsole.allText),
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets(
+    'slide card keeps delayed local IME session through remaining transition',
+    (tester) async {
+      DebugConsole.clear();
+      NativeKeyboardInsets.instance.debugResetForTesting();
+      addTearDown(NativeKeyboardInsets.instance.debugResetForTesting);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(390, 600)),
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: SizedBox(
+                width: 390,
+                height: 600,
+                child: SlideUpMenuCard(
+                  cardKey: const ValueKey('test-slide-card'),
+                  debugLabel: 'DelayedSessionMenu',
+                  panelHeight: 260,
+                  child: const SizedBox(height: 260),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      NativeKeyboardInsets.instance.debugSetSessionForTesting(
+        NativeKeyboardAnimationSession(
+          phase: KeyboardAnimationPhase.start,
+          sequence: 89,
+          startInset: 0,
+          endInset: 252,
+          currentInset: 126,
+          duration: const Duration(milliseconds: 200),
+          fraction: 0.5,
+          receivedAt: DateTime.now(),
+          startedAt: DateTime.now().subtract(const Duration(milliseconds: 100)),
+          nativeSource: 'WindowInsetsAnimation',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final translation = _slideCardTranslationY(tester);
+      expect(translation, lessThan(-160));
+      expect(translation, greaterThan(-235));
+      expect(
+        DebugConsole.allText,
+        contains('DelayedSessionMenu keyboard lift'),
+      );
+      expect(DebugConsole.allText, contains('source=local-ime-session'));
     },
   );
 
@@ -650,6 +796,55 @@ double _slideCardTranslationY(WidgetTester tester) {
     find.byKey(const ValueKey('slide-up-menu-transform')),
   );
   return transform.transform.getTranslation().y;
+}
+
+Future<Map<String, double>> _pumpCategoryEditorMetrics(
+  WidgetTester tester, {
+  required double keyboardInset,
+}) async {
+  DebugConsole.clear();
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(
+          size: const Size(390, 720),
+          viewInsets: EdgeInsets.only(bottom: keyboardInset),
+        ),
+        child: Scaffold(
+          resizeToAvoidBottomInset: false,
+          body: SizedBox(
+            width: 390,
+            height: 720,
+            child: CategoryEditorSheet(
+              activeType: TransactionType.expense,
+              panelHeight: 560,
+              onSave: (_) {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  final sheetTop = tester
+      .getTopLeft(find.byKey(const ValueKey('category-editor-slide-card')))
+      .dy;
+  double relativeTop(Finder finder) => tester.getTopLeft(finder).dy - sheetTop;
+
+  return <String, double>{
+    'sheetTop': sheetTop,
+    'titleTop': relativeTop(find.text('Új kiadási kategória')),
+    'nameTop': relativeTop(find.byKey(const ValueKey('category-name-input'))),
+    'slotGridTop': relativeTop(
+      find.byKey(const ValueKey('category-slot-page-view')),
+    ),
+    'previewTop': relativeTop(
+      find.byKey(const ValueKey('category-preview-pill-surface')),
+    ),
+    'saveTop': relativeTop(find.byKey(const ValueKey('category-save-button'))),
+  };
 }
 
 double _veilOpacity(WidgetTester tester) {

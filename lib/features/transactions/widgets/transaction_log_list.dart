@@ -80,6 +80,11 @@ class _TransactionLogListState extends State<TransactionLogList> {
   int _buildPassId = 0;
   int? _lastLoggedBuildEntryCount;
   bool? _lastLoggedBuildHasMore;
+  bool _loggedFirstIconListBuild = false;
+  var _builtRowsInPass = 0;
+  var _builtRecordsInPass = 0;
+  var _builtGhostsInPass = 0;
+  var _builtHeadersInPass = 0;
   DateTime? _lastScrollStartedAt;
   DateTime? _lastScrollEventAt;
   DateTime? _lastScrollUpdateLogAt;
@@ -103,6 +108,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
   Widget build(BuildContext context) {
     final logEntries = widget.entries ?? _entries();
     final buildPassId = _beginBuildPass();
+    _logFirstIconListBuild(logEntries);
     _logBuildMetrics(logEntries.length, buildPassId);
     if (logEntries.isEmpty) {
       return const Center(
@@ -125,12 +131,15 @@ class _TransactionLogListState extends State<TransactionLogList> {
         itemCount: logEntries.length,
         itemBuilder: (context, index) {
           final entry = logEntries[index];
+          _builtRowsInPass += 1;
           final header = entry.header;
           if (header != null) {
+            _builtHeadersInPass += 1;
             return _DateHeader(date: header);
           }
           final ghost = entry.ghost;
           if (ghost != null) {
+            _builtGhostsInPass += 1;
             return RecurringGhostLogBox(
               key: ValueKey('recurring-ghost-log-row-${ghost.id}'),
               ghost: ghost,
@@ -143,6 +152,7 @@ class _TransactionLogListState extends State<TransactionLogList> {
             );
           }
           final record = entry.record!;
+          _builtRecordsInPass += 1;
           final category = _categoryForId(record.transactionCategoryID);
           return TransactionLogBox(
             key: ValueKey('transaction-log-row-${record.id}'),
@@ -252,7 +262,52 @@ class _TransactionLogListState extends State<TransactionLogList> {
 
   int _beginBuildPass() {
     _buildPassId += 1;
+    _builtRowsInPass = 0;
+    _builtRecordsInPass = 0;
+    _builtGhostsInPass = 0;
+    _builtHeadersInPass = 0;
     return _buildPassId;
+  }
+
+  void _logFirstIconListBuild(List<TransactionLogEntry> entries) {
+    if (_loggedFirstIconListBuild) return;
+    _loggedFirstIconListBuild = true;
+    final hasSourceCounts =
+        widget.records.isNotEmpty || widget.ghostRecords.isNotEmpty;
+    final canScanEntries = !hasSourceCounts && entries.length <= 500;
+    var scannedRecords = 0;
+    var scannedGhosts = 0;
+    if (canScanEntries) {
+      for (final entry in entries) {
+        if (entry.record != null) scannedRecords += 1;
+        if (entry.ghost != null) scannedGhosts += 1;
+      }
+    }
+    final recordCount = hasSourceCounts
+        ? '${widget.records.length}'
+        : canScanEntries
+        ? '$scannedRecords'
+        : 'n/a';
+    final ghostCount = hasSourceCounts
+        ? '${widget.ghostRecords.length}'
+        : canScanEntries
+        ? '$scannedGhosts'
+        : 'n/a';
+    final visibleRows = hasSourceCounts
+        ? '${widget.records.length + widget.ghostRecords.length}'
+        : canScanEntries
+        ? '${scannedRecords + scannedGhosts}'
+        : 'n/a';
+    final source = hasSourceCounts
+        ? 'props'
+        : canScanEntries
+        ? 'small-entries'
+        : 'large-entries';
+    DebugConsole.log(
+      '[LogBoxIcon] first list build entries=${entries.length} '
+      'visibleRows=$visibleRows records=$recordCount '
+      'ghosts=$ghostCount source=$source',
+    );
   }
 
   void _logBuildMetrics(int entryCount, int buildPassId) {
@@ -273,7 +328,9 @@ class _TransactionLogListState extends State<TransactionLogList> {
       final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
       DebugConsole.log(
         '[Perf] LogList frame id=$buildPassId entries=$entryCount elapsed=${elapsed}ms '
-        'jank=${elapsed > 32}',
+        'jank=${elapsed > 32} builtRows=$_builtRowsInPass '
+        'builtRecords=$_builtRecordsInPass builtGhosts=$_builtGhostsInPass '
+        'builtHeaders=$_builtHeadersInPass',
       );
     });
   }
