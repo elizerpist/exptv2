@@ -386,6 +386,121 @@ void main() {
     );
   });
 
+  testWidgets(
+    'vendor sheet search filters rows and keeps card fixed for keyboard',
+    (tester) async {
+      final repository = FakeTransactionRepository();
+      repository.transactions
+        ..clear()
+        ..addAll([
+          TransactionRecord.fromMap({
+            'id': 1,
+            'date': '2025.09.25',
+            'time': '20:30:00',
+            'merchant': 'Alpha Market',
+            'amount': -100,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+          TransactionRecord.fromMap({
+            'id': 2,
+            'date': '2025.09.25',
+            'time': '20:31:00',
+            'merchant': 'Beta Bolt',
+            'amount': -200,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+          TransactionRecord.fromMap({
+            'id': 3,
+            'date': '2025.09.25',
+            'time': '20:32:00',
+            'merchant': 'Gamma Shop',
+            'amount': -300,
+            'userAssignedName': null,
+            'transactionCategoryID': 6,
+          }),
+        ]);
+      final store = TransactionStore(repository);
+      final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 919),
+              viewInsets: EdgeInsets.only(bottom: 180),
+            ),
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: SizedBox(
+                width: 390,
+                height: 919,
+                child: TransactionHomePage(store: store, expenseTheme: theme),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('vendor-filter-search-pill')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-search-field')),
+        findsOneWidget,
+      );
+      expect(find.text('3 vendor'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Alpha Market')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Beta Bolt')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Gamma Shop')),
+        findsOneWidget,
+      );
+
+      final transform = tester.widget<Transform>(
+        find.byKey(const ValueKey('slide-up-menu-transform')),
+      );
+      expect(transform.transform.getTranslation().y, moreOrLessEquals(0));
+
+      final footerRect = tester.getRect(
+        find.byKey(const ValueKey('vendor-filter-footer')),
+      );
+      expect(footerRect.bottom, lessThanOrEqualTo(919 - 180));
+
+      await tester.enterText(
+        find.byKey(const ValueKey('vendor-filter-search-field')),
+        'beta',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 vendor'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Alpha Market')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Beta Bolt')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('vendor-filter-row-Gamma Shop')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {

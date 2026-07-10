@@ -99,7 +99,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: while the keyboard is visible, the vendor list scroll area's usable height is reduced by the same keyboard inset so list content is not covered by the moved footer.
 - Acceptance condition: the vendor search pill, list, footer, and keyboard behavior must not break the vendor sheet drag/scroll rule from BUG2-006/BUG2-013: list scroll remains independent and sheet drag is allowed only from the top state/handle as specified.
 - Verification method: add/update widget tests that open vendor sheet, assert vendor search pill and `x vendor` count are visible, enter text and verify vendor rows/count filter, simulate keyboard/viewInsets and assert the sheet card top/height are unchanged while footer button and white padding move above keyboard and list viewport bottom stops above the moved footer.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-008 - Vendor cardok ABC szerinti tagolása
 

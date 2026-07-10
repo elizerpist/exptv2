@@ -1182,6 +1182,7 @@ class _CategoryMenuPickerSlotState extends State<_CategoryMenuPickerSlot> {
           dragFromHandleOnly: true,
           dragHandleExtent: 72,
           verticalDragBias: 1.2,
+          keyboardAvoidance: false,
           child: SafeArea(
             top: false,
             bottom: false,
@@ -1278,6 +1279,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
           dragFromHandleOnly: true,
           dragHandleExtent: 72,
           verticalDragBias: 1.2,
+          keyboardAvoidance: false,
           child: SafeArea(
             top: false,
             bottom: false,

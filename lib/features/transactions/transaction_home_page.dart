@@ -430,6 +430,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     dragFromHandleOnly: true,
                     dragHandleExtent: 72,
                     verticalDragBias: 1.2,
+                    keyboardAvoidance: false,
                     child: SafeArea(
                       top: false,
                       bottom: false,
@@ -471,6 +472,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                     dragFromHandleOnly: true,
                     dragHandleExtent: 72,
                     verticalDragBias: 1.2,
+                    keyboardAvoidance: false,
                     child: SafeArea(
                       top: false,
                       bottom: false,
@@ -1346,7 +1348,7 @@ class _TransactionListHeader extends StatelessWidget {
   }
 }
 
-class VendorFilterPanel extends StatelessWidget {
+class VendorFilterPanel extends StatefulWidget {
   const VendorFilterPanel({
     required this.summaries,
     required this.selectedVendors,
@@ -1366,71 +1368,207 @@ class VendorFilterPanel extends StatelessWidget {
   final VoidCallback onApply;
 
   @override
+  State<VendorFilterPanel> createState() => _VendorFilterPanelState();
+}
+
+class _VendorFilterPanelState extends State<VendorFilterPanel> {
+  late final TextEditingController _searchController;
+  var _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom + 8;
+    final safeBottomInset = MediaQuery.paddingOf(context).bottom + 8;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final visibleSummaries = _visibleSummaries();
+    final listBottomPadding = 84 + safeBottomInset + keyboardInset;
     return ColoredBox(
       color: AppColors.white,
-      child: Column(
+      child: Stack(
         children: [
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              width: 42,
-              height: 4,
-              decoration: const BoxDecoration(
-                color: AppColors.gray200,
-                borderRadius: BorderRadius.all(Radius.circular(2)),
+          Column(
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.gray200,
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(
+                height: 46,
+                child: Center(
+                  child: Text(
+                    'Vendor lista',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.gray800,
+                    ),
+                  ),
+                ),
+              ),
+              _VendorSearchPill(
+                controller: _searchController,
+                count: visibleSummaries.length,
+                surfaceStyle: widget.buttonSurfaceStyle,
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              Expanded(
+                child: widget.summaries.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Nincs vendor az időszakban',
+                          style: TextStyle(color: AppColors.gray500),
+                        ),
+                      )
+                    : ListView.separated(
+                        key: const ValueKey('vendor-filter-list'),
+                        controller: widget.scrollController,
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          8,
+                          20,
+                          listBottomPadding,
+                        ),
+                        itemCount: visibleSummaries.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final summary = visibleSummaries[index];
+                          return _VendorFilterRow(
+                            summary: summary,
+                            selected: widget.selectedVendors.contains(
+                              summary.name,
+                            ),
+                            accentColor: widget.accentColor,
+                            buttonSurfaceStyle: widget.buttonSurfaceStyle,
+                            onTap: () => widget.onToggle(summary.name),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
-          const SizedBox(
-            height: 54,
-            child: Center(
-              child: Text(
-                'Vendor lista',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.gray800,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: keyboardInset,
+            child: ColoredBox(
+              key: const ValueKey('vendor-filter-footer'),
+              color: AppColors.white,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(20, 12, 20, safeBottomInset),
+                child: ExpenseSurfaceButton(
+                  buttonKey: const ValueKey('vendor-filter-apply-button'),
+                  label: 'Szűrőbeállítás',
+                  onPressed: widget.onApply,
+                  surfaceStyle: widget.buttonSurfaceStyle,
+                  color: widget.accentColor,
+                  foregroundColor: AppColors.white,
                 ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  List<VendorFilterSummary> _visibleSummaries() {
+    final needle = _query.trim().toLowerCase();
+    if (needle.isEmpty) return widget.summaries;
+    return [
+      for (final summary in widget.summaries)
+        if (summary.name.toLowerCase().contains(needle)) summary,
+    ];
+  }
+}
+
+class _VendorSearchPill extends StatelessWidget {
+  const _VendorSearchPill({
+    required this.controller,
+    required this.count,
+    required this.surfaceStyle,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final int count;
+  final ExpenseSurfaceInteraction surfaceStyle;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpenseSurfaceContainer(
+      surfaceKey: const ValueKey('vendor-filter-search-pill'),
+      style: surfaceStyle,
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(25),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      constraints: const BoxConstraints(minHeight: 46),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      neutralBorder: Border.all(color: AppColors.gray200),
+      neutralShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.1),
+          offset: const Offset(0, 2),
+          blurRadius: 3,
+        ),
+      ],
+      child: Row(
+        children: [
+          const Icon(Icons.search, size: 18, color: AppColors.gray400),
+          const SizedBox(width: 8),
           Expanded(
-            child: summaries.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Nincs vendor az időszakban',
-                      style: TextStyle(color: AppColors.gray500),
-                    ),
-                  )
-                : ListView.separated(
-                    key: const ValueKey('vendor-filter-list'),
-                    controller: scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                    itemCount: summaries.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final summary = summaries[index];
-                      return _VendorFilterRow(
-                        summary: summary,
-                        selected: selectedVendors.contains(summary.name),
-                        accentColor: accentColor,
-                        buttonSurfaceStyle: buttonSurfaceStyle,
-                        onTap: () => onToggle(summary.name),
-                      );
-                    },
-                  ),
+            child: TextField(
+              key: const ValueKey('vendor-filter-search-field'),
+              controller: controller,
+              onChanged: onChanged,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                filled: true,
+                fillColor: Colors.transparent,
+                contentPadding: EdgeInsets.zero,
+                hintText: 'Vendor keresés',
+                isDense: true,
+              ),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.gray800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset),
-            child: ExpenseSurfaceButton(
-              buttonKey: const ValueKey('vendor-filter-apply-button'),
-              label: 'Szűrőbeállítás',
-              onPressed: onApply,
-              surfaceStyle: buttonSurfaceStyle,
-              color: accentColor,
-              foregroundColor: AppColors.white,
+          const SizedBox(width: 8),
+          Text(
+            '$count vendor',
+            key: const ValueKey('vendor-filter-count'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.gray500,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
