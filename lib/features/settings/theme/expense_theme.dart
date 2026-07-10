@@ -100,7 +100,7 @@ class ExpenseTheme {
       border: AppColors.gray200,
       buttonSurfaceStyle: buttonSurfaceStyle,
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
-      summaryPillSurfaceStyle: settings.summaryPillSurfaceStyle,
+      summaryPillSurfaceStyle: buttonSurfaceStyle,
       bottomNavSurfaceStyle: buttonSurfaceStyle,
       forcedInsetSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,

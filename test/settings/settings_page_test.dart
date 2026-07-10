@@ -267,7 +267,7 @@ void main() {
     expect(find.text('Mágneskártya'), findsOneWidget);
     expect(find.text('Gombok felülete'), findsOneWidget);
     expect(find.text('Logboxok felülete'), findsNothing);
-    expect(find.text('Summary pill nyomása'), findsOneWidget);
+    expect(find.text('Summary pill nyomása'), findsNothing);
     expect(find.text('Design profil'), findsNothing);
 
     expect(find.text('Kategória sheet színe'), findsOneWidget);
@@ -364,7 +364,7 @@ void main() {
     expect(find.text('Design profil'), findsNothing);
     expect(find.text('Gombok felülete'), findsOneWidget);
     expect(find.text('Logboxok felülete'), findsNothing);
-    expect(find.text('Summary pill nyomása'), findsOneWidget);
+    expect(find.text('Summary pill nyomása'), findsNothing);
     expect(
       find.byKey(const ValueKey('theme-button-surface-normal')),
       findsOneWidget,
@@ -387,11 +387,11 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('theme-summary-pill-surface-normal')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('theme-summary-pill-surface-neumorph')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('App színe'), findsOneWidget);
     expect(find.text('Kategória menü mód'), findsNothing);
@@ -436,6 +436,10 @@ void main() {
       ExpenseSurfaceInteraction.neutralInset,
     );
     expect(
+      updated.last.summaryPillSurfaceStyle,
+      ExpenseSurfaceInteraction.neutralInset,
+    );
+    expect(
       updated.last.contentSurfaceStyle,
       ExpenseSurfaceInteraction.neutralNeutral,
     );
@@ -444,13 +448,6 @@ void main() {
       ExpenseSurfaceInteraction.neutralNeutral,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('theme-summary-pill-surface-neumorph')),
-    );
-    expect(
-      updated.last.summaryPillSurfaceStyle,
-      ExpenseSurfaceInteraction.neutralInset,
-    );
     expect(
       find.byKey(const ValueKey('theme-category-menu-surface-neumorph')),
       findsNothing,

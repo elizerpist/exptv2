@@ -323,7 +323,7 @@ void main() {
         'boxColor': 'gray',
         'buttonSurfaceStyle': 'neutralInset',
         'contentSurfaceStyle': 'neutralInset',
-        'summaryPillSurfaceStyle': 'neutralInset',
+        'summaryPillSurfaceStyle': 'neutralNeutral',
         'ghostLogboxSurfaceStyle': 'insetInset',
         'ghostLogboxSettings': <String, Object?>{
           'borderStyle': 'normal',
@@ -411,7 +411,7 @@ void main() {
     expect(payload['cardColor'], 'darkgray');
     expect(payload['buttonSurfaceStyle'], 'neutralInset');
     expect(payload['contentSurfaceStyle'], 'neutralInset');
-    expect(payload['summaryPillSurfaceStyle'], 'neutralInset');
+    expect(payload.containsKey('summaryPillSurfaceStyle'), isFalse);
     expect(payload['ghostLogboxSurfaceStyle'], 'insetInset');
     expect(payload['categoryMenuColor'], 'gray');
     expect(payload['categoryCardColor'], 'white');

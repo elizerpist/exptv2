@@ -380,7 +380,6 @@ class AppThemeSettings {
     required this.boxColor,
     required this.buttonSurfaceStyle,
     required this.contentSurfaceStyle,
-    required this.summaryPillSurfaceStyle,
     required this.ghostLogboxSurfaceStyle,
     required this.ghostLogboxSettings,
     required this.categoryMenuColor,
@@ -409,7 +408,7 @@ class AppThemeSettings {
     this.centerBadgeColoredBackgroundOpacity =
         kCenterBadgeColoredBackgroundOpacityDefault,
     this.fabSize = kFabSizeDefault,
-  });
+  }) : summaryPillSurfaceStyle = buttonSurfaceStyle;
 
   factory AppThemeSettings.defaults() {
     return AppThemeSettings(
@@ -420,7 +419,6 @@ class AppThemeSettings {
       boxColor: AppBoxColor.gray,
       buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       contentSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
-      summaryPillSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
       ghostLogboxSettings: GhostLogboxSettings.defaults(),
       categoryMenuColor: AppBoxColor.gray,
@@ -472,11 +470,6 @@ class AppThemeSettings {
       contentSurfaceStyle: _surfaceFromMap(
         map,
         'contentSurfaceStyle',
-        ExpenseSurfaceInteraction.neutralNeutral,
-      ),
-      summaryPillSurfaceStyle: _surfaceFromMap(
-        map,
-        'summaryPillSurfaceStyle',
         ExpenseSurfaceInteraction.neutralNeutral,
       ),
       ghostLogboxSurfaceStyle: _surfaceFromMap(
@@ -612,7 +605,6 @@ class AppThemeSettings {
       'boxColor': boxColor.nativeValue,
       'buttonSurfaceStyle': buttonSurfaceStyle.nativeValue,
       'contentSurfaceStyle': contentSurfaceStyle.nativeValue,
-      'summaryPillSurfaceStyle': summaryPillSurfaceStyle.nativeValue,
       'ghostLogboxSurfaceStyle': ghostLogboxSurfaceStyle.nativeValue,
       'ghostLogboxSettings': ghostLogboxSettings.toMap(),
       'categoryMenuColor': categoryMenuColor.nativeValue,
@@ -649,7 +641,6 @@ class AppThemeSettings {
     AppBoxColor? boxColor,
     ExpenseSurfaceInteraction? buttonSurfaceStyle,
     ExpenseSurfaceInteraction? contentSurfaceStyle,
-    ExpenseSurfaceInteraction? summaryPillSurfaceStyle,
     ExpenseSurfaceInteraction? ghostLogboxSurfaceStyle,
     GhostLogboxSettings? ghostLogboxSettings,
     AppBoxColor? categoryMenuColor,
@@ -682,8 +673,6 @@ class AppThemeSettings {
       boxColor: boxColor ?? this.boxColor,
       buttonSurfaceStyle: buttonSurfaceStyle ?? this.buttonSurfaceStyle,
       contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
-      summaryPillSurfaceStyle:
-          summaryPillSurfaceStyle ?? this.summaryPillSurfaceStyle,
       ghostLogboxSurfaceStyle:
           ghostLogboxSurfaceStyle ?? this.ghostLogboxSurfaceStyle,
       ghostLogboxSettings: ghostLogboxSettings ?? this.ghostLogboxSettings,

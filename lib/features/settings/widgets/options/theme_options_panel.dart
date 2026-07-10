@@ -135,40 +135,6 @@ class ThemeOptionsPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              _sectionTitle(
-                'Summary pill nyomása',
-                'Az összesítő pill saját tap effektje:',
-              ),
-              _surfaceOption(
-                key: const ValueKey('theme-summary-pill-surface-normal'),
-                title: 'Normál',
-                description: 'Eredeti sík summary pill',
-                selected:
-                    settings.summaryPillSurfaceStyle ==
-                    ExpenseSurfaceInteraction.neutralNeutral,
-                previewStyle: ExpenseSurfaceInteraction.neutralNeutral,
-                onTap: () => onChanged(
-                  settings.copyWith(
-                    summaryPillSurfaceStyle:
-                        ExpenseSurfaceInteraction.neutralNeutral,
-                  ),
-                ),
-              ),
-              _surfaceOption(
-                key: const ValueKey('theme-summary-pill-surface-neumorph'),
-                title: 'Neumorph',
-                description: 'Sík summary pill, tapre benyomódó hatással',
-                selected:
-                    settings.summaryPillSurfaceStyle ==
-                    ExpenseSurfaceInteraction.neutralInset,
-                previewStyle: ExpenseSurfaceInteraction.neutralInset,
-                onTap: () => onChanged(
-                  settings.copyWith(
-                    summaryPillSurfaceStyle:
-                        ExpenseSurfaceInteraction.neutralInset,
-                  ),
-                ),
-              ),
               _FabSizeControl(settings: settings, onChanged: onChanged),
               _sectionTitle(
                 'Kategória sheet színe',

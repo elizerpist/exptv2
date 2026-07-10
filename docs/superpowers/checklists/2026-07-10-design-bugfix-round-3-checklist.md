@@ -85,7 +85,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: removing the separate summary pill option must not break loading old persisted settings that still contain `summaryPillSurfaceStyle`; old saved values should be ignored, migrated, or safely tolerated.
 - Acceptance condition: settings round-trip/serialization must not reintroduce an independent user-facing summary pill neumorph choice.
 - Verification method: update settings UI and settings store/serialization tests to assert the separate summary pill option is absent, global neumorph changes summary pill surface behavior, old settings payloads with summary pill fields hydrate safely, and both home/stats summary pills follow the global setting.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG3-006 - Vendor card inline név szerkesztés, log átnevezés és reset
 

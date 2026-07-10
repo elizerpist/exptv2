@@ -191,7 +191,7 @@ void main() {
   );
 
   test(
-    'summary pill surface survives native theme response without legacy key',
+    'summary pill surface follows button surface without legacy key',
     () async {
       await store.start();
       DebugConsole.clear();
@@ -200,7 +200,7 @@ void main() {
       themeUpdateResponses.add(response);
 
       final requested = store.themeSettings.copyWith(
-        summaryPillSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+        buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
       );
       final future = store.updateThemeSettings(requested);
       await Future<void>.delayed(Duration.zero);
