@@ -8,6 +8,7 @@ import '../../core/keyboard/keyboard_inset_follower.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
+import '../../services/native_ime_sheet_bridge.dart';
 import '../../services/recurring_alarm_service.dart';
 import '../../state/event_store.dart';
 import '../notifications/data/notification_repository.dart';
@@ -66,6 +67,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late AppTab _activeTab;
   late final TransactionStore _transactionStore;
   late final NotificationStore _notificationStore;
+  late final NativeImeSheetBridge _nativeImeSheetBridge;
   late final RecurringAlarmService _recurringAlarmService;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
@@ -97,6 +99,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onNotificationsMayHaveChanged:
           _refreshNotificationsAfterTransactionChange,
     );
+    _nativeImeSheetBridge = NativeImeSheetBridge(
+      onTransactionCommitted: _handleNativeTransactionCommitted,
+    );
     unawaited(_transactionStore.start());
     _transactionHomePage = _buildTransactionHomePage();
     _statsPage = _buildStatsPage();
@@ -113,6 +118,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     _homeThemeSettingsSaveDebounce?.cancel();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
+    _nativeImeSheetBridge.dispose();
     _notificationStore.removeListener(_handleNotificationStoreChanged);
     _notificationStore.dispose();
     super.dispose();
@@ -332,6 +338,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _handleNativeTransactionCommitted() async {
+    DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh start');
+    await _transactionStore.refreshAfterRecurringProcessing();
+    if (!mounted) return;
+    setState(() {
+      _transactionHomePage = _buildTransactionHomePage();
+      _statsPage = _buildStatsPage();
+    });
+    DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh end');
+  }
+
   void _applyThemeSettings(AppThemeSettings settings) {
     setState(() {
       _themeSettings = settings;
@@ -482,7 +499,27 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void _handleFabPressed() {
     final requestedAt = DateTime.now();
     DebugConsole.log(
-      '[SlideUpMenu] AddTransaction shell open requested source=fab',
+      '[NativeImeSheet] AddTransaction open requested source=fab',
+    );
+    unawaited(_openAddTransactionNativeFirst(requestedAt));
+  }
+
+  Future<void> _openAddTransactionNativeFirst(DateTime requestedAt) async {
+    _sheetHostKey.currentState?.closeAll();
+    final openedNative = await _nativeImeSheetBridge.openAddTransaction(
+      type: _transactionStore.activeType,
+    );
+    if (!mounted) return;
+    if (openedNative) {
+      DebugConsole.log(
+        '[NativeImeSheet] AddTransaction native open dispatched '
+        'elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+      return;
+    }
+    DebugConsole.log(
+      '[NativeImeSheet] AddTransaction native unavailable fallback=flutter '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
     );
     _sheetHostKey.currentState?.openTransaction(
       requestedAt: requestedAt,
@@ -716,6 +753,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             bottomOffset: _rightFabDebugBottomOffset(
               _themeSettings.fabSize.toDouble(),
             ),
+            nativeImeSheetBridge: _nativeImeSheetBridge,
             recurringAlarmService: _recurringAlarmService,
             onRecurringChanged:
                 _transactionStore.refreshAfterRecurringProcessing,

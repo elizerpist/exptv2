@@ -20,16 +20,29 @@ import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import kotlin.math.abs
 
-class NativeImeSheetHost(private val activity: Activity) {
+class NativeImeSheetHost(
+    private val activity: Activity,
+    private val configureFlutterEngine: (FlutterEngine) -> Unit = {},
+) {
+    private enum class SheetMode(val channelValue: String) {
+        PROBE("probe"),
+        ADD_TRANSACTION("addTransaction"),
+    }
+
+    private var mainChannel: MethodChannel? = null
     private var overlay: FrameLayout? = null
     private var sheetContainer: FrameLayout? = null
     private var flutterView: FlutterView? = null
     private var flutterEngine: FlutterEngine? = null
+    private var engineMode: SheetMode? = null
+    private var sheetMode = SheetMode.PROBE
+    private var activeTransactionType = "expense"
     private var previousSoftInputMode: Int? = null
     private var frameSeq = 0L
     private var lastLoggedImePx = Int.MIN_VALUE
 
     fun attachMainChannel(channel: MethodChannel) {
+        mainChannel = channel
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "openProbe" -> {
@@ -40,13 +53,44 @@ class NativeImeSheetHost(private val activity: Activity) {
                     closeProbe()
                     result.success(null)
                 }
+                "openAddTransaction" -> {
+                    val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                    openAddTransaction(args["type"]?.toString())
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
     }
 
     fun openProbe() {
+        openSheet(
+            mode = SheetMode.PROBE,
+            transactionType = activeTransactionType,
+            logMessage = "[NativeImeSheet] probe open host=android-native-motion",
+        )
+    }
+
+    fun openAddTransaction(transactionType: String?) {
+        openSheet(
+            mode = SheetMode.ADD_TRANSACTION,
+            transactionType = sanitizeTransactionType(transactionType),
+            logMessage = "[NativeImeSheet] AddTransaction open " +
+                "host=android-native-motion type=${sanitizeTransactionType(transactionType)}",
+        )
+    }
+
+    private fun openSheet(
+        mode: SheetMode,
+        transactionType: String,
+        logMessage: String,
+    ) {
+        val contentStale = sheetMode != mode || activeTransactionType != transactionType
+        sheetMode = mode
+        activeTransactionType = transactionType
         val root = ensureOverlay()
+        updateSheetHeight()
+        if (contentStale) destroyFlutterContent()
         ensureFlutterContent()
         if (previousSoftInputMode == null) {
             previousSoftInputMode = activity.window.attributes.softInputMode
@@ -55,23 +99,31 @@ class NativeImeSheetHost(private val activity: Activity) {
         root.visibility = View.VISIBLE
         root.bringToFront()
         ViewCompat.requestApplyInsets(root)
-        publish("[NativeImeSheet] probe open host=android-native-motion")
+        publish(logMessage)
     }
 
     fun closeProbe() {
+        closeSheet("[NativeImeSheet] probe close")
+    }
+
+    fun closeSheet() {
+        closeSheet("[NativeImeSheet] sheet close")
+    }
+
+    private fun closeSheet(logMessage: String) {
         hideKeyboard()
         sheetContainer?.translationY = 0f
         overlay?.visibility = View.GONE
         restoreSoftInputMode()
-        publish("[NativeImeSheet] probe close")
+        if (sheetMode == SheetMode.ADD_TRANSACTION) {
+            destroyFlutterContent()
+        }
+        publish(logMessage)
     }
 
     fun dispose() {
-        closeProbe()
-        flutterView?.detachFromFlutterEngine()
-        flutterView = null
-        flutterEngine?.destroy()
-        flutterEngine = null
+        closeSheet("[NativeImeSheet] dispose")
+        destroyFlutterContent()
         val root = overlay
         if (root?.parent is ViewGroup) {
             (root.parent as ViewGroup).removeView(root)
@@ -92,7 +144,7 @@ class NativeImeSheetHost(private val activity: Activity) {
         val backdrop = View(activity).apply {
             setBackgroundColor(Color.argb(82, 15, 23, 42))
             isClickable = true
-            setOnClickListener { closeProbe() }
+            setOnClickListener { closeSheet() }
         }
         val sheet = FrameLayout(activity).apply {
             isClickable = true
@@ -109,7 +161,7 @@ class NativeImeSheetHost(private val activity: Activity) {
             sheet,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                probeHeightPx(),
+                sheetHeightPx(),
                 Gravity.BOTTOM,
             ),
         )
@@ -168,7 +220,8 @@ class NativeImeSheetHost(private val activity: Activity) {
 
     private fun ensureFlutterContent() {
         val sheet = sheetContainer ?: return
-        if (flutterView != null) return
+        if (flutterView != null && engineMode == sheetMode) return
+        destroyFlutterContent()
         val engine = ensureFlutterEngine()
         val view = FlutterView(activity).apply {
             attachToFlutterEngine(engine)
@@ -185,8 +238,9 @@ class NativeImeSheetHost(private val activity: Activity) {
 
     private fun ensureFlutterEngine(): FlutterEngine {
         val existing = flutterEngine
-        if (existing != null) return existing
+        if (existing != null && engineMode == sheetMode) return existing
         val engine = FlutterEngine(activity)
+        configureFlutterEngine(engine)
         attachSheetChannel(engine)
         val loader = FlutterInjector.instance().flutterLoader()
         val entrypoint = DartExecutor.DartEntrypoint(
@@ -195,6 +249,7 @@ class NativeImeSheetHost(private val activity: Activity) {
         )
         engine.dartExecutor.executeDartEntrypoint(entrypoint)
         flutterEngine = engine
+        engineMode = sheetMode
         return engine
     }
 
@@ -202,17 +257,50 @@ class NativeImeSheetHost(private val activity: Activity) {
         MethodChannel(engine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "getInitialState" -> {
+                        result.success(
+                            mapOf(
+                                "mode" to sheetMode.channelValue,
+                                "type" to activeTransactionType,
+                            ),
+                        )
+                    }
                     "closeProbe" -> {
-                        closeProbe()
                         result.success(null)
+                        closeProbe()
+                    }
+                    "closeSheet" -> {
+                        result.success(null)
+                        closeSheet()
                     }
                     "openProbe" -> {
                         openProbe()
                         result.success(null)
                     }
+                    "transactionCommitted" -> {
+                        publish(
+                            "[NativeImeSheet] AddTransaction committed " +
+                                "source=sheet type=$activeTransactionType",
+                        )
+                        mainChannel?.invokeMethod(
+                            "transactionCommitted",
+                            mapOf("type" to activeTransactionType),
+                        )
+                        result.success(null)
+                        closeSheet("[NativeImeSheet] AddTransaction close after commit")
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun destroyFlutterContent() {
+        flutterView?.detachFromFlutterEngine()
+        flutterView = null
+        sheetContainer?.removeAllViews()
+        flutterEngine?.destroy()
+        flutterEngine = null
+        engineMode = null
     }
 
     private fun logProgress(imeBottomPx: Int, translation: Float) {
@@ -246,8 +334,23 @@ class NativeImeSheetHost(private val activity: Activity) {
         inputMethodManager.hideSoftInputFromWindow(token, 0)
     }
 
-    private fun probeHeightPx(): Int {
-        return (360f * activity.resources.displayMetrics.density).toInt()
+    private fun updateSheetHeight() {
+        val sheet = sheetContainer ?: return
+        val params = sheet.layoutParams as? FrameLayout.LayoutParams ?: return
+        params.height = sheetHeightPx()
+        sheet.layoutParams = params
+    }
+
+    private fun sheetHeightPx(): Int {
+        val dp = when (sheetMode) {
+            SheetMode.PROBE -> 360f
+            SheetMode.ADD_TRANSACTION -> 401f
+        }
+        return (dp * activity.resources.displayMetrics.density).toInt()
+    }
+
+    private fun sanitizeTransactionType(value: String?): String {
+        return if (value == "income") "income" else "expense"
     }
 
     private fun logStepPx(): Int {

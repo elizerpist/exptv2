@@ -201,12 +201,25 @@ class MainActivity : FlutterFragmentActivity() {
         NativeKeyboardInsetChannel(this).attach(
             EventChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/keyboard_insets"),
         )
-        val imeSheetHost = nativeImeSheetHost ?: NativeImeSheetHost(this).also {
+        val imeSheetHost = nativeImeSheetHost ?: NativeImeSheetHost(
+            this,
+            ::attachNativeImeSheetDataChannel,
+        ).also {
             nativeImeSheetHost = it
         }
         imeSheetHost.attachMainChannel(
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/native_ime_sheet"),
         )
+    }
+
+    private fun attachNativeImeSheetDataChannel(flutterEngine: FlutterEngine) {
+        val expenseChannel = ExpenseMethodChannel(this, this, scope)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pushparser/methods")
+            .setMethodCallHandler { call, result ->
+                if (!expenseChannel.handle(call, result)) {
+                    result.notImplemented()
+                }
+            }
     }
 
     override fun onDestroy() {

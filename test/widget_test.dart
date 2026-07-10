@@ -3,6 +3,9 @@ import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
+import 'package:exptv2/features/transactions/data/transaction_repository.dart';
+import 'package:exptv2/features/transactions/state/transaction_store.dart';
+import 'package:exptv2/features/transactions/widgets/add_transaction_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/state/event_store.dart';
@@ -32,6 +35,11 @@ void main() {
     themeSettingsOverride = null;
     firstLaunchNotificationPromptEnabled = false;
     firstLaunchNotificationPromptCalls = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('exptv2/native_ime_sheet'),
+          (call) async => false,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
           call,
@@ -174,6 +182,11 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('pushparser/methods'),
+          null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('exptv2/native_ime_sheet'),
           null,
         );
   });
@@ -510,6 +523,88 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+  });
+
+  testWidgets('FAB uses native add transaction host when available', (
+    tester,
+  ) async {
+    const nativeSheetChannel = MethodChannel('exptv2/native_ime_sheet');
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeSheetChannel, (call) async {
+          calls.add(call);
+          if (call.method == 'openAddTransaction') return true;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeSheetChannel, null),
+    );
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(calls.map((call) => call.method), contains('openAddTransaction'));
+    expect(
+      calls
+          .where((call) => call.method == 'openAddTransaction')
+          .single
+          .arguments,
+      containsPair('type', 'expense'),
+    );
+    expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
+    expect(
+      DebugConsole.entries.any(
+        (entry) => entry.contains(
+          '[NativeImeSheet] AddTransaction open requested source=fab',
+        ),
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('native hosted add transaction content omits SlideUpMenuCard', (
+    tester,
+  ) async {
+    final bridge = NativeBridge();
+    final store = TransactionStore(TransactionRepository(bridge));
+    var savedCallbacks = 0;
+    addTearDown(store.dispose);
+    await store.start();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AddTransactionSheet(
+            store: store,
+            nativeHostMode: true,
+            onSaved: () => savedCallbacks += 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    expect(find.text('Tranzakció neve'), findsOneWidget);
+    expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
+    expect(find.byType(SlideUpMenuCard), findsNothing);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Tranzakció neve'),
+      'Native Host Store',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Összeg'), '1234');
+    await tester.tap(find.byKey(const ValueKey('transaction-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(savedCallbacks, 1);
+    expect(savedTransactions.last['merchant'], 'Native Host Store');
+    expect(savedTransactions.last['type'], 'expense');
   });
 
   testWidgets('FAB long press opens the recurring manager', (tester) async {

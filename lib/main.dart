@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'exptv2_app.dart';
-import 'features/diagnostics/native_ime_sheet_probe.dart';
+import 'features/transactions/native/native_ime_sheet_app.dart';
 import 'services/native_bridge.dart';
 import 'state/event_store.dart';
 
@@ -17,5 +17,5 @@ Future<void> main() async {
 @pragma('vm:entry-point')
 Future<void> nativeImeSheetMain() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const NativeImeSheetProbeApp());
+  runApp(const NativeImeSheetApp());
 }

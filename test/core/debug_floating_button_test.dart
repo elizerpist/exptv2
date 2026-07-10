@@ -190,4 +190,30 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets('native IME bridge handles transaction commit callback', (
+    tester,
+  ) async {
+    const channel = MethodChannel('test/native_ime_sheet_commit');
+    var commits = 0;
+    final bridge = NativeImeSheetBridge(
+      methodChannel: channel,
+      onTransactionCommitted: () async {
+        commits += 1;
+      },
+    );
+    addTearDown(bridge.dispose);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'test/native_ime_sheet_commit',
+          const StandardMethodCodec().encodeMethodCall(
+            const MethodCall('transactionCommitted'),
+          ),
+          (_) {},
+        );
+    await tester.pump();
+
+    expect(commits, 1);
+  });
 }
