@@ -55,7 +55,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: custom category icon resolution remains correct and does not fall back to blank/old/default icons to avoid flicker.
 - Acceptance condition: any memoization/cache introduced must invalidate correctly when category icon slot data, category color/icon assignment, or the represented transaction changes.
 - Verification method: inspect the full logbox and icon render path; add debug/test instrumentation or widget tests that pump list load and refresh states and assert the icon widget path is present together with the logbox on the first frame, does not switch from placeholder to final icon, and is not rebuilt/recreated on unrelated refreshes; manually verify the affected screen for no white icon flicker.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG3-004 - Vendor selector category card szerű grid design
 

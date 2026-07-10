@@ -62,6 +62,8 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   bool _deleteFrozen = false;
   bool _bodyPressed = false;
   Timer? _bodyReleaseTimer;
+  String? _avatarIconSignature;
+  Widget? _avatarIcon;
 
   bool get _hasCustomName =>
       widget.record.userAssignedName?.trim().isNotEmpty ?? false;
@@ -184,6 +186,30 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     return (topLeft & box.size).contains(globalPosition);
   }
 
+  Widget _stableAvatarIcon({required bool uncategorized}) {
+    final category = widget.category;
+    final signature = [
+      widget.record.id,
+      category?.transactionCategoryID,
+      category?.iconSlot,
+      uncategorized,
+    ].join(':');
+    if (_avatarIconSignature != signature || _avatarIcon == null) {
+      _avatarIconSignature = signature;
+      _avatarIcon = CategoryIconBadge(
+        key: ValueKey('transaction-logbox-avatar-icon-${widget.record.id}'),
+        category: category,
+        backgroundColor: Colors.transparent,
+        size: 46,
+        iconSize: 28,
+        iconStrokeWidth: 1.35,
+        showShadow: false,
+        showQuestionMark: uncategorized,
+      );
+    }
+    return _avatarIcon!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final amountColor = widget.record.type == TransactionType.income
@@ -290,17 +316,8 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                       pressed: avatarPressed,
                                       width: 46,
                                       height: 46,
-                                      child: CategoryIconBadge(
-                                        key: ValueKey(
-                                          'transaction-logbox-avatar-icon-${widget.record.id}',
-                                        ),
-                                        category: widget.category,
-                                        backgroundColor: Colors.transparent,
-                                        size: 46,
-                                        iconSize: 28,
-                                        iconStrokeWidth: 1.35,
-                                        showShadow: false,
-                                        showQuestionMark: uncategorized,
+                                      child: _stableAvatarIcon(
+                                        uncategorized: uncategorized,
                                       ),
                                     );
                                   },

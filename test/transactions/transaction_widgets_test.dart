@@ -18,6 +18,7 @@ import 'package:exptv2/features/transactions/widgets/transaction_type_pills.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 void main() {
   testWidgets('type pills switch active type', (tester) async {
@@ -936,6 +937,36 @@ void main() {
     expect(badge.iconStrokeWidth, 1.35);
   });
 
+  testWidgets('logbox avatar icon is stable across parent refreshes', (
+    tester,
+  ) async {
+    final record = sampleRecord();
+    final category = sampleCategory();
+    late StateSetter refresh;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return TransactionLogBox(record: record, category: category);
+          },
+        ),
+      ),
+    );
+
+    final iconFinder = find.byKey(
+      ValueKey('transaction-logbox-avatar-icon-${record.id}'),
+    );
+    final before = tester.widget<CategoryIconBadge>(iconFinder);
+
+    refresh(() {});
+    await tester.pump();
+
+    final after = tester.widget<CategoryIconBadge>(iconFinder);
+    expect(identical(after, before), isTrue);
+  });
+
   test('category slot icon rewrites stroke width without changing size', () {
     const svg =
         '<svg width="24" height="24" stroke-width="2"><path d="M0 0"/></svg>';
@@ -963,6 +994,28 @@ void main() {
 
     expect(find.byIcon(Icons.category_outlined), findsNothing);
     expect(find.byType(CategorySlotIcon), findsOneWidget);
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump();
+
+    expect(find.byType(SvgPicture), findsOneWidget);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: KeyedSubtree(
+          key: ValueKey('refreshed-icon-root'),
+          child: CategorySlotIcon(
+            slot: 2,
+            color: AppColors.white,
+            size: 32,
+            strokeWidth: 1.35,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(SvgPicture), findsOneWidget);
   });
 
   testWidgets('log list renders uncategorized transaction question avatar', (

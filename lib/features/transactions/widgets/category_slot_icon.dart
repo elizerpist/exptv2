@@ -6,6 +6,7 @@ import '../slots/category_icon_manager.dart';
 
 final Map<String, Future<String>> _strokeAdjustedSvgCache =
     <String, Future<String>>{};
+final Map<String, String> _strokeAdjustedSvgDataCache = <String, String>{};
 
 class CategorySlotIcon extends StatelessWidget {
   const CategorySlotIcon({
@@ -44,25 +45,19 @@ class CategorySlotIcon extends StatelessWidget {
     final requestedStrokeWidth = strokeWidth;
     if (requestedStrokeWidth != null) {
       final cacheKey = '$assetPath:${_strokeText(requestedStrokeWidth)}';
-      final future = _strokeAdjustedSvgCache.putIfAbsent(cacheKey, () async {
-        final svg = await rootBundle.loadString(assetPath);
-        return rewriteCategoryIconStrokeWidth(svg, requestedStrokeWidth);
-      });
+      final cachedSvg = _strokeAdjustedSvgDataCache[cacheKey];
+      if (cachedSvg != null) {
+        return _svgPicture(cachedSvg);
+      }
+      final future = _strokeAdjustedSvgFuture(assetPath, requestedStrokeWidth);
       return FutureBuilder<String>(
         future: future,
         builder: (context, snapshot) {
-          final svg = snapshot.data;
+          final svg = snapshot.data ?? _strokeAdjustedSvgDataCache[cacheKey];
           if (svg == null) {
             return _iconPlaceholder();
           }
-          return SvgPicture.string(
-            svg,
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-            placeholderBuilder: (context) => _iconPlaceholder(),
-          );
+          return _svgPicture(svg);
         },
       );
     }
@@ -79,6 +74,27 @@ class CategorySlotIcon extends StatelessWidget {
   Widget _iconPlaceholder() {
     return SizedBox.square(dimension: size);
   }
+
+  Widget _svgPicture(String svg) {
+    return SvgPicture.string(
+      svg,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      placeholderBuilder: (context) => _iconPlaceholder(),
+    );
+  }
+}
+
+Future<String> _strokeAdjustedSvgFuture(String assetPath, double strokeWidth) {
+  final cacheKey = '$assetPath:${_strokeText(strokeWidth)}';
+  return _strokeAdjustedSvgCache.putIfAbsent(cacheKey, () async {
+    final svg = await rootBundle.loadString(assetPath);
+    final rewritten = rewriteCategoryIconStrokeWidth(svg, strokeWidth);
+    _strokeAdjustedSvgDataCache[cacheKey] = rewritten;
+    return rewritten;
+  });
 }
 
 String rewriteCategoryIconStrokeWidth(String svg, double strokeWidth) {
