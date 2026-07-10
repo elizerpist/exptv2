@@ -479,6 +479,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                       child: VendorFilterPanel(
                         summaries: widget.store.vendorFilterSummaries,
                         selectedVendors: _pendingVendorFilters,
+                        activeType: widget.store.activeType,
                         scrollController: _vendorListScrollController,
                         accentColor: expenseTheme.accent,
                         cardSurfaceColor: expenseTheme.logBox,
@@ -1353,6 +1354,7 @@ class VendorFilterPanel extends StatefulWidget {
   const VendorFilterPanel({
     required this.summaries,
     required this.selectedVendors,
+    required this.activeType,
     required this.scrollController,
     required this.accentColor,
     required this.cardSurfaceColor,
@@ -1363,6 +1365,7 @@ class VendorFilterPanel extends StatefulWidget {
 
   final List<VendorFilterSummary> summaries;
   final Set<String> selectedVendors;
+  final TransactionType activeType;
   final ScrollController scrollController;
   final Color accentColor;
   final Color cardSurfaceColor;
@@ -1464,6 +1467,7 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
                             selected: widget.selectedVendors.contains(
                               summary.name,
                             ),
+                            activeType: widget.activeType,
                             accentColor: widget.accentColor,
                             cardSurfaceColor: widget.cardSurfaceColor,
                             buttonSurfaceStyle: widget.buttonSurfaceStyle,
@@ -1708,6 +1712,7 @@ class _VendorFilterRow extends StatelessWidget {
   const _VendorFilterRow({
     required this.summary,
     required this.selected,
+    required this.activeType,
     required this.accentColor,
     required this.cardSurfaceColor,
     required this.buttonSurfaceStyle,
@@ -1716,6 +1721,7 @@ class _VendorFilterRow extends StatelessWidget {
 
   final VendorFilterSummary summary;
   final bool selected;
+  final TransactionType activeType;
   final Color accentColor;
   final Color cardSurfaceColor;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
@@ -1726,6 +1732,10 @@ class _VendorFilterRow extends StatelessWidget {
     final avatarColor = summary.colorHex == null
         ? accentColor
         : AppColors.fromHex(summary.colorHex!);
+    final amountColor = activeType == TransactionType.income
+        ? AppColors.income
+        : AppColors.expense;
+    final amountPrefix = activeType == TransactionType.income ? '+' : '-';
     return GestureDetector(
       key: ValueKey('vendor-filter-row-${summary.name}'),
       behavior: HitTestBehavior.opaque,
@@ -1795,13 +1805,14 @@ class _VendorFilterRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  formatHuf(summary.total),
+                  '$amountPrefix${formatHuf(summary.total)}',
+                  key: ValueKey('vendor-filter-amount-${summary.name}'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.gray800,
+                    color: amountColor,
                   ),
                 ),
               ],

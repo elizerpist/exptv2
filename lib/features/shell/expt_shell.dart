@@ -1286,6 +1286,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
             child: VendorFilterPanel(
               summaries: widget.store.vendorFilterSummaries,
               selectedVendors: _pendingVendorFilters,
+              activeType: widget.store.activeType,
               scrollController: _scrollController,
               accentColor: widget.expenseTheme.accent,
               cardSurfaceColor: widget.expenseTheme.logBox,

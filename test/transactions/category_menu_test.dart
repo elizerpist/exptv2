@@ -680,6 +680,71 @@ void main() {
     expect(decoration.color, theme.logBox);
   });
 
+  testWidgets('vendor amounts use log amount sign and color by active type', (
+    tester,
+  ) async {
+    final repository = FakeTransactionRepository();
+    repository.transactions
+      ..clear()
+      ..addAll([
+        TransactionRecord.fromMap({
+          'id': 1,
+          'date': '2025.09.25',
+          'time': '20:30:00',
+          'merchant': 'Expense Vendor',
+          'amount': -1200,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap({
+          'id': 2,
+          'date': '2025.09.25',
+          'time': '20:31:00',
+          'merchant': 'Income Vendor',
+          'amount': 3400,
+          'userAssignedName': null,
+          'transactionCategoryID': 5,
+        }),
+      ]);
+    final store = TransactionStore(repository);
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 919,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    final expenseAmount = tester.widget<Text>(
+      find.byKey(const ValueKey('vendor-filter-amount-Expense Vendor')),
+    );
+    expect(expenseAmount.data, '-1 200 Ft');
+    expect(expenseAmount.style?.color, AppColors.expense);
+
+    await tester.tap(find.byKey(const ValueKey('vendor-filter-apply-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bevétel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    final incomeAmount = tester.widget<Text>(
+      find.byKey(const ValueKey('vendor-filter-amount-Income Vendor')),
+    );
+    expect(incomeAmount.data, '+3 400 Ft');
+    expect(incomeAmount.style?.color, AppColors.income);
+  });
+
   testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {

@@ -136,7 +136,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: vendor aggregated totals use the active transaction type/scope correctly so the shown sign/color matches the listed vendor transactions.
 - Acceptance condition: any future log amount color/theme change is picked up by vendor card amounts through the same shared style source, without a separate hardcoded vendor amount style.
 - Verification method: add/update widget tests with one income vendor total and one expense vendor total; assert vendor amount text sign and color match corresponding log card amount sign/color; inspect vendor amount code to confirm it uses the shared log amount formatter/style rather than a local black text style.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-011 - Category card neumorph avatar együtt mozogjon a carddal
 
