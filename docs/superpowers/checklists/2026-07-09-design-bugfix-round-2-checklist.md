@@ -124,7 +124,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the color match holds after settings close/reopen, page rebuild, app reload, and vendor sheet reopen.
 - Acceptance condition: selected/highlighted vendor state may add the existing selected-state treatment, but the base card color must still be derived from the log card color.
 - Verification method: add/update widget tests that set a custom log card color, open the vendor sheet, assert vendor card background equals log card background, then change the setting and assert both rebuild to the new color; inspect vendor card code to confirm it reads the shared log card color token rather than a local constant.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-010 - Vendor card összeg design egyezzen a logcard összeggel
 

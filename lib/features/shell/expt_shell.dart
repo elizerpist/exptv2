@@ -1288,6 +1288,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
               selectedVendors: _pendingVendorFilters,
               scrollController: _scrollController,
               accentColor: widget.expenseTheme.accent,
+              cardSurfaceColor: widget.expenseTheme.logBox,
               buttonSurfaceStyle: widget.expenseTheme.buttonSurfaceStyle,
               onToggle: _togglePendingVendorFilter,
               onApply: _applyVendorFilters,

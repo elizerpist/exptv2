@@ -481,6 +481,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         selectedVendors: _pendingVendorFilters,
                         scrollController: _vendorListScrollController,
                         accentColor: expenseTheme.accent,
+                        cardSurfaceColor: expenseTheme.logBox,
                         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                         onToggle: _togglePendingVendorFilter,
                         onApply: _applyVendorFilters,
@@ -1354,6 +1355,7 @@ class VendorFilterPanel extends StatefulWidget {
     required this.selectedVendors,
     required this.scrollController,
     required this.accentColor,
+    required this.cardSurfaceColor,
     required this.buttonSurfaceStyle,
     required this.onToggle,
     required this.onApply,
@@ -1363,6 +1365,7 @@ class VendorFilterPanel extends StatefulWidget {
   final Set<String> selectedVendors;
   final ScrollController scrollController;
   final Color accentColor;
+  final Color cardSurfaceColor;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ValueChanged<String> onToggle;
   final VoidCallback onApply;
@@ -1462,6 +1465,7 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
                               summary.name,
                             ),
                             accentColor: widget.accentColor,
+                            cardSurfaceColor: widget.cardSurfaceColor,
                             buttonSurfaceStyle: widget.buttonSurfaceStyle,
                             onTap: () => widget.onToggle(summary.name),
                           );
@@ -1705,6 +1709,7 @@ class _VendorFilterRow extends StatelessWidget {
     required this.summary,
     required this.selected,
     required this.accentColor,
+    required this.cardSurfaceColor,
     required this.buttonSurfaceStyle,
     required this.onTap,
   });
@@ -1712,6 +1717,7 @@ class _VendorFilterRow extends StatelessWidget {
   final VendorFilterSummary summary;
   final bool selected;
   final Color accentColor;
+  final Color cardSurfaceColor;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final VoidCallback onTap;
 
@@ -1731,7 +1737,7 @@ class _VendorFilterRow extends StatelessWidget {
           return ExpenseSurfaceContainer(
             surfaceKey: ValueKey('vendor-filter-row-surface-${summary.name}'),
             style: buttonSurfaceStyle,
-            color: AppColors.gray100,
+            color: cardSurfaceColor,
             borderRadius: BorderRadius.circular(25),
             pressed: pressed,
             constraints: const BoxConstraints(minHeight: 72),

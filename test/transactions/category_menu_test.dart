@@ -648,6 +648,38 @@ void main() {
     );
   });
 
+  testWidgets('vendor cards use the same background color as log cards', (
+    tester,
+  ) async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(repository);
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(boxColor: AppBoxColor.darkgray),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 919,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    final vendorSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('vendor-filter-row-surface-Test Store')),
+    );
+    final decoration = vendorSurface.decoration! as BoxDecoration;
+    expect(decoration.color, theme.logBox);
+  });
+
   testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {
