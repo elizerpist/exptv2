@@ -1126,6 +1126,7 @@ void main() {
   ) async {
     final record = sampleRecord();
     final category = sampleCategory();
+    var bodyTaps = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1133,8 +1134,8 @@ void main() {
           record: record,
           category: category,
           surfaceStyle: ExpenseSurfaceInteraction.raisedInset,
-          avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
-          onTap: (_) {},
+          avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+          onTap: (_) => bodyTaps += 1,
           onCategoryFilter: (_) {},
         ),
       ),
@@ -1144,23 +1145,35 @@ void main() {
     final cardFinder = find.byKey(
       ValueKey('transaction-logbox-content-${record.id}'),
     );
+    final avatarFinder = find.byKey(
+      ValueKey('transaction-logbox-avatar-surface-${record.id}'),
+    );
     final cardRect = tester.getRect(cardFinder);
+    final releasedAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
 
     final gesture = await tester.startGesture(
-      cardRect.topLeft + const Offset(68, 20),
+      cardRect.topLeft + const Offset(140, 36),
     );
     await tester.pump(ExpenseSurface.pressDuration);
 
     final pressedDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    final pressedAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
     expect(pressedDecoration.boxShadow, isNull);
+    expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
 
     await gesture.up();
     await tester.pumpAndSettle();
 
     final releasedDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    final finalAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
     expect(releasedDecoration.boxShadow, isNotNull);
+    expect(finalAvatarDecoration, releasedAvatarDecoration);
+    expect(bodyTaps, 1);
   });
 
   testWidgets('transaction log rows do not build swipe overlays while idle', (

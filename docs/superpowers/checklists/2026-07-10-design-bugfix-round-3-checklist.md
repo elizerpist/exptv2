@@ -116,8 +116,8 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: avatar-only tap behavior remains unchanged: tapping the avatar still triggers only the avatar tap/filter path and must not press the whole logbox body.
 - Acceptance condition: body tap still fires the existing transaction open/edit callback exactly once and is not delayed or swallowed by the press animation.
 - Acceptance condition: non-neumorph mode keeps the normal current logbox tap behavior.
-- Verification method: add/update widget tests that enable global/button neumorph style, press the logbox body and assert the body surface and avatar pressed/offset state activate together, then release and assert they return to normal; tap the avatar and assert only avatar press/filter behavior occurs; verify edit/open callback firing.
-- Status: NOT DONE
+- Verification method: updated widget tests that enable neumorph press style, press the logbox body and assert the body surface and avatar pressed decoration activate together, then release and assert both return to normal and edit/open fires once; verified avatar-only press/filter still does not press the body. Ran full `test/transactions/transaction_widgets_test.dart`.
+- Status: DONE
 
 ### BUG3-008 - Category card és add-new avatar neumorph animáció szinkron
 

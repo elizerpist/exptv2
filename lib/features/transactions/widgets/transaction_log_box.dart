@@ -303,6 +303,9 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                           .hasPressEffect &&
                                       widget.category != null &&
                                       widget.onCategoryFilter != null,
+                                  forcePressed:
+                                      _bodyPressed &&
+                                      widget.avatarSurfaceStyle.hasPressEffect,
                                   builder: (context, avatarPressed) {
                                     return ExpenseSurfaceContainer(
                                       surfaceKey: ValueKey(
