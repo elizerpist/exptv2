@@ -1352,6 +1352,7 @@ class _TransactionListHeader extends StatelessWidget {
 
 class VendorFilterPanel extends StatefulWidget {
   const VendorFilterPanel({
+    super.key,
     required this.summaries,
     required this.selectedVendors,
     required this.activeType,
