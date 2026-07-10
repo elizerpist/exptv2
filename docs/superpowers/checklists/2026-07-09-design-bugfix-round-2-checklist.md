@@ -112,7 +112,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the ABC separator title text size matches the existing log area date separator title text size.
 - Acceptance condition: the ABC separator title spacing/alignment visually follows the log area date separator pattern unless the vendor sheet layout requires only proportional vertical spacing.
 - Verification method: add/update widget tests with vendors spanning multiple letters, mixed case, accented names, and non-letter names; assert section headers appear in alphabetical order, cards appear under the correct header, search filtering recomputes visible groups, and the header text style font size equals the log date separator font size.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG2-009 - Vendor card színe kövesse a logcard színét
 

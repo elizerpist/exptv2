@@ -1392,6 +1392,7 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
     final safeBottomInset = MediaQuery.paddingOf(context).bottom + 8;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final visibleSummaries = _visibleSummaries();
+    final visibleItems = _sectionedItems(visibleSummaries);
     final listBottomPadding = 84 + safeBottomInset + keyboardInset;
     return ColoredBox(
       color: AppColors.white,
@@ -1446,10 +1447,15 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
                           20,
                           listBottomPadding,
                         ),
-                        itemCount: visibleSummaries.length,
+                        itemCount: visibleItems.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          final summary = visibleSummaries[index];
+                          final item = visibleItems[index];
+                          final header = item.header;
+                          if (header != null) {
+                            return _VendorSectionHeader(label: header);
+                          }
+                          final summary = item.summary!;
                           return _VendorFilterRow(
                             summary: summary,
                             selected: widget.selectedVendors.contains(
@@ -1496,6 +1502,123 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
       for (final summary in widget.summaries)
         if (summary.name.toLowerCase().contains(needle)) summary,
     ];
+  }
+
+  List<_VendorListItem> _sectionedItems(List<VendorFilterSummary> summaries) {
+    final sorted = [...summaries]..sort(_compareVendorSummaries);
+    final items = <_VendorListItem>[];
+    String? previousGroup;
+    for (final summary in sorted) {
+      final group = _vendorGroup(summary.name);
+      if (group != previousGroup) {
+        items.add(_VendorListItem.header(group));
+        previousGroup = group;
+      }
+      items.add(_VendorListItem.summary(summary));
+    }
+    return items;
+  }
+
+  int _compareVendorSummaries(
+    VendorFilterSummary left,
+    VendorFilterSummary right,
+  ) {
+    final leftGroup = _vendorGroup(left.name);
+    final rightGroup = _vendorGroup(right.name);
+    final groupCompare = _groupRank(
+      leftGroup,
+    ).compareTo(_groupRank(rightGroup));
+    if (groupCompare != 0) return groupCompare;
+    final leftName = _normalizeVendorName(left.name);
+    final rightName = _normalizeVendorName(right.name);
+    final nameCompare = leftName.compareTo(rightName);
+    if (nameCompare != 0) return nameCompare;
+    return left.name.compareTo(right.name);
+  }
+
+  int _groupRank(String group) {
+    if (group == '#') return 0;
+    return group.codeUnitAt(0);
+  }
+
+  String _vendorGroup(String name) {
+    final normalized = _normalizeVendorName(name).trim();
+    if (normalized.isEmpty) return '#';
+    final first = normalized.codeUnitAt(0);
+    if (first < 97 || first > 122) return '#';
+    return String.fromCharCode(first).toUpperCase();
+  }
+
+  String _normalizeVendorName(String name) {
+    final lower = name.toLowerCase();
+    const accents = {
+      'á': 'a',
+      'à': 'a',
+      'ä': 'a',
+      'â': 'a',
+      'ã': 'a',
+      'å': 'a',
+      'é': 'e',
+      'è': 'e',
+      'ë': 'e',
+      'ê': 'e',
+      'í': 'i',
+      'ì': 'i',
+      'ï': 'i',
+      'î': 'i',
+      'ó': 'o',
+      'ò': 'o',
+      'ö': 'o',
+      'ő': 'o',
+      'ô': 'o',
+      'õ': 'o',
+      'ú': 'u',
+      'ù': 'u',
+      'ü': 'u',
+      'ű': 'u',
+      'û': 'u',
+      'ç': 'c',
+      'ñ': 'n',
+    };
+    final buffer = StringBuffer();
+    for (final rune in lower.runes) {
+      final char = String.fromCharCode(rune);
+      buffer.write(accents[char] ?? char);
+    }
+    return buffer.toString();
+  }
+}
+
+class _VendorListItem {
+  const _VendorListItem.header(this.header) : summary = null;
+  const _VendorListItem.summary(this.summary) : header = null;
+
+  final String? header;
+  final VendorFilterSummary? summary;
+}
+
+class _VendorSectionHeader extends StatelessWidget {
+  const _VendorSectionHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: ValueKey('vendor-filter-section-$label'),
+      height: 34,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 14, 4, 0),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.gray500,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 }
 

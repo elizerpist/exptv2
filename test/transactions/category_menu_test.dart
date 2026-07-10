@@ -501,6 +501,153 @@ void main() {
     },
   );
 
+  testWidgets('vendor sheet groups sorted vendors by alphabetic headers', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = FakeTransactionRepository();
+    repository.transactions
+      ..clear()
+      ..addAll([
+        TransactionRecord.fromMap({
+          'id': 1,
+          'date': '2025.09.25',
+          'time': '20:30:00',
+          'merchant': 'Élelmiszer Bolt',
+          'amount': -100,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap({
+          'id': 2,
+          'date': '2025.09.25',
+          'time': '20:31:00',
+          'merchant': 'alpha Market',
+          'amount': -200,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap({
+          'id': 3,
+          'date': '2025.09.25',
+          'time': '20:32:00',
+          'merchant': '# Corner',
+          'amount': -300,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap({
+          'id': 4,
+          'date': '2025.09.25',
+          'time': '20:33:00',
+          'merchant': 'Beta Bolt',
+          'amount': -400,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+      ]);
+    final store = TransactionStore(repository);
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 1200,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    for (final group in const ['#', 'A', 'B', 'E']) {
+      expect(
+        find.byKey(ValueKey('vendor-filter-section-$group')),
+        findsOneWidget,
+      );
+    }
+
+    final hashTop = tester
+        .getTopLeft(find.byKey(const ValueKey('vendor-filter-section-#')))
+        .dy;
+    final aTop = tester
+        .getTopLeft(find.byKey(const ValueKey('vendor-filter-section-A')))
+        .dy;
+    final bTop = tester
+        .getTopLeft(find.byKey(const ValueKey('vendor-filter-section-B')))
+        .dy;
+    final eTop = tester
+        .getTopLeft(find.byKey(const ValueKey('vendor-filter-section-E')))
+        .dy;
+    expect(hashTop, lessThan(aTop));
+    expect(aTop, lessThan(bTop));
+    expect(bTop, lessThan(eTop));
+
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('vendor-filter-row-# Corner')))
+          .dy,
+      greaterThan(hashTop),
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('vendor-filter-row-alpha Market')),
+          )
+          .dy,
+      greaterThan(aTop),
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('vendor-filter-row-Élelmiszer Bolt')),
+          )
+          .dy,
+      greaterThan(eTop),
+    );
+
+    final dateHeaderText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('transaction-date-group-2025.09.25')),
+        matching: find.text('2025.09.25'),
+      ),
+    );
+    final vendorHeaderText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('vendor-filter-section-A')),
+        matching: find.text('A'),
+      ),
+    );
+    expect(vendorHeaderText.style?.fontSize, dateHeaderText.style?.fontSize);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('vendor-filter-search-field')),
+      'bolt',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('vendor-filter-section-#')), findsNothing);
+    expect(find.byKey(const ValueKey('vendor-filter-section-A')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('vendor-filter-section-B')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('vendor-filter-section-E')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('slide-up category menu closes on apply and drag gestures', (
     tester,
   ) async {
