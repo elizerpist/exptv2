@@ -1164,6 +1164,103 @@ void main() {
     },
   );
 
+  testWidgets('category body press applies avatar neumorph in the same frame', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 180,
+            height: 180,
+            child: CategoryCard(
+              category: categoryFixtures.last,
+              transactionCount: 3,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              onSelect: (_) {},
+              onModify: (_) {},
+              onDelete: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final cardFinder = find.byKey(const ValueKey('category-card-surface-6'));
+    final avatarFinder = find.byKey(const ValueKey('category-icon-surface-6'));
+    final releasedCardDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    final releasedAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    final cardRect = tester.getRect(cardFinder);
+
+    final gesture = await tester.startGesture(
+      cardRect.bottomCenter - const Offset(0, 36),
+    );
+    await tester.pump();
+
+    final pressedCardDecoration =
+        tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+    final pressedAvatarDecoration =
+        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    expect(pressedCardDecoration, isNot(releasedCardDecoration));
+    expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
+
+    await gesture.up();
+  });
+
+  testWidgets(
+    'add category card body press applies plus avatar neumorph shadow',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CategoryMenuPanel(
+              activeType: TransactionType.expense,
+              categories: categoryFixtures,
+              categoryTransactionCounts: const {6: 3},
+              activeCategory: null,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.raisedInset,
+              onSelect: (_) {},
+              onModify: (_) {},
+              onDelete: (_) {},
+              onAdd: () {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      final cardFinder = find.byKey(
+        const ValueKey('category-utility-surface-Új kategória'),
+      );
+      final avatarFinder = find.byKey(
+        const ValueKey('category-utility-avatar-surface-Új kategória'),
+      );
+      final releasedCardDecoration =
+          tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+      final releasedAvatarDecoration =
+          tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+      final cardRect = tester.getRect(cardFinder);
+
+      final gesture = await tester.startGesture(
+        cardRect.bottomCenter - const Offset(0, 36),
+      );
+      await tester.pump();
+
+      final pressedCardDecoration =
+          tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
+      final pressedAvatarDecoration =
+          tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+      expect(pressedCardDecoration, isNot(releasedCardDecoration));
+      expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
+
+      await gesture.up();
+    },
+  );
+
   testWidgets('selected category avatar follows the card neumorph offset', (
     tester,
   ) async {

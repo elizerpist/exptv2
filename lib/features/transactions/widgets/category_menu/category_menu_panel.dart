@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -274,7 +276,7 @@ class _CategoryMenuPanelState extends State<CategoryMenuPanel> {
   }
 }
 
-class _CategoryUtilityCard extends StatelessWidget {
+class _CategoryUtilityCard extends StatefulWidget {
   const _CategoryUtilityCard({
     super.key,
     required this.title,
@@ -303,96 +305,164 @@ class _CategoryUtilityCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_CategoryUtilityCard> createState() => _CategoryUtilityCardState();
+}
+
+class _CategoryUtilityCardState extends State<_CategoryUtilityCard> {
+  Timer? _cardReleaseTimer;
+  var _cardPressed = false;
+
+  @override
+  void dispose() {
+    _cardReleaseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _pressCard() {
+    if (!widget.surfaceStyle.hasPressEffect) return;
+    _cardReleaseTimer?.cancel();
+    _setCardPressed(true);
+  }
+
+  void _releaseCardSoon() {
+    if (!widget.surfaceStyle.hasPressEffect) return;
+    _cardReleaseTimer?.cancel();
+    _cardReleaseTimer = Timer(const Duration(milliseconds: 120), () {
+      _setCardPressed(false);
+    });
+  }
+
+  void _setCardPressed(bool value) {
+    if (_cardPressed == value || !mounted) return;
+    setState(() => _cardPressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18);
-    final activeUsesInset = active && surfaceStyle.hasPressEffect;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: ExpensePressable(
-        enabled: surfaceStyle.hasPressEffect,
-        forcePressed: activeUsesInset,
-        builder: (context, pressed) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              ExpenseSurfaceContainer(
-                surfaceKey: ValueKey('category-utility-surface-$title'),
-                style: surfaceStyle,
-                color: surfaceColor,
-                borderRadius: radius,
-                pressed: pressed,
-                padding: const EdgeInsets.fromLTRB(12, 15, 12, 18),
-                neutralBorder: Border.all(color: AppColors.gray200),
-                neutralShadow: categoryNeutralShadow(surfaceStyle),
-                child: Column(
-                  children: [
-                    ExpensePressable(
-                      enabled: avatarSurfaceStyle.hasPressEffect,
-                      forcePressed: active && avatarSurfaceStyle.hasPressEffect,
-                      builder: (context, avatarPressed) {
-                        return ExpenseSurfaceContainer(
-                          surfaceKey: ValueKey(
-                            'category-utility-avatar-surface-$title',
-                          ),
-                          style: avatarSurfaceStyle,
-                          color: avatarColor,
-                          primary: true,
-                          primaryColor: avatarColor,
-                          borderRadius: BorderRadius.circular(32.5),
-                          pressed: avatarPressed,
-                          width: 65,
-                          height: 65,
-                          child: Center(
-                            child: avatarLabel == null
-                                ? Icon(icon, color: AppColors.white, size: 34)
-                                : Text(
-                                    avatarLabel!,
-                                    style: const TextStyle(
-                                      color: AppColors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                          ),
-                        );
-                      },
-                    ),
-                    const Spacer(),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.gray800,
+    final activeUsesInset = widget.active && widget.surfaceStyle.hasPressEffect;
+    final cardPressed = activeUsesInset || _cardPressed;
+    final avatarCardOffset = ExpenseSurface.pressOffset(
+      style: widget.surfaceStyle,
+      pressed: cardPressed,
+    );
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _pressCard(),
+      onPointerUp: (_) => _releaseCardSoon(),
+      onPointerCancel: (_) => _releaseCardSoon(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: ExpensePressable(
+          enabled: widget.surfaceStyle.hasPressEffect,
+          forcePressed: cardPressed,
+          builder: (context, pressed) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                ExpenseSurfaceContainer(
+                  surfaceKey: ValueKey(
+                    'category-utility-surface-${widget.title}',
+                  ),
+                  style: widget.surfaceStyle,
+                  color: widget.surfaceColor,
+                  borderRadius: radius,
+                  pressed: pressed,
+                  padding: const EdgeInsets.fromLTRB(12, 15, 12, 18),
+                  neutralBorder: Border.all(color: AppColors.gray200),
+                  neutralShadow: categoryNeutralShadow(widget.surfaceStyle),
+                  child: Column(
+                    children: [
+                      TweenAnimationBuilder<Offset>(
+                        tween: Tween<Offset>(
+                          begin: Offset.zero,
+                          end: avatarCardOffset,
+                        ),
+                        duration: ExpenseSurface.pressDuration,
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) {
+                          return Transform.translate(
+                            offset: value,
+                            child: child,
+                          );
+                        },
+                        child: ExpensePressable(
+                          enabled: widget.avatarSurfaceStyle.hasPressEffect,
+                          forcePressed:
+                              cardPressed &&
+                              widget.avatarSurfaceStyle.hasPressEffect,
+                          builder: (context, avatarPressed) {
+                            return ExpenseSurfaceContainer(
+                              surfaceKey: ValueKey(
+                                'category-utility-avatar-surface-${widget.title}',
+                              ),
+                              style: widget.avatarSurfaceStyle,
+                              color: widget.avatarColor,
+                              primary: true,
+                              primaryColor: widget.avatarColor,
+                              borderRadius: BorderRadius.circular(32.5),
+                              pressed: avatarPressed,
+                              width: 65,
+                              height: 65,
+                              child: Center(
+                                child: widget.avatarLabel == null
+                                    ? Icon(
+                                        widget.icon,
+                                        color: AppColors.white,
+                                        size: 34,
+                                      )
+                                    : Text(
+                                        widget.avatarLabel!,
+                                        style: const TextStyle(
+                                          color: AppColors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.gray500,
+                      const Spacer(),
+                      Text(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.gray800,
+                        ),
                       ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.gray500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.active && !widget.surfaceStyle.hasPressEffect)
+                  CategoryActiveBorder(
+                    key: ValueKey(
+                      'category-utility-active-border-${widget.title}',
                     ),
-                  ],
-                ),
-              ),
-              if (active && !surfaceStyle.hasPressEffect)
-                CategoryActiveBorder(
-                  key: ValueKey('category-utility-active-border-$title'),
-                  radius: radius,
-                  color: accentColor,
-                ),
-            ],
-          );
-        },
+                    radius: radius,
+                    color: widget.accentColor,
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

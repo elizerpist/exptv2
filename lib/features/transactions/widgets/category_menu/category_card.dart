@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,7 +8,7 @@ import '../../../settings/models/app_theme_settings.dart';
 import '../../models/transaction_category.dart';
 import 'category_icon_badge.dart';
 
-class CategoryCard extends StatelessWidget {
+class CategoryCard extends StatefulWidget {
   const CategoryCard({
     super.key,
     required this.category,
@@ -32,19 +34,54 @@ class CategoryCard extends StatelessWidget {
   final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final Color accentColor;
 
-  bool get _hasTransactions => transactionCount > 0;
+  @override
+  State<CategoryCard> createState() => _CategoryCardState();
+}
+
+class _CategoryCardState extends State<CategoryCard> {
+  Timer? _cardReleaseTimer;
+  var _cardPressed = false;
+
+  bool get _hasTransactions => widget.transactionCount > 0;
+
+  @override
+  void dispose() {
+    _cardReleaseTimer?.cancel();
+    super.dispose();
+  }
 
   void _handleLongPress() {
     HapticFeedback.mediumImpact();
-    onModify(category);
+    widget.onModify(widget.category);
+  }
+
+  void _pressCard() {
+    if (!widget.cardSurfaceStyle.hasPressEffect) return;
+    _cardReleaseTimer?.cancel();
+    _setCardPressed(true);
+  }
+
+  void _releaseCardSoon() {
+    if (!widget.cardSurfaceStyle.hasPressEffect) return;
+    _cardReleaseTimer?.cancel();
+    _cardReleaseTimer = Timer(const Duration(milliseconds: 120), () {
+      _setCardPressed(false);
+    });
+  }
+
+  void _setCardPressed(bool value) {
+    if (_cardPressed == value || !mounted) return;
+    setState(() => _cardPressed = value);
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeUsesInset = active && cardSurfaceStyle.hasPressEffect;
+    final activeUsesInset =
+        widget.active && widget.cardSurfaceStyle.hasPressEffect;
+    final cardPressed = activeUsesInset || _cardPressed;
     final avatarCardOffset = ExpenseSurface.pressOffset(
-      style: cardSurfaceStyle,
-      pressed: activeUsesInset,
+      style: widget.cardSurfaceStyle,
+      pressed: cardPressed,
     );
     return SizedBox(
       height: 150,
@@ -52,72 +89,83 @@ class CategoryCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: GestureDetector(
-              key: ValueKey('category-card-${category.transactionCategoryID}'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onSelect(category),
-              onLongPress: _handleLongPress,
-              child: ExpensePressable(
-                enabled: cardSurfaceStyle.hasPressEffect,
-                forcePressed: activeUsesInset,
-                builder: (context, pressed) {
-                  final radius = BorderRadius.circular(18);
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ExpenseSurfaceContainer(
-                        surfaceKey: ValueKey(
-                          'category-card-surface-${category.transactionCategoryID}',
-                        ),
-                        style: cardSurfaceStyle,
-                        color: surfaceColor,
-                        borderRadius: radius,
-                        pressed: pressed,
-                        padding: const EdgeInsets.fromLTRB(12, 82, 12, 14),
-                        neutralBorder: Border.all(color: AppColors.gray200),
-                        neutralShadow: categoryNeutralShadow(cardSurfaceStyle),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              category.name,
-                              key: ValueKey(
-                                'category-card-title-${category.transactionCategoryID}',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.gray800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '$transactionCount tranzakció',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.gray500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (active && !cardSurfaceStyle.hasPressEffect)
-                        CategoryActiveBorder(
-                          key: ValueKey(
-                            'category-card-active-border-${category.transactionCategoryID}',
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) => _pressCard(),
+              onPointerUp: (_) => _releaseCardSoon(),
+              onPointerCancel: (_) => _releaseCardSoon(),
+              child: GestureDetector(
+                key: ValueKey(
+                  'category-card-${widget.category.transactionCategoryID}',
+                ),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => widget.onSelect(widget.category),
+                onLongPress: _handleLongPress,
+                child: ExpensePressable(
+                  enabled: widget.cardSurfaceStyle.hasPressEffect,
+                  forcePressed: cardPressed,
+                  builder: (context, pressed) {
+                    final radius = BorderRadius.circular(18);
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ExpenseSurfaceContainer(
+                          surfaceKey: ValueKey(
+                            'category-card-surface-${widget.category.transactionCategoryID}',
                           ),
-                          radius: radius,
-                          color: accentColor,
+                          style: widget.cardSurfaceStyle,
+                          color: widget.surfaceColor,
+                          borderRadius: radius,
+                          pressed: pressed,
+                          padding: const EdgeInsets.fromLTRB(12, 82, 12, 14),
+                          neutralBorder: Border.all(color: AppColors.gray200),
+                          neutralShadow: categoryNeutralShadow(
+                            widget.cardSurfaceStyle,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(
+                                widget.category.name,
+                                key: ValueKey(
+                                  'category-card-title-${widget.category.transactionCategoryID}',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.gray800,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${widget.transactionCount} tranzakció',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.gray500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                    ],
-                  );
-                },
+                        if (widget.active &&
+                            !widget.cardSurfaceStyle.hasPressEffect)
+                          CategoryActiveBorder(
+                            key: ValueKey(
+                              'category-card-active-border-${widget.category.transactionCategoryID}',
+                            ),
+                            radius: radius,
+                            color: widget.accentColor,
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -136,25 +184,26 @@ class CategoryCard extends StatelessWidget {
                 child: IgnorePointer(
                   child: ExpensePressable(
                     key: ValueKey(
-                      'category-icon-${category.transactionCategoryID}',
+                      'category-icon-${widget.category.transactionCategoryID}',
                     ),
-                    enabled: avatarSurfaceStyle.hasPressEffect,
-                    forcePressed: active && avatarSurfaceStyle.hasPressEffect,
+                    enabled: widget.avatarSurfaceStyle.hasPressEffect,
+                    forcePressed:
+                        cardPressed && widget.avatarSurfaceStyle.hasPressEffect,
                     builder: (context, pressed) {
                       return ExpenseSurfaceContainer(
                         surfaceKey: ValueKey(
-                          'category-icon-surface-${category.transactionCategoryID}',
+                          'category-icon-surface-${widget.category.transactionCategoryID}',
                         ),
-                        style: avatarSurfaceStyle,
-                        color: category.slotColor,
+                        style: widget.avatarSurfaceStyle,
+                        color: widget.category.slotColor,
                         primary: true,
-                        primaryColor: category.slotColor,
+                        primaryColor: widget.category.slotColor,
                         borderRadius: BorderRadius.circular(32.5),
                         pressed: pressed,
                         width: 65,
                         height: 65,
                         child: CategoryIconBadge(
-                          category: category,
+                          category: widget.category,
                           backgroundColor: Colors.transparent,
                           size: 65,
                           iconSize: 44,
@@ -173,9 +222,11 @@ class CategoryCard extends StatelessWidget {
             right: 5,
             child: GestureDetector(
               key: ValueKey(
-                'category-delete-${category.transactionCategoryID}',
+                'category-delete-${widget.category.transactionCategoryID}',
               ),
-              onTap: _hasTransactions ? null : () => onDelete(category),
+              onTap: _hasTransactions
+                  ? null
+                  : () => widget.onDelete(widget.category),
               child: Container(
                 width: 24,
                 height: 24,

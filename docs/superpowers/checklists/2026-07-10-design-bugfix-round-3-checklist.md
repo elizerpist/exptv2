@@ -130,8 +130,8 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: the add-new category card plus avatar must receive the actual avatar surface/shadow pressed animation, not only a downward position offset.
 - Acceptance condition: add-new category card avatar offset and shadow/depth animation must be synchronized with the card press animation.
 - Acceptance condition: normal/non-neumorph category card selection behavior remains unchanged.
-- Verification method: add/update widget tests that select a neumorph category card and assert card surface and avatar surface enter pressed state in the same frame; test the add-new category card press and assert the plus avatar has both offset and pressed decoration/shadow change, then returns after release; verify no active-border regressions in normal mode.
-- Status: NOT DONE
+- Verification method: added widget tests that body-press a neumorph category card and assert the card surface and avatar surface enter pressed decoration in the same frame; added a matching add-new category card test that verifies the plus avatar receives the neumorph pressed decoration/shadow together with the card; verified selected active-border regressions and full `test/transactions/category_menu_test.dart`; ran targeted analyze for the category menu widgets and tests.
+- Status: DONE
 
 ### BUG3-009 - Category/vendor sheet keyboard slide lag deep analysis és debug logok
 
