@@ -866,7 +866,7 @@ void main() {
         ),
       ),
     );
-    expect(mobileClosedHeight, lessThanOrEqualTo(430));
+    expect(mobileClosedHeight, lessThanOrEqualTo(440));
     expect(mobileClosedHeight, greaterThanOrEqualTo(400));
 
     await tester.pumpWidget(buildApp());
@@ -927,27 +927,50 @@ void main() {
     );
   });
 
-  testWidgets('transaction editor keeps save button close to date row', (
+  testWidgets('transaction editor keeps one field gap above save button', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
     await _tapFab(tester);
-    final dateBottom = tester
-        .getRect(find.byKey(const ValueKey('transaction-date-picker-button')))
-        .bottom;
-    final saveTop = tester
-        .getRect(find.byKey(const ValueKey('transaction-save-button')))
-        .top;
-    final nameBottom = tester
-        .getRect(find.widgetWithText(TextField, 'Tranzakció neve'))
-        .bottom;
-    final amountTop = tester
-        .getRect(find.widgetWithText(TextField, 'Összeg'))
-        .top;
+    _expectTransactionDateSaveGapMatchesFieldGap(tester);
 
-    expect(saveTop - dateBottom, lessThanOrEqualTo(amountTop - nameBottom + 2));
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('transaction-logbox-250909')),
+        matching: find.text('-505 Ft'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
+    _expectTransactionDateSaveGapMatchesFieldGap(tester);
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Bevétel'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await _tapFab(tester);
+
+    expect(find.text('Új bevételi tranzakció'), findsOneWidget);
+    _expectTransactionDateSaveGapMatchesFieldGap(tester);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 180);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await _tapFab(tester);
+    await tester.pump();
+
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    _expectTransactionDateSaveGapMatchesFieldGap(tester);
   });
 
   testWidgets(
@@ -1848,4 +1871,19 @@ double _slideCardTranslationY(WidgetTester tester) {
     find.byKey(const ValueKey('slide-up-menu-transform')),
   );
   return transform.transform.getTranslation().y;
+}
+
+void _expectTransactionDateSaveGapMatchesFieldGap(WidgetTester tester) {
+  final fieldGap =
+      tester.getRect(find.widgetWithText(TextField, 'Összeg')).top -
+      tester.getRect(find.widgetWithText(TextField, 'Tranzakció neve')).bottom;
+  final dateTimeBottom = [
+    tester.getRect(find.widgetWithText(TextField, 'Dátum')).bottom,
+    tester.getRect(find.widgetWithText(TextField, 'Idő')).bottom,
+  ].reduce((value, element) => value > element ? value : element);
+  final saveTop = tester
+      .getRect(find.byKey(const ValueKey('transaction-save-button')))
+      .top;
+
+  expect(saveTop - dateTimeBottom, moreOrLessEquals(fieldGap, epsilon: 1));
 }

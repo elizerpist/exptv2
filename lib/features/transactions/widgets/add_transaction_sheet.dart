@@ -18,6 +18,8 @@ import 'slide_up_panel_metrics.dart';
 import 'themed_pill_field.dart';
 import 'transaction_menu_metrics.dart';
 
+const _transactionFormFieldGap = 12.0;
+
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
     super.key,
@@ -251,7 +253,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                     surfaceStyle:
                                         expenseTheme.contentSurfaceStyle,
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(
+                                    height: _transactionFormFieldGap,
+                                  ),
                                   AmountField(
                                     controller: _amount,
                                     focusNode: _amountFocus,
@@ -260,7 +264,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                     surfaceStyle:
                                         expenseTheme.contentSurfaceStyle,
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(
+                                    height: _transactionFormFieldGap,
+                                  ),
                                   CategorySelectorField(
                                     selected: _category,
                                     onTap: _openCategoryPicker,
@@ -306,6 +312,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: _transactionFormFieldGap),
                     Padding(
                       padding: EdgeInsets.fromLTRB(
                         SlideUpPanelMetrics.horizontalInset,
