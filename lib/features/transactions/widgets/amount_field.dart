@@ -10,6 +10,7 @@ class AmountField extends StatelessWidget {
     required this.controller,
     this.focusNode,
     this.debugLabel = 'AmountField.amount',
+    this.floatingLabelBehavior,
     this.surfaceColor = AppColors.gray50,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
@@ -17,6 +18,7 @@ class AmountField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode? focusNode;
   final String debugLabel;
+  final FloatingLabelBehavior? floatingLabelBehavior;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
 
@@ -29,6 +31,7 @@ class AmountField extends StatelessWidget {
       keyboardType: TextInputType.number,
       label: 'Összeg',
       suffixText: 'Ft',
+      floatingLabelBehavior: floatingLabelBehavior,
       surfaceColor: surfaceColor,
       surfaceStyle: surfaceStyle,
     );

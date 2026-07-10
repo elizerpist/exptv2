@@ -866,8 +866,8 @@ void main() {
         ),
       ),
     );
-    expect(mobileClosedHeight, lessThanOrEqualTo(440));
-    expect(mobileClosedHeight, greaterThanOrEqualTo(400));
+    expect(mobileClosedHeight, lessThanOrEqualTo(404));
+    expect(mobileClosedHeight, greaterThanOrEqualTo(390));
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -927,14 +927,14 @@ void main() {
     );
   });
 
-  testWidgets('transaction editor keeps one field gap above save button', (
+  testWidgets('transaction editor keeps one field gap between every control', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
     await _tapFab(tester);
-    _expectTransactionDateSaveGapMatchesFieldGap(tester);
+    _expectTransactionEditorGapsMatchFieldGap(tester);
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -949,7 +949,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Kiadási tranzakció módosítása'), findsOneWidget);
-    _expectTransactionDateSaveGapMatchesFieldGap(tester);
+    _expectTransactionEditorGapsMatchFieldGap(tester);
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -959,7 +959,7 @@ void main() {
     await _tapFab(tester);
 
     expect(find.text('Új bevételi tranzakció'), findsOneWidget);
-    _expectTransactionDateSaveGapMatchesFieldGap(tester);
+    _expectTransactionEditorGapsMatchFieldGap(tester);
 
     tester.view.viewInsets = const FakeViewPadding(bottom: 180);
     addTearDown(tester.view.resetViewInsets);
@@ -970,7 +970,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Új kiadási tranzakció'), findsOneWidget);
-    _expectTransactionDateSaveGapMatchesFieldGap(tester);
+    _expectTransactionEditorGapsMatchFieldGap(tester);
   });
 
   testWidgets(
@@ -1873,17 +1873,45 @@ double _slideCardTranslationY(WidgetTester tester) {
   return transform.transform.getTranslation().y;
 }
 
-void _expectTransactionDateSaveGapMatchesFieldGap(WidgetTester tester) {
-  final fieldGap =
-      tester.getRect(find.widgetWithText(TextField, 'Összeg')).top -
-      tester.getRect(find.widgetWithText(TextField, 'Tranzakció neve')).bottom;
+void _expectTransactionEditorGapsMatchFieldGap(WidgetTester tester) {
+  final titleBottom = tester
+      .getRect(
+        find.descendant(
+          of: find.byKey(const ValueKey('transaction-editor-card')),
+          matching: find.textContaining('tranzakció'),
+        ),
+      )
+      .bottom;
+  final nameRect = tester.getRect(
+    find.widgetWithText(TextField, 'Tranzakció neve'),
+  );
+  final amountRect = tester.getRect(find.widgetWithText(TextField, 'Összeg'));
+  final categoryRect = tester.getRect(
+    find.byKey(const ValueKey('transaction-category-selector')),
+  );
+  final dateRect = tester.getRect(find.widgetWithText(TextField, 'Dátum'));
+  final timeRect = tester.getRect(find.widgetWithText(TextField, 'Idő'));
+  final fieldGap = amountRect.top - nameRect.bottom;
+  final dateTimeTop = [
+    dateRect.top,
+    timeRect.top,
+  ].reduce((value, element) => value < element ? value : element);
   final dateTimeBottom = [
-    tester.getRect(find.widgetWithText(TextField, 'Dátum')).bottom,
-    tester.getRect(find.widgetWithText(TextField, 'Idő')).bottom,
+    dateRect.bottom,
+    timeRect.bottom,
   ].reduce((value, element) => value > element ? value : element);
   final saveTop = tester
       .getRect(find.byKey(const ValueKey('transaction-save-button')))
       .top;
 
+  expect(nameRect.top - titleBottom, moreOrLessEquals(14, epsilon: 1));
+  expect(
+    categoryRect.top - amountRect.bottom,
+    moreOrLessEquals(fieldGap, epsilon: 1),
+  );
+  expect(
+    dateTimeTop - categoryRect.bottom,
+    moreOrLessEquals(fieldGap, epsilon: 1),
+  );
   expect(saveTop - dateTimeBottom, moreOrLessEquals(fieldGap, epsilon: 1));
 }

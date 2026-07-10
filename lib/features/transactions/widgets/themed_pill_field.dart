@@ -18,6 +18,7 @@ class ThemedPillField extends StatelessWidget {
     this.suffixIcon,
     this.minLines,
     this.maxLines,
+    this.floatingLabelBehavior,
     this.surfaceColor = AppColors.gray50,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
   });
@@ -33,6 +34,7 @@ class ThemedPillField extends StatelessWidget {
   final Widget? suffixIcon;
   final int? minLines;
   final int? maxLines;
+  final FloatingLabelBehavior? floatingLabelBehavior;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
 
@@ -48,10 +50,12 @@ class ThemedPillField extends StatelessWidget {
         minLines: minLines,
         maxLines: maxLines,
         onChanged: onChanged,
-        decoration: transactionFieldDecoration(
-          label,
-          fillColor: surfaceColor,
-        ).copyWith(suffixText: suffixText, suffixIcon: suffixIcon),
+        decoration: transactionFieldDecoration(label, fillColor: surfaceColor)
+            .copyWith(
+              suffixText: suffixText,
+              suffixIcon: suffixIcon,
+              floatingLabelBehavior: floatingLabelBehavior,
+            ),
       );
     }
     final radius = BorderRadius.circular(25);
@@ -79,6 +83,7 @@ class ThemedPillField extends StatelessWidget {
             fillColor: Colors.transparent,
             suffixText: suffixText,
             suffixIcon: suffixIcon,
+            floatingLabelBehavior: floatingLabelBehavior,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,

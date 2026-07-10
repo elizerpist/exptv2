@@ -206,6 +206,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                   Text(
                                     _title(type),
                                     textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -249,6 +251,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                     controller: _name,
                                     focusNode: _nameFocus,
                                     label: 'Tranzakció neve',
+                                    floatingLabelBehavior:
+                                        FloatingLabelBehavior.never,
                                     surfaceColor: expenseTheme.fieldSurface,
                                     surfaceStyle:
                                         expenseTheme.contentSurfaceStyle,
@@ -260,6 +264,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                     controller: _amount,
                                     focusNode: _amountFocus,
                                     debugLabel: '$debugLabel.amount',
+                                    floatingLabelBehavior:
+                                        FloatingLabelBehavior.never,
                                     surfaceColor: expenseTheme.fieldSurface,
                                     surfaceStyle:
                                         expenseTheme.contentSurfaceStyle,
@@ -284,7 +290,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                       onSelected: _selectCategory,
                                     ),
                                   ],
-                                  const Spacer(),
+                                  const SizedBox(
+                                    height: _transactionFormFieldGap,
+                                  ),
                                   DateTimeFields(
                                     dateController: _date,
                                     timeController: _time,
@@ -344,10 +352,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   double _panelHeightFor(BuildContext context) {
-    return SlideUpPanelMetrics.transactionHeight(
+    final baseHeight = SlideUpPanelMetrics.transactionHeight(
       context,
       pickerOpen: _categoryPickerOpen,
     );
+    final hasNotificationLinkRow =
+        _notificationLinkLoading || _linkedNotificationEventId != null;
+    if (_categoryPickerOpen || !hasNotificationLinkRow) return baseHeight;
+    return (baseHeight + 22.0).clamp(0.0, MediaQuery.sizeOf(context).height);
   }
 
   void _logFirstBuild(double panelHeight, int categoryCount) {
