@@ -653,7 +653,7 @@ void main() {
     );
   });
 
-  testWidgets('vendor cards use the same background color as log cards', (
+  testWidgets('vendor cards use the same background color as category cards', (
     tester,
   ) async {
     final repository = FakeTransactionRepository();
@@ -682,7 +682,75 @@ void main() {
       find.byKey(const ValueKey('vendor-filter-row-surface-Test Store')),
     );
     final decoration = vendorSurface.decoration! as BoxDecoration;
-    expect(decoration.color, theme.logBox);
+    expect(decoration.color, theme.categoryCard);
+  });
+
+  testWidgets('vendor cards are compact grid tiles under alphabetic headers', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = FakeTransactionRepository();
+    repository.transactions
+      ..clear()
+      ..addAll([
+        TransactionRecord.fromMap({
+          'id': 1,
+          'date': '2025.09.25',
+          'time': '20:30:00',
+          'merchant': 'Alpha Market',
+          'amount': -100,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+        TransactionRecord.fromMap({
+          'id': 2,
+          'date': '2025.09.25',
+          'time': '20:31:00',
+          'merchant': 'Aqua Shop',
+          'amount': -200,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+      ]);
+    final store = TransactionStore(repository);
+    final theme = ExpenseTheme.fromSettings(AppThemeSettings.defaults());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 1200,
+            child: TransactionHomePage(store: store, expenseTheme: theme),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('search-pill-vendor-button')));
+    await tester.pumpAndSettle();
+
+    final alphaRect = tester.getRect(
+      find.byKey(const ValueKey('vendor-filter-row-Alpha Market')),
+    );
+    final aquaRect = tester.getRect(
+      find.byKey(const ValueKey('vendor-filter-row-Aqua Shop')),
+    );
+    final headerRect = tester.getRect(
+      find.byKey(const ValueKey('vendor-filter-section-A')),
+    );
+
+    expect(alphaRect.top, greaterThanOrEqualTo(headerRect.bottom));
+    expect(aquaRect.top, moreOrLessEquals(alphaRect.top, epsilon: 1));
+    expect(alphaRect.width, lessThan(180));
+    expect(aquaRect.left, greaterThan(alphaRect.right));
+    expect(alphaRect.height, moreOrLessEquals(150, epsilon: 1));
   });
 
   testWidgets('vendor amounts use log amount sign and color by active type', (

@@ -71,7 +71,7 @@ Status values: `NOT DONE`, `PARTIAL`, `BLOCKED`, `DONE`.
 - Acceptance condition: vendor sorting, search filtering, selection toggling, selected count/apply behavior, and keyboard-safe footer behavior from previous fixes must continue to work.
 - Acceptance condition: the grid layout must work on mobile widths without text overflow, card overlap, or footer/list clipping.
 - Verification method: inspect category menu card/grid implementation and reuse/mirror the relevant design logic where appropriate; add/update widget tests that open the vendor selector, assert vendor cards render as grid tiles under ABC headers, assert card color equals category card color, assert selected vendor uses the category-card-like permanent selected style, and verify search/filter/apply/keyboard footer regressions still pass.
-- Status: NOT DONE
+- Status: DONE
 
 ### BUG3-005 - Summary pill neumorph beolvad a globális neumorph beállításba
 

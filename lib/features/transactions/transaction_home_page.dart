@@ -18,6 +18,7 @@ import 'models/summary_window.dart';
 import 'state/transaction_store.dart';
 import 'widgets/category_menu/category_editor_panel.dart';
 import 'widgets/category_menu/category_editor_sheet.dart';
+import 'widgets/category_menu/category_card.dart';
 import 'widgets/category_menu/category_menu_panel.dart';
 import 'models/backheader_budget_item.dart';
 import 'widgets/header_card/category_budget_stage.dart';
@@ -481,7 +482,9 @@ class _TransactionHomePageState extends State<TransactionHomePage>
                         activeType: widget.store.activeType,
                         scrollController: _vendorListScrollController,
                         accentColor: expenseTheme.accent,
-                        cardSurfaceColor: expenseTheme.logBox,
+                        cardSurfaceColor: expenseTheme.categoryCard,
+                        cardSurfaceStyle: expenseTheme.categoryCardSurfaceStyle,
+                        avatarSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
                         onToggle: _togglePendingVendorFilter,
                         onApply: _applyVendorFilters,
@@ -1333,6 +1336,8 @@ class VendorFilterPanel extends StatefulWidget {
     required this.scrollController,
     required this.accentColor,
     required this.cardSurfaceColor,
+    required this.cardSurfaceStyle,
+    required this.avatarSurfaceStyle,
     required this.buttonSurfaceStyle,
     required this.onToggle,
     required this.onApply,
@@ -1344,6 +1349,8 @@ class VendorFilterPanel extends StatefulWidget {
   final ScrollController scrollController;
   final Color accentColor;
   final Color cardSurfaceColor;
+  final ExpenseSurfaceInteraction cardSurfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
   final ValueChanged<String> onToggle;
   final VoidCallback onApply;
@@ -1373,7 +1380,7 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
     final safeBottomInset = MediaQuery.paddingOf(context).bottom + 8;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final visibleSummaries = _visibleSummaries();
-    final visibleItems = _sectionedItems(visibleSummaries);
+    final visibleSections = _sectionedItems(visibleSummaries);
     final listBottomPadding = 84 + safeBottomInset + keyboardInset;
     return ColoredBox(
       color: AppColors.white,
@@ -1419,7 +1426,7 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
                           style: TextStyle(color: AppColors.gray500),
                         ),
                       )
-                    : ListView.separated(
+                    : ListView.builder(
                         key: const ValueKey('vendor-filter-list'),
                         controller: widget.scrollController,
                         padding: EdgeInsets.fromLTRB(
@@ -1428,25 +1435,44 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
                           20,
                           listBottomPadding,
                         ),
-                        itemCount: visibleItems.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemCount: visibleSections.length,
                         itemBuilder: (context, index) {
-                          final item = visibleItems[index];
-                          final header = item.header;
-                          if (header != null) {
-                            return _VendorSectionHeader(label: header);
-                          }
-                          final summary = item.summary!;
-                          return _VendorFilterRow(
-                            summary: summary,
-                            selected: widget.selectedVendors.contains(
-                              summary.name,
-                            ),
-                            activeType: widget.activeType,
-                            accentColor: widget.accentColor,
-                            cardSurfaceColor: widget.cardSurfaceColor,
-                            buttonSurfaceStyle: widget.buttonSurfaceStyle,
-                            onTap: () => widget.onToggle(summary.name),
+                          final section = visibleSections[index];
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _VendorSectionHeader(label: section.label),
+                              GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                padding: const EdgeInsets.only(bottom: 12),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      mainAxisSpacing: 15,
+                                      crossAxisSpacing: 14,
+                                      mainAxisExtent: 150,
+                                    ),
+                                itemCount: section.summaries.length,
+                                itemBuilder: (context, summaryIndex) {
+                                  final summary =
+                                      section.summaries[summaryIndex];
+                                  return _VendorFilterRow(
+                                    summary: summary,
+                                    selected: widget.selectedVendors.contains(
+                                      summary.name,
+                                    ),
+                                    activeType: widget.activeType,
+                                    accentColor: widget.accentColor,
+                                    cardSurfaceColor: widget.cardSurfaceColor,
+                                    cardSurfaceStyle: widget.cardSurfaceStyle,
+                                    avatarSurfaceStyle:
+                                        widget.avatarSurfaceStyle,
+                                    onTap: () => widget.onToggle(summary.name),
+                                  );
+                                },
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -1487,19 +1513,26 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
     ];
   }
 
-  List<_VendorListItem> _sectionedItems(List<VendorFilterSummary> summaries) {
+  List<_VendorListSection> _sectionedItems(
+    List<VendorFilterSummary> summaries,
+  ) {
     final sorted = [...summaries]..sort(_compareVendorSummaries);
-    final items = <_VendorListItem>[];
+    final sections = <_VendorListSection>[];
     String? previousGroup;
+    var groupSummaries = <VendorFilterSummary>[];
     for (final summary in sorted) {
       final group = _vendorGroup(summary.name);
-      if (group != previousGroup) {
-        items.add(_VendorListItem.header(group));
-        previousGroup = group;
+      if (previousGroup != null && group != previousGroup) {
+        sections.add(_VendorListSection(previousGroup, groupSummaries));
+        groupSummaries = <VendorFilterSummary>[];
       }
-      items.add(_VendorListItem.summary(summary));
+      previousGroup = group;
+      groupSummaries.add(summary);
     }
-    return items;
+    if (previousGroup != null) {
+      sections.add(_VendorListSection(previousGroup, groupSummaries));
+    }
+    return sections;
   }
 
   int _compareVendorSummaries(
@@ -1572,12 +1605,11 @@ class _VendorFilterPanelState extends State<VendorFilterPanel> {
   }
 }
 
-class _VendorListItem {
-  const _VendorListItem.header(this.header) : summary = null;
-  const _VendorListItem.summary(this.summary) : header = null;
+class _VendorListSection {
+  const _VendorListSection(this.label, this.summaries);
 
-  final String? header;
-  final VendorFilterSummary? summary;
+  final String label;
+  final List<VendorFilterSummary> summaries;
 }
 
 class _VendorSectionHeader extends StatelessWidget {
@@ -1690,7 +1722,8 @@ class _VendorFilterRow extends StatelessWidget {
     required this.activeType,
     required this.accentColor,
     required this.cardSurfaceColor,
-    required this.buttonSurfaceStyle,
+    required this.cardSurfaceStyle,
+    required this.avatarSurfaceStyle,
     required this.onTap,
   });
 
@@ -1699,7 +1732,8 @@ class _VendorFilterRow extends StatelessWidget {
   final TransactionType activeType;
   final Color accentColor;
   final Color cardSurfaceColor;
-  final ExpenseSurfaceInteraction buttonSurfaceStyle;
+  final ExpenseSurfaceInteraction cardSurfaceStyle;
+  final ExpenseSurfaceInteraction avatarSurfaceStyle;
   final VoidCallback onTap;
 
   @override
@@ -1711,89 +1745,133 @@ class _VendorFilterRow extends StatelessWidget {
         ? AppColors.income
         : AppColors.expense;
     final amountPrefix = activeType == TransactionType.income ? '+' : '-';
-    return GestureDetector(
+    final activeUsesInset = selected && cardSurfaceStyle.hasPressEffect;
+    final avatarCardOffset = ExpenseSurface.pressOffset(
+      style: cardSurfaceStyle,
+      pressed: activeUsesInset,
+    );
+    return SizedBox(
       key: ValueKey('vendor-filter-row-${summary.name}'),
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: ExpensePressable(
-        enabled: buttonSurfaceStyle.hasPressEffect,
-        forcePressed: selected && buttonSurfaceStyle.hasPressEffect,
-        builder: (context, pressed) {
-          return ExpenseSurfaceContainer(
-            surfaceKey: ValueKey('vendor-filter-row-surface-${summary.name}'),
-            style: buttonSurfaceStyle,
-            color: cardSurfaceColor,
-            borderRadius: BorderRadius.circular(25),
-            pressed: pressed,
-            constraints: const BoxConstraints(minHeight: 72),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            neutralBorder: Border.all(
-              color: selected ? accentColor : AppColors.gray200,
-              width: selected ? 1.5 : 1,
-            ),
-            neutralShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                offset: const Offset(0, 2),
-                blurRadius: 3,
-              ),
-            ],
-            child: Row(
-              children: [
-                ExpenseSurfaceContainer(
-                  surfaceKey: ValueKey(
-                    'vendor-filter-avatar-surface-${summary.name}',
-                  ),
-                  style: buttonSurfaceStyle,
-                  color: avatarColor,
-                  primary: true,
-                  primaryColor: avatarColor,
-                  borderRadius: BorderRadius.circular(23),
-                  pressed: pressed,
-                  width: 46,
-                  height: 46,
-                  child: Center(
-                    child: Text(
-                      _initials(summary.name),
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+      height: 150,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: ExpensePressable(
+                enabled: cardSurfaceStyle.hasPressEffect,
+                forcePressed: activeUsesInset,
+                builder: (context, pressed) {
+                  final radius = BorderRadius.circular(18);
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ExpenseSurfaceContainer(
+                        surfaceKey: ValueKey(
+                          'vendor-filter-row-surface-${summary.name}',
+                        ),
+                        style: cardSurfaceStyle,
+                        color: cardSurfaceColor,
+                        borderRadius: radius,
+                        pressed: pressed,
+                        padding: const EdgeInsets.fromLTRB(10, 82, 10, 12),
+                        neutralBorder: Border.all(color: AppColors.gray200),
+                        neutralShadow: categoryNeutralShadow(cardSurfaceStyle),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              summary.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.gray800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '$amountPrefix${formatHuf(summary.total)}',
+                              key: ValueKey(
+                                'vendor-filter-amount-${summary.name}',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: amountColor,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    summary.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.gray800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '$amountPrefix${formatHuf(summary.total)}',
-                  key: ValueKey('vendor-filter-amount-${summary.name}'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: amountColor,
-                  ),
-                ),
-              ],
+                      if (selected && !cardSurfaceStyle.hasPressEffect)
+                        CategoryActiveBorder(
+                          radius: radius,
+                          color: accentColor,
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
-          );
-        },
+          ),
+          Positioned(
+            top: 15,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: TweenAnimationBuilder<Offset>(
+                tween: Tween<Offset>(begin: Offset.zero, end: avatarCardOffset),
+                duration: ExpenseSurface.pressDuration,
+                curve: Curves.easeOut,
+                builder: (context, value, child) {
+                  return Transform.translate(offset: value, child: child);
+                },
+                child: IgnorePointer(
+                  child: ExpensePressable(
+                    key: ValueKey('vendor-filter-avatar-${summary.name}'),
+                    enabled: avatarSurfaceStyle.hasPressEffect,
+                    forcePressed: selected && avatarSurfaceStyle.hasPressEffect,
+                    builder: (context, avatarPressed) {
+                      return ExpenseSurfaceContainer(
+                        surfaceKey: ValueKey(
+                          'vendor-filter-avatar-surface-${summary.name}',
+                        ),
+                        style: avatarSurfaceStyle,
+                        color: avatarColor,
+                        primary: true,
+                        primaryColor: avatarColor,
+                        borderRadius: BorderRadius.circular(32.5),
+                        pressed: avatarPressed,
+                        width: 65,
+                        height: 65,
+                        child: Center(
+                          child: Text(
+                            _initials(summary.name),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
