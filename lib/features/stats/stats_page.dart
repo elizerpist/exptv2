@@ -120,7 +120,6 @@ class _StatsPageState extends State<StatsPage>
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
   final _snapshotRecallGeneration = StatsSnapshotRecallGeneration();
-  var _snapshotRecallOperations = 0;
 
   @override
   void initState() {
@@ -175,7 +174,6 @@ class _StatsPageState extends State<StatsPage>
   bool get wantKeepAlive => true;
 
   void _handleStoreChanged() {
-    if (_snapshotRecallOperations > 0) return;
     var changed = _syncSummaryFromStore();
     if (!widget.store.loading && widget.store.error == null) {
       final nextThreshold = _clampThresholdToCurrentScope(_thresholdValue);
@@ -272,58 +270,69 @@ class _StatsPageState extends State<StatsPage>
   ) async {
     final recall = _snapshotRecallGeneration.begin();
     final applied = snapshot.applyTo(_currentSnapshotState());
-    await Future<void>.delayed(Duration.zero);
+    final mutation = await widget.store.prepareStatsViewMutation(
+      merchantFilters: snapshot.includeVendorScope
+          ? applied.vendorScopeNames
+          : null,
+      summaryWindow: snapshot.includeLayoutMode
+          ? switch (applied.layoutMode) {
+              StatsLayoutMode.sum => SummaryWindow.allTime,
+              StatsLayoutMode.year => SummaryWindow.yearly,
+              StatsLayoutMode.month => SummaryWindow.monthly,
+            }
+          : null,
+      year: snapshot.includeLayoutMode ? applied.activeYear : null,
+      month: snapshot.includeLayoutMode ? applied.activeMonth : null,
+    );
     if (!mounted || !recall.isLatest) {
       return _ignoredSnapshotRecallResult();
     }
-    _snapshotRecallOperations += 1;
-    try {
-      if (snapshot.includeLayoutMode) {
-        switch (applied.layoutMode) {
-          case StatsLayoutMode.sum:
-            await widget.store.setSummaryAllTime();
-          case StatsLayoutMode.year:
-            await widget.store.setSummaryYear(applied.activeYear);
-          case StatsLayoutMode.month:
-            await widget.store.setSummaryMonth(
-              applied.activeYear,
-              applied.activeMonth,
-            );
-        }
-      }
-      if (!mounted || !recall.isLatest) {
-        return _ignoredSnapshotRecallResult();
-      }
-      _activeType = applied.activeType;
-      _thresholdValue = applied.threshold;
-      if (snapshot.includeCategoryScope) {
-        _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
-      }
-      if (snapshot.includeLayoutMode) {
-        _applySnapshotLayoutLocally(applied);
-      }
-      if (snapshot.includeVendorScope) {
-        widget.store.setMerchantFilters(applied.vendorScopeNames);
-      }
-      final observedMax = _resolveRenderFrame().observedMaximum;
-      final clampedThreshold = _statsThresholdRange(
-        observedMax: observedMax,
-        fallbackMax: 50000,
-      ).snap(_thresholdValue);
-      setState(() {
-        _thresholdValue = clampedThreshold;
-        _selectedSnapshotIndex = _snapshots.indexWhere(
-          (item) => item.id == snapshot.id,
-        );
-      });
-      return _StatsSnapshotRecallResult(
-        threshold: clampedThreshold,
-        observedMax: observedMax,
-        applied: true,
-      );
-    } finally {
-      _snapshotRecallOperations -= 1;
+    final targetVendors =
+        mutation.merchantFilters ?? widget.store.activeMerchantFilters;
+    final targetCategoryIds = snapshot.includeCategoryScope
+        ? applied.categoryScopeIds
+        : _selectedScopeByType[applied.activeType] ?? const <int>{};
+    final targetFrame = _resolveRenderFrameFor(
+      activeType: applied.activeType,
+      threshold: applied.threshold,
+      layoutMode: applied.layoutMode,
+      year: applied.activeYear,
+      month: applied.activeMonth,
+      categoryIds: targetCategoryIds,
+      vendorNames: targetVendors,
+    );
+    final clampedThreshold = _statsThresholdRange(
+      observedMax: targetFrame.observedMaximum,
+      fallbackMax: 50000,
+    ).snap(applied.threshold);
+    final finalFrame = clampedThreshold == applied.threshold
+        ? targetFrame
+        : _resolveRenderFrameFor(
+            activeType: applied.activeType,
+            threshold: clampedThreshold,
+            layoutMode: applied.layoutMode,
+            year: applied.activeYear,
+            month: applied.activeMonth,
+            categoryIds: targetCategoryIds,
+            vendorNames: targetVendors,
+          );
+    _activeType = applied.activeType;
+    _thresholdValue = clampedThreshold;
+    if (snapshot.includeCategoryScope) {
+      _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
     }
+    if (snapshot.includeLayoutMode) {
+      _applySnapshotLayoutLocally(applied);
+    }
+    _selectedSnapshotIndex = _snapshots.indexWhere(
+      (item) => item.id == snapshot.id,
+    );
+    widget.store.commitStatsViewMutation(mutation);
+    return _StatsSnapshotRecallResult(
+      threshold: clampedThreshold,
+      observedMax: finalFrame.observedMaximum,
+      applied: true,
+    );
   }
 
   void _applySnapshotLayoutLocally(StatsSnapshotState applied) {
@@ -564,36 +573,56 @@ class _StatsPageState extends State<StatsPage>
   }
 
   StatsRenderFrame _resolveRenderFrame() {
-    final summaryScope = !_yearScopeEnabled
-        ? StatsSummaryScope.allTime
-        : _monthScopeEnabled
-        ? StatsSummaryScope.monthly
-        : StatsSummaryScope.yearly;
+    return _resolveRenderFrameFor(
+      activeType: _activeType,
+      threshold: _thresholdValue,
+      layoutMode: _layoutMode,
+      year: _year,
+      month: _month,
+      categoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
+      vendorNames: widget.store.activeMerchantFilters,
+    );
+  }
+
+  StatsRenderFrame _resolveRenderFrameFor({
+    required TransactionType activeType,
+    required double threshold,
+    required StatsLayoutMode layoutMode,
+    required int year,
+    required int month,
+    required Set<int> categoryIds,
+    required Set<String> vendorNames,
+  }) {
+    final summaryScope = switch (layoutMode) {
+      StatsLayoutMode.sum => StatsSummaryScope.allTime,
+      StatsLayoutMode.year => StatsSummaryScope.yearly,
+      StatsLayoutMode.month => StatsSummaryScope.monthly,
+    };
     final key = StatsRenderFrameKey(
       dataRevision: (
         transactions: widget.store.transactions,
         categories: widget.store.categories,
       ),
-      activeType: _activeType,
+      activeType: activeType,
       summaryScope: summaryScope,
-      year: _year,
-      month: _month,
-      categoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
-      vendorNames: widget.store.activeMerchantFilters,
+      year: year,
+      month: month,
+      categoryIds: categoryIds,
+      vendorNames: vendorNames,
       query: _searchQuery,
-      threshold: _thresholdValue,
+      threshold: threshold,
     );
     final frame = _renderFrameCache.resolve(key, () {
       return StatsRenderFrame.build(
-        year: _year,
-        activeType: _activeType,
-        thresholdValue: _thresholdValue,
+        year: year,
+        activeType: activeType,
+        thresholdValue: threshold,
         transactions: widget.store.transactions,
         categories: widget.store.categories,
-        selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
-        vendorFilters: widget.store.activeMerchantFilters,
+        selectedCategoryIds: categoryIds,
+        vendorFilters: vendorNames,
         summaryScope: summaryScope,
-        month: _month,
+        month: month,
         query: _searchQuery,
         today: widget.store.currentDate,
       );
@@ -904,6 +933,10 @@ class _StatsPageState extends State<StatsPage>
           accentColor: _expenseTheme.accent,
           snapshots: _snapshots,
           selectedSnapshotIndex: _selectedSnapshotIndex,
+          categoryNamesById: {
+            for (final category in widget.store.categories)
+              category.transactionCategoryID: category.name,
+          },
           onAddSnapshot: _saveSnapshot,
           onSnapshotSelected: _applySnapshot,
           onThresholdChanged: (value) {
@@ -2006,6 +2039,7 @@ class _StatsThresholdControlSheet extends StatefulWidget {
     required this.accentColor,
     required this.snapshots,
     required this.selectedSnapshotIndex,
+    required this.categoryNamesById,
     required this.onAddSnapshot,
     required this.onSnapshotSelected,
     required this.onThresholdChanged,
@@ -2017,6 +2051,7 @@ class _StatsThresholdControlSheet extends StatefulWidget {
   final Color accentColor;
   final List<StatsSnapshot> snapshots;
   final int selectedSnapshotIndex;
+  final Map<int, String> categoryNamesById;
   final Future<List<StatsSnapshot>> Function(
     _StatsSnapshotDraft,
     StatsSnapshot?,
@@ -2103,17 +2138,10 @@ class _StatsThresholdControlSheetState
               _StatsSnapshotStrip(
                 snapshots: _snapshots,
                 selectedSnapshotIndex: _selectedSnapshotIndex,
+                categoryNamesById: widget.categoryNamesById,
                 onAddSnapshot: _openSnapshotDialog,
-                onSnapshotSelected: (snapshot) async {
-                  setState(() {
-                    _selectedSnapshotIndex = _snapshots.indexOf(snapshot);
-                  });
-                  final result = await widget.onSnapshotSelected(snapshot);
-                  if (!mounted || !result.applied) return;
-                  _syncThreshold(
-                    result.threshold,
-                    observedMax: result.observedMax,
-                  );
+                onSnapshotSelected: (snapshot) {
+                  unawaited(_recallSnapshot(snapshot));
                 },
                 onSnapshotEdit: (snapshot) {
                   unawaited(_openSnapshotDialog(snapshot));
@@ -2156,10 +2184,7 @@ class _StatsThresholdControlSheetState
                   key: const ValueKey('stats-threshold-slider'),
                   min: range.min,
                   max: range.max,
-                  divisions: ((range.max - range.min) / range.step)
-                      .round()
-                      .clamp(1, 1000)
-                      .toInt(),
+                  divisions: ((range.max - range.min) / range.step).round(),
                   value: range.clamp(_thresholdValue),
                   onChanged: _setThreshold,
                   onChangeEnd: (_) => _flushThresholdPublication(),
@@ -2238,6 +2263,18 @@ class _StatsThresholdControlSheetState
     });
   }
 
+  Future<void> _recallSnapshot(StatsSnapshot snapshot) async {
+    final result = await widget.onSnapshotSelected(snapshot);
+    if (!mounted || !result.applied) return;
+    setState(() {
+      _selectedSnapshotIndex = _snapshots.indexOf(snapshot);
+      _observedMax = result.observedMax;
+      final next = _range.snap(result.threshold);
+      _thresholdValue = next;
+      _amountController.text = next.toStringAsFixed(0);
+    });
+  }
+
   void _setThreshold(double value) {
     final next = _range.snap(value);
     if (next == _thresholdValue) return;
@@ -2309,6 +2346,7 @@ class _StatsSnapshotStrip extends StatelessWidget {
   const _StatsSnapshotStrip({
     required this.snapshots,
     required this.selectedSnapshotIndex,
+    required this.categoryNamesById,
     required this.onAddSnapshot,
     required this.onSnapshotSelected,
     required this.onSnapshotEdit,
@@ -2316,6 +2354,7 @@ class _StatsSnapshotStrip extends StatelessWidget {
 
   final List<StatsSnapshot> snapshots;
   final int selectedSnapshotIndex;
+  final Map<int, String> categoryNamesById;
   final VoidCallback onAddSnapshot;
   final ValueChanged<StatsSnapshot> onSnapshotSelected;
   final ValueChanged<StatsSnapshot> onSnapshotEdit;
@@ -2346,6 +2385,7 @@ class _StatsSnapshotStrip extends StatelessWidget {
                 _StatsSnapshotPreviewCard(
                   snapshot: snapshots[i],
                   selected: i == selectedSnapshotIndex,
+                  categoryNamesById: categoryNamesById,
                   onTap: () => onSnapshotSelected(snapshots[i]),
                   onLongPress: () => onSnapshotEdit(snapshots[i]),
                 ),
@@ -2392,18 +2432,20 @@ class _StatsSnapshotPreviewCard extends StatelessWidget {
   const _StatsSnapshotPreviewCard({
     required this.snapshot,
     required this.selected,
+    required this.categoryNamesById,
     required this.onTap,
     required this.onLongPress,
   });
 
   final StatsSnapshot snapshot;
   final bool selected;
+  final Map<int, String> categoryNamesById;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = _snapshotTokens(snapshot);
+    final tokens = _snapshotTokens(snapshot, categoryNamesById);
     return GestureDetector(
       key: ValueKey('stats-snapshot-card-${snapshot.id}'),
       behavior: HitTestBehavior.opaque,
@@ -2427,25 +2469,49 @@ class _StatsSnapshotPreviewCard extends StatelessWidget {
               children: [
                 SizedBox(
                   height: 14,
-                  child: Tooltip(
-                    message: snapshot.name,
-                    triggerMode: TooltipTriggerMode.manual,
-                    child: Semantics(
-                      label: 'Pillanatkép neve: ${snapshot.name}',
-                      child: FittedBox(
-                        alignment: Alignment.centerLeft,
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          snapshot.name,
-                          softWrap: false,
-                          style: const TextStyle(
-                            color: AppColors.gray800,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          label: 'Pillanatkép neve: ${snapshot.name}',
+                          child: FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              snapshot.name,
+                              softWrap: false,
+                              style: const TextStyle(
+                                color: AppColors.gray800,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 2),
+                      Tooltip(
+                        message: 'Pillanatkép részletei',
+                        child: IconButton(
+                          key: ValueKey('stats-snapshot-info-${snapshot.id}'),
+                          onPressed: () => _showDetails(context, tokens),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 14,
+                            height: 14,
+                          ),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(14, 14),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: const Icon(
+                            Icons.info_outline_rounded,
+                            size: 12,
+                            color: AppColors.gray500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -2457,6 +2523,40 @@ class _StatsSnapshotPreviewCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _showDetails(
+    BuildContext context,
+    List<_StatsSnapshotTokenData> tokens,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          key: const ValueKey('stats-snapshot-details-dialog'),
+          title: Text(snapshot.name),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final token in tokens) ...[
+                  Text(token.description),
+                  if (token != tokens.last) const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('stats-snapshot-details-close'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Bezárás'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -2480,7 +2580,10 @@ class _StatsSnapshotPreviewCard extends StatelessWidget {
     );
   }
 
-  static List<_StatsSnapshotTokenData> _snapshotTokens(StatsSnapshot snapshot) {
+  static List<_StatsSnapshotTokenData> _snapshotTokens(
+    StatsSnapshot snapshot,
+    Map<int, String> categoryNamesById,
+  ) {
     final tokens = <_StatsSnapshotTokenData>[];
     if (snapshot.includeActiveType) {
       final income = snapshot.activeType == TransactionType.income;
@@ -2543,13 +2646,16 @@ class _StatsSnapshotPreviewCard extends StatelessWidget {
     }
     if (snapshot.includeCategoryScope) {
       final ids = snapshot.categoryScopeIds.toList()..sort();
+      final categoryNames = [
+        for (final id in ids) categoryNamesById[id] ?? '#$id',
+      ];
       tokens.add(
         _StatsSnapshotTokenData(
           field: 'categories',
           compact: 'K${ids.length}',
           description: ids.isEmpty
               ? 'Kategória szűrés: mind'
-              : 'Kategória szűrés: ${ids.join(', ')}',
+              : 'Kategória szűrés: ${categoryNames.join(', ')}',
         ),
       );
     }
@@ -2588,29 +2694,25 @@ class _StatsSnapshotToken extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: data.description,
-      triggerMode: TooltipTriggerMode.manual,
-      child: Semantics(
-        label: data.description,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.gray100,
-            borderRadius: BorderRadius.circular(3),
-            border: Border.all(color: AppColors.gray200),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                data.compact,
-                softWrap: false,
-                style: const TextStyle(
-                  color: AppColors.gray700,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                ),
+    return Semantics(
+      label: data.description,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.gray100,
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: AppColors.gray200),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              data.compact,
+              softWrap: false,
+              style: const TextStyle(
+                color: AppColors.gray700,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ),

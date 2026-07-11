@@ -41,6 +41,18 @@ class VendorFilterSummary {
   final bool hasCustomName;
 }
 
+class StatsViewMutation {
+  const StatsViewMutation({
+    required this.merchantFilters,
+    required this.summaryWindow,
+    required this.referenceDate,
+  });
+
+  final Set<String>? merchantFilters;
+  final SummaryWindow? summaryWindow;
+  final DateTime? referenceDate;
+}
+
 class _VendorCategoryRollup {
   const _VendorCategoryRollup({
     required this.category,
@@ -1007,6 +1019,74 @@ class TransactionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<StatsViewMutation> prepareStatsViewMutation({
+    Set<String>? merchantFilters,
+    SummaryWindow? summaryWindow,
+    int? year,
+    int? month,
+  }) async {
+    final normalizedMerchants = merchantFilters == null
+        ? null
+        : Set<String>.unmodifiable(
+            merchantFilters
+                .map((merchant) => merchant.trim())
+                .where((merchant) => merchant.isNotEmpty)
+                .toSet(),
+          );
+    final referenceDate = switch (summaryWindow) {
+      SummaryWindow.allTime => _periodReferenceDate,
+      SummaryWindow.yearly => DateTime(year ?? _periodReferenceDate.year),
+      SummaryWindow.monthly => DateTime(
+        year ?? _periodReferenceDate.year,
+        (month ?? _periodReferenceDate.month).clamp(1, 12).toInt(),
+      ),
+      null => null,
+    };
+    return StatsViewMutation(
+      merchantFilters: normalizedMerchants,
+      summaryWindow: summaryWindow,
+      referenceDate: referenceDate,
+    );
+  }
+
+  void commitStatsViewMutation(StatsViewMutation mutation) {
+    final merchants = mutation.merchantFilters;
+    if (merchants != null) {
+      _resetVisibleDisplayWindow();
+      if (merchants.isEmpty) {
+        _filter = _filter.copyWith(clearMerchant: true, searchQuery: '');
+      } else {
+        _filter = _filter.copyWith(
+          merchant: merchants.length == 1 ? merchants.first : null,
+          merchantFilters: merchants,
+          merchantColorHex: null,
+          searchQuery: '',
+        );
+      }
+    }
+    final summaryWindow = mutation.summaryWindow;
+    int? summaryGeneration;
+    if (summaryWindow != null) {
+      _summaryWindow = summaryWindow;
+      _periodReferenceDate = mutation.referenceDate!;
+      _prepareGhostProjectionForActiveWindow();
+      summaryGeneration = ++_summaryChangeGeneration;
+    }
+    _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
+    notifyListeners();
+    if (summaryWindow == SummaryWindow.monthly) {
+      // Stats frames consume the stable real-transaction view. Refresh only
+      // ghost state after the atomic publish without changing that revision.
+      unawaited(
+        _projectRecurringGhostsForActiveWindow(
+          generation: summaryGeneration,
+          notify: false,
+        ),
+      );
+    }
+  }
+
   void clearMerchantFilter([String? merchant]) {
     if (merchant == null) {
       _resetVisibleDisplayWindow();
@@ -1504,7 +1584,7 @@ class TransactionStore extends ChangeNotifier {
         return;
       }
       _replaceRecurringGhostTransactions(ghosts, stablePeriodKey: periodKey);
-      _rebuildPublicViews();
+      _rebuildRecurringGhostsView();
       _invalidateViewCaches();
       _invalidateFastInfoMetrics();
       _prewarmCriticalCaches('recurring-ghosts');
@@ -1596,10 +1676,14 @@ class TransactionStore extends ChangeNotifier {
   void _rebuildPublicViews() {
     _categoriesView = List<TransactionCategory>.unmodifiable(_categories);
     _transactionsView = List<TransactionRecord>.unmodifiable(_transactions);
+    _rebuildRecurringGhostsView();
+    _limitsView = List<CategoryLimit>.unmodifiable(_limits);
+  }
+
+  void _rebuildRecurringGhostsView() {
     _recurringGhostTransactionsView = List<RecurringGhostRecord>.unmodifiable(
       _recurringGhostTransactions,
     );
-    _limitsView = List<CategoryLimit>.unmodifiable(_limits);
   }
 
   void _rebuildDerivedIndexes() {

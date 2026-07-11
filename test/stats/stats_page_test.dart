@@ -1075,6 +1075,65 @@ void main() {
     );
   });
 
+  testWidgets('threshold slider retains exact 5000 steps above five million', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -10000000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    final controller = StatsPageController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: snapshotRepository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+
+    var slider = tester.widget<Slider>(
+      find.byKey(const ValueKey('stats-threshold-slider')),
+    );
+    expect(slider.max, 10000000);
+    expect(slider.divisions, 2000);
+
+    slider.onChanged!(5000000);
+    await tester.pump();
+    slider = tester.widget<Slider>(
+      find.byKey(const ValueKey('stats-threshold-slider')),
+    );
+    slider.onChanged!(5005000);
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<Slider>(find.byKey(const ValueKey('stats-threshold-slider')))
+          .value,
+      5005000,
+    );
+    expect(find.text('5 005 000 Ft'), findsAtLeastNWidgets(1));
+  });
+
   testWidgets('stats SearchPill vendor button delegates to shell callback', (
     tester,
   ) async {
@@ -1876,6 +1935,138 @@ void main() {
     expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
   });
 
+  testWidgets(
+    'out-of-order recall commits only latest target in one store publication',
+    (tester) async {
+      final store = DelayedSnapshotTransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Bolt', type: TransactionType.expense),
+            category(id: 2, name: 'Fizetes', type: TransactionType.income),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+            record(id: 2, date: '2026-01-01', amount: 90000, categoryId: 2),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      var storePublications = 0;
+      store.addListener(() => storePublications += 1);
+      final controller = StatsPageController();
+      final cache = TrackingStatsRenderFrameCache();
+      final now = DateTime(2026, 7, 11);
+      final repository = InMemoryStatsSnapshotRepository([
+        StatsSnapshot(
+          id: 'stale-a',
+          name: 'Stale A',
+          createdAt: now,
+          updatedAt: now,
+          includeCategoryScope: false,
+          includeVendorScope: true,
+          includeActiveType: true,
+          includeThreshold: true,
+          includeLayoutMode: true,
+          includePageIndex: false,
+          vendorScopeNames: const {'A vendor'},
+          activeType: TransactionType.income,
+          threshold: 10000,
+          layoutMode: StatsLayoutMode.month,
+          activeYear: 2025,
+          activeMonth: 3,
+        ),
+        StatsSnapshot(
+          id: 'latest-b',
+          name: 'Latest B',
+          createdAt: now.add(const Duration(seconds: 1)),
+          updatedAt: now.add(const Duration(seconds: 1)),
+          includeCategoryScope: false,
+          includeVendorScope: false,
+          includeActiveType: true,
+          includeThreshold: true,
+          includeLayoutMode: false,
+          includePageIndex: true,
+          activeType: TransactionType.expense,
+          threshold: 25000,
+          pageIndex: 1,
+        ),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(
+                store: store,
+                controller: controller,
+                snapshotRepository: repository,
+                renderFrameCache: cache,
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+      controller.openThresholdSheet();
+      await pumpStatsPage(tester);
+      final frameBuildsBeforeRecall = cache.builderCalls;
+
+      await tester.tap(
+        find.byKey(const ValueKey('stats-snapshot-card-stale-a')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('stats-snapshot-card-latest-b')),
+      );
+      await tester.pump();
+
+      expect(store.pendingPreparations, 2);
+      expect(store.snapshotCommitCount, 0);
+      expect(storePublications, 0);
+      expect(cache.builderCalls, frameBuildsBeforeRecall);
+
+      store.completePreparation(1);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 240));
+      await tester.pump(const Duration(milliseconds: 240));
+
+      expect(store.snapshotCommitCount, 1);
+      expect(storePublications, 1);
+      expect(store.summaryWindow, SummaryWindow.yearly);
+      expect(store.summaryReferenceDate.year, 2026);
+      expect(store.activeMerchantFilters, isEmpty);
+      expect(cache.builderCalls, frameBuildsBeforeRecall + 1);
+      expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
+      expect(
+        tester
+            .widget<StatsYearCalendar>(find.byType(StatsYearCalendar))
+            .data
+            .activeType,
+        TransactionType.expense,
+      );
+      expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
+
+      store.completePreparation(0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 240));
+      await tester.pump(const Duration(milliseconds: 240));
+
+      expect(store.snapshotCommitCount, 1);
+      expect(storePublications, 1);
+      expect(store.summaryWindow, SummaryWindow.yearly);
+      expect(store.activeMerchantFilters, isEmpty);
+      expect(cache.builderCalls, frameBuildsBeforeRecall + 1);
+      expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      store.dispose();
+    },
+  );
+
   testWidgets('worst-case snapshot card keeps every field in 112x74', (
     tester,
   ) async {
@@ -1979,6 +2170,90 @@ void main() {
     }
   });
 
+  testWidgets('snapshot info exposes full scopes and long press still edits', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          category(id: 2, name: 'Étterem', type: TransactionType.expense),
+          category(id: 3, name: 'Utazás', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    final controller = StatsPageController();
+    final now = DateTime(2026, 7, 11);
+    final repository = InMemoryStatsSnapshotRepository([
+      StatsSnapshot(
+        id: 'details',
+        name: 'Reszletes',
+        createdAt: now,
+        updatedAt: now,
+        includeCategoryScope: true,
+        includeVendorScope: true,
+        includeActiveType: true,
+        includeThreshold: true,
+        includeLayoutMode: true,
+        includePageIndex: true,
+        categoryScopeIds: const {1, 2, 3},
+        vendorScopeNames: const {'Aldi', 'Spar', 'Tesco'},
+        activeType: TransactionType.expense,
+        threshold: 125000,
+        layoutMode: StatsLayoutMode.month,
+        activeYear: 2025,
+        activeMonth: 12,
+        pageIndex: 1,
+      ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: repository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+
+    await tester.tap(find.byKey(const ValueKey('stats-snapshot-info-details')));
+    await pumpStatsPage(tester);
+
+    expect(
+      find.byKey(const ValueKey('stats-snapshot-details-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Kategória szűrés: Bolt, Étterem, Utazás'),
+      findsOneWidget,
+    );
+    expect(find.text('Kereskedő szűrés: Aldi, Spar, Tesco'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('stats-snapshot-details-close')),
+    );
+    await pumpStatsPage(tester);
+
+    await tester.longPress(
+      find.byKey(const ValueKey('stats-snapshot-card-details')),
+    );
+    await pumpStatsPage(tester);
+    expect(find.byKey(const ValueKey('stats-snapshot-dialog')), findsOneWidget);
+  });
+
   testWidgets(
     'active-type-only snapshot preserves the target type category scope',
     (tester) async {
@@ -2000,6 +2275,7 @@ void main() {
       await store.start();
       unawaited(store.setSummaryYear(2026));
       final controller = StatsPageController();
+      final cache = TrackingStatsRenderFrameCache();
       final now = DateTime(2026, 7, 11, 12);
       final repository = InMemoryStatsSnapshotRepository([
         StatsSnapshot(
@@ -2027,6 +2303,7 @@ void main() {
                 store: store,
                 controller: controller,
                 snapshotRepository: repository,
+                renderFrameCache: cache,
               ),
             ),
           ),
@@ -2054,9 +2331,11 @@ void main() {
       await pumpStatsPage(tester);
       controller.openThresholdSheet();
       await pumpStatsPage(tester);
+      final beforeRecall = cache.builderCalls;
       await tester.tap(find.text('Bevétel oldal'));
       await pumpStatsPage(tester);
 
+      expect(cache.builderCalls, beforeRecall + 1);
       expect(find.text('2026'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('search-pill-capsule-category-2')),
@@ -2430,6 +2709,43 @@ class TrackingStatsRenderFrameCache extends StatsRenderFrameCache {
     });
     resolvedFrames.add(frame);
     return frame;
+  }
+}
+
+class DelayedSnapshotTransactionStore extends TransactionStore {
+  DelayedSnapshotTransactionStore(super.repository, {required super.clock});
+
+  final _preparationGates = <Completer<void>>[];
+  var snapshotCommitCount = 0;
+
+  int get pendingPreparations => _preparationGates.length;
+
+  void completePreparation(int index) {
+    _preparationGates[index].complete();
+  }
+
+  @override
+  Future<StatsViewMutation> prepareStatsViewMutation({
+    Set<String>? merchantFilters,
+    SummaryWindow? summaryWindow,
+    int? year,
+    int? month,
+  }) async {
+    final gate = Completer<void>();
+    _preparationGates.add(gate);
+    await gate.future;
+    return super.prepareStatsViewMutation(
+      merchantFilters: merchantFilters,
+      summaryWindow: summaryWindow,
+      year: year,
+      month: month,
+    );
+  }
+
+  @override
+  void commitStatsViewMutation(StatsViewMutation mutation) {
+    snapshotCommitCount += 1;
+    super.commitStatsViewMutation(mutation);
   }
 }
 
