@@ -352,7 +352,7 @@ void main() {
     expect(find.text('MIND'), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-magnet-common')), findsOneWidget);
     expect(find.byKey(const ValueKey('summary-pill')), findsOneWidget);
-    expect(find.text('Éves · 2026 · Kiadás'), findsOneWidget);
+    expect(find.text('2026'), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('calendar-threshold-joystick-trigger')),
@@ -394,7 +394,7 @@ void main() {
     );
     await pumpStatsPage(tester);
 
-    expect(find.text('Összes · Kiadás'), findsOneWidget);
+    expect(find.text('Sum'), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-sum-year-cards')), findsOneWidget);
 
     expect(find.byKey(const ValueKey('stats-year-card-2025')), findsOneWidget);
@@ -410,11 +410,349 @@ void main() {
 
     expect(store.summaryWindow, SummaryWindow.yearly);
     expect(store.summaryReferenceDate.year, 2025);
-    expect(find.text('Éves · 2025 · Kiadás'), findsOneWidget);
+    expect(find.text('2025'), findsOneWidget);
+  });
+
+  testWidgets('stats period label exactly mirrors the main menu period label', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryAllTime());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('summary-pill')),
+        matching: find.text('Sum'),
+      ),
+      findsOneWidget,
+    );
+
+    unawaited(store.setSummaryYear(2026));
+    await pumpStatsPage(tester);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('summary-pill')),
+        matching: find.text('2026'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Éves · 2026 · Kiadás'), findsNothing);
+
+    unawaited(store.setSummaryMonth(2026, 1));
+    await pumpStatsPage(tester);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('summary-pill')),
+        matching: find.text('Január 2026'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Január 2026 · Kiadás'), findsNothing);
+  });
+
+  testWidgets('all year-card regions open year then a month card opens month', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2025-01-12', amount: -6000, categoryId: 1),
+          record(id: 2, date: '2026-01-12', amount: -7000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryAllTime());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('stats-year-month-cell-2025-1')),
+    );
+    await pumpStatsPage(tester);
+
+    expect(store.activePeriodLabel, '2025');
+    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-focus-month-view')),
+      findsNothing,
+    );
+
+    await tester.ensureVisible(find.byKey(const ValueKey('stats-month-hit-1')));
+    await pumpStatsPage(tester);
+    await tester.tap(find.byKey(const ValueKey('stats-month-hit-1')));
+    await pumpStatsPage(tester);
+
+    expect(store.activePeriodLabel, 'Január 2025');
+    expect(
+      find.byKey(const ValueKey('calendar-focus-month-view')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('stats floating header matches main menu count geometry', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+          record(id: 2, date: '2026-01-02', amount: -9000, categoryId: 1),
+          record(id: 3, date: '2026-01-03', amount: -1000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    final header = find.byKey(const ValueKey('stats-page-header'));
+    final count = find.byKey(const ValueKey('stats-page-header-count'));
+    expect(tester.getSize(header), const Size(390, 28));
+    expect(find.text('2 tranzakció'), findsOneWidget);
+    final countText = tester.widget<Text>(count);
+    expect(countText.style?.fontSize, 12);
+    expect(countText.style?.fontWeight, FontWeight.w700);
+    expect(countText.style?.color, AppColors.gray500);
+    expect(
+      tester.getTopLeft(count).dy,
+      moreOrLessEquals(tester.getTopLeft(header).dy + 4, epsilon: 1),
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('stats-content-switcher')))
+          .dy,
+      tester.getBottomLeft(header).dy,
+    );
+  });
+
+  testWidgets('content swipe recalls snapshot but never opens Page 2', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+          category(id: 2, name: 'Fizetés', type: TransactionType.income),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+          record(id: 2, date: '2026-01-02', amount: 300000, categoryId: 2),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    final now = DateTime(2026, 7, 11);
+    final repository = InMemoryStatsSnapshotRepository([
+      StatsSnapshot(
+        id: 'income-page-two',
+        name: 'Bevétel snapshot',
+        createdAt: now,
+        updatedAt: now,
+        includeCategoryScope: false,
+        includeVendorScope: false,
+        includeActiveType: true,
+        includeThreshold: false,
+        includeLayoutMode: false,
+        includePageIndex: true,
+        activeType: TransactionType.income,
+        pageIndex: 1,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store, snapshotRepository: repository),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    await tester.drag(
+      find.byKey(const ValueKey('stats-content-gesture-surface')),
+      const Offset(-260, 0),
+    );
+    await pumpStatsPage(tester);
+
+    expect(find.text('Bevétel'), findsNWidgets(1));
+    expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
+  });
+
+  testWidgets('empty snapshot swipe is a safe page-one no-op', (tester) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    await tester.drag(
+      find.byKey(const ValueKey('stats-content-gesture-surface')),
+      const Offset(-260, 0),
+    );
+    await pumpStatsPage(tester);
+
+    expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
+  });
+
+  testWidgets('right-edge chevron opens and closes Page 2 with bounded slide', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    final switcherRect = tester.getRect(
+      find.byKey(const ValueKey('stats-content-switcher')),
+    );
+    final chevronRect = tester.getRect(
+      find.byKey(const ValueKey('stats-page-chevron')),
+    );
+    expect(chevronRect.right, switcherRect.right);
+    expect(
+      chevronRect.center.dy,
+      moreOrLessEquals(switcherRect.center.dy, epsilon: 1),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 90));
+    final pageTwoMidX = tester
+        .getTopLeft(find.byKey(const ValueKey('stats-page-2-boundary')))
+        .dx;
+    expect(pageTwoMidX, greaterThan(0));
+    expect(pageTwoMidX, lessThan(390));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('stats-page-2-boundary'))).dx,
+      moreOrLessEquals(0, epsilon: 0.1),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 90));
+    final pageTwoCloseMidX = tester
+        .getTopLeft(find.byKey(const ValueKey('stats-page-2-boundary')))
+        .dx;
+    expect(pageTwoCloseMidX, greaterThan(0));
+    expect(pageTwoCloseMidX, lessThan(390));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
   });
 
   testWidgets(
-    'stats page puts SearchPill above horizontal Page 1 Page 2 pager',
+    'stats page puts SearchPill and header above the Page 1 Page 2 switcher',
     (tester) async {
       final store = TransactionStore(
         StatsRepository(
@@ -447,14 +785,14 @@ void main() {
         find.byKey(const ValueKey('search-pill-container')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('stats-content-pager')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('stats-content-switcher')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
       expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
 
-      await tester.drag(
-        find.byKey(const ValueKey('stats-content-pager')),
-        const Offset(-320, 0),
-      );
+      await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
       await pumpStatsPage(tester);
 
       expect(find.byKey(const ValueKey('stats-page-2')), findsOneWidget);
@@ -502,10 +840,7 @@ void main() {
     expect(cache.builderCalls, 1);
     final initialFrame = cache.resolvedFrames.first;
 
-    await tester.drag(
-      find.byKey(const ValueKey('stats-content-pager')),
-      const Offset(-320, 0),
-    );
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
     await pumpStatsPage(tester);
     expect(find.byKey(const ValueKey('stats-page-2')), findsOneWidget);
 
@@ -594,10 +929,7 @@ void main() {
     );
     await pumpStatsPage(tester);
 
-    await tester.drag(
-      find.byKey(const ValueKey('stats-content-pager')),
-      const Offset(-320, 0),
-    );
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
     await pumpStatsPage(tester);
 
     expect(find.text('Kategória rangsor'), findsOneWidget);
@@ -662,7 +994,7 @@ void main() {
     await tester.tapAt(yearCard.topLeft + const Offset(20, 20));
     await pumpStatsPage(tester);
 
-    expect(find.text('Éves · 2025 · Kiadás'), findsOneWidget);
+    expect(find.text('2025'), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
   });
 
@@ -1139,7 +1471,7 @@ void main() {
     await pumpStatsPage(tester);
     await tester.tap(find.text('Kiadás').first);
     await pumpStatsPage(tester);
-    expect(find.text('Éves · 2026 · Kiadás'), findsOneWidget);
+    expect(find.text('2026'), findsOneWidget);
 
     controller.openThresholdSheet();
     await pumpStatsPage(tester);
@@ -1152,7 +1484,7 @@ void main() {
     await tester.tap(find.text('Bevétel mentés'));
     await pumpStatsPage(tester);
 
-    expect(find.text('Éves · 2026 · Bevétel'), findsOneWidget);
+    expect(find.text('2026'), findsOneWidget);
     expect(find.text('20 000 Ft'), findsAtLeastNWidgets(1));
     expect(
       tester
@@ -1243,7 +1575,7 @@ void main() {
       await tester.tap(find.text('Bevétel oldal'));
       await pumpStatsPage(tester);
 
-      expect(find.text('Éves · 2026 · Bevétel'), findsOneWidget);
+      expect(find.text('2026'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('search-pill-capsule-category-2')),
         findsOneWidget,

@@ -107,7 +107,6 @@ class _StatsPageState extends State<StatsPage>
   var _scopeSheetOpen = false;
   late final ValueNotifier<double> _fastInfoExtent;
   late final AnimationController _headerPullController;
-  late final PageController _contentPageController;
   var _contentPageIndex = 0;
   var _searchQuery = '';
   final _selectedScopeByType = <TransactionType, Set<int>>{
@@ -131,7 +130,6 @@ class _StatsPageState extends State<StatsPage>
     _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
       ..addListener(_syncHeaderPullFromController);
-    _contentPageController = PageController();
     widget.controller?._attach(
       openThresholdSheet: _openThresholdControlSheet,
       stepSnapshot: _stepSnapshot,
@@ -164,7 +162,6 @@ class _StatsPageState extends State<StatsPage>
   void dispose() {
     _fastInfoExtent.dispose();
     _headerPullController.dispose();
-    _contentPageController.dispose();
     widget.store.removeListener(_handleStoreChanged);
     widget.controller?._detach(_openThresholdControlSheet);
     super.dispose();
@@ -263,8 +260,9 @@ class _StatsPageState extends State<StatsPage>
   }
 
   Future<_StatsSnapshotRecallResult> _applySnapshot(
-    StatsSnapshot snapshot,
-  ) async {
+    StatsSnapshot snapshot, {
+    bool applyPageIndex = true,
+  }) async {
     final applied = snapshot.applyTo(_currentSnapshotState());
     setState(() {
       _activeType = applied.activeType;
@@ -272,7 +270,9 @@ class _StatsPageState extends State<StatsPage>
       if (snapshot.includeCategoryScope) {
         _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
       }
-      _contentPageIndex = applied.pageIndex.clamp(0, 1).toInt();
+      if (applyPageIndex) {
+        _contentPageIndex = applied.pageIndex.clamp(0, 1).toInt();
+      }
     });
     widget.store.setMerchantFilters(applied.vendorScopeNames);
     switch (applied.layoutMode) {
@@ -282,9 +282,6 @@ class _StatsPageState extends State<StatsPage>
         await _setSummaryYear(applied.activeYear);
       case StatsLayoutMode.month:
         await _setSummaryMonth(applied.activeYear, applied.activeMonth);
-    }
-    if (_contentPageController.hasClients) {
-      _contentPageController.jumpToPage(applied.pageIndex.clamp(0, 1).toInt());
     }
     final observedMax = _resolveRenderFrame().observedMaximum;
     final clampedThreshold = _statsThresholdRange(
@@ -308,7 +305,22 @@ class _StatsPageState extends State<StatsPage>
         ? nextIndex + _snapshots.length
         : nextIndex;
     setState(() => _selectedSnapshotIndex = wrappedIndex);
-    unawaited(_applySnapshot(_snapshots[wrappedIndex]).then<void>((_) {}));
+    unawaited(
+      _applySnapshot(
+        _snapshots[wrappedIndex],
+        applyPageIndex: false,
+      ).then<void>((_) {}),
+    );
+  }
+
+  void _handleContentHorizontalDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 100) return;
+    _stepSnapshot(velocity < 0 ? 1 : -1);
+  }
+
+  void _toggleContentPage() {
+    setState(() => _contentPageIndex = _contentPageIndex == 0 ? 1 : 0);
   }
 
   void _stepThreshold(int multiplier) {
@@ -376,7 +388,7 @@ class _StatsPageState extends State<StatsPage>
                       onChanged: _setActiveType,
                     ),
                     SummaryPill(
-                      title: _summaryTitle(),
+                      title: widget.store.activePeriodLabel,
                       value: data.summaryValue,
                       surfaceColor: resolvedTheme.logBox,
                       surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
@@ -407,58 +419,42 @@ class _StatsPageState extends State<StatsPage>
                           : () => widget.onVendorSheetRequested!(_activeType),
                       accentColor: resolvedTheme.accent,
                     ),
+                    _StatsPageHeader(
+                      transactionCount: frame.filteredTransactionCount,
+                      activeIndex: _contentPageIndex,
+                    ),
                     Expanded(
-                      child: PageView.builder(
-                        key: const ValueKey('stats-content-pager'),
-                        controller: _contentPageController,
-                        onPageChanged: (index) {
-                          setState(() => _contentPageIndex = index);
-                        },
-                        itemCount: 2,
-                        itemBuilder: (context, index) {
-                          if (index == 1) {
-                            return _StatsPageTwoSummary(
-                              key: const ValueKey('stats-page-2'),
-                              data: data,
-                              categories: widget.store.categories,
-                              activeType: _activeType,
-                              thresholdValue: _thresholdValue,
-                              metrics: frame.page2Metrics,
-                              largestVendor: frame.largestVisibleVendor,
-                            );
-                          }
-                          return KeyedSubtree(
+                      child: _StatsPageSwitcher(
+                        key: const ValueKey('stats-content-switcher'),
+                        activeIndex: _contentPageIndex,
+                        onTogglePage: _toggleContentPage,
+                        onHorizontalDragEnd: _handleContentHorizontalDragEnd,
+                        pageOne: RepaintBoundary(
+                          key: const ValueKey('stats-page-1-boundary'),
+                          child: KeyedSubtree(
                             key: const ValueKey('stats-page-1'),
-                            child: Stack(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    16,
-                                    20,
-                                    0,
-                                  ),
-                                  child: _pageOneContent(
-                                    frame: frame,
-                                    focusedMonth: focusedMonth,
-                                    monthCardColor:
-                                        resolvedTheme.statsMonthCard,
-                                  ),
-                                ),
-                                const Positioned(
-                                  top: 4,
-                                  right: 20,
-                                  child: _StatsPageIndicator(
-                                    key: ValueKey(
-                                      'stats-page-indicator-page-1',
-                                    ),
-                                    activeIndex: 0,
-                                  ),
-                                ),
-                              ],
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                              child: _pageOneContent(
+                                frame: frame,
+                                focusedMonth: focusedMonth,
+                                monthCardColor: resolvedTheme.statsMonthCard,
+                              ),
                             ),
-                          );
-                        },
+                          ),
+                        ),
+                        pageTwo: RepaintBoundary(
+                          key: const ValueKey('stats-page-2-boundary'),
+                          child: _StatsPageTwoSummary(
+                            key: const ValueKey('stats-page-2'),
+                            data: data,
+                            categories: widget.store.categories,
+                            activeType: _activeType,
+                            thresholdValue: _thresholdValue,
+                            metrics: frame.page2Metrics,
+                            largestVendor: frame.largestVisibleVendor,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -652,9 +648,6 @@ class _StatsPageState extends State<StatsPage>
         onYearSelected: (year) {
           unawaited(_setSummaryYear(year));
         },
-        onMonthSelected: (year, month) {
-          unawaited(_setSummaryMonth(year, month));
-        },
       );
     }
     if (focusedMonth == null) {
@@ -672,14 +665,6 @@ class _StatsPageState extends State<StatsPage>
       heatColor: _selectedHeatColor(),
       onBack: () => unawaited(_setSummaryYear(_year)),
     );
-  }
-
-  String _summaryTitle() {
-    if (!_yearScopeEnabled) return 'Összes · ${_activeType.label}';
-    if (_monthScopeEnabled) {
-      return '${_monthName(_month)} $_year · ${_activeType.label}';
-    }
-    return 'Éves · $_year · ${_activeType.label}';
   }
 
   Future<void> _openSummaryScopePicker() async {
@@ -723,24 +708,6 @@ class _StatsPageState extends State<StatsPage>
 
   void _resetSummaryScope() {
     unawaited(widget.store.resetSummaryToCurrentMonth());
-  }
-
-  static String _monthName(int month) {
-    const names = [
-      'Január',
-      'Február',
-      'Március',
-      'Április',
-      'Május',
-      'Június',
-      'Július',
-      'Augusztus',
-      'Szeptember',
-      'Október',
-      'November',
-      'December',
-    ];
-    return names[(month - 1).clamp(0, 11)];
   }
 
   void _selectMonth(StatsMonthData month) {
@@ -978,6 +945,154 @@ class _StatsHeaderVisual {
   final double markerPosition;
 }
 
+class _StatsPageHeader extends StatelessWidget {
+  const _StatsPageHeader({
+    required this.transactionCount,
+    required this.activeIndex,
+  });
+
+  final int transactionCount;
+  final int activeIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('stats-page-header'),
+      height: 28,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Center(
+              heightFactor: 1,
+              child: Text(
+                '$transactionCount tranzakció',
+                key: const ValueKey('stats-page-header-count'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.gray500,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.topRight,
+              child: _StatsPageIndicator(
+                key: const ValueKey('stats-page-indicator'),
+                activeIndex: activeIndex,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatsPageSwitcher extends StatelessWidget {
+  const _StatsPageSwitcher({
+    super.key,
+    required this.activeIndex,
+    required this.pageOne,
+    required this.pageTwo,
+    required this.onTogglePage,
+    required this.onHorizontalDragEnd,
+  });
+
+  static const _transitionDuration = Duration(milliseconds: 220);
+
+  final int activeIndex;
+  final Widget pageOne;
+  final Widget pageTwo;
+  final VoidCallback onTogglePage;
+  final GestureDragEndCallback onHorizontalDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final activePage = activeIndex == 0 ? pageOne : pageTwo;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        GestureDetector(
+          key: const ValueKey('stats-content-gesture-surface'),
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragEnd: onHorizontalDragEnd,
+          child: ClipRect(
+            child: AnimatedSwitcher(
+              duration: _transitionDuration,
+              reverseDuration: _transitionDuration,
+              layoutBuilder: (currentChild, previousChildren) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [...previousChildren, ?currentChild],
+                );
+              },
+              transitionBuilder: (child, animation) {
+                final childIndex =
+                    child.key == const ValueKey('stats-page-2-boundary')
+                    ? 1
+                    : 0;
+                final incoming = childIndex == activeIndex;
+                final begin = switch ((activeIndex, incoming)) {
+                  (1, true) => const Offset(1, 0),
+                  (1, false) => const Offset(-1, 0),
+                  (0, true) => const Offset(-1, 0),
+                  (0, false) => const Offset(1, 0),
+                  _ => Offset.zero,
+                };
+                return SlideTransition(
+                  position: Tween<Offset>(begin: begin, end: Offset.zero)
+                      .animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                  child: child,
+                );
+              },
+              child: activePage,
+            ),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            key: const ValueKey('stats-page-chevron'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onTogglePage,
+            child: Container(
+              width: 32,
+              height: 56,
+              decoration: const BoxDecoration(
+                color: Color(0xEFFFFFFF),
+                borderRadius: BorderRadius.horizontal(left: Radius.circular(8)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    offset: Offset(-1, 1),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: Icon(
+                activeIndex == 0
+                    ? Icons.chevron_left_rounded
+                    : Icons.chevron_right_rounded,
+                color: AppColors.gray700,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _StatsPageIndicator extends StatelessWidget {
   const _StatsPageIndicator({super.key, required this.activeIndex});
 
@@ -988,12 +1103,13 @@ class _StatsPageIndicator extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (var index = 0; index < 2; index++)
+        for (var index = 0; index < 2; index++) ...[
+          if (index > 0) const SizedBox(width: 6),
           AnimatedContainer(
+            key: ValueKey('stats-page-indicator-dot-$index'),
             duration: const Duration(milliseconds: 180),
             width: activeIndex == index ? 18 : 6,
             height: 6,
-            margin: const EdgeInsets.symmetric(horizontal: 3),
             decoration: BoxDecoration(
               color: activeIndex == index
                   ? AppColors.primary
@@ -1001,6 +1117,7 @@ class _StatsPageIndicator extends StatelessWidget {
               borderRadius: BorderRadius.circular(99),
             ),
           ),
+        ],
       ],
     );
   }
@@ -1014,7 +1131,6 @@ class _StatsSumYearCards extends StatelessWidget {
     required this.activeYear,
     required this.selectedCategoryIds,
     required this.onYearSelected,
-    required this.onMonthSelected,
   });
 
   final List<StatsSumYearSummary> summaries;
@@ -1023,7 +1139,6 @@ class _StatsSumYearCards extends StatelessWidget {
   final int activeYear;
   final Set<int> selectedCategoryIds;
   final ValueChanged<int> onYearSelected;
-  final void Function(int year, int month) onMonthSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1044,8 +1159,9 @@ class _StatsSumYearCards extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: () => onYearSelected(summary.year),
           child: Container(
+            key: ValueKey('stats-year-card-surface-${summary.year}'),
             decoration: BoxDecoration(
-              color: AppColors.gray50,
+              color: AppColors.white,
               borderRadius: BorderRadius.circular(15),
               border: Border.all(
                 color: summary.year == activeYear
@@ -1162,34 +1278,29 @@ class _StatsSumYearCards extends StatelessWidget {
                                   : (amount / summary.maxMonthTotal)
                                         .clamp(0.0, 1.0)
                                         .toDouble();
-                              return GestureDetector(
+                              return Padding(
                                 key: ValueKey(
                                   'stats-year-month-cell-${summary.year}-$month',
                                 ),
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () =>
-                                    onMonthSelected(summary.year, month),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(1),
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: amount <= 0
-                                          ? AppColors.white
-                                          : _heatColor.withValues(
-                                              alpha: 0.10 + intensity * 0.90,
-                                            ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        _monthLabels[monthIndex],
-                                        style: TextStyle(
-                                          color: amount <= 0
-                                              ? AppColors.gray500
-                                              : AppColors.gray800,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w800,
-                                        ),
+                                padding: const EdgeInsets.all(1),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: amount <= 0
+                                        ? AppColors.white
+                                        : _heatColor.withValues(
+                                            alpha: 0.10 + intensity * 0.90,
+                                          ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _monthLabels[monthIndex],
+                                      style: TextStyle(
+                                        color: amount <= 0
+                                            ? AppColors.gray500
+                                            : AppColors.gray800,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                   ),
@@ -1286,6 +1397,7 @@ class _StatsPageTwoSummary extends StatelessWidget {
         ? 'bevétel'
         : 'kiadás';
     return SingleChildScrollView(
+      key: const ValueKey('stats-page-2-scroll'),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1320,13 +1432,6 @@ class _StatsPageTwoSummary extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: 3),
-                child: _StatsPageIndicator(
-                  key: ValueKey('stats-page-indicator'),
-                  activeIndex: 1,
                 ),
               ),
             ],

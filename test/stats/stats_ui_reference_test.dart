@@ -98,38 +98,99 @@ void main() {
     },
   );
 
-  testWidgets('page indicator belongs to page content below SearchPill', (
-    tester,
-  ) async {
-    final store = await _store(
-      categories: [_category(1, 'Étel', AppColors.expense)],
-      transactions: [
-        _record(id: 1, date: '2026-01-01', amount: -8000, categoryId: 1),
-      ],
-    );
+  testWidgets(
+    'one floating page indicator animates and stays above scrolling',
+    (tester) async {
+      final store = await _store(
+        categories: [_category(1, 'Étel', AppColors.expense)],
+        transactions: [
+          _record(id: 1, date: '2026-01-01', amount: -8000, categoryId: 1),
+        ],
+      );
 
-    await _pumpPage(tester, store);
+      await _pumpPage(tester, store);
 
-    final pagerTop = tester
-        .getTopLeft(find.byKey(const ValueKey('stats-content-pager')))
-        .dy;
-    final indicatorTop = tester
-        .getTopLeft(find.byKey(const ValueKey('stats-page-indicator-page-1')))
-        .dy;
-    expect(indicatorTop, greaterThanOrEqualTo(pagerTop));
+      final header = find.byKey(const ValueKey('stats-page-header'));
+      final indicatorTop = tester
+          .getTopLeft(find.byKey(const ValueKey('stats-page-indicator')))
+          .dy;
+      expect(indicatorTop, greaterThanOrEqualTo(tester.getTopLeft(header).dy));
+      expect(indicatorTop, lessThan(tester.getBottomLeft(header).dy));
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('stats-page-indicator')))
+            .right,
+        moreOrLessEquals(tester.getRect(header).right - 24, epsilon: 0.1),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('stats-page-indicator')),
+          matching: find.byType(AnimatedContainer),
+        ),
+        findsNWidgets(2),
+      );
 
-    final activeDot = tester.widget<AnimatedContainer>(
-      find
-          .descendant(
-            of: find.byKey(
-              const ValueKey('stats-page-indicator-page-1'),
-            ),
-            matching: find.byType(AnimatedContainer),
+      final firstDot = find.byKey(const ValueKey('stats-page-indicator-dot-0'));
+      final secondDot = find.byKey(
+        const ValueKey('stats-page-indicator-dot-1'),
+      );
+      expect(tester.getSize(firstDot).width, 18);
+      expect(tester.getSize(secondDot).width, 6);
+
+      final beforeScrollTop = tester.getTopLeft(header).dy;
+      final pageOneScroll = find.byKey(
+        const ValueKey('stats-year-calendar-scroll'),
+      );
+      final pageOnePosition = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: pageOneScroll,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
           )
-          .first,
-    );
-    expect((activeDot.decoration! as BoxDecoration).color, AppColors.primary);
-  });
+          .position;
+      await tester.drag(pageOneScroll, const Offset(0, -180));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(pageOnePosition.pixels, greaterThan(0));
+      expect(tester.getTopLeft(header).dy, beforeScrollTop);
+
+      await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 90));
+      expect(tester.getSize(firstDot).width, inExclusiveRange(6, 18));
+      expect(tester.getSize(secondDot).width, inExclusiveRange(6, 18));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(tester.getSize(firstDot).width, 6);
+      expect(tester.getSize(secondDot).width, 18);
+
+      final pageTwoScroll = find.byKey(const ValueKey('stats-page-2-scroll'));
+      final pageTwoPosition = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: pageTwoScroll,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      await tester.drag(pageTwoScroll, const Offset(0, -180));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(pageTwoPosition.pixels, greaterThan(0));
+      expect(tester.getTopLeft(header).dy, beforeScrollTop);
+      expect(
+        find.byKey(const ValueKey('stats-page-indicator')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('stats-page-2-boundary')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('stats-page-1-boundary')), findsNothing);
+    },
+  );
 
   testWidgets(
     'free-text search filters stats and selected scopes are capsules',
@@ -206,10 +267,7 @@ void main() {
       );
 
       await _pumpPage(tester, store);
-      await tester.drag(
-        find.byKey(const ValueKey('stats-content-pager')),
-        const Offset(-340, 0),
-      );
+      await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
       await _settle(tester);
 
       expect(find.text('Aktuális szűrés · 2026'), findsOneWidget);
@@ -243,10 +301,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-card-1')));
     await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
     await _settle(tester);
-    await tester.drag(
-      find.byKey(const ValueKey('stats-content-pager')),
-      const Offset(-340, 0),
-    );
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
     await _settle(tester);
 
     expect(find.text('Szűrt kategória'), findsOneWidget);
@@ -279,6 +334,12 @@ void main() {
         70,
       );
       expect(find.text('zárás'), findsNWidgets(2));
+      for (final card in [card2025, card2026]) {
+        final container = tester.widget<Container>(
+          find.descendant(of: card, matching: find.byType(Container)).first,
+        );
+        expect((container.decoration! as BoxDecoration).color, AppColors.white);
+      }
       await expectLater(
         find.byKey(const ValueKey('stats-sum-year-cards')),
         matchesGoldenFile('goldens/stats_sum_year_cards.png'),
@@ -366,10 +427,7 @@ void main() {
       ],
     );
     await _pumpPage(tester, store);
-    await tester.drag(
-      find.byKey(const ValueKey('stats-content-pager')),
-      const Offset(-340, 0),
-    );
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
     await _settle(tester);
     await tester.pump(const Duration(seconds: 1));
 
@@ -378,7 +436,6 @@ void main() {
       matchesGoldenFile('goldens/stats_page2.png'),
     );
   });
-
 }
 
 Future<TransactionStore> _store({
