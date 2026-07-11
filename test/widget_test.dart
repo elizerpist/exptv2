@@ -500,7 +500,7 @@ void main() {
     expect(firstLaunchNotificationPromptCalls, 1);
   });
 
-  testWidgets('FAB opens add transaction sheet from any bottom tab', (
+  testWidgets('FAB opens stats threshold sheet on the stats tab', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -511,19 +511,10 @@ void main() {
 
     await _tapFab(tester);
 
-    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
-    expect(find.text('Tranzakció neve'), findsOneWidget);
-    expect(find.text('Összeg'), findsOneWidget);
-    expect(find.text('Kategória'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('transaction-date-picker-button')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('transaction-time-picker-button')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-threshold-sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-snapshot-row')), findsOneWidget);
+    expect(find.text('Új kiadási tranzakció'), findsNothing);
+    expect(find.text('Tranzakció neve'), findsNothing);
   });
 
   testWidgets('FAB opens Flutter add transaction sheet directly', (

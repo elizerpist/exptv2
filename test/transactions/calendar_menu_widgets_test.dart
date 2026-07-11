@@ -778,29 +778,30 @@ void main() {
     expect(find.text('Teszt'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('stats page renders redesigned annual stats as a full screen tab', (
-    tester,
-  ) async {
-    final store = TransactionStore(CalendarHomeRepository());
-    await store.start();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 780,
-            child: StatsPage(store: store),
+  testWidgets(
+    'stats page renders redesigned annual stats as a full screen tab',
+    (tester) async {
+      final store = TransactionStore(CalendarHomeRepository());
+      await store.start();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(store: store),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
-    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
-    expect(find.text('SCOPE SCORE'), findsOneWidget);
-  });
+      expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
+      expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+      expect(find.text('SZŰRÉS PONTSZÁM'), findsOneWidget);
+    },
+  );
 }
 
 Future<void> _tapFirstMonthCard(WidgetTester tester) async {

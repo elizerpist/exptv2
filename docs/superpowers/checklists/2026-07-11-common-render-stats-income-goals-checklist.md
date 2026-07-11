@@ -90,7 +90,7 @@ proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubunt
 Result: `No issues found!`
 
 ```bash
-proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter test test/stats/stats_year_data_test.dart test/stats/stats_category_scope_series_test.dart test/stats/stats_page_test.dart test/transactions/income_goal_presentation_test.dart test/transactions/category_budget_stage_test.dart test/transactions/transaction_store_budget_goals_test.dart test/transactions/transaction_home_limits_test.dart'
+proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter test'
 ```
 
-Result: `+150 All tests passed!`
+Result: `+759 All tests passed!`
