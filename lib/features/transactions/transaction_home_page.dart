@@ -875,21 +875,15 @@ class _TransactionHomePageState extends State<TransactionHomePage>
 
   void _setActiveType(TransactionType type) {
     final stopwatch = Stopwatch()..start();
-    final beforeEntries = widget.store.visibleDisplayLogEntries.length;
-    final beforeTransactions = widget.store.visibleTransactions.length;
     DebugConsole.log(
       '[Perf] Home type switch start target=${type.name} '
-      'current=${widget.store.activeType.name} '
-      'entriesBefore=$beforeEntries transactionsBefore=$beforeTransactions',
+      'current=${widget.store.activeType.name}',
     );
     _headerPullController.stop();
     _headerPullController.value = 0;
     widget.store.setActiveType(type);
-    final afterEntries = widget.store.visibleDisplayLogEntries.length;
-    final afterTransactions = widget.store.visibleTransactions.length;
     DebugConsole.log(
       '[Perf] Home type switch state target=${type.name} '
-      'entriesAfter=$afterEntries transactionsAfter=$afterTransactions '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
     widget.onBudgetTargetEditorClosed?.call();

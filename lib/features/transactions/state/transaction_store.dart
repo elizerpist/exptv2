@@ -927,7 +927,6 @@ class TransactionStore extends ChangeNotifier {
       '[Perf] TypeSwitch state type=${type.name} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
-    _prewarmActiveView('type-switch');
     DebugConsole.log(
       '[Perf] TypeSwitch notify type=${type.name} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',

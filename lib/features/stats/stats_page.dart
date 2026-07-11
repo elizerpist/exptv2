@@ -5,6 +5,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/debug/debug_console.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../settings/models/app_theme_settings.dart';
@@ -123,6 +124,12 @@ class _StatsPageState extends State<StatsPage>
   final _pendingThresholdSteps = <int>[];
   var _thresholdPublicationScheduled = false;
   var _thresholdPublicationGeneration = 0;
+  TransactionType? _pendingActiveType;
+  var _activeTypePublicationGeneration = 0;
+  var _storeThresholdClampPending = false;
+  var _thresholdStateSyncScheduled = false;
+  final _inactiveStoreListenable = ChangeNotifier();
+  var _pageActive = true;
 
   @override
   void initState() {
@@ -165,7 +172,21 @@ class _StatsPageState extends State<StatsPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = TickerMode.valuesOf(context).enabled;
+    if (_pageActive == active) return;
+    _pageActive = active;
+    if (!active) return;
+    _syncSummaryFromStore();
+    if (!widget.store.loading && widget.store.error == null) {
+      _storeThresholdClampPending = true;
+    }
+  }
+
+  @override
   void dispose() {
+    _inactiveStoreListenable.dispose();
     _fastInfoExtent.dispose();
     _headerPullController.dispose();
     widget.store.removeListener(_handleStoreChanged);
@@ -177,14 +198,11 @@ class _StatsPageState extends State<StatsPage>
   bool get wantKeepAlive => true;
 
   void _handleStoreChanged() {
+    if (!_pageActive) return;
     _discardPendingThresholdStep();
-    var changed = _syncSummaryFromStore();
+    final changed = _syncSummaryFromStore();
     if (!widget.store.loading && widget.store.error == null) {
-      final nextThreshold = _clampThresholdToCurrentScope(_thresholdValue);
-      if (nextThreshold != _thresholdValue) {
-        _thresholdValue = nextThreshold;
-        changed = true;
-      }
+      _storeThresholdClampPending = true;
     }
     if (changed && mounted) setState(() {});
   }
@@ -425,7 +443,7 @@ class _StatsPageState extends State<StatsPage>
       child: Padding(
         padding: const EdgeInsets.only(bottom: AppDimensions.bottomNavHeight),
         child: ListenableBuilder(
-          listenable: widget.store,
+          listenable: _pageActive ? widget.store : _inactiveStoreListenable,
           builder: (context, _) {
             if (widget.store.loading) {
               return Center(
@@ -444,6 +462,51 @@ class _StatsPageState extends State<StatsPage>
                 ),
               );
             }
+            final pendingType = _pendingActiveType;
+            if (pendingType != null) {
+              return Stack(
+                children: [
+                  Column(
+                    children: [
+                      const SizedBox(
+                        height: TransactionHeaderMetrics.contentTop,
+                      ),
+                      TransactionTypePills(
+                        activeType: pendingType,
+                        surfaceColor: resolvedTheme.logBox,
+                        surfaceStyle: resolvedTheme.buttonSurfaceStyle,
+                        accentColor: resolvedTheme.accent,
+                        shadowEnabled: true,
+                        onChanged: _setActiveType,
+                      ),
+                      Expanded(
+                        child: ColoredBox(
+                          key: const ValueKey('stats-type-switch-frozen'),
+                          color: resolvedTheme.appBackground,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: resolvedTheme.accent,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    child: LinearProgressIndicator(
+                      key: const ValueKey('stats-type-switch-pending'),
+                      minHeight: 2,
+                      color: resolvedTheme.accent,
+                      backgroundColor: Colors.transparent,
+                    ),
+                  ),
+                ],
+              );
+            }
             final frame = _resolveRenderFrame();
             final data = frame.yearData;
             final focusedMonth = _focusedMonth == null
@@ -455,89 +518,100 @@ class _StatsPageState extends State<StatsPage>
             return Stack(
               clipBehavior: Clip.none,
               children: [
-                Column(
-                  children: [
-                    const SizedBox(height: TransactionHeaderMetrics.contentTop),
-                    TransactionTypePills(
-                      activeType: _activeType,
-                      surfaceColor: resolvedTheme.logBox,
-                      surfaceStyle: resolvedTheme.buttonSurfaceStyle,
-                      accentColor: resolvedTheme.accent,
-                      shadowEnabled: true,
-                      onChanged: _setActiveType,
-                    ),
-                    SummaryPill(
-                      title: widget.store.activePeriodLabel,
-                      value: data.summaryValue,
-                      surfaceColor: resolvedTheme.logBox,
-                      surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
-                      shadowEnabled: true,
-                      onTap: _openSummaryScopePicker,
-                      onIntervalSwipe: _cycleSummaryScope,
-                      onPeriodSwipe: _shiftSummaryScope,
-                      onResetToCurrentMonth: _resetSummaryScope,
-                    ),
-                    SearchPill(
-                      query: _searchQuery,
-                      onQueryChanged: (value) {
-                        _discardPendingThresholdStep();
-                        setState(() {
-                          _searchQuery = value;
-                          _thresholdValue = _clampThresholdToCurrentScope(
-                            _thresholdValue,
-                          );
-                        });
-                      },
-                      surfaceColor: resolvedTheme.logBox,
-                      surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
-                      merchantFilters: _merchantSearchFilters(
-                        resolvedTheme.accent,
+                AbsorbPointer(
+                  absorbing: false,
+                  child: Column(
+                    children: [
+                      const SizedBox(
+                        height: TransactionHeaderMetrics.contentTop,
                       ),
-                      categoryFilters: _categorySearchFilters(),
-                      onVendorListPressed: widget.onVendorSheetRequested == null
-                          ? null
-                          : () => widget.onVendorSheetRequested!(_activeType),
-                      accentColor: resolvedTheme.accent,
-                    ),
-                    _StatsPageHeader(
-                      transactionCount: frame.filteredTransactionCount,
-                      activeIndex: _contentPageIndex,
-                    ),
-                    Expanded(
-                      child: _StatsPageSwitcher(
-                        key: const ValueKey('stats-content-switcher'),
+                      TransactionTypePills(
+                        activeType: _activeType,
+                        surfaceColor: resolvedTheme.logBox,
+                        surfaceStyle: resolvedTheme.buttonSurfaceStyle,
+                        accentColor: resolvedTheme.accent,
+                        shadowEnabled: true,
+                        onChanged: _setActiveType,
+                      ),
+                      SummaryPill(
+                        title: widget.store.activePeriodLabel,
+                        value: data.summaryValue,
+                        surfaceColor: resolvedTheme.logBox,
+                        surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
+                        shadowEnabled: true,
+                        onTap: _openSummaryScopePicker,
+                        onIntervalSwipe: _cycleSummaryScope,
+                        onPeriodSwipe: _shiftSummaryScope,
+                        onResetToCurrentMonth: _resetSummaryScope,
+                      ),
+                      SearchPill(
+                        query: _searchQuery,
+                        onQueryChanged: (value) {
+                          _discardPendingThresholdStep();
+                          setState(() {
+                            _searchQuery = value;
+                            _thresholdValue = _clampThresholdToCurrentScope(
+                              _thresholdValue,
+                            );
+                          });
+                        },
+                        surfaceColor: resolvedTheme.logBox,
+                        surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
+                        merchantFilters: _merchantSearchFilters(
+                          resolvedTheme.accent,
+                        ),
+                        categoryFilters: _categorySearchFilters(),
+                        onVendorListPressed:
+                            widget.onVendorSheetRequested == null
+                            ? null
+                            : () => widget.onVendorSheetRequested!(_activeType),
+                        accentColor: resolvedTheme.accent,
+                      ),
+                      _StatsPageHeader(
+                        transactionCount: frame.filteredTransactionCount,
                         activeIndex: _contentPageIndex,
-                        onTogglePage: _toggleContentPage,
-                        onHorizontalDragEnd: _handleContentHorizontalDragEnd,
-                        pageOne: RepaintBoundary(
-                          key: const ValueKey('stats-page-1-boundary'),
-                          child: KeyedSubtree(
-                            key: const ValueKey('stats-page-1'),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                              child: _pageOneContent(
-                                frame: frame,
-                                focusedMonth: focusedMonth,
-                                monthCardColor: resolvedTheme.statsMonthCard,
+                      ),
+                      Expanded(
+                        child: _StatsPageSwitcher(
+                          key: const ValueKey('stats-content-switcher'),
+                          activeIndex: _contentPageIndex,
+                          onTogglePage: _toggleContentPage,
+                          onHorizontalDragEnd: _handleContentHorizontalDragEnd,
+                          pageOne: RepaintBoundary(
+                            key: const ValueKey('stats-page-1-boundary'),
+                            child: KeyedSubtree(
+                              key: const ValueKey('stats-page-1'),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  16,
+                                  20,
+                                  0,
+                                ),
+                                child: _pageOneContent(
+                                  frame: frame,
+                                  focusedMonth: focusedMonth,
+                                  monthCardColor: resolvedTheme.statsMonthCard,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        pageTwo: RepaintBoundary(
-                          key: const ValueKey('stats-page-2-boundary'),
-                          child: _StatsPageTwoSummary(
-                            key: const ValueKey('stats-page-2'),
-                            data: data,
-                            categories: widget.store.categories,
-                            activeType: _activeType,
-                            thresholdValue: _thresholdValue,
-                            metrics: frame.page2Metrics,
-                            largestVendor: frame.largestVisibleVendor,
+                          pageTwo: RepaintBoundary(
+                            key: const ValueKey('stats-page-2-boundary'),
+                            child: _StatsPageTwoSummary(
+                              key: const ValueKey('stats-page-2'),
+                              data: data,
+                              categories: widget.store.categories,
+                              activeType: _activeType,
+                              thresholdValue: data.thresholdValue,
+                              metrics: frame.page2Metrics,
+                              largestVendor: frame.largestVisibleVendor,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 HeaderFastInfoSurface.listenable(
                   key: const ValueKey('stats-fastinfo-extent-builder'),
@@ -605,7 +679,8 @@ class _StatsPageState extends State<StatsPage>
   }
 
   StatsRenderFrame _resolveRenderFrame() {
-    return _resolveRenderFrameFor(
+    final clampThreshold = _storeThresholdClampPending;
+    final frame = _resolveRenderFrameFor(
       activeType: _activeType,
       threshold: _thresholdValue,
       layoutMode: _layoutMode,
@@ -613,7 +688,23 @@ class _StatsPageState extends State<StatsPage>
       month: _month,
       categoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
       vendorNames: widget.store.activeMerchantFilters,
+      clampThreshold: clampThreshold,
     );
+    if (clampThreshold) {
+      _storeThresholdClampPending = false;
+      _scheduleThresholdStateSync(frame.yearData.thresholdValue);
+    }
+    return frame;
+  }
+
+  void _scheduleThresholdStateSync(double threshold) {
+    if (threshold == _thresholdValue || _thresholdStateSyncScheduled) return;
+    _thresholdStateSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _thresholdStateSyncScheduled = false;
+      if (!mounted || threshold == _thresholdValue) return;
+      setState(() => _thresholdValue = threshold);
+    });
   }
 
   StatsRenderFrame _resolveRenderFrameFor({
@@ -624,6 +715,7 @@ class _StatsPageState extends State<StatsPage>
     required int month,
     required Set<int> categoryIds,
     required Set<String> vendorNames,
+    bool clampThreshold = false,
   }) {
     final summaryScope = switch (layoutMode) {
       StatsLayoutMode.sum => StatsSummaryScope.allTime,
@@ -645,6 +737,10 @@ class _StatsPageState extends State<StatsPage>
       threshold: threshold,
     );
     final frame = _renderFrameCache.resolve(key, () {
+      DebugConsole.log(
+        '[Perf] Stats frame build type=${activeType.name} '
+        'transactions=${widget.store.transactions.length}',
+      );
       return StatsRenderFrame.build(
         year: year,
         activeType: activeType,
@@ -657,8 +753,34 @@ class _StatsPageState extends State<StatsPage>
         month: month,
         query: _searchQuery,
         today: widget.store.currentDate,
+        thresholdResolver: clampThreshold
+            ? (requested, observedMaximum) => _statsThresholdRange(
+                observedMax: observedMaximum,
+                fallbackMax: 50000,
+              ).snap(requested)
+            : null,
       );
     });
+    final effectiveThreshold = frame.yearData.thresholdValue;
+    if (effectiveThreshold != threshold) {
+      _renderFrameCache.seed(
+        StatsRenderFrameKey(
+          dataRevision: (
+            transactions: widget.store.transactions,
+            categories: widget.store.categories,
+          ),
+          activeType: activeType,
+          summaryScope: summaryScope,
+          year: year,
+          month: month,
+          categoryIds: categoryIds,
+          vendorNames: vendorNames,
+          query: _searchQuery,
+          threshold: effectiveThreshold,
+        ),
+        frame,
+      );
+    }
     _lastRenderFrame = frame;
     return frame;
   }
@@ -727,11 +849,43 @@ class _StatsPageState extends State<StatsPage>
   }
 
   void _setActiveType(TransactionType type) {
-    if (_activeType == type) return;
+    if (_activeType == type && _pendingActiveType == null) return;
     _discardPendingThresholdStep();
-    setState(() {
-      _activeType = type;
-      _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
+    _activeTypePublicationGeneration += 1;
+    final generation = _activeTypePublicationGeneration;
+    if (_activeType == type) {
+      setState(() => _pendingActiveType = null);
+      return;
+    }
+    setState(() => _pendingActiveType = type);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _activeTypePublicationGeneration) return;
+      SchedulerBinding.instance.scheduleFrame();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || generation != _activeTypePublicationGeneration) {
+          return;
+        }
+        final targetType = _pendingActiveType;
+        if (targetType == null || targetType == _activeType) return;
+        final categoryIds = _selectedScopeByType[targetType] ?? const <int>{};
+        final vendorNames = widget.store.activeMerchantFilters;
+        final frame = _resolveRenderFrameFor(
+          activeType: targetType,
+          threshold: _thresholdValue,
+          layoutMode: _layoutMode,
+          year: _year,
+          month: _month,
+          categoryIds: categoryIds,
+          vendorNames: vendorNames,
+          clampThreshold: true,
+        );
+        _storeThresholdClampPending = false;
+        setState(() {
+          _activeType = targetType;
+          _pendingActiveType = null;
+          _thresholdValue = frame.yearData.thresholdValue;
+        });
+      });
     });
   }
 

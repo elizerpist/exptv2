@@ -76,6 +76,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
   final _statsPageController = StatsPageController();
   late final PageController _pageController;
+  late AppTab _pageActiveTab;
+  final Map<AppTab, Widget> _retainedTabPages = <AppTab, Widget>{};
   var _homeBlockingOverlayOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
@@ -93,6 +95,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     DebugConsole.log('[Shell] start');
     _activeTab = _tabFromStoreKey(widget.store.shellActiveTabKey);
+    _pageActiveTab = _activeTab;
     _pageController = PageController(initialPage: appTabs.indexOf(_activeTab));
     _recurringAlarmService = RecurringAlarmService();
     _notificationStore = NotificationStore(
@@ -115,6 +118,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       widget.nativeBridge,
     );
     _statsPage = _buildStatsPage();
+    _retainedTabPages[_activeTab] = _buildShellPage(
+      _activeTab,
+      ExpenseTheme.fromSettings(_themeSettings),
+    );
     _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
@@ -331,6 +338,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _fastInfoConfig = payload.fastInfoConfig;
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      _refreshRetainedTabPages();
     });
   }
 
@@ -343,6 +351,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     setState(() {
       _transactionHomePage = _buildTransactionHomePage();
+      _refreshRetainedTabPages();
     });
   }
 
@@ -365,6 +374,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      _refreshRetainedTabPages();
     });
     DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh end');
   }
@@ -378,6 +388,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       _themeSettings = settings;
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      _refreshRetainedTabPages();
     });
     DebugConsole.log(
       '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
@@ -414,6 +425,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _fastInfoConfig = config;
       _transactionHomePage = _buildTransactionHomePage();
+      _refreshRetainedTabPages();
     });
   }
 
@@ -432,30 +444,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       'homeOverlay=$_homeBlockingOverlayOpen '
       '${_contextKeyboardTrace()}',
     );
-    _sheetHostKey.currentState?.closeAll();
-    DebugConsole.log(
-      '[Perf] BottomNav close sheets issued from=${previous.id} to=${tab.id} '
-      'elapsed=${_elapsedMs(requestedAt)}ms',
-    );
-    if (previous == AppTab.settings && tab != AppTab.settings) {
-      widget.store.setSettingsActiveMenuKey('root');
-      DebugConsole.log(
-        '[Settings] active menu reset reason=bottom_nav_leave target=${tab.id}',
-      );
-    }
     setState(() {
       _activeTab = tab;
       _homeBlockingOverlayOpen = false;
     });
-    widget.store.setShellActiveTabKey(tab.id);
     DebugConsole.log(
       '[Perf] BottomNav shell state queued from=${previous.id} to=${tab.id} '
       'elapsed=${_elapsedMs(requestedAt)}ms',
     );
-    _jumpToTabPage(tab, requestedAt);
-    if (tab == AppTab.notifications) {
-      unawaited(_openNotificationsTab(requestedAt));
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _activeTab != tab) return;
       DebugConsole.log(
@@ -463,49 +459,55 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         'elapsed=${_elapsedMs(requestedAt)}ms '
         '${_contextKeyboardTrace()}',
       );
+      _sheetHostKey.currentState?.closeAll();
+      DebugConsole.log(
+        '[Perf] BottomNav close sheets issued from=${previous.id} '
+        'to=${tab.id} elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+      if (previous == AppTab.settings && tab != AppTab.settings) {
+        widget.store.setSettingsActiveMenuKey('root');
+        DebugConsole.log(
+          '[Settings] active menu reset reason=bottom_nav_leave '
+          'target=${tab.id}',
+        );
+      }
+      widget.store.setShellActiveTabKey(tab.id);
+      _jumpToTabPage(tab, requestedAt);
+      if (tab == AppTab.notifications) {
+        unawaited(_openNotificationsTab(requestedAt));
+      }
     });
   }
 
   void _jumpToTabPage(AppTab tab, DateTime requestedAt) {
     final pageIndex = appTabs.indexOf(tab);
-    if (tab == AppTab.stats) {
-      DebugConsole.log(
-        '[Perf] BottomNav page jump deferred tab=${tab.id} '
-        'reason=post-frame elapsed=${_elapsedMs(requestedAt)}ms',
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _activeTab != tab || !_pageController.hasClients) {
-          return;
-        }
-        _pageController.jumpToPage(pageIndex);
-        DebugConsole.log(
-          '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
-          'deferred=true elapsed=${_elapsedMs(requestedAt)}ms',
-        );
-      });
-      return;
-    }
+    DebugConsole.log(
+      '[Perf] BottomNav page jump deferred tab=${tab.id} '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
     if (!_pageController.hasClients) {
-      DebugConsole.log(
-        '[Perf] BottomNav page jump deferred tab=${tab.id} '
-        'elapsed=${_elapsedMs(requestedAt)}ms',
-      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _activeTab != tab || !_pageController.hasClients) {
           return;
         }
-        _pageController.jumpToPage(pageIndex);
-        DebugConsole.log(
-          '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
-          'deferred=true elapsed=${_elapsedMs(requestedAt)}ms',
-        );
+        _activateRetainedPage(tab, pageIndex, requestedAt);
       });
       return;
     }
+    _activateRetainedPage(tab, pageIndex, requestedAt);
+  }
+
+  void _activateRetainedPage(AppTab tab, int pageIndex, DateTime requestedAt) {
+    setState(() => _pageActiveTab = tab);
     _pageController.jumpToPage(pageIndex);
+    _logRetainedPageJump(tab, pageIndex, requestedAt);
+  }
+
+  void _logRetainedPageJump(AppTab tab, int pageIndex, DateTime requestedAt) {
     DebugConsole.log(
       '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
-      'deferred=false elapsed=${_elapsedMs(requestedAt)}ms',
+      'deferred=true retained=${_retainedTabPages.length} '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
     );
   }
 
@@ -746,6 +748,13 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     }
   }
 
+  void _refreshRetainedTabPages() {
+    final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+    for (final tab in _retainedTabPages.keys.toList(growable: false)) {
+      _retainedTabPages[tab] = _buildShellPage(tab, expenseTheme);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
@@ -762,8 +771,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: appTabs.length,
-              itemBuilder: (context, index) =>
-                  _buildShellPage(appTabs[index], expenseTheme),
+              itemBuilder: (context, index) {
+                final tab = appTabs[index];
+                final page = _retainedTabPages.putIfAbsent(
+                  tab,
+                  () => _buildShellPage(tab, expenseTheme),
+                );
+                return _RetainedShellTab(
+                  key: ValueKey('retained-shell-tab-${tab.id}'),
+                  active: tab == _pageActiveTab,
+                  child: page,
+                );
+              },
             ),
           ),
           if (!_homeBlockingOverlayOpen) ...shellNavigation,
@@ -825,6 +844,32 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       if (tab.id == key) return tab;
     }
     return AppTab.home;
+  }
+}
+
+class _RetainedShellTab extends StatefulWidget {
+  const _RetainedShellTab({
+    super.key,
+    required this.active,
+    required this.child,
+  });
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_RetainedShellTab> createState() => _RetainedShellTabState();
+}
+
+class _RetainedShellTabState extends State<_RetainedShellTab>
+    with AutomaticKeepAliveClientMixin<_RetainedShellTab> {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return TickerMode(enabled: widget.active, child: widget.child);
   }
 }
 

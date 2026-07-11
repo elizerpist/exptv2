@@ -19,6 +19,7 @@ import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_menu_panel.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
+import 'package:exptv2/features/transactions/widgets/transaction_type_pills.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,6 +28,48 @@ void main() {
 
   setUp(() {
     snapshotRepository = InMemoryStatsSnapshotRepository();
+  });
+
+  test('clamp-aware frame preserves score parity at the same threshold', () {
+    final categories = [
+      category(id: 1, name: 'Expense', type: TransactionType.expense),
+    ];
+    final transactions = [
+      record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+      record(id: 2, date: '2026-01-02', amount: -9000, categoryId: 1),
+    ];
+    final normal = StatsRenderFrame.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      thresholdValue: 5000,
+      transactions: transactions,
+      categories: categories,
+      selectedCategoryIds: const {},
+    );
+    final clampAware = StatsRenderFrame.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      thresholdValue: 100000,
+      transactions: transactions,
+      categories: categories,
+      selectedCategoryIds: const {},
+      thresholdResolver: (_, _) => normal.yearData.thresholdValue,
+    );
+
+    expect(clampAware.yearData.thresholdValue, normal.yearData.thresholdValue);
+    expect(clampAware.yearData.summaryTotal, normal.yearData.summaryTotal);
+    expect(
+      clampAware.yearData.scorePeriodAmounts,
+      normal.yearData.scorePeriodAmounts,
+    );
+    expect(
+      clampAware.categoryScopeSeries.kontrollScore,
+      normal.categoryScopeSeries.kontrollScore,
+    );
+    expect(
+      clampAware.filteredTransactionCount,
+      normal.filteredTransactionCount,
+    );
   });
 
   testWidgets('stats annual calendar renders 12 month hit targets', (
@@ -966,6 +1009,160 @@ void main() {
     expect(cache.resolvedFrames, isNotEmpty);
     expect(cache.resolvedFrames, everyElement(same(initialFrame)));
   });
+
+  testWidgets(
+    'high-volume type switch schedules one internally consistent final frame',
+    (tester) async {
+      final categories = [
+        category(id: 1, name: 'Expense', type: TransactionType.expense),
+        category(id: 2, name: 'Income', type: TransactionType.income),
+      ];
+      final transactions = List<TransactionRecord>.generate(6000, (index) {
+        final income = index.isEven;
+        final month = (index % 12) + 1;
+        final day = (index % 28) + 1;
+        return record(
+          id: 100000 + index,
+          date:
+              '2026-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}',
+          amount: income ? 1000 + index.toDouble() : -(1000 + index.toDouble()),
+          categoryId: income ? 2 : 1,
+        );
+      });
+      final store = TransactionStore(
+        StatsRepository(categories: categories, transactions: transactions),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      final cache = TrackingStatsRenderFrameCache();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(
+                store: store,
+                snapshotRepository: snapshotRepository,
+                renderFrameCache: cache,
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+      final buildsBeforeTap = cache.builderCalls;
+      final incomePill = find.byKey(
+        const ValueKey('transaction-type-pill-income-surface'),
+      );
+      final inkWell = tester.widget<InkWell>(
+        find.descendant(of: incomePill, matching: find.byType(InkWell)),
+      );
+
+      inkWell.onTap!();
+
+      expect(cache.builderCalls, buildsBeforeTap);
+      await tester.pump();
+      expect(cache.builderCalls, buildsBeforeTap);
+      expect(
+        tester
+            .widget<TransactionTypePills>(find.byType(TransactionTypePills))
+            .activeType,
+        TransactionType.income,
+      );
+      expect(
+        find.byKey(const ValueKey('stats-type-switch-pending')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('stats-content-switcher')),
+        findsNothing,
+      );
+      await tester.pump();
+      expect(cache.builderCalls, buildsBeforeTap + 1);
+      await tester.pump();
+      expect(cache.builderCalls, buildsBeforeTap + 1);
+      expect(
+        find.byKey(const ValueKey('stats-type-switch-pending')),
+        findsNothing,
+      );
+      expect(cache.resolvedKeys.last.activeType, TransactionType.income);
+      expect(
+        cache.resolvedFrames.last.yearData.activeType,
+        TransactionType.income,
+      );
+      expect(cache.resolvedFrames.last.filteredTransactionCount, 1000);
+    },
+  );
+
+  testWidgets(
+    'retained Stats listener performs no frame build in Home type callback',
+    (tester) async {
+      final categories = [
+        category(id: 1, name: 'Expense', type: TransactionType.expense),
+        category(id: 2, name: 'Income', type: TransactionType.income),
+      ];
+      final transactions = List<TransactionRecord>.generate(6000, (index) {
+        final income = index.isEven;
+        return TransactionRecord(
+          id: 200000 + index,
+          date: '2026-07-${((index % 28) + 1).toString().padLeft(2, '0')}',
+          time: '10:00',
+          latitude: null,
+          longitude: null,
+          address: null,
+          merchant: 'Merchant ${index % 40}',
+          amount: income ? 1000 + index.toDouble() : -(1000 + index.toDouble()),
+          userAssignedName: null,
+          transactionCategoryID: income ? 2 : 1,
+        );
+      });
+      final store = TransactionStore(
+        StatsRepository(categories: categories, transactions: transactions),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      final cache = TrackingStatsRenderFrameCache();
+      Widget statsHost({required bool active}) {
+        return MaterialApp(
+          home: Scaffold(
+            body: TickerMode(
+              enabled: active,
+              child: SizedBox(
+                width: 390,
+                height: 780,
+                child: StatsPage(
+                  store: store,
+                  snapshotRepository: snapshotRepository,
+                  renderFrameCache: cache,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(statsHost(active: true));
+      await pumpStatsPage(tester);
+      store.setMerchantFilter('Merchant 0');
+      await pumpStatsPage(tester);
+      await tester.pumpWidget(statsHost(active: false));
+      await tester.pump();
+      final buildsBeforeHomeSwitch = cache.builderCalls;
+
+      store.setActiveType(TransactionType.income);
+
+      expect(cache.builderCalls, buildsBeforeHomeSwitch);
+      await tester.pump();
+      expect(cache.builderCalls, buildsBeforeHomeSwitch);
+
+      await tester.pumpWidget(statsHost(active: true));
+      await tester.pump();
+      expect(cache.builderCalls, buildsBeforeHomeSwitch + 1);
+    },
+  );
 
   testWidgets(
     'FAB open uses the last rendered frame before its first route frame',

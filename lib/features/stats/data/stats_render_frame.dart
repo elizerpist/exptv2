@@ -37,6 +37,8 @@ class StatsRenderFrame {
     int? month,
     String query = '',
     DateTime? today,
+    double Function(double requested, double observedMaximum)?
+    thresholdResolver,
   }) {
     final normalizedQuery = StatsRenderFrameKey.normalizeQuery(query);
     final queryFilteredTransactions = normalizedQuery.isEmpty
@@ -60,6 +62,7 @@ class StatsRenderFrame {
       summaryScope: summaryScope,
       month: month,
       today: today,
+      thresholdResolver: thresholdResolver,
     );
     final categoryScopeSeries = StatsCategoryScopeSeries.fromYearData(yearData);
     final page2Metrics = StatsPage2Metrics.fromYearData(yearData);
@@ -151,5 +154,10 @@ class StatsRenderFrameCache {
     _key = key;
     _frame = next;
     return next;
+  }
+
+  void seed(StatsRenderFrameKey key, StatsRenderFrame frame) {
+    _key = key;
+    _frame = frame;
   }
 }

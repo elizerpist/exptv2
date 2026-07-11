@@ -172,6 +172,8 @@ class StatsYearData {
     StatsSummaryScope summaryScope = StatsSummaryScope.yearly,
     int? month,
     DateTime? today,
+    double Function(double requested, double observedMaximum)?
+    thresholdResolver,
   }) {
     final activeCategoryIds = categories
         .where((category) => category.normalizedType == activeType)
@@ -282,6 +284,14 @@ class StatsYearData {
           .add(_StatsDatedRecord(record, originalDate));
     }
 
+    final observedMaximum = rawScoreDayTotals.values.fold<double>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
+    final effectiveThresholdValue =
+        thresholdResolver?.call(thresholdValue, observedMaximum) ??
+        thresholdValue;
+
     var summaryTotal = 0.0;
     final unscaledMonths = <StatsMonthData>[];
     final heatCategoryId = scopeSelection.isAll
@@ -317,7 +327,9 @@ class StatsYearData {
           final categoryId = record.transactionCategoryID;
           final inScope = scopeSelection.includesCategory(categoryId);
           if (inScope) rawScopedAmount += amount;
-          if (thresholdValue > 0 && amount < thresholdValue) continue;
+          if (effectiveThresholdValue > 0 && amount < effectiveThresholdValue) {
+            continue;
+          }
           if (!inScope) continue;
           activeAmount += amount;
           scopedAmount += amount;
@@ -389,7 +401,9 @@ class StatsYearData {
         final dominantCategoryId = _dominantCategoryId(categoryAmounts);
         final meetsThreshold = scopedAmount > 0;
         if (meetsThreshold) thresholdHitDays += 1;
-        if (activeAmount >= thresholdValue && activeAmount > 0) hotDays += 1;
+        if (activeAmount >= effectiveThresholdValue && activeAmount > 0) {
+          hotDays += 1;
+        }
         monthTotal += activeAmount;
         scopeTotal += scopedAmount;
         days.add(
@@ -438,10 +452,6 @@ class StatsYearData {
           0,
           (max, day) => day.scopeAmount > max ? day.scopeAmount : max,
         );
-    final observedMaximum = rawScoreDayTotals.values.fold<double>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
     final months = [
       for (final month in unscaledMonths)
         month.copyWith(
@@ -494,7 +504,7 @@ class StatsYearData {
       month: targetMonth,
       labels: periodMetrics.periodLabels,
       rawDayTotals: rawScoreDayTotals,
-      threshold: thresholdValue,
+      threshold: effectiveThresholdValue,
     );
     final matchingExpensePeriodAmounts = _canonicalPeriodAmounts(
       summaryScope: summaryScope,
@@ -518,7 +528,7 @@ class StatsYearData {
       activeType: activeType,
       mode: mode,
       summaryScope: summaryScope,
-      thresholdValue: thresholdValue,
+      thresholdValue: effectiveThresholdValue,
       months: List.unmodifiable(months),
       summaryTotal: summaryTotal,
       summaryValue: formatHuf(summaryTotal),
@@ -526,7 +536,7 @@ class StatsYearData {
       headerValue: _headerValue(
         mode: mode,
         activeType: activeType,
-        thresholdValue: thresholdValue,
+        thresholdValue: effectiveThresholdValue,
         months: months,
         scopeLabel: scopeLabel,
         totalThresholdHitDays: totalThresholdHitDays,
