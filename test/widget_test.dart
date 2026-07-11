@@ -10,6 +10,7 @@ import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -525,7 +526,7 @@ void main() {
     expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
   });
 
-  testWidgets('FAB uses native add transaction host when available', (
+  testWidgets('FAB opens Flutter add transaction sheet directly', (
     tester,
   ) async {
     const nativeSheetChannel = MethodChannel('exptv2/native_ime_sheet');
@@ -548,19 +549,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
 
-    expect(calls.map((call) => call.method), contains('openAddTransaction'));
     expect(
-      calls
-          .where((call) => call.method == 'openAddTransaction')
-          .single
-          .arguments,
-      containsPair('type', 'expense'),
+      calls.map((call) => call.method),
+      isNot(contains('openAddTransaction')),
     );
-    expect(find.byKey(const ValueKey('transaction-editor-card')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
     expect(
       DebugConsole.entries.any(
         (entry) => entry.contains(
-          '[NativeImeSheet] AddTransaction open requested source=fab',
+          '[SlideUpMenu] AddTransaction shell open requested source=fab',
         ),
       ),
       isTrue,
@@ -606,6 +607,36 @@ void main() {
     expect(savedTransactions.last['merchant'], 'Native Host Store');
     expect(savedTransactions.last['type'], 'expense');
   });
+
+  testWidgets(
+    'Flutter add transaction sheet uses scroll body and fixed footer',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      await _tapFab(tester);
+      await tester.pumpAndSettle();
+
+      final scrollBody = find.byKey(
+        const ValueKey('transaction-editor-scroll-body'),
+      );
+      final saveFooter = find.byKey(const ValueKey('transaction-save-footer'));
+
+      expect(scrollBody, findsOneWidget);
+      expect(
+        find.descendant(
+          of: scrollBody,
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsOneWidget,
+      );
+      expect(saveFooter, findsOneWidget);
+      expect(
+        find.descendant(of: scrollBody, matching: saveFooter),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('FAB long press opens the recurring manager', (tester) async {
     await tester.pumpWidget(buildApp());
@@ -1020,41 +1051,49 @@ void main() {
     }
   });
 
-  testWidgets('transaction editor closed layout is not full-sheet scrollable', (
-    tester,
-  ) async {
-    await tester.pumpWidget(buildApp());
-    await tester.pumpAndSettle();
+  testWidgets(
+    'transaction editor closed layout uses scroll body and fixed footer',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
 
-    await _tapFab(tester);
+      await _tapFab(tester);
 
-    final nameField = find.widgetWithText(TextField, 'Tranzakció neve');
-    expect(nameField, findsOneWidget);
-    expect(
-      find.ancestor(
-        of: nameField,
-        matching: find.byType(SingleChildScrollView),
-      ),
-      findsNothing,
-    );
+      final nameField = find.widgetWithText(TextField, 'Tranzakció neve');
+      expect(nameField, findsOneWidget);
+      expect(
+        find.ancestor(
+          of: nameField,
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('transaction-editor-scroll-body')),
+          matching: find.byKey(const ValueKey('transaction-save-footer')),
+        ),
+        findsNothing,
+      );
 
-    await tester.tap(
-      find.byKey(const ValueKey('transaction-category-selector')),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('transaction-category-selector')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('transaction-category-scroll-list')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('transaction-category-scroll-list')),
-        matching: find.byType(Scrollable),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.byKey(const ValueKey('transaction-category-scroll-list')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('transaction-category-scroll-list')),
+          matching: find.byType(Scrollable),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('transaction editor keeps one field gap between every control', (
     tester,
@@ -1128,8 +1167,19 @@ void main() {
           .height;
       final gapBefore = _transactionEditorDateTimeSaveGap(tester);
 
-      tester.view.viewInsets = const FakeViewPadding(bottom: 180);
-      tester.view.padding = FakeViewPadding.zero;
+      final keyboard = KeyboardControllerScope.of(
+        tester.element(find.byKey(const ValueKey('transaction-editor-card'))),
+      );
+      keyboard.handleEvent(
+        const KeyboardEventData(
+          height: 180,
+          progress: 0.5,
+          duration: 285,
+          timestamp: 1,
+          isVisible: true,
+          type: KeyboardEventType.move,
+        ),
+      );
       await tester.pump();
 
       final panelHeightAfter = tester
@@ -1158,12 +1208,7 @@ void main() {
         transformAfter.transform.getTranslation().y,
         moreOrLessEquals(-180, epsilon: 0.1),
       );
-      expect(
-        DebugConsole.allText,
-        contains(
-          '[KeyboardFlow] SlideUpMenu AddTransaction keyboard frame raw=180.0',
-        ),
-      );
+      expect(DebugConsole.allText, contains('source=keyboard-controller'));
       expect(DebugConsole.allText, contains('lag=0.0'));
     },
   );
@@ -1235,13 +1280,16 @@ void main() {
     );
     expect(slideCard.entryDuration, const Duration(milliseconds: 192));
     expect(slideCard.deferEntryAnimation, isTrue);
+    expect(
+      slideCard.keyboardMotionSource,
+      SlideUpKeyboardMotionSource.controller,
+    );
     final cardBefore = tester.getRect(
       find.byKey(const ValueKey('transaction-editor-card')),
     );
     final saveBefore = tester.getRect(
       find.byKey(const ValueKey('transaction-save-button')),
     );
-    final dateBefore = tester.getRect(find.widgetWithText(TextField, 'Dátum'));
 
     await tester.tap(
       find.byKey(const ValueKey('transaction-category-selector')),
@@ -1277,7 +1325,6 @@ void main() {
     final selectorRect = tester.getRect(
       find.byKey(const ValueKey('transaction-category-selector')),
     );
-    final dateAfter = tester.getRect(find.widgetWithText(TextField, 'Dátum'));
     final screenHeight =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
     expect(editorRect.top, lessThan(cardBefore.top));
@@ -1291,7 +1338,6 @@ void main() {
         epsilon: 0.1,
       ),
     );
-    expect(dateAfter.bottom, moreOrLessEquals(dateBefore.bottom, epsilon: 1));
     expect(saveAfter.bottom, moreOrLessEquals(saveBefore.bottom, epsilon: 1));
     expect(saveAfter.bottom, lessThanOrEqualTo(screenHeight));
     expect(

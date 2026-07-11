@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 
 import '../../../core/debug/debug_console.dart';
 import '../../../core/keyboard/keyboard_inset_follower.dart';
@@ -14,6 +15,8 @@ typedef SlideUpDragGate =
       double gestureDx,
       double gestureDy,
     );
+
+enum SlideUpKeyboardMotionSource { legacyInsets, controller }
 
 class SlideUpMenuCard extends StatefulWidget {
   const SlideUpMenuCard({
@@ -38,6 +41,7 @@ class SlideUpMenuCard extends StatefulWidget {
     this.openRequestedAt,
     this.deferEntryAnimation = false,
     this.keyboardAvoidance = true,
+    this.keyboardMotionSource = SlideUpKeyboardMotionSource.legacyInsets,
     this.dismissOnVeilTap = true,
   });
 
@@ -61,6 +65,7 @@ class SlideUpMenuCard extends StatefulWidget {
   final DateTime? openRequestedAt;
   final bool deferEntryAnimation;
   final bool keyboardAvoidance;
+  final SlideUpKeyboardMotionSource keyboardMotionSource;
   final bool dismissOnVeilTap;
 
   @override
@@ -182,6 +187,44 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
           final focusVeilTapTop = widget.focusVeilPassthroughTop
               .clamp(0.0, availableHeight)
               .toDouble();
+          final cardChild = RepaintBoundary(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: _handlePointerDown,
+              onPointerMove: _handlePointerMove,
+              onPointerUp: _handlePointerUp,
+              onPointerCancel: _handlePointerCancel,
+              child: KeyedSubtree(
+                key: widget.cardKey,
+                child: SizedBox.expand(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(30),
+                      ),
+                      border: Border.all(color: AppColors.gray200),
+                      boxShadow: widget.zIndexShadow
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.14),
+                                offset: const Offset(0, -2),
+                                blurRadius: 12,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(30),
+                      ),
+                      child: widget.child,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
           return Stack(
             children: [
               if (widget.showFocusVeil)
@@ -223,87 +266,100 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
                         )
                       : const AbsorbPointer(child: SizedBox.expand()),
                 ),
-              KeyboardInsetFollower(
-                debugLabel: 'SlideUpMenu $_debugLabel',
-                enabled: widget.keyboardAvoidance,
-                child: RepaintBoundary(
-                  child: Listener(
-                    behavior: HitTestBehavior.translucent,
-                    onPointerDown: _handlePointerDown,
-                    onPointerMove: _handlePointerMove,
-                    onPointerUp: _handlePointerUp,
-                    onPointerCancel: _handlePointerCancel,
-                    child: KeyedSubtree(
-                      key: widget.cardKey,
-                      child: SizedBox.expand(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(30),
-                            ),
-                            border: Border.all(color: AppColors.gray200),
-                            boxShadow: widget.zIndexShadow
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.14,
-                                      ),
-                                      offset: const Offset(0, -2),
-                                      blurRadius: 12,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(30),
-                            ),
-                            child: widget.child,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                builder: (context, keyboard, child) {
-                  final keyboardInset = keyboard.effectiveInset;
-                  if (widget.keyboardAvoidance) {
-                    _logKeyboardLift(
-                      keyboard: keyboard,
-                      panelHeight: panelHeight,
-                      availableHeight: availableHeight,
-                    );
-                  }
-                  return Align(
-                    alignment: Alignment.bottomCenter,
-                    child: SizedBox(
-                      height: panelHeight,
-                      child: AnimatedBuilder(
-                        animation: Listenable.merge([_entry, _dragDy]),
-                        builder: (context, child) {
-                          final entryOffset =
-                              (1 -
-                                  Curves.easeOutCubic.transform(_entry.value)) *
-                              panelHeight;
-                          return Transform.translate(
-                            key: const ValueKey('slide-up-menu-transform'),
-                            offset: Offset(
-                              0,
-                              entryOffset + _dragDy.value - keyboardInset,
-                            ),
-                            child: child,
-                          );
-                        },
-                        child: child,
-                      ),
-                    ),
-                  );
-                },
+              _buildKeyboardDrivenPanel(
+                context: context,
+                panelHeight: panelHeight,
+                availableHeight: availableHeight,
+                child: cardChild,
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildKeyboardDrivenPanel({
+    required BuildContext context,
+    required double panelHeight,
+    required double availableHeight,
+    required Widget child,
+  }) {
+    if (widget.keyboardMotionSource == SlideUpKeyboardMotionSource.controller) {
+      final keyboard = context.keyboardOrNull;
+      if (!widget.keyboardAvoidance || keyboard == null) {
+        return _buildTranslatedPanel(
+          panelHeight: panelHeight,
+          keyboardInset: 0,
+          child: child,
+        );
+      }
+      return ValueListenableBuilder<double>(
+        valueListenable: keyboard.heightNotifier,
+        child: child,
+        builder: (context, keyboardHeight, child) {
+          final keyboardInset = keyboardHeight
+              .clamp(0.0, availableHeight)
+              .toDouble();
+          _logControllerKeyboardLift(
+            keyboardInset: keyboardInset,
+            panelHeight: panelHeight,
+            availableHeight: availableHeight,
+          );
+          return _buildTranslatedPanel(
+            panelHeight: panelHeight,
+            keyboardInset: keyboardInset,
+            child: child!,
+          );
+        },
+      );
+    }
+
+    return KeyboardInsetFollower(
+      debugLabel: 'SlideUpMenu $_debugLabel',
+      enabled: widget.keyboardAvoidance,
+      child: child,
+      builder: (context, keyboard, child) {
+        final keyboardInset = keyboard.effectiveInset;
+        if (widget.keyboardAvoidance) {
+          _logKeyboardLift(
+            keyboard: keyboard,
+            panelHeight: panelHeight,
+            availableHeight: availableHeight,
+          );
+        }
+        return _buildTranslatedPanel(
+          panelHeight: panelHeight,
+          keyboardInset: keyboardInset,
+          child: child!,
+        );
+      },
+    );
+  }
+
+  Widget _buildTranslatedPanel({
+    required double panelHeight,
+    required double keyboardInset,
+    required Widget child,
+  }) {
+    _keyboardInset = keyboardInset;
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SizedBox(
+        height: panelHeight,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_entry, _dragDy]),
+          builder: (context, child) {
+            final entryOffset =
+                (1 - Curves.easeOutCubic.transform(_entry.value)) * panelHeight;
+            return Transform.translate(
+              key: const ValueKey('slide-up-menu-transform'),
+              offset: Offset(0, entryOffset + _dragDy.value - keyboardInset),
+              child: child,
+            );
+          },
+          child: child,
+        ),
       ),
     );
   }
@@ -470,6 +526,41 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
         'ageMs=${keyboard.ageMs?.toString() ?? 'n/a'} '
         'fallback=${keyboard.fallbackInset.toStringAsFixed(1)} '
         'nativeSource=${keyboard.nativeSource ?? 'n/a'} '
+        'entry=${_entry.value.toStringAsFixed(2)} '
+        'drag=${_dragDy.value.toStringAsFixed(1)}',
+      );
+    });
+  }
+
+  void _logControllerKeyboardLift({
+    required double keyboardInset,
+    required double panelHeight,
+    required double availableHeight,
+  }) {
+    if (_lastLoggedKeyboardInset == keyboardInset &&
+        _lastLoggedKeyboardSource == 'keyboard-controller') {
+      return;
+    }
+    _lastLoggedKeyboardInset = keyboardInset;
+    _lastLoggedKeyboardSource = 'keyboard-controller';
+    _lastLoggedKeyboardPhase = 'height-notifier';
+    _lastLoggedKeyboardSequence = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      DebugConsole.log(
+        '[SlideUpMenu] $_debugLabel keyboard lift '
+        'inset=${keyboardInset.toStringAsFixed(1)} '
+        'raw=${keyboardInset.toStringAsFixed(1)} '
+        'lag=0.0 '
+        'panel=${panelHeight.toStringAsFixed(1)} '
+        'available=${availableHeight.toStringAsFixed(1)} '
+        'transform=${(-keyboardInset).toStringAsFixed(1)} '
+        'source=keyboard-controller '
+        'phase=height-notifier '
+        'seq=n/a '
+        'ageMs=n/a '
+        'fallback=${KeyboardInsetReader.rawOf(context).toStringAsFixed(1)} '
+        'nativeSource=flutter_keyboard_controller '
         'entry=${_entry.value.toStringAsFixed(2)} '
         'drag=${_dragDy.value.toStringAsFixed(1)}',
       );

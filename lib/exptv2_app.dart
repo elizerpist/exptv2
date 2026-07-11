@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
@@ -89,19 +90,21 @@ class _Exptv2AppState extends State<Exptv2App> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Exptv2',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      home: SecurityGate(
-        nativeBridge: widget.nativeBridge,
-        onUnlocked: _googleSheetsSyncController == null
-            ? null
-            : _syncGoogleSheetsOnUnlocked,
-        child: ExptShell(
-          store: widget.store,
+    return KeyboardProvider(
+      child: MaterialApp(
+        title: 'Exptv2',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: SecurityGate(
           nativeBridge: widget.nativeBridge,
-          googleSheetsSyncController: _googleSheetsSyncController,
+          onUnlocked: _googleSheetsSyncController == null
+              ? null
+              : _syncGoogleSheetsOnUnlocked,
+          child: ExptShell(
+            store: widget.store,
+            nativeBridge: widget.nativeBridge,
+            googleSheetsSyncController: _googleSheetsSyncController,
+          ),
         ),
       ),
     );

@@ -174,9 +174,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           child: Builder(
             builder: (context) {
               final actionBottomInset =
-                  widget.nativeHostMode && _keyboardVisible(context)
-                  ? 8.0
-                  : MediaQuery.viewPaddingOf(context).bottom + 8;
+                  MediaQuery.viewPaddingOf(context).bottom + 8;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -300,12 +298,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                                   onSelected: _selectCategory,
                                 ),
                               ],
-                              if (_categoryPickerOpen && !widget.nativeHostMode)
-                                const Spacer()
-                              else
-                                const SizedBox(
-                                  height: _transactionFormFieldGap,
-                                ),
+                              const SizedBox(height: _transactionFormFieldGap),
                               DateTimeFields(
                                 dateFieldKey: _dateFieldKey,
                                 timeFieldKey: _timeFieldKey,
@@ -329,18 +322,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               ],
                             ],
                           );
-                          final body = widget.nativeHostMode
-                              ? ClipRect(
-                                  child: SingleChildScrollView(
-                                    keyboardDismissBehavior:
-                                        ScrollViewKeyboardDismissBehavior
-                                            .manual,
-                                    physics: const ClampingScrollPhysics(),
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: formFields,
-                                  ),
-                                )
-                              : formFields;
+                          final body = ClipRect(
+                            child: SingleChildScrollView(
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.manual,
+                              physics: const ClampingScrollPhysics(),
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: formFields,
+                            ),
+                          );
                           return SizedBox.expand(
                             key: const ValueKey(
                               'transaction-editor-scroll-body',
@@ -410,6 +400,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           visible: widget.visible,
           openRequestedAt: widget.openRequestedAt,
           deferEntryAnimation: true,
+          keyboardMotionSource: SlideUpKeyboardMotionSource.controller,
           focusVeilPassthroughTop: TransactionMenuMetrics.overlayTop,
           dragExclusionKeys: _categoryPickerOpen
               ? [_categoryPickerBoundaryKey]
@@ -444,11 +435,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _stablePanelSignature = signature;
     }
     return _stablePanelHeight!;
-  }
-
-  bool _keyboardVisible(BuildContext context) {
-    return MediaQuery.viewInsetsOf(context).bottom > 0.5 ||
-        KeyboardInsetReader.rawOf(context) > 0.5;
   }
 
   void _logFirstBuild(double panelHeight, int categoryCount) {

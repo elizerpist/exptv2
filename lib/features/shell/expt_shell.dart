@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../core/debug/debug_console.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/keyboard/keyboard_inset_follower.dart';
-import '../../core/keyboard/native_keyboard_insets.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -79,9 +78,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
   double _lastKeyboardInset = 0;
-  var _nativeAddTransactionSheetOpen = false;
-  var _nativeSheetStoreSuspended = false;
-  var _nativeKeyboardSuspended = false;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
   var _homeThemeSettingsRevision = 0;
@@ -145,9 +141,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final inset = keyboard.inset;
     final previous = _lastKeyboardInset;
     _lastKeyboardInset = inset;
-    if (_nativeAddTransactionSheetOpen) {
-      return;
-    }
     DebugConsole.log(
       '[Perf] Keyboard metrics changed inset=${inset.toStringAsFixed(1)} '
       'previous=${previous.toStringAsFixed(1)} '
@@ -365,34 +358,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   Future<void> _handleNativeSheetClosed() async {
-    _nativeAddTransactionSheetOpen = false;
-    _resumeStoreForNativeSheet();
-    _resumeKeyboardForNativeSheet();
     DebugConsole.log('[NativeImeSheet] sheet closed acknowledged');
-  }
-
-  void _suspendStoreForNativeSheet() {
-    if (_nativeSheetStoreSuspended) return;
-    _nativeSheetStoreSuspended = true;
-    _transactionStore.suspendUiUpdates();
-  }
-
-  void _resumeStoreForNativeSheet() {
-    if (!_nativeSheetStoreSuspended) return;
-    _nativeSheetStoreSuspended = false;
-    _transactionStore.resumeUiUpdates();
-  }
-
-  void _suspendKeyboardForNativeSheet() {
-    if (_nativeKeyboardSuspended) return;
-    _nativeKeyboardSuspended = true;
-    NativeKeyboardInsets.instance.suspendForNativeSheet();
-  }
-
-  void _resumeKeyboardForNativeSheet() {
-    if (!_nativeKeyboardSuspended) return;
-    _nativeKeyboardSuspended = false;
-    NativeKeyboardInsets.instance.resumeForNativeSheet();
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
@@ -545,37 +511,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void _handleFabPressed() {
     final requestedAt = DateTime.now();
     DebugConsole.log(
-      '[NativeImeSheet] AddTransaction open requested source=fab',
-    );
-    unawaited(_openAddTransactionNativeFirst(requestedAt));
-  }
-
-  Future<void> _openAddTransactionNativeFirst(DateTime requestedAt) async {
-    _sheetHostKey.currentState?.closeAll();
-    _nativeAddTransactionSheetOpen = true;
-    _suspendStoreForNativeSheet();
-    _suspendKeyboardForNativeSheet();
-    final openedNative = await _nativeImeSheetBridge.openAddTransaction(
-      type: _transactionStore.activeType,
-    );
-    if (!mounted) {
-      _resumeStoreForNativeSheet();
-      _resumeKeyboardForNativeSheet();
-      return;
-    }
-    if (openedNative) {
-      DebugConsole.log(
-        '[NativeImeSheet] AddTransaction native open dispatched '
-        'elapsed=${_elapsedMs(requestedAt)}ms',
-      );
-      return;
-    }
-    _resumeStoreForNativeSheet();
-    _resumeKeyboardForNativeSheet();
-    _nativeAddTransactionSheetOpen = false;
-    DebugConsole.log(
-      '[NativeImeSheet] AddTransaction native unavailable fallback=flutter '
-      'elapsed=${_elapsedMs(requestedAt)}ms',
+      '[SlideUpMenu] AddTransaction shell open requested source=fab',
     );
     _sheetHostKey.currentState?.openTransaction(
       requestedAt: requestedAt,

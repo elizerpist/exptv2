@@ -80,19 +80,6 @@ class NativeImeSheetHost(
                 else -> result.notImplemented()
             }
         }
-        activity.window.decorView.post { prewarmAddTransaction() }
-    }
-
-    private fun prewarmAddTransaction() {
-        if (flutterView != null && sheetMode == SheetMode.ADD_TRANSACTION) return
-        publish("[NativeImeSheet] AddTransaction prewarm requested")
-        sheetMode = SheetMode.ADD_TRANSACTION
-        activeTransactionType = sanitizeTransactionType(activeTransactionType)
-        val root = ensureOverlay()
-        updateSheetHeight()
-        prepareHiddenHost("prewarm")
-        ensureFlutterContent()
-        ViewCompat.requestApplyInsets(root)
     }
 
     fun openProbe() {
