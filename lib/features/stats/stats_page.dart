@@ -292,30 +292,34 @@ class _StatsPageState extends State<StatsPage>
     final targetCategoryIds = snapshot.includeCategoryScope
         ? applied.categoryScopeIds
         : _selectedScopeByType[applied.activeType] ?? const <int>{};
-    final targetFrame = _resolveRenderFrameFor(
+    final targetObservedMaximum = StatsYearData.observedMaximumFor(
+      year: applied.activeYear,
       activeType: applied.activeType,
-      threshold: applied.threshold,
+      transactions: widget.store.transactions,
+      categories: widget.store.categories,
+      selectedCategoryIds: targetCategoryIds,
+      vendorFilters: targetVendors,
+      summaryScope: switch (applied.layoutMode) {
+        StatsLayoutMode.sum => StatsSummaryScope.allTime,
+        StatsLayoutMode.year => StatsSummaryScope.yearly,
+        StatsLayoutMode.month => StatsSummaryScope.monthly,
+      },
+      month: applied.activeMonth,
+      query: _searchQuery,
+    );
+    final clampedThreshold = _statsThresholdRange(
+      observedMax: targetObservedMaximum,
+      fallbackMax: 50000,
+    ).snap(applied.threshold);
+    final finalFrame = _resolveRenderFrameFor(
+      activeType: applied.activeType,
+      threshold: clampedThreshold,
       layoutMode: applied.layoutMode,
       year: applied.activeYear,
       month: applied.activeMonth,
       categoryIds: targetCategoryIds,
       vendorNames: targetVendors,
     );
-    final clampedThreshold = _statsThresholdRange(
-      observedMax: targetFrame.observedMaximum,
-      fallbackMax: 50000,
-    ).snap(applied.threshold);
-    final finalFrame = clampedThreshold == applied.threshold
-        ? targetFrame
-        : _resolveRenderFrameFor(
-            activeType: applied.activeType,
-            threshold: clampedThreshold,
-            layoutMode: applied.layoutMode,
-            year: applied.activeYear,
-            month: applied.activeMonth,
-            categoryIds: targetCategoryIds,
-            vendorNames: targetVendors,
-          );
     _activeType = applied.activeType;
     _thresholdValue = clampedThreshold;
     if (snapshot.includeCategoryScope) {

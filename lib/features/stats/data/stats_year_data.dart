@@ -108,6 +108,58 @@ class StatsYearData {
 
   static const weekdayLabels = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
 
+  static double observedMaximumFor({
+    required int year,
+    required TransactionType activeType,
+    required List<TransactionRecord> transactions,
+    required List<TransactionCategory> categories,
+    required Set<int> selectedCategoryIds,
+    Set<String> vendorFilters = const <String>{},
+    StatsSummaryScope summaryScope = StatsSummaryScope.yearly,
+    int? month,
+    String query = '',
+  }) {
+    final activeCategoryIds = categories
+        .where((category) => category.normalizedType == activeType)
+        .map((category) => category.transactionCategoryID)
+        .toSet();
+    final scopeSelection = StatsScopeSelection.normalize(
+      selectedCategoryIds: selectedCategoryIds,
+      availableCategoryIds: activeCategoryIds,
+    );
+    final targetMonth = (month ?? 1).clamp(1, 12).toInt();
+    final normalizedQuery = query.trim().toLowerCase();
+    final dayTotals = <int, double>{};
+    for (final record in transactions) {
+      if (normalizedQuery.isNotEmpty &&
+          !record.displayMerchant.toLowerCase().contains(normalizedQuery)) {
+        continue;
+      }
+      final date = _parseDate(record.date);
+      if (date == null) continue;
+      final inPeriod = switch (summaryScope) {
+        StatsSummaryScope.yearly => date.year == year,
+        StatsSummaryScope.monthly =>
+          date.year == year && date.month == targetMonth,
+        StatsSummaryScope.allTime => true,
+      };
+      if (!inPeriod || !_matchesVendorFilter(record, vendorFilters)) continue;
+      if (_recordType(record) != activeType ||
+          !scopeSelection.includesCategory(record.transactionCategoryID)) {
+        continue;
+      }
+      dayTotals.update(
+        date.dateKey,
+        (value) => value + record.amount.abs(),
+        ifAbsent: () => record.amount.abs(),
+      );
+    }
+    return dayTotals.values.fold<double>(
+      0,
+      (maximum, value) => value > maximum ? value : maximum,
+    );
+  }
+
   static StatsYearData build({
     required int year,
     required TransactionType activeType,

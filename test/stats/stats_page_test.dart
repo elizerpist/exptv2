@@ -1936,6 +1936,82 @@ void main() {
   });
 
   testWidgets(
+    'narrow out-of-range recall builds only the final clamped frame',
+    (tester) async {
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Nagy', type: TransactionType.expense),
+            category(id: 2, name: 'Szűk', type: TransactionType.expense),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-01-01', amount: -200000, categoryId: 1),
+            record(id: 2, date: '2026-01-02', amount: -20000, categoryId: 2),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      final controller = StatsPageController();
+      final cache = TrackingStatsRenderFrameCache();
+      final now = DateTime(2026, 7, 11);
+      final repository = InMemoryStatsSnapshotRepository([
+        StatsSnapshot(
+          id: 'narrow-clamp',
+          name: 'Szűk clamp',
+          createdAt: now,
+          updatedAt: now,
+          includeCategoryScope: true,
+          includeVendorScope: false,
+          includeActiveType: false,
+          includeThreshold: true,
+          includeLayoutMode: false,
+          includePageIndex: false,
+          categoryScopeIds: const {2},
+          threshold: 200000,
+        ),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(
+                store: store,
+                controller: controller,
+                snapshotRepository: repository,
+                renderFrameCache: cache,
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+      controller.openThresholdSheet();
+      await pumpStatsPage(tester);
+      final beforeRecall = cache.builderCalls;
+
+      await tester.tap(
+        find.byKey(const ValueKey('stats-snapshot-card-narrow-clamp')),
+      );
+      await pumpStatsPage(tester);
+
+      expect(cache.builderCalls, beforeRecall + 1);
+      expect(find.text('50 000 Ft'), findsAtLeastNWidgets(1));
+      expect(
+        tester
+            .widget<Slider>(
+              find.byKey(const ValueKey('stats-threshold-slider')),
+            )
+            .value,
+        50000,
+      );
+    },
+  );
+
+  testWidgets(
     'out-of-order recall commits only latest target in one store publication',
     (tester) async {
       final store = DelayedSnapshotTransactionStore(
@@ -2070,15 +2146,13 @@ void main() {
   testWidgets('worst-case snapshot card keeps every field in 112x74', (
     tester,
   ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 1400);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final now = DateTime(2026, 7, 11);
     final store = TransactionStore(
       StatsRepository(
         categories: [
           category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          category(id: 2, name: 'Étterem', type: TransactionType.expense),
+          category(id: 3, name: 'Utazás', type: TransactionType.expense),
         ],
         transactions: [
           record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
@@ -2088,53 +2162,61 @@ void main() {
     );
     await store.start();
     final controller = StatsPageController();
-    final now = DateTime(2026, 7, 11);
-    final repository = InMemoryStatsSnapshotRepository([
-      StatsSnapshot(
-        id: 'all-fields',
-        name: 'Minden szuro hosszu neve',
-        createdAt: now,
-        updatedAt: now,
-        includeCategoryScope: true,
-        includeVendorScope: true,
-        includeActiveType: true,
-        includeThreshold: true,
-        includeLayoutMode: true,
-        includePageIndex: true,
-        categoryScopeIds: const {1, 2, 3},
-        vendorScopeNames: const {'Aldi', 'Spar', 'Tesco'},
-        activeType: TransactionType.expense,
-        threshold: 125000,
-        layoutMode: StatsLayoutMode.month,
-        activeYear: 2025,
-        activeMonth: 12,
-        pageIndex: 1,
-      ),
-    ]);
-
-    for (final scale in const [1.0, 2.0]) {
-      tester.platformDispatcher.textScaleFactorTestValue = scale;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MediaQuery(
-              data: const MediaQueryData(textScaler: TextScaler.noScaling),
-              child: SizedBox(
-                width: 390,
-                height: 1200,
-                child: StatsPage(
-                  store: store,
-                  controller: controller,
-                  snapshotRepository: repository,
-                ),
-              ),
+    final snapshot = StatsSnapshot(
+      id: 'all-fields',
+      name: 'Minden szuro hosszu neve',
+      createdAt: now,
+      updatedAt: now,
+      includeCategoryScope: true,
+      includeVendorScope: true,
+      includeActiveType: true,
+      includeThreshold: true,
+      includeLayoutMode: true,
+      includePageIndex: true,
+      categoryScopeIds: const {1, 2, 3},
+      vendorScopeNames: const {'Aldi', 'Spar', 'Tesco'},
+      activeType: TransactionType.expense,
+      threshold: 125000,
+      layoutMode: StatsLayoutMode.month,
+      activeYear: 2025,
+      activeMonth: 12,
+      pageIndex: 1,
+    );
+    final repository = InMemoryStatsSnapshotRepository([snapshot]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: repository,
             ),
           ),
         ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    final renderedCard = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('stats-snapshot-card-all-fields')),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    for (final scale in const [1.0, 2.0]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: Scaffold(body: Center(child: renderedCard)),
+          ),
+        ),
       );
-      await pumpStatsPage(tester);
-      controller.openThresholdSheet();
-      await pumpStatsPage(tester);
+      await tester.pump();
       final card = find.byKey(const ValueKey('stats-snapshot-card-all-fields'));
 
       expect(tester.getSize(card), const Size(112, 74));
@@ -2165,8 +2247,6 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-      await tester.tapAt(const Offset(10, 10));
-      await pumpStatsPage(tester);
     }
   });
 
