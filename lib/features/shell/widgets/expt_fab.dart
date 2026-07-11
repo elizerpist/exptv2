@@ -48,6 +48,19 @@ class _ExptFabState extends State<ExptFab> {
   bool _dragStepped = false;
 
   @override
+  void didUpdateWidget(covariant ExptFab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onVerticalDragStep != null &&
+        widget.onVerticalDragStep == null) {
+      _verticalTickTimer?.cancel();
+      _verticalTickTimer = null;
+      _verticalOffsetY = 0;
+      _verticalActive = false;
+      _verticalTickCount = 0;
+    }
+  }
+
+  @override
   void dispose() {
     _verticalTickTimer?.cancel();
     super.dispose();

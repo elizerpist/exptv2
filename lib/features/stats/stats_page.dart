@@ -120,8 +120,9 @@ class _StatsPageState extends State<StatsPage>
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
   final _snapshotRecallGeneration = StatsSnapshotRecallGeneration();
-  double? _pendingThresholdValue;
+  final _pendingThresholdSteps = <int>[];
   var _thresholdPublicationScheduled = false;
+  var _thresholdPublicationGeneration = 0;
 
   @override
   void initState() {
@@ -176,6 +177,7 @@ class _StatsPageState extends State<StatsPage>
   bool get wantKeepAlive => true;
 
   void _handleStoreChanged() {
+    _discardPendingThresholdStep();
     var changed = _syncSummaryFromStore();
     if (!widget.store.loading && widget.store.error == null) {
       final nextThreshold = _clampThresholdToCurrentScope(_thresholdValue);
@@ -289,6 +291,7 @@ class _StatsPageState extends State<StatsPage>
     if (!mounted || !recall.isLatest) {
       return _ignoredSnapshotRecallResult();
     }
+    _discardPendingThresholdStep();
     final targetVendors =
         mutation.merchantFilters ?? widget.store.activeMerchantFilters;
     final targetCategoryIds = snapshot.includeCategoryScope
@@ -359,6 +362,7 @@ class _StatsPageState extends State<StatsPage>
 
   void _stepSnapshot(int direction) {
     if (_snapshots.isEmpty || direction == 0) return;
+    _discardPendingThresholdStep();
     final nextIndex =
         (_selectedSnapshotIndex + (direction > 0 ? 1 : -1)) % _snapshots.length;
     final wrappedIndex = nextIndex < 0
@@ -379,24 +383,34 @@ class _StatsPageState extends State<StatsPage>
 
   void _stepThreshold(int multiplier) {
     if (multiplier == 0) return;
-    final range = _statsThresholdRange(
-      observedMax: _lastRenderFrame?.observedMaximum ?? 0,
-      fallbackMax: 50000,
-    );
-    final current = _pendingThresholdValue ?? _thresholdValue;
-    final next = range.snap(current + multiplier * range.step);
-    if (next == current) return;
-    _pendingThresholdValue = next;
+    _pendingThresholdSteps.add(multiplier);
     if (_thresholdPublicationScheduled) return;
     _thresholdPublicationScheduled = true;
-    SchedulerBinding.instance.scheduleFrameCallback((_) {
+    final generation = ++_thresholdPublicationGeneration;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (generation != _thresholdPublicationGeneration) return;
       _thresholdPublicationScheduled = false;
-      final value = _pendingThresholdValue;
-      _pendingThresholdValue = null;
-      if (!mounted || value == null || value == _thresholdValue) return;
-      setState(() => _thresholdValue = value);
+      final steps = List<int>.of(_pendingThresholdSteps);
+      _pendingThresholdSteps.clear();
+      if (!mounted || steps.isEmpty) return;
+      final range = _statsThresholdRange(
+        observedMax: _lastRenderFrame?.observedMaximum ?? 0,
+        fallbackMax: 50000,
+      );
+      var next = _thresholdValue;
+      for (final step in steps) {
+        next = range.snap(next + step * range.step);
+      }
+      if (next == _thresholdValue) return;
+      setState(() => _thresholdValue = next);
     });
     SchedulerBinding.instance.scheduleFrame();
+  }
+
+  void _discardPendingThresholdStep() {
+    _pendingThresholdSteps.clear();
+    _thresholdPublicationScheduled = false;
+    _thresholdPublicationGeneration += 1;
   }
 
   @override
@@ -466,6 +480,7 @@ class _StatsPageState extends State<StatsPage>
                     SearchPill(
                       query: _searchQuery,
                       onQueryChanged: (value) {
+                        _discardPendingThresholdStep();
                         setState(() {
                           _searchQuery = value;
                           _thresholdValue = _clampThresholdToCurrentScope(
@@ -713,6 +728,7 @@ class _StatsPageState extends State<StatsPage>
 
   void _setActiveType(TransactionType type) {
     if (_activeType == type) return;
+    _discardPendingThresholdStep();
     setState(() {
       _activeType = type;
       _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
@@ -785,14 +801,17 @@ class _StatsPageState extends State<StatsPage>
   }
 
   void _cycleSummaryScope() {
+    _discardPendingThresholdStep();
     unawaited(widget.store.cycleSummaryWindow());
   }
 
   void _shiftSummaryScope(int direction) {
+    _discardPendingThresholdStep();
     unawaited(widget.store.shiftSummaryPeriod(direction));
   }
 
   void _resetSummaryScope() {
+    _discardPendingThresholdStep();
     unawaited(widget.store.resetSummaryToCurrentMonth());
   }
 
@@ -801,6 +820,7 @@ class _StatsPageState extends State<StatsPage>
   }
 
   Future<void> _setSummaryYear(int year) async {
+    _discardPendingThresholdStep();
     setState(() {
       _yearScopeEnabled = true;
       _monthScopeEnabled = false;
@@ -812,6 +832,7 @@ class _StatsPageState extends State<StatsPage>
 
   Future<void> _setSummaryMonth(int year, int month) async {
     final boundedMonth = month.clamp(1, 12).toInt();
+    _discardPendingThresholdStep();
     setState(() {
       _yearScopeEnabled = true;
       _monthScopeEnabled = true;
@@ -855,6 +876,7 @@ class _StatsPageState extends State<StatsPage>
   }
 
   void _applyScopeSelection(Set<int> ids) {
+    _discardPendingThresholdStep();
     setState(() {
       _selectedScopeByType[_activeType] = ids;
       _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
@@ -871,6 +893,7 @@ class _StatsPageState extends State<StatsPage>
           label: vendor,
           color: accentColor,
           onClear: () {
+            _discardPendingThresholdStep();
             final next = {...widget.store.activeMerchantFilters}
               ..remove(vendor);
             widget.store.setMerchantFilters(next);
@@ -898,6 +921,7 @@ class _StatsPageState extends State<StatsPage>
           label: category.name,
           color: category.slotColor,
           onClear: () {
+            _discardPendingThresholdStep();
             setState(() {
               _selectedScopeByType[_activeType] = {...selected}
                 ..remove(category.transactionCategoryID);
@@ -938,7 +962,7 @@ class _StatsPageState extends State<StatsPage>
 
   Future<void> _openThresholdControlSheet() async {
     final observedMax = _lastRenderFrame?.observedMaximum ?? 0;
-    final thresholdValue = _pendingThresholdValue ?? _thresholdValue;
+    final thresholdValue = _pendingThresholdPreview(observedMax);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -958,11 +982,25 @@ class _StatsPageState extends State<StatsPage>
           onAddSnapshot: _saveSnapshot,
           onSnapshotSelected: _applySnapshot,
           onThresholdChanged: (value) {
+            _discardPendingThresholdStep();
             setState(() => _thresholdValue = value);
           },
         );
       },
     );
+  }
+
+  double _pendingThresholdPreview(double observedMax) {
+    if (_pendingThresholdSteps.isEmpty) return _thresholdValue;
+    final range = _statsThresholdRange(
+      observedMax: observedMax,
+      fallbackMax: 50000,
+    );
+    var next = _thresholdValue;
+    for (final step in _pendingThresholdSteps) {
+      next = range.snap(next + step * range.step);
+    }
+    return next;
   }
 
   ExpenseTheme get _expenseTheme =>

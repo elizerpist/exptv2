@@ -205,4 +205,51 @@ void main() {
       expect(pressed, 0);
     },
   );
+
+  testWidgets('FAB cancels an active joystick when its callback is removed', (
+    tester,
+  ) async {
+    final steps = <int>[];
+    var joystickEnabled = true;
+    late StateSetter updateHost;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              updateHost = setState;
+              return Center(
+                child: ExptFab(
+                  onPressed: () {},
+                  onVerticalDragStep: joystickEnabled ? steps.add : null,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    final fab = find.byKey(const ValueKey('expt-fab'));
+    final center = tester.getCenter(fab);
+    final gesture = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveTo(center - const Offset(0, 100));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(
+      find.byKey(const ValueKey('expt-fab-joystick-increase-active')),
+      findsOneWidget,
+    );
+
+    updateHost(() => joystickEnabled = false);
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('expt-fab-joystick-increase-active')),
+      findsNothing,
+    );
+
+    await tester.pump(const Duration(milliseconds: 300));
+    await gesture.up();
+    expect(steps, isEmpty);
+  });
 }

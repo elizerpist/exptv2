@@ -1679,6 +1679,8 @@ void main() {
 
       expect(cache.builderCalls, beforeSteps);
       await tester.pump();
+      expect(cache.builderCalls, beforeSteps);
+      await tester.pump();
       expect(cache.builderCalls, beforeSteps + 1);
 
       controller.openThresholdSheet();
@@ -1693,6 +1695,71 @@ void main() {
       );
     },
   );
+
+  testWidgets('stats discards a queued joystick target after a scope change', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2025-01-01', amount: -20000, categoryId: 1),
+          record(id: 2, date: '2026-01-01', amount: -150000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryAllTime());
+    final controller = StatsPageController();
+    final cache = TrackingStatsRenderFrameCache();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: snapshotRepository,
+              renderFrameCache: cache,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    controller.stepThreshold(6);
+    controller.stepThreshold(6);
+    final yearCard = tester.getRect(
+      find.byKey(const ValueKey('stats-year-card-2025')),
+    );
+    await tester.tapAt(yearCard.topLeft + const Offset(20, 20));
+    controller.stepThreshold(6);
+    controller.stepThreshold(6);
+    await tester.pump();
+
+    expect(cache.resolvedKeys.last.summaryScope, StatsSummaryScope.yearly);
+    expect(cache.resolvedKeys.last.year, 2025);
+    expect(cache.resolvedKeys.last.threshold, 5000);
+
+    await tester.pump();
+    expect(cache.resolvedKeys.last.threshold, 50000);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+
+    expect(
+      tester
+          .widget<Slider>(find.byKey(const ValueKey('stats-threshold-slider')))
+          .value,
+      50000,
+    );
+  });
 
   testWidgets('stats threshold sheet includes snapshot add dialog', (
     tester,
@@ -2836,12 +2903,14 @@ TransactionCategory category({
 class TrackingStatsRenderFrameCache extends StatsRenderFrameCache {
   int builderCalls = 0;
   final resolvedFrames = <StatsRenderFrame>[];
+  final resolvedKeys = <StatsRenderFrameKey>[];
 
   @override
   StatsRenderFrame resolve(
     StatsRenderFrameKey key,
     StatsRenderFrame Function() builder,
   ) {
+    resolvedKeys.add(key);
     final frame = super.resolve(key, () {
       builderCalls += 1;
       return builder();
