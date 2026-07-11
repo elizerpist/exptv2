@@ -175,30 +175,36 @@ void main() {
     },
   );
 
-  test('category scope FastInfo layout uses one large padded chart panel', () {
-    final layout = StatsFastInfoGraph.layoutForTesting(const Size(390, 328));
+  test('category scope FastInfo layout matches accepted HTML geometry', () {
+    final expense = StatsFastInfoGraph.layoutForTesting(
+      const Size(412, 328),
+      categoryActiveType: TransactionType.expense,
+    );
+    final income = StatsFastInfoGraph.layoutForTesting(
+      const Size(412, 328),
+      categoryActiveType: TransactionType.income,
+    );
 
-    expect(layout.categoryPanel.left, greaterThanOrEqualTo(12));
-    expect(layout.categoryPanel.right, lessThanOrEqualTo(378));
+    expect(expense.categoryPanel, const Rect.fromLTWH(14, 42, 384, 268));
+    expect(expense.categoryTitleOffset, const Offset(47, 64));
+    expect(expense.categoryLegendY, 81);
     expect(
-      layout.categoryControlChart.left - layout.categoryPanel.left,
-      greaterThanOrEqualTo(48),
+      expense.categoryControlChart,
+      const Rect.fromLTWH(47, 104, 337, 126),
     );
     expect(
-      layout.categoryAxisLabelLeft,
-      greaterThan(layout.categoryPanel.left),
+      expense.categorySecondaryChart,
+      const Rect.fromLTWH(47, 264, 337, 26),
     );
+
+    expect(income.categoryPanel, const Rect.fromLTWH(14, 42, 384, 268));
+    expect(income.categoryTitleOffset, const Offset(47, 57));
+    expect(income.categoryLegendY, 69);
+    expect(income.categoryControlChart, const Rect.fromLTWH(47, 92, 337, 118));
     expect(
-      layout.categoryAxisLabelLeft,
-      lessThan(layout.categoryControlChart.left),
+      income.categorySecondaryChart,
+      const Rect.fromLTWH(47, 248, 337, 42),
     );
-    expect(layout.categoryControlChart.top, greaterThanOrEqualTo(86));
-    expect(layout.categoryControlChart.height, greaterThanOrEqualTo(180));
-    expect(
-      layout.categoryControlChart.bottom,
-      lessThanOrEqualTo(layout.categoryPanel.bottom - 16),
-    );
-    expect(layout.categorySecondaryChart.height, 0);
   });
 
   test(
@@ -206,15 +212,15 @@ void main() {
     () {
       final style = StatsFastInfoGraph.visualStyleForTesting();
 
-      expect(style.legendFontSize, moreOrLessEquals(10.37, epsilon: 0.01));
-      expect(style.legendMarkerWidth, moreOrLessEquals(8.64, epsilon: 0.01));
-      expect(style.legendMarkerHeight, moreOrLessEquals(4.32, epsilon: 0.01));
+      expect(style.legendFontSize, moreOrLessEquals(12.4, epsilon: 0.01));
+      expect(style.legendMarkerWidth, moreOrLessEquals(10.5, epsilon: 0.01));
+      expect(style.legendMarkerHeight, moreOrLessEquals(5.2, epsilon: 0.01));
       expect(style.secondaryLineSmoothingEnabled, isTrue);
-      expect(style.secondaryLineDashed, isTrue);
-      expect(style.controlVisualSensitivity, moreOrLessEquals(3.0));
+      expect(style.secondaryLineDashed, isFalse);
+      expect(style.controlVisualSensitivity, moreOrLessEquals(1.0));
       expect(
         StatsFastInfoGraph.visualControlValueForTesting(60),
-        moreOrLessEquals(80),
+        moreOrLessEquals(60),
       );
       expect(style.categoryYAxisValueLabelCount, greaterThanOrEqualTo(2));
     },
@@ -238,11 +244,13 @@ void main() {
       StatsRenderMode.categoryScope,
     );
 
-    expect(spec.charts, hasLength(1));
-    expect(spec.charts[0].title, '1. Kontroll + kiugras');
-    expect(spec.charts[0].yAxisLabel, 'index');
+    expect(spec.charts, hasLength(2));
+    expect(spec.charts[0].title, '1. Scope score · Soft band');
+    expect(spec.charts[0].yAxisLabel, 'score');
     expect(spec.charts[0].xAxisLabel, 'honapok');
-    expect(spec.charts[0].legendLabels, ['romlik', 'javul', '50', 'kiugras']);
+    expect(spec.charts[0].legendLabels, ['rossz', 'semleges 50', 'jó']);
+    expect(spec.charts[1].title, '2. Threshold excess');
+    expect(spec.charts[1].legendLabels, ['threshold']);
   });
 
   testWidgets('stats scope sheet toggles multiple active-type categories', (
@@ -369,7 +377,7 @@ void main() {
       find.byKey(const ValueKey('transaction-header-card')),
       findsOneWidget,
     );
-    expect(find.text('SCOPE TREND'), findsOneWidget);
+    expect(find.text('SCOPE SCORE'), findsOneWidget);
     expect(find.text('ALL'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('stats-magnet-categoryScope')),
@@ -415,12 +423,58 @@ void main() {
 
     final strip = tester.widget<MagnetStrip>(find.byType(MagnetStrip));
     expect(strip.customMarkerStyle, MagnetMarkerStyle.line);
+    expect(strip.customMarkerPosition, moreOrLessEquals(0));
 
     final chip = tester.widget<Container>(
       find.byKey(const ValueKey('header-scope-chip')),
     );
     final decoration = chip.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFFFBBF24));
+  });
+
+  testWidgets('stats income header follows endpoint income health score', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Fizetés', type: TransactionType.income),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: 300000, categoryId: 1),
+          record(id: 2, date: '2026-02-01', amount: 75000, categoryId: 1),
+          record(id: 3, date: '2026-02-02', amount: 75000, categoryId: 1),
+          record(id: 4, date: '2026-02-03', amount: 75000, categoryId: 1),
+          record(id: 5, date: '2026-02-04', amount: 75000, categoryId: 1),
+          record(id: 6, date: '2026-03-01', amount: 400000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Bevétel').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('INCOME SCORE'), findsOneWidget);
+    expect(find.text('56/100'), findsOneWidget);
+
+    final strip = tester.widget<MagnetStrip>(find.byType(MagnetStrip));
+    expect(strip.customMarkerStyle, MagnetMarkerStyle.line);
+    expect(strip.customMarkerPosition, moreOrLessEquals(0.5565, epsilon: 0.01));
   });
 
   testWidgets('stats custom magnet is not overridden by ambulance theme', (
@@ -618,7 +672,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-menu-apply-button')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Gyorskaja'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Gyorskaja'), findsNothing);
+    expect(find.text('SCOPE SCORE'), findsOneWidget);
   });
 
   testWidgets('stats header pull reveals graph-only FastInfo', (tester) async {

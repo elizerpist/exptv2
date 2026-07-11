@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../transactions/models/transaction_category.dart';
 import '../data/stats_category_scope_series.dart';
 import '../data/stats_closing_series.dart';
 import '../data/stats_heatmap_series.dart';
@@ -17,6 +18,8 @@ class StatsFastInfoLayout {
     required this.categoryControlChart,
     required this.categorySecondaryChart,
     required this.categoryAxisLabelLeft,
+    required this.categoryTitleOffset,
+    required this.categoryLegendY,
   });
 
   static const _chartLeft = 34.0;
@@ -30,10 +33,15 @@ class StatsFastInfoLayout {
   final Rect categoryControlChart;
   final Rect categorySecondaryChart;
   final double categoryAxisLabelLeft;
+  final Offset categoryTitleOffset;
+  final double categoryLegendY;
 
   double get topTitleTop => topChart.top - _titleOffset;
 
-  static StatsFastInfoLayout resolve(Size size) {
+  static StatsFastInfoLayout resolve(
+    Size size, {
+    TransactionType categoryActiveType = TransactionType.expense,
+  }) {
     final width = (size.width - _chartLeft * 2)
         .clamp(1.0, double.infinity)
         .toDouble();
@@ -49,22 +57,32 @@ class StatsFastInfoLayout {
       (size.height - 60).clamp(1.0, double.infinity).toDouble(),
     );
     final categoryAxisLabelLeft = categoryPanel.left + 12;
-    final categoryChartLeft = categoryPanel.left + 52;
+    final categoryChartLeft = categoryPanel.left + 33;
     final categoryChartRight = categoryPanel.right - 14;
     final categoryChartWidth = (categoryChartRight - categoryChartLeft)
         .clamp(1.0, double.infinity)
         .toDouble();
+    final contentBottom = categoryPanel.top + categoryPanel.height - 16;
+    final isIncome = categoryActiveType == TransactionType.income;
+    final upperLift = isIncome ? 12.0 : 0.0;
+    final titleY = categoryPanel.top + 22 - upperLift;
+    final titleDrawY = isIncome ? titleY + 5 : titleY;
+    final legendY = titleY + 17;
+    final helperH = isIncome ? 42.0 : 26.0;
+    final helperGap = isIncome ? 26.0 : 34.0;
+    final chartY = legendY + 23;
+    final chartBottom = contentBottom - helperH - 4 - helperGap - upperLift;
     final categoryControlChart = Rect.fromLTWH(
       categoryChartLeft,
-      categoryPanel.top + 48,
+      chartY,
       categoryChartWidth,
-      (categoryPanel.height - 84).clamp(180.0, 210.0).toDouble(),
+      (chartBottom - chartY).clamp(1.0, double.infinity).toDouble(),
     );
     final categorySecondaryChart = Rect.fromLTWH(
       categoryChartLeft,
-      categoryPanel.bottom - 22,
+      contentBottom - helperH - 4,
       categoryChartWidth,
-      0,
+      helperH,
     );
     return StatsFastInfoLayout(
       topChart: Rect.fromLTWH(_chartLeft, 66, width, 82),
@@ -74,6 +92,8 @@ class StatsFastInfoLayout {
       categoryControlChart: categoryControlChart,
       categorySecondaryChart: categorySecondaryChart,
       categoryAxisLabelLeft: categoryAxisLabelLeft,
+      categoryTitleOffset: Offset(categoryChartLeft, titleDrawY),
+      categoryLegendY: legendY,
     );
   }
 }
@@ -88,19 +108,26 @@ class StatsFastInfoSpec {
       StatsRenderMode.categoryScope => const StatsFastInfoSpec(
         charts: [
           StatsFastInfoChartMetadata(
-            title: '1. Kontroll + kiugras',
-            yAxisLabel: 'index',
+            title: '1. Scope score · Soft band',
+            yAxisLabel: 'score',
+            xAxisLabel: 'honapok',
+            legendItems: [
+              StatsFastInfoLegendItem(label: 'rossz', color: Color(0xFFEF4444)),
+              StatsFastInfoLegendItem(
+                label: 'semleges 50',
+                color: Color(0xFFFBBF24),
+              ),
+              StatsFastInfoLegendItem(label: 'jó', color: Color(0xFF22C55E)),
+            ],
+          ),
+          StatsFastInfoChartMetadata(
+            title: '2. Threshold excess',
+            yAxisLabel: 'delta',
             xAxisLabel: 'honapok',
             legendItems: [
               StatsFastInfoLegendItem(
-                label: 'romlik',
+                label: 'threshold',
                 color: Color(0xFFEF4444),
-              ),
-              StatsFastInfoLegendItem(label: 'javul', color: Color(0xFF22C55E)),
-              StatsFastInfoLegendItem(label: '50', color: AppColors.gray500),
-              StatsFastInfoLegendItem(
-                label: 'kiugras',
-                color: Color(0xFFF97316),
               ),
             ],
           ),
@@ -253,17 +280,23 @@ class StatsFastInfoGraph extends StatelessWidget {
   final StatsYearData data;
 
   static const visualStyle = StatsFastInfoVisualStyle(
-    legendFontSize: 10.37,
-    legendMarkerWidth: 8.64,
-    legendMarkerHeight: 4.32,
+    legendFontSize: 12.4,
+    legendMarkerWidth: 10.5,
+    legendMarkerHeight: 5.2,
     secondaryLineSmoothingEnabled: true,
-    secondaryLineDashed: true,
-    controlVisualSensitivity: 3.0,
+    secondaryLineDashed: false,
+    controlVisualSensitivity: 1.0,
     categoryYAxisValueLabelCount: 3,
   );
 
-  static StatsFastInfoLayout layoutForTesting(Size size) {
-    return StatsFastInfoLayout.resolve(size);
+  static StatsFastInfoLayout layoutForTesting(
+    Size size, {
+    TransactionType categoryActiveType = TransactionType.expense,
+  }) {
+    return StatsFastInfoLayout.resolve(
+      size,
+      categoryActiveType: categoryActiveType,
+    );
   }
 
   static StatsFastInfoSpec specForTesting(StatsRenderMode mode) {
@@ -305,7 +338,10 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final layout = StatsFastInfoLayout.resolve(size);
+    final layout = StatsFastInfoLayout.resolve(
+      size,
+      categoryActiveType: data.activeType,
+    );
     final spec = StatsFastInfoSpec.forMode(data.mode);
     switch (data.mode) {
       case StatsRenderMode.categoryScope:
@@ -337,13 +373,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       false,
     );
     canvas.drawRRect(rrect, Paint()..color = Colors.white);
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = AppColors.gray200.withValues(alpha: 0.85)
-        ..strokeWidth = 1
-        ..style = PaintingStyle.stroke,
-    );
   }
 
   void _drawCategoryScope(
@@ -354,30 +383,47 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     final series = StatsCategoryScopeSeries.fromYearData(data);
     _drawCategoryPanel(canvas, layout.categoryPanel);
     final chart = layout.categoryControlChart;
-    final metadata = spec.charts[0].copyWith(
-      legendItems: [
-        ...spec.charts[0].legendItems.take(3),
-        StatsFastInfoLegendItem(
-          label: series.secondaryMetricLabel,
-          color: const Color(0xFFF97316),
-        ),
-      ],
+    final primary = spec.charts[0].copyWith(
+      title: data.activeType == TransactionType.income
+          ? '1. Income health · App current'
+          : spec.charts[0].title,
     );
-    _drawChartHeader(canvas, metadata, chart);
-    _drawGrid(canvas, chart, horizontal: 4);
-    _drawControlBars(canvas, chart, series.controlBars);
-    _drawSecondaryIndexLine(canvas, chart, series.secondaryLine);
-    _drawControlAxisValueLabels(canvas, chart);
-    _drawAxisLabels(
+    _drawCategoryChartHeader(canvas, primary, layout);
+    _drawSoftScoreZones(canvas, chart);
+    _drawScoreGrid(canvas, chart);
+    _drawSegmentedScorePath(canvas, chart, series.scoreLine);
+    _drawScoreEndpoint(canvas, chart, series.scoreLine);
+    _drawEndpointBadge(
       canvas,
-      metadata,
       chart,
-      drawXAxisLabel: false,
-      yAxisLabelLeft: layout.categoryAxisLabelLeft,
-      yAxisLabelTop: chart.top - 14,
-      yAxisLabelWidth: chart.left - layout.categoryAxisLabelLeft - 6,
+      series.scoreLine,
+      '${series.kontrollScore.round()}/100',
+      _scoreColor(series.kontrollScore),
     );
-    _drawMonthLabels(canvas, chart, series.monthLabels);
+    _drawControlAxisValueLabels(canvas, chart);
+    _drawMonthTicks(canvas, chart, series.monthTicks);
+
+    final helperChart = layout.categorySecondaryChart;
+    final helperTitle = data.activeType == TransactionType.income
+        ? '2. Átlagtól eltérő minták'
+        : spec.charts[1].title;
+    _drawText(
+      canvas,
+      helperTitle,
+      Offset(helperChart.left, helperChart.top - 8),
+      TextStyle(
+        color: AppColors.gray700,
+        fontSize: data.activeType == TransactionType.income ? 8.8 : 8.5,
+        fontWeight: FontWeight.w700,
+      ),
+      maxWidth: helperChart.width,
+    );
+    if (data.activeType == TransactionType.income) {
+      _drawAverageDeviationBars(canvas, helperChart, series.helperBars);
+    } else {
+      _drawThresholdExcessBars(canvas, helperChart, series.helperBars);
+    }
+    _drawMonthTicks(canvas, helperChart, series.monthTicks);
   }
 
   void _drawHeatmap(
@@ -455,13 +501,45 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     _drawLegend(canvas, metadata.legendItems, chart);
   }
 
+  void _drawCategoryChartHeader(
+    Canvas canvas,
+    StatsFastInfoChartMetadata metadata,
+    StatsFastInfoLayout layout,
+  ) {
+    _drawText(
+      canvas,
+      metadata.title,
+      layout.categoryTitleOffset,
+      const TextStyle(
+        color: AppColors.gray700,
+        fontSize: 10.2,
+        fontWeight: FontWeight.w700,
+      ),
+      maxWidth: layout.categoryControlChart.width,
+    );
+    _drawLegendAt(
+      canvas,
+      metadata.legendItems,
+      layout.categoryControlChart,
+      layout.categoryLegendY,
+    );
+  }
+
   void _drawLegend(
     Canvas canvas,
     List<StatsFastInfoLegendItem> items,
     Rect chart,
   ) {
+    _drawLegendAt(canvas, items, chart, chart.top - 10);
+  }
+
+  void _drawLegendAt(
+    Canvas canvas,
+    List<StatsFastInfoLegendItem> items,
+    Rect chart,
+    double y,
+  ) {
     var x = chart.left;
-    final y = chart.top - 10;
     final maxX = chart.right;
     for (final item in items) {
       final labelPainter = _textPainter(
@@ -499,6 +577,279 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     }
   }
 
+  void _drawSoftScoreZones(Canvas canvas, Rect chart) {
+    final paint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0x2122C55E),
+          Color(0x0A22C55E),
+          Color(0x14FBBF24),
+          Color(0x0AEF4444),
+          Color(0x21EF4444),
+        ],
+        stops: [0, 0.38, 0.50, 0.62, 1],
+      ).createShader(chart);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chart, const Radius.circular(8)),
+      paint,
+    );
+  }
+
+  void _drawScoreGrid(Canvas canvas, Rect chart) {
+    final gridPaint = Paint()
+      ..color = AppColors.gray200.withValues(alpha: 0.55)
+      ..strokeWidth = 1;
+    for (var i = 0; i <= 4; i += 1) {
+      final y = chart.top + chart.height * i / 4;
+      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
+    }
+    final neutralY = chart.bottom - chart.height * 0.5;
+    canvas.drawLine(
+      Offset(chart.left, neutralY),
+      Offset(chart.right, neutralY),
+      Paint()
+        ..color = const Color(0xFFFBBF24).withValues(alpha: 0.50)
+        ..strokeWidth = 1,
+    );
+  }
+
+  void _drawSegmentedScorePath(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+  ) {
+    if (points.isEmpty) return;
+    final path = _smoothPathForPoints(chart, points, 100);
+    final zones = const [
+      _ScoreZone(from: 0, to: 45, color: Color(0xFFEF4444)),
+      _ScoreZone(from: 45, to: 60, color: Color(0xFFFBBF24)),
+      _ScoreZone(from: 60, to: 100, color: Color(0xFF22C55E)),
+    ];
+    for (final zone in zones) {
+      final yTop = chart.bottom - chart.height * zone.to / 100;
+      final yBottom = chart.bottom - chart.height * zone.from / 100;
+      canvas.save();
+      canvas.clipRect(
+        Rect.fromLTRB(chart.left - 4, yTop, chart.right + 4, yBottom),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = zone.color.withValues(alpha: 0.96)
+          ..strokeWidth = 3.1
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..style = PaintingStyle.stroke,
+      );
+      canvas.restore();
+    }
+  }
+
+  void _drawScoreEndpoint(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+  ) {
+    if (points.isEmpty) return;
+    final point = points.last;
+    final offset = _offsetForPoint(
+      chart,
+      point,
+      points.length - 1,
+      points.length,
+    );
+    canvas.drawCircle(offset, 6.8, Paint()..color = Colors.white);
+    canvas.drawCircle(offset, 4.3, Paint()..color = _scoreColor(point.value));
+  }
+
+  void _drawEndpointBadge(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+    String label,
+    Color color,
+  ) {
+    if (points.isEmpty) return;
+    final point = points.last;
+    final offset = _offsetForPoint(
+      chart,
+      point,
+      points.length - 1,
+      points.length,
+    );
+    final painter = _textPainter(
+      label,
+      TextStyle(color: color, fontSize: 7, fontWeight: FontWeight.w800),
+      maxWidth: 52,
+    );
+    final width = painter.width + 10;
+    final left = offset.dx - width - 2;
+    final top = (offset.dy - 8).clamp(chart.top + 2, chart.bottom - 14);
+    final rect = Rect.fromLTWH(left, top, width, 14);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(7)),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(7)),
+      Paint()
+        ..color = color
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke,
+    );
+    painter.paint(
+      canvas,
+      Offset(
+        left + width / 2 - painter.width / 2,
+        top + 7 - painter.height / 2,
+      ),
+    );
+  }
+
+  void _drawMonthTicks(Canvas canvas, Rect chart, List<StatsMonthTick> ticks) {
+    if (ticks.isEmpty) return;
+    const textStyle = TextStyle(
+      color: AppColors.gray500,
+      fontSize: 7.4,
+      fontWeight: FontWeight.w700,
+    );
+    for (final tick in ticks) {
+      final painter = _textPainter(tick.label, textStyle, maxWidth: 42);
+      final x = chart.left + chart.width * tick.position.clamp(0.0, 1.0);
+      final left = (x - painter.width / 2).clamp(
+        chart.left,
+        chart.right - painter.width,
+      );
+      painter.paint(canvas, Offset(left, chart.bottom + 11));
+    }
+  }
+
+  void _drawThresholdExcessBars(
+    Canvas canvas,
+    Rect chart,
+    List<StatsHelperBar> bars,
+  ) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chart, const Radius.circular(6)),
+      Paint()..color = const Color(0xB8F8FAFC),
+    );
+    final baselineY = chart.bottom - 1;
+    canvas.drawLine(
+      Offset(chart.left, baselineY),
+      Offset(chart.right, baselineY),
+      Paint()
+        ..color = AppColors.gray500.withValues(alpha: 0.40)
+        ..strokeWidth = 1,
+    );
+    if (bars.isEmpty) return;
+    final barWidth = bars.length <= 12
+        ? (chart.width / math.max(bars.length * 7, 18)).clamp(5.0, 10.0)
+        : (chart.width / (bars.length * 1.35)).clamp(1.1, 7.0);
+    for (final bar in bars) {
+      final delta = bar.value.clamp(0, 100).toDouble();
+      final x = chart.left + chart.width * bar.position.clamp(0.0, 1.0);
+      final height = math.max(1.0, delta / 100 * chart.height * 0.82);
+      final rect = Rect.fromLTWH(
+        x - barWidth / 2,
+        baselineY - height,
+        barWidth,
+        height,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          rect,
+          Radius.circular(math.min(2.4, barWidth / 2)),
+        ),
+        Paint()
+          ..color = const Color(
+            0xFFEF4444,
+          ).withValues(alpha: (0.34 + delta / 100 * 0.5).clamp(0.34, 0.84)),
+      );
+    }
+  }
+
+  void _drawAverageDeviationBars(
+    Canvas canvas,
+    Rect chart,
+    List<StatsHelperBar> bars,
+  ) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chart, const Radius.circular(6)),
+      Paint()..color = const Color(0xB8F8FAFC),
+    );
+    final baselineY = chart.center.dy;
+    canvas.drawLine(
+      Offset(chart.left, baselineY),
+      Offset(chart.right, baselineY),
+      Paint()
+        ..color = AppColors.gray500.withValues(alpha: 0.48)
+        ..strokeWidth = 1,
+    );
+    final edgePaint = Paint()
+      ..color = AppColors.gray200.withValues(alpha: 0.66)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(chart.left, chart.top + 1),
+      Offset(chart.right, chart.top + 1),
+      edgePaint,
+    );
+    canvas.drawLine(
+      Offset(chart.left, chart.bottom - 1),
+      Offset(chart.right, chart.bottom - 1),
+      edgePaint,
+    );
+    _drawHelperAxisLabel(canvas, '+max', chart.left - 5, chart.top + 4);
+    _drawHelperAxisLabel(canvas, '0', chart.left - 5, baselineY + 2);
+    _drawHelperAxisLabel(canvas, '-max', chart.left - 5, chart.bottom - 2);
+    if (bars.isEmpty) return;
+    final barWidth = _helperBarWidth(chart, bars.length);
+    for (final bar in bars) {
+      final strength = (bar.value.abs() / 100).clamp(0.0, 1.0);
+      final x = chart.left + chart.width * bar.position.clamp(0.0, 1.0);
+      final height = math.max(1.5, strength * chart.height * 0.42);
+      final top = bar.value >= 0 ? baselineY - height : baselineY;
+      final rect = Rect.fromLTWH(x - barWidth / 2, top, barWidth, height);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          rect,
+          Radius.circular(math.min(4, barWidth / 2)),
+        ),
+        Paint()
+          ..color = _color(
+            bar.colorHex,
+          ).withValues(alpha: (0.30 + strength * 0.52).clamp(0.30, 0.82)),
+      );
+    }
+  }
+
+  void _drawHelperAxisLabel(
+    Canvas canvas,
+    String label,
+    double right,
+    double y,
+  ) {
+    final painter = _textPainter(
+      label,
+      const TextStyle(
+        color: AppColors.gray500,
+        fontSize: 6.8,
+        fontWeight: FontWeight.w700,
+      ),
+      maxWidth: 32,
+    );
+    painter.paint(
+      canvas,
+      Offset(right - painter.width, y - painter.height / 2),
+    );
+  }
+
+  double _helperBarWidth(Rect chart, int count) {
+    if (count <= 1) return 14;
+    return (chart.width / math.max(count * 3.6, 16)).clamp(6.0, 16.0);
+  }
+
   void _drawAxisLabels(
     Canvas canvas,
     StatsFastInfoChartMetadata metadata,
@@ -533,33 +884,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       canvas,
       Offset(chart.right - xPainter.width, chart.bottom + 3),
     );
-  }
-
-  void _drawMonthLabels(Canvas canvas, Rect chart, List<String> labels) {
-    if (labels.isEmpty) return;
-    final textStyle = const TextStyle(
-      color: AppColors.gray500,
-      fontSize: 6.6,
-      fontWeight: FontWeight.w700,
-    );
-    final segmentWidth = labels.length <= 1
-        ? chart.width
-        : chart.width / (labels.length - 1);
-    for (var i = 0; i < labels.length; i += 1) {
-      final painter = _textPainter(
-        labels[i],
-        textStyle,
-        maxWidth: segmentWidth.clamp(18.0, 42.0),
-      );
-      final x = labels.length <= 1
-          ? chart.center.dx
-          : chart.left + chart.width * i / (labels.length - 1);
-      final left = (x - painter.width / 2).clamp(
-        chart.left,
-        chart.right - painter.width,
-      );
-      painter.paint(canvas, Offset(left, chart.bottom + 3));
-    }
   }
 
   void _drawControlAxisValueLabels(Canvas canvas, Rect chart) {
@@ -659,87 +983,19 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     );
   }
 
-  void _drawControlBars(Canvas canvas, Rect chart, List<StatsControlBar> bars) {
-    final baselineY = chart.bottom - chart.height * 0.5;
-    canvas.drawLine(
-      Offset(chart.left, baselineY),
-      Offset(chart.right, baselineY),
-      Paint()
-        ..color = AppColors.gray500.withValues(alpha: 0.55)
-        ..strokeWidth = 1.2,
-    );
-    if (bars.isEmpty) return;
-    final barWidth = (chart.width / (bars.length * 1.35)).clamp(1.1, 11.0);
-    for (var i = 0; i < bars.length; i += 1) {
-      final bar = bars[i];
-      final visualValue = StatsFastInfoGraph._emphasizeControlValue(bar.value);
-      final centerX = _xForBarIndex(chart, i, bars.length);
-      final normalized = ((visualValue - 50).abs() / 50).clamp(0.0, 1.0);
-      final height = math.max(1.0, chart.height * 0.48 * normalized);
-      final top = visualValue >= 50 ? baselineY - height : baselineY;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(centerX - barWidth / 2, top, barWidth, height),
-          const Radius.circular(1.8),
-        ),
-        Paint()..color = _color(bar.colorHex),
-      );
-    }
-  }
-
-  void _drawSecondaryIndexLine(
-    Canvas canvas,
+  Path _smoothPathForPoints(
     Rect chart,
     List<StatsSeriesPoint> points,
+    double maxValue,
   ) {
-    if (points.isEmpty) return;
-    final values = points
-        .map((point) => point.value.clamp(0, 100).toDouble())
-        .toList(growable: false);
-    final path = _smoothPathForValues(chart, values, 100);
-    final paint = Paint()
-      ..color = const Color(0xFFF97316)
-      ..strokeWidth = 2.4
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    if (!StatsFastInfoGraph.visualStyle.secondaryLineDashed) {
-      canvas.drawPath(path, paint);
-      return;
-    }
-    _drawDashedPath(canvas, path, paint, dash: 7, gap: 5);
-  }
-
-  void _drawDashedPath(
-    Canvas canvas,
-    Path path,
-    Paint paint, {
-    required double dash,
-    required double gap,
-  }) {
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final end = math.min(distance + dash, metric.length);
-        canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance = end + gap;
-      }
-    }
-  }
-
-  Path _smoothPathForValues(Rect chart, List<double> values, double maxValue) {
     final offsets = [
-      for (var i = 0; i < values.length; i += 1)
-        Offset(
-          _xForIndex(chart, i, values.length),
-          chart.bottom - chart.height * (values[i] / maxValue).clamp(0.0, 1.0),
-        ),
+      for (var i = 0; i < points.length; i += 1)
+        _offsetForPoint(chart, points[i], i, points.length, maxValue: maxValue),
     ];
     final path = Path();
     if (offsets.isEmpty) return path;
     path.moveTo(offsets.first.dx, offsets.first.dy);
-    if (!StatsFastInfoGraph.visualStyle.secondaryLineSmoothingEnabled ||
-        offsets.length < 3) {
+    if (offsets.length < 3) {
       for (final offset in offsets.skip(1)) {
         path.lineTo(offset.dx, offset.dy);
       }
@@ -761,6 +1017,26 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
       path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
     }
     return path;
+  }
+
+  Offset _offsetForPoint(
+    Rect chart,
+    StatsSeriesPoint point,
+    int index,
+    int count, {
+    double maxValue = 100,
+  }) {
+    final position = point.position ?? (count <= 1 ? 0.5 : index / (count - 1));
+    return Offset(
+      chart.left + chart.width * position.clamp(0.0, 1.0),
+      chart.bottom - chart.height * (point.value / maxValue).clamp(0.0, 1.0),
+    );
+  }
+
+  Color _scoreColor(double value) {
+    if (value < 45) return const Color(0xFFEF4444);
+    if (value < 60) return const Color(0xFFFBBF24);
+    return const Color(0xFF22C55E);
   }
 
   void _drawSignedBars(
@@ -906,4 +1182,12 @@ class _YAxisValueLabel {
 
   final String label;
   final double normalizedValue;
+}
+
+class _ScoreZone {
+  const _ScoreZone({required this.from, required this.to, required this.color});
+
+  final double from;
+  final double to;
+  final Color color;
 }

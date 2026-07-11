@@ -5,81 +5,131 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('expense control bars use dynamic EMA around a neutral 50 baseline', () {
-    final series = StatsCategoryScopeSeries.fromDailySamples(
-      threshold: 5000,
-      dailyScopeAmounts: [
-        ...List<double>.filled(18, 1000),
-        ...List<double>.filled(13, 18000),
+  test('expense scope uses accepted sparse score and real helper samples', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.categoryScope,
+      thresholdValue: 5000,
+      transactions: [
+        record(id: 1, date: '2026-01-10', amount: -6000, categoryId: 1),
+        record(id: 2, date: '2026-07-10', amount: -26030, categoryId: 1),
       ],
+      categories: [
+        category(id: 1, name: 'Gyorsetterem', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
     );
 
-    expect(series.dynamicEmaPeriod, 8);
-    expect(series.controlBars, hasLength(31));
-    expect(series.controlBars.any((bar) => bar.colorHex == '#EF4444'), isTrue);
-    expect(series.controlBars.any((bar) => bar.colorHex == '#22C55E'), isTrue);
-    expect(
-      series.controlBars.map((bar) => bar.value).toSet().length,
-      greaterThan(2),
-      reason: 'dynamic EMA should smooth sparse daily samples',
-    );
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(series.scoreLine, hasLength(2));
+    expect(series.scoreLine.first.position, 0);
+    expect(series.scoreLine.last.position, 1);
+    expect(series.scoreLine.first.value, closeTo(76.949673, 0.0001));
+    expect(series.scoreLine.last.value, 0);
+    expect(series.kontrollScore, 0);
+    expect(series.monthTicks.map((tick) => tick.label), [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+    ]);
+    expect(series.helperBars.map((bar) => bar.rawValue), [6000, 26030]);
+    _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
+      4.75511174512601,
+      100,
+    ]);
+    expect(series.helperBars.every((bar) => bar.colorHex == '#EF4444'), isTrue);
   });
 
   test(
-    'threshold zero labels the orange line as active-day intensity index',
+    'income scope filters months by threshold and exposes endpoint score',
     () {
-      final series = StatsCategoryScopeSeries.fromDailySamples(
-        threshold: 0,
-        dailyScopeAmounts: const [2000, 0, 3000],
+      final data = StatsYearData.build(
+        year: 2026,
+        activeType: TransactionType.income,
+        mode: StatsRenderMode.categoryScope,
+        thresholdValue: 100000,
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: 300000, categoryId: 1),
+          record(id: 2, date: '2026-02-01', amount: 75000, categoryId: 1),
+          record(id: 3, date: '2026-02-02', amount: 75000, categoryId: 1),
+          record(id: 4, date: '2026-02-03', amount: 75000, categoryId: 1),
+          record(id: 5, date: '2026-02-04', amount: 75000, categoryId: 1),
+          record(id: 6, date: '2026-03-01', amount: 400000, categoryId: 1),
+        ],
+        categories: [
+          category(id: 1, name: 'Fizetes', type: TransactionType.income),
+        ],
+        selectedCategoryIds: const {},
       );
 
-      expect(series.secondaryMetricLabel, 'aktiv nap index');
-      expect(series.secondaryLine, hasLength(3));
-      expect(
-        series.secondaryLine.map((point) => point.value),
-        everyElement(inInclusiveRange(0, 100)),
-      );
+      final series = StatsCategoryScopeSeries.fromYearData(data);
+
+      expect(series.monthTicks.map((tick) => tick.label), ['Jan', 'Mar']);
+      expect(series.scoreLine, hasLength(2));
+      expect(series.scoreLine.last.value, closeTo(60.5, 0.0001));
+      expect(series.kontrollScore, closeTo(60.5, 0.0001));
+      expect(series.helperBars.map((bar) => bar.rawValue), [300000, 400000]);
+      expect(series.helperBars.map((bar) => bar.value), [-100, 100]);
+      expect(series.helperBars.map((bar) => bar.colorHex), [
+        '#EF4444',
+        '#22C55E',
+      ]);
     },
   );
 
-  test('expense orange line smooths normalized spike severity index', () {
+  test(
+    'expense dense scope uses centered rolling score inside active range',
+    () {
+      final series = StatsCategoryScopeSeries.fromDailySamples(
+        threshold: 5000,
+        dailyScopeAmounts: [
+          ...List<double>.filled(18, 1000),
+          ...List<double>.filled(13, 18000),
+        ],
+      );
+
+      expect(series.dynamicEmaPeriod, 16);
+      expect(series.scoreLine, hasLength(13));
+      expect(series.scoreLine.first.position, 0);
+      expect(series.scoreLine.last.position, 1);
+      expect(series.scoreLine.map((point) => point.value), everyElement(0));
+    },
+  );
+
+  test('threshold zero uses min-baseline helper bars', () {
+    final series = StatsCategoryScopeSeries.fromDailySamples(
+      threshold: 0,
+      dailyScopeAmounts: const [2000, 0, 3000],
+    );
+
+    expect(series.secondaryMetricLabel, 'min baseline');
+    expect(series.helperBars.map((bar) => bar.rawValue), [2000, 3000]);
+    expect(series.helperBars.map((bar) => bar.value), [0, 100]);
+  });
+
+  test('expense helper bars use threshold excess from real samples only', () {
     final series = StatsCategoryScopeSeries.fromDailySamples(
       threshold: 5000,
       dailyScopeAmounts: const [6000, 2000, 14000],
     );
 
-    expect(series.secondaryMetricLabel, 'kiugras index');
-    expect(series.dynamicEmaPeriod, 18);
-    _expectCloseValues(series.secondaryLine.map((point) => point.value), const [
-      20,
-      20,
-      24.210526315789473,
+    expect(series.secondaryMetricLabel, 'threshold excess');
+    expect(series.helperBars, hasLength(2));
+    expect(series.helperBars.map((bar) => bar.rawValue), [6000, 14000]);
+    _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
+      11.11111111111111,
+      100,
     ]);
-    expect(
-      series.secondaryLine.map((point) => point.value),
-      everyElement(inInclusiveRange(0, 100)),
-    );
   });
 
   test(
-    'threshold zero orange line smooths normalized active-day intensity',
-    () {
-      final series = StatsCategoryScopeSeries.fromDailySamples(
-        threshold: 0,
-        dailyScopeAmounts: const [2000, 0, 6000],
-      );
-
-      expect(series.secondaryMetricLabel, 'aktiv nap index');
-      expect(series.dynamicEmaPeriod, 18);
-      _expectCloseValues(
-        series.secondaryLine.map((point) => point.value),
-        const [50, 50, 55.26315789473684],
-      );
-    },
-  );
-
-  test(
-    'income scope uses income-health bars and normalized deviation line',
+    'income scope uses endpoint income health and average-deviation helper bars',
     () {
       final data = StatsYearData.build(
         year: 2026,
@@ -103,13 +153,9 @@ void main() {
       final series = StatsCategoryScopeSeries.fromYearData(data);
 
       expect(series.monthLabels, ['Jan', 'Feb', 'Mar']);
-      expect(series.secondaryMetricLabel, 'elteres index');
+      expect(series.secondaryMetricLabel, 'atlag elteres');
       expect(series.secondaryReferenceAmount, closeTo(333333.33, 0.01));
-      _expectCloseValues(
-        series.secondaryLine.map((point) => point.value),
-        const [24.0, 35.666666666666664, 32.22222222222222],
-      );
-      expect(series.controlBars.map((bar) => bar.value), [
+      expect(series.scoreLine.map((point) => point.value), [
         closeTo(41.0, 0.01),
         closeTo(69.75, 0.01),
         closeTo(55.65, 0.01),
@@ -117,9 +163,19 @@ void main() {
       expect(series.controlBars.map((bar) => bar.colorHex), [
         '#EF4444',
         '#22C55E',
+        '#FBBF24',
+      ]);
+      _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
+        -50,
+        -50,
+        100,
+      ]);
+      expect(series.helperBars.map((bar) => bar.colorHex), [
+        '#EF4444',
+        '#EF4444',
         '#22C55E',
       ]);
-      expect(series.kontrollScore, closeTo(62.7, 0.01));
+      expect(series.kontrollScore, closeTo(55.65, 0.01));
     },
   );
 
@@ -157,39 +213,28 @@ void main() {
     ]);
   });
 
-  test('occurrence can fall while value index rises', () {
+  test('sparse score can improve while a later amount is lower', () {
     final series = StatsCategoryScopeSeries.fromDailySamples(
       threshold: 5000,
-      dailyScopeAmounts: const [6000, 6000, 0, 0, 30000],
+      dailyScopeAmounts: const [30000, 0, 0, 0, 6000],
       window: 2,
     );
 
     expect(
-      series.occurrence.last.value,
-      lessThan(series.occurrence.first.value),
-    );
-    expect(
-      series.valueIndex.last.value,
-      greaterThan(series.valueIndex.first.value),
+      series.scoreLine.last.value,
+      greaterThan(series.scoreLine.first.value),
     );
   });
 
-  test('occurrence-only improvement does not create a false high score', () {
+  test('sparse high late amount keeps endpoint score low', () {
     final series = StatsCategoryScopeSeries.fromDailySamples(
       threshold: 5000,
       dailyScopeAmounts: const [6000, 6000, 6000, 0, 0, 50000],
       window: 3,
     );
 
-    expect(
-      series.occurrence.last.value,
-      lessThan(series.occurrence.first.value),
-    );
-    expect(
-      series.valueIndex.last.value,
-      greaterThan(series.valueIndex.first.value),
-    );
-    expect(series.kontrollScore, lessThan(65));
+    expect(series.scoreLine.last.value, 0);
+    expect(series.kontrollScore, 0);
   });
 
   test(

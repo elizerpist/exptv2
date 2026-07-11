@@ -272,11 +272,22 @@ class _StatsPageState extends State<StatsPage>
     required ExpenseTheme expenseTheme,
     bool drawSurface = true,
   }) {
+    final categorySeries = data.mode == StatsRenderMode.categoryScope
+        ? StatsCategoryScopeSeries.fromYearData(data)
+        : null;
     final visual = _headerVisual(data);
+    final headerLabel = categorySeries == null
+        ? data.headerLabel
+        : data.activeType == TransactionType.income
+        ? 'INCOME SCORE'
+        : 'SCOPE SCORE';
+    final headerValue = categorySeries == null
+        ? data.headerValue
+        : '${categorySeries.kontrollScore.round()}/100';
     return RepaintBoundary(
       child: TransactionHeaderCard(
-        labelText: data.headerLabel,
-        balanceText: data.headerValue,
+        labelText: headerLabel,
+        balanceText: headerValue,
         showBalanceVisibilityButton: false,
         magnetType: MagnetType.fade,
         backheaderStyle: expenseTheme.settings.backheaderStyle,
@@ -331,8 +342,8 @@ class _StatsPageState extends State<StatsPage>
       StatsRenderMode.categoryScope => _StatsHeaderVisual(
         gradientColors: const [
           Color(0xFFEF4444),
-          Color(0xFFF97316),
-          Color(0xFF10B981),
+          Color(0xFFFBBF24),
+          Color(0xFF22C55E),
         ],
         markerPosition:
             StatsCategoryScopeSeries.fromYearData(data).kontrollScore / 100,

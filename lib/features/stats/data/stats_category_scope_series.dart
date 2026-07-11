@@ -18,6 +18,9 @@ class StatsCategoryScopeSeries {
     required this.secondaryMetricLabel,
     required this.secondaryReferenceAmount,
     required this.dynamicEmaPeriod,
+    this.scoreLine = const <StatsSeriesPoint>[],
+    this.helperBars = const <StatsHelperBar>[],
+    this.monthTicks = const <StatsMonthTick>[],
   });
 
   final List<StatsSeriesPoint> occurrence;
@@ -33,6 +36,9 @@ class StatsCategoryScopeSeries {
   final String secondaryMetricLabel;
   final double secondaryReferenceAmount;
   final int dynamicEmaPeriod;
+  final List<StatsSeriesPoint> scoreLine;
+  final List<StatsHelperBar> helperBars;
+  final List<StatsMonthTick> monthTicks;
 
   static StatsCategoryScopeSeries fromYearData(StatsYearData data) {
     final dailyAmounts = <double>[];
@@ -110,6 +116,7 @@ class StatsCategoryScopeSeries {
       secondaryMetricLabel: 'kiugras index',
       secondaryReferenceAmount: 0,
       dynamicEmaPeriod: 0,
+      scoreLine: points,
     );
   }
 
@@ -166,207 +173,445 @@ class StatsCategoryScopeSeries {
     required List<int> monthlyThresholdHitDays,
     required Map<int, String> categoryNames,
   }) {
-    final occurrenceValues = _occurrenceValues(
+    if (activeType == TransactionType.income) {
+      return _buildIncomeHtmlSeries(
+        threshold: threshold,
+        graphMonths: graphMonths,
+        monthLabels: monthLabels,
+        monthlyCategoryTotals: monthlyCategoryTotals,
+        monthlyThresholdHitDays: monthlyThresholdHitDays,
+        categoryNames: categoryNames,
+      );
+    }
+    return _buildExpenseHtmlSeries(
       threshold: threshold,
       dailyScopeAmounts: dailyScopeAmounts,
-      window: window,
+      graphMonths: graphMonths,
+      monthLabels: monthLabels,
+      monthlyCategoryTotals: monthlyCategoryTotals,
+      monthlyThresholdHitDays: monthlyThresholdHitDays,
+      categoryNames: categoryNames,
     );
-    final valueIndexValues = _valueIndexValues(
-      threshold: threshold,
-      dailyScopeAmounts: dailyScopeAmounts,
-      window: window,
-    );
-    final pressureValues = [
-      for (
-        var i = 0;
-        i < math.min(occurrenceValues.length, valueIndexValues.length);
-        i += 1
-      )
-        0.4 * occurrenceValues[i] + 0.6 * valueIndexValues[i],
-    ];
+  }
+
+  static StatsCategoryScopeSeries _buildExpenseHtmlSeries({
+    required double threshold,
+    required List<double> dailyScopeAmounts,
+    required List<StatsMonthData> graphMonths,
+    required List<String> monthLabels,
+    required List<Map<int, double>> monthlyCategoryTotals,
+    required List<int> monthlyThresholdHitDays,
+    required Map<int, String> categoryNames,
+  }) {
+    final allDays = graphMonths.isNotEmpty
+        ? [
+            for (final month in graphMonths)
+              for (final day in month.days)
+                _ScopeDaySample(month: month.month, amount: day.scopeAmount),
+          ]
+        : [
+            for (var i = 0; i < dailyScopeAmounts.length; i += 1)
+              _ScopeDaySample(month: null, amount: dailyScopeAmounts[i]),
+          ];
     final monthlyBars = _monthlyBars(
       monthlyCategoryTotals: monthlyCategoryTotals,
       monthlyThresholdHitDays: monthlyThresholdHitDays,
       categoryNames: categoryNames,
     );
-    final controlData = activeType == TransactionType.income
-        ? _incomeControlData(graphMonths: graphMonths)
-        : _expenseControlData(
-            threshold: threshold,
-            dailyScopeAmounts: dailyScopeAmounts,
-          );
+    final firstScopeIndex = allDays.indexWhere(
+      (day) => _isThresholdHit(day.amount, threshold),
+    );
+    var lastScopeIndex = -1;
+    for (var i = allDays.length - 1; i >= 0; i -= 1) {
+      if (_isThresholdHit(allDays[i].amount, threshold)) {
+        lastScopeIndex = i;
+        break;
+      }
+    }
+    if (firstScopeIndex < 0 || lastScopeIndex < firstScopeIndex) {
+      const scoreLine = [StatsSeriesPoint(index: 0, value: 100, position: 0.5)];
+      return StatsCategoryScopeSeries(
+        occurrence: const <StatsSeriesPoint>[],
+        valueIndex: const <StatsSeriesPoint>[],
+        riskSegments: const <StatsRiskSegment>[],
+        kontrollScore: 100,
+        macd: const <StatsMacdBar>[],
+        monthlyBars: monthlyBars,
+        latestImpactLabel: _latestImpactLabel(monthlyBars),
+        controlBars: const <StatsControlBar>[],
+        secondaryLine: const <StatsSeriesPoint>[],
+        monthLabels: const <String>[],
+        secondaryMetricLabel: threshold > 0
+            ? 'threshold excess'
+            : 'min baseline',
+        secondaryReferenceAmount: 0,
+        dynamicEmaPeriod: 7,
+        scoreLine: scoreLine,
+        helperBars: const <StatsHelperBar>[],
+        monthTicks: const <StatsMonthTick>[],
+      );
+    }
+
+    final graphDays = allDays.sublist(firstScopeIndex, lastScopeIndex + 1);
+    final hitDays = [
+      for (final day in graphDays)
+        if (_isThresholdHit(day.amount, threshold)) day,
+    ];
+    final helperBars = _expenseHelperBars(
+      threshold: threshold,
+      graphDays: graphDays,
+      hitDays: hitDays,
+    );
+    final monthTicks = _monthTicksForGraphDays(graphDays);
+    final focusScopeDays = hitDays.length;
+    final amountMax = math.max(
+      1,
+      hitDays.fold<double>(0, (max, day) => math.max(max, day.amount)),
+    );
+
+    if (focusScopeDays <= 12) {
+      final scoreLine = [
+        for (var i = 0; i < hitDays.length; i += 1)
+          StatsSeriesPoint(
+            index: i,
+            value: (100 - hitDays[i].amount / amountMax * 100)
+                .clamp(0, 100)
+                .toDouble(),
+            position: _positionInGraph(hitDays[i], graphDays),
+          ),
+      ];
+      final amountLine = [
+        for (var i = 0; i < hitDays.length; i += 1)
+          StatsSeriesPoint(
+            index: i,
+            value: (hitDays[i].amount / amountMax * 100)
+                .clamp(0, 100)
+                .toDouble(),
+            position: _positionInGraph(hitDays[i], graphDays),
+          ),
+      ];
+      return StatsCategoryScopeSeries(
+        occurrence: [
+          for (var i = 0; i < hitDays.length; i += 1)
+            StatsSeriesPoint(
+              index: i,
+              value: 100,
+              position: _positionInGraph(hitDays[i], graphDays),
+            ),
+        ],
+        valueIndex: amountLine,
+        riskSegments: const <StatsRiskSegment>[],
+        kontrollScore: scoreLine.isNotEmpty ? scoreLine.last.value : 100,
+        macd: const <StatsMacdBar>[],
+        monthlyBars: monthlyBars,
+        latestImpactLabel: _latestImpactLabel(monthlyBars),
+        controlBars: [
+          for (final point in scoreLine)
+            StatsControlBar(
+              index: point.index,
+              value: point.value,
+              colorHex: _scoreColorHex(point.value),
+              position: point.position,
+            ),
+        ],
+        secondaryLine: amountLine,
+        monthLabels: [for (final tick in monthTicks) tick.label],
+        secondaryMetricLabel: threshold > 0
+            ? 'threshold excess'
+            : 'min baseline',
+        secondaryReferenceAmount: 0,
+        dynamicEmaPeriod: 1,
+        scoreLine: scoreLine,
+        helperBars: helperBars,
+        monthTicks: monthTicks,
+      );
+    }
+
+    const behaviorWindow = 31;
+    const halfWindow = behaviorWindow ~/ 2;
+    final rollingOccurrences = <double>[];
+    final rollingAmounts = <double>[];
+    for (var i = firstScopeIndex; i <= lastScopeIndex; i += 1) {
+      final start = math.max(firstScopeIndex, i - halfWindow);
+      final end = math.min(lastScopeIndex, i + halfWindow);
+      var occurrence = 0.0;
+      var total = 0.0;
+      for (var windowIndex = start; windowIndex <= end; windowIndex += 1) {
+        final amount = allDays[windowIndex].amount;
+        if (!_isThresholdHit(amount, threshold)) continue;
+        occurrence += 1;
+        total += amount;
+      }
+      rollingOccurrences.add(occurrence);
+      rollingAmounts.add(total);
+    }
+    final emaPeriod = _dynamicEmaPeriod(focusScopeDays);
+    final smoothedOccurrences = _ema(rollingOccurrences, emaPeriod);
+    final smoothedAmounts = _ema(rollingAmounts, emaPeriod);
+    final occurrenceMax = math.max(
+      1,
+      smoothedOccurrences.fold<double>(0, math.max),
+    );
+    final amountMaxDense = math.max(
+      1,
+      smoothedAmounts.fold<double>(0, math.max),
+    );
+    final occurrenceValues = [
+      for (final value in smoothedOccurrences)
+        (value / occurrenceMax * 100).clamp(0, 100).toDouble(),
+    ];
+    final amountValues = [
+      for (final value in smoothedAmounts)
+        (value / amountMaxDense * 100).clamp(0, 100).toDouble(),
+    ];
+    final pressureValues = [
+      for (var i = 0; i < occurrenceValues.length; i += 1)
+        occurrenceValues[i] * 0.5 + amountValues[i] * 0.5,
+    ];
+    final scoreValues = [
+      for (final value in pressureValues)
+        (100 - value).clamp(0, 100).toDouble(),
+    ];
+    final scoreLine = [
+      for (var i = 0; i < scoreValues.length; i += 1)
+        StatsSeriesPoint(
+          index: i,
+          value: scoreValues[i],
+          position: _normalizedPosition(i, scoreValues.length),
+        ),
+    ];
+    final occurrenceLine = [
+      for (var i = 0; i < occurrenceValues.length; i += 1)
+        StatsSeriesPoint(
+          index: i,
+          value: occurrenceValues[i],
+          position: _normalizedPosition(i, occurrenceValues.length),
+        ),
+    ];
+    final amountLine = [
+      for (var i = 0; i < amountValues.length; i += 1)
+        StatsSeriesPoint(
+          index: i,
+          value: amountValues[i],
+          position: _normalizedPosition(i, amountValues.length),
+        ),
+    ];
     return StatsCategoryScopeSeries(
-      occurrence: [
-        for (var i = 0; i < occurrenceValues.length; i += 1)
-          StatsSeriesPoint(index: i, value: occurrenceValues[i]),
-      ],
-      valueIndex: [
-        for (var i = 0; i < valueIndexValues.length; i += 1)
-          StatsSeriesPoint(index: i, value: valueIndexValues[i]),
-      ],
+      occurrence: occurrenceLine,
+      valueIndex: amountLine,
       riskSegments: classifyRiskSegments(
         occurrenceValues: occurrenceValues,
-        valueIndexValues: valueIndexValues,
+        valueIndexValues: amountValues,
       ),
-      kontrollScore: controlData.kontrollScore,
+      kontrollScore: scoreLine.isNotEmpty ? scoreLine.last.value : 100,
       macd: _macd(pressureValues),
       monthlyBars: monthlyBars,
       latestImpactLabel: _latestImpactLabel(monthlyBars),
-      controlBars: controlData.controlBars,
-      secondaryLine: controlData.secondaryLine,
-      monthLabels: monthLabels,
-      secondaryMetricLabel: controlData.secondaryMetricLabel,
-      secondaryReferenceAmount: controlData.secondaryReferenceAmount,
-      dynamicEmaPeriod: controlData.dynamicEmaPeriod,
-    );
-  }
-
-  static _StatsCategoryControlData _expenseControlData({
-    required double threshold,
-    required List<double> dailyScopeAmounts,
-  }) {
-    if (dailyScopeAmounts.isEmpty) {
-      return const _StatsCategoryControlData(
-        controlBars: <StatsControlBar>[],
-        secondaryLine: <StatsSeriesPoint>[],
-        secondaryMetricLabel: 'kiugras index',
-        secondaryReferenceAmount: 0,
-        dynamicEmaPeriod: 0,
-        kontrollScore: 100,
-      );
-    }
-    final thresholdEnabled = threshold > 0;
-    final activeScopeDays = dailyScopeAmounts
-        .where((amount) => amount > 0)
-        .length;
-    final emaPeriod = _dynamicEmaPeriod(activeScopeDays);
-    final frequencyRaw = <double>[];
-    final valueRaw = <double>[];
-    final impactRaw = <double>[];
-    for (final amount in dailyScopeAmounts) {
-      final active = amount > 0;
-      final hit = thresholdEnabled ? amount >= threshold && active : active;
-      frequencyRaw.add(hit ? 1 : 0);
-      valueRaw.add(active ? amount : 0);
-      impactRaw.add(hit ? amount : 0);
-    }
-    final frequencyAverage = _average(frequencyRaw);
-    final valueAverage = _average(valueRaw);
-    final impactAverage = _average(impactRaw);
-    final rawControl = <double>[
-      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        (50 *
-                (0.35 * _ratio(frequencyRaw[i], frequencyAverage) +
-                    0.35 * _ratio(valueRaw[i], valueAverage) +
-                    0.30 * _ratio(impactRaw[i], impactAverage)))
-            .clamp(0, 100)
-            .toDouble(),
-    ];
-    final smoothedControl = _ema(rawControl, emaPeriod);
-    final secondaryRawValues = _expenseSecondaryIndexValues(
-      threshold: threshold,
-      dailyScopeAmounts: dailyScopeAmounts,
-      window: emaPeriod,
-    );
-    final secondaryValues = _ema(secondaryRawValues, emaPeriod);
-    final referenceValues = secondaryRawValues.where((value) => value > 0);
-    return _StatsCategoryControlData(
       controlBars: [
-        for (var i = 0; i < smoothedControl.length; i += 1)
+        for (final point in scoreLine)
           StatsControlBar(
-            index: i,
-            value: smoothedControl[i],
-            colorHex: _controlColor(
-              activeType: TransactionType.expense,
-              value: smoothedControl[i],
-            ),
+            index: point.index,
+            value: point.value,
+            colorHex: _scoreColorHex(point.value),
+            position: point.position,
           ),
       ],
-      secondaryLine: [
-        for (var i = 0; i < secondaryValues.length; i += 1)
-          StatsSeriesPoint(index: i, value: secondaryValues[i]),
-      ],
-      secondaryMetricLabel: thresholdEnabled
-          ? 'kiugras index'
-          : 'aktiv nap index',
-      secondaryReferenceAmount: _average(referenceValues),
+      secondaryLine: amountLine,
+      monthLabels: [for (final tick in monthTicks) tick.label],
+      secondaryMetricLabel: threshold > 0 ? 'threshold excess' : 'min baseline',
+      secondaryReferenceAmount: 0,
       dynamicEmaPeriod: emaPeriod,
-      kontrollScore: _scoreFromPressure(smoothedControl),
+      scoreLine: scoreLine,
+      helperBars: helperBars,
+      monthTicks: monthTicks,
     );
   }
 
-  static List<double> _expenseSecondaryIndexValues({
+  static StatsCategoryScopeSeries _buildIncomeHtmlSeries({
     required double threshold,
-    required List<double> dailyScopeAmounts,
-    required int window,
+    required List<StatsMonthData> graphMonths,
+    required List<String> monthLabels,
+    required List<Map<int, double>> monthlyCategoryTotals,
+    required List<int> monthlyThresholdHitDays,
+    required Map<int, String> categoryNames,
   }) {
-    final thresholdEnabled = threshold > 0;
-    if (!thresholdEnabled) {
-      return _activeIntensityIndexValues(dailyScopeAmounts);
+    final visibleMonths = graphMonths
+        .where((month) => month.scopeTotal > 0)
+        .where((month) => threshold <= 0 || month.thresholdHitDays > 0)
+        .toList(growable: false);
+    final monthlyBars = _monthlyBars(
+      monthlyCategoryTotals: monthlyCategoryTotals,
+      monthlyThresholdHitDays: monthlyThresholdHitDays,
+      categoryNames: categoryNames,
+    );
+    final totals = [
+      for (final month in visibleMonths) _incomeMetricTotal(month, threshold),
+    ];
+    final activeDayCounts = [
+      for (final month in visibleMonths)
+        _incomeMetricDayCount(month, threshold).toDouble(),
+    ];
+    final scoreValues = _incomeHealthValues(totals, activeDayCounts);
+    final scoreLine = [
+      for (var i = 0; i < scoreValues.length; i += 1)
+        StatsSeriesPoint(
+          index: i,
+          value: scoreValues[i],
+          position: _normalizedPosition(i, scoreValues.length),
+        ),
+    ];
+    final maxTotal = math.max(1, totals.fold<double>(0, math.max));
+    final amountLine = [
+      for (var i = 0; i < totals.length; i += 1)
+        StatsSeriesPoint(
+          index: i,
+          value: (totals[i] / maxTotal * 100).clamp(0, 100).toDouble(),
+          position: _normalizedPosition(i, totals.length),
+        ),
+    ];
+    final monthTicks = [
+      for (var i = 0; i < visibleMonths.length; i += 1)
+        StatsMonthTick(
+          label: _monthAbbreviations[visibleMonths[i].month - 1],
+          position: _normalizedPosition(i, visibleMonths.length),
+        ),
+    ];
+    final helperBars = _incomeAverageDeviationBars(totals);
+    return StatsCategoryScopeSeries(
+      occurrence: const <StatsSeriesPoint>[],
+      valueIndex: amountLine,
+      riskSegments: const <StatsRiskSegment>[],
+      kontrollScore: scoreLine.isNotEmpty ? scoreLine.last.value : 50,
+      macd: const <StatsMacdBar>[],
+      monthlyBars: monthlyBars,
+      latestImpactLabel: _latestImpactLabel(monthlyBars),
+      controlBars: [
+        for (final point in scoreLine)
+          StatsControlBar(
+            index: point.index,
+            value: point.value,
+            colorHex: _scoreColorHex(point.value),
+            position: point.position,
+          ),
+      ],
+      secondaryLine: amountLine,
+      monthLabels: [for (final tick in monthTicks) tick.label],
+      secondaryMetricLabel: 'atlag elteres',
+      secondaryReferenceAmount: _average(totals),
+      dynamicEmaPeriod: 0,
+      scoreLine: scoreLine,
+      helperBars: helperBars,
+      monthTicks: monthTicks,
+    );
+  }
+
+  static bool _isThresholdHit(double amount, double threshold) {
+    return amount > 0 && amount >= threshold;
+  }
+
+  static double _normalizedPosition(int index, int length) {
+    return length <= 1 ? 0.5 : index / (length - 1);
+  }
+
+  static double _positionInGraph(
+    _ScopeDaySample day,
+    List<_ScopeDaySample> graphDays,
+  ) {
+    final index = graphDays.indexOf(day);
+    return _normalizedPosition(index < 0 ? 0 : index, graphDays.length);
+  }
+
+  static List<StatsMonthTick> _monthTicksForGraphDays(
+    List<_ScopeDaySample> graphDays,
+  ) {
+    if (graphDays.isEmpty) return const <StatsMonthTick>[];
+    final ticks = <StatsMonthTick>[];
+    final seen = <int>{};
+    for (var i = 0; i < graphDays.length; i += 1) {
+      final month = graphDays[i].month;
+      if (month == null || seen.contains(month)) continue;
+      seen.add(month);
+      ticks.add(
+        StatsMonthTick(
+          label: _monthAbbreviations[month - 1],
+          position: _normalizedPosition(i, graphDays.length),
+        ),
+      );
     }
+    return List.unmodifiable(ticks);
+  }
+
+  static List<StatsHelperBar> _expenseHelperBars({
+    required double threshold,
+    required List<_ScopeDaySample> graphDays,
+    required List<_ScopeDaySample> hitDays,
+  }) {
+    if (hitDays.isEmpty) return const <StatsHelperBar>[];
+    final rawValues = [for (final day in hitDays) day.amount];
+    final deltas = threshold > 0
+        ? _thresholdExcessDeltas(rawValues, threshold)
+        : _amountMinDeltas(rawValues);
     return [
-      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        _expenseSpikeSeverityIndex(
-          threshold: threshold,
-          windowAmounts: _rollingWindow(dailyScopeAmounts, i, window),
+      for (var i = 0; i < hitDays.length; i += 1)
+        StatsHelperBar(
+          index: i,
+          rawValue: hitDays[i].amount,
+          value: deltas[i],
+          position: _positionInGraph(hitDays[i], graphDays),
+          colorHex: '#EF4444',
         ),
     ];
   }
 
-  static double _expenseSpikeSeverityIndex({
-    required double threshold,
-    required List<double> windowAmounts,
-  }) {
-    if (threshold <= 0) return 0;
-    var severityTotal = 0.0;
-    var hitCount = 0;
-    for (final amount in windowAmounts) {
-      if (amount < threshold || amount <= 0) continue;
-      severityTotal += ((amount - threshold) / threshold * 100)
-          .clamp(0, 100)
-          .toDouble();
-      hitCount += 1;
-    }
-    return hitCount > 0 ? severityTotal / hitCount : 0;
-  }
-
-  static List<double> _activeIntensityIndexValues(List<double> amounts) {
-    final activeAmounts = amounts.where((amount) => amount > 0).toList();
-    if (amounts.isEmpty) return const <double>[];
-    if (activeAmounts.isEmpty) return List<double>.filled(amounts.length, 0);
-    final minActive = activeAmounts.fold<double>(activeAmounts.first, math.min);
-    final maxActive = activeAmounts.fold<double>(activeAmounts.first, math.max);
-    final spread = maxActive - minActive;
+  static List<double> _thresholdExcessDeltas(
+    List<double> values,
+    double threshold,
+  ) {
+    if (threshold <= 0) return _amountMinDeltas(values);
+    final excessValues = [
+      for (final value in values) math.max(0.0, value - threshold),
+    ];
+    final maxExcess = math.max(1, excessValues.fold<double>(0, math.max));
     return [
-      for (final amount in amounts)
-        if (amount <= 0)
-          50
-        else if (spread <= 0)
-          50
-        else
-          (50 + 50 * ((amount - minActive) / spread)).clamp(50, 100).toDouble(),
+      for (final value in excessValues)
+        (value / maxExcess * 100).clamp(0, 100).toDouble(),
     ];
   }
 
-  static _StatsCategoryControlData _incomeControlData({
-    required List<StatsMonthData> graphMonths,
-  }) {
-    if (graphMonths.isEmpty) {
-      return const _StatsCategoryControlData(
-        controlBars: <StatsControlBar>[],
-        secondaryLine: <StatsSeriesPoint>[],
-        secondaryMetricLabel: 'elteres index',
-        secondaryReferenceAmount: 0,
-        dynamicEmaPeriod: 0,
-        kontrollScore: 50,
-      );
-    }
-    final monthlyTotals = [for (final month in graphMonths) month.scopeTotal];
-    final monthlyReference = _average(monthlyTotals);
-    final activeDayCounts = [
-      for (final month in graphMonths)
-        month.days.where((day) => day.scopeAmount > 0).length.toDouble(),
+  static List<double> _amountMinDeltas(List<double> values) {
+    if (values.isEmpty) return const <double>[];
+    final min = values.fold<double>(values.first, math.min);
+    final maxSpread = math.max(
+      1,
+      values.map((value) => value - min).fold<double>(0, math.max),
+    );
+    return [
+      for (final value in values)
+        ((value - min) / maxSpread * 100).clamp(0, 100).toDouble(),
     ];
+  }
+
+  static double _incomeMetricTotal(StatsMonthData month, double threshold) {
+    if (threshold <= 0) return month.scopeTotal;
+    return month.days.fold<double>(
+      0,
+      (sum, day) => day.meetsThreshold ? sum + day.scopeAmount : sum,
+    );
+  }
+
+  static int _incomeMetricDayCount(StatsMonthData month, double threshold) {
+    if (threshold <= 0) {
+      return month.days.where((day) => day.scopeAmount > 0).length;
+    }
+    return month.thresholdHitDays;
+  }
+
+  static List<double> _incomeHealthValues(
+    List<double> monthlyTotals,
+    List<double> activeDayCounts,
+  ) {
+    if (monthlyTotals.isEmpty) return const <double>[];
+    final monthlyReference = _average(monthlyTotals);
     final activeDayReference = _average(
       activeDayCounts.where((days) => days > 0),
     );
@@ -387,7 +632,7 @@ class StatsCategoryScopeSeries {
       final delta = (totalIndexes[i] - totalIndexes[i - 1]).abs();
       stabilityIndexes.add((100 - delta * 1.2).clamp(0, 100).toDouble());
     }
-    final incomeHealthValues = [
+    return [
       for (var i = 0; i < monthlyTotals.length; i += 1)
         (0.55 * totalIndexes[i] +
                 0.25 * activeDayIndexes[i] +
@@ -395,85 +640,34 @@ class StatsCategoryScopeSeries {
             .clamp(0, 100)
             .toDouble(),
     ];
-    final rawDeviationValues = [
-      for (var i = 0; i < monthlyTotals.length; i += 1)
-        (0.65 * (totalIndexes[i] - 50).abs() * 2 +
-                0.35 * (activeDayIndexes[i] - 50).abs() * 2)
-            .clamp(0, 100)
-            .toDouble(),
-    ];
-    final secondaryValues = _ema(rawDeviationValues, 2);
-    return _StatsCategoryControlData(
-      controlBars: [
-        for (var i = 0; i < incomeHealthValues.length; i += 1)
-          StatsControlBar(
-            index: i,
-            value: incomeHealthValues[i],
-            colorHex: _controlColor(
-              activeType: TransactionType.income,
-              value: incomeHealthValues[i],
-            ),
-          ),
-      ],
-      secondaryLine: [
-        for (var i = 0; i < secondaryValues.length; i += 1)
-          StatsSeriesPoint(index: i, value: secondaryValues[i]),
-      ],
-      secondaryMetricLabel: 'elteres index',
-      secondaryReferenceAmount: monthlyReference,
-      dynamicEmaPeriod: 0,
-      kontrollScore: _scoreFromIncomeHealth(incomeHealthValues),
-    );
   }
 
-  static List<double> _occurrenceValues({
-    required double threshold,
-    required List<double> dailyScopeAmounts,
-    required int window,
-  }) {
-    if (dailyScopeAmounts.isEmpty) return const <double>[];
+  static List<StatsHelperBar> _incomeAverageDeviationBars(List<double> totals) {
+    if (totals.isEmpty) return const <StatsHelperBar>[];
+    final avg = _average(totals);
+    final maxDeviation = math.max(
+      1,
+      totals.map((value) => (value - avg).abs()).fold<double>(0, math.max),
+    );
     return [
-      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        _rollingWindow(
-              dailyScopeAmounts,
-              i,
-              window,
-            ).where((amount) => amount >= threshold && amount > 0).length /
-            _rollingWindow(dailyScopeAmounts, i, window).length *
-            100,
+      for (var i = 0; i < totals.length; i += 1)
+        () {
+          final delta = totals[i] - avg;
+          return StatsHelperBar(
+            index: i,
+            rawValue: totals[i],
+            value: (delta / maxDeviation * 100).clamp(-100, 100).toDouble(),
+            position: _normalizedPosition(i, totals.length),
+            colorHex: delta >= 0 ? '#22C55E' : '#EF4444',
+          );
+        }(),
     ];
   }
 
-  static List<double> _valueIndexValues({
-    required double threshold,
-    required List<double> dailyScopeAmounts,
-    required int window,
-  }) {
-    if (dailyScopeAmounts.isEmpty) return const <double>[];
-    final rollingValues = [
-      for (var i = 0; i < dailyScopeAmounts.length; i += 1)
-        _rollingWindow(dailyScopeAmounts, i, window).fold<double>(
-          0,
-          (sum, amount) =>
-              amount >= threshold && amount > 0 ? sum + amount : sum,
-        ),
-    ];
-    final maxValue = rollingValues.fold<double>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
-    if (maxValue <= 0) return List<double>.filled(dailyScopeAmounts.length, 0);
-    return [for (final value in rollingValues) value / maxValue * 100];
-  }
-
-  static List<double> _rollingWindow(
-    List<double> values,
-    int endIndex,
-    int window,
-  ) {
-    final safeWindow = math.max(1, window);
-    final start = math.max(0, endIndex - safeWindow + 1);
-    return values.sublist(start, endIndex + 1);
+  static String _scoreColorHex(double value) {
+    if (value < 45) return '#EF4444';
+    if (value < 60) return '#FBBF24';
+    return '#22C55E';
   }
 
   static String? _riskColor(
@@ -503,18 +697,6 @@ class StatsCategoryScopeSeries {
     final recent = _average(pressureValues.skip(split));
     final worseningPenalty = math.max(0, recent - prior) * 0.5;
     return (100 - recent - worseningPenalty).clamp(0, 100).toDouble();
-  }
-
-  static double _scoreFromIncomeHealth(List<double> incomeHealthValues) {
-    if (incomeHealthValues.isEmpty) return 50;
-    if (incomeHealthValues.length == 1) {
-      return incomeHealthValues.single.clamp(0, 100).toDouble();
-    }
-    final split = math.max(1, incomeHealthValues.length ~/ 2);
-    final prior = _average(incomeHealthValues.take(split));
-    final recent = _average(incomeHealthValues.skip(split));
-    final declinePenalty = math.max(0, prior - recent) * 0.5;
-    return (recent - declinePenalty).clamp(0, 100).toDouble();
   }
 
   static List<StatsMacdBar> _macd(
@@ -634,18 +816,6 @@ class StatsCategoryScopeSeries {
     return period.clamp(7, 18);
   }
 
-  static String _controlColor({
-    required TransactionType activeType,
-    required double value,
-  }) {
-    if ((value - 50).abs() < 0.05) return '#64748B';
-    final aboveBaseline = value > 50;
-    if (activeType == TransactionType.income) {
-      return aboveBaseline ? '#22C55E' : '#EF4444';
-    }
-    return aboveBaseline ? '#EF4444' : '#22C55E';
-  }
-
   static List<String> _monthLabels(List<StatsMonthData> months) {
     return [for (final month in months) _monthAbbreviations[month.month - 1]];
   }
@@ -674,10 +844,15 @@ class StatsCategoryScopeSeries {
 }
 
 class StatsSeriesPoint {
-  const StatsSeriesPoint({required this.index, required this.value});
+  const StatsSeriesPoint({
+    required this.index,
+    required this.value,
+    this.position,
+  });
 
   final int index;
   final double value;
+  final double? position;
 }
 
 class StatsControlBar {
@@ -685,13 +860,38 @@ class StatsControlBar {
     required this.index,
     required this.value,
     required this.colorHex,
+    this.position,
   });
 
   final int index;
   final double value;
   final String colorHex;
+  final double? position;
 
   double get deltaFromBaseline => value - 50;
+}
+
+class StatsHelperBar {
+  const StatsHelperBar({
+    required this.index,
+    required this.rawValue,
+    required this.value,
+    required this.position,
+    required this.colorHex,
+  });
+
+  final int index;
+  final double rawValue;
+  final double value;
+  final double position;
+  final String colorHex;
+}
+
+class StatsMonthTick {
+  const StatsMonthTick({required this.label, required this.position});
+
+  final String label;
+  final double position;
 }
 
 class StatsRiskSegment {
@@ -756,20 +956,9 @@ class StatsCategoryStackSegment {
   }
 }
 
-class _StatsCategoryControlData {
-  const _StatsCategoryControlData({
-    required this.controlBars,
-    required this.secondaryLine,
-    required this.secondaryMetricLabel,
-    required this.secondaryReferenceAmount,
-    required this.dynamicEmaPeriod,
-    required this.kontrollScore,
-  });
+class _ScopeDaySample {
+  const _ScopeDaySample({required this.month, required this.amount});
 
-  final List<StatsControlBar> controlBars;
-  final List<StatsSeriesPoint> secondaryLine;
-  final String secondaryMetricLabel;
-  final double secondaryReferenceAmount;
-  final int dynamicEmaPeriod;
-  final double kontrollScore;
+  final int? month;
+  final double amount;
 }
