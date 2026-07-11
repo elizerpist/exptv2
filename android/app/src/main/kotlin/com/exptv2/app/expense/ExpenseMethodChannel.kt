@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -348,6 +349,8 @@ class ExpenseMethodChannel(
             try {
                 val payload = withContext(Dispatchers.IO) { block() }
                 result.success(payload)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (error: ExpenseValidationException) {
                 result.error(error.code, error.message, null)
             } catch (error: Exception) {
