@@ -41,7 +41,7 @@ Result before edits: `+107 All tests passed`.
 | SCR-SHEET-01 | same | Threshold bottom sheet | Threshold sheet has slider + numeric input and no render-mode buttons | Widget test | DONE |
 | SCR-SNAPSHOT-01 | same | Snapshot model/repository/sheet | FAB sheet contains snapshot editor row with camera add card, tap-select recall, and snapshot state fields | Model + widget tests | DONE |
 | SCR-SNAPSHOT-02 | same | Snapshot add dialog | Add-new snapshot opens centered dialog with name input and include-mask checkboxes | Widget test | DONE |
-| SCR-SNAPSHOT-03 | same | Snapshot repository/storage | Snapshots persist in local repository/table with include-mask fields | Repository/model tests + native database inspection | PARTIAL |
+| SCR-SNAPSHOT-03 | same | Snapshot repository/storage | Snapshots persist in local repository/table with include-mask fields | Repository/model tests + native database inspection | DONE |
 | SCR-SEARCH-01 | same | `StatsPage`, `SearchPill`, shell vendor sheet | Stats menu includes SearchPill and vendor selector sheet support | Widget test | DONE |
 | SCR-VENDOR-01 | same | Stats filtering/model | Vendor/source filters affect header score, FastInfo, summary, Page 1, Page 2 | Model + widget tests | DONE |
 | SCR-MAG-01 | same | Header/magnet stats model | Header score/magnet uses approved score bands and Hungarian copy | Model + widget/screenshot comparison | DONE |
@@ -122,4 +122,11 @@ Additional acceptance evidence:
 - Fresh post-review analyzer result: `No issues found! (ran in 64.2s)`.
 - `git diff --check` passes.
 
-`SCR-SNAPSHOT-03` remains `PARTIAL` until the Android DAO and migration tests pass on GitHub Actions. No feature package completion claim is permitted before that run succeeds.
+GitHub Actions verification for commit `8a61e720605998f751a9f53133beae3c76d532b6`:
+
+- Run: `https://github.com/elizerpist/exptv2/actions/runs/29153051207`
+- Result: `success`.
+- Successful steps include Dart analyze, the complete Flutter suite, all 88 Android unit tests, Room v10 -> v11 migration validation, debug APK build, and release publication.
+- Published APK: `https://github.com/elizerpist/exptv2/releases/download/debug-latest/exptv2-debug-8a61e72.apk`.
+
+Every requirement row is now `DONE`; the feature package satisfies the completion rule above.
