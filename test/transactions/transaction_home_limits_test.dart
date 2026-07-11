@@ -19,6 +19,68 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('income category editor labels the amount as income goal', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final salary = TransactionCategory.fromMap({
+      'transactionCategoryID': 5,
+      'name': 'Salary',
+      'type': 'bevétel',
+      'colorSlot': 2,
+      'iconSlot': 0,
+      'backgroundColor': '#3b82f6',
+      'hasLimit': false,
+      'limitAmount': 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    });
+    final bar = CategoryBudgetBarData(
+      key: 'category-income-5-monthly-2026-05',
+      targetType: LimitTargetType.category,
+      targetId: 5,
+      transactionType: TransactionType.income,
+      window: LimitWindow.monthly,
+      periodKey: '2026-05',
+      title: 'Salary',
+      spent: 420000,
+      hasLimit: true,
+      limitAmount: 600000,
+      alertActive: false,
+      color: salary.slotColor,
+      iconSlot: salary.iconSlot,
+      category: salary,
+      sourceLimit: null,
+    );
+    final item = BackheaderBudgetItem.category(bar);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BudgetTargetEditorSheet(
+            item: item,
+            items: [item],
+            periodLabel: '2026 május',
+            categoryBars: [bar],
+            periodIncome: 420000,
+            onCancel: () {},
+            onActiveItemChanged: (_) {},
+            onSaveOverview:
+                (_, {required limitAmount, required alertActive}) async {},
+            onSaveCategory:
+                (_, {required limitAmount, required alertActive}) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bevételi cél'), findsOneWidget);
+    expect(find.text('Kategória limit'), findsNothing);
+  });
+
   testWidgets(
     'limit editor keeps save button close to the budget limit field',
     (tester) async {
@@ -1184,7 +1246,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-budget-bar')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Beveteli cel'), findsWidgets);
+    expect(find.text('Bevételi cél'), findsWidgets);
     expect(
       find.byKey(const ValueKey('category-limit-partition-bar')),
       findsOneWidget,

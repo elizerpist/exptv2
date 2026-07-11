@@ -72,6 +72,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late final RecurringAlarmService _recurringAlarmService;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
+  final _statsPageController = StatsPageController();
   late final PageController _pageController;
   var _homeBlockingOverlayOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
@@ -235,9 +236,13 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   StatsPage _buildStatsPage() {
     return StatsPage(
       store: _transactionStore,
+      controller: _statsPageController,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       onCategoryMenuRequested: (request) {
         _sheetHostKey.currentState?.openCategoryPicker(request);
+      },
+      onVendorSheetRequested: () {
+        _sheetHostKey.currentState?.openVendorFilter();
       },
       onAddCategoryEditorRequested: () {
         _sheetHostKey.currentState?.openCategory();
@@ -509,6 +514,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabPressed() {
+    if (_activeTab == AppTab.stats) {
+      DebugConsole.log('[Stats] threshold sheet open requested source=fab');
+      _statsPageController.openThresholdSheet();
+      return;
+    }
     final requestedAt = DateTime.now();
     DebugConsole.log(
       '[SlideUpMenu] AddTransaction shell open requested source=fab',
@@ -685,9 +695,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         child: ExptFab(
           primaryColor: expenseTheme.accent,
           surfaceStyle: expenseTheme.buttonSurfaceStyle,
+          icon: _activeTab == AppTab.stats ? Icons.tune_rounded : Icons.add,
           size: fabSize,
           onPressed: _handleFabPressed,
-          onLongPress: _handleFabLongPressed,
+          onLongPress: _activeTab == AppTab.stats
+              ? null
+              : _handleFabLongPressed,
         ),
       ),
     ];

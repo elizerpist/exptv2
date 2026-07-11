@@ -4,13 +4,17 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('stats render mode exposes only the common mode', () {
+    expect(StatsRenderMode.values, [StatsRenderMode.common]);
+  });
+
   test(
     'stats year data measures threshold by active type and selected scope',
     () {
       final data = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.expense,
-        mode: StatsRenderMode.categoryScope,
+        mode: StatsRenderMode.common,
         thresholdValue: 5000,
         transactions: [
           record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
@@ -29,63 +33,15 @@ void main() {
       final january = data.months.first;
       expect(january.days[0].scopeAmount, 6000);
       expect(january.days[0].meetsThreshold, isTrue);
-      expect(january.days[1].scopeAmount, 4000);
+      expect(january.days[1].scopeAmount, 0);
       expect(january.days[1].meetsThreshold, isFalse);
       expect(january.days[2].scopeAmount, 0);
       expect(january.thresholdHitDays, 1);
-      expect(data.summaryValue, '40 000 Ft');
-      expect(data.headerLabel, 'SCOPE TREND');
+      expect(data.summaryValue, '6 000 Ft');
+      expect(data.headerLabel, 'SZŰRÉS PONTSZÁM');
       expect(data.headerValue, contains('Gyorskaja'));
     },
   );
-
-  test('heatmap feedback counts active-side hot days above threshold', () {
-    final data = StatsYearData.build(
-      year: 2026,
-      activeType: TransactionType.income,
-      mode: StatsRenderMode.heatmap,
-      thresholdValue: 8000,
-      transactions: [
-        record(id: 1, date: '2026-01-01', amount: 9000, categoryId: 3),
-        record(id: 2, date: '2026-01-02', amount: 7000, categoryId: 3),
-        record(id: 3, date: '2026-01-03', amount: -50000, categoryId: 1),
-      ],
-      categories: [
-        category(id: 1, name: 'Ruha', type: TransactionType.expense),
-        category(id: 3, name: 'Fizetés', type: TransactionType.income),
-      ],
-      selectedCategoryIds: const {},
-    );
-
-    expect(data.headerLabel, 'HEATMAP');
-    expect(data.headerValue, '1 forró nap 8k felett');
-    expect(data.months.first.hotDays, 1);
-    expect(data.summaryValue, '16 000 Ft');
-  });
-
-  test('closing feedback keeps yearly wording and counts worsening months', () {
-    final data = StatsYearData.build(
-      year: 2026,
-      activeType: TransactionType.expense,
-      mode: StatsRenderMode.closing,
-      thresholdValue: 5000,
-      transactions: [
-        record(id: 1, date: '2026-01-01', amount: -4000, categoryId: 1),
-        record(id: 2, date: '2026-02-01', amount: -7000, categoryId: 1),
-        record(id: 3, date: '2026-03-01', amount: -3000, categoryId: 1),
-        record(id: 4, date: '2026-04-01', amount: -9000, categoryId: 1),
-      ],
-      categories: [
-        category(id: 1, name: 'Bolt', type: TransactionType.expense),
-      ],
-      selectedCategoryIds: const {},
-    );
-
-    expect(data.headerLabel, 'HÓZÁRÁS');
-    expect(data.headerValue, '2 romló hónap idén');
-    expect(data.months[1].thresholdHitDays, 1);
-    expect(data.months[1].closingAmount, 7000);
-  });
 
   test(
     'graph domain uses active side first through last transaction month',
@@ -93,7 +49,7 @@ void main() {
       final expenseData = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.expense,
-        mode: StatsRenderMode.categoryScope,
+        mode: StatsRenderMode.common,
         thresholdValue: 5000,
         transactions: [
           record(id: 1, date: '2026-03-01', amount: -4000, categoryId: 1),
@@ -118,7 +74,7 @@ void main() {
       final incomeData = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.income,
-        mode: StatsRenderMode.heatmap,
+        mode: StatsRenderMode.common,
         thresholdValue: 5000,
         transactions: [
           record(id: 1, date: '2026-01-01', amount: -4000, categoryId: 1),
@@ -151,7 +107,7 @@ void main() {
     final allTime = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: transactions,
       categories: categories,
@@ -161,7 +117,7 @@ void main() {
     final yearly = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: transactions,
       categories: categories,
@@ -170,7 +126,7 @@ void main() {
     final monthly = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: transactions,
       categories: categories,
@@ -179,11 +135,44 @@ void main() {
       month: 6,
     );
 
-    expect(allTime.summaryTotal, 21000);
+    expect(allTime.summaryTotal, 18000);
     expect(yearly.summaryTotal, 18000);
     expect(monthly.summaryTotal, 11000);
     expect(monthly.months[4].activeTotal, 0);
     expect(monthly.months[5].activeTotal, 11000);
+  });
+
+  test('stats year data filters by selected vendor names', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.common,
+      thresholdValue: 0,
+      transactions: [
+        record(
+          id: 1,
+          date: '2026-01-01',
+          amount: -6000,
+          categoryId: 1,
+          merchant: 'BKK',
+        ),
+        record(
+          id: 2,
+          date: '2026-01-01',
+          amount: -9000,
+          categoryId: 1,
+          merchant: 'Spar',
+        ),
+      ],
+      categories: [
+        category(id: 1, name: 'Bolt', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
+      vendorFilters: const {'BKK'},
+    );
+
+    expect(data.summaryTotal, 6000);
+    expect(data.months.first.days.first.activeAmount, 6000);
   });
 }
 
@@ -192,6 +181,7 @@ TransactionRecord record({
   required String date,
   required double amount,
   required int categoryId,
+  String merchant = 'Teszt',
 }) {
   return TransactionRecord(
     id: id,
@@ -200,7 +190,7 @@ TransactionRecord record({
     latitude: null,
     longitude: null,
     address: null,
-    merchant: 'Teszt',
+    merchant: merchant,
     amount: amount,
     userAssignedName: null,
     transactionCategoryID: categoryId,

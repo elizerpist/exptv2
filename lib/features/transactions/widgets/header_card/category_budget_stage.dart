@@ -15,6 +15,7 @@ import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/income_goal_presentation.dart';
 import '../../models/limit_allocation_data.dart';
 import '../../models/overview_budget_data.dart';
 import '../../models/transaction_category.dart';
@@ -982,11 +983,17 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final overview = item.overview;
     final amount = _orbitEffectiveAmountFor(item);
     if (overview != null) {
+      if (overview.kind == BudgetGoalKind.incomeGoal) {
+        return IncomeGoalPresentation.fromOverview(overview).ringProgress;
+      }
       if (amount <= 0) return 0;
       return (overview.amount / amount).clamp(0.0, 1.0).toDouble();
     }
     final category = item.category;
     if (category == null) return 0;
+    if (category.transactionType == TransactionType.income) {
+      return IncomeGoalPresentation.fromCategory(category).ringProgress;
+    }
     if (amount <= 0) return 0;
     return (category.spent / amount).clamp(0.0, 1.0).toDouble();
   }
@@ -995,6 +1002,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     final amount = _orbitEffectiveAmountFor(item);
     final overview = item.overview;
     if (overview != null) {
+      if (overview.kind == BudgetGoalKind.incomeGoal) {
+        return IncomeGoalPresentation.fromOverview(overview).amountText;
+      }
       final formattedAmount = formatHuf(overview.amount);
       return amount > 0
           ? '$formattedAmount / ${formatHuf(amount)}'
@@ -1002,6 +1012,9 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
     }
     final category = item.category;
     if (category == null) return item.amountText;
+    if (category.transactionType == TransactionType.income) {
+      return IncomeGoalPresentation.fromCategory(category).amountText;
+    }
     return amount > 0
         ? '${category.formattedSpent} / ${formatHuf(amount)}'
         : category.formattedSpent;
@@ -1016,6 +1029,14 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   String _remainingAmountTextFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    if (overview?.kind == BudgetGoalKind.incomeGoal) {
+      return IncomeGoalPresentation.fromOverview(overview!).statusText;
+    }
+    final category = item.category;
+    if (category?.transactionType == TransactionType.income) {
+      return IncomeGoalPresentation.fromCategory(category!).statusText;
+    }
     final remaining = (_orbitEffectiveAmountFor(item) - _spentAmountFor(item))
         .clamp(0.0, double.infinity)
         .toDouble();
@@ -1132,6 +1153,18 @@ class _CategoryBudgetStageState extends State<CategoryBudgetStage>
   }
 
   Color _centerProgressColorFor(BackheaderBudgetItem item) {
+    final overview = item.overview;
+    if (overview?.kind == BudgetGoalKind.incomeGoal) {
+      return IncomeGoalPresentation.fromOverview(
+        overview!,
+      ).effectiveProgressColor;
+    }
+    final category = item.category;
+    if (category?.transactionType == TransactionType.income) {
+      return IncomeGoalPresentation.fromCategory(
+        category!,
+      ).effectiveProgressColor;
+    }
     final limit = _orbitEffectiveAmountFor(item);
     if (limit <= 0) return item.category?.color ?? AppColors.primary;
     final ratio = (_spentAmountFor(item) / limit).clamp(0.0, double.infinity);

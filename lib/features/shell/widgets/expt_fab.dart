@@ -12,6 +12,7 @@ class ExptFab extends StatefulWidget {
     this.primaryColor = AppColors.primary,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onLongPress,
+    this.icon = Icons.add,
     this.size = AppDimensions.fabSize,
   });
 
@@ -19,6 +20,7 @@ class ExptFab extends StatefulWidget {
   final Color primaryColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onLongPress;
+  final IconData icon;
   final double size;
 
   @override
@@ -69,7 +71,7 @@ class _ExptFabState extends State<ExptFab> {
               onTap: _handleTap,
               onLongPress: _handleLongPress,
               child: Icon(
-                Icons.add,
+                widget.icon,
                 color: AppColors.white,
                 size: widget.size * AppDimensions.fabIconScale,
               ),

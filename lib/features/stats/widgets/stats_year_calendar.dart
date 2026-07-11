@@ -108,12 +108,6 @@ class _StatsYearCalendarPainter extends CustomPainter {
     );
     canvas.save();
     canvas.clipRRect(rrect);
-    if (data.mode == StatsRenderMode.closing && month.hasTransactions) {
-      final overlay = data.activeType == TransactionType.income
-          ? AppColors.income
-          : AppColors.expense;
-      canvas.drawRRect(rrect, Paint()..color = overlay.withValues(alpha: 0.08));
-    }
     _drawCenteredText(
       canvas,
       month.name,
@@ -122,20 +116,14 @@ class _StatsYearCalendarPainter extends CustomPainter {
       FontWeight.w600,
       AppColors.gray800,
     );
-    if (data.mode == StatsRenderMode.closing && month.hasTransactions) {
-      final prefix = data.activeType == TransactionType.income ? '+' : '-';
-      final color = data.activeType == TransactionType.income
-          ? const Color(0xFF059669)
-          : const Color(0xFFDC2626);
-      _drawCenteredText(
-        canvas,
-        '$prefix${formatHuf(month.closingAmount)}',
-        Offset(rect.center.dx, rect.top + 30),
-        10,
-        FontWeight.w700,
-        color,
-      );
-    }
+    _drawCenteredText(
+      canvas,
+      formatHuf(month.closingAmount),
+      Offset(rect.center.dx, rect.top + 30),
+      10,
+      FontWeight.w700,
+      AppColors.gray700,
+    );
     _drawWeekdays(canvas, rect, month);
     _drawDays(canvas, rect, month);
     canvas.restore();
@@ -177,50 +165,23 @@ class _StatsYearCalendarPainter extends CustomPainter {
   void _drawDayCell(Canvas canvas, Rect cell, StatsDayData day) {
     final center = cell.center;
     final shortestSide = math.min(cell.width, cell.height);
-    final radius = (shortestSide * 0.38).clamp(3, 11).toDouble();
     final dayFontSize = (shortestSide * 0.34).clamp(10, 10).toDouble();
     var textColor = AppColors.gray500;
 
-    if (data.mode == StatsRenderMode.categoryScope &&
-        day.dominantCategoryId != null &&
-        day.meetsThreshold) {
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()..color = day.dominantCategoryColor,
+    if (day.meetsThreshold) {
+      final heatColor = day.dominantCategoryId == null
+          ? (data.activeType == TransactionType.income
+                ? AppColors.income
+                : AppColors.primary)
+          : day.dominantCategoryColor;
+      final opacity = (0.10 + day.heatmapIntensity * 0.90)
+          .clamp(0.10, 1.0)
+          .toDouble();
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(cell.deflate(2), const Radius.circular(3)),
+        Paint()..color = heatColor.withValues(alpha: opacity),
       );
       textColor = AppColors.white;
-    } else if (data.mode == StatsRenderMode.heatmap) {
-      final percentage = day.heatmapIntensity;
-      if (percentage > 0) {
-        final overlay = RRect.fromRectAndRadius(
-          cell.deflate(2),
-          const Radius.circular(3),
-        );
-        final color = data.activeType == TransactionType.income
-            ? AppColors.income
-            : AppColors.primary;
-        canvas.drawRRect(
-          overlay,
-          Paint()..color = color.withValues(alpha: percentage * 0.8),
-        );
-        canvas.drawRRect(
-          overlay,
-          Paint()
-            ..color = AppColors.white.withValues(alpha: (1 - percentage) * 0.4),
-        );
-      }
-    }
-
-    if (data.mode == StatsRenderMode.closing && day.meetsThreshold) {
-      final color = data.activeType == TransactionType.income
-          ? AppColors.income
-          : AppColors.expense;
-      canvas.drawCircle(
-        Offset(cell.center.dx, cell.top + 1),
-        2.5,
-        Paint()..color = color,
-      );
     }
 
     _drawCenteredText(

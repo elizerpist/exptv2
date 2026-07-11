@@ -4,15 +4,13 @@ import '../../transactions/models/transaction_category.dart';
 import '../../transactions/models/transaction_record.dart';
 import 'stats_scope_model.dart';
 
-enum StatsRenderMode { categoryScope, closing, heatmap }
+enum StatsRenderMode { common }
 
 enum StatsSummaryScope { allTime, yearly, monthly }
 
 extension StatsRenderModeX on StatsRenderMode {
   String get title => switch (this) {
-    StatsRenderMode.categoryScope => 'Kategória scope',
-    StatsRenderMode.closing => 'Hózárás',
-    StatsRenderMode.heatmap => 'Hőtérkép',
+    StatsRenderMode.common => 'Common',
   };
 }
 
@@ -29,6 +27,8 @@ class StatsYearData {
     required this.headerValue,
     required this.scopeLabel,
     required this.selectedCategoryIds,
+    required this.categoryTotals,
+    required this.vendorSummaries,
     required this.totalThresholdHitDays,
     required this.graphMonths,
     required this.graphStartMonth,
@@ -46,6 +46,8 @@ class StatsYearData {
   final String headerValue;
   final String scopeLabel;
   final Set<int> selectedCategoryIds;
+  final Map<int, double> categoryTotals;
+  final List<StatsVendorSummary> vendorSummaries;
   final int totalThresholdHitDays;
   final List<StatsMonthData> graphMonths;
   final int graphStartMonth;
@@ -76,6 +78,7 @@ class StatsYearData {
     required List<TransactionRecord> transactions,
     required List<TransactionCategory> categories,
     required Set<int> selectedCategoryIds,
+    Set<String> vendorFilters = const <String>{},
     StatsSummaryScope summaryScope = StatsSummaryScope.yearly,
     int? month,
     DateTime? today,
@@ -96,6 +99,8 @@ class StatsYearData {
     final normalizedToday = _dateOnly(today ?? DateTime.now());
     final targetMonth = (month ?? normalizedToday.month).clamp(1, 12).toInt();
     final byDate = <DateTime, List<TransactionRecord>>{};
+    final totalCategoryTotals = <int, double>{};
+    final vendorTotals = <String, _StatsVendorAccumulator>{};
     int? firstActiveMonth;
     int? lastActiveMonth;
     for (final record in transactions) {
@@ -108,6 +113,7 @@ class StatsYearData {
         summaryScope: summaryScope,
       );
       if (displayDate == null) continue;
+      if (!_matchesVendorFilter(record, vendorFilters)) continue;
       final matchesType = _recordType(record) == activeType;
       if (!matchesType) continue;
       firstActiveMonth = firstActiveMonth == null
@@ -149,6 +155,7 @@ class StatsYearData {
 
         for (final record in records) {
           final amount = record.amount.abs();
+          if (thresholdValue > 0 && amount < thresholdValue) continue;
           activeAmount += amount;
           final categoryId = record.transactionCategoryID;
           final inScope = scopeSelection.includesCategory(categoryId);
@@ -165,12 +172,27 @@ class StatsYearData {
               (value) => value + amount,
               ifAbsent: () => amount,
             );
+            totalCategoryTotals.update(
+              categoryId,
+              (value) => value + amount,
+              ifAbsent: () => amount,
+            );
+          }
+          final vendorName = record.displayMerchant.trim().isEmpty
+              ? record.merchant.trim()
+              : record.displayMerchant.trim();
+          if (vendorName.isNotEmpty) {
+            vendorTotals
+                .putIfAbsent(
+                  vendorName,
+                  () => _StatsVendorAccumulator(vendorName),
+                )
+                .add(amount: amount, categoryId: categoryId);
           }
         }
 
         final dominantCategoryId = _dominantCategoryId(categoryAmounts);
-        final meetsThreshold =
-            scopedAmount >= thresholdValue && scopedAmount > 0;
+        final meetsThreshold = scopedAmount > 0;
         final intensity = thresholdValue <= 0
             ? 0.0
             : (scopedAmount / thresholdValue).clamp(0.0, 1.0).toDouble();
@@ -197,7 +219,7 @@ class StatsYearData {
         );
       }
 
-      summaryTotal += monthTotal;
+      summaryTotal += scopeTotal;
       months.add(
         StatsMonthData(
           year: year,
@@ -257,6 +279,8 @@ class StatsYearData {
       ),
       scopeLabel: scopeLabel,
       selectedCategoryIds: Set.unmodifiable(scopedCategoryIds),
+      categoryTotals: Map.unmodifiable(totalCategoryTotals),
+      vendorSummaries: _vendorSummaries(vendorTotals, categoriesById),
       totalThresholdHitDays: totalThresholdHitDays,
       graphMonths: List.unmodifiable(graphMonths),
       graphStartMonth: graphStartMonth,
@@ -265,9 +289,7 @@ class StatsYearData {
   }
 
   static String _headerLabel(StatsRenderMode mode) => switch (mode) {
-    StatsRenderMode.categoryScope => 'SCOPE TREND',
-    StatsRenderMode.closing => 'HÓZÁRÁS',
-    StatsRenderMode.heatmap => 'HEATMAP',
+    StatsRenderMode.common => 'SZŰRÉS PONTSZÁM',
   };
 
   static String _headerValue({
@@ -279,15 +301,11 @@ class StatsYearData {
     required int totalThresholdHitDays,
   }) {
     return switch (mode) {
-      StatsRenderMode.categoryScope => _categoryScopeHeader(
+      StatsRenderMode.common => _categoryScopeHeader(
         months: months,
         scopeLabel: scopeLabel,
         totalThresholdHitDays: totalThresholdHitDays,
       ),
-      StatsRenderMode.closing =>
-        '${_worseningMonthCount(months, activeType)} romló hónap idén',
-      StatsRenderMode.heatmap =>
-        '$totalThresholdHitDays forró nap ${_compactThreshold(thresholdValue)} felett',
     };
   }
 
@@ -308,27 +326,6 @@ class StatsYearData {
     return '$scopeLabel: $totalThresholdHitDays nap';
   }
 
-  static int _worseningMonthCount(
-    List<StatsMonthData> months,
-    TransactionType activeType,
-  ) {
-    var count = 0;
-    double? previous;
-    for (final month in months) {
-      if (!month.hasTransactions) continue;
-      final current = month.activeTotal;
-      final previousValue = previous;
-      if (previousValue != null) {
-        final worse = activeType == TransactionType.expense
-            ? current > previousValue
-            : current < previousValue;
-        if (worse) count += 1;
-      }
-      previous = current;
-    }
-    return count;
-  }
-
   static String _scopeLabel({
     required TransactionType activeType,
     required Set<int> scopedCategoryIds,
@@ -347,15 +344,19 @@ class StatsYearData {
     return '${names.first} +${names.length - 1}';
   }
 
-  static String _compactThreshold(double value) {
-    if (value >= 1000 && value % 1000 == 0) {
-      return '${(value / 1000).round()}k';
-    }
-    return formatHuf(value).replaceAll(' Ft', '');
-  }
-
   static TransactionType _recordType(TransactionRecord record) =>
       record.amount > 0 ? TransactionType.income : TransactionType.expense;
+
+  static bool _matchesVendorFilter(
+    TransactionRecord record,
+    Set<String> vendorFilters,
+  ) {
+    if (vendorFilters.isEmpty) return true;
+    final displayName = record.displayMerchant.trim();
+    final originalName = record.merchant.trim();
+    return vendorFilters.contains(displayName) ||
+        vendorFilters.contains(originalName);
+  }
 
   static DateTime? _displayDateForScope({
     required DateTime parsed,
@@ -404,6 +405,72 @@ class StatsYearData {
 
   static DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
+
+  static List<StatsVendorSummary> _vendorSummaries(
+    Map<String, _StatsVendorAccumulator> totals,
+    Map<int, TransactionCategory> categoriesById,
+  ) {
+    final rows =
+        [
+          for (final accumulator in totals.values)
+            accumulator.toSummary(categoriesById),
+        ]..sort((left, right) {
+          final totalOrder = right.total.compareTo(left.total);
+          if (totalOrder != 0) return totalOrder;
+          return left.name.compareTo(right.name);
+        });
+    return List.unmodifiable(rows);
+  }
+}
+
+class StatsVendorSummary {
+  const StatsVendorSummary({
+    required this.name,
+    required this.total,
+    required this.count,
+    required this.color,
+  });
+
+  final String name;
+  final double total;
+  final int count;
+  final Color color;
+}
+
+class _StatsVendorAccumulator {
+  _StatsVendorAccumulator(this.name);
+
+  final String name;
+  final categoryTotals = <int, double>{};
+  double total = 0;
+  int count = 0;
+
+  void add({required double amount, required int? categoryId}) {
+    total += amount;
+    count += 1;
+    if (categoryId == null) return;
+    categoryTotals.update(
+      categoryId,
+      (value) => value + amount,
+      ifAbsent: () => amount,
+    );
+  }
+
+  StatsVendorSummary toSummary(Map<int, TransactionCategory> categoriesById) {
+    int? dominantCategoryId;
+    var dominantAmount = -1.0;
+    for (final entry in categoryTotals.entries) {
+      if (entry.value <= dominantAmount) continue;
+      dominantCategoryId = entry.key;
+      dominantAmount = entry.value;
+    }
+    return StatsVendorSummary(
+      name: name,
+      total: total,
+      count: count,
+      color: StatsYearData._categoryColor(dominantCategoryId, categoriesById),
+    );
+  }
 }
 
 class StatsMonthData {

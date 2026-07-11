@@ -517,7 +517,7 @@ class TransactionStore extends ChangeNotifier {
     final expense = _periodTotal(TransactionType.expense);
     final kinds = type == TransactionType.expense
         ? const [BudgetGoalKind.expenseBudget]
-        : const [BudgetGoalKind.incomeGoal, BudgetGoalKind.savingGoal];
+        : const [BudgetGoalKind.incomeGoal];
 
     final rows = List<OverviewBudgetData>.unmodifiable(
       kinds.map((kind) {

@@ -2526,6 +2526,127 @@ void main() {
     expect(closeRequests, 1);
   });
 
+  testWidgets(
+    'centerBadgeBudget income category uses goal amount and missing copy',
+    (tester) async {
+      final salary = barFixture(
+        16,
+        'Fizetés',
+        420000,
+        600000,
+        transactionType: TransactionType.income,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 420,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: [BackheaderBudgetItem.category(salary)],
+                categoryBars: [salary],
+                activeKey: BackheaderBudgetItem.category(salary).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('420 000 Ft / 600 000 Ft cél'), findsOneWidget);
+
+      final handle = find.byKey(const ValueKey('backheader-center-handle'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('backheader-center-remaining-amount')),
+        findsOneWidget,
+      );
+      expect(find.text('180 000 Ft hiányzik'), findsOneWidget);
+
+      await gesture.cancel();
+    },
+  );
+
+  testWidgets(
+    'centerBadgeBudget income overview uses osszbeveteli cel and plus copy',
+    (tester) async {
+      final overview = overviewFixture(
+        BudgetGoalKind.incomeGoal,
+        750000,
+        600000,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 420,
+              child: CategoryBudgetStage(
+                backheaderStyle: BackheaderStyle.centerBadgeBudget,
+                items: [BackheaderBudgetItem.overview(overview)],
+                overviewItems: [overview],
+                activeKey: BackheaderBudgetItem.overview(overview).key,
+                onItemTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Összbevételi cél'), findsOneWidget);
+      expect(find.text('750 000 Ft / 600 000 Ft cél'), findsOneWidget);
+
+      final handle = find.byKey(const ValueKey('backheader-center-handle'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump();
+
+      expect(find.text('+150 000 Ft plusz'), findsOneWidget);
+
+      await gesture.cancel();
+    },
+  );
+
+  testWidgets('centerBadgeBudget expense category keeps remaining copy', (
+    tester,
+  ) async {
+    final food = barFixture(6, 'Food', 100, 500);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 420,
+            child: CategoryBudgetStage(
+              backheaderStyle: BackheaderStyle.centerBadgeBudget,
+              items: [BackheaderBudgetItem.category(food)],
+              categoryBars: [food],
+              activeKey: BackheaderBudgetItem.category(food).key,
+              onItemTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final handle = find.byKey(const ValueKey('backheader-center-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump();
+
+    expect(find.text('400 Ft maradt'), findsOneWidget);
+    expect(find.textContaining('hiányzik'), findsNothing);
+
+    await gesture.cancel();
+  });
+
   testWidgets('orbitBudget stage height follows header card height metric', (
     tester,
   ) async {

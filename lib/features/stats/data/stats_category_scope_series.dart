@@ -447,11 +447,7 @@ class StatsCategoryScopeSeries {
     final totals = [
       for (final month in visibleMonths) _incomeMetricTotal(month, threshold),
     ];
-    final activeDayCounts = [
-      for (final month in visibleMonths)
-        _incomeMetricDayCount(month, threshold).toDouble(),
-    ];
-    final scoreValues = _incomeHealthValues(totals, activeDayCounts);
+    final scoreValues = _incomePatternTrendValues(totals);
     final scoreLine = [
       for (var i = 0; i < scoreValues.length; i += 1)
         StatsSeriesPoint(
@@ -476,7 +472,7 @@ class StatsCategoryScopeSeries {
           position: _normalizedPosition(i, visibleMonths.length),
         ),
     ];
-    final helperBars = _incomeAverageDeviationBars(totals);
+    final helperBars = _incomeThresholdExcessBars(totals, threshold);
     return StatsCategoryScopeSeries(
       occurrence: const <StatsSeriesPoint>[],
       valueIndex: amountLine,
@@ -496,8 +492,8 @@ class StatsCategoryScopeSeries {
       ],
       secondaryLine: amountLine,
       monthLabels: [for (final tick in monthTicks) tick.label],
-      secondaryMetricLabel: 'atlag elteres',
-      secondaryReferenceAmount: _average(totals),
+      secondaryMetricLabel: 'threshold excess',
+      secondaryReferenceAmount: threshold,
       dynamicEmaPeriod: 0,
       scoreLine: scoreLine,
       helperBars: helperBars,
@@ -599,68 +595,57 @@ class StatsCategoryScopeSeries {
     );
   }
 
-  static int _incomeMetricDayCount(StatsMonthData month, double threshold) {
-    if (threshold <= 0) {
-      return month.days.where((day) => day.scopeAmount > 0).length;
-    }
-    return month.thresholdHitDays;
-  }
-
-  static List<double> _incomeHealthValues(
-    List<double> monthlyTotals,
-    List<double> activeDayCounts,
-  ) {
+  static List<double> _incomePatternTrendValues(List<double> monthlyTotals) {
     if (monthlyTotals.isEmpty) return const <double>[];
-    final monthlyReference = _average(monthlyTotals);
-    final activeDayReference = _average(
-      activeDayCounts.where((days) => days > 0),
-    );
-    final totalIndexes = [
-      for (final total in monthlyTotals)
-        (50 * _ratio(total, monthlyReference)).clamp(0, 100).toDouble(),
-    ];
-    final activeDayIndexes = [
-      for (final days in activeDayCounts)
-        (50 * _ratio(days, activeDayReference)).clamp(0, 100).toDouble(),
-    ];
-    final stabilityIndexes = <double>[];
-    for (var i = 0; i < totalIndexes.length; i += 1) {
-      if (i == 0) {
-        stabilityIndexes.add(50);
-        continue;
-      }
-      final delta = (totalIndexes[i] - totalIndexes[i - 1]).abs();
-      stabilityIndexes.add((100 - delta * 1.2).clamp(0, 100).toDouble());
-    }
     return [
       for (var i = 0; i < monthlyTotals.length; i += 1)
-        (0.55 * totalIndexes[i] +
-                0.25 * activeDayIndexes[i] +
-                0.20 * stabilityIndexes[i])
-            .clamp(0, 100)
-            .toDouble(),
+        _incomePatternTrendScore(
+          monthlyTotals.take(i).toList(),
+          monthlyTotals[i],
+        ),
     ];
   }
 
-  static List<StatsHelperBar> _incomeAverageDeviationBars(List<double> totals) {
-    if (totals.isEmpty) return const <StatsHelperBar>[];
-    final avg = _average(totals);
-    final maxDeviation = math.max(
-      1,
-      totals.map((value) => (value - avg).abs()).fold<double>(0, math.max),
+  static double _incomePatternTrendScore(
+    List<double> previousVisibleValues,
+    double recentPatternAvg,
+  ) {
+    if (recentPatternAvg <= 0 || previousVisibleValues.isEmpty) return 50;
+    final previousWindowSize = math.min(3, previousVisibleValues.length);
+    final previousPatternAvg = _average(
+      previousVisibleValues.skip(
+        previousVisibleValues.length - previousWindowSize,
+      ),
     );
+    final baseline = math.max(
+      1,
+      math.max(
+        previousPatternAvg,
+        _median([...previousVisibleValues, recentPatternAvg]),
+      ),
+    );
+    final trendDelta = (recentPatternAvg - previousPatternAvg) / baseline;
+    final trendAdjustment = (trendDelta * 35).clamp(-30, 30).toDouble();
+    return (50 + trendAdjustment).clamp(0, 100).toDouble();
+  }
+
+  static List<StatsHelperBar> _incomeThresholdExcessBars(
+    List<double> totals,
+    double threshold,
+  ) {
+    if (totals.isEmpty) return const <StatsHelperBar>[];
+    final values = threshold > 0
+        ? _thresholdExcessDeltas(totals, threshold)
+        : _amountMinDeltas(totals);
     return [
       for (var i = 0; i < totals.length; i += 1)
-        () {
-          final delta = totals[i] - avg;
-          return StatsHelperBar(
-            index: i,
-            rawValue: totals[i],
-            value: (delta / maxDeviation * 100).clamp(-100, 100).toDouble(),
-            position: _normalizedPosition(i, totals.length),
-            colorHex: delta >= 0 ? '#22C55E' : '#EF4444',
-          );
-        }(),
+        StatsHelperBar(
+          index: i,
+          rawValue: totals[i],
+          value: values[i],
+          position: _normalizedPosition(i, totals.length),
+          colorHex: '#22C55E',
+        ),
     ];
   }
 
@@ -806,9 +791,12 @@ class StatsCategoryScopeSeries {
     return count == 0 ? 0 : sum / count;
   }
 
-  static double _ratio(double value, double reference) {
-    if (reference <= 0) return 0;
-    return value / reference;
+  static double _median(List<double> values) {
+    if (values.isEmpty) return 0;
+    final sorted = [...values]..sort();
+    final middle = sorted.length ~/ 2;
+    if (sorted.length.isOdd) return sorted[middle];
+    return (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
   static int _dynamicEmaPeriod(int activeScopeDays) {

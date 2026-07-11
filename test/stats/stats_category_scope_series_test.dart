@@ -9,7 +9,7 @@ void main() {
     final data = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: [
         record(id: 1, date: '2026-01-10', amount: -6000, categoryId: 1),
@@ -52,7 +52,7 @@ void main() {
       final data = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.income,
-        mode: StatsRenderMode.categoryScope,
+        mode: StatsRenderMode.common,
         thresholdValue: 100000,
         transactions: [
           record(id: 1, date: '2026-01-01', amount: 300000, categoryId: 1),
@@ -72,12 +72,16 @@ void main() {
 
       expect(series.monthTicks.map((tick) => tick.label), ['Jan', 'Mar']);
       expect(series.scoreLine, hasLength(2));
-      expect(series.scoreLine.last.value, closeTo(60.5, 0.0001));
-      expect(series.kontrollScore, closeTo(60.5, 0.0001));
+      expect(series.scoreLine.first.value, closeTo(50, 0.0001));
+      expect(series.scoreLine.last.value, closeTo(60, 0.0001));
+      expect(series.kontrollScore, closeTo(60, 0.0001));
       expect(series.helperBars.map((bar) => bar.rawValue), [300000, 400000]);
-      expect(series.helperBars.map((bar) => bar.value), [-100, 100]);
+      _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
+        66.66666666666666,
+        100,
+      ]);
       expect(series.helperBars.map((bar) => bar.colorHex), [
-        '#EF4444',
+        '#22C55E',
         '#22C55E',
       ]);
     },
@@ -129,13 +133,13 @@ void main() {
   });
 
   test(
-    'income scope uses endpoint income health and average-deviation helper bars',
+    'income scope uses pattern trend score and threshold-excess helper bars',
     () {
       final data = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.income,
-        mode: StatsRenderMode.categoryScope,
-        thresholdValue: 50,
+        mode: StatsRenderMode.common,
+        thresholdValue: 50000,
         transactions: [
           record(id: 1, date: '2026-01-01', amount: 300000, categoryId: 1),
           record(id: 2, date: '2026-02-01', amount: 75000, categoryId: 1),
@@ -153,29 +157,29 @@ void main() {
       final series = StatsCategoryScopeSeries.fromYearData(data);
 
       expect(series.monthLabels, ['Jan', 'Feb', 'Mar']);
-      expect(series.secondaryMetricLabel, 'atlag elteres');
-      expect(series.secondaryReferenceAmount, closeTo(333333.33, 0.01));
+      expect(series.secondaryMetricLabel, 'threshold excess');
+      expect(series.secondaryReferenceAmount, 50000);
       expect(series.scoreLine.map((point) => point.value), [
-        closeTo(41.0, 0.01),
-        closeTo(69.75, 0.01),
-        closeTo(55.65, 0.01),
+        closeTo(50, 0.01),
+        closeTo(50, 0.01),
+        closeTo(61.67, 0.01),
       ]);
       expect(series.controlBars.map((bar) => bar.colorHex), [
-        '#EF4444',
-        '#22C55E',
         '#FBBF24',
+        '#FBBF24',
+        '#22C55E',
       ]);
       _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
-        -50,
-        -50,
+        71.42857142857143,
+        71.42857142857143,
         100,
       ]);
       expect(series.helperBars.map((bar) => bar.colorHex), [
-        '#EF4444',
-        '#EF4444',
+        '#22C55E',
+        '#22C55E',
         '#22C55E',
       ]);
-      expect(series.kontrollScore, closeTo(55.65, 0.01));
+      expect(series.kontrollScore, closeTo(61.67, 0.01));
     },
   );
 
@@ -183,7 +187,7 @@ void main() {
     final data = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: [
         record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
