@@ -263,11 +263,19 @@ class KeyboardInsetReader {
   }
 
   static ResolvedKeyboardInset idleSnapshotOf(BuildContext context) {
-    NativeKeyboardInsets.instance.ensureStarted();
+    final nativeInsets = NativeKeyboardInsets.instance;
     final fallbackInset =
         MediaQuery.maybeOf(context)?.viewInsets.bottom ?? platformRawInset();
+    if (nativeInsets.suspendedForNativeSheet) {
+      return ResolvedKeyboardInset(
+        inset: fallbackInset,
+        source: 'flutter-viewInsets-suspended',
+        fallbackInset: fallbackInset,
+      );
+    }
+    nativeInsets.ensureStarted();
     return KeyboardInsetMotionCoordinator.resolveIdle(
-      nativeSample: NativeKeyboardInsets.instance.latest,
+      nativeSample: nativeInsets.latest,
       fallbackInset: fallbackInset,
       now: DateTime.now(),
     );

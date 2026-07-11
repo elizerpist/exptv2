@@ -242,4 +242,30 @@ void main() {
 
     expect(closes, 1);
   });
+
+  testWidgets('native IME bridge forwards native debug logs', (tester) async {
+    const channel = MethodChannel('test/native_ime_sheet_debug_log');
+    final logs = <String>[];
+    final bridge = NativeImeSheetBridge(
+      methodChannel: channel,
+      onDebugLog: (message) async {
+        logs.add(message);
+      },
+    );
+    addTearDown(bridge.dispose);
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'test/native_ime_sheet_debug_log',
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall('debugLog', <String, Object?>{
+              'message': '[NativeImeSheet] content ready',
+            }),
+          ),
+          (_) {},
+        );
+    await tester.pump();
+
+    expect(logs, <String>['[NativeImeSheet] content ready']);
+  });
 }

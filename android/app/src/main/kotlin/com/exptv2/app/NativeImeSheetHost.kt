@@ -5,7 +5,10 @@ import android.content.Context
 import android.graphics.Color
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.VelocityTracker
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
@@ -30,17 +33,29 @@ class NativeImeSheetHost(
         ADD_TRANSACTION("addTransaction"),
     }
 
+    private interface DragCallbacks {
+        fun onDragStart()
+        fun onDragMove(offsetPx: Float)
+        fun onDragEnd(offsetPx: Float, velocityYPxPerSecond: Float)
+        fun onDragCancel()
+    }
+
     private var mainChannel: MethodChannel? = null
     private var overlay: FrameLayout? = null
+    private var backdropView: View? = null
     private var sheetContainer: FrameLayout? = null
     private var flutterView: FlutterView? = null
     private var flutterEngine: FlutterEngine? = null
-    private var engineMode: SheetMode? = null
+    private var sheetChannel: MethodChannel? = null
     private var sheetMode = SheetMode.PROBE
     private var activeTransactionType = "expense"
     private var previousSoftInputMode: Int? = null
     private var frameSeq = 0L
     private var lastLoggedImePx = Int.MIN_VALUE
+    private var contentReady = false
+    private var pendingReveal = false
+    private var sheetVisible = false
+    private var dragOffsetPx = 0f
     private val closeState = NativeImeSheetCloseStateMachine()
 
     fun attachMainChannel(channel: MethodChannel) {
@@ -65,6 +80,19 @@ class NativeImeSheetHost(
                 else -> result.notImplemented()
             }
         }
+        activity.window.decorView.post { prewarmAddTransaction() }
+    }
+
+    private fun prewarmAddTransaction() {
+        if (flutterView != null && sheetMode == SheetMode.ADD_TRANSACTION) return
+        publish("[NativeImeSheet] AddTransaction prewarm requested")
+        sheetMode = SheetMode.ADD_TRANSACTION
+        activeTransactionType = sanitizeTransactionType(activeTransactionType)
+        val root = ensureOverlay()
+        updateSheetHeight()
+        prepareHiddenHost("prewarm")
+        ensureFlutterContent()
+        ViewCompat.requestApplyInsets(root)
     }
 
     fun openProbe() {
@@ -89,26 +117,31 @@ class NativeImeSheetHost(
         transactionType: String,
         logMessage: String,
     ) {
-        val contentStale = sheetMode != mode || activeTransactionType != transactionType
+        val stateChanged = sheetMode != mode || activeTransactionType != transactionType
+        val hadContent = flutterView != null
         sheetMode = mode
         activeTransactionType = transactionType
         val root = ensureOverlay()
         updateSheetHeight()
-        if (contentStale) destroyFlutterContent()
-        if (previousSoftInputMode == null) {
-            previousSoftInputMode = activity.window.attributes.softInputMode
+        prepareHiddenHost("open_prepare")
+        if (stateChanged && hadContent) {
+            contentReady = false
+            sendSheetStateChanged()
         }
-        activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        closeState.markOpened()
+        ensureFlutterContent()
+        pendingReveal = true
         frameSeq = 0L
         lastLoggedImePx = Int.MIN_VALUE
-        root.visibility = View.VISIBLE
         root.bringToFront()
-        sheetContainer?.translationY = NativeImeSheetMotion.translationYForIme(currentImeBottomPx())
         ViewCompat.requestApplyInsets(root)
         publish(logMessage)
-        if (flutterView == null || engineMode != sheetMode) {
-            root.postDelayed({ ensureFlutterContent() }, 16L)
+        if (contentReady) {
+            revealSheet("content_ready_cached")
+        } else {
+            publish(
+                "[NativeImeSheet] open delayed reason=content_not_ready " +
+                    "mode=${sheetMode.channelValue} type=$activeTransactionType",
+            )
         }
     }
 
@@ -123,9 +156,9 @@ class NativeImeSheetHost(
     private fun closeSheet(logMessage: String) {
         val imeBottomPx = currentImeBottomPx()
         val shouldNotifyMain =
-            sheetMode == SheetMode.ADD_TRANSACTION && overlay?.visibility == View.VISIBLE
+            sheetMode == SheetMode.ADD_TRANSACTION && sheetVisible
         val action = closeState.requestClose(
-            visible = overlay?.visibility == View.VISIBLE,
+            visible = sheetVisible,
             imeBottomPx = imeBottomPx,
             notifyMain = shouldNotifyMain,
         )
@@ -156,6 +189,7 @@ class NativeImeSheetHost(
             (root.parent as ViewGroup).removeView(root)
         }
         overlay = null
+        backdropView = null
         sheetContainer = null
     }
 
@@ -164,19 +198,34 @@ class NativeImeSheetHost(
         if (existing != null) return existing
 
         val root = FrameLayout(activity).apply {
-            visibility = View.GONE
+            visibility = View.VISIBLE
+            alpha = 0f
             isClickable = false
             fitsSystemWindows = false
         }
         val backdrop = View(activity).apply {
             setBackgroundColor(Color.argb(82, 15, 23, 42))
-            isClickable = true
+            isClickable = false
             setOnClickListener { closeSheet() }
         }
-        val sheet = FrameLayout(activity).apply {
+        val sheet = DraggableSheetFrameLayout(
+            activity,
+            dragHandleHeightPx = dragHandleHeightPx(),
+            callbacks = object : DragCallbacks {
+                override fun onDragStart() = handleDragStart()
+                override fun onDragMove(offsetPx: Float) = handleDragMove(offsetPx)
+                override fun onDragEnd(
+                    offsetPx: Float,
+                    velocityYPxPerSecond: Float,
+                ) = handleDragEnd(offsetPx, velocityYPxPerSecond)
+
+                override fun onDragCancel() = handleDragCancel()
+            },
+        ).apply {
             isClickable = true
             isFocusable = false
             setBackgroundColor(Color.WHITE)
+            translationY = sheetHeightPx().toFloat()
         }
         root.addView(
             backdrop,
@@ -195,8 +244,7 @@ class NativeImeSheetHost(
         )
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val imeBottomPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            val translation = NativeImeSheetMotion.translationYForIme(imeBottomPx)
-            sheet.translationY = translation
+            if (shouldApplyImeMotion()) applySheetTranslation(imeBottomPx)
             applyCloseAction(closeState.onImeProgress(imeBottomPx))
             insets
         }
@@ -223,8 +271,11 @@ class NativeImeSheetHost(
                     runningAnimations: MutableList<WindowInsetsAnimationCompat>,
                 ): WindowInsetsCompat {
                     val imeBottomPx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-                    val translation = NativeImeSheetMotion.translationYForIme(imeBottomPx)
-                    sheet.translationY = translation
+                    val translation = if (shouldApplyImeMotion()) {
+                        applySheetTranslation(imeBottomPx)
+                    } else {
+                        sheet.translationY
+                    }
                     logProgress(imeBottomPx, translation)
                     applyCloseAction(closeState.onImeProgress(imeBottomPx))
                     return insets
@@ -233,8 +284,11 @@ class NativeImeSheetHost(
                 override fun onEnd(animation: WindowInsetsAnimationCompat) {
                     if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
                         val imeBottomPx = currentImeBottomPx()
-                        val translation = NativeImeSheetMotion.translationYForIme(imeBottomPx)
-                        sheet.translationY = translation
+                        val translation = if (shouldApplyImeMotion()) {
+                            applySheetTranslation(imeBottomPx)
+                        } else {
+                            sheet.translationY
+                        }
                         publish(
                             "[NativeImeSheet] ime end ime=$imeBottomPx translation=$translation",
                         )
@@ -251,18 +305,27 @@ class NativeImeSheetHost(
             ),
         )
         overlay = root
+        backdropView = backdrop
         sheetContainer = sheet
+        publish("[NativeImeSheet] overlay created")
         return root
     }
 
     private fun ensureFlutterContent() {
         val sheet = sheetContainer ?: return
-        if (flutterView != null && engineMode == sheetMode) return
-        destroyFlutterContent()
+        if (flutterView != null) {
+            publish(
+                "[NativeImeSheet] FlutterView reused " +
+                    "mode=${sheetMode.channelValue} type=$activeTransactionType ready=$contentReady",
+            )
+            return
+        }
+        contentReady = false
         val engine = ensureFlutterEngine()
         val view = FlutterView(activity, FlutterTextureView(activity)).apply {
             attachToFlutterEngine(engine)
         }
+        publish("[NativeImeSheet] FlutterView attached")
         sheet.addView(
             view,
             FrameLayout.LayoutParams(
@@ -273,9 +336,72 @@ class NativeImeSheetHost(
         flutterView = view
     }
 
+    private fun handleDragStart() {
+        if (!sheetVisible) return
+        publish(
+            "[NativeImeSheet] drag start ime=${currentImeBottomPx()} " +
+                "mode=${sheetMode.channelValue}",
+        )
+        if (currentImeBottomPx() > 0) {
+            clearSheetFocus()
+            hideKeyboard()
+            publish("[NativeImeSheet] drag requested ime hide")
+        }
+    }
+
+    private fun handleDragMove(offsetPx: Float) {
+        if (!sheetVisible) return
+        dragOffsetPx = NativeImeSheetDragModel.clampOffset(
+            offsetPx,
+            sheetHeightPx().toFloat(),
+        )
+        val translation = applySheetTranslation(currentImeBottomPx())
+        publish(
+            "[NativeImeSheet] drag move offset=${dragOffsetPx.toInt()} " +
+                "translation=$translation",
+        )
+    }
+
+    private fun handleDragEnd(offsetPx: Float, velocityYPxPerSecond: Float) {
+        if (!sheetVisible) return
+        dragOffsetPx = NativeImeSheetDragModel.clampOffset(
+            offsetPx,
+            sheetHeightPx().toFloat(),
+        )
+        val thresholdPx = dismissThresholdPx()
+        val dismiss = NativeImeSheetDragModel.shouldDismiss(
+            offsetPx = dragOffsetPx,
+            velocityYPxPerSecond = velocityYPxPerSecond,
+            thresholdPx = thresholdPx,
+            velocityThresholdPxPerSecond = dismissVelocityThresholdPx(),
+        )
+        publish(
+            "[NativeImeSheet] drag end offset=${dragOffsetPx.toInt()} " +
+                "velocity=${velocityYPxPerSecond.toInt()} threshold=${thresholdPx.toInt()} " +
+                "decision=${if (dismiss) "dismiss" else "snap"}",
+        )
+        if (dismiss) {
+            closeSheet("[NativeImeSheet] drag dismiss")
+            return
+        }
+        dragOffsetPx = 0f
+        applySheetTranslation(currentImeBottomPx())
+    }
+
+    private fun handleDragCancel() {
+        if (!sheetVisible) return
+        publish("[NativeImeSheet] drag cancel offset=${dragOffsetPx.toInt()}")
+        dragOffsetPx = 0f
+        applySheetTranslation(currentImeBottomPx())
+    }
+
     private fun ensureFlutterEngine(): FlutterEngine {
         val existing = flutterEngine
-        if (existing != null && engineMode == sheetMode) return existing
+        if (existing != null) {
+            publish("[NativeImeSheet] FlutterEngine reused mode=${sheetMode.channelValue}")
+            return existing
+        }
+        publish("[NativeImeSheet] FlutterEngine create start mode=${sheetMode.channelValue}")
         val engine = FlutterEngine(activity)
         configureFlutterEngine(engine)
         attachSheetChannel(engine)
@@ -286,47 +412,57 @@ class NativeImeSheetHost(
         )
         engine.dartExecutor.executeDartEntrypoint(entrypoint)
         flutterEngine = engine
-        engineMode = sheetMode
+        publish("[NativeImeSheet] Dart entrypoint started nativeImeSheetMain")
         return engine
     }
 
     private fun attachSheetChannel(engine: FlutterEngine) {
-        MethodChannel(engine.dartExecutor.binaryMessenger, channelName)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "getInitialState" -> {
-                        result.success(
-                            mapOf(
-                                "mode" to sheetMode.channelValue,
-                                "type" to activeTransactionType,
-                            ),
-                        )
+        sheetChannel = MethodChannel(engine.dartExecutor.binaryMessenger, channelName)
+            .also { channel ->
+                channel.setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "getInitialState" -> {
+                            publish(
+                                "[NativeImeSheet] getInitialState " +
+                                    "mode=${sheetMode.channelValue} type=$activeTransactionType",
+                            )
+                            result.success(
+                                mapOf(
+                                    "mode" to sheetMode.channelValue,
+                                    "type" to activeTransactionType,
+                                ),
+                            )
+                        }
+                        "contentReady" -> {
+                            result.success(null)
+                            handleContentReady()
+                        }
+                        "closeProbe" -> {
+                            result.success(null)
+                            closeProbe()
+                        }
+                        "closeSheet" -> {
+                            result.success(null)
+                            closeSheet()
+                        }
+                        "openProbe" -> {
+                            openProbe()
+                            result.success(null)
+                        }
+                        "transactionCommitted" -> {
+                            publish(
+                                "[NativeImeSheet] AddTransaction committed " +
+                                    "source=sheet type=$activeTransactionType",
+                            )
+                            result.success(null)
+                            closeSheet("[NativeImeSheet] AddTransaction close after commit")
+                            mainChannel?.invokeMethod(
+                                "transactionCommitted",
+                                mapOf("type" to activeTransactionType),
+                            )
+                        }
+                        else -> result.notImplemented()
                     }
-                    "closeProbe" -> {
-                        result.success(null)
-                        closeProbe()
-                    }
-                    "closeSheet" -> {
-                        result.success(null)
-                        closeSheet()
-                    }
-                    "openProbe" -> {
-                        openProbe()
-                        result.success(null)
-                    }
-                    "transactionCommitted" -> {
-                        publish(
-                            "[NativeImeSheet] AddTransaction committed " +
-                                "source=sheet type=$activeTransactionType",
-                        )
-                        result.success(null)
-                        closeSheet("[NativeImeSheet] AddTransaction close after commit")
-                        mainChannel?.invokeMethod(
-                            "transactionCommitted",
-                            mapOf("type" to activeTransactionType),
-                        )
-                    }
-                    else -> result.notImplemented()
                 }
             }
     }
@@ -337,7 +473,74 @@ class NativeImeSheetHost(
         sheetContainer?.removeAllViews()
         flutterEngine?.destroy()
         flutterEngine = null
-        engineMode = null
+        sheetChannel = null
+        contentReady = false
+    }
+
+    private fun handleContentReady() {
+        contentReady = true
+        publish(
+            "[NativeImeSheet] content ready " +
+                "mode=${sheetMode.channelValue} type=$activeTransactionType pending=$pendingReveal",
+        )
+        if (pendingReveal) revealSheet("content_ready")
+    }
+
+    private fun sendSheetStateChanged() {
+        val payload = mapOf(
+            "mode" to sheetMode.channelValue,
+            "type" to activeTransactionType,
+        )
+        publish(
+            "[NativeImeSheet] sheet state changed dispatch " +
+                "mode=${sheetMode.channelValue} type=$activeTransactionType",
+        )
+        sheetChannel?.invokeMethod("sheetStateChanged", payload)
+    }
+
+    private fun revealSheet(reason: String) {
+        val root = overlay ?: return
+        if (previousSoftInputMode == null) {
+            previousSoftInputMode = activity.window.attributes.softInputMode
+        }
+        activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        closeState.markOpened()
+        pendingReveal = false
+        sheetVisible = true
+        dragOffsetPx = 0f
+        root.visibility = View.VISIBLE
+        root.alpha = 1f
+        root.isClickable = false
+        backdropView?.isClickable = true
+        root.bringToFront()
+        val translation = applySheetTranslation(currentImeBottomPx())
+        publish(
+            "[NativeImeSheet] sheet revealed reason=$reason " +
+                "translation=$translation mode=${sheetMode.channelValue} type=$activeTransactionType",
+        )
+    }
+
+    private fun prepareHiddenHost(reason: String) {
+        val root = overlay ?: return
+        val sheet = sheetContainer ?: return
+        sheetVisible = false
+        dragOffsetPx = 0f
+        root.visibility = View.VISIBLE
+        root.alpha = 0f
+        root.isClickable = false
+        backdropView?.isClickable = false
+        sheet.translationY = sheetHeightPx().toFloat()
+        publish("[NativeImeSheet] host hidden reason=$reason")
+    }
+
+    private fun shouldApplyImeMotion(): Boolean {
+        return sheetVisible || closeState.phase == NativeImeSheetCloseStateMachine.Phase.CLOSING
+    }
+
+    private fun applySheetTranslation(imeBottomPx: Int): Float {
+        val translation = NativeImeSheetDragModel.translationY(imeBottomPx, dragOffsetPx)
+        sheetContainer?.translationY = translation
+        return translation
     }
 
     private fun logProgress(imeBottomPx: Int, translation: Float) {
@@ -380,12 +583,12 @@ class NativeImeSheetHost(
 
     private fun finishClose(reason: String, notifyMain: Boolean) {
         val imeBottomPx = currentImeBottomPx()
-        sheetContainer?.translationY = 0f
-        overlay?.visibility = View.GONE
+        pendingReveal = false
+        prepareHiddenHost(reason)
         restoreSoftInputMode()
         publish(
             "[NativeImeSheet] close complete reason=$reason ime=$imeBottomPx " +
-                "notify=$notifyMain",
+                "notify=$notifyMain cached=${flutterEngine != null}",
         )
         if (notifyMain) {
             mainChannel?.invokeMethod(
@@ -439,9 +642,94 @@ class NativeImeSheetHost(
         return (32f * activity.resources.displayMetrics.density).toInt().coerceAtLeast(1)
     }
 
+    private fun dragHandleHeightPx(): Float {
+        return 72f * activity.resources.displayMetrics.density
+    }
+
+    private fun dismissThresholdPx(): Float {
+        return 90f * activity.resources.displayMetrics.density
+    }
+
+    private fun dismissVelocityThresholdPx(): Float {
+        return 1200f * activity.resources.displayMetrics.density
+    }
+
     private fun publish(message: String) {
         Log.d(logTag, message)
         EventBroadcaster.publishDebugLog(message)
+        mainChannel?.invokeMethod("debugLog", mapOf("message" to message))
+    }
+
+    private class DraggableSheetFrameLayout(
+        context: Context,
+        private val dragHandleHeightPx: Float,
+        private val callbacks: DragCallbacks,
+    ) : FrameLayout(context) {
+        private var dragging = false
+        private var startRawY = 0f
+        private var velocityTracker: VelocityTracker? = null
+        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+        override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startRawY = event.rawY
+                    dragging = event.y <= dragHandleHeightPx
+                    if (dragging) {
+                        velocityTracker = VelocityTracker.obtain().also {
+                            it.addMovement(event)
+                        }
+                        callbacks.onDragStart()
+                    }
+                    return dragging
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!dragging) return false
+                    velocityTracker?.addMovement(event)
+                    return kotlin.math.abs(event.rawY - startRawY) >= touchSlop
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> {
+                    val wasDragging = dragging
+                    if (event.actionMasked == MotionEvent.ACTION_CANCEL && wasDragging) {
+                        callbacks.onDragCancel()
+                    }
+                    recycleTracker()
+                    dragging = false
+                    return wasDragging
+                }
+            }
+            return false
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (!dragging) return super.onTouchEvent(event)
+            velocityTracker?.addMovement(event)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_MOVE -> {
+                    callbacks.onDragMove((event.rawY - startRawY).coerceAtLeast(0f))
+                }
+                MotionEvent.ACTION_UP -> {
+                    velocityTracker?.computeCurrentVelocity(1000)
+                    callbacks.onDragEnd(
+                        (event.rawY - startRawY).coerceAtLeast(0f),
+                        velocityTracker?.yVelocity ?: 0f,
+                    )
+                    recycleTracker()
+                    dragging = false
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    callbacks.onDragCancel()
+                    recycleTracker()
+                    dragging = false
+                }
+            }
+            return true
+        }
+
+        private fun recycleTracker() {
+            velocityTracker?.recycle()
+            velocityTracker = null
+        }
     }
 
     private companion object {

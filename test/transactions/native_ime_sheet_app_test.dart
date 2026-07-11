@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/transactions/native/native_ime_sheet_app.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
@@ -25,7 +24,7 @@ void main() {
   });
 
   testWidgets(
-    'native sheet startup uses a visible sheet-colored loading layer',
+    'native sheet startup does not expose a blank white loading sheet',
     (tester) async {
       final pendingInitialState = Completer<Map<String, Object?>>();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -47,7 +46,8 @@ void main() {
             )
             .first,
       );
-      expect(loadingMaterial.color, AppColors.white);
+      expect(loadingMaterial.color, Colors.transparent);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     },
   );
 
@@ -101,6 +101,126 @@ void main() {
     expect(listCategoryCalls, 1, reason: 'calls: $dataCalls');
     expect(nativeCalls, contains('getInitialState'));
   });
+
+  testWidgets('native add transaction sends contentReady after first frame', (
+    tester,
+  ) async {
+    final nativeCalls = <String>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeSheetChannel, (call) async {
+          nativeCalls.add(call.method);
+          if (call.method == 'getInitialState') {
+            return <String, Object?>{
+              'mode': 'addTransaction',
+              'type': 'expense',
+            };
+          }
+          return null;
+        });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(dataChannel, (call) async {
+          switch (call.method) {
+            case 'expenseLoadSettings':
+              return _settingsPayload();
+            case 'expenseListCategories':
+              return _categoryPayload();
+          }
+          return null;
+        });
+
+    await tester.pumpWidget(const NativeImeSheetApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    expect(nativeCalls, contains('contentReady'));
+  });
+
+  testWidgets('native add transaction sends contentReady for error surface', (
+    tester,
+  ) async {
+    final nativeCalls = <String>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeSheetChannel, (call) async {
+          nativeCalls.add(call.method);
+          if (call.method == 'getInitialState') {
+            return <String, Object?>{
+              'mode': 'addTransaction',
+              'type': 'expense',
+            };
+          }
+          return null;
+        });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(dataChannel, (call) async {
+          if (call.method == 'expenseLoadSettings') {
+            throw PlatformException(code: 'settings_failed');
+          }
+          return null;
+        });
+
+    await tester.pumpWidget(const NativeImeSheetApp());
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Native sheet hiba'), findsOneWidget);
+    expect(nativeCalls, contains('contentReady'));
+  });
+
+  testWidgets(
+    'native add transaction handles host type changes without restart',
+    (tester) async {
+      final nativeCalls = <String>[];
+      var listCategoryCalls = 0;
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeSheetChannel, (call) async {
+            nativeCalls.add(call.method);
+            if (call.method == 'getInitialState') {
+              return <String, Object?>{
+                'mode': 'addTransaction',
+                'type': 'expense',
+              };
+            }
+            return null;
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(dataChannel, (call) async {
+            switch (call.method) {
+              case 'expenseLoadSettings':
+                return _settingsPayload();
+              case 'expenseListCategories':
+                listCategoryCalls += 1;
+                return _categoryPayload();
+            }
+            return null;
+          });
+
+      await tester.pumpWidget(const NativeImeSheetApp());
+      await tester.pumpAndSettle();
+      expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .handlePlatformMessage(
+            nativeSheetChannel.name,
+            nativeSheetChannel.codec.encodeMethodCall(
+              const MethodCall('sheetStateChanged', <String, Object?>{
+                'mode': 'addTransaction',
+                'type': 'income',
+              }),
+            ),
+            (_) {},
+          );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Új bevételi tranzakció'), findsOneWidget);
+      expect(listCategoryCalls, 1);
+      expect(
+        nativeCalls.where((method) => method == 'contentReady'),
+        hasLength(2),
+      );
+    },
+  );
 
   testWidgets('native add transaction save avoids sheet-side full reload', (
     tester,

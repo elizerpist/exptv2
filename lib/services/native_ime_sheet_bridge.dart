@@ -7,11 +7,18 @@ class NativeImeSheetBridge {
     MethodChannel? methodChannel,
     Future<void> Function()? onTransactionCommitted,
     Future<void> Function()? onSheetClosed,
+    Future<void> Function(Map<dynamic, dynamic> state)? onSheetStateChanged,
+    Future<void> Function(String message)? onDebugLog,
   }) : _methodChannel =
            methodChannel ?? const MethodChannel('exptv2/native_ime_sheet'),
        _onTransactionCommitted = onTransactionCommitted,
-       _onSheetClosed = onSheetClosed {
-    if (_onTransactionCommitted != null || _onSheetClosed != null) {
+       _onSheetClosed = onSheetClosed,
+       _onSheetStateChanged = onSheetStateChanged,
+       _onDebugLog = onDebugLog {
+    if (_onTransactionCommitted != null ||
+        _onSheetClosed != null ||
+        _onSheetStateChanged != null ||
+        _onDebugLog != null) {
       _methodChannel.setMethodCallHandler(_handleNativeCall);
     }
   }
@@ -19,6 +26,9 @@ class NativeImeSheetBridge {
   final MethodChannel _methodChannel;
   final Future<void> Function()? _onTransactionCommitted;
   final Future<void> Function()? _onSheetClosed;
+  final Future<void> Function(Map<dynamic, dynamic> state)?
+  _onSheetStateChanged;
+  final Future<void> Function(String message)? _onDebugLog;
 
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     switch (call.method) {
@@ -27,6 +37,21 @@ class NativeImeSheetBridge {
         return null;
       case 'sheetClosed':
         await _onSheetClosed?.call();
+        return null;
+      case 'sheetStateChanged':
+        final state = call.arguments is Map
+            ? Map<dynamic, dynamic>.from(call.arguments as Map)
+            : <dynamic, dynamic>{};
+        await _onSheetStateChanged?.call(state);
+        return null;
+      case 'debugLog':
+        final args = call.arguments is Map
+            ? Map<dynamic, dynamic>.from(call.arguments as Map)
+            : <dynamic, dynamic>{};
+        final message = args['message']?.toString();
+        if (message != null && message.isNotEmpty) {
+          await _onDebugLog?.call(message);
+        }
         return null;
       default:
         throw MissingPluginException(
@@ -72,8 +97,15 @@ class NativeImeSheetBridge {
     await _methodChannel.invokeMethod<void>('transactionCommitted');
   }
 
+  Future<void> notifyContentReady() async {
+    await _methodChannel.invokeMethod<void>('contentReady');
+  }
+
   void dispose() {
-    if (_onTransactionCommitted != null || _onSheetClosed != null) {
+    if (_onTransactionCommitted != null ||
+        _onSheetClosed != null ||
+        _onSheetStateChanged != null ||
+        _onDebugLog != null) {
       _methodChannel.setMethodCallHandler(null);
     }
   }

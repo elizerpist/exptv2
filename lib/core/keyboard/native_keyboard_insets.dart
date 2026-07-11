@@ -357,9 +357,37 @@ class NativeKeyboardInsets extends ChangeNotifier {
       NativeKeyboardInsetSampleGate();
   var _started = false;
   var _streamErrorLogged = false;
+  var _nativeSheetSuspendCount = 0;
 
   NativeKeyboardInsetSample? get latest => _latest;
   NativeKeyboardAnimationSession? get latestSession => _latestSession;
+  bool get suspendedForNativeSheet => _nativeSheetSuspendCount > 0;
+
+  void suspendForNativeSheet() {
+    _nativeSheetSuspendCount += 1;
+    _latest = null;
+    _latestSession = null;
+    _sampleGate.reset();
+    DebugConsole.log(
+      '[KeyboardNative] suspended for native sheet count=$_nativeSheetSuspendCount',
+    );
+    notifyListeners();
+  }
+
+  void resumeForNativeSheet() {
+    if (_nativeSheetSuspendCount > 0) {
+      _nativeSheetSuspendCount -= 1;
+    }
+    DebugConsole.log(
+      '[KeyboardNative] resumed for native sheet count=$_nativeSheetSuspendCount',
+    );
+    if (_nativeSheetSuspendCount == 0) {
+      _latest = null;
+      _latestSession = null;
+      _sampleGate.reset();
+    }
+    notifyListeners();
+  }
 
   void ensureStarted() {
     if (_started) return;
@@ -372,6 +400,7 @@ class NativeKeyboardInsets extends ChangeNotifier {
   }
 
   void _handleEvent(Object? event) {
+    if (suspendedForNativeSheet) return;
     final session = NativeKeyboardAnimationSession.fromEvent(event);
     if (session != null) {
       _latestSession = session;
@@ -410,12 +439,14 @@ class NativeKeyboardInsets extends ChangeNotifier {
 
   @visibleForTesting
   void debugSetSampleForTesting(NativeKeyboardInsetSample sample) {
+    if (suspendedForNativeSheet) return;
     _latest = sample;
     notifyListeners();
   }
 
   @visibleForTesting
   void debugSetSessionForTesting(NativeKeyboardAnimationSession session) {
+    if (suspendedForNativeSheet) return;
     _latestSession = session;
     notifyListeners();
   }
@@ -429,6 +460,7 @@ class NativeKeyboardInsets extends ChangeNotifier {
     _latestSession = null;
     _sampleGate.reset();
     _streamErrorLogged = false;
+    _nativeSheetSuspendCount = 0;
     notifyListeners();
   }
 

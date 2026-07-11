@@ -62,6 +62,62 @@ void main() {
     },
   );
 
+  testWidgets('keyboard follower ignores native sessions while suspended', (
+    tester,
+  ) async {
+    tester.view.viewInsets = const FakeViewPadding(bottom: 252);
+    tester.view.devicePixelRatio = 1;
+    var latestRawInset = 0.0;
+    var latestSource = '';
+    addTearDown(() {
+      tester.view.resetViewInsets();
+      tester.view.resetDevicePixelRatio();
+      NativeKeyboardInsets.instance.resumeForNativeSheet();
+    });
+
+    NativeKeyboardInsets.instance.suspendForNativeSheet();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KeyboardInsetFollower(
+          debugLabel: 'SuspendedKeyboard',
+          builder: (context, metrics, child) {
+            latestRawInset = metrics.rawInset;
+            latestSource = metrics.source;
+            return Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                'raw=${metrics.rawInset.toStringAsFixed(1)} '
+                'source=${metrics.source}',
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    NativeKeyboardInsets.instance.debugSetSessionForTesting(
+      NativeKeyboardAnimationSession(
+        phase: KeyboardAnimationPhase.start,
+        sequence: 99,
+        startInset: 0,
+        endInset: 252,
+        currentInset: 0,
+        duration: const Duration(milliseconds: 200),
+        fraction: 0,
+        receivedAt: DateTime.now(),
+        startedAt: DateTime.now(),
+        nativeSource: 'WindowInsetsAnimation',
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(latestRawInset, 252);
+    expect(latestSource, 'flutter-viewInsets-suspended');
+  });
+
   testWidgets('keyboard follower interpolates active IME session locally', (
     tester,
   ) async {
