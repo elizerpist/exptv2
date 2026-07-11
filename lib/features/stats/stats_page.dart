@@ -8,14 +8,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
-import '../transactions/models/calendar_menu_mode.dart';
-import '../transactions/models/calendar_render_models.dart';
+import '../transactions/models/summary_window.dart';
 import '../transactions/models/transaction_category.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
 import '../transactions/widgets/calendar_menu/calendar_joystick_range.dart';
-import '../transactions/widgets/calendar_menu/focused_month_canvas.dart';
-import '../transactions/widgets/calendar_menu/month_stats_charts.dart';
 import '../transactions/widgets/category_menu/category_menu_panel.dart';
 import '../transactions/widgets/header_card/header_fast_info_surface.dart';
 import '../transactions/widgets/header_card/magnet_strip.dart';
@@ -28,24 +25,44 @@ import '../transactions/widgets/summary_scope_picker_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/transaction_type_pills.dart';
 import 'data/stats_category_scope_series.dart';
+import 'data/stats_page2_metrics.dart';
+import 'data/stats_snapshot.dart';
 import 'data/stats_year_data.dart';
 import 'widgets/stats_fast_info_graph.dart';
 import 'widgets/stats_year_calendar.dart';
 
 class StatsPageController {
   VoidCallback? _openThresholdSheet;
+  ValueChanged<int>? _stepSnapshot;
+  ValueChanged<int>? _stepThreshold;
 
   void openThresholdSheet() {
     _openThresholdSheet?.call();
   }
 
-  void _attach({required VoidCallback openThresholdSheet}) {
+  void stepSnapshot(int direction) {
+    _stepSnapshot?.call(direction);
+  }
+
+  void stepThreshold(int multiplier) {
+    _stepThreshold?.call(multiplier);
+  }
+
+  void _attach({
+    required VoidCallback openThresholdSheet,
+    required ValueChanged<int> stepSnapshot,
+    required ValueChanged<int> stepThreshold,
+  }) {
     _openThresholdSheet = openThresholdSheet;
+    _stepSnapshot = stepSnapshot;
+    _stepThreshold = stepThreshold;
   }
 
   void _detach(VoidCallback openThresholdSheet) {
     if (_openThresholdSheet == openThresholdSheet) {
       _openThresholdSheet = null;
+      _stepSnapshot = null;
+      _stepThreshold = null;
     }
   }
 }
@@ -60,15 +77,17 @@ class StatsPage extends StatefulWidget {
     this.onVendorSheetRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
+    this.snapshotRepository,
   });
 
   final TransactionStore store;
   final StatsPageController? controller;
   final ExpenseTheme? expenseTheme;
   final CategoryMenuSheetRequested? onCategoryMenuRequested;
-  final VoidCallback? onVendorSheetRequested;
+  final ValueChanged<TransactionType>? onVendorSheetRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
+  final StatsSnapshotRepository? snapshotRepository;
 
   @override
   State<StatsPage> createState() => _StatsPageState();
@@ -76,8 +95,8 @@ class StatsPage extends StatefulWidget {
 
 class _StatsPageState extends State<StatsPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin<StatsPage> {
-  late int _year;
-  late int _month;
+  var _year = 0;
+  var _month = 1;
   var _yearScopeEnabled = true;
   var _monthScopeEnabled = false;
   var _activeType = TransactionType.expense;
@@ -94,25 +113,45 @@ class _StatsPageState extends State<StatsPage>
     TransactionType.income: <int>{},
     TransactionType.expense: <int>{},
   };
+  late StatsSnapshotRepository _snapshotRepository;
+  List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
+  var _selectedSnapshotIndex = -1;
 
   @override
   void initState() {
     super.initState();
-    _year = widget.store.currentDate.year;
-    _month = widget.store.currentDate.month;
+    _syncSummaryFromStore();
+    widget.store.addListener(_handleStoreChanged);
+    _snapshotRepository =
+        widget.snapshotRepository ?? InMemoryStatsSnapshotRepository();
+    unawaited(_loadSnapshots());
     _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
       ..addListener(_syncHeaderPullFromController);
     _contentPageController = PageController();
-    widget.controller?._attach(openThresholdSheet: _openThresholdControlSheet);
+    widget.controller?._attach(
+      openThresholdSheet: _openThresholdControlSheet,
+      stepSnapshot: _stepSnapshot,
+      stepThreshold: _stepThreshold,
+    );
   }
 
   @override
   void didUpdateWidget(covariant StatsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller) return;
-    oldWidget.controller?._detach(_openThresholdControlSheet);
-    widget.controller?._attach(openThresholdSheet: _openThresholdControlSheet);
+    if (oldWidget.snapshotRepository != widget.snapshotRepository &&
+        widget.snapshotRepository != null) {
+      _snapshotRepository = widget.snapshotRepository!;
+      unawaited(_loadSnapshots());
+    }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(_openThresholdControlSheet);
+      widget.controller?._attach(
+        openThresholdSheet: _openThresholdControlSheet,
+        stepSnapshot: _stepSnapshot,
+        stepThreshold: _stepThreshold,
+      );
+    }
   }
 
   @override
@@ -120,12 +159,162 @@ class _StatsPageState extends State<StatsPage>
     _fastInfoExtent.dispose();
     _headerPullController.dispose();
     _contentPageController.dispose();
+    widget.store.removeListener(_handleStoreChanged);
     widget.controller?._detach(_openThresholdControlSheet);
     super.dispose();
   }
 
   @override
   bool get wantKeepAlive => true;
+
+  void _handleStoreChanged() {
+    var changed = _syncSummaryFromStore();
+    if (!widget.store.loading && widget.store.error == null) {
+      final nextThreshold = _clampThresholdToCurrentScope(_thresholdValue);
+      if (nextThreshold != _thresholdValue) {
+        _thresholdValue = nextThreshold;
+        changed = true;
+      }
+    }
+    if (changed && mounted) setState(() {});
+  }
+
+  bool _syncSummaryFromStore() {
+    final reference = widget.store.summaryReferenceDate;
+    final nextYear = reference.year;
+    final nextMonth = reference.month.clamp(1, 12).toInt();
+    final nextYearEnabled = widget.store.summaryWindow != SummaryWindow.allTime;
+    final nextMonthEnabled =
+        widget.store.summaryWindow == SummaryWindow.monthly;
+    final changed =
+        _year != nextYear ||
+        _month != nextMonth ||
+        _yearScopeEnabled != nextYearEnabled ||
+        _monthScopeEnabled != nextMonthEnabled;
+    _year = nextYear;
+    _month = nextMonth;
+    _yearScopeEnabled = nextYearEnabled;
+    _monthScopeEnabled = nextMonthEnabled;
+    _focusedMonth = nextMonthEnabled ? nextMonth : null;
+    return changed;
+  }
+
+  Future<void> _loadSnapshots() async {
+    final snapshots = await _snapshotRepository.load();
+    if (!mounted) return;
+    setState(() => _snapshots = snapshots);
+  }
+
+  StatsSnapshotState _currentSnapshotState() {
+    return StatsSnapshotState(
+      categoryScopeIds: _selectedScopeByType[_activeType] ?? const <int>{},
+      vendorScopeNames: widget.store.activeMerchantFilters,
+      activeType: _activeType,
+      threshold: _thresholdValue,
+      layoutMode: _layoutMode,
+      activeYear: _year,
+      activeMonth: _month,
+      pageIndex: _contentPageIndex,
+    );
+  }
+
+  StatsLayoutMode get _layoutMode {
+    if (!_yearScopeEnabled) return StatsLayoutMode.sum;
+    if (_monthScopeEnabled) return StatsLayoutMode.month;
+    return StatsLayoutMode.year;
+  }
+
+  Future<List<StatsSnapshot>> _saveSnapshot(_StatsSnapshotDraft draft) async {
+    final now = DateTime.now();
+    final state = _currentSnapshotState();
+    final snapshot = StatsSnapshot(
+      id: 'stats-${now.microsecondsSinceEpoch}',
+      name: draft.name.trim().isEmpty ? 'Mentett nézet' : draft.name.trim(),
+      createdAt: now,
+      updatedAt: now,
+      includeCategoryScope: draft.includeCategoryScope,
+      includeVendorScope: draft.includeVendorScope,
+      includeActiveType: draft.includeActiveType,
+      includeThreshold: draft.includeThreshold,
+      includeLayoutMode: draft.includeLayoutMode,
+      includePageIndex: draft.includePageIndex,
+      categoryScopeIds: draft.includeCategoryScope
+          ? state.categoryScopeIds
+          : const <int>{},
+      vendorScopeNames: draft.includeVendorScope
+          ? state.vendorScopeNames
+          : const <String>{},
+      activeType: draft.includeActiveType ? state.activeType : null,
+      threshold: draft.includeThreshold ? state.threshold : null,
+      layoutMode: draft.includeLayoutMode ? state.layoutMode : null,
+      activeYear: draft.includeLayoutMode ? state.activeYear : null,
+      activeMonth: draft.includeLayoutMode ? state.activeMonth : null,
+      pageIndex: draft.includePageIndex ? state.pageIndex : null,
+    );
+    await _snapshotRepository.upsert(snapshot);
+    await _loadSnapshots();
+    return _snapshotRepository.load();
+  }
+
+  Future<_StatsSnapshotRecallResult> _applySnapshot(
+    StatsSnapshot snapshot,
+  ) async {
+    final applied = snapshot.applyTo(_currentSnapshotState());
+    setState(() {
+      _activeType = applied.activeType;
+      _thresholdValue = applied.threshold;
+      if (snapshot.includeCategoryScope) {
+        _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
+      }
+      _contentPageIndex = applied.pageIndex.clamp(0, 1).toInt();
+    });
+    widget.store.setMerchantFilters(applied.vendorScopeNames);
+    switch (applied.layoutMode) {
+      case StatsLayoutMode.sum:
+        await widget.store.setSummaryAllTime();
+      case StatsLayoutMode.year:
+        await _setSummaryYear(applied.activeYear);
+      case StatsLayoutMode.month:
+        await _setSummaryMonth(applied.activeYear, applied.activeMonth);
+    }
+    if (_contentPageController.hasClients) {
+      _contentPageController.jumpToPage(applied.pageIndex.clamp(0, 1).toInt());
+    }
+    final observedMax = _observedMaxScopeAmount(_buildStatsData());
+    final clampedThreshold = _statsThresholdRange(
+      observedMax: observedMax,
+      fallbackMax: 50000,
+    ).snap(_thresholdValue);
+    if (clampedThreshold != _thresholdValue && mounted) {
+      setState(() => _thresholdValue = clampedThreshold);
+    }
+    return _StatsSnapshotRecallResult(
+      threshold: clampedThreshold,
+      observedMax: observedMax,
+    );
+  }
+
+  void _stepSnapshot(int direction) {
+    if (_snapshots.isEmpty || direction == 0) return;
+    final nextIndex =
+        (_selectedSnapshotIndex + (direction > 0 ? 1 : -1)) % _snapshots.length;
+    final wrappedIndex = nextIndex < 0
+        ? nextIndex + _snapshots.length
+        : nextIndex;
+    setState(() => _selectedSnapshotIndex = wrappedIndex);
+    unawaited(_applySnapshot(_snapshots[wrappedIndex]).then<void>((_) {}));
+  }
+
+  void _stepThreshold(int multiplier) {
+    if (multiplier == 0) return;
+    final range = _statsThresholdRange(
+      observedMax: _observedMaxScopeAmount(_buildStatsData()),
+      fallbackMax: 50000,
+    );
+    final next = range.snap(_thresholdValue + multiplier * range.step);
+    if (next == _thresholdValue) return;
+    setState(() => _thresholdValue = next);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -193,19 +382,24 @@ class _StatsPageState extends State<StatsPage>
                     SearchPill(
                       query: _searchQuery,
                       onQueryChanged: (value) {
-                        setState(() => _searchQuery = value);
+                        setState(() {
+                          _searchQuery = value;
+                          _thresholdValue = _clampThresholdToCurrentScope(
+                            _thresholdValue,
+                          );
+                        });
                       },
                       surfaceColor: resolvedTheme.logBox,
                       surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
                       merchantFilters: _merchantSearchFilters(
                         resolvedTheme.accent,
                       ),
-                      onVendorListPressed: widget.onVendorSheetRequested,
+                      categoryFilters: _categorySearchFilters(),
+                      onVendorListPressed: widget.onVendorSheetRequested == null
+                          ? null
+                          : () => widget.onVendorSheetRequested!(_activeType),
                       accentColor: resolvedTheme.accent,
                     ),
-                    const SizedBox(height: 6),
-                    _StatsPageIndicator(activeIndex: _contentPageIndex),
-                    const SizedBox(height: 4),
                     Expanded(
                       child: PageView.builder(
                         key: const ValueKey('stats-content-pager'),
@@ -222,19 +416,38 @@ class _StatsPageState extends State<StatsPage>
                               categories: widget.store.categories,
                               activeType: _activeType,
                               thresholdValue: _thresholdValue,
+                              largestVendor: _largestVisibleVendor(),
                             );
                           }
                           return KeyedSubtree(
                             key: const ValueKey('stats-page-1'),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                              ),
-                              child: _pageOneContent(
-                                data: data,
-                                focusedMonth: focusedMonth,
-                                monthCardColor: resolvedTheme.statsMonthCard,
-                              ),
+                            child: Stack(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    16,
+                                    20,
+                                    0,
+                                  ),
+                                  child: _pageOneContent(
+                                    data: data,
+                                    focusedMonth: focusedMonth,
+                                    monthCardColor:
+                                        resolvedTheme.statsMonthCard,
+                                  ),
+                                ),
+                                const Positioned(
+                                  top: 4,
+                                  right: 20,
+                                  child: _StatsPageIndicator(
+                                    key: ValueKey(
+                                      'stats-page-indicator-page-1',
+                                    ),
+                                    activeIndex: 0,
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -310,7 +523,7 @@ class _StatsPageState extends State<StatsPage>
       activeType: _activeType,
       mode: _renderMode,
       thresholdValue: _thresholdValue,
-      transactions: widget.store.transactions,
+      transactions: _queryFilteredTransactions(),
       categories: widget.store.categories,
       selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
       vendorFilters: widget.store.activeMerchantFilters,
@@ -363,7 +576,7 @@ class _StatsPageState extends State<StatsPage>
 
   double _yearTotal(TransactionType type) {
     var total = 0.0;
-    for (final record in widget.store.transactions) {
+    for (final record in _queryFilteredTransactions()) {
       final date = DateTime.tryParse(record.normalizedDate);
       if (date == null || date.year != _year || record.type != type) continue;
       total += record.amount.abs();
@@ -375,10 +588,18 @@ class _StatsPageState extends State<StatsPage>
     var max = 0.0;
     for (final month in data.months) {
       for (final day in month.days) {
-        if (day.scopeAmount > max) max = day.scopeAmount;
+        if (day.scoreScopeAmount > max) max = day.scoreScopeAmount;
       }
     }
     return max;
+  }
+
+  double _clampThresholdToCurrentScope(double value) {
+    final observedMax = _observedMaxScopeAmount(_buildStatsData());
+    return _statsThresholdRange(
+      observedMax: observedMax,
+      fallbackMax: 50000,
+    ).snap(value);
   }
 
   String _scopeChipText(StatsYearData data) {
@@ -400,7 +621,10 @@ class _StatsPageState extends State<StatsPage>
 
   void _setActiveType(TransactionType type) {
     if (_activeType == type) return;
-    setState(() => _activeType = type);
+    setState(() {
+      _activeType = type;
+      _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
+    });
   }
 
   Widget _pageOneContent({
@@ -410,28 +634,18 @@ class _StatsPageState extends State<StatsPage>
   }) {
     if (!_yearScopeEnabled) {
       return _StatsSumYearCards(
-        transactions: widget.store.transactions,
+        transactions: _queryFilteredTransactions(),
         categories: widget.store.categories,
         activeType: _activeType,
+        activeYear: _year,
         selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
         vendorFilters: widget.store.activeMerchantFilters,
         thresholdValue: _thresholdValue,
         onYearSelected: (year) {
-          setState(() {
-            _yearScopeEnabled = true;
-            _monthScopeEnabled = false;
-            _focusedMonth = null;
-            _year = year;
-          });
+          unawaited(_setSummaryYear(year));
         },
         onMonthSelected: (year, month) {
-          setState(() {
-            _yearScopeEnabled = true;
-            _monthScopeEnabled = true;
-            _year = year;
-            _month = month;
-            _focusedMonth = month;
-          });
+          unawaited(_setSummaryMonth(year, month));
         },
       );
     }
@@ -439,22 +653,21 @@ class _StatsPageState extends State<StatsPage>
       return StatsYearCalendar(
         data: data,
         monthCardColor: monthCardColor,
+        heatColor: _selectedHeatColor(),
         onMonthSelected: _selectMonth,
       );
     }
     return _StatsFocusedMonthView(
       data: data,
       month: focusedMonth,
-      transactions: widget.store.transactions,
-      categories: widget.store.categories,
-      onBack: () {
-        setState(() => _focusedMonth = null);
-      },
+      cardColor: monthCardColor,
+      heatColor: _selectedHeatColor(),
+      onBack: () => unawaited(_setSummaryYear(_year)),
     );
   }
 
   String _summaryTitle() {
-    if (!_yearScopeEnabled) return 'Sum · ${_activeType.label}';
+    if (!_yearScopeEnabled) return 'Összes · ${_activeType.label}';
     if (_monthScopeEnabled) {
       return '${_monthName(_month)} $_year · ${_activeType.label}';
     }
@@ -481,63 +694,27 @@ class _StatsPageState extends State<StatsPage>
       },
     );
     if (!mounted || selection == null) return;
-    setState(() {
-      _yearScopeEnabled = selection.yearEnabled;
-      _monthScopeEnabled = selection.monthEnabled && selection.yearEnabled;
-      _year = selection.year;
-      _month = selection.month.clamp(1, 12).toInt();
-      if (!_monthScopeEnabled) _focusedMonth = null;
-      if (_monthScopeEnabled) _focusedMonth = _month;
-    });
+    if (!selection.yearEnabled) {
+      await widget.store.setSummaryAllTime();
+      return;
+    }
+    if (!selection.monthEnabled) {
+      await widget.store.setSummaryYear(selection.year);
+      return;
+    }
+    await widget.store.setSummaryMonth(selection.year, selection.month);
   }
 
   void _cycleSummaryScope() {
-    setState(() {
-      if (_monthScopeEnabled) {
-        _yearScopeEnabled = false;
-        _monthScopeEnabled = false;
-        _focusedMonth = null;
-      } else if (_yearScopeEnabled) {
-        _monthScopeEnabled = true;
-        _focusedMonth = _month;
-      } else {
-        _yearScopeEnabled = true;
-        _monthScopeEnabled = false;
-        _focusedMonth = null;
-      }
-    });
+    unawaited(widget.store.cycleSummaryWindow());
   }
 
   void _shiftSummaryScope(int direction) {
-    if (direction == 0 || !_yearScopeEnabled) return;
-    setState(() {
-      if (_monthScopeEnabled) {
-        final nextMonth = _month + direction;
-        if (nextMonth < 1) {
-          _month = 12;
-          _year -= 1;
-        } else if (nextMonth > 12) {
-          _month = 1;
-          _year += 1;
-        } else {
-          _month = nextMonth;
-        }
-        _focusedMonth = _month;
-        return;
-      }
-      _year += direction;
-    });
+    unawaited(widget.store.shiftSummaryPeriod(direction));
   }
 
   void _resetSummaryScope() {
-    final now = widget.store.currentDate;
-    setState(() {
-      _yearScopeEnabled = true;
-      _monthScopeEnabled = true;
-      _year = now.year;
-      _month = now.month;
-      _focusedMonth = _month;
-    });
+    unawaited(widget.store.resetSummaryToCurrentMonth());
   }
 
   static String _monthName(int month) {
@@ -559,12 +736,29 @@ class _StatsPageState extends State<StatsPage>
   }
 
   void _selectMonth(StatsMonthData month) {
+    unawaited(_setSummaryMonth(month.year, month.month));
+  }
+
+  Future<void> _setSummaryYear(int year) async {
+    setState(() {
+      _yearScopeEnabled = true;
+      _monthScopeEnabled = false;
+      _focusedMonth = null;
+      _year = year;
+    });
+    await widget.store.setSummaryYear(year);
+  }
+
+  Future<void> _setSummaryMonth(int year, int month) async {
+    final boundedMonth = month.clamp(1, 12).toInt();
     setState(() {
       _yearScopeEnabled = true;
       _monthScopeEnabled = true;
-      _month = month.month;
-      _focusedMonth = month.month;
+      _year = year;
+      _month = boundedMonth;
+      _focusedMonth = boundedMonth;
     });
+    await widget.store.setSummaryMonth(year, boundedMonth);
   }
 
   void _openScopeSheet() {
@@ -602,6 +796,7 @@ class _StatsPageState extends State<StatsPage>
   void _applyScopeSelection(Set<int> ids) {
     setState(() {
       _selectedScopeByType[_activeType] = ids;
+      _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
       _scopeSheetOpen = false;
     });
   }
@@ -621,6 +816,89 @@ class _StatsPageState extends State<StatsPage>
           },
         ),
     ];
+  }
+
+  List<SearchPillFilter> _categorySearchFilters() {
+    final selected = _selectedScopeByType[_activeType] ?? const <int>{};
+    if (selected.isEmpty) return const <SearchPillFilter>[];
+    final categories =
+        widget.store.categories
+            .where(
+              (category) =>
+                  category.normalizedType == _activeType &&
+                  selected.contains(category.transactionCategoryID),
+            )
+            .toList()
+          ..sort((left, right) => left.name.compareTo(right.name));
+    return [
+      for (final category in categories)
+        SearchPillFilter(
+          id: category.transactionCategoryID.toString(),
+          label: category.name,
+          color: category.slotColor,
+          onClear: () {
+            setState(() {
+              _selectedScopeByType[_activeType] = {...selected}
+                ..remove(category.transactionCategoryID);
+              _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
+            });
+          },
+        ),
+    ];
+  }
+
+  List<TransactionRecord> _queryFilteredTransactions() {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return widget.store.transactions;
+    return widget.store.transactions
+        .where((record) => record.displayMerchant.toLowerCase().contains(query))
+        .toList(growable: false);
+  }
+
+  Color _selectedHeatColor() {
+    final selected = _selectedScopeByType[_activeType] ?? const <int>{};
+    if (selected.length != 1) return AppColors.primary;
+    final selectedId = selected.single;
+    for (final category in widget.store.categories) {
+      if (category.normalizedType == _activeType &&
+          category.transactionCategoryID == selectedId) {
+        return category.slotColor;
+      }
+    }
+    return AppColors.primary;
+  }
+
+  String _largestVisibleVendor() {
+    TransactionRecord? largest;
+    final selected = _selectedScopeByType[_activeType] ?? const <int>{};
+    final activeCategoryIds = widget.store.categories
+        .where((category) => category.normalizedType == _activeType)
+        .map((category) => category.transactionCategoryID)
+        .toSet();
+    final useAllCategories =
+        selected.isEmpty || selected.length == activeCategoryIds.length;
+    for (final record in _queryFilteredTransactions()) {
+      if (record.type != _activeType) continue;
+      final date = DateTime.tryParse(record.normalizedDate);
+      if (date == null) continue;
+      if (_yearScopeEnabled && date.year != _year) continue;
+      if (_monthScopeEnabled && date.month != _month) continue;
+      if (!useAllCategories &&
+          !selected.contains(record.transactionCategoryID)) {
+        continue;
+      }
+      final vendors = widget.store.activeMerchantFilters;
+      if (vendors.isNotEmpty &&
+          !vendors.contains(record.displayMerchant) &&
+          !vendors.contains(record.merchant)) {
+        continue;
+      }
+      if (record.amount.abs() < _thresholdValue) continue;
+      if (largest == null || record.amount.abs() > largest.amount.abs()) {
+        largest = record;
+      }
+    }
+    return largest?.displayMerchant ?? 'Nincs találat';
   }
 
   void _openAddCategory() {
@@ -650,6 +928,13 @@ class _StatsPageState extends State<StatsPage>
           observedMax: observedMax,
           fallbackMax: 50000,
           accentColor: _expenseTheme.accent,
+          snapshots: _snapshots,
+          selectedSnapshotIndex: _selectedSnapshotIndex,
+          onAddSnapshot: _saveSnapshot,
+          onSnapshotSelected: (snapshot) {
+            _selectedSnapshotIndex = _snapshots.indexOf(snapshot);
+            return _applySnapshot(snapshot);
+          },
           onThresholdChanged: (value) {
             setState(() => _thresholdValue = value);
           },
@@ -727,14 +1012,13 @@ class _StatsHeaderVisual {
 }
 
 class _StatsPageIndicator extends StatelessWidget {
-  const _StatsPageIndicator({required this.activeIndex});
+  const _StatsPageIndicator({super.key, required this.activeIndex});
 
   final int activeIndex;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      key: const ValueKey('stats-page-indicator'),
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (var index = 0; index < 2; index++)
@@ -745,7 +1029,7 @@ class _StatsPageIndicator extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 3),
             decoration: BoxDecoration(
               color: activeIndex == index
-                  ? AppColors.gray700
+                  ? AppColors.primary
                   : AppColors.gray300,
               borderRadius: BorderRadius.circular(99),
             ),
@@ -760,6 +1044,7 @@ class _StatsSumYearCards extends StatelessWidget {
     required this.transactions,
     required this.categories,
     required this.activeType,
+    required this.activeYear,
     required this.selectedCategoryIds,
     required this.vendorFilters,
     required this.thresholdValue,
@@ -770,6 +1055,7 @@ class _StatsSumYearCards extends StatelessWidget {
   final List<TransactionRecord> transactions;
   final List<TransactionCategory> categories;
   final TransactionType activeType;
+  final int activeYear;
   final Set<int> selectedCategoryIds;
   final Set<String> vendorFilters;
   final double thresholdValue;
@@ -779,11 +1065,16 @@ class _StatsSumYearCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summaries = _buildSummaries();
-    return ListView.separated(
+    return GridView.builder(
       key: const ValueKey('stats-sum-year-cards'),
       padding: const EdgeInsets.only(bottom: 24),
       itemCount: summaries.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 14.88,
+        mainAxisSpacing: 15,
+        mainAxisExtent: 154,
+      ),
       itemBuilder: (context, index) {
         final summary = summaries[index];
         return GestureDetector(
@@ -791,95 +1082,165 @@ class _StatsSumYearCards extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: () => onYearSelected(summary.year),
           child: Container(
-            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.gray50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.gray200),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: summary.year == activeYear
+                    ? AppColors.primary
+                    : AppColors.gray200,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  offset: const Offset(0, 2),
-                  blurRadius: 4,
+                  color: summary.year == activeYear
+                      ? AppColors.primary.withValues(alpha: 0.24)
+                      : Colors.black.withValues(alpha: 0.10),
+                  offset: Offset(0, summary.year == activeYear ? 2 : 1),
+                  blurRadius: summary.year == activeYear ? 8 : 3,
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 26,
+                    child: Center(
                       child: Text(
                         summary.year.toString(),
                         style: const TextStyle(
                           color: AppColors.gray800,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    Text(
-                      formatHuf(summary.total),
-                      style: const TextStyle(
-                        color: AppColors.gray700,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: 12,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    mainAxisSpacing: 0,
-                    crossAxisSpacing: 0,
-                    childAspectRatio: 2.9,
                   ),
-                  itemBuilder: (context, monthIndex) {
-                    final month = monthIndex + 1;
-                    final amount = summary.monthTotals[month] ?? 0;
-                    final intensity = summary.maxMonthTotal <= 0
-                        ? 0.0
-                        : (amount / summary.maxMonthTotal)
-                              .clamp(0.0, 1.0)
-                              .toDouble();
-                    return GestureDetector(
-                      key: ValueKey(
-                        'stats-year-month-cell-${summary.year}-$month',
-                      ),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onMonthSelected(summary.year, month),
-                      child: Container(
-                        margin: const EdgeInsets.all(1),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: amount <= 0
-                              ? AppColors.white
-                              : _heatColor.withValues(
-                                  alpha: 0.10 + intensity * 0.70,
-                                ),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Text(
-                          month.toString(),
+                  SizedBox(
+                    height: 30,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'zárás',
                           style: TextStyle(
-                            color: amount <= 0
-                                ? AppColors.gray500
-                                : AppColors.white,
-                            fontSize: 10,
+                            color: AppColors.gray500,
+                            fontSize: 6.8,
                             fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            height: 1,
                           ),
                         ),
+                        const SizedBox(height: 1),
+                        Text(
+                          _formatSignedHuf(summary.closingAmount),
+                          style: TextStyle(
+                            color: _statsClosingColor(summary.closingAmount),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    height: 18,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: _heatColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '$_scopeLabel ${formatHuf(summary.scopeTotal)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.gray600,
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    key: ValueKey('stats-year-month-grid-${summary.year}'),
+                    height: 70,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final cellWidth = constraints.maxWidth / 6;
+                          final cellHeight = constraints.maxHeight / 2;
+                          return GridView.builder(
+                            padding: EdgeInsets.zero,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: 12,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 6,
+                                  childAspectRatio: cellWidth / cellHeight,
+                                ),
+                            itemBuilder: (context, monthIndex) {
+                              final month = monthIndex + 1;
+                              final amount = summary.monthTotals[month] ?? 0;
+                              final intensity = summary.maxMonthTotal <= 0
+                                  ? 0.0
+                                  : (amount / summary.maxMonthTotal)
+                                        .clamp(0.0, 1.0)
+                                        .toDouble();
+                              return GestureDetector(
+                                key: ValueKey(
+                                  'stats-year-month-cell-${summary.year}-$month',
+                                ),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () =>
+                                    onMonthSelected(summary.year, month),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(1),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: amount <= 0
+                                          ? AppColors.white
+                                          : _heatColor.withValues(
+                                              alpha: 0.10 + intensity * 0.90,
+                                            ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _monthLabels[monthIndex],
+                                        style: TextStyle(
+                                          color: amount <= 0
+                                              ? AppColors.gray500
+                                              : AppColors.gray800,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -887,9 +1248,30 @@ class _StatsSumYearCards extends StatelessWidget {
     );
   }
 
-  Color get _heatColor => activeType == TransactionType.income
-      ? AppColors.income
-      : AppColors.primary;
+  Color get _heatColor {
+    if (selectedCategoryIds.length != 1) return AppColors.primary;
+    final selectedId = selectedCategoryIds.single;
+    for (final category in categories) {
+      if (category.normalizedType == activeType &&
+          category.transactionCategoryID == selectedId) {
+        return category.slotColor;
+      }
+    }
+    return AppColors.primary;
+  }
+
+  String get _scopeLabel {
+    final type = activeType.label.toLowerCase();
+    if (selectedCategoryIds.isEmpty) return type;
+    if (selectedCategoryIds.length == 1) {
+      for (final category in categories) {
+        if (category.transactionCategoryID == selectedCategoryIds.single) {
+          return '$type ${category.name}';
+        }
+      }
+    }
+    return '$type ${selectedCategoryIds.length} kategória';
+  }
 
   List<_StatsYearSummary> _buildSummaries() {
     final activeCategoryIds = categories
@@ -901,15 +1283,8 @@ class _StatsSumYearCards extends StatelessWidget {
         .toSet();
     final useAllCategories =
         selected.isEmpty || selected.length == activeCategoryIds.length;
-    final byYear = <int, Map<int, double>>{};
+    final byYear = <int, _StatsYearSummaryBuilder>{};
     for (final record in transactions) {
-      if ((record.amount > 0) != (activeType == TransactionType.income)) {
-        continue;
-      }
-      final amount = record.amount.abs();
-      if (thresholdValue > 0 && amount < thresholdValue) continue;
-      final categoryId = record.transactionCategoryID;
-      if (!useAllCategories && !selected.contains(categoryId)) continue;
       if (vendorFilters.isNotEmpty &&
           !vendorFilters.contains(record.displayMerchant) &&
           !vendorFilters.contains(record.merchant)) {
@@ -917,38 +1292,86 @@ class _StatsSumYearCards extends StatelessWidget {
       }
       final parsed = DateTime.tryParse(record.normalizedDate);
       if (parsed == null) continue;
-      byYear
-          .putIfAbsent(parsed.year, () => <int, double>{})
-          .update(
-            parsed.month,
-            (value) => value + amount,
-            ifAbsent: () => amount,
-          );
+      final builder = byYear.putIfAbsent(
+        parsed.year,
+        () => _StatsYearSummaryBuilder(parsed.year),
+      );
+      builder.closingAmount += record.amount;
+      if (record.type != activeType) continue;
+      final amount = record.amount.abs();
+      if (thresholdValue > 0 && amount < thresholdValue) continue;
+      final categoryId = record.transactionCategoryID;
+      if (!useAllCategories && !selected.contains(categoryId)) continue;
+      builder.monthTotals.update(
+        parsed.month,
+        (value) => value + amount,
+        ifAbsent: () => amount,
+      );
     }
-    final summaries = [
-      for (final entry in byYear.entries)
-        _StatsYearSummary(
-          year: entry.key,
-          monthTotals: Map.unmodifiable(entry.value),
-        ),
-    ]..sort((left, right) => right.year.compareTo(left.year));
+    final summaries = [for (final builder in byYear.values) builder.build()]
+      ..sort((left, right) => right.year.compareTo(left.year));
     return summaries;
   }
 }
 
 class _StatsYearSummary {
-  const _StatsYearSummary({required this.year, required this.monthTotals});
+  const _StatsYearSummary({
+    required this.year,
+    required this.monthTotals,
+    required this.closingAmount,
+  });
 
   final int year;
   final Map<int, double> monthTotals;
+  final double closingAmount;
 
-  double get total =>
+  double get scopeTotal =>
       monthTotals.values.fold<double>(0, (sum, value) => sum + value);
 
   double get maxMonthTotal => monthTotals.values.fold<double>(
     0,
     (max, value) => value > max ? value : max,
   );
+}
+
+class _StatsYearSummaryBuilder {
+  _StatsYearSummaryBuilder(this.year);
+
+  final int year;
+  final monthTotals = <int, double>{};
+  double closingAmount = 0;
+
+  _StatsYearSummary build() => _StatsYearSummary(
+    year: year,
+    monthTotals: Map.unmodifiable(monthTotals),
+    closingAmount: closingAmount,
+  );
+}
+
+const _monthLabels = [
+  'Jan',
+  'Feb',
+  'Már',
+  'Ápr',
+  'Máj',
+  'Jún',
+  'Júl',
+  'Aug',
+  'Sze',
+  'Okt',
+  'Nov',
+  'Dec',
+];
+
+String _formatSignedHuf(double value) {
+  if (value == 0) return '0 Ft';
+  return '${value > 0 ? '+' : '-'}${formatHuf(value.abs())}';
+}
+
+Color _statsClosingColor(double value) {
+  if (value > 0) return const Color(0xFF15803D);
+  if (value < 0) return const Color(0xFFB91C1C);
+  return AppColors.gray700;
 }
 
 class _StatsPageTwoSummary extends StatelessWidget {
@@ -958,40 +1381,68 @@ class _StatsPageTwoSummary extends StatelessWidget {
     required this.categories,
     required this.activeType,
     required this.thresholdValue,
+    required this.largestVendor,
   });
 
   final StatsYearData data;
   final List<TransactionCategory> categories;
   final TransactionType activeType;
   final double thresholdValue;
+  final String largestVendor;
 
   @override
   Widget build(BuildContext context) {
-    final total = data.summaryTotal;
-    final largestMonth = data.months.fold<StatsMonthData?>(
-      null,
-      (best, month) =>
-          best == null || month.activeTotal > best.activeTotal ? month : best,
-    );
-    final activeDays = data.months.fold<int>(
-      0,
-      (sum, month) =>
-          sum + month.days.where((day) => day.activeAmount > 0).length,
-    );
-    final dayCount = data.months.fold<int>(
-      0,
-      (sum, month) => sum + month.days.length,
-    );
-    final dailyAverage = dayCount == 0 ? 0.0 : total / dayCount;
-    final noActivityDays = (dayCount - activeDays).clamp(0, dayCount);
+    final metrics = StatsPage2Metrics.fromYearData(data);
     final titlePrefix = activeType == TransactionType.income
         ? 'bevétel'
         : 'kiadás';
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aktuális szűrés · ${data.year}',
+                      style: const TextStyle(
+                        color: AppColors.gray500,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      activeType == TransactionType.income
+                          ? 'Bevételi éves statisztika'
+                          : 'Kiadási éves statisztika',
+                      style: const TextStyle(
+                        color: AppColors.gray800,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 3),
+                child: _StatsPageIndicator(
+                  key: ValueKey('stats-page-indicator'),
+                  activeIndex: 1,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           if (thresholdValue > 0)
             _StatsThresholdWarning(thresholdValue: thresholdValue),
           Row(
@@ -999,7 +1450,7 @@ class _StatsPageTwoSummary extends StatelessWidget {
               Expanded(
                 child: _StatsMetricTile(
                   title: 'Havi átlag',
-                  value: formatHuf(total / 12),
+                  value: formatHuf(metrics.monthlyAverage),
                   highlighted: true,
                 ),
               ),
@@ -1009,7 +1460,8 @@ class _StatsPageTwoSummary extends StatelessWidget {
                   title: activeType == TransactionType.income
                       ? 'Legnagyobb bevétel'
                       : 'Legnagyobb kiadás',
-                  value: formatHuf(_largestDayAmount()),
+                  value: formatHuf(metrics.largestAmount),
+                  detail: largestVendor,
                   highlighted: true,
                 ),
               ),
@@ -1019,8 +1471,8 @@ class _StatsPageTwoSummary extends StatelessWidget {
                   title: activeType == TransactionType.income
                       ? 'Legerősebb hónap'
                       : 'Legdrágább hónap',
-                  value: formatHuf(largestMonth?.activeTotal ?? 0),
-                  detail: largestMonth?.name ?? '-',
+                  value: formatHuf(metrics.topMonthAmount),
+                  detail: metrics.topMonthLabel,
                   highlighted: true,
                 ),
               ),
@@ -1032,7 +1484,9 @@ class _StatsPageTwoSummary extends StatelessWidget {
               Expanded(
                 child: _StatsMetricTile(
                   title: 'Napi tranzakcióátlag',
-                  value: _dailyTransactionAverageText(dayCount),
+                  value: metrics.dailyAverageTransactionCount.toStringAsFixed(
+                    1,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1041,7 +1495,7 @@ class _StatsPageTwoSummary extends StatelessWidget {
                   title:
                       'Napi $titlePrefix'
                       'átlag',
-                  value: formatHuf(dailyAverage),
+                  value: formatHuf(metrics.dailyAverageAmount),
                 ),
               ),
             ],
@@ -1054,7 +1508,7 @@ class _StatsPageTwoSummary extends StatelessWidget {
                   title: activeType == TransactionType.income
                       ? 'Bevételmentes nap'
                       : 'Költésmentes nap',
-                  value: '$noActivityDays nap',
+                  value: '${metrics.zeroActivityDays} nap',
                 ),
               ),
               const SizedBox(width: 10),
@@ -1063,7 +1517,7 @@ class _StatsPageTwoSummary extends StatelessWidget {
                   title: activeType == TransactionType.income
                       ? 'Átlagos bevétel'
                       : 'Átlagos kiadás',
-                  value: formatHuf(_averageEventAmount()),
+                  value: formatHuf(metrics.averageEventAmount),
                 ),
               ),
             ],
@@ -1083,38 +1537,6 @@ class _StatsPageTwoSummary extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  double _largestDayAmount() {
-    var largest = 0.0;
-    for (final month in data.months) {
-      for (final day in month.days) {
-        if (day.activeAmount > largest) largest = day.activeAmount;
-      }
-    }
-    return largest;
-  }
-
-  double _averageEventAmount() {
-    var total = 0.0;
-    var count = 0;
-    for (final month in data.months) {
-      for (final day in month.days) {
-        if (day.activeAmount <= 0) continue;
-        total += day.activeAmount;
-        count += 1;
-      }
-    }
-    return count == 0 ? 0 : total / count;
-  }
-
-  String _dailyTransactionAverageText(int dayCount) {
-    if (dayCount == 0) return '0';
-    final count = data.months.fold<int>(
-      0,
-      (sum, month) => sum + month.transactionCount,
-    );
-    return (count / dayCount).toStringAsFixed(1);
   }
 }
 
@@ -1143,6 +1565,28 @@ class _StatsCategoryRankingPanel extends StatelessWidget {
       title: singleSelected ? 'Szűrt kategória' : 'Kategória rangsor',
       thresholdValue: thresholdValue,
       children: [
+        if (!singleSelected && rows.length > 1) ...[
+          Center(
+            child: SizedBox.square(
+              key: const ValueKey('stats-category-donut'),
+              dimension: 208,
+              child: CustomPaint(
+                painter: _StatsDonutPainter(
+                  slices: [
+                    for (final row in rows)
+                      _StatsDonutSlice(
+                        fraction: total <= 0 ? 0 : row.value / total,
+                        color:
+                            categoriesById[row.key]?.slotColor ??
+                            AppColors.primary,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         for (final row in rows)
           _StatsProgressRow(
             label: categoriesById[row.key]?.name ?? 'Kategória ${row.key}',
@@ -1154,6 +1598,37 @@ class _StatsCategoryRankingPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+class _StatsDonutSlice {
+  const _StatsDonutSlice({required this.fraction, required this.color});
+
+  final double fraction;
+  final Color color;
+}
+
+class _StatsDonutPainter extends CustomPainter {
+  const _StatsDonutPainter({required this.slices});
+
+  final List<_StatsDonutSlice> slices;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    var start = -1.5707963267948966;
+    for (final slice in slices) {
+      final sweep = slice.fraction.clamp(0.0, 1.0) * 6.283185307179586;
+      canvas.drawArc(rect, start, sweep, true, Paint()..color = slice.color);
+      start += sweep;
+    }
+    canvas.drawCircle(center, 52, Paint()..color = AppColors.white);
+  }
+
+  @override
+  bool shouldRepaint(_StatsDonutPainter oldDelegate) =>
+      oldDelegate.slices != slices;
 }
 
 class _StatsVendorRankingPanel extends StatelessWidget {
@@ -1184,6 +1659,7 @@ class _StatsVendorRankingPanel extends StatelessWidget {
             value: formatHuf(row.total),
             fraction: listedTotal <= 0 ? 0 : row.total / listedTotal,
             color: row.color,
+            showPercent: false,
           ),
       ],
     );
@@ -1437,21 +1913,19 @@ class _StatsFocusedMonthView extends StatelessWidget {
   const _StatsFocusedMonthView({
     required this.data,
     required this.month,
-    required this.transactions,
-    required this.categories,
+    required this.cardColor,
+    required this.heatColor,
     required this.onBack,
   });
 
   final StatsYearData data;
   final StatsMonthData month;
-  final List<TransactionRecord> transactions;
-  final List<TransactionCategory> categories;
+  final Color cardColor;
+  final Color heatColor;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    final calendarMode = _calendarMode;
-    final calendarMonth = _calendarMonth(calendarMode);
     return SingleChildScrollView(
       key: const ValueKey('calendar-focus-month-view'),
       padding: const EdgeInsets.only(bottom: 144),
@@ -1488,91 +1962,34 @@ class _StatsFocusedMonthView extends StatelessWidget {
               ],
             ),
           ),
-          FocusedMonthCanvas(
-            month: calendarMonth,
-            mode: calendarMode,
-            thresholdValue: data.thresholdValue,
-            heatmapMinValue: 0,
-            heatmapCurrentValue: _heatmapCurrentValue,
-          ),
-          const SizedBox(height: 14),
-          MonthStatsCharts(
-            year: month.year,
-            month: month.month,
-            transactions: transactions,
-            categories: categories,
+          AspectRatio(
+            key: const ValueKey('calendar-focus-month-canvas'),
+            aspectRatio: 0.875,
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: 175,
+                height: StatsMonthCard.cardHeight,
+                child: StatsMonthCard(
+                  key: const ValueKey('stats-focused-month-card'),
+                  month: month,
+                  scopeLabel: _scopeLabel,
+                  cardColor: cardColor,
+                  heatColor: heatColor,
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  CalendarMenuMode get _calendarMode => CalendarMenuMode.category;
-
-  double get _heatmapCurrentValue {
-    var max = data.thresholdValue;
-    for (final day in month.days) {
-      if (day.scopeAmount > max) max = day.scopeAmount;
-    }
-    return max <= 0 ? 1 : max;
-  }
-
-  CalendarMonthRenderData _calendarMonth(CalendarMenuMode calendarMode) {
-    final visualAsExpense = calendarMode != CalendarMenuMode.summary;
-    final income = !visualAsExpense && data.activeType == TransactionType.income
-        ? month.activeTotal
-        : 0.0;
-    final expense =
-        visualAsExpense || data.activeType == TransactionType.expense
-        ? month.activeTotal
-        : 0.0;
-    return CalendarMonthRenderData(
-      year: month.year,
-      month: month.month,
-      name: month.name,
-      weekdayLabels: month.weekdayLabels,
-      leadingBlankDays: month.leadingBlankDays,
-      days: [
-        for (final day in month.days)
-          _calendarDay(day, visualAsExpense: visualAsExpense),
-      ],
-      income: income,
-      expense: expense,
-      balance: income - expense,
-      transactionCount: month.transactionCount,
-    );
-  }
-
-  CalendarDayRenderData _calendarDay(
-    StatsDayData day, {
-    required bool visualAsExpense,
-  }) {
-    final income = !visualAsExpense && data.activeType == TransactionType.income
-        ? day.activeAmount
-        : 0.0;
-    final expense =
-        visualAsExpense || data.activeType == TransactionType.expense
-        ? day.activeAmount
-        : 0.0;
-    return CalendarDayRenderData(
-      date: day.date,
-      day: day.day,
-      income: income,
-      expense: expense,
-      hasIncome:
-          !visualAsExpense &&
-          data.activeType == TransactionType.income &&
-          day.hasActiveTypeActivity,
-      hasExpense:
-          !visualAsExpense &&
-          data.activeType == TransactionType.expense &&
-          day.hasActiveTypeActivity,
-      meetsThreshold: day.meetsThreshold,
-      heatmapPercentage: day.heatmapIntensity,
-      dominantCategoryId: day.dominantCategoryId,
-      dominantCategoryColor: day.dominantCategoryColor,
-      isToday: day.isToday,
-    );
+  String get _scopeLabel {
+    final type = data.activeType.label.toLowerCase();
+    if (data.selectedCategoryIds.isEmpty) return type;
+    if (data.selectedCategoryIds.length == 1) return '$type ${data.scopeLabel}';
+    return '$type ${data.selectedCategoryIds.length} kategória';
   }
 }
 
@@ -1582,6 +1999,10 @@ class _StatsThresholdControlSheet extends StatefulWidget {
     required this.observedMax,
     required this.fallbackMax,
     required this.accentColor,
+    required this.snapshots,
+    required this.selectedSnapshotIndex,
+    required this.onAddSnapshot,
+    required this.onSnapshotSelected,
     required this.onThresholdChanged,
   });
 
@@ -1589,6 +2010,11 @@ class _StatsThresholdControlSheet extends StatefulWidget {
   final double observedMax;
   final double fallbackMax;
   final Color accentColor;
+  final List<StatsSnapshot> snapshots;
+  final int selectedSnapshotIndex;
+  final Future<List<StatsSnapshot>> Function(_StatsSnapshotDraft) onAddSnapshot;
+  final Future<_StatsSnapshotRecallResult> Function(StatsSnapshot)
+  onSnapshotSelected;
   final ValueChanged<double> onThresholdChanged;
 
   @override
@@ -1599,15 +2025,35 @@ class _StatsThresholdControlSheet extends StatefulWidget {
 class _StatsThresholdControlSheetState
     extends State<_StatsThresholdControlSheet> {
   late double _thresholdValue;
+  late double _observedMax;
   late final TextEditingController _amountController;
+  late List<StatsSnapshot> _snapshots;
+  late int _selectedSnapshotIndex;
 
   @override
   void initState() {
     super.initState();
+    _observedMax = widget.observedMax;
     _thresholdValue = _range.snap(widget.thresholdValue);
     _amountController = TextEditingController(
       text: _thresholdValue.toStringAsFixed(0),
     );
+    _snapshots = widget.snapshots;
+    _selectedSnapshotIndex = widget.selectedSnapshotIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _StatsThresholdControlSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.snapshots != widget.snapshots) {
+      _snapshots = widget.snapshots;
+    }
+    if (oldWidget.selectedSnapshotIndex != widget.selectedSnapshotIndex) {
+      _selectedSnapshotIndex = widget.selectedSnapshotIndex;
+    }
+    if (oldWidget.observedMax != widget.observedMax) {
+      _observedMax = widget.observedMax;
+    }
   }
 
   @override
@@ -1643,7 +2089,22 @@ class _StatsThresholdControlSheetState
                 ),
               ),
               const SizedBox(height: 20),
-              _StatsSnapshotStrip(onAddSnapshot: _openSnapshotDialog),
+              _StatsSnapshotStrip(
+                snapshots: _snapshots,
+                selectedSnapshotIndex: _selectedSnapshotIndex,
+                onAddSnapshot: _openSnapshotDialog,
+                onSnapshotSelected: (snapshot) async {
+                  setState(() {
+                    _selectedSnapshotIndex = _snapshots.indexOf(snapshot);
+                  });
+                  final result = await widget.onSnapshotSelected(snapshot);
+                  if (!mounted) return;
+                  _syncThreshold(
+                    result.threshold,
+                    observedMax: result.observedMax,
+                  );
+                },
+              ),
               const SizedBox(height: 18),
               Row(
                 children: [
@@ -1738,29 +2199,41 @@ class _StatsThresholdControlSheetState
     );
   }
 
-  CalendarJoystickRange get _range => CalendarJoystickRange.adaptive(
-    currentValue: widget.thresholdValue,
-    observedMax: widget.observedMax,
+  CalendarJoystickRange get _range => _statsThresholdRange(
+    observedMax: _observedMax,
     fallbackMax: widget.fallbackMax,
   );
 
   Future<void> _openSnapshotDialog() async {
-    await showDialog<void>(
+    final draft = await showDialog<_StatsSnapshotDraft>(
       context: context,
       builder: (context) {
         return const _StatsSnapshotDialog();
       },
     );
+    if (draft == null) return;
+    final snapshots = await widget.onAddSnapshot(draft);
+    if (!mounted) return;
+    setState(() {
+      _snapshots = snapshots;
+      _selectedSnapshotIndex = snapshots.length - 1;
+    });
   }
 
   void _setThreshold(double value) {
     final next = _range.snap(value);
     if (next == _thresholdValue) return;
+    _syncThreshold(next);
+    widget.onThresholdChanged(next);
+  }
+
+  void _syncThreshold(double value, {double? observedMax}) {
     setState(() {
+      if (observedMax != null) _observedMax = observedMax;
+      final next = _range.snap(value);
       _thresholdValue = next;
       _amountController.text = next.toStringAsFixed(0);
     });
-    widget.onThresholdChanged(next);
   }
 
   void _submitManualAmount(String rawValue) {
@@ -1773,10 +2246,39 @@ class _StatsThresholdControlSheetState
   }
 }
 
-class _StatsSnapshotStrip extends StatelessWidget {
-  const _StatsSnapshotStrip({required this.onAddSnapshot});
+class _StatsSnapshotRecallResult {
+  const _StatsSnapshotRecallResult({
+    required this.threshold,
+    required this.observedMax,
+  });
 
+  final double threshold;
+  final double observedMax;
+}
+
+CalendarJoystickRange _statsThresholdRange({
+  required double observedMax,
+  required double fallbackMax,
+}) {
+  const step = 5000.0;
+  final sourceMax = observedMax > fallbackMax ? observedMax : fallbackMax;
+  final safeMax = sourceMax > 0 ? sourceMax : step;
+  final max = (safeMax / step).ceil() * step;
+  return CalendarJoystickRange(min: 0, max: max.toDouble(), step: step);
+}
+
+class _StatsSnapshotStrip extends StatelessWidget {
+  const _StatsSnapshotStrip({
+    required this.snapshots,
+    required this.selectedSnapshotIndex,
+    required this.onAddSnapshot,
+    required this.onSnapshotSelected,
+  });
+
+  final List<StatsSnapshot> snapshots;
+  final int selectedSnapshotIndex;
   final VoidCallback onAddSnapshot;
+  final ValueChanged<StatsSnapshot> onSnapshotSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1784,7 +2286,7 @@ class _StatsSnapshotStrip extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Pillanatképek',
+          'Mentett nézetek',
           style: TextStyle(
             color: AppColors.gray800,
             fontSize: 13,
@@ -1799,16 +2301,14 @@ class _StatsSnapshotStrip extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             children: [
               _StatsSnapshotAddCard(onTap: onAddSnapshot),
-              const SizedBox(width: 8),
-              const _StatsSnapshotPreviewCard(
-                title: 'Kiadás',
-                detail: 'Éves · 5k',
-              ),
-              const SizedBox(width: 8),
-              const _StatsSnapshotPreviewCard(
-                title: 'Bevétel',
-                detail: 'Hónap · 0',
-              ),
+              for (var i = 0; i < snapshots.length; i += 1) ...[
+                const SizedBox(width: 8),
+                _StatsSnapshotPreviewCard(
+                  snapshot: snapshots[i],
+                  selected: i == selectedSnapshotIndex,
+                  onTap: () => onSnapshotSelected(snapshots[i]),
+                ),
+              ],
             ],
           ),
         ),
@@ -1848,49 +2348,81 @@ class _StatsSnapshotAddCard extends StatelessWidget {
 }
 
 class _StatsSnapshotPreviewCard extends StatelessWidget {
-  const _StatsSnapshotPreviewCard({required this.title, required this.detail});
+  const _StatsSnapshotPreviewCard({
+    required this.snapshot,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final String title;
-  final String detail;
+  final StatsSnapshot snapshot;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 112,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.gray200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.gray800,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
+    return GestureDetector(
+      key: ValueKey('stats-snapshot-card-${snapshot.id}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 112,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEFFCF6) : AppColors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.income : AppColors.gray200,
           ),
-          const SizedBox(height: 4),
-          Text(
-            detail,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.gray500,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              snapshot.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.gray800,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              _snapshotDetail(snapshot),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.gray500,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  static String _snapshotDetail(StatsSnapshot snapshot) {
+    final parts = <String>[];
+    if (snapshot.includeActiveType && snapshot.activeType != null) {
+      parts.add(
+        snapshot.activeType == TransactionType.income ? 'Bevétel' : 'Kiadás',
+      );
+    }
+    if (snapshot.includeLayoutMode && snapshot.layoutMode != null) {
+      parts.add(switch (snapshot.layoutMode!) {
+        StatsLayoutMode.sum => 'Összes',
+        StatsLayoutMode.year => 'Éves',
+        StatsLayoutMode.month => 'Havi',
+      });
+    }
+    if (snapshot.includeThreshold && snapshot.threshold != null) {
+      parts.add(formatHuf(snapshot.threshold!));
+    }
+    return parts.isEmpty ? 'Részleges' : parts.join(' · ');
   }
 }
 
@@ -1902,13 +2434,27 @@ class _StatsSnapshotDialog extends StatefulWidget {
 }
 
 class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
+  late final TextEditingController _nameController;
   final _selectedFields = <String>{
-    'Kategória scope',
-    'Vendor scope',
+    'Kategória szűrés',
+    'Kereskedő szűrés',
     'Küszöb',
-    'Layout mód',
+    'Nézet mód',
     'Bevétel / kiadás',
+    'Aktív oldal',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1918,7 +2464,7 @@ class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text(
-        'Snapshot mentése',
+        'Pillanatkép mentése',
         style: TextStyle(
           color: AppColors.gray800,
           fontSize: 17,
@@ -1931,6 +2477,7 @@ class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
           children: [
             TextField(
               key: const ValueKey('stats-snapshot-name-input'),
+              controller: _nameController,
               textInputAction: TextInputAction.done,
               decoration: const InputDecoration(
                 labelText: 'Név',
@@ -1939,11 +2486,12 @@ class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
             ),
             const SizedBox(height: 12),
             for (final field in const [
-              'Kategória scope',
-              'Vendor scope',
+              'Kategória szűrés',
+              'Kereskedő szűrés',
               'Küszöb',
-              'Layout mód',
+              'Nézet mód',
               'Bevétel / kiadás',
+              'Aktív oldal',
             ])
               CheckboxListTile(
                 dense: true,
@@ -1977,10 +2525,43 @@ class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
           child: const Text('Mégse'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(),
+          key: const ValueKey('stats-snapshot-save-button'),
+          onPressed: () => Navigator.of(context).pop(
+            _StatsSnapshotDraft(
+              name: _nameController.text,
+              includeCategoryScope: _selectedFields.contains(
+                'Kategória szűrés',
+              ),
+              includeVendorScope: _selectedFields.contains('Kereskedő szűrés'),
+              includeThreshold: _selectedFields.contains('Küszöb'),
+              includeLayoutMode: _selectedFields.contains('Nézet mód'),
+              includeActiveType: _selectedFields.contains('Bevétel / kiadás'),
+              includePageIndex: _selectedFields.contains('Aktív oldal'),
+            ),
+          ),
           child: const Text('Mentés'),
         ),
       ],
     );
   }
+}
+
+class _StatsSnapshotDraft {
+  const _StatsSnapshotDraft({
+    required this.name,
+    required this.includeCategoryScope,
+    required this.includeVendorScope,
+    required this.includeActiveType,
+    required this.includeThreshold,
+    required this.includeLayoutMode,
+    required this.includePageIndex,
+  });
+
+  final String name;
+  final bool includeCategoryScope;
+  final bool includeVendorScope;
+  final bool includeActiveType;
+  final bool includeThreshold;
+  final bool includeLayoutMode;
+  final bool includePageIndex;
 }

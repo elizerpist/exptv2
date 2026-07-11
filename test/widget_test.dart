@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
@@ -36,6 +37,7 @@ void main() {
     themeSettingsOverride = null;
     firstLaunchNotificationPromptEnabled = false;
     firstLaunchNotificationPromptCalls = 0;
+    SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('exptv2/native_ime_sheet'),
@@ -391,13 +393,19 @@ void main() {
     await tester.tap(find.text('Stats'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-sum-year-cards')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    var fab = tester.widget<ExptFab>(find.byType(ExptFab));
+    expect(fab.onHorizontalDragStep, isNotNull);
+    expect(fab.onVerticalDragStep, isNotNull);
 
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
     expect(find.text('Kiadás'), findsOneWidget);
+    fab = tester.widget<ExptFab>(find.byType(ExptFab));
+    expect(fab.onHorizontalDragStep, isNull);
+    expect(fab.onVerticalDragStep, isNull);
 
     await tester.tap(find.byKey(const ValueKey('header-notification-button')));
     await tester.pumpAndSettle();
@@ -474,7 +482,7 @@ void main() {
     expect(logs, contains('[Perf] BottomNav pointer dispatch tab=stats'));
     expect(logs, contains('[Perf] BottomNav page jump deferred tab=stats'));
     expect(logs, isNot(contains('[Perf] CalendarRender build source=overlay')));
-    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-sum-year-cards')), findsOneWidget);
 
     await tester.tap(find.text('Beállítások'));
     await tester.pumpAndSettle();

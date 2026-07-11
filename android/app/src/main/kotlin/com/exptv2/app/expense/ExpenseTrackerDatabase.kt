@@ -17,8 +17,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecurringRuleEntity::class,
         RecurringRuleInstanceEntity::class,
         NotificationCardEntity::class,
+        StatsSnapshotEntity::class,
+        StatsSnapshotCategoryEntity::class,
+        StatsSnapshotVendorEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class ExpenseTrackerDatabase : RoomDatabase() {
@@ -30,6 +33,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
     abstract fun recurringRules(): RecurringRuleDao
     abstract fun recurringRuleInstances(): RecurringRuleInstanceDao
     abstract fun notificationCards(): NotificationCardDao
+    abstract fun statsSnapshots(): StatsSnapshotDao
 
     companion object {
         @Volatile private var instance: ExpenseTrackerDatabase? = null
@@ -465,6 +469,66 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS stats_snapshots (
+                        id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        includeCategoryScope INTEGER NOT NULL,
+                        includeVendorScope INTEGER NOT NULL,
+                        includeActiveType INTEGER NOT NULL,
+                        includeThreshold INTEGER NOT NULL,
+                        includeLayoutMode INTEGER NOT NULL,
+                        includePageIndex INTEGER NOT NULL,
+                        activeType TEXT,
+                        threshold REAL,
+                        layoutMode TEXT,
+                        activeYear INTEGER,
+                        activeMonth INTEGER,
+                        pageIndex INTEGER,
+                        PRIMARY KEY(id)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_stats_snapshots_createdAt_id " +
+                        "ON stats_snapshots(createdAt, id)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS stats_snapshot_categories (
+                        snapshotId TEXT NOT NULL,
+                        categoryId INTEGER NOT NULL,
+                        PRIMARY KEY(snapshotId, categoryId),
+                        FOREIGN KEY(snapshotId) REFERENCES stats_snapshots(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_stats_snapshot_categories_snapshotId " +
+                        "ON stats_snapshot_categories(snapshotId)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS stats_snapshot_vendors (
+                        snapshotId TEXT NOT NULL,
+                        vendorName TEXT NOT NULL,
+                        PRIMARY KEY(snapshotId, vendorName),
+                        FOREIGN KEY(snapshotId) REFERENCES stats_snapshots(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_stats_snapshot_vendors_snapshotId " +
+                        "ON stats_snapshot_vendors(snapshotId)",
+                )
+            }
+        }
+
         fun get(context: Context): ExpenseTrackerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -481,6 +545,7 @@ abstract class ExpenseTrackerDatabase : RoomDatabase() {
                         MIGRATION_7_8,
                         MIGRATION_8_9,
                         MIGRATION_9_10,
+                        MIGRATION_10_11,
                     )
                     .build().also { instance = it }
             }

@@ -21,6 +21,8 @@ import '../settings/state/push_notification_log_store.dart';
 import '../settings/widgets/push_log/push_notification_event_sheet.dart';
 import '../settings/widgets/options/backheader_style_options_panel.dart';
 import '../settings/theme/expense_theme.dart';
+import '../stats/data/stats_snapshot.dart';
+import '../stats/data/stats_snapshot_repository.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/sync/google_sheets_sync_controller.dart';
@@ -78,6 +80,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
+  late final StatsSnapshotRepository _statsSnapshotRepository;
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
@@ -108,6 +111,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     unawaited(_transactionStore.start());
     _transactionHomePage = _buildTransactionHomePage();
+    _statsSnapshotRepository = NativeStatsSnapshotRepository(
+      widget.nativeBridge,
+    );
     _statsPage = _buildStatsPage();
     _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
@@ -238,11 +244,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       store: _transactionStore,
       controller: _statsPageController,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
+      snapshotRepository: _statsSnapshotRepository,
       onCategoryMenuRequested: (request) {
         _sheetHostKey.currentState?.openCategoryPicker(request);
       },
-      onVendorSheetRequested: () {
-        _sheetHostKey.currentState?.openVendorFilter();
+      onVendorSheetRequested: (type) {
+        _sheetHostKey.currentState?.openVendorFilter(activeType: type);
       },
       onAddCategoryEditorRequested: () {
         _sheetHostKey.currentState?.openCategory();
@@ -701,6 +708,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           onLongPress: _activeTab == AppTab.stats
               ? null
               : _handleFabLongPressed,
+          onHorizontalDragStep: _activeTab == AppTab.stats
+              ? _statsPageController.stepSnapshot
+              : null,
+          onVerticalDragStep: _activeTab == AppTab.stats
+              ? _statsPageController.stepThreshold
+              : null,
         ),
       ),
     ];
@@ -885,14 +898,14 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categoryPickerSlotKey.currentState?.open(request);
   }
 
-  void openVendorFilter() {
+  void openVendorFilter({TransactionType? activeType}) {
     _transactionSlotKey.currentState?.close();
     _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
-    _vendorFilterSlotKey.currentState?.open();
+    _vendorFilterSlotKey.currentState?.open(activeType: activeType);
   }
 
   void openRecurring() {
@@ -1290,6 +1303,7 @@ class _VendorFilterSheetSlot extends StatefulWidget {
 class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
   final _scrollController = ScrollController();
   var _open = false;
+  TransactionType? _activeTypeOverride;
   Set<String> _pendingVendorFilters = const <String>{};
 
   @override
@@ -1298,10 +1312,11 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
     super.dispose();
   }
 
-  void open() {
+  void open({TransactionType? activeType}) {
     DebugConsole.clear();
     DebugConsole.log('[KeyboardFlow] VendorFilter debug cleared');
     setState(() {
+      _activeTypeOverride = activeType;
       _pendingVendorFilters = {...widget.store.activeMerchantFilters};
       _open = true;
     });
@@ -1310,7 +1325,10 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
 
   void close() {
     if (!_open) return;
-    setState(() => _open = false);
+    setState(() {
+      _open = false;
+      _activeTypeOverride = null;
+    });
     DebugConsole.log('[VendorFilter] shell closed');
   }
 
@@ -1323,6 +1341,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
     return ListenableBuilder(
       listenable: widget.store,
       builder: (context, _) {
+        final activeType = _activeTypeOverride ?? widget.store.activeType;
         return SlideUpMenuCard(
           cardKey: const ValueKey('vendor-filter-slide-card'),
           debugLabel: 'VendorFilter',
@@ -1340,9 +1359,9 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
             top: false,
             bottom: false,
             child: VendorFilterPanel(
-              summaries: widget.store.vendorFilterSummaries,
+              summaries: widget.store.vendorFilterSummariesFor(activeType),
               selectedVendors: _pendingVendorFilters,
-              activeType: widget.store.activeType,
+              activeType: activeType,
               scrollController: _scrollController,
               accentColor: widget.expenseTheme.accent,
               cardSurfaceColor: widget.expenseTheme.categoryCard,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/calendar_render_builder.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
@@ -783,6 +785,7 @@ void main() {
     (tester) async {
       final store = TransactionStore(CalendarHomeRepository());
       await store.start();
+      unawaited(store.setSummaryYear(2026));
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

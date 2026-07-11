@@ -470,6 +470,25 @@ void main() {
     },
   );
 
+  test('vendor summaries can be requested for a type outside home state', () async {
+    final store = TransactionStore(FakeTransactionRepository());
+    await store.start();
+
+    expect(store.activeType, TransactionType.expense);
+    expect(
+      store
+          .vendorFilterSummariesFor(TransactionType.income)
+          .map((summary) => summary.name),
+      contains('Gguu'),
+    );
+    expect(
+      store
+          .vendorFilterSummariesFor(TransactionType.income)
+          .map((summary) => summary.name),
+      isNot(contains('Rrr')),
+    );
+  });
+
   test(
     'vendor summaries expose deterministic dominant category icon data',
     () async {

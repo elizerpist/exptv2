@@ -23,6 +23,7 @@ class ExpenseRepository(context: Context) {
     private val recurringRules = db.recurringRules()
     private val recurringRuleInstances = db.recurringRuleInstances()
     private val notificationCards = db.notificationCards()
+    private val statsSnapshotDao = db.statsSnapshots()
     private val notificationEmitter = ExpenseNotificationEmitter(appContext)
     private val settingsStore = ExpenseSettingsStore(appContext)
     private val debugClockStore = RecurringDebugClockStore(appContext)
@@ -58,6 +59,124 @@ class ExpenseRepository(context: Context) {
     suspend fun categoryCounts(): Map<Int, Int> {
         seedIfEmpty()
         return transactions.categoryCounts().associate { it.transactionCategoryID to it.count }
+    }
+
+    suspend fun listStatsSnapshots(): List<Map<String, Any?>> =
+        statsSnapshotDao.list().map(StatsSnapshotRecord::toMap)
+
+    suspend fun upsertStatsSnapshot(args: Map<*, *>): Map<String, Any?> {
+        val id = args["id"]?.toString()?.trim().orEmpty()
+        if (id.isEmpty()) {
+            throw ExpenseValidationException("INVALID_STATS_SNAPSHOT", "Snapshot id is required")
+        }
+        val name = args["name"]?.toString()?.trim().orEmpty()
+        if (name.isEmpty()) {
+            throw ExpenseValidationException("INVALID_STATS_SNAPSHOT", "Snapshot name is required")
+        }
+        val now = System.currentTimeMillis()
+        val includeCategoryScope = boolArg(args["includeCategoryScope"], false)
+        val includeVendorScope = boolArg(args["includeVendorScope"], false)
+        val includeActiveType = boolArg(args["includeActiveType"], false)
+        val includeThreshold = boolArg(args["includeThreshold"], false)
+        val includeLayoutMode = boolArg(args["includeLayoutMode"], false)
+        val includePageIndex = boolArg(args["includePageIndex"], false)
+        val categoryScopeIds = if (includeCategoryScope) {
+            (args["categoryScopeIds"] as? List<*>)
+                .orEmpty()
+                .mapNotNull(::optionalInt)
+                .distinct()
+                .sorted()
+        } else {
+            emptyList()
+        }
+        val vendorScopeNames = if (includeVendorScope) {
+            (args["vendorScopeNames"] as? List<*>)
+                .orEmpty()
+                .map { it?.toString()?.trim().orEmpty() }
+                .filter(String::isNotEmpty)
+                .distinct()
+                .sorted()
+        } else {
+            emptyList()
+        }
+        val activeType = if (includeActiveType) {
+            normalizeNativeTransactionType(args["activeType"]?.toString())
+                ?: throw ExpenseValidationException(
+                    "INVALID_STATS_SNAPSHOT",
+                    "Snapshot active type must be income or expense",
+                )
+        } else {
+            null
+        }
+        val threshold = if (includeThreshold) {
+            ((args["threshold"] as? Number)?.toDouble()
+                ?: args["threshold"]?.toString()?.toDoubleOrNull())
+                ?.coerceAtLeast(0.0)
+                ?: throw ExpenseValidationException(
+                    "INVALID_STATS_SNAPSHOT",
+                    "Snapshot threshold is required",
+                )
+        } else {
+            null
+        }
+        val layoutMode = if (includeLayoutMode) {
+            args["layoutMode"]?.toString()?.takeIf { it in setOf("sum", "year", "month") }
+                ?: throw ExpenseValidationException(
+                    "INVALID_STATS_SNAPSHOT",
+                    "Snapshot layout mode is invalid",
+                )
+        } else {
+            null
+        }
+        val activeYear = if (layoutMode == "year" || layoutMode == "month") {
+            optionalInt(args["activeYear"])
+                ?: throw ExpenseValidationException(
+                    "INVALID_STATS_SNAPSHOT",
+                    "Snapshot active year is required for this layout",
+                )
+        } else {
+            null
+        }
+        val activeMonth = if (layoutMode == "month") {
+            optionalInt(args["activeMonth"])
+                ?.takeIf { it in 1..12 }
+                ?: throw ExpenseValidationException(
+                    "INVALID_STATS_SNAPSHOT",
+                    "Snapshot active month must be between 1 and 12",
+                )
+        } else {
+            null
+        }
+        val pageIndex = if (includePageIndex) {
+            optionalInt(args["pageIndex"])
+                ?.takeIf { it in 0..1 }
+                ?: throw ExpenseValidationException(
+                    "INVALID_STATS_SNAPSHOT",
+                    "Snapshot page index must be 0 or 1",
+                )
+        } else {
+            null
+        }
+        val snapshot = StatsSnapshotEntity(
+            id = id,
+            name = name,
+            createdAt = optionalLong(args["createdAt"]) ?: now,
+            updatedAt = optionalLong(args["updatedAt"]) ?: now,
+            includeCategoryScope = includeCategoryScope,
+            includeVendorScope = includeVendorScope,
+            includeActiveType = includeActiveType,
+            includeThreshold = includeThreshold,
+            includeLayoutMode = includeLayoutMode,
+            includePageIndex = includePageIndex,
+            activeType = activeType,
+            threshold = threshold,
+            layoutMode = layoutMode,
+            activeYear = activeYear,
+            activeMonth = activeMonth,
+            pageIndex = pageIndex,
+        )
+        statsSnapshotDao.upsert(snapshot, categoryScopeIds, vendorScopeNames)
+        return snapshot.toMap(categoryScopeIds, vendorScopeNames)
     }
 
     suspend fun transactionsBySourceNotificationEventIds(eventIds: List<Long>): Map<Long, ExpenseTransactionEntity> =

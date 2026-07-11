@@ -149,6 +149,9 @@ class TransactionStore extends ChangeNotifier {
   List<VendorFilterSummary> get vendorFilterSummaries =>
       _vendorFilterSummariesFor(_filter.type);
 
+  List<VendorFilterSummary> vendorFilterSummariesFor(TransactionType type) =>
+      _vendorFilterSummariesFor(type);
+
   List<TransactionCategory> get categories => _categoriesView;
   List<TransactionRecord> get transactions => _transactionsView;
   List<RecurringGhostRecord> get recurringGhostTransactions =>

@@ -218,6 +218,29 @@ class NativeBridge {
     );
   }
 
+  Future<List<Map<String, Object?>>> expenseListStatsSnapshots() async {
+    final rows = await _methodChannel.invokeListMethod<dynamic>(
+      'expenseListStatsSnapshots',
+    );
+    return [
+      for (final row in rows ?? const <dynamic>[])
+        if (row is Map)
+          row.map((key, value) => MapEntry(key.toString(), value)),
+    ];
+  }
+
+  Future<Map<String, Object?>> expenseUpsertStatsSnapshot(
+    Map<String, Object?> snapshot,
+  ) async {
+    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpsertStatsSnapshot',
+      snapshot,
+    );
+    return (row ?? const <dynamic, dynamic>{}).map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+  }
+
   Future<List<TransactionRecord>> expenseListTransactions(
     Map<String, Object?> filter,
   ) async {

@@ -31,6 +31,12 @@ class ExpenseMethodChannel(
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "expenseLoadBootstrap" -> scope.launchResult(result) { repository.bootstrap() }
+            "expenseListStatsSnapshots" -> scope.launchResult(result) {
+                repository.listStatsSnapshots()
+            }
+            "expenseUpsertStatsSnapshot" -> scope.launchResult(result) {
+                repository.upsertStatsSnapshot(call.argumentsMap())
+            }
             "expenseLoadSettings" -> scope.launchResult(result) {
                 repository.loadSettings(
                     biometricAvailable = biometricAvailable(),

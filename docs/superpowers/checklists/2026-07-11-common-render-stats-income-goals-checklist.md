@@ -31,33 +31,34 @@ Result before edits: `+107 All tests passed`.
 
 | ID | Source | Intended code area | Acceptance condition | Verification method | Status |
 | --- | --- | --- | --- | --- | --- |
-| SCR-LANG-01 | `2026-07-10-stat-common-render-page1-2-final-spec.md` | `lib/features/stats/**` | Page 1 and Page 2 stats UI copy is Hungarian except `Expense Tracker` | Widget tests + source scan + visual comparison | PARTIAL |
-| SCR-STRUCT-01 | same | `lib/features/stats/stats_page.dart` | Order is header/FastInfo, type toggle, SummaryPill, SearchPill, swipe viewport | Widget test + screenshot/manual comparison | PARTIAL |
-| SCR-AREA-01 | same | `StatsPage` layout | Page 1/Page 2 content shares fixed viewport between SearchPill and bottom nav | Widget test + screenshot/manual comparison | PARTIAL |
+| SCR-LANG-01 | `2026-07-10-stat-common-render-page1-2-final-spec.md` | `lib/features/stats/**` | Page 1 and Page 2 stats UI copy is Hungarian except `Expense Tracker` | Widget tests + source scan + visual comparison | DONE |
+| SCR-STRUCT-01 | same | `lib/features/stats/stats_page.dart` | Order is header/FastInfo, type toggle, SummaryPill, SearchPill, swipe viewport | Widget test + screenshot/manual comparison | DONE |
+| SCR-AREA-01 | same | `StatsPage` layout | Page 1/Page 2 content shares fixed viewport between SearchPill and bottom nav | Widget test + screenshot/manual comparison | DONE |
 | SCR-MODE-01 | same | `StatsRenderMode`, threshold sheet, `StatsPage` | Old `Kategória scope` / `Hózárás` / `Hőtérkép` UI selector is removed; only common render remains | Widget test + code inspection | DONE |
 | SCR-SWIPE-01 | same | `StatsPage` content pager | Page 1 and Page 2 are horizontal swipe pages, not vertical stacks | Widget test | DONE |
-| SCR-FAB-01 | same | `ExptShell`, `ExptFab`, `StatsPage` | Stats-tab FAB uses threshold/joystick icon and opens stats threshold/snapshot sheet; home tab keeps plus/add transaction | Widget test + code inspection | PARTIAL |
+| SCR-FAB-01 | same | `ExptShell`, `ExptFab`, `StatsPage` | Stats-tab FAB uses threshold/joystick icon and opens stats threshold/snapshot sheet; home tab keeps plus/add transaction | Widget test + code inspection | DONE |
+| SCR-FAB-02 | Current conversation: restore prior joystick logic | `ExptFab`, `StatsPageController`, `ExptShell` | Stats FAB long-press vertical drag changes the fixed 5 000 Ft threshold upward/downward with the prior 1x/2x/6x distance acceleration; horizontal drag still steps snapshots | FAB + controller + shell widget tests | DONE |
 | SCR-SHEET-01 | same | Threshold bottom sheet | Threshold sheet has slider + numeric input and no render-mode buttons | Widget test | DONE |
-| SCR-SNAPSHOT-01 | same | Snapshot model/repository/sheet | FAB sheet contains snapshot editor row with camera add card, tap-select recall, and snapshot state fields | Model + widget tests | PARTIAL |
+| SCR-SNAPSHOT-01 | same | Snapshot model/repository/sheet | FAB sheet contains snapshot editor row with camera add card, tap-select recall, and snapshot state fields | Model + widget tests | DONE |
 | SCR-SNAPSHOT-02 | same | Snapshot add dialog | Add-new snapshot opens centered dialog with name input and include-mask checkboxes | Widget test | DONE |
-| SCR-SNAPSHOT-03 | same | Snapshot repository/storage | Snapshots persist in local repository/table with include-mask fields | Repository/model tests | NOT DONE |
+| SCR-SNAPSHOT-03 | same | Snapshot repository/storage | Snapshots persist in local repository/table with include-mask fields | Repository/model tests + native database inspection | PARTIAL |
 | SCR-SEARCH-01 | same | `StatsPage`, `SearchPill`, shell vendor sheet | Stats menu includes SearchPill and vendor selector sheet support | Widget test | DONE |
-| SCR-VENDOR-01 | same | Stats filtering/model | Vendor/source filters affect header score, FastInfo, summary, Page 1, Page 2 | Model + widget tests | PARTIAL |
-| SCR-MAG-01 | same | Header/magnet stats model | Header score/magnet uses approved score bands and Hungarian copy | Model + widget/screenshot comparison | PARTIAL |
-| SCR-FAST-01 | same | `stats_fast_info_graph.dart`, data helpers | Expense/income FastInfo graph math and labels match approved common render | Model + widget/painter tests + visual comparison | PARTIAL |
-| SCR-MONTH-01 | same | `stats_year_calendar.dart` | Page 1 year-mode month cards/day cells match approved HTML behavior | Painter/widget tests + visual comparison | PARTIAL |
-| SCR-SUM-01 | same | New/extended sum-mode widgets/data | Sum mode year cards and month cells match authoritative sum-mode HTML | Model + widget/painter tests + visual comparison | PARTIAL |
-| SCR-SUM-02 | same | Page 2 routing | Sum mode reuses the same Page 2 layout with sum-mode data scope | Widget/model tests + code inspection | PARTIAL |
+| SCR-VENDOR-01 | same | Stats filtering/model | Vendor/source filters affect header score, FastInfo, summary, Page 1, Page 2 | Model + widget tests | DONE |
+| SCR-MAG-01 | same | Header/magnet stats model | Header score/magnet uses approved score bands and Hungarian copy | Model + widget/screenshot comparison | DONE |
+| SCR-FAST-01 | same | `stats_fast_info_graph.dart`, data helpers | Expense/income FastInfo graph math and labels match approved common render | Model + widget/painter tests + visual comparison | DONE |
+| SCR-MONTH-01 | same | `stats_year_calendar.dart` | Page 1 year-mode month cards/day cells match approved HTML behavior | Painter/widget tests + visual comparison | DONE |
+| SCR-SUM-01 | same | New/extended sum-mode widgets/data | Sum mode year cards and month cells match authoritative sum-mode HTML | Model + widget/painter tests + visual comparison | DONE |
+| SCR-SUM-02 | same | Page 2 routing | Sum mode reuses the same Page 2 layout with sum-mode data scope | Widget/model tests + code inspection | DONE |
 | SCR-MODES-01 | same | Stats layout state | Page 1 supports `sum`, `year`, `month` layout modes | Widget/state tests | DONE |
 | SCR-NAV-01 | same | SummaryPill integration | SummaryPill navigates `sum/year/month` layout state | Widget/state tests | DONE |
 | SCR-NAV-02 | same | Page 1 card taps | Year/month card taps update active period and SummaryPill state | Widget/state tests | DONE |
-| SCR-SYNC-01 | same | Shared period state | Main menu and stats share layoutMode/activeYear/activeMonth | State/integration tests | NOT DONE |
-| SCR-MONTHFOCUS-01 | same | Month mode content | Month mode shows enlarged single month card with top back button | Widget/painter tests + visual comparison | PARTIAL |
-| SCR-MONTH-AXIS-01 | same | FastInfo axis helpers | Month-mode FastInfo keeps all day points and thins day labels dynamically | Model tests | NOT DONE |
-| SCR-PAGE2-01 | same | Page 2 widget/data | Page 2 KPI/category/vendor layout matches final Page 2 HTML | Widget/model tests + visual comparison | PARTIAL |
-| SCR-PAGE2-SCOPE-01 | same | Page 2 filtering | Same Page 2 component receives sum/year/month filtered datasets | Model tests | PARTIAL |
+| SCR-SYNC-01 | same | Shared period state | Main menu and stats share layoutMode/activeYear/activeMonth | State/integration tests | DONE |
+| SCR-MONTHFOCUS-01 | same | Month mode content | Month mode shows enlarged single month card with top back button | Widget/painter tests + visual comparison | DONE |
+| SCR-MONTH-AXIS-01 | same | FastInfo axis helpers | Month-mode FastInfo keeps all day points and thins day labels dynamically | Model tests | DONE |
+| SCR-PAGE2-01 | same | Page 2 widget/data | Page 2 KPI/category/vendor layout matches final Page 2 HTML | Widget/model tests + visual comparison | DONE |
+| SCR-PAGE2-SCOPE-01 | same | Page 2 filtering | Same Page 2 component receives sum/year/month filtered datasets | Model tests | DONE |
 | SCR-THRESH-01 | same | Stats filtering | Threshold filters visible records consistently across all stats | Model tests | DONE |
-| SCR-WARN-01 | same | Page 2 warning | Threshold warning appears in all three approved places with `X alatti tranzakciók rejtve` | Widget test + visual comparison | PARTIAL |
+| SCR-WARN-01 | same | Page 2 warning | Threshold warning appears in all three approved places with `X alatti tranzakciók rejtve` | Widget test + visual comparison | DONE |
 | SCR-NOBUDGET-01 | same | Stats pages | Budget/limit stats are not mixed into threshold-filtered common stats pages | Code inspection | DONE |
 
 ## Bevételi Célok Requirements
@@ -81,6 +82,20 @@ This feature package is complete only when every row above is `DONE`, or a non-D
 
 ## Latest Verification
 
+### Recovery audit before completion work
+
+Audit date: 2026-07-11.
+
+- GitHub branch and local `HEAD` both point to `9101537eac46582ffd7d3de6c6389c04dba68d47`; the successful GitHub Actions run for that commit does not include the current local working-tree changes.
+- Local-only state at audit start: 10 modified tracked files and 5 untracked files; none were staged or uploaded.
+- `SCR-SNAPSHOT-03` remains `NOT DONE`: the local draft stores one JSON string in `SharedPreferences`, while the accepted spec requires a real local snapshot repository/database/table rather than an ad hoc encoded string.
+- `SCR-MONTH-01` remains `PARTIAL`: the Flutter month-card painter omits the authoritative HTML's `zárás` caption and threshold-filtered secondary scope row.
+- `SCR-SUM-01` remains `PARTIAL`: the local year card omits the authoritative HTML's closing amount/caption, selected-year styling, scope-total row, and single-category color rule.
+- `SCR-PAGE2-01` remains `PARTIAL`: the local category panel does not render the required centered donut for multiple categories, and the top largest-event tile omits the reference detail line.
+- `SCR-LANG-01` and visual rows remain `PARTIAL` until source scan, widget evidence, and reference screenshots/geometry checks are all complete.
+- `SCR-SYNC-01` and `SCR-MONTH-AXIS-01` move to `DONE` based on new local regression tests, subject to the fresh full-suite verification below.
+- Completion work may not change any remaining `PARTIAL`/`NOT DONE` row to `DONE` without the verification method named in that row.
+
 2026-07-11 targeted implementation verification:
 
 ```bash
@@ -93,4 +108,18 @@ Result: `No issues found!`
 proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/exptv2 && /home/flutteruser/flutter/bin/flutter test'
 ```
 
-Result: `+759 All tests passed!`
+Result after the recovered implementation: `+795 All tests passed!` (8 minutes 6 seconds).
+
+Additional acceptance evidence:
+
+- `test/stats/stats_ui_reference_test.dart` verifies the accepted Page 1 month-card geometry, sum-mode year-card geometry, shared pager viewport, active primary-color page indicator, Page 2 KPI/donut layout, single-category behavior, focused-month reuse, and three checked-in visual baselines under `test/stats/goldens/`.
+- `test/stats/stats_category_scope_series_test.dart` locks the single canonical expense-score dataflow: period/category/vendor scope, raw per-day expense aggregation, daily threshold, unsmoothed 1-12 samples or 31-day rolling window plus EMA, pressure, then score. Record-level display filtering does not create a second score calculation.
+- Final review regressions lock fixed 5 000 Ft threshold snapping, active-scope maximum clamping, live snapshot-sheet threshold synchronization, and income helper bars sourced from threshold-hit daily income samples rather than monthly totals.
+- `test/shell/expt_fab_test.dart` locks horizontal snapshot stepping and the restored vertical threshold joystick bands: slow `1x`, medium `2x`, fast `6x`, positive above the activation point and negative below it. `StatsPageController` and shell widget tests verify the stats-only wiring.
+- Fresh post-review stats suite: `+89 All tests passed!`; FAB joystick suite: `+4 All tests passed!`.
+- `test/stats/stats_snapshot_native_repository_test.dart` and Android DAO/migration tests cover the structured MethodChannel payload, normalized Room tables, include masks, ordering, and additive `10 -> 11` migration. The Android tests still require GitHub Actions because local ARM64 AAPT2 cannot start in Termux.
+- All four prototype static acceptance scripts pass: common Page 1, final Page 2, sum-mode Page 1, and snapshot-mode logic.
+- Fresh post-review analyzer result: `No issues found! (ran in 64.2s)`.
+- `git diff --check` passes.
+
+`SCR-SNAPSHOT-03` remains `PARTIAL` until the Android DAO and migration tests pass on GitHub Actions. No feature package completion claim is permitted before that run succeeds.
