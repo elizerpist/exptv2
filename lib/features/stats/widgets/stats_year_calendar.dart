@@ -31,6 +31,7 @@ class StatsYearCalendar extends StatelessWidget {
         final cardWidth = (width - columnGap) / 2;
         return SingleChildScrollView(
           key: const ValueKey('stats-year-calendar-scroll'),
+          padding: const EdgeInsets.only(bottom: 24),
           child: SizedBox(
             key: const ValueKey('stats-year-calendar'),
             width: width,
@@ -94,6 +95,7 @@ class StatsMonthCard extends StatelessWidget {
   });
 
   static const cardHeight = 200.0;
+  static const cardAspectRatio = 175 / cardHeight;
 
   final StatsMonthData month;
   final String scopeLabel;

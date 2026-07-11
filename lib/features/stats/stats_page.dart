@@ -654,7 +654,6 @@ class _StatsPageState extends State<StatsPage>
       month: focusedMonth,
       cardColor: monthCardColor,
       heatColor: _selectedHeatColor(),
-      onBack: () => unawaited(_setSummaryYear(_year)),
     );
   }
 
@@ -1901,73 +1900,46 @@ class _StatsFocusedMonthView extends StatelessWidget {
     required this.month,
     required this.cardColor,
     required this.heatColor,
-    required this.onBack,
   });
 
   final StatsYearData data;
   final StatsMonthData month;
   final Color cardColor;
   final Color heatColor;
-  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return LayoutBuilder(
       key: const ValueKey('calendar-focus-month-view'),
-      padding: const EdgeInsets.only(bottom: 144),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 52,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned(
-                  left: 0,
-                  child: IconButton(
-                    key: const ValueKey('calendar-focus-back'),
-                    onPressed: onBack,
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.gray700,
-                    ),
-                    tooltip: 'Vissza az éves nézethez',
-                  ),
-                ),
-                Text(
-                  '${month.name} ${month.year}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.gray800,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AspectRatio(
-            key: const ValueKey('calendar-focus-month-canvas'),
-            aspectRatio: 0.875,
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: SizedBox(
-                width: 175,
-                height: StatsMonthCard.cardHeight,
-                child: StatsMonthCard(
-                  key: const ValueKey('stats-focused-month-card'),
-                  month: month,
-                  scopeLabel: _scopeLabel,
-                  cardColor: cardColor,
-                  heatColor: heatColor,
-                ),
+      builder: (context, constraints) {
+        const bottomInset = 24.0;
+        final contentHeight = (constraints.maxHeight - bottomInset)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        final widthFromHeight = contentHeight * StatsMonthCard.cardAspectRatio;
+        final cardWidth = constraints.maxWidth < widthFromHeight
+            ? constraints.maxWidth
+            : widthFromHeight;
+        final cardHeight = cardWidth / StatsMonthCard.cardAspectRatio;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: bottomInset),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              key: const ValueKey('calendar-focus-month-canvas'),
+              width: cardWidth,
+              height: cardHeight,
+              child: StatsMonthCard(
+                key: const ValueKey('stats-focused-month-card'),
+                month: month,
+                scopeLabel: _scopeLabel,
+                cardColor: cardColor,
+                heatColor: heatColor,
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

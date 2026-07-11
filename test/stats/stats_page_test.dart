@@ -195,6 +195,15 @@ void main() {
         moreOrLessEquals(60),
       );
       expect(style.categoryYAxisValueLabelCount, greaterThanOrEqualTo(2));
+      expect(style.surfaceShadowOffset, const Offset(0, 2));
+      expect(style.surfaceShadowBlurRadius, 4);
+      expect(style.surfaceShadowColor.r, 0);
+      expect(style.surfaceShadowColor.g, 0);
+      expect(style.surfaceShadowColor.b, 0);
+      expect(
+        style.surfaceShadowColor.a,
+        moreOrLessEquals(0.08, epsilon: 0.001),
+      );
     },
   );
 
@@ -416,6 +425,10 @@ void main() {
   testWidgets('stats period label exactly mirrors the main menu period label', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final store = TransactionStore(
       StatsRepository(
         categories: [
@@ -1771,12 +1784,11 @@ void main() {
   });
 
   testWidgets(
-    'stats month card tap opens focused month view and back returns',
+    'focused month fits target viewports without scaling scrolling or duplicate header',
     (tester) async {
-      tester.view.physicalSize = const Size(390, 780);
       tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
       final store = TransactionStore(
         StatsRepository(
           categories: [
@@ -1789,49 +1801,154 @@ void main() {
         clock: () => DateTime(2026, 7, 7),
       );
       await store.start();
-      unawaited(store.setSummaryYear(2026));
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 390,
-              height: 780,
-              child: StatsPage(store: store),
+      for (final viewport in const [
+        Size(360, 800),
+        Size(390, 780),
+        Size(412, 915),
+      ]) {
+        tester.view.physicalSize = viewport;
+        unawaited(store.setSummaryYear(2026));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: viewport.width,
+                height: viewport.height,
+                child: StatsPage(store: store),
+              ),
             ),
           ),
-        ),
-      );
-      await pumpStatsPage(tester);
+        );
+        await pumpStatsPage(tester);
 
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('stats-month-hit-1')),
-      );
-      await pumpStatsPage(tester);
-      await tester.tap(find.byKey(const ValueKey('stats-month-hit-1')));
-      await pumpStatsPage(tester);
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('stats-month-hit-1')),
+        );
+        await pumpStatsPage(tester);
+        await tester.tap(find.byKey(const ValueKey('stats-month-hit-1')));
+        await pumpStatsPage(tester);
 
-      expect(
-        find.byKey(const ValueKey('calendar-focus-month-view')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('calendar-focus-month-canvas')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('calendar-focus-back')), findsOneWidget);
-      expect(find.byKey(const ValueKey('stats-year-calendar')), findsNothing);
+        final focus = find.byKey(const ValueKey('calendar-focus-month-view'));
+        final canvas = find.byKey(
+          const ValueKey('calendar-focus-month-canvas'),
+        );
+        final card = find.byKey(const ValueKey('stats-focused-month-card'));
+        final boundary = find.byKey(const ValueKey('stats-page-1-boundary'));
+        expect(focus, findsOneWidget, reason: '$viewport');
+        expect(canvas, findsOneWidget, reason: '$viewport');
+        expect(card, findsOneWidget, reason: '$viewport');
+        expect(
+          find.descendant(
+            of: focus,
+            matching: find.byType(SingleChildScrollView),
+          ),
+          findsNothing,
+          reason: '$viewport',
+        );
+        expect(
+          find.descendant(of: focus, matching: find.byType(FittedBox)),
+          findsNothing,
+          reason: '$viewport',
+        );
+        expect(
+          find.byKey(const ValueKey('calendar-focus-back')),
+          findsNothing,
+          reason: '$viewport',
+        );
+        expect(find.text('Január 2026'), findsOneWidget, reason: '$viewport');
+        expect(
+          tester.getRect(boundary).bottom - tester.getRect(canvas).bottom,
+          moreOrLessEquals(24, epsilon: 0.01),
+          reason: '$viewport',
+        );
+        expect(
+          tester.getRect(canvas).width / tester.getRect(canvas).height,
+          moreOrLessEquals(0.875, epsilon: 0.001),
+          reason: '$viewport',
+        );
+        expect(
+          tester.getRect(canvas).left,
+          greaterThanOrEqualTo(tester.getRect(focus).left),
+          reason: '$viewport',
+        );
+        expect(
+          tester.getRect(canvas).right,
+          lessThanOrEqualTo(tester.getRect(focus).right),
+          reason: '$viewport',
+        );
 
-      await tester.tap(find.byKey(const ValueKey('calendar-focus-back')));
-      await pumpStatsPage(tester);
-
-      expect(
-        find.byKey(const ValueKey('calendar-focus-month-view')),
-        findsNothing,
-      );
-      expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+        final monthLabel = tester.widget<Text>(
+          find.descendant(of: card, matching: find.text('Január')),
+        );
+        final dayLabel = tester.widget<Text>(
+          find.descendant(of: card, matching: find.text('1')),
+        );
+        expect(monthLabel.style?.fontSize, 12, reason: '$viewport');
+        expect(monthLabel.style?.fontWeight, FontWeight.w700);
+        expect(dayLabel.style?.fontSize, 10, reason: '$viewport');
+        final cardInk = tester.widget<Ink>(
+          find.descendant(of: card, matching: find.byType(Ink)),
+        );
+        final cardDecoration = cardInk.decoration as BoxDecoration;
+        expect((cardDecoration.border! as Border).top.width, 1);
+        expect(tester.takeException(), isNull, reason: '$viewport');
+        await expectLater(
+          find.byKey(const ValueKey('stats-page')),
+          matchesGoldenFile(
+            'goldens/stats_focused_month_${viewport.width.round()}x${viewport.height.round()}.png',
+          ),
+        );
+      }
     },
   );
+
+  testWidgets('annual Page 1 exposes a 24px bottom inset after scrolling', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-12', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(store: store),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    final scroll = find.byKey(const ValueKey('stats-year-calendar-scroll'));
+    await tester.fling(scroll, const Offset(0, -2400), 3000);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+              .getRect(find.byKey(const ValueKey('stats-page-1-boundary')))
+              .bottom -
+          tester
+              .getRect(find.byKey(const ValueKey('stats-month-card-12')))
+              .bottom,
+      moreOrLessEquals(24, epsilon: 0.01),
+    );
+  });
 
   testWidgets('stats header pull keeps FastInfo graph stable between frames', (
     tester,

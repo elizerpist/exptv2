@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
+import 'package:exptv2/features/stats/widgets/stats_fast_info_graph.dart';
 import 'package:exptv2/features/stats/widgets/stats_year_calendar.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -331,6 +332,14 @@ void main() {
             .height,
         70,
       );
+      expect(
+        tester
+            .widget<GridView>(
+              find.byKey(const ValueKey('stats-sum-year-cards')),
+            )
+            .padding,
+        const EdgeInsets.only(bottom: 24),
+      );
       expect(find.text('zárás'), findsNWidgets(2));
       for (final card in [card2025, card2026]) {
         final container = tester.widget<Container>(
@@ -365,6 +374,53 @@ void main() {
     );
     expect(find.byKey(const ValueKey('month-cashflow-chart')), findsNothing);
     expect(find.text('zárás'), findsOneWidget);
+  });
+
+  testWidgets('income and expense FastInfo surfaces match shared shadow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 656);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    StatsYearData data(TransactionType type) {
+      return StatsYearData.build(
+        year: 2026,
+        activeType: type,
+        mode: StatsRenderMode.common,
+        thresholdValue: 5000,
+        transactions: const [],
+        categories: const [],
+        selectedCategoryIds: const {},
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: const ValueKey('stats-fastinfo-shadow-reference'),
+            child: SizedBox(
+              width: 412,
+              height: 656,
+              child: Column(
+                children: [
+                  StatsFastInfoGraph(data: data(TransactionType.expense)),
+                  StatsFastInfoGraph(data: data(TransactionType.income)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await expectLater(
+      find.byKey(const ValueKey('stats-fastinfo-shadow-reference')),
+      matchesGoldenFile('goldens/stats_fastinfo_surfaces.png'),
+    );
   });
 
   testWidgets('year Page 1 matches the reviewed visual baseline', (

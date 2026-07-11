@@ -181,6 +181,9 @@ class StatsFastInfoVisualStyle {
     required this.secondaryLineDashed,
     required this.controlVisualSensitivity,
     required this.categoryYAxisValueLabelCount,
+    required this.surfaceShadowColor,
+    required this.surfaceShadowOffset,
+    required this.surfaceShadowBlurRadius,
   });
 
   final double legendFontSize;
@@ -190,6 +193,9 @@ class StatsFastInfoVisualStyle {
   final bool secondaryLineDashed;
   final double controlVisualSensitivity;
   final int categoryYAxisValueLabelCount;
+  final Color surfaceShadowColor;
+  final Offset surfaceShadowOffset;
+  final double surfaceShadowBlurRadius;
 }
 
 class StatsFastInfoGraph extends StatelessWidget {
@@ -206,6 +212,9 @@ class StatsFastInfoGraph extends StatelessWidget {
     secondaryLineDashed: false,
     controlVisualSensitivity: 1.0,
     categoryYAxisValueLabelCount: 3,
+    surfaceShadowColor: Color.fromRGBO(0, 0, 0, 0.08),
+    surfaceShadowOffset: Offset(0, 2),
+    surfaceShadowBlurRadius: 4,
   );
 
   static StatsFastInfoLayout layoutForTesting(
@@ -271,13 +280,12 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
 
   void _drawCategoryPanel(Canvas canvas, Rect panel) {
     final rrect = RRect.fromRectAndRadius(panel, const Radius.circular(14));
-    final shadowPath = Path()..addRRect(rrect);
-    canvas.drawShadow(
-      shadowPath,
-      Colors.black.withValues(alpha: 0.08),
-      4,
-      false,
+    final shadow = BoxShadow(
+      color: StatsFastInfoGraph.visualStyle.surfaceShadowColor,
+      offset: StatsFastInfoGraph.visualStyle.surfaceShadowOffset,
+      blurRadius: StatsFastInfoGraph.visualStyle.surfaceShadowBlurRadius,
     );
+    canvas.drawRRect(rrect.shift(shadow.offset), shadow.toPaint());
     canvas.drawRRect(rrect, Paint()..color = Colors.white);
   }
 
