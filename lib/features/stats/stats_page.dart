@@ -120,6 +120,8 @@ class _StatsPageState extends State<StatsPage>
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
   final _snapshotRecallGeneration = StatsSnapshotRecallGeneration();
+  double? _pendingThresholdValue;
+  var _thresholdPublicationScheduled = false;
 
   @override
   void initState() {
@@ -378,12 +380,23 @@ class _StatsPageState extends State<StatsPage>
   void _stepThreshold(int multiplier) {
     if (multiplier == 0) return;
     final range = _statsThresholdRange(
-      observedMax: _resolveRenderFrame().observedMaximum,
+      observedMax: _lastRenderFrame?.observedMaximum ?? 0,
       fallbackMax: 50000,
     );
-    final next = range.snap(_thresholdValue + multiplier * range.step);
-    if (next == _thresholdValue) return;
-    setState(() => _thresholdValue = next);
+    final current = _pendingThresholdValue ?? _thresholdValue;
+    final next = range.snap(current + multiplier * range.step);
+    if (next == current) return;
+    _pendingThresholdValue = next;
+    if (_thresholdPublicationScheduled) return;
+    _thresholdPublicationScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _thresholdPublicationScheduled = false;
+      final value = _pendingThresholdValue;
+      _pendingThresholdValue = null;
+      if (!mounted || value == null || value == _thresholdValue) return;
+      setState(() => _thresholdValue = value);
+    });
+    SchedulerBinding.instance.scheduleFrame();
   }
 
   @override
@@ -925,13 +938,14 @@ class _StatsPageState extends State<StatsPage>
 
   Future<void> _openThresholdControlSheet() async {
     final observedMax = _lastRenderFrame?.observedMaximum ?? 0;
+    final thresholdValue = _pendingThresholdValue ?? _thresholdValue;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return _StatsThresholdControlSheet(
-          thresholdValue: _thresholdValue,
+          thresholdValue: thresholdValue,
           observedMax: observedMax,
           fallbackMax: 50000,
           accentColor: _expenseTheme.accent,

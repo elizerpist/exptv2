@@ -1635,6 +1635,65 @@ void main() {
     );
   });
 
+  testWidgets(
+    'stats joystick coalesces exact threshold steps into one frame publication',
+    (tester) async {
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-01-01', amount: -150000, categoryId: 1),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      final controller = StatsPageController();
+      final cache = TrackingStatsRenderFrameCache();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(
+                store: store,
+                controller: controller,
+                snapshotRepository: snapshotRepository,
+                renderFrameCache: cache,
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+      final beforeSteps = cache.builderCalls;
+
+      controller.stepThreshold(1);
+      controller.stepThreshold(2);
+      controller.stepThreshold(6);
+
+      expect(cache.builderCalls, beforeSteps);
+      await tester.pump();
+      expect(cache.builderCalls, beforeSteps + 1);
+
+      controller.openThresholdSheet();
+      await pumpStatsPage(tester);
+      expect(
+        tester
+            .widget<Slider>(
+              find.byKey(const ValueKey('stats-threshold-slider')),
+            )
+            .value,
+        50000,
+      );
+    },
+  );
+
   testWidgets('stats threshold sheet includes snapshot add dialog', (
     tester,
   ) async {
