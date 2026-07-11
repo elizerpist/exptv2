@@ -317,6 +317,45 @@ void main() {
     expect(series.dynamicEmaPeriod, 16);
   });
 
+  test(
+    'expense score has parity for equivalent sum year and month domains',
+    () {
+      final transactions = [
+        record(id: 1, date: '2026-01-01', amount: -3000, categoryId: 1),
+        record(id: 2, date: '2026-01-01', amount: -3000, categoryId: 2),
+        record(id: 3, date: '2026-01-03', amount: -9000, categoryId: 1),
+      ];
+      final categories = [
+        category(id: 1, name: 'Food', type: TransactionType.expense),
+        category(id: 2, name: 'Travel', type: TransactionType.expense),
+      ];
+      final series = <StatsCategoryScopeSeries>[];
+      for (final scope in StatsSummaryScope.values) {
+        final data = StatsYearData.build(
+          year: 2026,
+          activeType: TransactionType.expense,
+          mode: StatsRenderMode.common,
+          thresholdValue: 5000,
+          transactions: transactions,
+          categories: categories,
+          selectedCategoryIds: const {1, 2},
+          summaryScope: scope,
+          month: 1,
+        );
+        series.add(StatsCategoryScopeSeries.fromYearData(data));
+      }
+
+      for (final value in series) {
+        expect(value.helperBars.map((bar) => bar.rawValue), [6000, 9000]);
+        expect(value.scoreLine.map((point) => point.value), [
+          closeTo(100 / 3, 0.0001),
+          0,
+        ]);
+        expect(value.kontrollScore, 0);
+      }
+    },
+  );
+
   test('income exposes coverage, shortfall and break-even centerline bars', () {
     final data = StatsYearData.build(
       year: 2026,

@@ -354,6 +354,61 @@ void main() {
     expect(data.summaryTotal, 6000);
     expect(data.months.first.days.first.activeAmount, 6000);
   });
+
+  test('category scope is OR and combines with vendor scope using AND', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.common,
+      thresholdValue: 5000,
+      transactions: [
+        record(
+          id: 1,
+          date: '2026-01-01',
+          amount: -6000,
+          categoryId: 1,
+          merchant: 'B',
+        ),
+        record(
+          id: 2,
+          date: '2026-01-02',
+          amount: -9000,
+          categoryId: 2,
+          merchant: 'B',
+        ),
+        record(
+          id: 3,
+          date: '2026-01-03',
+          amount: -12000,
+          categoryId: 3,
+          merchant: 'B',
+        ),
+        record(
+          id: 4,
+          date: '2026-01-04',
+          amount: -15000,
+          categoryId: 1,
+          merchant: 'A',
+        ),
+      ],
+      categories: [
+        category(id: 1, name: 'Food', type: TransactionType.expense),
+        category(id: 2, name: 'Travel', type: TransactionType.expense),
+        category(id: 3, name: 'Other', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {1, 2},
+      vendorFilters: const {'B'},
+    );
+
+    expect(data.summaryTotal, 15000);
+    expect(data.categoryTotals, {1: 6000, 2: 9000});
+    expect(data.metricRecordCount, 2);
+    expect(data.vendorSummaries.single.name, 'B');
+    expect(data.months.first.days[0].meetsThreshold, isTrue);
+    expect(data.months.first.days[1].meetsThreshold, isTrue);
+    expect(data.months.first.days[2].meetsThreshold, isFalse);
+    expect(data.months.first.days[3].meetsThreshold, isFalse);
+  });
 }
 
 TransactionRecord record({

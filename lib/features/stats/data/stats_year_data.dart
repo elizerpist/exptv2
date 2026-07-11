@@ -46,6 +46,12 @@ class StatsYearData {
     required this.scorePeriodAmounts,
     required this.matchingExpensePeriodAmounts,
     required this.periodClosingAmounts,
+    required this.visibleTransactions,
+    required this.observedMaximum,
+    required this.largestVisibleVendor,
+    required this.canonicalIncomeTotal,
+    required this.canonicalExpenseTotal,
+    required this.sumYearSummaries,
   });
 
   final int year;
@@ -78,6 +84,12 @@ class StatsYearData {
   final List<double> scorePeriodAmounts;
   final List<double> matchingExpensePeriodAmounts;
   final List<double> periodClosingAmounts;
+  final List<TransactionRecord> visibleTransactions;
+  final double observedMaximum;
+  final String largestVisibleVendor;
+  final double canonicalIncomeTotal;
+  final double canonicalExpenseTotal;
+  final List<StatsSumYearSummary> sumYearSummaries;
 
   static const monthNames = [
     'Január',
@@ -124,74 +136,98 @@ class StatsYearData {
     };
     final normalizedToday = _dateOnly(today ?? DateTime.now());
     final targetMonth = (month ?? normalizedToday.month).clamp(1, 12).toInt();
-    final byDate = <DateTime, List<TransactionRecord>>{};
-    final incomeByDisplayDate = <DateTime, double>{};
-    final expenseByDisplayDate = <DateTime, double>{};
-    final rawScoreDayTotals = <DateTime, double>{};
-    final incomeDayTotals = <DateTime, double>{};
-    final expenseDayTotals = <DateTime, double>{};
+    final byDate = <int, List<_StatsDatedRecord>>{};
+    final parsedDateCache = <String, _StatsDateParts?>{};
+    final incomeByDisplayMonth = <int, double>{};
+    final expenseByDisplayMonth = <int, double>{};
+    final rawScoreDayTotals = <int, double>{};
+    final incomeDayTotals = <int, double>{};
+    final expenseDayTotals = <int, double>{};
     final totalCategoryTotals = <int, double>{};
     final vendorTotals = <String, _StatsVendorAccumulator>{};
-    final metricActiveDates = <DateTime>{};
-    final metricDayTotals = <DateTime, double>{};
-    final metricMonthTotals = <String, double>{};
+    final metricActiveDates = <int>{};
+    final metricDayTotals = <int, double>{};
+    final metricMonthTotals = <int, double>{};
     final metricYearTotals = <int, double>{};
+    final visibleTransactions = <TransactionRecord>[];
+    final sumYearBuilders = <int, _StatsSumYearSummaryBuilder>{};
     var metricRecordCount = 0;
     var largestRecordAmount = 0.0;
+    var largestVisibleVendor = 'Nincs találat';
+    var canonicalIncomeTotal = 0.0;
+    var canonicalExpenseTotal = 0.0;
     int? firstActiveMonth;
     int? lastActiveMonth;
     for (final record in transactions) {
-      final parsed = _parseDate(record.normalizedDate);
-      if (parsed == null) continue;
-      final displayDate = _displayDateForScope(
-        parsed: parsed,
-        year: year,
-        month: targetMonth,
-        summaryScope: summaryScope,
-      );
-      if (displayDate == null) continue;
+      final originalDate = parsedDateCache.putIfAbsent(record.date, () {
+        return _parseDate(record.date);
+      });
+      if (originalDate == null) continue;
+      final inPeriod = switch (summaryScope) {
+        StatsSummaryScope.yearly => originalDate.year == year,
+        StatsSummaryScope.monthly =>
+          originalDate.year == year && originalDate.month == targetMonth,
+        StatsSummaryScope.allTime => true,
+      };
+      if (!inPeriod) continue;
+      final displayDay = summaryScope == StatsSummaryScope.allTime
+          ? originalDate.day.clamp(1, _daysInMonth(year, originalDate.month))
+          : originalDate.day;
+      final displayDateKey = originalDate.month * 100 + displayDay;
       if (!_matchesVendorFilter(record, vendorFilters)) continue;
       final recordType = _recordType(record);
       final amount = record.amount.abs();
-      final originalDate = _dateOnly(parsed);
+      final sumYearBuilder = sumYearBuilders.putIfAbsent(
+        originalDate.year,
+        () => _StatsSumYearSummaryBuilder(originalDate.year),
+      );
+      sumYearBuilder.closingAmount += record.amount;
+      if (recordType == TransactionType.income) {
+        canonicalIncomeTotal += amount;
+      } else {
+        canonicalExpenseTotal += amount;
+      }
       final canonicalDisplayTotals = recordType == TransactionType.income
-          ? incomeByDisplayDate
-          : expenseByDisplayDate;
+          ? incomeByDisplayMonth
+          : expenseByDisplayMonth;
       final canonicalOriginalTotals = recordType == TransactionType.income
           ? incomeDayTotals
           : expenseDayTotals;
       canonicalDisplayTotals.update(
-        _dateOnly(displayDate),
+        originalDate.month,
         (value) => value + amount,
         ifAbsent: () => amount,
       );
       canonicalOriginalTotals.update(
-        originalDate,
+        originalDate.dateKey,
         (value) => value + amount,
         ifAbsent: () => amount,
       );
       final matchesType = recordType == activeType;
       if (!matchesType) continue;
-      if (scopeSelection.includesCategory(record.transactionCategoryID)) {
+      final isInCategoryScope = scopeSelection.includesCategory(
+        record.transactionCategoryID,
+      );
+      if (isInCategoryScope) {
         rawScoreDayTotals.update(
-          originalDate,
+          originalDate.dateKey,
           (value) => value + amount,
           ifAbsent: () => amount,
         );
+        firstActiveMonth = firstActiveMonth == null
+            ? originalDate.month
+            : (originalDate.month < firstActiveMonth
+                  ? originalDate.month
+                  : firstActiveMonth);
+        lastActiveMonth = lastActiveMonth == null
+            ? originalDate.month
+            : (originalDate.month > lastActiveMonth
+                  ? originalDate.month
+                  : lastActiveMonth);
       }
-      firstActiveMonth = firstActiveMonth == null
-          ? displayDate.month
-          : (displayDate.month < firstActiveMonth
-                ? displayDate.month
-                : firstActiveMonth);
-      lastActiveMonth = lastActiveMonth == null
-          ? displayDate.month
-          : (displayDate.month > lastActiveMonth
-                ? displayDate.month
-                : lastActiveMonth);
       byDate
-          .putIfAbsent(_dateOnly(displayDate), () => <TransactionRecord>[])
-          .add(record);
+          .putIfAbsent(displayDateKey, () => <_StatsDatedRecord>[])
+          .add(_StatsDatedRecord(record, originalDate));
     }
 
     var summaryTotal = 0.0;
@@ -216,48 +252,58 @@ class StatsYearData {
 
       for (var day = 1; day <= daysInMonth; day += 1) {
         final date = DateTime(year, month, day);
-        final records = byDate[_dateOnly(date)] ?? const <TransactionRecord>[];
-        transactionCount += records.length;
+        final records =
+            byDate[month * 100 + day] ?? const <_StatsDatedRecord>[];
         var activeAmount = 0.0;
         var scopedAmount = 0.0;
         var rawScopedAmount = 0.0;
         final categoryAmounts = <int, double>{};
 
-        for (final record in records) {
+        for (final datedRecord in records) {
+          final record = datedRecord.record;
           final amount = record.amount.abs();
           final categoryId = record.transactionCategoryID;
           final inScope = scopeSelection.includesCategory(categoryId);
           if (inScope) rawScopedAmount += amount;
           if (thresholdValue > 0 && amount < thresholdValue) continue;
-          activeAmount += amount;
           if (!inScope) continue;
+          activeAmount += amount;
           scopedAmount += amount;
+          transactionCount += 1;
           metricRecordCount += 1;
-          if (amount > largestRecordAmount) largestRecordAmount = amount;
-          final parsedOriginal = _parseDate(record.normalizedDate);
-          if (parsedOriginal != null) {
-            final originalDate = _dateOnly(parsedOriginal);
-            metricActiveDates.add(originalDate);
-            metricDayTotals.update(
-              originalDate,
-              (value) => value + amount,
-              ifAbsent: () => amount,
-            );
-            final monthKey = _monthKey(
-              parsedOriginal.year,
-              parsedOriginal.month,
-            );
-            metricMonthTotals.update(
-              monthKey,
-              (value) => value + amount,
-              ifAbsent: () => amount,
-            );
-            metricYearTotals.update(
-              parsedOriginal.year,
-              (value) => value + amount,
-              ifAbsent: () => amount,
-            );
+          visibleTransactions.add(record);
+          if (amount > largestRecordAmount) {
+            largestRecordAmount = amount;
+            largestVisibleVendor = record.displayMerchant.trim().isEmpty
+                ? record.merchant.trim()
+                : record.displayMerchant.trim();
+            if (largestVisibleVendor.isEmpty) {
+              largestVisibleVendor = 'Nincs találat';
+            }
           }
+          final originalDate = datedRecord.originalDate;
+          metricActiveDates.add(originalDate.dateKey);
+          metricDayTotals.update(
+            originalDate.dateKey,
+            (value) => value + amount,
+            ifAbsent: () => amount,
+          );
+          final monthKey = originalDate.monthKey;
+          metricMonthTotals.update(
+            monthKey,
+            (value) => value + amount,
+            ifAbsent: () => amount,
+          );
+          metricYearTotals.update(
+            originalDate.year,
+            (value) => value + amount,
+            ifAbsent: () => amount,
+          );
+          sumYearBuilders[originalDate.year]?.monthTotals.update(
+            originalDate.month,
+            (value) => value + amount,
+            ifAbsent: () => amount,
+          );
           if (categoryId != null) {
             categoryAmounts.update(
               categoryId,
@@ -306,14 +352,14 @@ class StatsYearData {
             hasActiveTypeActivity: activeAmount > 0,
             dominantCategoryId: dominantCategoryId,
             dominantCategoryColor: heatColor,
-            isToday: _dateOnly(date) == normalizedToday,
+            isToday: date == normalizedToday,
           ),
         );
       }
 
       summaryTotal += scopeTotal;
-      final canonicalIncome = _monthTotal(incomeByDisplayDate, year, month);
-      final canonicalExpense = _monthTotal(expenseByDisplayDate, year, month);
+      final canonicalIncome = incomeByDisplayMonth[month] ?? 0;
+      final canonicalExpense = expenseByDisplayMonth[month] ?? 0;
       unscaledMonths.add(
         StatsMonthData(
           year: year,
@@ -340,6 +386,10 @@ class StatsYearData {
           0,
           (max, day) => day.scopeAmount > max ? day.scopeAmount : max,
         );
+    final observedMaximum = rawScoreDayTotals.values.fold<double>(
+      0,
+      (max, value) => value > max ? value : max,
+    );
     final months = [
       for (final month in unscaledMonths)
         month.copyWith(
@@ -408,6 +458,9 @@ class StatsYearData {
       labels: periodMetrics.periodLabels,
       dayTotals: incomeDayTotals,
     );
+    final sumYearSummaries = [
+      for (final builder in sumYearBuilders.values) builder.build(),
+    ]..sort((left, right) => right.year.compareTo(left.year));
     return StatsYearData(
       year: year,
       activeType: activeType,
@@ -456,6 +509,12 @@ class StatsYearData {
           matchingIncomePeriodAmounts[index] -
               matchingExpensePeriodAmounts[index],
       ]),
+      visibleTransactions: List.unmodifiable(visibleTransactions),
+      observedMaximum: observedMaximum,
+      largestVisibleVendor: largestVisibleVendor,
+      canonicalIncomeTotal: canonicalIncomeTotal,
+      canonicalExpenseTotal: canonicalExpenseTotal,
+      sumYearSummaries: List.unmodifiable(sumYearSummaries),
     );
   }
 
@@ -529,25 +588,6 @@ class StatsYearData {
         vendorFilters.contains(originalName);
   }
 
-  static DateTime? _displayDateForScope({
-    required DateTime parsed,
-    required int year,
-    required int month,
-    required StatsSummaryScope summaryScope,
-  }) {
-    return switch (summaryScope) {
-      StatsSummaryScope.yearly =>
-        parsed.year == year ? _dateOnly(parsed) : null,
-      StatsSummaryScope.monthly =>
-        parsed.year == year && parsed.month == month ? _dateOnly(parsed) : null,
-      StatsSummaryScope.allTime => DateTime(
-        year,
-        parsed.month,
-        parsed.day.clamp(1, DateTime(year, parsed.month + 1, 0).day).toInt(),
-      ),
-    };
-  }
-
   static int? _dominantCategoryId(Map<int, double> categoryAmounts) {
     int? id;
     var amount = -1.0;
@@ -568,26 +608,56 @@ class StatsYearData {
     return categoriesById[categoryId]?.slotColor ?? const Color(0xFF06B6D4);
   }
 
-  static DateTime? _parseDate(String value) {
+  static _StatsDateParts? _parseDate(String value) {
+    if (value.length == 10 &&
+        (value[4] == '-' || value[4] == '.') &&
+        value[7] == value[4]) {
+      final year = int.tryParse(value.substring(0, 4));
+      final month = int.tryParse(value.substring(5, 7));
+      final day = int.tryParse(value.substring(8, 10));
+      if (year == null || month == null || day == null) return null;
+      if (month < 1 ||
+          month > 12 ||
+          day < 1 ||
+          day > _daysInMonth(year, month)) {
+        return null;
+      }
+      return _StatsDateParts(year, month, day);
+    }
     final parsed = DateTime.tryParse(value);
-    if (parsed != null) return parsed;
-    return DateTime.tryParse(value.replaceAll('.', '-'));
+    if (parsed != null) {
+      return _StatsDateParts(parsed.year, parsed.month, parsed.day);
+    }
+    final legacy = DateTime.tryParse(value.replaceAll('.', '-'));
+    return legacy == null
+        ? null
+        : _StatsDateParts(legacy.year, legacy.month, legacy.day);
   }
 
   static DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
 
-  static String _monthKey(int year, int month) =>
-      '$year-${month.toString().padLeft(2, '0')}';
+  static int _daysInMonth(int year, int month) {
+    const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month == 2 && _isLeapYear(year)) return 29;
+    return days[month - 1];
+  }
 
-  static double _monthTotal(
-    Map<DateTime, double> dayTotals,
-    int year,
-    int month,
-  ) {
-    return dayTotals.entries
-        .where((entry) => entry.key.year == year && entry.key.month == month)
-        .fold<double>(0, (sum, entry) => sum + entry.value);
+  static bool _isLeapYear(int year) =>
+      year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+
+  static int _dateOrdinalFromKey(int key) {
+    final year = key ~/ 10000;
+    final month = (key ~/ 100) % 100;
+    final day = key % 100;
+    final adjustedYear = year - (month <= 2 ? 1 : 0);
+    final era = adjustedYear ~/ 400;
+    final yearOfEra = adjustedYear - era * 400;
+    final adjustedMonth = month + (month > 2 ? -3 : 9);
+    final dayOfYear = (153 * adjustedMonth + 2) ~/ 5 + day - 1;
+    final dayOfEra =
+        yearOfEra * 365 + yearOfEra ~/ 4 - yearOfEra ~/ 100 + dayOfYear;
+    return era * 146097 + dayOfEra;
   }
 
   static List<double> _scorePeriodAmounts({
@@ -595,22 +665,28 @@ class StatsYearData {
     required int year,
     required int month,
     required List<String> labels,
-    required Map<DateTime, double> rawDayTotals,
+    required Map<int, double> rawDayTotals,
     required double threshold,
   }) {
-    final qualifying = <DateTime, double>{
+    final qualifying = <int, double>{
       for (final entry in rawDayTotals.entries)
         if (entry.value > 0 && entry.value >= threshold) entry.key: entry.value,
     };
     if (summaryScope == StatsSummaryScope.allTime) {
       if (qualifying.isEmpty) return const <double>[];
       final dates = qualifying.keys.toList()..sort();
-      final first = dates.first;
-      final dayCount = dates.last.difference(first).inDays + 1;
-      return [
-        for (var offset = 0; offset < dayCount; offset += 1)
-          qualifying[_dateOnly(first.add(Duration(days: offset)))] ?? 0,
-      ];
+      final amounts = <double>[];
+      int? previousOrdinal;
+      for (final date in dates) {
+        final ordinal = _dateOrdinalFromKey(date);
+        if (previousOrdinal != null) {
+          final gap = ordinal - previousOrdinal - 1;
+          if (gap > 0) amounts.addAll(List<double>.filled(gap, 0));
+        }
+        amounts.add(qualifying[date]!);
+        previousOrdinal = ordinal;
+      }
+      return amounts;
     }
     return _canonicalPeriodAmounts(
       summaryScope: summaryScope,
@@ -626,61 +702,66 @@ class StatsYearData {
     required int year,
     required int month,
     required List<String> labels,
-    required Map<DateTime, double> dayTotals,
+    required Map<int, double> dayTotals,
   }) {
-    return switch (summaryScope) {
-      StatsSummaryScope.monthly => [
+    if (summaryScope == StatsSummaryScope.monthly) {
+      return [
         for (var day = 1; day <= labels.length; day += 1)
-          dayTotals[DateTime(year, month, day)] ?? 0,
-      ],
-      StatsSummaryScope.yearly => [
-        for (var valueMonth = 1; valueMonth <= labels.length; valueMonth += 1)
-          dayTotals.entries
-              .where(
-                (entry) =>
-                    entry.key.year == year && entry.key.month == valueMonth,
-              )
-              .fold<double>(0, (sum, entry) => sum + entry.value),
-      ],
-      StatsSummaryScope.allTime => [
-        for (final label in labels)
-          dayTotals.entries
-              .where((entry) => entry.key.year == int.tryParse(label))
-              .fold<double>(0, (sum, entry) => sum + entry.value),
-      ],
-    };
+          dayTotals[year * 10000 + month * 100 + day] ?? 0,
+      ];
+    }
+    if (summaryScope == StatsSummaryScope.yearly) {
+      final amounts = List<double>.filled(labels.length, 0);
+      for (final entry in dayTotals.entries) {
+        if (entry.key ~/ 10000 != year) continue;
+        final index = (entry.key ~/ 100) % 100 - 1;
+        if (index >= 0 && index < amounts.length) {
+          amounts[index] += entry.value;
+        }
+      }
+      return amounts;
+    }
+    final totalsByYear = <int, double>{};
+    for (final entry in dayTotals.entries) {
+      totalsByYear.update(
+        entry.key ~/ 10000,
+        (value) => value + entry.value,
+        ifAbsent: () => entry.value,
+      );
+    }
+    return [for (final label in labels) totalsByYear[int.tryParse(label)] ?? 0];
   }
 
   static _StatsPeriodMetrics _periodMetrics({
     required int year,
     required int month,
     required StatsSummaryScope summaryScope,
-    required Set<DateTime> activeDates,
-    required Map<DateTime, double> dayTotals,
-    required Map<String, double> monthTotals,
+    required Set<int> activeDates,
+    required Map<int, double> dayTotals,
+    required Map<int, double> monthTotals,
     required Map<int, double> yearTotals,
   }) {
     final topMonth = _topMonth(monthTotals);
     return switch (summaryScope) {
       StatsSummaryScope.monthly => _StatsPeriodMetrics(
         monthCount: 1,
-        dayCount: DateTime(year, month + 1, 0).day,
+        dayCount: _daysInMonth(year, month),
         topMonthAmount: topMonth.amount,
         topMonthLabel: topMonth.label,
         periodAmounts: _dailyPeriodAmounts(year, month, dayTotals),
         periodLabels: [
-          for (var day = 1; day <= DateTime(year, month + 1, 0).day; day += 1)
+          for (var day = 1; day <= _daysInMonth(year, month); day += 1)
             day.toString(),
         ],
       ),
       StatsSummaryScope.yearly => _StatsPeriodMetrics(
         monthCount: 12,
-        dayCount: DateTime(year + 1).difference(DateTime(year)).inDays,
+        dayCount: _isLeapYear(year) ? 366 : 365,
         topMonthAmount: topMonth.amount,
         topMonthLabel: topMonth.label,
         periodAmounts: [
           for (var valueMonth = 1; valueMonth <= 12; valueMonth += 1)
-            monthTotals[_monthKey(year, valueMonth)] ?? 0,
+            monthTotals[year * 100 + valueMonth] ?? 0,
         ],
         periodLabels: [
           for (var valueMonth = 1; valueMonth <= 12; valueMonth += 1)
@@ -697,8 +778,8 @@ class StatsYearData {
   }
 
   static _StatsPeriodMetrics _allTimePeriodMetrics({
-    required Set<DateTime> activeDates,
-    required Map<String, double> monthTotals,
+    required Set<int> activeDates,
+    required Map<int, double> monthTotals,
     required Map<int, double> yearTotals,
     required _TopMonth topMonth,
   }) {
@@ -715,12 +796,16 @@ class StatsYearData {
     final sortedDates = activeDates.toList()..sort();
     final first = sortedDates.first;
     final last = sortedDates.last;
+    final firstYear = first ~/ 10000;
+    final firstMonth = (first ~/ 100) % 100;
+    final lastYear = last ~/ 10000;
+    final lastMonth = (last ~/ 100) % 100;
     final monthCount =
-        (last.year - first.year) * 12 + (last.month - first.month) + 1;
+        (lastYear - firstYear) * 12 + (lastMonth - firstMonth) + 1;
     final years = yearTotals.keys.toList()..sort();
     return _StatsPeriodMetrics(
       monthCount: monthCount,
-      dayCount: last.difference(first).inDays + 1,
+      dayCount: _dateOrdinalFromKey(last) - _dateOrdinalFromKey(first) + 1,
       topMonthAmount: topMonth.amount,
       topMonthLabel: topMonth.label,
       periodAmounts: [
@@ -733,16 +818,16 @@ class StatsYearData {
   static List<double> _dailyPeriodAmounts(
     int year,
     int month,
-    Map<DateTime, double> dayTotals,
+    Map<int, double> dayTotals,
   ) {
-    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final daysInMonth = _daysInMonth(year, month);
     return [
       for (var day = 1; day <= daysInMonth; day += 1)
-        dayTotals[DateTime(year, month, day)] ?? 0,
+        dayTotals[year * 10000 + month * 100 + day] ?? 0,
     ];
   }
 
-  static _TopMonth _topMonth(Map<String, double> monthTotals) {
+  static _TopMonth _topMonth(Map<int, double> monthTotals) {
     if (monthTotals.isEmpty) return const _TopMonth(amount: 0, label: '-');
     final entries = monthTotals.entries.toList()
       ..sort((left, right) {
@@ -751,11 +836,10 @@ class StatsYearData {
         return left.key.compareTo(right.key);
       });
     final key = entries.first.key;
-    final year = int.tryParse(key.substring(0, 4)) ?? 0;
-    final month = int.tryParse(key.substring(5, 7)) ?? 1;
+    final year = key ~/ 100;
+    final month = key % 100;
     final multiYear =
-        monthTotals.keys.map((value) => value.substring(0, 4)).toSet().length >
-        1;
+        monthTotals.keys.map((value) => value ~/ 100).toSet().length > 1;
     return _TopMonth(
       amount: entries.first.value,
       label: multiYear
@@ -797,6 +881,58 @@ class StatsYearData {
         });
     return List.unmodifiable(rows);
   }
+}
+
+class StatsSumYearSummary {
+  const StatsSumYearSummary({
+    required this.year,
+    required this.monthTotals,
+    required this.closingAmount,
+  });
+
+  final int year;
+  final Map<int, double> monthTotals;
+  final double closingAmount;
+
+  double get scopeTotal =>
+      monthTotals.values.fold<double>(0, (sum, value) => sum + value);
+
+  double get maxMonthTotal => monthTotals.values.fold<double>(
+    0,
+    (max, value) => value > max ? value : max,
+  );
+}
+
+class _StatsSumYearSummaryBuilder {
+  _StatsSumYearSummaryBuilder(this.year);
+
+  final int year;
+  final monthTotals = <int, double>{};
+  double closingAmount = 0;
+
+  StatsSumYearSummary build() => StatsSumYearSummary(
+    year: year,
+    monthTotals: Map.unmodifiable(monthTotals),
+    closingAmount: closingAmount,
+  );
+}
+
+class _StatsDatedRecord {
+  const _StatsDatedRecord(this.record, this.originalDate);
+
+  final TransactionRecord record;
+  final _StatsDateParts originalDate;
+}
+
+class _StatsDateParts {
+  const _StatsDateParts(this.year, this.month, this.day);
+
+  final int year;
+  final int month;
+  final int day;
+
+  int get dateKey => year * 10000 + month * 100 + day;
+  int get monthKey => year * 100 + month;
 }
 
 class StatsVendorSummary {

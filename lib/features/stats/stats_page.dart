@@ -24,8 +24,8 @@ import '../transactions/widgets/summary_pill.dart';
 import '../transactions/widgets/summary_scope_picker_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/transaction_type_pills.dart';
-import 'data/stats_category_scope_series.dart';
 import 'data/stats_page2_metrics.dart';
+import 'data/stats_render_frame.dart';
 import 'data/stats_snapshot.dart';
 import 'data/stats_year_data.dart';
 import 'widgets/stats_fast_info_graph.dart';
@@ -100,7 +100,6 @@ class _StatsPageState extends State<StatsPage>
   var _yearScopeEnabled = true;
   var _monthScopeEnabled = false;
   var _activeType = TransactionType.expense;
-  final _renderMode = StatsRenderMode.common;
   var _thresholdValue = 5000.0;
   int? _focusedMonth;
   var _scopeSheetOpen = false;
@@ -113,6 +112,7 @@ class _StatsPageState extends State<StatsPage>
     TransactionType.income: <int>{},
     TransactionType.expense: <int>{},
   };
+  final _renderFrameCache = StatsRenderFrameCache();
   late StatsSnapshotRepository _snapshotRepository;
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
@@ -280,7 +280,7 @@ class _StatsPageState extends State<StatsPage>
     if (_contentPageController.hasClients) {
       _contentPageController.jumpToPage(applied.pageIndex.clamp(0, 1).toInt());
     }
-    final observedMax = _observedMaxScopeAmount(_buildStatsData());
+    final observedMax = _resolveRenderFrame().observedMaximum;
     final clampedThreshold = _statsThresholdRange(
       observedMax: observedMax,
       fallbackMax: 50000,
@@ -308,7 +308,7 @@ class _StatsPageState extends State<StatsPage>
   void _stepThreshold(int multiplier) {
     if (multiplier == 0) return;
     final range = _statsThresholdRange(
-      observedMax: _observedMaxScopeAmount(_buildStatsData()),
+      observedMax: _resolveRenderFrame().observedMaximum,
       fallbackMax: 50000,
     );
     final next = range.snap(_thresholdValue + multiplier * range.step);
@@ -347,7 +347,8 @@ class _StatsPageState extends State<StatsPage>
                 ),
               );
             }
-            final data = _buildStatsData();
+            final frame = _resolveRenderFrame();
+            final data = frame.yearData;
             final focusedMonth = _focusedMonth == null
                 ? null
                 : data.months[(_focusedMonth! - 1).clamp(
@@ -416,7 +417,8 @@ class _StatsPageState extends State<StatsPage>
                               categories: widget.store.categories,
                               activeType: _activeType,
                               thresholdValue: _thresholdValue,
-                              largestVendor: _largestVisibleVendor(),
+                              metrics: frame.page2Metrics,
+                              largestVendor: frame.largestVisibleVendor,
                             );
                           }
                           return KeyedSubtree(
@@ -431,7 +433,7 @@ class _StatsPageState extends State<StatsPage>
                                     0,
                                   ),
                                   child: _pageOneContent(
-                                    data: data,
+                                    frame: frame,
                                     focusedMonth: focusedMonth,
                                     monthCardColor:
                                         resolvedTheme.statsMonthCard,
@@ -460,9 +462,12 @@ class _StatsPageState extends State<StatsPage>
                   visibleFastInfoExtentListenable: _fastInfoExtent,
                   cardColor: resolvedTheme.headerCard,
                   surfaceStyle: resolvedTheme.contentSurfaceStyle,
-                  fastInfo: StatsFastInfoGraph(data: data),
-                  header: _buildHeaderCard(
+                  fastInfo: StatsFastInfoGraph(
                     data: data,
+                    series: frame.categoryScopeSeries,
+                  ),
+                  header: _buildHeaderCard(
+                    frame: frame,
                     expenseTheme: resolvedTheme,
                     drawSurface: false,
                   ),
@@ -517,33 +522,51 @@ class _StatsPageState extends State<StatsPage>
     );
   }
 
-  StatsYearData _buildStatsData() {
-    return StatsYearData.build(
-      year: _year,
+  StatsRenderFrame _resolveRenderFrame() {
+    final summaryScope = !_yearScopeEnabled
+        ? StatsSummaryScope.allTime
+        : _monthScopeEnabled
+        ? StatsSummaryScope.monthly
+        : StatsSummaryScope.yearly;
+    final key = StatsRenderFrameKey(
+      dataRevision: (
+        transactions: widget.store.transactions,
+        categories: widget.store.categories,
+      ),
       activeType: _activeType,
-      mode: _renderMode,
-      thresholdValue: _thresholdValue,
-      transactions: _queryFilteredTransactions(),
-      categories: widget.store.categories,
-      selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
-      vendorFilters: widget.store.activeMerchantFilters,
-      summaryScope: !_yearScopeEnabled
-          ? StatsSummaryScope.allTime
-          : _monthScopeEnabled
-          ? StatsSummaryScope.monthly
-          : StatsSummaryScope.yearly,
+      summaryScope: summaryScope,
+      year: _year,
       month: _month,
-      today: widget.store.currentDate,
+      categoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
+      vendorNames: widget.store.activeMerchantFilters,
+      query: _searchQuery,
+      threshold: _thresholdValue,
     );
+    return _renderFrameCache.resolve(key, () {
+      return StatsRenderFrame.build(
+        year: _year,
+        activeType: _activeType,
+        thresholdValue: _thresholdValue,
+        transactions: widget.store.transactions,
+        categories: widget.store.categories,
+        selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
+        vendorFilters: widget.store.activeMerchantFilters,
+        summaryScope: summaryScope,
+        month: _month,
+        query: _searchQuery,
+        today: widget.store.currentDate,
+      );
+    });
   }
 
   Widget _buildHeaderCard({
-    required StatsYearData data,
+    required StatsRenderFrame frame,
     required ExpenseTheme expenseTheme,
     bool drawSurface = true,
   }) {
-    final categorySeries = StatsCategoryScopeSeries.fromYearData(data);
-    final visual = _headerVisual(data);
+    final data = frame.yearData;
+    final categorySeries = frame.categoryScopeSeries;
+    final visual = _headerVisual(frame);
     final headerLabel = 'SZŰRÉS PONTSZÁM';
     final headerValue = '${categorySeries.kontrollScore.round()}/100';
     return RepaintBoundary(
@@ -557,8 +580,8 @@ class _StatsPageState extends State<StatsPage>
         cardColor: expenseTheme.headerCard,
         surfaceStyle: expenseTheme.contentSurfaceStyle,
         buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
-        totalIncome: _yearTotal(TransactionType.income),
-        totalExpense: _yearTotal(TransactionType.expense),
+        totalIncome: data.canonicalIncomeTotal,
+        totalExpense: data.canonicalExpenseTotal,
         leadingChipText: _scopeChipText(data),
         leadingChipColor: const Color(0xFFFBBF24),
         magnetGradientColors: visual.gradientColors,
@@ -574,28 +597,8 @@ class _StatsPageState extends State<StatsPage>
     );
   }
 
-  double _yearTotal(TransactionType type) {
-    var total = 0.0;
-    for (final record in _queryFilteredTransactions()) {
-      final date = DateTime.tryParse(record.normalizedDate);
-      if (date == null || date.year != _year || record.type != type) continue;
-      total += record.amount.abs();
-    }
-    return total;
-  }
-
-  double _observedMaxScopeAmount(StatsYearData data) {
-    var max = 0.0;
-    for (final month in data.months) {
-      for (final day in month.days) {
-        if (day.scoreScopeAmount > max) max = day.scoreScopeAmount;
-      }
-    }
-    return max;
-  }
-
   double _clampThresholdToCurrentScope(double value) {
-    final observedMax = _observedMaxScopeAmount(_buildStatsData());
+    final observedMax = _resolveRenderFrame().observedMaximum;
     return _statsThresholdRange(
       observedMax: observedMax,
       fallbackMax: 50000,
@@ -607,15 +610,15 @@ class _StatsPageState extends State<StatsPage>
     return selectedCount == 0 ? 'MIND' : selectedCount.toString();
   }
 
-  _StatsHeaderVisual _headerVisual(StatsYearData data) {
+  _StatsHeaderVisual _headerVisual(StatsRenderFrame frame) {
+    final score = frame.categoryScopeSeries.kontrollScore;
     return _StatsHeaderVisual(
       gradientColors: const [
         Color(0xFFEF4444),
         Color(0xFFFBBF24),
         Color(0xFF22C55E),
       ],
-      markerPosition:
-          StatsCategoryScopeSeries.fromYearData(data).kontrollScore / 100,
+      markerPosition: score / 100,
     );
   }
 
@@ -628,19 +631,18 @@ class _StatsPageState extends State<StatsPage>
   }
 
   Widget _pageOneContent({
-    required StatsYearData data,
+    required StatsRenderFrame frame,
     required StatsMonthData? focusedMonth,
     required Color monthCardColor,
   }) {
+    final data = frame.yearData;
     if (!_yearScopeEnabled) {
       return _StatsSumYearCards(
-        transactions: _queryFilteredTransactions(),
+        summaries: frame.sumYearSummaries,
         categories: widget.store.categories,
         activeType: _activeType,
         activeYear: _year,
         selectedCategoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
-        vendorFilters: widget.store.activeMerchantFilters,
-        thresholdValue: _thresholdValue,
         onYearSelected: (year) {
           unawaited(_setSummaryYear(year));
         },
@@ -847,14 +849,6 @@ class _StatsPageState extends State<StatsPage>
     ];
   }
 
-  List<TransactionRecord> _queryFilteredTransactions() {
-    final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return widget.store.transactions;
-    return widget.store.transactions
-        .where((record) => record.displayMerchant.toLowerCase().contains(query))
-        .toList(growable: false);
-  }
-
   Color _selectedHeatColor() {
     final selected = _selectedScopeByType[_activeType] ?? const <int>{};
     if (selected.length != 1) return AppColors.primary;
@@ -866,39 +860,6 @@ class _StatsPageState extends State<StatsPage>
       }
     }
     return AppColors.primary;
-  }
-
-  String _largestVisibleVendor() {
-    TransactionRecord? largest;
-    final selected = _selectedScopeByType[_activeType] ?? const <int>{};
-    final activeCategoryIds = widget.store.categories
-        .where((category) => category.normalizedType == _activeType)
-        .map((category) => category.transactionCategoryID)
-        .toSet();
-    final useAllCategories =
-        selected.isEmpty || selected.length == activeCategoryIds.length;
-    for (final record in _queryFilteredTransactions()) {
-      if (record.type != _activeType) continue;
-      final date = DateTime.tryParse(record.normalizedDate);
-      if (date == null) continue;
-      if (_yearScopeEnabled && date.year != _year) continue;
-      if (_monthScopeEnabled && date.month != _month) continue;
-      if (!useAllCategories &&
-          !selected.contains(record.transactionCategoryID)) {
-        continue;
-      }
-      final vendors = widget.store.activeMerchantFilters;
-      if (vendors.isNotEmpty &&
-          !vendors.contains(record.displayMerchant) &&
-          !vendors.contains(record.merchant)) {
-        continue;
-      }
-      if (record.amount.abs() < _thresholdValue) continue;
-      if (largest == null || record.amount.abs() > largest.amount.abs()) {
-        largest = record;
-      }
-    }
-    return largest?.displayMerchant ?? 'Nincs találat';
   }
 
   void _openAddCategory() {
@@ -917,7 +878,7 @@ class _StatsPageState extends State<StatsPage>
   }
 
   Future<void> _openThresholdControlSheet() async {
-    final observedMax = _observedMaxScopeAmount(_buildStatsData());
+    final observedMax = _resolveRenderFrame().observedMaximum;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1041,30 +1002,25 @@ class _StatsPageIndicator extends StatelessWidget {
 
 class _StatsSumYearCards extends StatelessWidget {
   const _StatsSumYearCards({
-    required this.transactions,
+    required this.summaries,
     required this.categories,
     required this.activeType,
     required this.activeYear,
     required this.selectedCategoryIds,
-    required this.vendorFilters,
-    required this.thresholdValue,
     required this.onYearSelected,
     required this.onMonthSelected,
   });
 
-  final List<TransactionRecord> transactions;
+  final List<StatsSumYearSummary> summaries;
   final List<TransactionCategory> categories;
   final TransactionType activeType;
   final int activeYear;
   final Set<int> selectedCategoryIds;
-  final Set<String> vendorFilters;
-  final double thresholdValue;
   final ValueChanged<int> onYearSelected;
   final void Function(int year, int month) onMonthSelected;
 
   @override
   Widget build(BuildContext context) {
-    final summaries = _buildSummaries();
     return GridView.builder(
       key: const ValueKey('stats-sum-year-cards'),
       padding: const EdgeInsets.only(bottom: 24),
@@ -1272,80 +1228,6 @@ class _StatsSumYearCards extends StatelessWidget {
     }
     return '$type ${selectedCategoryIds.length} kategória';
   }
-
-  List<_StatsYearSummary> _buildSummaries() {
-    final activeCategoryIds = categories
-        .where((category) => category.normalizedType == activeType)
-        .map((category) => category.transactionCategoryID)
-        .toSet();
-    final selected = selectedCategoryIds
-        .where(activeCategoryIds.contains)
-        .toSet();
-    final useAllCategories =
-        selected.isEmpty || selected.length == activeCategoryIds.length;
-    final byYear = <int, _StatsYearSummaryBuilder>{};
-    for (final record in transactions) {
-      if (vendorFilters.isNotEmpty &&
-          !vendorFilters.contains(record.displayMerchant) &&
-          !vendorFilters.contains(record.merchant)) {
-        continue;
-      }
-      final parsed = DateTime.tryParse(record.normalizedDate);
-      if (parsed == null) continue;
-      final builder = byYear.putIfAbsent(
-        parsed.year,
-        () => _StatsYearSummaryBuilder(parsed.year),
-      );
-      builder.closingAmount += record.amount;
-      if (record.type != activeType) continue;
-      final amount = record.amount.abs();
-      if (thresholdValue > 0 && amount < thresholdValue) continue;
-      final categoryId = record.transactionCategoryID;
-      if (!useAllCategories && !selected.contains(categoryId)) continue;
-      builder.monthTotals.update(
-        parsed.month,
-        (value) => value + amount,
-        ifAbsent: () => amount,
-      );
-    }
-    final summaries = [for (final builder in byYear.values) builder.build()]
-      ..sort((left, right) => right.year.compareTo(left.year));
-    return summaries;
-  }
-}
-
-class _StatsYearSummary {
-  const _StatsYearSummary({
-    required this.year,
-    required this.monthTotals,
-    required this.closingAmount,
-  });
-
-  final int year;
-  final Map<int, double> monthTotals;
-  final double closingAmount;
-
-  double get scopeTotal =>
-      monthTotals.values.fold<double>(0, (sum, value) => sum + value);
-
-  double get maxMonthTotal => monthTotals.values.fold<double>(
-    0,
-    (max, value) => value > max ? value : max,
-  );
-}
-
-class _StatsYearSummaryBuilder {
-  _StatsYearSummaryBuilder(this.year);
-
-  final int year;
-  final monthTotals = <int, double>{};
-  double closingAmount = 0;
-
-  _StatsYearSummary build() => _StatsYearSummary(
-    year: year,
-    monthTotals: Map.unmodifiable(monthTotals),
-    closingAmount: closingAmount,
-  );
 }
 
 const _monthLabels = [
@@ -1381,6 +1263,7 @@ class _StatsPageTwoSummary extends StatelessWidget {
     required this.categories,
     required this.activeType,
     required this.thresholdValue,
+    required this.metrics,
     required this.largestVendor,
   });
 
@@ -1388,11 +1271,11 @@ class _StatsPageTwoSummary extends StatelessWidget {
   final List<TransactionCategory> categories;
   final TransactionType activeType;
   final double thresholdValue;
+  final StatsPage2Metrics metrics;
   final String largestVendor;
 
   @override
   Widget build(BuildContext context) {
-    final metrics = StatsPage2Metrics.fromYearData(data);
     final titlePrefix = activeType == TransactionType.income
         ? 'bevétel'
         : 'kiadás';

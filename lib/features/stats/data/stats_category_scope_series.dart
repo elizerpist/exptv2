@@ -63,10 +63,10 @@ class StatsCategoryScopeSeries {
         categoryNames: const <int, String>{},
       );
     }
-    final dailyAmounts = <double>[];
-    for (final month in data.graphMonths) {
-      dailyAmounts.addAll(month.days.map((day) => day.scoreScopeAmount));
-    }
+    final graphDayCount = data.graphMonths.fold<int>(
+      0,
+      (count, month) => count + month.days.length,
+    );
     final categoryNames = <int, String>{};
     for (final month in data.graphMonths) {
       for (final categoryId in month.scopeCategoryTotals.keys) {
@@ -76,10 +76,10 @@ class StatsCategoryScopeSeries {
     return _build(
       activeType: data.activeType,
       threshold: data.thresholdValue,
-      dailyScopeAmounts: dailyAmounts,
+      dailyScopeAmounts: const <double>[],
       graphMonths: data.graphMonths,
       monthLabels: _monthLabels(data.graphMonths),
-      window: _trendWindowForDays(dailyAmounts.length),
+      window: _trendWindowForDays(graphDayCount),
       monthlyCategoryTotals: data.graphMonths
           .map((month) => month.scopeCategoryTotals)
           .toList(growable: false),
@@ -800,16 +800,22 @@ class StatsCategoryScopeSeries {
     final deltas = threshold > 0
         ? _thresholdExcessDeltas(rawValues, threshold)
         : _amountMinDeltas(rawValues);
-    return [
-      for (var i = 0; i < hitDays.length; i += 1)
+    final bars = <StatsHelperBar>[];
+    for (var graphIndex = 0; graphIndex < graphDays.length; graphIndex += 1) {
+      final day = graphDays[graphIndex];
+      if (!_isThresholdHit(day.amount, threshold)) continue;
+      final hitIndex = bars.length;
+      bars.add(
         StatsHelperBar(
-          index: i,
-          rawValue: hitDays[i].amount,
-          value: deltas[i],
-          position: _positionInGraph(hitDays[i], graphDays),
+          index: hitIndex,
+          rawValue: day.amount,
+          value: deltas[hitIndex],
+          position: _normalizedPosition(graphIndex, graphDays.length),
           colorHex: '#EF4444',
         ),
-    ];
+      );
+    }
+    return bars;
   }
 
   static List<double> _thresholdExcessDeltas(

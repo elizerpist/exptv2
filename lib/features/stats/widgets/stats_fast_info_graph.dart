@@ -193,9 +193,10 @@ class StatsFastInfoVisualStyle {
 }
 
 class StatsFastInfoGraph extends StatelessWidget {
-  const StatsFastInfoGraph({super.key, required this.data});
+  const StatsFastInfoGraph({super.key, required this.data, this.series});
 
   final StatsYearData data;
+  final StatsCategoryScopeSeries? series;
 
   static const visualStyle = StatsFastInfoVisualStyle(
     legendFontSize: 12.4,
@@ -243,16 +244,20 @@ class StatsFastInfoGraph extends StatelessWidget {
       width: double.infinity,
       child: CustomPaint(
         key: ValueKey('stats-fastinfo-${data.mode.name}'),
-        painter: _StatsFastInfoGraphPainter(data),
+        painter: _StatsFastInfoGraphPainter(
+          data,
+          series ?? StatsCategoryScopeSeries.fromYearData(data),
+        ),
       ),
     );
   }
 }
 
 class _StatsFastInfoGraphPainter extends CustomPainter {
-  const _StatsFastInfoGraphPainter(this.data);
+  const _StatsFastInfoGraphPainter(this.data, this.series);
 
   final StatsYearData data;
+  final StatsCategoryScopeSeries series;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -281,7 +286,6 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
     StatsFastInfoLayout layout,
     StatsFastInfoSpec spec,
   ) {
-    final series = StatsCategoryScopeSeries.fromYearData(data);
     _drawCategoryPanel(canvas, layout.categoryPanel);
     final chart = layout.categoryControlChart;
     final primary = spec.charts[0].copyWith(
@@ -770,7 +774,7 @@ class _StatsFastInfoGraphPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_StatsFastInfoGraphPainter oldDelegate) {
-    return oldDelegate.data != data;
+    return oldDelegate.data != data || oldDelegate.series != series;
   }
 }
 
