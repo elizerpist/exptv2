@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/data/stats_snapshot.dart';
+import 'package:exptv2/features/stats/data/stats_render_frame.dart';
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/features/stats/widgets/stats_fast_info_graph.dart';
@@ -459,6 +460,62 @@ void main() {
       expect(find.byKey(const ValueKey('stats-page-2')), findsOneWidget);
     },
   );
+
+  testWidgets('stats page reuses one frame for page change and FAB sheet', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    final controller = StatsPageController();
+    final cache = TrackingStatsRenderFrameCache();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: snapshotRepository,
+              renderFrameCache: cache,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+
+    expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+    expect(cache.builderCalls, 1);
+    final initialFrame = cache.resolvedFrames.first;
+
+    await tester.drag(
+      find.byKey(const ValueKey('stats-content-pager')),
+      const Offset(-320, 0),
+    );
+    await pumpStatsPage(tester);
+    expect(find.byKey(const ValueKey('stats-page-2')), findsOneWidget);
+
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    expect(find.byKey(const ValueKey('stats-threshold-sheet')), findsOneWidget);
+    expect(cache.builderCalls, 1);
+    expect(cache.resolvedFrames, isNotEmpty);
+    expect(cache.resolvedFrames, everyElement(same(initialFrame)));
+  });
 
   testWidgets('stats SearchPill vendor button delegates to shell callback', (
     tester,
@@ -1438,6 +1495,24 @@ TransactionCategory category({
     isCustomIcon: false,
     originalIcon: null,
   );
+}
+
+class TrackingStatsRenderFrameCache extends StatsRenderFrameCache {
+  int builderCalls = 0;
+  final resolvedFrames = <StatsRenderFrame>[];
+
+  @override
+  StatsRenderFrame resolve(
+    StatsRenderFrameKey key,
+    StatsRenderFrame Function() builder,
+  ) {
+    final frame = super.resolve(key, () {
+      builderCalls += 1;
+      return builder();
+    });
+    resolvedFrames.add(frame);
+    return frame;
+  }
 }
 
 class StatsRepository extends TransactionRepositoryContract {

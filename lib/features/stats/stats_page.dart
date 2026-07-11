@@ -78,6 +78,7 @@ class StatsPage extends StatefulWidget {
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
     this.snapshotRepository,
+    this.renderFrameCache,
   });
 
   final TransactionStore store;
@@ -88,6 +89,7 @@ class StatsPage extends StatefulWidget {
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final StatsSnapshotRepository? snapshotRepository;
+  final StatsRenderFrameCache? renderFrameCache;
 
   @override
   State<StatsPage> createState() => _StatsPageState();
@@ -112,7 +114,7 @@ class _StatsPageState extends State<StatsPage>
     TransactionType.income: <int>{},
     TransactionType.expense: <int>{},
   };
-  final _renderFrameCache = StatsRenderFrameCache();
+  late StatsRenderFrameCache _renderFrameCache;
   late StatsSnapshotRepository _snapshotRepository;
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
@@ -124,6 +126,7 @@ class _StatsPageState extends State<StatsPage>
     widget.store.addListener(_handleStoreChanged);
     _snapshotRepository =
         widget.snapshotRepository ?? InMemoryStatsSnapshotRepository();
+    _renderFrameCache = widget.renderFrameCache ?? StatsRenderFrameCache();
     unawaited(_loadSnapshots());
     _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
@@ -143,6 +146,9 @@ class _StatsPageState extends State<StatsPage>
         widget.snapshotRepository != null) {
       _snapshotRepository = widget.snapshotRepository!;
       unawaited(_loadSnapshots());
+    }
+    if (oldWidget.renderFrameCache != widget.renderFrameCache) {
+      _renderFrameCache = widget.renderFrameCache ?? StatsRenderFrameCache();
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?._detach(_openThresholdControlSheet);

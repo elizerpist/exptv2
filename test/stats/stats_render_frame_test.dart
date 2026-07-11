@@ -172,6 +172,109 @@ void main() {
       expect(buildCount, 2);
     },
   );
+
+  test('cache rebuilds when only data revision changes', () {
+    final categories = [
+      category(id: 1, name: 'Food', type: TransactionType.expense),
+    ];
+    final transactions = [
+      record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+    ];
+    final firstRevision = Object();
+    final secondRevision = Object();
+    final cache = StatsRenderFrameCache();
+    var buildCount = 0;
+
+    StatsRenderFrame buildFrame() {
+      buildCount += 1;
+      return StatsRenderFrame.build(
+        year: 2026,
+        month: 1,
+        activeType: TransactionType.expense,
+        thresholdValue: 5000,
+        transactions: transactions,
+        categories: categories,
+        selectedCategoryIds: const {},
+        today: DateTime(2026, 1, 10),
+      );
+    }
+
+    StatsRenderFrameKey key(Object revision) => StatsRenderFrameKey(
+      dataRevision: revision,
+      activeType: TransactionType.expense,
+      summaryScope: StatsSummaryScope.yearly,
+      year: 2026,
+      month: 1,
+      categoryIds: const {},
+      vendorNames: const {},
+      query: '',
+      threshold: 5000,
+    );
+
+    final first = cache.resolve(key(firstRevision), buildFrame);
+    final reused = cache.resolve(key(firstRevision), buildFrame);
+    final rebuilt = cache.resolve(key(secondRevision), buildFrame);
+
+    expect(reused, same(first));
+    expect(rebuilt, isNot(same(first)));
+    expect(buildCount, 2);
+  });
+
+  test(
+    'all-time display folds same month day but score keeps original days',
+    () {
+      final frame = StatsRenderFrame.build(
+        year: 2026,
+        activeType: TransactionType.expense,
+        thresholdValue: 5000,
+        transactions: [
+          record(id: 1, date: '2024-01-05', amount: -6000, categoryId: 1),
+          record(id: 2, date: '2025-01-05', amount: -9000, categoryId: 1),
+        ],
+        categories: [
+          category(id: 1, name: 'Food', type: TransactionType.expense),
+        ],
+        selectedCategoryIds: const {},
+        summaryScope: StatsSummaryScope.allTime,
+        today: DateTime(2026, 1, 10),
+      );
+
+      expect(frame.yearData.months.first.days[4].scopeAmount, 15000);
+      expect(frame.yearData.months.first.days[4].scoreScopeAmount, 15000);
+      expect(frame.categoryScopeSeries.helperBars.map((bar) => bar.rawValue), [
+        6000,
+        9000,
+      ]);
+    },
+  );
+
+  test('all-time leap day clamps display without merging score dates', () {
+    final frame = StatsRenderFrame.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      thresholdValue: 5000,
+      transactions: [
+        record(id: 1, date: '2024-02-29', amount: -6000, categoryId: 1),
+        record(id: 2, date: '2025-02-28', amount: -7000, categoryId: 1),
+      ],
+      categories: [
+        category(id: 1, name: 'Food', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
+      summaryScope: StatsSummaryScope.allTime,
+      today: DateTime(2026, 1, 10),
+    );
+
+    final february = frame.yearData.months[1];
+    expect(february.days, hasLength(28));
+    expect(february.days.last.scopeAmount, 13000);
+    expect(february.days.last.scoreScopeAmount, 13000);
+    expect(frame.categoryScopeSeries.helperBars.map((bar) => bar.rawValue), [
+      6000,
+      7000,
+    ]);
+    expect(frame.sumYearSummaries.map((summary) => summary.year), [2025, 2024]);
+  });
 }
 
 TransactionRecord record({
