@@ -967,6 +967,114 @@ void main() {
     expect(cache.resolvedFrames, everyElement(same(initialFrame)));
   });
 
+  testWidgets(
+    'FAB open uses the last rendered frame before its first route frame',
+    (tester) async {
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      final controller = StatsPageController();
+      final cache = TrackingStatsRenderFrameCache();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(
+                store: store,
+                controller: controller,
+                snapshotRepository: snapshotRepository,
+                renderFrameCache: cache,
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+      expect(cache.builderCalls, 1);
+
+      controller.stepThreshold(1);
+      controller.openThresholdSheet();
+
+      expect(cache.builderCalls, 1);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('stats-threshold-sheet')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('slider drag publishes at most one trailing frame aggregation', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    final controller = StatsPageController();
+    final cache = TrackingStatsRenderFrameCache();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: snapshotRepository,
+              renderFrameCache: cache,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    final beforeDrag = cache.builderCalls;
+    final slider = tester.widget<Slider>(
+      find.byKey(const ValueKey('stats-threshold-slider')),
+    );
+
+    slider.onChanged!(11000);
+    slider.onChanged!(16000);
+    slider.onChanged!(24000);
+
+    expect(cache.builderCalls, beforeDrag);
+    await tester.pump();
+    expect(cache.builderCalls, beforeDrag + 1);
+    expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
+    expect(
+      tester
+          .widget<Slider>(find.byKey(const ValueKey('stats-threshold-slider')))
+          .value,
+      25000,
+    );
+  });
+
   testWidgets('stats SearchPill vendor button delegates to shell callback', (
     tester,
   ) async {
@@ -1610,6 +1718,265 @@ void main() {
           .text,
       '20000',
     );
+  });
+
+  testWidgets('snapshot tap recalls while long press edits the same row', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    final controller = StatsPageController();
+    final createdAt = DateTime(2026, 7, 11, 10);
+    final repository = InMemoryStatsSnapshotRepository([
+      StatsSnapshot(
+        id: 'editable',
+        name: 'Eredeti',
+        createdAt: createdAt,
+        updatedAt: createdAt,
+        includeCategoryScope: false,
+        includeVendorScope: false,
+        includeActiveType: false,
+        includeThreshold: true,
+        includeLayoutMode: false,
+        includePageIndex: false,
+        threshold: 25000,
+      ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: repository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    final card = find.byKey(const ValueKey('stats-snapshot-card-editable'));
+
+    await tester.tap(card);
+    await pumpStatsPage(tester);
+    expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const ValueKey('stats-snapshot-dialog')), findsNothing);
+
+    await tester.longPress(card);
+    await pumpStatsPage(tester);
+    expect(find.byKey(const ValueKey('stats-snapshot-dialog')), findsOneWidget);
+    final nameField = tester.widget<TextField>(
+      find.byKey(const ValueKey('stats-snapshot-name-input')),
+    );
+    expect(nameField.controller!.text, 'Eredeti');
+    await tester.enterText(
+      find.byKey(const ValueKey('stats-snapshot-name-input')),
+      'Szerkesztett',
+    );
+    await tester.tap(find.byKey(const ValueKey('stats-snapshot-save-button')));
+    await pumpStatsPage(tester);
+
+    final rows = await repository.load();
+    expect(rows, hasLength(1));
+    expect(rows.single.id, 'editable');
+    expect(rows.single.createdAt, createdAt);
+    expect(rows.single.name, 'Szerkesztett');
+    expect(find.text('Szerkesztett'), findsOneWidget);
+  });
+
+  testWidgets('snapshot recall publishes one final frame and keeps Page 2', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          category(id: 2, name: 'Fizetes', type: TransactionType.income),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+          record(id: 2, date: '2026-01-01', amount: 90000, categoryId: 2),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    final controller = StatsPageController();
+    final cache = TrackingStatsRenderFrameCache();
+    final now = DateTime(2026, 7, 11);
+    final repository = InMemoryStatsSnapshotRepository([
+      StatsSnapshot(
+        id: 'one-publish',
+        name: 'One publish',
+        createdAt: now,
+        updatedAt: now,
+        includeCategoryScope: false,
+        includeVendorScope: true,
+        includeActiveType: true,
+        includeThreshold: true,
+        includeLayoutMode: true,
+        includePageIndex: true,
+        vendorScopeNames: const {'Teszt'},
+        activeType: TransactionType.income,
+        threshold: 25000,
+        layoutMode: StatsLayoutMode.month,
+        activeYear: 2026,
+        activeMonth: 1,
+        pageIndex: 0,
+      ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: repository,
+              renderFrameCache: cache,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpStatsPage(tester);
+    await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
+    await pumpStatsPage(tester);
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    final beforeRecall = cache.builderCalls;
+
+    await tester.tap(
+      find.byKey(const ValueKey('stats-snapshot-card-one-publish')),
+    );
+    await pumpStatsPage(tester);
+
+    expect(cache.builderCalls, beforeRecall + 1);
+    expect(find.byKey(const ValueKey('stats-page-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-page-1')), findsNothing);
+    expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('worst-case snapshot card keeps every field in 112x74', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1400);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    final controller = StatsPageController();
+    final now = DateTime(2026, 7, 11);
+    final repository = InMemoryStatsSnapshotRepository([
+      StatsSnapshot(
+        id: 'all-fields',
+        name: 'Minden szuro hosszu neve',
+        createdAt: now,
+        updatedAt: now,
+        includeCategoryScope: true,
+        includeVendorScope: true,
+        includeActiveType: true,
+        includeThreshold: true,
+        includeLayoutMode: true,
+        includePageIndex: true,
+        categoryScopeIds: const {1, 2, 3},
+        vendorScopeNames: const {'Aldi', 'Spar', 'Tesco'},
+        activeType: TransactionType.expense,
+        threshold: 125000,
+        layoutMode: StatsLayoutMode.month,
+        activeYear: 2025,
+        activeMonth: 12,
+        pageIndex: 1,
+      ),
+    ]);
+
+    for (final scale in const [1.0, 2.0]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.noScaling),
+              child: SizedBox(
+                width: 390,
+                height: 1200,
+                child: StatsPage(
+                  store: store,
+                  controller: controller,
+                  snapshotRepository: repository,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+      controller.openThresholdSheet();
+      await pumpStatsPage(tester);
+      final card = find.byKey(const ValueKey('stats-snapshot-card-all-fields'));
+
+      expect(tester.getSize(card), const Size(112, 74));
+      expect(
+        MediaQuery.textScalerOf(tester.element(card)).scale(10),
+        10 * scale,
+      );
+      for (final field in const [
+        'type',
+        'layout',
+        'page',
+        'threshold',
+        'categories',
+        'vendors',
+      ]) {
+        expect(
+          find.byKey(ValueKey('stats-snapshot-token-$field-all-fields')),
+          findsOneWidget,
+        );
+      }
+      final texts = tester.widgetList<Text>(
+        find.descendant(of: card, matching: find.byType(Text)),
+      );
+      expect(
+        texts,
+        everyElement(
+          predicate<Text>((text) => text.overflow != TextOverflow.ellipsis),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tapAt(const Offset(10, 10));
+      await pumpStatsPage(tester);
+    }
   });
 
   testWidgets(

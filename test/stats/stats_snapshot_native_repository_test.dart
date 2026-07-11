@@ -100,6 +100,48 @@ void main() {
       });
     },
   );
+
+  test('editing sends the original ID for native row replacement', () async {
+    final original = StatsSnapshot.fromJson(
+      snapshotRow(id: 'stable-id', createdAt: 1000),
+    );
+    final edited = StatsSnapshot(
+      id: original.id,
+      name: 'Szerkesztett',
+      createdAt: original.createdAt,
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(3000),
+      includeCategoryScope: original.includeCategoryScope,
+      includeVendorScope: original.includeVendorScope,
+      includeActiveType: original.includeActiveType,
+      includeThreshold: original.includeThreshold,
+      includeLayoutMode: original.includeLayoutMode,
+      includePageIndex: original.includePageIndex,
+      categoryScopeIds: original.categoryScopeIds,
+      vendorScopeNames: original.vendorScopeNames,
+      activeType: original.activeType,
+      threshold: original.threshold,
+      layoutMode: original.layoutMode,
+      activeYear: original.activeYear,
+      activeMonth: original.activeMonth,
+      pageIndex: original.pageIndex,
+    );
+
+    await repository.upsert(edited);
+
+    expect(calls.single.method, 'expenseUpsertStatsSnapshot');
+    expect(
+      (calls.single.arguments as Map<Object?, Object?>)['id'],
+      'stable-id',
+    );
+    expect(
+      (calls.single.arguments as Map<Object?, Object?>)['createdAt'],
+      1000,
+    );
+    expect(
+      (calls.single.arguments as Map<Object?, Object?>)['name'],
+      'Szerkesztett',
+    );
+  });
 }
 
 Map<String, Object?> snapshotRow({required String id, required int createdAt}) {

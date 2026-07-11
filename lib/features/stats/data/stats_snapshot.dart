@@ -96,7 +96,9 @@ class StatsSnapshot {
       layoutMode: includeLayoutMode ? layoutMode : null,
       activeYear: includeLayoutMode ? activeYear : null,
       activeMonth: includeLayoutMode ? activeMonth : null,
-      pageIndex: includePageIndex ? pageIndex : null,
+      // Stored page metadata remains serializable for compatibility, but
+      // snapshot recall never owns chevron-only page navigation.
+      pageIndex: current.pageIndex,
     );
   }
 
@@ -186,6 +188,25 @@ class StatsSnapshot {
       _ => null,
     };
   }
+}
+
+class StatsSnapshotRecallGeneration {
+  var _latest = 0;
+
+  StatsSnapshotRecallToken begin() {
+    return StatsSnapshotRecallToken._(this, ++_latest);
+  }
+
+  bool _isLatest(int value) => value == _latest;
+}
+
+class StatsSnapshotRecallToken {
+  const StatsSnapshotRecallToken._(this._owner, this.value);
+
+  final StatsSnapshotRecallGeneration _owner;
+  final int value;
+
+  bool get isLatest => _owner._isLatest(value);
 }
 
 abstract class StatsSnapshotRepository {

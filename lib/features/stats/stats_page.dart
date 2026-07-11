@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -114,9 +115,12 @@ class _StatsPageState extends State<StatsPage>
     TransactionType.expense: <int>{},
   };
   late StatsRenderFrameCache _renderFrameCache;
+  StatsRenderFrame? _lastRenderFrame;
   late StatsSnapshotRepository _snapshotRepository;
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
+  final _snapshotRecallGeneration = StatsSnapshotRecallGeneration();
+  var _snapshotRecallOperations = 0;
 
   @override
   void initState() {
@@ -171,6 +175,7 @@ class _StatsPageState extends State<StatsPage>
   bool get wantKeepAlive => true;
 
   void _handleStoreChanged() {
+    if (_snapshotRecallOperations > 0) return;
     var changed = _syncSummaryFromStore();
     if (!widget.store.loading && widget.store.error == null) {
       final nextThreshold = _clampThresholdToCurrentScope(_thresholdValue);
@@ -227,13 +232,16 @@ class _StatsPageState extends State<StatsPage>
     return StatsLayoutMode.year;
   }
 
-  Future<List<StatsSnapshot>> _saveSnapshot(_StatsSnapshotDraft draft) async {
+  Future<List<StatsSnapshot>> _saveSnapshot(
+    _StatsSnapshotDraft draft,
+    StatsSnapshot? existing,
+  ) async {
     final now = DateTime.now();
     final state = _currentSnapshotState();
     final snapshot = StatsSnapshot(
-      id: 'stats-${now.microsecondsSinceEpoch}',
+      id: existing?.id ?? 'stats-${now.microsecondsSinceEpoch}',
       name: draft.name.trim().isEmpty ? 'Mentett nézet' : draft.name.trim(),
-      createdAt: now,
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       includeCategoryScope: draft.includeCategoryScope,
       includeVendorScope: draft.includeVendorScope,
@@ -262,34 +270,75 @@ class _StatsPageState extends State<StatsPage>
   Future<_StatsSnapshotRecallResult> _applySnapshot(
     StatsSnapshot snapshot,
   ) async {
+    final recall = _snapshotRecallGeneration.begin();
     final applied = snapshot.applyTo(_currentSnapshotState());
-    setState(() {
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted || !recall.isLatest) {
+      return _ignoredSnapshotRecallResult();
+    }
+    _snapshotRecallOperations += 1;
+    try {
+      if (snapshot.includeLayoutMode) {
+        switch (applied.layoutMode) {
+          case StatsLayoutMode.sum:
+            await widget.store.setSummaryAllTime();
+          case StatsLayoutMode.year:
+            await widget.store.setSummaryYear(applied.activeYear);
+          case StatsLayoutMode.month:
+            await widget.store.setSummaryMonth(
+              applied.activeYear,
+              applied.activeMonth,
+            );
+        }
+      }
+      if (!mounted || !recall.isLatest) {
+        return _ignoredSnapshotRecallResult();
+      }
       _activeType = applied.activeType;
       _thresholdValue = applied.threshold;
       if (snapshot.includeCategoryScope) {
         _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
       }
-    });
-    widget.store.setMerchantFilters(applied.vendorScopeNames);
-    switch (applied.layoutMode) {
-      case StatsLayoutMode.sum:
-        await widget.store.setSummaryAllTime();
-      case StatsLayoutMode.year:
-        await _setSummaryYear(applied.activeYear);
-      case StatsLayoutMode.month:
-        await _setSummaryMonth(applied.activeYear, applied.activeMonth);
+      if (snapshot.includeLayoutMode) {
+        _applySnapshotLayoutLocally(applied);
+      }
+      if (snapshot.includeVendorScope) {
+        widget.store.setMerchantFilters(applied.vendorScopeNames);
+      }
+      final observedMax = _resolveRenderFrame().observedMaximum;
+      final clampedThreshold = _statsThresholdRange(
+        observedMax: observedMax,
+        fallbackMax: 50000,
+      ).snap(_thresholdValue);
+      setState(() {
+        _thresholdValue = clampedThreshold;
+        _selectedSnapshotIndex = _snapshots.indexWhere(
+          (item) => item.id == snapshot.id,
+        );
+      });
+      return _StatsSnapshotRecallResult(
+        threshold: clampedThreshold,
+        observedMax: observedMax,
+        applied: true,
+      );
+    } finally {
+      _snapshotRecallOperations -= 1;
     }
-    final observedMax = _resolveRenderFrame().observedMaximum;
-    final clampedThreshold = _statsThresholdRange(
-      observedMax: observedMax,
-      fallbackMax: 50000,
-    ).snap(_thresholdValue);
-    if (clampedThreshold != _thresholdValue && mounted) {
-      setState(() => _thresholdValue = clampedThreshold);
-    }
+  }
+
+  void _applySnapshotLayoutLocally(StatsSnapshotState applied) {
+    _year = applied.activeYear;
+    _month = applied.activeMonth.clamp(1, 12).toInt();
+    _yearScopeEnabled = applied.layoutMode != StatsLayoutMode.sum;
+    _monthScopeEnabled = applied.layoutMode == StatsLayoutMode.month;
+    _focusedMonth = _monthScopeEnabled ? _month : null;
+  }
+
+  _StatsSnapshotRecallResult _ignoredSnapshotRecallResult() {
     return _StatsSnapshotRecallResult(
-      threshold: clampedThreshold,
-      observedMax: observedMax,
+      threshold: _thresholdValue,
+      observedMax: _lastRenderFrame?.observedMaximum ?? 0,
+      applied: false,
     );
   }
 
@@ -300,7 +349,6 @@ class _StatsPageState extends State<StatsPage>
     final wrappedIndex = nextIndex < 0
         ? nextIndex + _snapshots.length
         : nextIndex;
-    setState(() => _selectedSnapshotIndex = wrappedIndex);
     unawaited(_applySnapshot(_snapshots[wrappedIndex]).then<void>((_) {}));
   }
 
@@ -535,7 +583,7 @@ class _StatsPageState extends State<StatsPage>
       query: _searchQuery,
       threshold: _thresholdValue,
     );
-    return _renderFrameCache.resolve(key, () {
+    final frame = _renderFrameCache.resolve(key, () {
       return StatsRenderFrame.build(
         year: _year,
         activeType: _activeType,
@@ -550,6 +598,8 @@ class _StatsPageState extends State<StatsPage>
         today: widget.store.currentDate,
       );
     });
+    _lastRenderFrame = frame;
+    return frame;
   }
 
   Widget _buildHeaderCard({
@@ -841,7 +891,7 @@ class _StatsPageState extends State<StatsPage>
   }
 
   Future<void> _openThresholdControlSheet() async {
-    final observedMax = _resolveRenderFrame().observedMaximum;
+    final observedMax = _lastRenderFrame?.observedMaximum ?? 0;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -855,10 +905,7 @@ class _StatsPageState extends State<StatsPage>
           snapshots: _snapshots,
           selectedSnapshotIndex: _selectedSnapshotIndex,
           onAddSnapshot: _saveSnapshot,
-          onSnapshotSelected: (snapshot) {
-            _selectedSnapshotIndex = _snapshots.indexOf(snapshot);
-            return _applySnapshot(snapshot);
-          },
+          onSnapshotSelected: _applySnapshot,
           onThresholdChanged: (value) {
             setState(() => _thresholdValue = value);
           },
@@ -1970,7 +2017,11 @@ class _StatsThresholdControlSheet extends StatefulWidget {
   final Color accentColor;
   final List<StatsSnapshot> snapshots;
   final int selectedSnapshotIndex;
-  final Future<List<StatsSnapshot>> Function(_StatsSnapshotDraft) onAddSnapshot;
+  final Future<List<StatsSnapshot>> Function(
+    _StatsSnapshotDraft,
+    StatsSnapshot?,
+  )
+  onAddSnapshot;
   final Future<_StatsSnapshotRecallResult> Function(StatsSnapshot)
   onSnapshotSelected;
   final ValueChanged<double> onThresholdChanged;
@@ -1987,6 +2038,8 @@ class _StatsThresholdControlSheetState
   late final TextEditingController _amountController;
   late List<StatsSnapshot> _snapshots;
   late int _selectedSnapshotIndex;
+  double? _pendingThresholdPublication;
+  var _thresholdPublicationScheduled = false;
 
   @override
   void initState() {
@@ -2056,11 +2109,14 @@ class _StatsThresholdControlSheetState
                     _selectedSnapshotIndex = _snapshots.indexOf(snapshot);
                   });
                   final result = await widget.onSnapshotSelected(snapshot);
-                  if (!mounted) return;
+                  if (!mounted || !result.applied) return;
                   _syncThreshold(
                     result.threshold,
                     observedMax: result.observedMax,
                   );
+                },
+                onSnapshotEdit: (snapshot) {
+                  unawaited(_openSnapshotDialog(snapshot));
                 },
               ),
               const SizedBox(height: 18),
@@ -2106,6 +2162,7 @@ class _StatsThresholdControlSheetState
                       .toInt(),
                   value: range.clamp(_thresholdValue),
                   onChanged: _setThreshold,
+                  onChangeEnd: (_) => _flushThresholdPublication(),
                 ),
               ),
               const SizedBox(height: 10),
@@ -2162,19 +2219,22 @@ class _StatsThresholdControlSheetState
     fallbackMax: widget.fallbackMax,
   );
 
-  Future<void> _openSnapshotDialog() async {
+  Future<void> _openSnapshotDialog([StatsSnapshot? snapshot]) async {
     final draft = await showDialog<_StatsSnapshotDraft>(
       context: context,
       builder: (context) {
-        return const _StatsSnapshotDialog();
+        return _StatsSnapshotDialog(initialSnapshot: snapshot);
       },
     );
     if (draft == null) return;
-    final snapshots = await widget.onAddSnapshot(draft);
+    final snapshots = await widget.onAddSnapshot(draft, snapshot);
     if (!mounted) return;
+    final selectedId = snapshot?.id;
     setState(() {
       _snapshots = snapshots;
-      _selectedSnapshotIndex = snapshots.length - 1;
+      _selectedSnapshotIndex = selectedId == null
+          ? snapshots.length - 1
+          : snapshots.indexWhere((item) => item.id == selectedId);
     });
   }
 
@@ -2182,7 +2242,25 @@ class _StatsThresholdControlSheetState
     final next = _range.snap(value);
     if (next == _thresholdValue) return;
     _syncThreshold(next);
-    widget.onThresholdChanged(next);
+    _scheduleThresholdPublication(next);
+  }
+
+  void _scheduleThresholdPublication(double value) {
+    _pendingThresholdPublication = value;
+    if (_thresholdPublicationScheduled) return;
+    _thresholdPublicationScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _thresholdPublicationScheduled = false;
+      if (!mounted) return;
+      _flushThresholdPublication();
+    });
+    SchedulerBinding.instance.scheduleFrame();
+  }
+
+  void _flushThresholdPublication() {
+    final value = _pendingThresholdPublication;
+    _pendingThresholdPublication = null;
+    if (value != null) widget.onThresholdChanged(value);
   }
 
   void _syncThreshold(double value, {double? observedMax}) {
@@ -2208,10 +2286,12 @@ class _StatsSnapshotRecallResult {
   const _StatsSnapshotRecallResult({
     required this.threshold,
     required this.observedMax,
+    required this.applied,
   });
 
   final double threshold;
   final double observedMax;
+  final bool applied;
 }
 
 CalendarJoystickRange _statsThresholdRange({
@@ -2231,12 +2311,14 @@ class _StatsSnapshotStrip extends StatelessWidget {
     required this.selectedSnapshotIndex,
     required this.onAddSnapshot,
     required this.onSnapshotSelected,
+    required this.onSnapshotEdit,
   });
 
   final List<StatsSnapshot> snapshots;
   final int selectedSnapshotIndex;
   final VoidCallback onAddSnapshot;
   final ValueChanged<StatsSnapshot> onSnapshotSelected;
+  final ValueChanged<StatsSnapshot> onSnapshotEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -2265,6 +2347,7 @@ class _StatsSnapshotStrip extends StatelessWidget {
                   snapshot: snapshots[i],
                   selected: i == selectedSnapshotIndex,
                   onTap: () => onSnapshotSelected(snapshots[i]),
+                  onLongPress: () => onSnapshotEdit(snapshots[i]),
                 ),
               ],
             ],
@@ -2310,82 +2393,237 @@ class _StatsSnapshotPreviewCard extends StatelessWidget {
     required this.snapshot,
     required this.selected,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final StatsSnapshot snapshot;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _snapshotTokens(snapshot);
     return GestureDetector(
       key: ValueKey('stats-snapshot-card-${snapshot.id}'),
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
+      onLongPress: onLongPress,
+      child: SizedBox(
         width: 112,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEFFCF6) : AppColors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? AppColors.income : AppColors.gray200,
+        height: 74,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFEFFCF6) : AppColors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.income : AppColors.gray200,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              snapshot.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.gray800,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(5, 4, 5, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 14,
+                  child: Tooltip(
+                    message: snapshot.name,
+                    triggerMode: TooltipTriggerMode.manual,
+                    child: Semantics(
+                      label: 'Pillanatkép neve: ${snapshot.name}',
+                      child: FittedBox(
+                        alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          snapshot.name,
+                          softWrap: false,
+                          style: const TextStyle(
+                            color: AppColors.gray800,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Expanded(child: _snapshotTokenRow(tokens.take(3))),
+                const SizedBox(height: 3),
+                Expanded(child: _snapshotTokenRow(tokens.skip(3))),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              _snapshotDetail(snapshot),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.gray500,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  static String _snapshotDetail(StatsSnapshot snapshot) {
-    final parts = <String>[];
-    if (snapshot.includeActiveType && snapshot.activeType != null) {
-      parts.add(
-        snapshot.activeType == TransactionType.income ? 'Bevétel' : 'Kiadás',
+  Widget _snapshotTokenRow(Iterable<_StatsSnapshotTokenData> tokens) {
+    final rowTokens = tokens.toList(growable: false);
+    if (rowTokens.isEmpty) return const SizedBox.shrink();
+    return Row(
+      children: [
+        for (var index = 0; index < rowTokens.length; index += 1) ...[
+          if (index > 0) const SizedBox(width: 3),
+          Expanded(
+            child: _StatsSnapshotToken(
+              key: ValueKey(
+                'stats-snapshot-token-${rowTokens[index].field}-${snapshot.id}',
+              ),
+              data: rowTokens[index],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static List<_StatsSnapshotTokenData> _snapshotTokens(StatsSnapshot snapshot) {
+    final tokens = <_StatsSnapshotTokenData>[];
+    if (snapshot.includeActiveType) {
+      final income = snapshot.activeType == TransactionType.income;
+      tokens.add(
+        _StatsSnapshotTokenData(
+          field: 'type',
+          compact: snapshot.activeType == null ? 'T?' : (income ? 'BEV' : 'KI'),
+          description: snapshot.activeType == null
+              ? 'Típus: ismeretlen'
+              : (income ? 'Típus: bevétel' : 'Típus: kiadás'),
+        ),
       );
     }
-    if (snapshot.includeLayoutMode && snapshot.layoutMode != null) {
-      parts.add(switch (snapshot.layoutMode!) {
-        StatsLayoutMode.sum => 'Összes',
-        StatsLayoutMode.year => 'Éves',
-        StatsLayoutMode.month => 'Havi',
-      });
+    if (snapshot.includeLayoutMode) {
+      final period = switch (snapshot.layoutMode) {
+        StatsLayoutMode.sum => ('SUM', 'Időszak: összes'),
+        StatsLayoutMode.year => (
+          'É ${snapshot.activeYear ?? '-'}',
+          'Időszak: ${snapshot.activeYear ?? 'ismeretlen'} év',
+        ),
+        StatsLayoutMode.month => (
+          'H ${(snapshot.activeMonth ?? 0).toString().padLeft(2, '0')}/${snapshot.activeYear ?? '-'}',
+          'Időszak: ${snapshot.activeYear ?? 'ismeretlen'} év, ${snapshot.activeMonth ?? 'ismeretlen'} hónap',
+        ),
+        null => ('N?', 'Időszak: ismeretlen'),
+      };
+      tokens.add(
+        _StatsSnapshotTokenData(
+          field: 'layout',
+          compact: period.$1,
+          description: period.$2,
+        ),
+      );
     }
-    if (snapshot.includeThreshold && snapshot.threshold != null) {
-      parts.add(formatHuf(snapshot.threshold!));
+    if (snapshot.includePageIndex) {
+      tokens.add(
+        _StatsSnapshotTokenData(
+          field: 'page',
+          compact: snapshot.pageIndex == null
+              ? 'O?'
+              : 'O${snapshot.pageIndex! + 1}',
+          description: snapshot.pageIndex == null
+              ? 'Mentett oldal: ismeretlen. A visszahívás megtartja az aktuális oldalt.'
+              : 'Mentett oldal: ${snapshot.pageIndex! + 1}. A visszahívás megtartja az aktuális oldalt.',
+        ),
+      );
     }
-    return parts.isEmpty ? 'Részleges' : parts.join(' · ');
+    if (snapshot.includeThreshold) {
+      tokens.add(
+        _StatsSnapshotTokenData(
+          field: 'threshold',
+          compact: snapshot.threshold == null
+              ? '? Ft'
+              : formatHuf(snapshot.threshold!),
+          description: snapshot.threshold == null
+              ? 'Küszöb: ismeretlen'
+              : 'Küszöb: ${formatHuf(snapshot.threshold!)}',
+        ),
+      );
+    }
+    if (snapshot.includeCategoryScope) {
+      final ids = snapshot.categoryScopeIds.toList()..sort();
+      tokens.add(
+        _StatsSnapshotTokenData(
+          field: 'categories',
+          compact: 'K${ids.length}',
+          description: ids.isEmpty
+              ? 'Kategória szűrés: mind'
+              : 'Kategória szűrés: ${ids.join(', ')}',
+        ),
+      );
+    }
+    if (snapshot.includeVendorScope) {
+      final vendors = snapshot.vendorScopeNames.toList()..sort();
+      tokens.add(
+        _StatsSnapshotTokenData(
+          field: 'vendors',
+          compact: 'V${vendors.length}',
+          description: vendors.isEmpty
+              ? 'Kereskedő szűrés: mind'
+              : 'Kereskedő szűrés: ${vendors.join(', ')}',
+        ),
+      );
+    }
+    return tokens;
+  }
+}
+
+class _StatsSnapshotTokenData {
+  const _StatsSnapshotTokenData({
+    required this.field,
+    required this.compact,
+    required this.description,
+  });
+
+  final String field;
+  final String compact;
+  final String description;
+}
+
+class _StatsSnapshotToken extends StatelessWidget {
+  const _StatsSnapshotToken({super.key, required this.data});
+
+  final _StatsSnapshotTokenData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: data.description,
+      triggerMode: TooltipTriggerMode.manual,
+      child: Semantics(
+        label: data.description,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.gray100,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: AppColors.gray200),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                data.compact,
+                softWrap: false,
+                style: const TextStyle(
+                  color: AppColors.gray700,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
 class _StatsSnapshotDialog extends StatefulWidget {
-  const _StatsSnapshotDialog();
+  const _StatsSnapshotDialog({this.initialSnapshot});
+
+  final StatsSnapshot? initialSnapshot;
 
   @override
   State<_StatsSnapshotDialog> createState() => _StatsSnapshotDialogState();
@@ -2393,19 +2631,30 @@ class _StatsSnapshotDialog extends StatefulWidget {
 
 class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
   late final TextEditingController _nameController;
-  final _selectedFields = <String>{
-    'Kategória szűrés',
-    'Kereskedő szűrés',
-    'Küszöb',
-    'Nézet mód',
-    'Bevétel / kiadás',
-    'Aktív oldal',
-  };
+  late final Set<String> _selectedFields;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
+    final snapshot = widget.initialSnapshot;
+    _nameController = TextEditingController(text: snapshot?.name ?? '');
+    _selectedFields = snapshot == null
+        ? <String>{
+            'Kategória szűrés',
+            'Kereskedő szűrés',
+            'Küszöb',
+            'Nézet mód',
+            'Bevétel / kiadás',
+            'Aktív oldal',
+          }
+        : <String>{
+            if (snapshot.includeCategoryScope) 'Kategória szűrés',
+            if (snapshot.includeVendorScope) 'Kereskedő szűrés',
+            if (snapshot.includeThreshold) 'Küszöb',
+            if (snapshot.includeLayoutMode) 'Nézet mód',
+            if (snapshot.includeActiveType) 'Bevétel / kiadás',
+            if (snapshot.includePageIndex) 'Aktív oldal',
+          };
   }
 
   @override
@@ -2421,9 +2670,11 @@ class _StatsSnapshotDialogState extends State<_StatsSnapshotDialog> {
       backgroundColor: AppColors.white,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'Pillanatkép mentése',
-        style: TextStyle(
+      title: Text(
+        widget.initialSnapshot == null
+            ? 'Pillanatkép mentése'
+            : 'Pillanatkép szerkesztése',
+        style: const TextStyle(
           color: AppColors.gray800,
           fontSize: 17,
           fontWeight: FontWeight.w900,
