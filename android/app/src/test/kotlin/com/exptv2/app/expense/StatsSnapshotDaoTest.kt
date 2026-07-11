@@ -8,7 +8,10 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class StatsSnapshotDaoTest {
     private lateinit var database: ExpenseTrackerDatabase
     private lateinit var dao: StatsSnapshotDao

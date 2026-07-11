@@ -10,7 +10,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class StatsSnapshotMigrationTest {
     @Test
     fun migration10To11PassesRoomSchemaValidationAndPreservesExistingData() {
