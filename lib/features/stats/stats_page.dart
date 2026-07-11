@@ -260,18 +260,14 @@ class _StatsPageState extends State<StatsPage>
   }
 
   Future<_StatsSnapshotRecallResult> _applySnapshot(
-    StatsSnapshot snapshot, {
-    bool applyPageIndex = true,
-  }) async {
+    StatsSnapshot snapshot,
+  ) async {
     final applied = snapshot.applyTo(_currentSnapshotState());
     setState(() {
       _activeType = applied.activeType;
       _thresholdValue = applied.threshold;
       if (snapshot.includeCategoryScope) {
         _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
-      }
-      if (applyPageIndex) {
-        _contentPageIndex = applied.pageIndex.clamp(0, 1).toInt();
       }
     });
     widget.store.setMerchantFilters(applied.vendorScopeNames);
@@ -305,12 +301,7 @@ class _StatsPageState extends State<StatsPage>
         ? nextIndex + _snapshots.length
         : nextIndex;
     setState(() => _selectedSnapshotIndex = wrappedIndex);
-    unawaited(
-      _applySnapshot(
-        _snapshots[wrappedIndex],
-        applyPageIndex: false,
-      ).then<void>((_) {}),
-    );
+    unawaited(_applySnapshot(_snapshots[wrappedIndex]).then<void>((_) {}));
   }
 
   void _handleContentHorizontalDragEnd(DragEndDetails details) {
@@ -1101,6 +1092,7 @@ class _StatsPageIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (var index = 0; index < 2; index++) ...[

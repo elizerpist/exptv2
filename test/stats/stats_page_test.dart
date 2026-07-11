@@ -584,38 +584,136 @@ void main() {
     );
   });
 
-  testWidgets('content swipe recalls snapshot but never opens Page 2', (
+  testWidgets(
+    'left and right content swipes cycle snapshots without page navigation',
+    (tester) async {
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
+            category(id: 2, name: 'Fizetés', type: TransactionType.income),
+          ],
+          transactions: [
+            record(id: 0, date: '2025-01-01', amount: -5000, categoryId: 1),
+            record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+            record(id: 2, date: '2026-01-02', amount: 300000, categoryId: 2),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      final now = DateTime(2026, 7, 11);
+      final repository = InMemoryStatsSnapshotRepository([
+        StatsSnapshot(
+          id: 'year-page-two',
+          name: 'Bevétel snapshot',
+          createdAt: now,
+          updatedAt: now,
+          includeCategoryScope: false,
+          includeVendorScope: false,
+          includeActiveType: true,
+          includeThreshold: false,
+          includeLayoutMode: false,
+          includePageIndex: true,
+          activeType: TransactionType.income,
+          pageIndex: 1,
+        ),
+        StatsSnapshot(
+          id: 'month-page-two',
+          name: 'Kiadás snapshot',
+          createdAt: now.add(const Duration(seconds: 1)),
+          updatedAt: now.add(const Duration(seconds: 1)),
+          includeCategoryScope: false,
+          includeVendorScope: false,
+          includeActiveType: true,
+          includeThreshold: false,
+          includeLayoutMode: false,
+          includePageIndex: true,
+          activeType: TransactionType.expense,
+          pageIndex: 1,
+        ),
+      ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(store: store, snapshotRepository: repository),
+            ),
+          ),
+        ),
+      );
+      await pumpStatsPage(tester);
+
+      await tester.fling(
+        find.byKey(const ValueKey('stats-content-gesture-surface')),
+        const Offset(-260, 0),
+        1200,
+      );
+      await pumpStatsPage(tester);
+
+      expect(
+        tester
+            .widget<StatsYearCalendar>(find.byType(StatsYearCalendar))
+            .data
+            .activeType,
+        TransactionType.income,
+      );
+      expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
+
+      await tester.fling(
+        find.byKey(const ValueKey('stats-content-gesture-surface')),
+        const Offset(260, 0),
+        1200,
+      );
+      await pumpStatsPage(tester);
+
+      expect(
+        tester
+            .widget<StatsYearCalendar>(find.byType(StatsYearCalendar))
+            .data
+            .activeType,
+        TransactionType.expense,
+      );
+      expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
+    },
+  );
+
+  testWidgets('snapshot sheet card cannot navigate to its stored Page 2', (
     tester,
   ) async {
     final store = TransactionStore(
       StatsRepository(
         categories: [
           category(id: 1, name: 'Gyorskaja', type: TransactionType.expense),
-          category(id: 2, name: 'Fizetés', type: TransactionType.income),
         ],
         transactions: [
           record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
-          record(id: 2, date: '2026-01-02', amount: 300000, categoryId: 2),
         ],
       ),
       clock: () => DateTime(2026, 7, 7),
     );
     await store.start();
     unawaited(store.setSummaryYear(2026));
+    final controller = StatsPageController();
     final now = DateTime(2026, 7, 11);
     final repository = InMemoryStatsSnapshotRepository([
       StatsSnapshot(
-        id: 'income-page-two',
-        name: 'Bevétel snapshot',
+        id: 'stored-page-two',
+        name: 'Második oldal',
         createdAt: now,
         updatedAt: now,
         includeCategoryScope: false,
         includeVendorScope: false,
-        includeActiveType: true,
+        includeActiveType: false,
         includeThreshold: false,
         includeLayoutMode: false,
         includePageIndex: true,
-        activeType: TransactionType.income,
         pageIndex: 1,
       ),
     ]);
@@ -626,20 +724,24 @@ void main() {
           body: SizedBox(
             width: 390,
             height: 780,
-            child: StatsPage(store: store, snapshotRepository: repository),
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: repository,
+            ),
           ),
         ),
       ),
     );
     await pumpStatsPage(tester);
 
-    await tester.drag(
-      find.byKey(const ValueKey('stats-content-gesture-surface')),
-      const Offset(-260, 0),
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('stats-snapshot-card-stored-page-two')),
     );
     await pumpStatsPage(tester);
 
-    expect(find.text('Bevétel'), findsNWidgets(1));
     expect(find.byKey(const ValueKey('stats-page-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('stats-page-2')), findsNothing);
   });

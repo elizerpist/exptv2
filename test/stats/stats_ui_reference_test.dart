@@ -117,12 +117,6 @@ void main() {
       expect(indicatorTop, greaterThanOrEqualTo(tester.getTopLeft(header).dy));
       expect(indicatorTop, lessThan(tester.getBottomLeft(header).dy));
       expect(
-        tester
-            .getRect(find.byKey(const ValueKey('stats-page-indicator')))
-            .right,
-        moreOrLessEquals(tester.getRect(header).right - 24, epsilon: 0.1),
-      );
-      expect(
         find.descendant(
           of: find.byKey(const ValueKey('stats-page-indicator')),
           matching: find.byType(AnimatedContainer),
@@ -136,6 +130,10 @@ void main() {
       );
       expect(tester.getSize(firstDot).width, 18);
       expect(tester.getSize(secondDot).width, 6);
+      expect(
+        tester.getRect(secondDot).right,
+        moreOrLessEquals(tester.getRect(header).right - 24, epsilon: 0.1),
+      );
 
       final beforeScrollTop = tester.getTopLeft(header).dy;
       final pageOneScroll = find.byKey(
