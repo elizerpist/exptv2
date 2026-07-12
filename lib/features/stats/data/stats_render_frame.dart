@@ -141,27 +141,39 @@ class StatsRenderFrameKey {
 }
 
 class StatsRenderFrameCache {
-  StatsRenderFrameKey? _key;
-  StatsRenderFrame? _frame;
+  StatsRenderFrameCache({int capacity = 12})
+    : capacity = capacity < 1 ? 1 : capacity;
+
+  final int capacity;
+  final _frames = <StatsRenderFrameKey, StatsRenderFrame>{};
 
   StatsRenderFrame resolve(
     StatsRenderFrameKey key,
     StatsRenderFrame Function() builder,
   ) {
-    final frame = _frame;
-    if (frame != null && key == _key) return frame;
+    final frame = lookup(key);
+    if (frame != null) return frame;
     final next = builder();
-    _key = key;
-    _frame = next;
+    seed(key, next);
     return next;
   }
 
   StatsRenderFrame? lookup(StatsRenderFrameKey key) {
-    return key == _key ? _frame : null;
+    final frame = _frames.remove(key);
+    if (frame == null) return null;
+    _frames[key] = frame;
+    return frame;
   }
 
   void seed(StatsRenderFrameKey key, StatsRenderFrame frame) {
-    _key = key;
-    _frame = frame;
+    _frames.remove(key);
+    _frames[key] = frame;
+    while (_frames.length > capacity) {
+      _frames.remove(_frames.keys.first);
+    }
+  }
+
+  void clear() {
+    _frames.clear();
   }
 }

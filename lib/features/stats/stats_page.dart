@@ -137,8 +137,8 @@ class _StatsPageState extends State<StatsPage>
   StatsRenderFrameKey? _inFlightFrameKey;
   var _frameRequestScheduled = false;
   var _frameRequestGeneration = 0;
-  var _snapshotFramePending = false;
   TransactionType? _snapshotPendingType;
+  final _prewarmFrameKeys = <StatsRenderFrameKey>{};
   final _inactiveStoreListenable = ChangeNotifier();
   var _pageActive = true;
 
@@ -342,7 +342,6 @@ class _StatsPageState extends State<StatsPage>
     _frameRequestGeneration += 1;
     _scheduledFrameTarget = null;
     setState(() {
-      _snapshotFramePending = true;
       _snapshotPendingType = applied.activeType;
     });
     await SchedulerBinding.instance.endOfFrame;
@@ -360,7 +359,6 @@ class _StatsPageState extends State<StatsPage>
       _activeType = applied.activeType;
       _pendingActiveType = null;
       _thresholdValue = finalFrame.yearData.thresholdValue;
-      _snapshotFramePending = false;
       _snapshotPendingType = null;
       if (snapshot.includeCategoryScope) {
         _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
@@ -493,13 +491,15 @@ class _StatsPageState extends State<StatsPage>
             }
             final target = _currentFrameTarget();
             final frame = _frameForBuild(target);
-            if (frame == null || _snapshotFramePending) {
+            if (frame == null) {
               return _buildFramePending(
                 resolvedTheme,
                 activeType:
                     _snapshotPendingType ?? _pendingActiveType ?? _activeType,
               );
             }
+            final controlsActiveType =
+                _snapshotPendingType ?? _pendingActiveType ?? _activeType;
             final data = frame.yearData;
             final focusedMonth = _focusedMonth == null
                 ? null
@@ -518,7 +518,7 @@ class _StatsPageState extends State<StatsPage>
                         height: TransactionHeaderMetrics.contentTop,
                       ),
                       TransactionTypePills(
-                        activeType: _activeType,
+                        activeType: controlsActiveType,
                         surfaceColor: resolvedTheme.logBox,
                         surfaceStyle: resolvedTheme.buttonSurfaceStyle,
                         accentColor: resolvedTheme.accent,
@@ -551,7 +551,9 @@ class _StatsPageState extends State<StatsPage>
                         onVendorListPressed:
                             widget.onVendorSheetRequested == null
                             ? null
-                            : () => widget.onVendorSheetRequested!(_activeType),
+                            : () => widget.onVendorSheetRequested!(
+                                controlsActiveType,
+                              ),
                         accentColor: resolvedTheme.accent,
                       ),
                       _StatsPageHeader(
@@ -737,14 +739,14 @@ class _StatsPageState extends State<StatsPage>
           cached.yearData.thresholdValue != _thresholdValue;
       if (needsAtomicState) {
         _scheduleCachedFramePublication(target, cached);
-        return null;
+        return lastFrame;
       }
       _lastRenderFrame = cached;
       _lastRenderFrameKey = target.key;
       return cached;
     }
     _scheduleFrameRequest(target);
-    return null;
+    return lastFrame;
   }
 
   void _scheduleCachedFramePublication(
@@ -771,7 +773,8 @@ class _StatsPageState extends State<StatsPage>
 
   void _scheduleFrameRequest(_StatsFrameTarget target) {
     if (_inFlightFrameKey == target.key ||
-        _scheduledFrameTarget?.key == target.key) {
+        _scheduledFrameTarget?.key == target.key ||
+        _prewarmFrameKeys.contains(target.key)) {
       return;
     }
     _frameRequestGeneration += 1;
@@ -834,6 +837,53 @@ class _StatsPageState extends State<StatsPage>
       '[Perf] Stats frame worker publish type=${target.request.activeType.name} '
       'generation=$generation',
     );
+    _prewarmStatsFrames('publish');
+  }
+
+  void _prewarmStatsFrames(String reason) {
+    if (!_pageActive) return;
+    final oppositeType = _activeType == TransactionType.expense
+        ? TransactionType.income
+        : TransactionType.expense;
+    final target = _frameTarget(
+      activeType: oppositeType,
+      threshold: _thresholdValue,
+      layoutMode: _layoutMode,
+      year: _year,
+      month: _month,
+      categoryIds: _selectedScopeByType[oppositeType] ?? const <int>{},
+      vendorNames: widget.store.activeMerchantFilters,
+    );
+    if (_renderFrameCache.lookup(target.key) != null ||
+        _inFlightFrameKey == target.key ||
+        _scheduledFrameTarget?.key == target.key ||
+        _prewarmFrameKeys.contains(target.key)) {
+      return;
+    }
+    _prewarmFrameKeys.add(target.key);
+    DebugConsole.log(
+      '[Perf] Stats frame prewarm request reason=$reason '
+      'type=${target.request.activeType.name}',
+    );
+    _renderFrameWorker
+        .build(target.request)
+        .then(
+          (frame) {
+            _prewarmFrameKeys.remove(target.key);
+            if (!mounted) return;
+            final effectiveKey = target.keyWithThreshold(
+              frame.yearData.thresholdValue,
+            );
+            _renderFrameCache.seed(effectiveKey, frame);
+            final currentKey = _currentFrameTarget().key;
+            if (currentKey != target.key && currentKey != effectiveKey) return;
+            _publishFrame(target, frame, _frameRequestGeneration);
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            _prewarmFrameKeys.remove(target.key);
+            DebugConsole.log('[Perf] Stats frame prewarm failed: $error');
+          },
+        );
   }
 
   Widget _buildFramePending(

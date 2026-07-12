@@ -253,6 +253,72 @@ void main() {
     expect(buildCount, 2);
   });
 
+  test('cache retains multiple warm stats frames before evicting old keys', () {
+    final categories = [
+      category(id: 1, name: 'Expense', type: TransactionType.expense),
+      category(id: 2, name: 'Income', type: TransactionType.income),
+    ];
+    final transactions = [
+      record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+      record(id: 2, date: '2026-01-01', amount: 7000, categoryId: 2),
+    ];
+    final revision = Object();
+    final cache = StatsRenderFrameCache(capacity: 2);
+    var buildCount = 0;
+
+    StatsRenderFrame frameFor(TransactionType type) {
+      buildCount += 1;
+      return StatsRenderFrame.build(
+        year: 2026,
+        month: 1,
+        activeType: type,
+        thresholdValue: 5000,
+        transactions: transactions,
+        categories: categories,
+        selectedCategoryIds: const {},
+        today: DateTime(2026, 1, 10),
+      );
+    }
+
+    StatsRenderFrameKey key(TransactionType type, double threshold) {
+      return StatsRenderFrameKey(
+        dataRevision: revision,
+        activeType: type,
+        summaryScope: StatsSummaryScope.yearly,
+        year: 2026,
+        month: 1,
+        categoryIds: const {},
+        vendorNames: const {},
+        query: '',
+        threshold: threshold,
+      );
+    }
+
+    final expense = cache.resolve(
+      key(TransactionType.expense, 5000),
+      () => frameFor(TransactionType.expense),
+    );
+    final income = cache.resolve(
+      key(TransactionType.income, 5000),
+      () => frameFor(TransactionType.income),
+    );
+
+    expect(cache.lookup(key(TransactionType.expense, 5000)), same(expense));
+    expect(cache.lookup(key(TransactionType.income, 5000)), same(income));
+    expect(buildCount, 2);
+
+    final threshold = cache.resolve(
+      key(TransactionType.expense, 10000),
+      () => frameFor(TransactionType.expense),
+    );
+
+    expect(threshold, isNot(same(expense)));
+    expect(cache.lookup(key(TransactionType.expense, 5000)), isNull);
+    expect(cache.lookup(key(TransactionType.income, 5000)), same(income));
+    expect(cache.lookup(key(TransactionType.expense, 10000)), same(threshold));
+    expect(buildCount, 3);
+  });
+
   test(
     'all-time display folds same month day but score keeps original days',
     () {

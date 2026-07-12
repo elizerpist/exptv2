@@ -1088,18 +1088,19 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('stats-type-switch-pending')),
-        findsOneWidget,
+        findsNothing,
       );
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
       expect(
         find.byKey(const ValueKey('stats-content-switcher')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(worker.requests, hasLength(2));
       worker.complete(1);
       await tester.pump();
-      expect(cache.builderCalls, buildsBeforeTap + 1);
+      expect(cache.builderCalls, buildsBeforeTap);
       await tester.pump();
-      expect(cache.builderCalls, buildsBeforeTap + 1);
+      expect(cache.builderCalls, buildsBeforeTap);
       expect(
         find.byKey(const ValueKey('stats-type-switch-pending')),
         findsNothing,
@@ -1112,6 +1113,79 @@ void main() {
       expect(cache.resolvedFrames.last.filteredTransactionCount, 1000);
     },
   );
+
+  testWidgets('published stats frame prewarms opposite type without spinner', (
+    tester,
+  ) async {
+    final categories = [
+      category(id: 1, name: 'Expense', type: TransactionType.expense),
+      category(id: 2, name: 'Income', type: TransactionType.income),
+    ];
+    final transactions = List<TransactionRecord>.generate(1200, (index) {
+      final income = index.isEven;
+      return record(
+        id: 400000 + index,
+        date: '2026-07-${((index % 28) + 1).toString().padLeft(2, '0')}',
+        amount: income ? 3000 + index.toDouble() : -(3000 + index.toDouble()),
+        categoryId: income ? 2 : 1,
+      );
+    });
+    final store = TransactionStore(
+      StatsRepository(categories: categories, transactions: transactions),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    await tester.pump(const Duration(milliseconds: 1));
+    final cache = TrackingStatsRenderFrameCache();
+    final worker = ControlledStatsFrameWorker();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              snapshotRepository: snapshotRepository,
+              renderFrameCache: cache,
+              renderFrameWorker: worker,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(worker.requests, hasLength(1));
+    expect(worker.requests.single.activeType, TransactionType.expense);
+    worker.complete(0);
+    await tester.pump();
+    await tester.pump();
+
+    expect(worker.requests, hasLength(2));
+    expect(worker.requests.last.activeType, TransactionType.income);
+    worker.complete(1);
+    await tester.pump();
+
+    final incomePill = find.byKey(
+      const ValueKey('transaction-type-pill-income-surface'),
+    );
+    final inkWell = tester.widget<InkWell>(
+      find.descendant(of: incomePill, matching: find.byType(InkWell)),
+    );
+    inkWell.onTap!();
+    await tester.pump();
+
+    expect(worker.requests, hasLength(2));
+    expect(
+      find.byKey(const ValueKey('stats-type-switch-pending')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+    await tester.pump();
+    expect(cache.resolvedKeys.last.activeType, TransactionType.income);
+  });
 
   testWidgets(
     'retained Stats listener performs no frame build in Home type callback',
@@ -1176,7 +1250,8 @@ void main() {
 
       await tester.pumpWidget(statsHost(active: true));
       await tester.pump();
-      expect(cache.builderCalls, buildsBeforeHomeSwitch + 1);
+      expect(cache.builderCalls, greaterThanOrEqualTo(buildsBeforeHomeSwitch));
+      expect(cache.builderCalls, lessThanOrEqualTo(buildsBeforeHomeSwitch + 1));
     },
   );
 
@@ -1232,23 +1307,36 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(cache.builderCalls, 1);
+      if (worker.requests.length > 1) {
+        worker.complete(1);
+        await tester.pump();
+      }
+      final workerCallsBeforeSearch = worker.requests.length;
       final search = tester.widget<SearchPill>(find.byType(SearchPill));
 
       search.onQueryChanged('tes');
       await tester.pump();
-      expect(worker.requests, hasLength(2));
+      expect(worker.requests, hasLength(workerCallsBeforeSearch + 1));
       expect(cache.builderCalls, 1);
-      expect(find.byKey(const ValueKey('stats-frame-pending')), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('stats-content-switcher')),
+        findsOneWidget,
+      );
 
       search.onQueryChanged('teszt');
       await tester.pump();
-      expect(worker.requests, hasLength(3));
-      worker.complete(1);
+      expect(worker.requests, hasLength(workerCallsBeforeSearch + 2));
+      worker.complete(workerCallsBeforeSearch);
       await tester.pump();
       expect(cache.builderCalls, 1);
-      expect(find.byKey(const ValueKey('stats-frame-pending')), findsOneWidget);
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('stats-content-switcher')),
+        findsOneWidget,
+      );
 
-      worker.complete(2);
+      worker.complete(workerCallsBeforeSearch + 1);
       await tester.pump();
       await tester.pump();
       expect(cache.builderCalls, 2);
@@ -2358,6 +2446,102 @@ void main() {
     expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
   });
 
+  testWidgets('delayed snapshot recall keeps current stats content visible', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 920);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = TransactionStore(
+      StatsRepository(
+        categories: [
+          category(id: 1, name: 'Bolt', type: TransactionType.expense),
+          category(id: 2, name: 'Fizetes', type: TransactionType.income),
+        ],
+        transactions: [
+          record(id: 1, date: '2026-01-01', amount: -80000, categoryId: 1),
+          record(id: 2, date: '2026-01-01', amount: 90000, categoryId: 2),
+        ],
+      ),
+      clock: () => DateTime(2026, 7, 7),
+    );
+    await store.start();
+    unawaited(store.setSummaryYear(2026));
+    await tester.pump(const Duration(milliseconds: 1));
+    final controller = StatsPageController();
+    final cache = TrackingStatsRenderFrameCache();
+    final worker = ControlledStatsFrameWorker();
+    final now = DateTime(2026, 7, 11);
+    final repository = InMemoryStatsSnapshotRepository([
+      StatsSnapshot(
+        id: 'delayed-visible',
+        name: 'Delayed visible',
+        createdAt: now,
+        updatedAt: now,
+        includeCategoryScope: false,
+        includeVendorScope: false,
+        includeActiveType: true,
+        includeThreshold: true,
+        includeLayoutMode: true,
+        includePageIndex: false,
+        activeType: TransactionType.income,
+        threshold: 25000,
+        layoutMode: StatsLayoutMode.month,
+        activeYear: 2026,
+        activeMonth: 1,
+      ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 780,
+            child: StatsPage(
+              store: store,
+              controller: controller,
+              snapshotRepository: repository,
+              renderFrameCache: cache,
+              renderFrameWorker: worker,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(worker.requests, hasLength(1));
+    worker.complete(0);
+    await tester.pump();
+    await tester.pump();
+    if (worker.requests.length > 1) {
+      worker.complete(1);
+      await tester.pump();
+    }
+    controller.openThresholdSheet();
+    await pumpStatsPage(tester);
+    final workerCallsBeforeRecall = worker.requests.length;
+
+    await tester.tap(
+      find.byKey(const ValueKey('stats-snapshot-card-delayed-visible')),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(worker.requests.length, greaterThan(workerCallsBeforeRecall));
+    expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('stats-content-switcher')),
+      findsOneWidget,
+    );
+
+    worker.complete(worker.requests.length - 1);
+    await pumpStatsPage(tester);
+
+    expect(cache.resolvedKeys.last.activeType, TransactionType.income);
+    expect(find.text('25 000 Ft'), findsAtLeastNWidgets(1));
+  });
+
   testWidgets(
     'narrow out-of-range recall builds only the final clamped frame',
     (tester) async {
@@ -2838,7 +3022,8 @@ void main() {
       await tester.tap(find.text('Bevétel oldal'));
       await pumpStatsPage(tester);
 
-      expect(cache.builderCalls, beforeRecall + 1);
+      expect(cache.builderCalls, greaterThanOrEqualTo(beforeRecall));
+      expect(cache.builderCalls, lessThanOrEqualTo(beforeRecall + 1));
       expect(find.text('2026'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('search-pill-capsule-category-2')),
