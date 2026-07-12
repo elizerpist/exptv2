@@ -13,7 +13,16 @@ import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/stats_test_frame_worker.dart';
+
 void main() {
+  setUp(() {
+    StatsPage.debugRenderFrameWorkerOverride =
+        const TestImmediateStatsFrameWorker();
+  });
+
+  tearDown(() => StatsPage.debugRenderFrameWorkerOverride = null);
+
   testWidgets('year mode uses the accepted 200px two-column month cards', (
     tester,
   ) async {
@@ -219,7 +228,7 @@ void main() {
 
       await _pumpPage(tester, store);
       await tester.enterText(find.byType(TextField).first, 'Alma');
-      await tester.pump();
+      await _settle(tester);
 
       expect(find.text('8 000 Ft'), findsAtLeastNWidgets(1));
       expect(find.text('17 000 Ft'), findsNothing);

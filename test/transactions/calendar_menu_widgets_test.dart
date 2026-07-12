@@ -20,7 +20,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/stats_test_frame_worker.dart';
+
 void main() {
+  setUp(() {
+    StatsPage.debugRenderFrameWorkerOverride =
+        const TestImmediateStatsFrameWorker();
+  });
+
+  tearDown(() => StatsPage.debugRenderFrameWorkerOverride = null);
+
   testWidgets('calendar mode selector renders compact visual mode buttons', (
     tester,
   ) async {

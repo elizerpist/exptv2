@@ -1,5 +1,6 @@
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
@@ -15,6 +16,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'helpers/stats_test_frame_worker.dart';
+
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
 final updatedThemeSettings = <Map<dynamic, dynamic>>[];
@@ -28,6 +31,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    StatsPage.debugRenderFrameWorkerOverride =
+        const TestImmediateStatsFrameWorker();
     DebugConsole.clear();
     savedTransactions.clear();
     updatedTransactions.clear();
@@ -182,6 +187,7 @@ void main() {
   });
 
   tearDown(() {
+    StatsPage.debugRenderFrameWorkerOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('pushparser/methods'),
