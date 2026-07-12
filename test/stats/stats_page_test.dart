@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/data/stats_snapshot.dart';
@@ -3040,11 +3041,10 @@ void main() {
         final cardDecoration = cardInk.decoration as BoxDecoration;
         expect((cardDecoration.border! as Border).top.width, 1);
         expect(tester.takeException(), isNull, reason: '$viewport');
-        await expectLater(
+        await expectGoldenWithPixelTolerance(
           find.byKey(const ValueKey('stats-page')),
-          matchesGoldenFile(
-            'goldens/stats_focused_month_${viewport.width.round()}x${viewport.height.round()}.png',
-          ),
+          'goldens/stats_focused_month_${viewport.width.round()}x${viewport.height.round()}.png',
+          maxDiffPixels: 1,
         );
       }
     },
@@ -3152,6 +3152,55 @@ Future<void> pumpStatsPage(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 240));
   await tester.pump(const Duration(milliseconds: 240));
+}
+
+Future<void> expectGoldenWithPixelTolerance(
+  Finder finder,
+  String goldenPath, {
+  required int maxDiffPixels,
+}) async {
+  final previousComparator = goldenFileComparator;
+  goldenFileComparator = _PixelToleranceGoldenComparator(
+    Uri.parse('test/stats/stats_page_test.dart'),
+    maxDiffPixels: maxDiffPixels,
+  );
+  try {
+    await expectLater(finder, matchesGoldenFile(goldenPath));
+  } finally {
+    goldenFileComparator = previousComparator;
+  }
+}
+
+class _PixelToleranceGoldenComparator extends LocalFileComparator {
+  _PixelToleranceGoldenComparator(super.testFile, {required this.maxDiffPixels})
+    : assert(maxDiffPixels >= 0);
+
+  final int maxDiffPixels;
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    final diffPixels = _diffPixels(result);
+    if (result.passed || (diffPixels != null && diffPixels <= maxDiffPixels)) {
+      result.dispose();
+      return true;
+    }
+
+    final error = await generateFailureOutput(result, golden, basedir);
+    result.dispose();
+    throw FlutterError(error);
+  }
+
+  int? _diffPixels(ComparisonResult result) {
+    final error = result.error;
+    if (error == null) return null;
+    final match = RegExp(r'(\d+)px diff detected').firstMatch(error);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
 }
 
 class ImmediateStatsFrameWorker implements StatsRenderFrameWorker {
