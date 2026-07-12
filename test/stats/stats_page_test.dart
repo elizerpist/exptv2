@@ -1256,6 +1256,215 @@ void main() {
   );
 
   testWidgets(
+    'inactive retained Stats prewarms changed data before reactivation',
+    (tester) async {
+      final categories = [
+        category(id: 1, name: 'Expense', type: TransactionType.expense),
+        category(id: 2, name: 'Income', type: TransactionType.income),
+      ];
+      final store = TransactionStore(
+        StatsRepository(
+          categories: categories,
+          transactions: [
+            record(id: 1, date: '2026-07-01', amount: -8000, categoryId: 1),
+            record(id: 2, date: '2026-07-02', amount: 9000, categoryId: 2),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      addTearDown(store.dispose);
+      final cache = StatsRenderFrameCache();
+      final worker = ControlledStatsFrameWorker();
+
+      Widget statsHost({required bool active}) {
+        return MaterialApp(
+          home: Scaffold(
+            body: TickerMode(
+              enabled: active,
+              child: SizedBox(
+                width: 390,
+                height: 780,
+                child: StatsPage(
+                  store: store,
+                  snapshotRepository: snapshotRepository,
+                  renderFrameCache: cache,
+                  renderFrameWorker: worker,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(statsHost(active: true));
+      expect(worker.requests, hasLength(1));
+      worker.complete(0);
+      await tester.pump();
+      await tester.pump();
+      expect(worker.requests, hasLength(2));
+      worker.complete(1);
+      await tester.pump();
+
+      await tester.pumpWidget(statsHost(active: false));
+      await tester.pump();
+      final requestsBeforeMerge = worker.requests.length;
+
+      store.mergeExternalTransactions([
+        record(id: 3, date: '2026-07-03', amount: -11000, categoryId: 1),
+      ]);
+
+      expect(worker.requests, hasLength(requestsBeforeMerge + 2));
+      expect(
+        worker.requests
+            .skip(requestsBeforeMerge)
+            .map((request) => request.activeType),
+        containsAll(<TransactionType>[
+          TransactionType.expense,
+          TransactionType.income,
+        ]),
+      );
+      worker.complete(requestsBeforeMerge);
+      worker.complete(requestsBeforeMerge + 1);
+      await tester.pump();
+
+      final requestsBeforeReactivation = worker.requests.length;
+      await tester.pumpWidget(statsHost(active: true));
+      await tester.pump();
+
+      expect(worker.requests, hasLength(requestsBeforeReactivation));
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('stats-content-switcher')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'failed inactive prewarm retries the current frame after reactivation',
+    (tester) async {
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Expense', type: TransactionType.expense),
+            category(id: 2, name: 'Income', type: TransactionType.income),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-07-01', amount: -8000, categoryId: 1),
+            record(id: 2, date: '2026-07-02', amount: 9000, categoryId: 2),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      addTearDown(store.dispose);
+      final worker = ControlledStatsFrameWorker();
+
+      Widget statsHost({required bool active}) {
+        return MaterialApp(
+          home: TickerMode(
+            enabled: active,
+            child: StatsPage(
+              store: store,
+              snapshotRepository: snapshotRepository,
+              renderFrameWorker: worker,
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(statsHost(active: true));
+      worker.complete(0);
+      await tester.pump();
+      await tester.pump();
+      worker.complete(1);
+      await tester.pump();
+
+      await tester.pumpWidget(statsHost(active: false));
+      await tester.pump();
+      final requestsBeforeMerge = worker.requests.length;
+      store.mergeExternalTransactions([
+        record(id: 3, date: '2026-07-03', amount: -11000, categoryId: 1),
+      ]);
+      expect(worker.requests, hasLength(requestsBeforeMerge + 2));
+
+      await tester.pumpWidget(statsHost(active: true));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+      final failedIndex = worker.requests.indexWhere(
+        (request) =>
+            request.activeType == TransactionType.expense &&
+            request.transactions.length == 3,
+        requestsBeforeMerge,
+      );
+      expect(failedIndex, isNonNegative);
+      worker.fail(failedIndex);
+      await tester.pump();
+      await tester.pump();
+
+      expect(worker.requests, hasLength(requestsBeforeMerge + 3));
+      expect(worker.requests.last.activeType, TransactionType.expense);
+      expect(worker.requests.last.transactions, hasLength(3));
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'lifecycle refresh prewarms the new calendar day without a spinner',
+    (tester) async {
+      var currentDate = DateTime(2026, 7, 7, 23, 59);
+      final store = TransactionStore(
+        StatsRepository(
+          categories: [
+            category(id: 1, name: 'Expense', type: TransactionType.expense),
+            category(id: 2, name: 'Income', type: TransactionType.income),
+          ],
+          transactions: [
+            record(id: 1, date: '2026-07-01', amount: -8000, categoryId: 1),
+            record(id: 2, date: '2026-07-02', amount: 9000, categoryId: 2),
+          ],
+        ),
+        clock: () => currentDate,
+      );
+      await store.start();
+      addTearDown(store.dispose);
+      final controller = StatsPageController();
+      final worker = ControlledStatsFrameWorker();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatsPage(
+            store: store,
+            controller: controller,
+            snapshotRepository: snapshotRepository,
+            renderFrameWorker: worker,
+          ),
+        ),
+      );
+      worker.complete(0);
+      await tester.pump();
+      await tester.pump();
+      worker.complete(1);
+      await tester.pump();
+      final requestsBeforeResume = worker.requests.length;
+
+      currentDate = DateTime(2026, 7, 8);
+      controller.refreshForLifecycle();
+      await tester.pump();
+
+      expect(worker.requests, hasLength(requestsBeforeResume + 2));
+      expect(
+        worker.requests
+            .skip(requestsBeforeResume)
+            .map((request) => request.today),
+        everyElement(DateTime(2026, 7, 8)),
+      );
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+    },
+  );
+
+  testWidgets(
     '10k worker keeps feedback light and publishes only latest search frame',
     (tester) async {
       final categories = [
@@ -3411,6 +3620,10 @@ class ControlledStatsFrameWorker implements StatsRenderFrameWorker {
 
   void complete(int index) {
     _completers[index].complete(requests[index].buildSynchronously());
+  }
+
+  void fail(int index) {
+    _completers[index].completeError(StateError('controlled failure'));
   }
 }
 

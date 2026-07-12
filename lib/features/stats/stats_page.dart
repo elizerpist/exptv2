@@ -29,6 +29,7 @@ import '../transactions/widgets/transaction_type_pills.dart';
 import 'data/stats_page2_metrics.dart';
 import 'data/stats_render_frame.dart';
 import 'data/stats_render_frame_worker.dart';
+import 'data/stats_render_prewarmer.dart';
 import 'data/stats_snapshot.dart';
 import 'data/stats_year_data.dart';
 import 'widgets/stats_fast_info_graph.dart';
@@ -38,6 +39,7 @@ class StatsPageController {
   VoidCallback? _openThresholdSheet;
   ValueChanged<int>? _stepSnapshot;
   ValueChanged<int>? _stepThreshold;
+  VoidCallback? _refreshForLifecycle;
 
   void openThresholdSheet() {
     _openThresholdSheet?.call();
@@ -51,14 +53,20 @@ class StatsPageController {
     _stepThreshold?.call(multiplier);
   }
 
+  void refreshForLifecycle() {
+    _refreshForLifecycle?.call();
+  }
+
   void _attach({
     required VoidCallback openThresholdSheet,
     required ValueChanged<int> stepSnapshot,
     required ValueChanged<int> stepThreshold,
+    required VoidCallback refreshForLifecycle,
   }) {
     _openThresholdSheet = openThresholdSheet;
     _stepSnapshot = stepSnapshot;
     _stepThreshold = stepThreshold;
+    _refreshForLifecycle = refreshForLifecycle;
   }
 
   void _detach(VoidCallback openThresholdSheet) {
@@ -66,6 +74,7 @@ class StatsPageController {
       _openThresholdSheet = null;
       _stepSnapshot = null;
       _stepThreshold = null;
+      _refreshForLifecycle = null;
     }
   }
 }
@@ -110,7 +119,7 @@ class _StatsPageState extends State<StatsPage>
   var _yearScopeEnabled = true;
   var _monthScopeEnabled = false;
   var _activeType = TransactionType.expense;
-  var _thresholdValue = 5000.0;
+  var _thresholdValue = defaultStatsThreshold;
   int? _focusedMonth;
   var _scopeSheetOpen = false;
   late final ValueNotifier<double> _fastInfoExtent;
@@ -123,6 +132,7 @@ class _StatsPageState extends State<StatsPage>
   };
   late StatsRenderFrameCache _renderFrameCache;
   late StatsRenderFrameWorker _renderFrameWorker;
+  late StatsRenderPrewarmer _renderPrewarmer;
   StatsRenderFrame? _lastRenderFrame;
   StatsRenderFrameKey? _lastRenderFrameKey;
   late StatsSnapshotRepository _snapshotRepository;
@@ -154,6 +164,10 @@ class _StatsPageState extends State<StatsPage>
         widget.renderFrameWorker ??
         StatsPage.debugRenderFrameWorkerOverride ??
         const IsolateStatsRenderFrameWorker();
+    _renderPrewarmer = StatsRenderPrewarmer(
+      cache: _renderFrameCache,
+      worker: _renderFrameWorker,
+    );
     unawaited(_loadSnapshots());
     _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
@@ -162,12 +176,14 @@ class _StatsPageState extends State<StatsPage>
       openThresholdSheet: _openThresholdControlSheet,
       stepSnapshot: _stepSnapshot,
       stepThreshold: _stepThreshold,
+      refreshForLifecycle: _refreshForLifecycle,
     );
   }
 
   @override
   void didUpdateWidget(covariant StatsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    var renderDependenciesChanged = false;
     if (oldWidget.snapshotRepository != widget.snapshotRepository &&
         widget.snapshotRepository != null) {
       _snapshotRepository = widget.snapshotRepository!;
@@ -175,12 +191,20 @@ class _StatsPageState extends State<StatsPage>
     }
     if (oldWidget.renderFrameCache != widget.renderFrameCache) {
       _renderFrameCache = widget.renderFrameCache ?? StatsRenderFrameCache();
+      renderDependenciesChanged = true;
     }
     if (oldWidget.renderFrameWorker != widget.renderFrameWorker) {
       _renderFrameWorker =
           widget.renderFrameWorker ??
           StatsPage.debugRenderFrameWorkerOverride ??
           const IsolateStatsRenderFrameWorker();
+      renderDependenciesChanged = true;
+    }
+    if (renderDependenciesChanged) {
+      _renderPrewarmer = StatsRenderPrewarmer(
+        cache: _renderFrameCache,
+        worker: _renderFrameWorker,
+      );
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?._detach(_openThresholdControlSheet);
@@ -188,6 +212,7 @@ class _StatsPageState extends State<StatsPage>
         openThresholdSheet: _openThresholdControlSheet,
         stepSnapshot: _stepSnapshot,
         stepThreshold: _stepThreshold,
+        refreshForLifecycle: _refreshForLifecycle,
       );
     }
   }
@@ -216,10 +241,27 @@ class _StatsPageState extends State<StatsPage>
   bool get wantKeepAlive => true;
 
   void _handleStoreChanged() {
-    if (!_pageActive) return;
     _discardPendingThresholdStep();
     final changed = _syncSummaryFromStore();
+    if (!_pageActive) {
+      _prewarmStatsFrames(
+        'inactive-store',
+        includeCurrent: true,
+        allowInactive: true,
+      );
+      return;
+    }
     if (changed && mounted) setState(() {});
+  }
+
+  void _refreshForLifecycle() {
+    if (!mounted) return;
+    _prewarmStatsFrames(
+      'lifecycle-resume',
+      includeCurrent: true,
+      allowInactive: true,
+    );
+    if (_pageActive) setState(() {});
   }
 
   bool _syncSummaryFromStore() {
@@ -698,32 +740,24 @@ class _StatsPageState extends State<StatsPage>
     final resolvedQuery = query ?? _searchQuery;
     final transactions = widget.store.transactions;
     final categories = widget.store.categories;
-    final key = StatsRenderFrameKey(
-      dataRevision: (transactions: transactions, categories: categories),
-      activeType: activeType,
-      summaryScope: summaryScope,
+    final request = StatsRenderFrameRequest(
       year: year,
       month: month,
-      categoryIds: categoryIds,
-      vendorNames: vendorNames,
+      activeType: activeType,
+      thresholdValue: threshold,
+      transactions: transactions,
+      categories: categories,
+      selectedCategoryIds: Set<int>.unmodifiable(categoryIds),
+      vendorFilters: Set<String>.unmodifiable(vendorNames),
+      summaryScope: summaryScope,
       query: resolvedQuery,
-      threshold: threshold,
+      today: widget.store.currentDate,
     );
     return _StatsFrameTarget(
-      key: key,
-      request: StatsRenderFrameRequest(
-        year: year,
-        month: month,
-        activeType: activeType,
-        thresholdValue: threshold,
-        transactions: transactions,
-        categories: categories,
-        selectedCategoryIds: Set<int>.unmodifiable(categoryIds),
-        vendorFilters: Set<String>.unmodifiable(vendorNames),
-        summaryScope: summaryScope,
-        query: resolvedQuery,
-        today: widget.store.currentDate,
+      key: request.cacheKey(
+        dataRevision: (transactions: transactions, categories: categories),
       ),
+      request: request,
     );
   }
 
@@ -840,9 +874,16 @@ class _StatsPageState extends State<StatsPage>
     _prewarmStatsFrames('publish');
   }
 
-  void _prewarmStatsFrames(String reason) {
-    if (!_pageActive) return;
-    final oppositeType = _activeType == TransactionType.expense
+  void _prewarmStatsFrames(
+    String reason, {
+    bool includeCurrent = false,
+    bool allowInactive = false,
+  }) {
+    if (!_pageActive && !allowInactive) return;
+    final currentTarget = _currentFrameTarget();
+    if (includeCurrent) _prewarmStatsFrame(currentTarget, reason);
+    final oppositeType =
+        currentTarget.request.activeType == TransactionType.expense
         ? TransactionType.income
         : TransactionType.expense;
     final target = _frameTarget(
@@ -854,6 +895,10 @@ class _StatsPageState extends State<StatsPage>
       categoryIds: _selectedScopeByType[oppositeType] ?? const <int>{},
       vendorNames: widget.store.activeMerchantFilters,
     );
+    _prewarmStatsFrame(target, reason);
+  }
+
+  void _prewarmStatsFrame(_StatsFrameTarget target, String reason) {
     if (_renderFrameCache.lookup(target.key) != null ||
         _inFlightFrameKey == target.key ||
         _scheduledFrameTarget?.key == target.key ||
@@ -865,8 +910,12 @@ class _StatsPageState extends State<StatsPage>
       '[Perf] Stats frame prewarm request reason=$reason '
       'type=${target.request.activeType.name}',
     );
-    _renderFrameWorker
-        .build(target.request)
+    _renderPrewarmer
+        .prewarmRequest(
+          target.request,
+          dataRevision: target.key.dataRevision,
+          reason: reason,
+        )
         .then(
           (frame) {
             _prewarmFrameKeys.remove(target.key);
@@ -874,7 +923,7 @@ class _StatsPageState extends State<StatsPage>
             final effectiveKey = target.keyWithThreshold(
               frame.yearData.thresholdValue,
             );
-            _renderFrameCache.seed(effectiveKey, frame);
+            if (!_pageActive) return;
             final currentKey = _currentFrameTarget().key;
             if (currentKey != target.key && currentKey != effectiveKey) return;
             _publishFrame(target, frame, _frameRequestGeneration);
@@ -882,6 +931,11 @@ class _StatsPageState extends State<StatsPage>
           onError: (Object error, StackTrace stackTrace) {
             _prewarmFrameKeys.remove(target.key);
             DebugConsole.log('[Perf] Stats frame prewarm failed: $error');
+            if (!mounted || !_pageActive) return;
+            final currentTarget = _currentFrameTarget();
+            if (currentTarget.key == target.key) {
+              _scheduleFrameRequest(currentTarget);
+            }
           },
         );
   }
@@ -1346,17 +1400,7 @@ class _StatsFrameTarget {
   final StatsRenderFrameRequest request;
 
   StatsRenderFrameKey keyWithThreshold(double threshold) {
-    return StatsRenderFrameKey(
-      dataRevision: key.dataRevision,
-      activeType: key.activeType,
-      summaryScope: key.summaryScope,
-      year: key.year,
-      month: key.month,
-      categoryIds: key.categoryIds,
-      vendorNames: key.vendorNames,
-      query: key.query,
-      threshold: threshold,
-    );
+    return key.withThreshold(threshold);
   }
 }
 

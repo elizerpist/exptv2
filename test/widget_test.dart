@@ -205,6 +205,7 @@ void main() {
     return Exptv2App(
       store: store ?? EventStore(bridge, realtimeEnabled: false),
       nativeBridge: bridge,
+      statsRenderFrameWorker: const TestImmediateStatsFrameWorker(),
     );
   }
 

@@ -253,6 +253,35 @@ void main() {
     expect(buildCount, 2);
   });
 
+  test('request cache key changes only when the calendar day changes', () {
+    final categories = [
+      category(id: 1, name: 'Food', type: TransactionType.expense),
+    ];
+    final transactions = [
+      record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+    ];
+    final revision = (transactions: transactions, categories: categories);
+
+    StatsRenderFrameKey key(DateTime today) {
+      return StatsRenderFrameRequest(
+        year: 2026,
+        month: 1,
+        activeType: TransactionType.expense,
+        thresholdValue: 5000,
+        transactions: transactions,
+        categories: categories,
+        selectedCategoryIds: const {},
+        vendorFilters: const {},
+        summaryScope: StatsSummaryScope.yearly,
+        query: '',
+        today: today,
+      ).cacheKey(dataRevision: revision);
+    }
+
+    expect(key(DateTime(2026, 1, 10, 8)), key(DateTime(2026, 1, 10, 23)));
+    expect(key(DateTime(2026, 1, 10)), isNot(key(DateTime(2026, 1, 11))));
+  });
+
   test('cache retains multiple warm stats frames before evicting old keys', () {
     final categories = [
       category(id: 1, name: 'Expense', type: TransactionType.expense),

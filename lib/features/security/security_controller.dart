@@ -13,6 +13,10 @@ class SecurityController extends ChangeNotifier {
   var _loading = true;
   var _locked = false;
   var _authenticatingBiometric = false;
+  var _settingsLoadGeneration = 0;
+  var _authenticationEpoch = 0;
+  var _biometricGeneration = 0;
+  var _disposed = false;
   String? _error;
 
   SecuritySettings get settings => _settings;
@@ -22,65 +26,149 @@ class SecurityController extends ChangeNotifier {
   String? get error => _error;
 
   Future<void> start() async {
-    await _load(lockIfEnabled: true);
+    await _load(lockIfEnabled: true, blocking: true);
   }
 
   Future<void> lockForResume() async {
-    await _load(lockIfEnabled: true);
+    if (_settings.authEnabled) {
+      _beginLockSession();
+      _error = null;
+      _notifyListeners();
+    }
+    await _load(lockIfEnabled: true, blocking: false);
   }
 
   Future<void> refreshSettings() async {
-    await _load(lockIfEnabled: false);
+    await _load(lockIfEnabled: false, blocking: false);
   }
 
-  Future<void> _load({required bool lockIfEnabled}) async {
-    _loading = true;
+  void updateKnownSettings(SecuritySettings settings) {
+    if (_disposed) return;
+    _settingsLoadGeneration += 1;
+    _settings = settings;
     _error = null;
-    notifyListeners();
+    _loading = false;
+    if (!settings.authEnabled) _unlockAndInvalidateAuthentication();
+    _notifyListeners();
+  }
+
+  Future<void> _load({
+    required bool lockIfEnabled,
+    required bool blocking,
+  }) async {
+    final generation = ++_settingsLoadGeneration;
+    final authenticationEpoch = _authenticationEpoch;
+    if (blocking) _loading = true;
+    _error = null;
+    if (blocking) _notifyListeners();
+    var authenticateBiometricAfterLoad = false;
     try {
       final payload = await _nativeBridge.expenseLoadSettings();
+      if (!_isCurrentLoad(generation)) return;
       _settings = payload.securitySettings;
-      if (lockIfEnabled && _settings.authEnabled) {
-        _locked = true;
-        if (_settings.biometricReady) {
-          unawaited(authenticateBiometric());
-        }
+      if (lockIfEnabled &&
+          _settings.authEnabled &&
+          authenticationEpoch == _authenticationEpoch) {
+        if (!_locked) _beginLockSession();
+        authenticateBiometricAfterLoad = _settings.biometricReady;
       } else if (!_settings.authEnabled) {
-        _locked = false;
+        _unlockAndInvalidateAuthentication();
       }
     } catch (error) {
+      if (!_isCurrentLoad(generation)) return;
       _error = error.toString();
-      _locked = true;
+      if (authenticationEpoch == _authenticationEpoch && !_locked) {
+        _beginLockSession();
+      }
     } finally {
-      _loading = false;
-      notifyListeners();
+      if (_isCurrentLoad(generation)) {
+        _loading = false;
+        _notifyListeners();
+      }
+    }
+    if (authenticateBiometricAfterLoad && _isCurrentLoad(generation)) {
+      unawaited(authenticateBiometric());
     }
   }
 
   Future<void> authenticateBiometric() async {
-    if (!_settings.biometricReady || _authenticatingBiometric) return;
+    if (_disposed ||
+        !_locked ||
+        !_settings.biometricReady ||
+        _authenticatingBiometric) {
+      return;
+    }
+    final generation = ++_biometricGeneration;
+    final authenticationEpoch = _authenticationEpoch;
     _authenticatingBiometric = true;
     _error = null;
-    notifyListeners();
+    _notifyListeners();
     try {
       final ok = await _nativeBridge.expenseAuthenticateBiometric();
-      if (ok) _locked = false;
+      if (!_isCurrentBiometric(generation, authenticationEpoch)) return;
+      if (ok) {
+        _unlockAndInvalidateAuthentication();
+        _notifyListeners();
+      }
     } catch (error) {
+      if (!_isCurrentBiometric(generation, authenticationEpoch)) return;
       _error = error.toString();
     } finally {
-      _authenticatingBiometric = false;
-      notifyListeners();
+      if (!_disposed && generation == _biometricGeneration) {
+        _authenticatingBiometric = false;
+        _notifyListeners();
+      }
     }
   }
 
   Future<void> unlockWithPin(String pin) async {
+    if (_disposed || !_locked) return;
+    final authenticationEpoch = _authenticationEpoch;
     final ok = await _nativeBridge.expenseVerifySecurityPin(pin);
+    if (_disposed || authenticationEpoch != _authenticationEpoch) return;
     if (ok) {
-      _locked = false;
+      _unlockAndInvalidateAuthentication();
       _error = null;
     } else {
       _error = 'Hibás PIN.';
     }
-    notifyListeners();
+    _notifyListeners();
+  }
+
+  bool _isCurrentLoad(int generation) {
+    return !_disposed && generation == _settingsLoadGeneration;
+  }
+
+  bool _isCurrentBiometric(int generation, int authenticationEpoch) {
+    return !_disposed &&
+        generation == _biometricGeneration &&
+        authenticationEpoch == _authenticationEpoch;
+  }
+
+  void _beginLockSession() {
+    _locked = true;
+    _authenticationEpoch += 1;
+    _biometricGeneration += 1;
+    _authenticatingBiometric = false;
+  }
+
+  void _unlockAndInvalidateAuthentication() {
+    _locked = false;
+    _authenticationEpoch += 1;
+    _biometricGeneration += 1;
+    _authenticatingBiometric = false;
+  }
+
+  void _notifyListeners() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _settingsLoadGeneration += 1;
+    _authenticationEpoch += 1;
+    _biometricGeneration += 1;
+    super.dispose();
   }
 }

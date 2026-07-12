@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/features/security/security_gate.dart';
 import 'package:exptv2/features/shell/expt_shell.dart';
 import 'package:exptv2/features/notifications/notifications_page.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
+import 'package:exptv2/features/stats/data/stats_render_frame.dart';
+import 'package:exptv2/features/stats/data/stats_render_frame_worker.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
@@ -72,6 +77,274 @@ void main() {
     },
   );
 
+  testWidgets('cold start prewarms and mounts Stats before first navigation', (
+    tester,
+  ) async {
+    const channel = MethodChannel('startup-prewarm-shell');
+    const nativeSheetChannel = MethodChannel('exptv2/native_ime_sheet');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, _smallShellMethodHandler);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeSheetChannel, (call) async => false);
+    addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeSheetChannel, null);
+    });
+    final bridge = NativeBridge(methodChannel: channel);
+    final worker = _ControlledStatsFrameWorker();
+    final cache = StatsRenderFrameCache();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExptShell(
+          store: EventStore(bridge, realtimeEnabled: false),
+          nativeBridge: bridge,
+          statsRenderFrameCache: cache,
+          statsRenderFrameWorker: worker,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(worker.requests, hasLength(2));
+    expect(
+      worker.requests.map((request) => request.activeType),
+      containsAll(<TransactionType>[
+        TransactionType.expense,
+        TransactionType.income,
+      ]),
+    );
+    expect(
+      find.byKey(const ValueKey('shell-cold-start-loading')),
+      findsOneWidget,
+    );
+    expect(find.byType(StatsPage, skipOffstage: false), findsNothing);
+
+    worker.complete(0);
+    worker.complete(1);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('shell-cold-start-loading')),
+      findsNothing,
+    );
+    expect(
+      find.byType(TransactionHomePage, skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.byType(StatsPage, skipOffstage: false), findsOneWidget);
+    final requestCountBeforeStatsTap = worker.requests.length;
+
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-stats')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(worker.requests, hasLength(requestCountBeforeStatsTap));
+    expect(find.byType(StatsPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+  });
+
+  testWidgets(
+    'cold start retries Stats prewarm when resume merges a newer transaction',
+    (tester) async {
+      const channel = MethodChannel('startup-prewarm-revision-shell');
+      const nativeSheetChannel = MethodChannel('exptv2/native_ime_sheet');
+      var eventDelivered = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'loadEventsAfterId' && !eventDelivered) {
+              eventDelivered = true;
+              return <Map<String, Object?>>[
+                <String, Object?>{
+                  'id': 77,
+                  'timestamp': DateTime(2026, 7, 12).millisecondsSinceEpoch,
+                  'source': 'notification_listener',
+                  'packageName': 'hu.bank',
+                  'appLabel': 'Bank',
+                  'title': 'Transaction',
+                  'text': 'Expense',
+                  'bigText': '',
+                  'subText': '',
+                  'category': '',
+                  'notificationKey': 'event-77',
+                  'accessibilityEventType': '',
+                  'hash': 'event-77',
+                  'isDuplicate': false,
+                },
+              ];
+            }
+            if (call.method == 'expenseTransactionsForNotificationEvents') {
+              return <Map<String, Object?>>[
+                <String, Object?>{
+                  'id': 3,
+                  'date': '2026.07.03',
+                  'time': '11:00',
+                  'merchant': 'Background expense',
+                  'amount': -24000,
+                  'userAssignedName': null,
+                  'transactionCategoryID': 1,
+                },
+              ];
+            }
+            return _smallShellMethodHandler(call);
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeSheetChannel, (call) async => false);
+      addTearDown(() async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(nativeSheetChannel, null);
+      });
+      final bridge = NativeBridge(methodChannel: channel);
+      final worker = _ControlledStatsFrameWorker();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ExptShell(
+            store: EventStore(bridge, realtimeEnabled: false),
+            nativeBridge: bridge,
+            statsRenderFrameWorker: worker,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(worker.requests, hasLength(2));
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(eventDelivered, isTrue);
+
+      worker.complete(0);
+      worker.complete(1);
+      await tester.pump();
+      await tester.pump();
+
+      expect(worker.requests, hasLength(4));
+      expect(worker.requests[2].transactions, hasLength(3));
+      expect(worker.requests[3].transactions, hasLength(3));
+      expect(
+        find.byKey(const ValueKey('shell-cold-start-loading')),
+        findsOneWidget,
+      );
+
+      worker.complete(2);
+      worker.complete(3);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('shell-cold-start-loading')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'background resume retains the active Stats tab without cold loading',
+    (tester) async {
+      const channel = MethodChannel('retained-resume-shell');
+      const nativeSheetChannel = MethodChannel('exptv2/native_ime_sheet');
+      var settingsLoadCount = 0;
+      final resumeSettings = Completer<Object?>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'expenseLoadSettings') {
+              settingsLoadCount += 1;
+              if (settingsLoadCount > 2) return await resumeSettings.future;
+            }
+            if (call.method == 'loadEvents') return <Object?>[];
+            return await _smallShellMethodHandler(call);
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeSheetChannel, (call) async => false);
+      addTearDown(() async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(nativeSheetChannel, null);
+      });
+      final bridge = NativeBridge(methodChannel: channel);
+      final worker = _ControlledStatsFrameWorker();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SecurityGate(
+            nativeBridge: bridge,
+            child: ExptShell(
+              store: EventStore(bridge, realtimeEnabled: false),
+              nativeBridge: bridge,
+              statsRenderFrameWorker: worker,
+            ),
+          ),
+        ),
+      );
+      for (var index = 0; index < 6 && worker.requests.length < 2; index += 1) {
+        await tester.pump();
+      }
+      expect(worker.requests, hasLength(2));
+      worker.complete(0);
+      worker.complete(1);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('shell-cold-start-loading')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-stats')));
+      await tester.pump();
+      await tester.pump();
+      final statsElement = tester.element(find.byType(StatsPage));
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        find.byKey(const ValueKey('shell-cold-start-loading')),
+        findsNothing,
+      );
+      expect(tester.element(find.byType(StatsPage)), same(statsElement));
+
+      resumeSettings.complete(<String, Object?>{});
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(StatsPage), findsOneWidget);
+      expect(tester.element(find.byType(StatsPage)), same(statsElement));
+    },
+  );
+
   testWidgets(
     'bottom-nav pointer work is deferred and visited tab elements are retained',
     (tester) async {
@@ -91,12 +364,20 @@ void main() {
       final store = _TrackingEventStore(bridge);
       await tester.pumpWidget(
         MaterialApp(
-          home: ExptShell(store: store, nativeBridge: bridge),
+          home: ExptShell(
+            store: store,
+            nativeBridge: bridge,
+            statsRenderFrameWorker: const _ImmediateStatsFrameWorker(),
+          ),
         ),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 240));
       await tester.pump(const Duration(milliseconds: 240));
+      expect(
+        find.byKey(const ValueKey('shell-cold-start-loading')),
+        findsNothing,
+      );
       final homeElement = tester.element(find.byType(TransactionHomePage));
       store.shellPersistenceWrites = 0;
       DebugConsole.clear();
@@ -235,6 +516,44 @@ class _TrackingEventStore extends EventStore {
   }
 }
 
+class _ControlledStatsFrameWorker implements StatsRenderFrameWorker {
+  final requests = <StatsRenderFrameRequest>[];
+  final _completers = <Completer<StatsRenderFrame>>[];
+
+  @override
+  Future<StatsRenderFrame> build(StatsRenderFrameRequest request) {
+    requests.add(request);
+    final completer = Completer<StatsRenderFrame>();
+    _completers.add(completer);
+    return completer.future;
+  }
+
+  void complete(int index) {
+    _completers[index].complete(requests[index].buildSynchronously());
+  }
+}
+
+class _ImmediateStatsFrameWorker implements StatsRenderFrameWorker {
+  const _ImmediateStatsFrameWorker();
+
+  @override
+  Future<StatsRenderFrame> build(StatsRenderFrameRequest request) async {
+    return StatsRenderFrame.build(
+      year: request.year,
+      month: request.month,
+      activeType: request.activeType,
+      thresholdValue: request.thresholdValue,
+      transactions: const <TransactionRecord>[],
+      categories: request.categories,
+      selectedCategoryIds: request.selectedCategoryIds,
+      vendorFilters: request.vendorFilters,
+      summaryScope: request.summaryScope,
+      query: request.query,
+      today: request.today,
+    );
+  }
+}
+
 class _HighVolumeRepository extends TransactionRepositoryContract {
   _HighVolumeRepository()
     : categories = [
@@ -327,6 +646,46 @@ Future<Object?> _shellMethodHandler(MethodCall call) async {
         _categoryMap(2, 'Income', TransactionType.income),
       ],
       'transactions': _transactionMaps(),
+      'limits': <Object?>[],
+      'recurringGhostTransactions': <Object?>[],
+    },
+    'expenseLoadSettings' => <String, Object?>{},
+    'expenseListNotificationCards' ||
+    'expenseListStatsSnapshots' ||
+    'expenseListRecurringRules' ||
+    'expenseListRecurringTransactions' => <Object?>[],
+    'requestPostNotificationsOnFirstLaunch' => false,
+    _ => null,
+  };
+}
+
+Future<Object?> _smallShellMethodHandler(MethodCall call) async {
+  return switch (call.method) {
+    'expenseLoadBootstrap' => <String, Object?>{
+      'categories': [
+        _categoryMap(1, 'Expense', TransactionType.expense),
+        _categoryMap(2, 'Income', TransactionType.income),
+      ],
+      'transactions': <Map<String, Object?>>[
+        <String, Object?>{
+          'id': 1,
+          'date': '2026.07.01',
+          'time': '10:00',
+          'merchant': 'Expense merchant',
+          'amount': -12000,
+          'userAssignedName': null,
+          'transactionCategoryID': 1,
+        },
+        <String, Object?>{
+          'id': 2,
+          'date': '2026.07.02',
+          'time': '10:00',
+          'merchant': 'Income merchant',
+          'amount': 18000,
+          'userAssignedName': null,
+          'transactionCategoryID': 2,
+        },
+      ],
       'limits': <Object?>[],
       'recurringGhostTransactions': <Object?>[],
     },

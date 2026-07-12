@@ -89,6 +89,7 @@ class StatsRenderFrameKey {
     required Iterable<String> vendorNames,
     required String query,
     required this.threshold,
+    this.todayKey = '',
   }) : categoryIds = List.unmodifiable([...categoryIds]..sort()),
        vendorNames = List.unmodifiable(
          [
@@ -108,8 +109,30 @@ class StatsRenderFrameKey {
   final List<String> vendorNames;
   final String query;
   final double threshold;
+  final String todayKey;
 
   static String normalizeQuery(String query) => query.trim().toLowerCase();
+
+  static String calendarDayKey(DateTime value) {
+    return '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+  }
+
+  StatsRenderFrameKey withThreshold(double value) {
+    return StatsRenderFrameKey(
+      dataRevision: dataRevision,
+      activeType: activeType,
+      summaryScope: summaryScope,
+      year: year,
+      month: month,
+      categoryIds: categoryIds,
+      vendorNames: vendorNames,
+      query: query,
+      threshold: value,
+      todayKey: todayKey,
+    );
+  }
 
   @override
   bool operator ==(Object other) {
@@ -123,7 +146,8 @@ class StatsRenderFrameKey {
             listEquals(other.categoryIds, categoryIds) &&
             listEquals(other.vendorNames, vendorNames) &&
             other.query == query &&
-            other.threshold == threshold;
+            other.threshold == threshold &&
+            other.todayKey == todayKey;
   }
 
   @override
@@ -137,6 +161,7 @@ class StatsRenderFrameKey {
     Object.hashAll(vendorNames),
     query,
     threshold,
+    todayKey,
   );
 }
 

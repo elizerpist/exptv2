@@ -5,6 +5,8 @@ import '../../transactions/models/transaction_record.dart';
 import 'stats_render_frame.dart';
 import 'stats_year_data.dart';
 
+const defaultStatsThreshold = 5000.0;
+
 class StatsRenderFrameRequest {
   const StatsRenderFrameRequest({
     required this.year,
@@ -33,6 +35,21 @@ class StatsRenderFrameRequest {
   final String query;
   final DateTime today;
   final bool clampThreshold;
+
+  StatsRenderFrameKey cacheKey({required Object dataRevision}) {
+    return StatsRenderFrameKey(
+      dataRevision: dataRevision,
+      activeType: activeType,
+      summaryScope: summaryScope,
+      year: year,
+      month: month,
+      categoryIds: selectedCategoryIds,
+      vendorNames: vendorFilters,
+      query: query,
+      threshold: thresholdValue,
+      todayKey: StatsRenderFrameKey.calendarDayKey(today),
+    );
+  }
 
   StatsRenderFrame buildSynchronously() {
     return StatsRenderFrame.build(

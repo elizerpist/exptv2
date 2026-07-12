@@ -5,18 +5,37 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../services/native_bridge.dart';
+import '../settings/models/security_settings.dart';
 import 'security_controller.dart';
+
+class SecurityGateController {
+  _SecurityGateState? _state;
+
+  void updateSettings(SecuritySettings settings) {
+    _state?._updateKnownSettings(settings);
+  }
+
+  void _attach(_SecurityGateState state) {
+    _state = state;
+  }
+
+  void _detach(_SecurityGateState state) {
+    if (identical(_state, state)) _state = null;
+  }
+}
 
 class SecurityGate extends StatefulWidget {
   const SecurityGate({
     super.key,
     required this.nativeBridge,
     required this.child,
+    this.controller,
     this.onUnlocked,
   });
 
   final NativeBridge nativeBridge;
   final Widget child;
+  final SecurityGateController? controller;
   final VoidCallback? onUnlocked;
 
   @override
@@ -29,11 +48,13 @@ class _SecurityGateState extends State<SecurityGate>
   final _pinController = TextEditingController();
   var _wasBackgrounded = false;
   var _reportedUnlocked = false;
+  var _childMounted = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.controller?._attach(this);
     _controller = SecurityController(widget.nativeBridge);
     _controller.addListener(_onChanged);
     unawaited(_controller.start());
@@ -42,9 +63,14 @@ class _SecurityGateState extends State<SecurityGate>
   @override
   void didUpdateWidget(covariant SecurityGate oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this);
+    }
     if (oldWidget.nativeBridge == widget.nativeBridge) return;
     _controller.removeListener(_onChanged);
     _controller.dispose();
+    _childMounted = false;
     _controller = SecurityController(widget.nativeBridge);
     _controller.addListener(_onChanged);
     unawaited(_controller.start());
@@ -53,6 +79,7 @@ class _SecurityGateState extends State<SecurityGate>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.controller?._detach(this);
     _controller.removeListener(_onChanged);
     _controller.dispose();
     _pinController.dispose();
@@ -74,29 +101,47 @@ class _SecurityGateState extends State<SecurityGate>
   }
 
   void _onChanged() {
+    if (!_controller.loading && !_controller.locked) _childMounted = true;
     if (mounted) setState(() {});
+  }
+
+  void _updateKnownSettings(SecuritySettings settings) {
+    _controller.updateKnownSettings(settings);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_controller.loading) {
-      return const ColoredBox(
-        color: AppColors.gray100,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (!_controller.locked) {
+    final childVisible = !_controller.loading && !_controller.locked;
+    if (childVisible) {
       _reportUnlockedOnce();
-      return widget.child;
+    } else {
+      _reportedUnlocked = false;
     }
-    _reportedUnlocked = false;
-    return _LockScreen(
-      controller: _pinController,
-      error: _controller.error,
-      biometricReady: _controller.settings.biometricReady,
-      authenticatingBiometric: _controller.authenticatingBiometric,
-      onUnlock: _unlock,
-      onBiometric: _controller.authenticateBiometric,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_childMounted)
+          TickerMode(
+            enabled: childVisible,
+            child: Offstage(offstage: !childVisible, child: widget.child),
+          )
+        else
+          const SizedBox.expand(),
+        if (_controller.loading)
+          const ColoredBox(
+            color: AppColors.gray100,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_controller.locked)
+          _LockScreen(
+            controller: _pinController,
+            error: _controller.error,
+            biometricReady: _controller.settings.biometricReady,
+            authenticatingBiometric: _controller.authenticatingBiometric,
+            onUnlock: _unlock,
+            onBiometric: _controller.authenticateBiometric,
+          ),
+      ],
     );
   }
 

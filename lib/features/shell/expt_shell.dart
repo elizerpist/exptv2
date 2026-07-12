@@ -16,6 +16,7 @@ import '../notifications/notifications_page.dart';
 import '../notifications/state/notification_store.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/models/fast_info_config.dart';
+import '../settings/models/security_settings.dart';
 import '../settings/settings_page.dart';
 import '../settings/state/push_notification_log_store.dart';
 import '../settings/widgets/push_log/push_notification_event_sheet.dart';
@@ -23,10 +24,15 @@ import '../settings/widgets/options/backheader_style_options_panel.dart';
 import '../settings/theme/expense_theme.dart';
 import '../stats/data/stats_snapshot.dart';
 import '../stats/data/stats_snapshot_repository.dart';
+import '../stats/data/stats_render_frame.dart';
+import '../stats/data/stats_render_frame_worker.dart';
+import '../stats/data/stats_render_prewarmer.dart';
+import '../stats/data/stats_year_data.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/sync/google_sheets_sync_controller.dart';
 import '../transactions/models/backheader_budget_item.dart';
+import '../transactions/models/summary_window.dart';
 import '../transactions/models/transaction_category.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
@@ -49,11 +55,17 @@ class ExptShell extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     this.googleSheetsSyncController,
+    this.statsRenderFrameCache,
+    this.statsRenderFrameWorker,
+    this.onSecuritySettingsChanged,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
   final GoogleSheetsSyncController? googleSheetsSyncController;
+  final StatsRenderFrameCache? statsRenderFrameCache;
+  final StatsRenderFrameWorker? statsRenderFrameWorker;
+  final ValueChanged<SecuritySettings>? onSecuritySettingsChanged;
 
   @override
   State<ExptShell> createState() => _ExptShellState();
@@ -75,7 +87,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
   final _statsPageController = StatsPageController();
-  late final PageController _pageController;
   late AppTab _pageActiveTab;
   final Map<AppTab, Widget> _retainedTabPages = <AppTab, Widget>{};
   var _homeBlockingOverlayOpen = false;
@@ -83,6 +94,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
   late final StatsSnapshotRepository _statsSnapshotRepository;
+  late final StatsRenderFrameCache _statsRenderFrameCache;
+  late final StatsRenderFrameWorker _statsRenderFrameWorker;
+  late final StatsRenderPrewarmer _statsRenderPrewarmer;
+  var _coldStartReady = false;
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
@@ -96,7 +111,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     DebugConsole.log('[Shell] start');
     _activeTab = _tabFromStoreKey(widget.store.shellActiveTabKey);
     _pageActiveTab = _activeTab;
-    _pageController = PageController(initialPage: appTabs.indexOf(_activeTab));
     _recurringAlarmService = RecurringAlarmService();
     _notificationStore = NotificationStore(
       NotificationRepository(widget.nativeBridge),
@@ -112,16 +126,26 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onSheetClosed: _handleNativeSheetClosed,
       onDebugLog: (message) async => DebugConsole.log(message),
     );
-    unawaited(_transactionStore.start());
     _transactionHomePage = _buildTransactionHomePage();
     _statsSnapshotRepository = NativeStatsSnapshotRepository(
       widget.nativeBridge,
     );
-    _statsPage = _buildStatsPage();
-    _retainedTabPages[_activeTab] = _buildShellPage(
-      _activeTab,
-      ExpenseTheme.fromSettings(_themeSettings),
+    _statsRenderFrameCache =
+        widget.statsRenderFrameCache ?? StatsRenderFrameCache();
+    _statsRenderFrameWorker =
+        widget.statsRenderFrameWorker ?? const IsolateStatsRenderFrameWorker();
+    _statsRenderPrewarmer = StatsRenderPrewarmer(
+      cache: _statsRenderFrameCache,
+      worker: _statsRenderFrameWorker,
     );
+    _statsPage = _buildStatsPage();
+    if (_activeTab != AppTab.stats) {
+      _retainedTabPages[_activeTab] = _buildShellPage(
+        _activeTab,
+        ExpenseTheme.fromSettings(_themeSettings),
+      );
+    }
+    unawaited(_initializeApp());
     _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
@@ -131,7 +155,6 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pageController.dispose();
     _homeThemeSettingsSaveDebounce?.cancel();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
@@ -144,6 +167,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    _statsPageController.refreshForLifecycle();
     unawaited(_refreshBackgroundTransactionsOnResume());
     unawaited(_processRecurringOnResume());
   }
@@ -252,6 +276,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       controller: _statsPageController,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       snapshotRepository: _statsSnapshotRepository,
+      renderFrameCache: _statsRenderFrameCache,
+      renderFrameWorker: _statsRenderFrameWorker,
       onCategoryMenuRequested: (request) {
         _sheetHostKey.currentState?.openCategoryPicker(request);
       },
@@ -265,6 +291,78 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         _sheetHostKey.currentState?.openCategory(initialCategory: category);
       },
     );
+  }
+
+  Future<void> _initializeApp() async {
+    await _transactionStore.start();
+    if (!mounted) return;
+    await _prewarmPrimaryStatsUntilStable();
+    if (!mounted) return;
+    setState(() {
+      final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+      _retainedTabPages.putIfAbsent(
+        AppTab.home,
+        () => _buildShellPage(AppTab.home, expenseTheme),
+      );
+      _retainedTabPages.putIfAbsent(
+        AppTab.stats,
+        () => _buildShellPage(AppTab.stats, expenseTheme),
+      );
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    setState(() => _coldStartReady = true);
+    DebugConsole.log('[Perf] Shell cold start ready home=true stats=true');
+  }
+
+  Future<void> _prewarmPrimaryStatsUntilStable() async {
+    while (mounted && _transactionStore.error == null) {
+      final transactions = _transactionStore.transactions;
+      final categories = _transactionStore.categories;
+      final reference = _transactionStore.summaryReferenceDate;
+      final summaryWindow = _transactionStore.summaryWindow;
+      final today = _transactionStore.currentDate;
+      final vendorFilters = Set<String>.unmodifiable(
+        _transactionStore.activeMerchantFilters,
+      );
+      final summaryScope = switch (_transactionStore.summaryWindow) {
+        SummaryWindow.allTime => StatsSummaryScope.allTime,
+        SummaryWindow.yearly => StatsSummaryScope.yearly,
+        SummaryWindow.monthly => StatsSummaryScope.monthly,
+      };
+      try {
+        await _statsRenderPrewarmer.prewarmPrimary(
+          dataRevision: (transactions: transactions, categories: categories),
+          transactions: transactions,
+          categories: categories,
+          summaryScope: summaryScope,
+          year: reference.year,
+          month: reference.month,
+          today: today,
+          vendorFilters: vendorFilters,
+        );
+      } catch (error) {
+        DebugConsole.log('[Perf] Stats startup prewarm failed: $error');
+        return;
+      }
+      if (!mounted) return;
+      final currentFilters = _transactionStore.activeMerchantFilters;
+      final currentDate = _transactionStore.currentDate;
+      final stable =
+          identical(transactions, _transactionStore.transactions) &&
+          identical(categories, _transactionStore.categories) &&
+          reference == _transactionStore.summaryReferenceDate &&
+          summaryWindow == _transactionStore.summaryWindow &&
+          today.year == currentDate.year &&
+          today.month == currentDate.month &&
+          today.day == currentDate.day &&
+          vendorFilters.length == currentFilters.length &&
+          vendorFilters.containsAll(currentFilters);
+      if (stable) return;
+      DebugConsole.log(
+        '[Perf] Stats startup prewarm retry reason=data-revision-changed',
+      );
+    }
   }
 
   void _requestPostNotificationsOnFirstLaunch() {
@@ -485,21 +583,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       '[Perf] BottomNav page jump deferred tab=${tab.id} '
       'elapsed=${_elapsedMs(requestedAt)}ms',
     );
-    if (!_pageController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _activeTab != tab || !_pageController.hasClients) {
-          return;
-        }
-        _activateRetainedPage(tab, pageIndex, requestedAt);
-      });
-      return;
-    }
     _activateRetainedPage(tab, pageIndex, requestedAt);
   }
 
   void _activateRetainedPage(AppTab tab, int pageIndex, DateTime requestedAt) {
-    setState(() => _pageActiveTab = tab);
-    _pageController.jumpToPage(pageIndex);
+    setState(() {
+      _retainedTabPages.putIfAbsent(
+        tab,
+        () => _buildShellPage(tab, ExpenseTheme.fromSettings(_themeSettings)),
+      );
+      _pageActiveTab = tab;
+    });
     _logRetainedPageJump(tab, pageIndex, requestedAt);
   }
 
@@ -743,6 +837,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           expenseTheme: expenseTheme,
           onThemeSettingsChanged: _applyThemeSettings,
           onFastInfoConfigChanged: _applyFastInfoConfig,
+          onSecuritySettingsChanged: widget.onSecuritySettingsChanged,
           onOpenTransaction: _openTransactionFromPushLog,
         );
     }
@@ -766,23 +861,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       body: Stack(
         children: [
           Positioned.fill(
-            child: PageView.builder(
+            child: Stack(
               key: const ValueKey('shell-page-stack'),
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: appTabs.length,
-              itemBuilder: (context, index) {
-                final tab = appTabs[index];
-                final page = _retainedTabPages.putIfAbsent(
-                  tab,
-                  () => _buildShellPage(tab, expenseTheme),
-                );
-                return _RetainedShellTab(
-                  key: ValueKey('retained-shell-tab-${tab.id}'),
-                  active: tab == _pageActiveTab,
-                  child: page,
-                );
-              },
+              fit: StackFit.expand,
+              children: [
+                for (final entry in _retainedTabPages.entries)
+                  _RetainedShellTab(
+                    key: ValueKey('retained-shell-tab-${entry.key.id}'),
+                    active: entry.key == _pageActiveTab,
+                    child: entry.value,
+                  ),
+              ],
             ),
           ),
           if (!_homeBlockingOverlayOpen) ...shellNavigation,
@@ -808,6 +897,19 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               onThemeSettingsChanged: _queueHomeThemeSettings,
             ),
           ),
+          if (!_coldStartReady)
+            Positioned.fill(
+              child: ColoredBox(
+                key: const ValueKey('shell-cold-start-loading'),
+                color: expenseTheme.appBackground,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: expenseTheme.accent,
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -869,7 +971,19 @@ class _RetainedShellTabState extends State<_RetainedShellTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return TickerMode(enabled: widget.active, child: widget.child);
+    return Offstage(
+      offstage: !widget.active,
+      child: TickerMode(
+        enabled: widget.active,
+        child: IgnorePointer(
+          ignoring: !widget.active,
+          child: ExcludeSemantics(
+            excluding: !widget.active,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
   }
 }
 

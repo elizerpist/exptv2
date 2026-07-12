@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/security_gate.dart';
 import 'features/shell/expt_shell.dart';
+import 'features/stats/data/stats_render_frame_worker.dart';
 import 'features/transactions/data/transaction_repository.dart';
 import 'features/transactions/sync/google_auth_headers_client.dart';
 import 'features/transactions/sync/google_sheets_api_client.dart';
@@ -40,10 +41,16 @@ Future<void> _loadAndWarmCategoryIcons({SharedPreferences? preferences}) async {
 }
 
 class Exptv2App extends StatefulWidget {
-  const Exptv2App({super.key, required this.store, required this.nativeBridge});
+  const Exptv2App({
+    super.key,
+    required this.store,
+    required this.nativeBridge,
+    this.statsRenderFrameWorker,
+  });
 
   final EventStore store;
   final NativeBridge nativeBridge;
+  final StatsRenderFrameWorker? statsRenderFrameWorker;
 
   @override
   State<Exptv2App> createState() => _Exptv2AppState();
@@ -51,6 +58,7 @@ class Exptv2App extends StatefulWidget {
 
 class _Exptv2AppState extends State<Exptv2App> {
   GoogleSheetsSyncController? _googleSheetsSyncController;
+  final _securityGateController = SecurityGateController();
 
   @override
   void initState() {
@@ -96,6 +104,7 @@ class _Exptv2AppState extends State<Exptv2App> {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         home: SecurityGate(
+          controller: _securityGateController,
           nativeBridge: widget.nativeBridge,
           onUnlocked: _googleSheetsSyncController == null
               ? null
@@ -104,6 +113,8 @@ class _Exptv2AppState extends State<Exptv2App> {
             store: widget.store,
             nativeBridge: widget.nativeBridge,
             googleSheetsSyncController: _googleSheetsSyncController,
+            statsRenderFrameWorker: widget.statsRenderFrameWorker,
+            onSecuritySettingsChanged: _securityGateController.updateSettings,
           ),
         ),
       ),

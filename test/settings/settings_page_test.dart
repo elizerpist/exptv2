@@ -1,6 +1,7 @@
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/core/theme/app_dimensions.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/settings/models/security_settings.dart';
 import 'package:exptv2/features/settings/settings_page.dart';
 import 'package:exptv2/features/settings/widgets/options/theme_options_panel.dart';
 import 'package:exptv2/services/native_bridge.dart';
@@ -212,7 +213,9 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Widget buildSubject() {
+  Widget buildSubject({
+    ValueChanged<SecuritySettings>? onSecuritySettingsChanged,
+  }) {
     final bridge = NativeBridge(
       methodChannel: channel,
       eventChannel: const EventChannel('test/settings_page_events'),
@@ -221,6 +224,7 @@ void main() {
       home: SettingsPage(
         store: EventStore(bridge, realtimeEnabled: false),
         nativeBridge: bridge,
+        onSecuritySettingsChanged: onSecuritySettingsChanged,
       ),
     );
   }
@@ -638,7 +642,10 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(buildSubject());
+    final reportedSettings = <SecuritySettings>[];
+    await tester.pumpWidget(
+      buildSubject(onSecuritySettingsChanged: reportedSettings.add),
+    );
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(find.text('PIN kód beállítása'), 160);
@@ -656,6 +663,7 @@ void main() {
 
     expect(find.text('PIN aktív'), findsOneWidget);
     expect(calls, contains('expenseSetSecurityPin'));
+    expect(reportedSettings.last.pinEnabled, isTrue);
   });
 
   testWidgets('biometric setting requires pin first', (tester) async {
