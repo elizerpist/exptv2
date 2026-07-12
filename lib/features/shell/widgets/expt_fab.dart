@@ -36,11 +36,14 @@ class ExptFab extends StatefulWidget {
 
 class _ExptFabState extends State<ExptFab> {
   static const _dragStepDistance = 32.0;
+  static const _horizontalDeadZone = 0.0;
   static const _verticalDeadZone = 10.0;
   static const _verticalTickInterval = Duration(milliseconds: 90);
 
   double _dragDx = 0;
+  double _horizontalOffsetX = 0;
   double _verticalOffsetY = 0;
+  double? _pointerDownX;
   double? _pointerDownY;
   Timer? _verticalTickTimer;
   int _verticalTickCount = 0;
@@ -57,6 +60,11 @@ class _ExptFabState extends State<ExptFab> {
       _verticalOffsetY = 0;
       _verticalActive = false;
       _verticalTickCount = 0;
+    }
+    if (oldWidget.onHorizontalDragStep != null &&
+        widget.onHorizontalDragStep == null) {
+      _horizontalOffsetX = 0;
+      _pointerDownX = null;
     }
   }
 
@@ -75,6 +83,13 @@ class _ExptFabState extends State<ExptFab> {
         ? _FabJoystickFeedback.forOffset(
             _verticalOffsetY,
             deadZone: _verticalDeadZone,
+          )
+        : null;
+    final horizontalFeedback =
+        !_verticalActive && widget.onHorizontalDragStep != null
+        ? _FabHorizontalFeedback.forOffset(
+            _horizontalOffsetX,
+            deadZone: _horizontalDeadZone,
           )
         : null;
     return ExpensePressable(
@@ -154,8 +169,57 @@ class _ExptFabState extends State<ExptFab> {
                     ),
                   ),
                 ],
+                if (horizontalFeedback != null) ...[
+                  Positioned(
+                    left: -20,
+                    child: IgnorePointer(
+                      child: _FabJoystickDirectionIndicator(
+                        key: ValueKey(
+                          'expt-fab-joystick-left-'
+                          '${horizontalFeedback.direction == _FabHorizontalDirection.left ? 'active' : 'idle'}',
+                        ),
+                        icon: Icons.chevron_left,
+                        active:
+                            horizontalFeedback.direction ==
+                            _FabHorizontalDirection.left,
+                        color: widget.primaryColor,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -20,
+                    child: IgnorePointer(
+                      child: _FabJoystickDirectionIndicator(
+                        key: ValueKey(
+                          'expt-fab-joystick-right-'
+                          '${horizontalFeedback.direction == _FabHorizontalDirection.right ? 'active' : 'idle'}',
+                        ),
+                        icon: Icons.chevron_right,
+                        active:
+                            horizontalFeedback.direction ==
+                            _FabHorizontalDirection.right,
+                        color: widget.primaryColor,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -18,
+                    child: IgnorePointer(
+                      child: RotatedBox(
+                        quarterTurns: 1,
+                        child: _FabJoystickStrengthIndicator(
+                          strength: horizontalFeedback.strength,
+                          color: widget.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 Transform.translate(
-                  offset: Offset(0, joystickFeedback?.knobOffsetY ?? 0),
+                  offset: Offset(
+                    horizontalFeedback?.knobOffsetX ?? 0,
+                    joystickFeedback?.knobOffsetY ?? 0,
+                  ),
                   child: ExpenseSurfaceContainer(
                     surfaceKey: const ValueKey('expt-fab'),
                     style: widget.surfaceStyle,
@@ -242,7 +306,9 @@ class _ExptFabState extends State<ExptFab> {
 
   void _handlePointerDown(PointerDownEvent event) {
     _dragDx = 0;
+    _horizontalOffsetX = 0;
     _verticalOffsetY = 0;
+    _pointerDownX = event.position.dx;
     _pointerDownY = event.position.dy;
     _verticalActive = false;
     _verticalTickCount = 0;
@@ -261,6 +327,13 @@ class _ExptFabState extends State<ExptFab> {
       return;
     }
     if (widget.onHorizontalDragStep == null) return;
+    final pointerDownX = _pointerDownX;
+    if (pointerDownX != null) {
+      final nextOffset = event.position.dx - pointerDownX;
+      if (nextOffset != _horizontalOffsetX) {
+        setState(() => _horizontalOffsetX = nextOffset);
+      }
+    }
     _dragDx += event.delta.dx;
     if (_dragDx.abs() < _dragStepDistance) return;
     final direction = _dragDx > 0 ? 1 : -1;
@@ -273,6 +346,7 @@ class _ExptFabState extends State<ExptFab> {
 
   void _finishPointerGesture() {
     _dragDx = 0;
+    _pointerDownX = null;
     _pointerDownY = null;
     if (_verticalActive) {
       setState(() {
@@ -281,6 +355,9 @@ class _ExptFabState extends State<ExptFab> {
       });
     } else {
       _verticalOffsetY = 0;
+    }
+    if (_horizontalOffsetX != 0) {
+      setState(() => _horizontalOffsetX = 0);
     }
     _verticalTickTimer?.cancel();
     _verticalTickTimer = null;
@@ -404,7 +481,40 @@ class _FabJoystickFeedback {
   }
 }
 
+class _FabHorizontalFeedback {
+  const _FabHorizontalFeedback({
+    required this.direction,
+    required this.strength,
+    required this.knobOffsetX,
+  });
+
+  final _FabHorizontalDirection direction;
+  final _FabJoystickStrength strength;
+  final double knobOffsetX;
+
+  static _FabHorizontalFeedback? forOffset(
+    double offsetX, {
+    required double deadZone,
+  }) {
+    final distance = offsetX.abs();
+    if (distance <= deadZone) return null;
+    final direction = offsetX < 0
+        ? _FabHorizontalDirection.left
+        : _FabHorizontalDirection.right;
+    final strength = _FabJoystickStrength.forDistance(distance);
+    return _FabHorizontalFeedback(
+      direction: direction,
+      strength: strength,
+      knobOffsetX: direction == _FabHorizontalDirection.left
+          ? -strength.knobOffset
+          : strength.knobOffset,
+    );
+  }
+}
+
 enum _FabJoystickDirection { increase, decrease }
+
+enum _FabHorizontalDirection { left, right }
 
 enum _FabJoystickStrength {
   slow(stepMultiplier: 1, tickStride: 3, knobOffset: 2),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/data/stats_snapshot.dart';
 import 'package:exptv2/features/stats/data/stats_render_frame.dart';
+import 'package:exptv2/features/stats/data/stats_render_frame_worker.dart';
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/features/stats/widgets/stats_fast_info_graph.dart';
@@ -19,6 +20,7 @@ import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/widgets/calendar_menu/calendar_menu_overlay.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_menu_panel.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
+import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/transaction_type_pills.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,7 +30,11 @@ void main() {
 
   setUp(() {
     snapshotRepository = InMemoryStatsSnapshotRepository();
+    StatsPage.debugRenderFrameWorkerOverride =
+        const ImmediateStatsFrameWorker();
   });
+
+  tearDown(() => StatsPage.debugRenderFrameWorkerOverride = null);
 
   test('clamp-aware frame preserves score parity at the same threshold', () {
     final categories = [
@@ -1035,7 +1041,9 @@ void main() {
       );
       await store.start();
       unawaited(store.setSummaryYear(2026));
+      await tester.pump(const Duration(milliseconds: 1));
       final cache = TrackingStatsRenderFrameCache();
+      final worker = ControlledStatsFrameWorker();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1047,12 +1055,17 @@ void main() {
                 store: store,
                 snapshotRepository: snapshotRepository,
                 renderFrameCache: cache,
+                renderFrameWorker: worker,
               ),
             ),
           ),
         ),
       );
-      await pumpStatsPage(tester);
+      await tester.pump();
+      expect(worker.requests, hasLength(1));
+      worker.complete(0);
+      await tester.pump();
+      await tester.pump();
       final buildsBeforeTap = cache.builderCalls;
       final incomePill = find.byKey(
         const ValueKey('transaction-type-pill-income-surface'),
@@ -1080,6 +1093,8 @@ void main() {
         find.byKey(const ValueKey('stats-content-switcher')),
         findsNothing,
       );
+      expect(worker.requests, hasLength(2));
+      worker.complete(1);
       await tester.pump();
       expect(cache.builderCalls, buildsBeforeTap + 1);
       await tester.pump();
@@ -1161,6 +1176,89 @@ void main() {
       await tester.pumpWidget(statsHost(active: true));
       await tester.pump();
       expect(cache.builderCalls, buildsBeforeHomeSwitch + 1);
+    },
+  );
+
+  testWidgets(
+    '10k worker keeps feedback light and publishes only latest search frame',
+    (tester) async {
+      final categories = [
+        category(id: 1, name: 'Expense', type: TransactionType.expense),
+      ];
+      final transactions = List<TransactionRecord>.generate(10000, (index) {
+        return TransactionRecord(
+          id: 300000 + index,
+          date: '2026-07-${((index % 28) + 1).toString().padLeft(2, '0')}',
+          time: '10:00',
+          latitude: null,
+          longitude: null,
+          address: null,
+          merchant: 'Teszt ${index % 40}',
+          amount: -(5000 + index.toDouble()),
+          userAssignedName: null,
+          transactionCategoryID: 1,
+        );
+      }, growable: false);
+      final store = TransactionStore(
+        StatsRepository(categories: categories, transactions: transactions),
+        clock: () => DateTime(2026, 7, 7),
+      );
+      await store.start();
+      final cache = TrackingStatsRenderFrameCache();
+      final worker = ControlledStatsFrameWorker();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(
+                store: store,
+                snapshotRepository: snapshotRepository,
+                renderFrameCache: cache,
+                renderFrameWorker: worker,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(worker.requests, hasLength(1));
+      expect(cache.builderCalls, 0);
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsOneWidget);
+
+      worker.complete(0);
+      await tester.pump();
+      await tester.pump();
+      expect(cache.builderCalls, 1);
+      final search = tester.widget<SearchPill>(find.byType(SearchPill));
+
+      search.onQueryChanged('tes');
+      await tester.pump();
+      expect(worker.requests, hasLength(2));
+      expect(cache.builderCalls, 1);
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsOneWidget);
+
+      search.onQueryChanged('teszt');
+      await tester.pump();
+      expect(worker.requests, hasLength(3));
+      worker.complete(1);
+      await tester.pump();
+      expect(cache.builderCalls, 1);
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsOneWidget);
+
+      worker.complete(2);
+      await tester.pump();
+      await tester.pump();
+      expect(cache.builderCalls, 2);
+      expect(cache.resolvedKeys.last.query, 'teszt');
+      expect(find.byKey(const ValueKey('stats-frame-pending')), findsNothing);
+
+      final workerCalls = worker.requests.length;
+      await tester.tap(find.byKey(const ValueKey('stats-page-chevron')));
+      await tester.pump();
+      expect(worker.requests, hasLength(workerCalls));
+      expect(cache.builderCalls, 2);
     },
   );
 
@@ -1945,6 +2043,7 @@ void main() {
     expect(cache.resolvedKeys.last.year, 2025);
     expect(cache.resolvedKeys.last.threshold, 5000);
 
+    await tester.pump();
     await tester.pump();
     expect(cache.resolvedKeys.last.threshold, 50000);
     controller.openThresholdSheet();
@@ -3053,6 +3152,32 @@ Future<void> pumpStatsPage(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 240));
   await tester.pump(const Duration(milliseconds: 240));
+}
+
+class ImmediateStatsFrameWorker implements StatsRenderFrameWorker {
+  const ImmediateStatsFrameWorker();
+
+  @override
+  Future<StatsRenderFrame> build(StatsRenderFrameRequest request) {
+    return Future<StatsRenderFrame>.value(request.buildSynchronously());
+  }
+}
+
+class ControlledStatsFrameWorker implements StatsRenderFrameWorker {
+  final requests = <StatsRenderFrameRequest>[];
+  final _completers = <Completer<StatsRenderFrame>>[];
+
+  @override
+  Future<StatsRenderFrame> build(StatsRenderFrameRequest request) {
+    requests.add(request);
+    final completer = Completer<StatsRenderFrame>();
+    _completers.add(completer);
+    return completer.future;
+  }
+
+  void complete(int index) {
+    _completers[index].complete(requests[index].buildSynchronously());
+  }
 }
 
 TransactionRecord record({

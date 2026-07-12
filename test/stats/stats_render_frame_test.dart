@@ -1,10 +1,43 @@
 import 'package:exptv2/features/stats/data/stats_render_frame.dart';
+import 'package:exptv2/features/stats/data/stats_render_frame_worker.dart';
 import 'package:exptv2/features/stats/data/stats_year_data.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('isolate worker returns the canonical frame asynchronously', () async {
+    final request = StatsRenderFrameRequest(
+      year: 2026,
+      month: 1,
+      activeType: TransactionType.expense,
+      thresholdValue: 5000,
+      transactions: [
+        record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
+      ],
+      categories: [
+        category(id: 1, name: 'Food', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
+      vendorFilters: const {},
+      summaryScope: StatsSummaryScope.yearly,
+      query: '',
+      today: DateTime(2026, 1, 10),
+    );
+    var completed = false;
+
+    final pending = const IsolateStatsRenderFrameWorker().build(request).then((
+      frame,
+    ) {
+      completed = true;
+      return frame;
+    });
+
+    expect(completed, isFalse);
+    final frame = await pending;
+    expect(frame.yearData.summaryTotal, 6000);
+  });
+
   test(
     'one combined category OR and vendor AND frame drives every consumer',
     () {

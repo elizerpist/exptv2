@@ -28,6 +28,7 @@ import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/transaction_type_pills.dart';
 import 'data/stats_page2_metrics.dart';
 import 'data/stats_render_frame.dart';
+import 'data/stats_render_frame_worker.dart';
 import 'data/stats_snapshot.dart';
 import 'data/stats_year_data.dart';
 import 'widgets/stats_fast_info_graph.dart';
@@ -81,6 +82,7 @@ class StatsPage extends StatefulWidget {
     this.onEditCategoryEditorRequested,
     this.snapshotRepository,
     this.renderFrameCache,
+    this.renderFrameWorker,
   });
 
   final TransactionStore store;
@@ -92,6 +94,10 @@ class StatsPage extends StatefulWidget {
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final StatsSnapshotRepository? snapshotRepository;
   final StatsRenderFrameCache? renderFrameCache;
+  final StatsRenderFrameWorker? renderFrameWorker;
+
+  @visibleForTesting
+  static StatsRenderFrameWorker? debugRenderFrameWorkerOverride;
 
   @override
   State<StatsPage> createState() => _StatsPageState();
@@ -116,7 +122,9 @@ class _StatsPageState extends State<StatsPage>
     TransactionType.expense: <int>{},
   };
   late StatsRenderFrameCache _renderFrameCache;
+  late StatsRenderFrameWorker _renderFrameWorker;
   StatsRenderFrame? _lastRenderFrame;
+  StatsRenderFrameKey? _lastRenderFrameKey;
   late StatsSnapshotRepository _snapshotRepository;
   List<StatsSnapshot> _snapshots = const <StatsSnapshot>[];
   var _selectedSnapshotIndex = -1;
@@ -125,9 +133,12 @@ class _StatsPageState extends State<StatsPage>
   var _thresholdPublicationScheduled = false;
   var _thresholdPublicationGeneration = 0;
   TransactionType? _pendingActiveType;
-  var _activeTypePublicationGeneration = 0;
-  var _storeThresholdClampPending = false;
-  var _thresholdStateSyncScheduled = false;
+  _StatsFrameTarget? _scheduledFrameTarget;
+  StatsRenderFrameKey? _inFlightFrameKey;
+  var _frameRequestScheduled = false;
+  var _frameRequestGeneration = 0;
+  var _snapshotFramePending = false;
+  TransactionType? _snapshotPendingType;
   final _inactiveStoreListenable = ChangeNotifier();
   var _pageActive = true;
 
@@ -139,6 +150,10 @@ class _StatsPageState extends State<StatsPage>
     _snapshotRepository =
         widget.snapshotRepository ?? InMemoryStatsSnapshotRepository();
     _renderFrameCache = widget.renderFrameCache ?? StatsRenderFrameCache();
+    _renderFrameWorker =
+        widget.renderFrameWorker ??
+        StatsPage.debugRenderFrameWorkerOverride ??
+        const IsolateStatsRenderFrameWorker();
     unawaited(_loadSnapshots());
     _fastInfoExtent = ValueNotifier<double>(0);
     _headerPullController = AnimationController.unbounded(vsync: this)
@@ -161,6 +176,12 @@ class _StatsPageState extends State<StatsPage>
     if (oldWidget.renderFrameCache != widget.renderFrameCache) {
       _renderFrameCache = widget.renderFrameCache ?? StatsRenderFrameCache();
     }
+    if (oldWidget.renderFrameWorker != widget.renderFrameWorker) {
+      _renderFrameWorker =
+          widget.renderFrameWorker ??
+          StatsPage.debugRenderFrameWorkerOverride ??
+          const IsolateStatsRenderFrameWorker();
+    }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?._detach(_openThresholdControlSheet);
       widget.controller?._attach(
@@ -179,9 +200,6 @@ class _StatsPageState extends State<StatsPage>
     _pageActive = active;
     if (!active) return;
     _syncSummaryFromStore();
-    if (!widget.store.loading && widget.store.error == null) {
-      _storeThresholdClampPending = true;
-    }
   }
 
   @override
@@ -201,9 +219,6 @@ class _StatsPageState extends State<StatsPage>
     if (!_pageActive) return;
     _discardPendingThresholdStep();
     final changed = _syncSummaryFromStore();
-    if (!widget.store.loading && widget.store.error == null) {
-      _storeThresholdClampPending = true;
-    }
     if (changed && mounted) setState(() {});
   }
 
@@ -315,48 +330,51 @@ class _StatsPageState extends State<StatsPage>
     final targetCategoryIds = snapshot.includeCategoryScope
         ? applied.categoryScopeIds
         : _selectedScopeByType[applied.activeType] ?? const <int>{};
-    final targetObservedMaximum = StatsYearData.observedMaximumFor(
-      year: applied.activeYear,
+    final target = _frameTarget(
       activeType: applied.activeType,
-      transactions: widget.store.transactions,
-      categories: widget.store.categories,
-      selectedCategoryIds: targetCategoryIds,
-      vendorFilters: targetVendors,
-      summaryScope: switch (applied.layoutMode) {
-        StatsLayoutMode.sum => StatsSummaryScope.allTime,
-        StatsLayoutMode.year => StatsSummaryScope.yearly,
-        StatsLayoutMode.month => StatsSummaryScope.monthly,
-      },
-      month: applied.activeMonth,
-      query: _searchQuery,
-    );
-    final clampedThreshold = _statsThresholdRange(
-      observedMax: targetObservedMaximum,
-      fallbackMax: 50000,
-    ).snap(applied.threshold);
-    final finalFrame = _resolveRenderFrameFor(
-      activeType: applied.activeType,
-      threshold: clampedThreshold,
+      threshold: applied.threshold,
       layoutMode: applied.layoutMode,
       year: applied.activeYear,
       month: applied.activeMonth,
       categoryIds: targetCategoryIds,
       vendorNames: targetVendors,
     );
-    _activeType = applied.activeType;
-    _thresholdValue = clampedThreshold;
-    if (snapshot.includeCategoryScope) {
-      _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
+    _frameRequestGeneration += 1;
+    _scheduledFrameTarget = null;
+    setState(() {
+      _snapshotFramePending = true;
+      _snapshotPendingType = applied.activeType;
+    });
+    await SchedulerBinding.instance.endOfFrame;
+    if (!mounted || !recall.isLatest) {
+      return _ignoredSnapshotRecallResult();
     }
-    if (snapshot.includeLayoutMode) {
-      _applySnapshotLayoutLocally(applied);
+    final built = await _buildFrameAsync(target);
+    if (!mounted || !recall.isLatest) {
+      return _ignoredSnapshotRecallResult();
     }
-    _selectedSnapshotIndex = _snapshots.indexWhere(
-      (item) => item.id == snapshot.id,
-    );
+    final finalFrame = _renderFrameCache.resolve(built.key, () => built.frame);
+    setState(() {
+      _lastRenderFrame = finalFrame;
+      _lastRenderFrameKey = built.key;
+      _activeType = applied.activeType;
+      _pendingActiveType = null;
+      _thresholdValue = finalFrame.yearData.thresholdValue;
+      _snapshotFramePending = false;
+      _snapshotPendingType = null;
+      if (snapshot.includeCategoryScope) {
+        _selectedScopeByType[applied.activeType] = applied.categoryScopeIds;
+      }
+      if (snapshot.includeLayoutMode) {
+        _applySnapshotLayoutLocally(applied);
+      }
+      _selectedSnapshotIndex = _snapshots.indexWhere(
+        (item) => item.id == snapshot.id,
+      );
+    });
     widget.store.commitStatsViewMutation(mutation);
     return _StatsSnapshotRecallResult(
-      threshold: clampedThreshold,
+      threshold: finalFrame.yearData.thresholdValue,
       observedMax: finalFrame.observedMaximum,
       applied: true,
     );
@@ -402,17 +420,28 @@ class _StatsPageState extends State<StatsPage>
   void _stepThreshold(int multiplier) {
     if (multiplier == 0) return;
     _pendingThresholdSteps.add(multiplier);
+    _scheduleThresholdPublication();
+  }
+
+  void _scheduleThresholdPublication() {
     if (_thresholdPublicationScheduled) return;
     _thresholdPublicationScheduled = true;
     final generation = ++_thresholdPublicationGeneration;
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (generation != _thresholdPublicationGeneration) return;
       _thresholdPublicationScheduled = false;
+      if (!mounted || _pendingThresholdSteps.isEmpty) return;
+      final target = _currentFrameTarget();
+      final currentFrame = _lastRenderFrame;
+      if (currentFrame == null || _lastRenderFrameKey != target.key) {
+        _scheduleThresholdPublication();
+        SchedulerBinding.instance.scheduleFrame();
+        return;
+      }
       final steps = List<int>.of(_pendingThresholdSteps);
       _pendingThresholdSteps.clear();
-      if (!mounted || steps.isEmpty) return;
       final range = _statsThresholdRange(
-        observedMax: _lastRenderFrame?.observedMaximum ?? 0,
+        observedMax: currentFrame.observedMaximum,
         fallbackMax: 50000,
       );
       var next = _thresholdValue;
@@ -462,52 +491,15 @@ class _StatsPageState extends State<StatsPage>
                 ),
               );
             }
-            final pendingType = _pendingActiveType;
-            if (pendingType != null) {
-              return Stack(
-                children: [
-                  Column(
-                    children: [
-                      const SizedBox(
-                        height: TransactionHeaderMetrics.contentTop,
-                      ),
-                      TransactionTypePills(
-                        activeType: pendingType,
-                        surfaceColor: resolvedTheme.logBox,
-                        surfaceStyle: resolvedTheme.buttonSurfaceStyle,
-                        accentColor: resolvedTheme.accent,
-                        shadowEnabled: true,
-                        onChanged: _setActiveType,
-                      ),
-                      Expanded(
-                        child: ColoredBox(
-                          key: const ValueKey('stats-type-switch-frozen'),
-                          color: resolvedTheme.appBackground,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: resolvedTheme.accent,
-                              strokeWidth: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    child: LinearProgressIndicator(
-                      key: const ValueKey('stats-type-switch-pending'),
-                      minHeight: 2,
-                      color: resolvedTheme.accent,
-                      backgroundColor: Colors.transparent,
-                    ),
-                  ),
-                ],
+            final target = _currentFrameTarget();
+            final frame = _frameForBuild(target);
+            if (frame == null || _snapshotFramePending) {
+              return _buildFramePending(
+                resolvedTheme,
+                activeType:
+                    _snapshotPendingType ?? _pendingActiveType ?? _activeType,
               );
             }
-            final frame = _resolveRenderFrame();
             final data = frame.yearData;
             final focusedMonth = _focusedMonth == null
                 ? null
@@ -548,12 +540,7 @@ class _StatsPageState extends State<StatsPage>
                         query: _searchQuery,
                         onQueryChanged: (value) {
                           _discardPendingThresholdStep();
-                          setState(() {
-                            _searchQuery = value;
-                            _thresholdValue = _clampThresholdToCurrentScope(
-                              _thresholdValue,
-                            );
-                          });
+                          setState(() => _searchQuery = value);
                         },
                         surfaceColor: resolvedTheme.logBox,
                         surfaceStyle: resolvedTheme.summaryPillSurfaceStyle,
@@ -678,36 +665,20 @@ class _StatsPageState extends State<StatsPage>
     );
   }
 
-  StatsRenderFrame _resolveRenderFrame() {
-    final clampThreshold = _storeThresholdClampPending;
-    final frame = _resolveRenderFrameFor(
-      activeType: _activeType,
+  _StatsFrameTarget _currentFrameTarget() {
+    final activeType = _pendingActiveType ?? _activeType;
+    return _frameTarget(
+      activeType: activeType,
       threshold: _thresholdValue,
       layoutMode: _layoutMode,
       year: _year,
       month: _month,
-      categoryIds: _selectedScopeByType[_activeType] ?? const <int>{},
+      categoryIds: _selectedScopeByType[activeType] ?? const <int>{},
       vendorNames: widget.store.activeMerchantFilters,
-      clampThreshold: clampThreshold,
     );
-    if (clampThreshold) {
-      _storeThresholdClampPending = false;
-      _scheduleThresholdStateSync(frame.yearData.thresholdValue);
-    }
-    return frame;
   }
 
-  void _scheduleThresholdStateSync(double threshold) {
-    if (threshold == _thresholdValue || _thresholdStateSyncScheduled) return;
-    _thresholdStateSyncScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _thresholdStateSyncScheduled = false;
-      if (!mounted || threshold == _thresholdValue) return;
-      setState(() => _thresholdValue = threshold);
-    });
-  }
-
-  StatsRenderFrame _resolveRenderFrameFor({
+  _StatsFrameTarget _frameTarget({
     required TransactionType activeType,
     required double threshold,
     required StatsLayoutMode layoutMode,
@@ -715,74 +686,218 @@ class _StatsPageState extends State<StatsPage>
     required int month,
     required Set<int> categoryIds,
     required Set<String> vendorNames,
-    bool clampThreshold = false,
+    String? query,
   }) {
     final summaryScope = switch (layoutMode) {
       StatsLayoutMode.sum => StatsSummaryScope.allTime,
       StatsLayoutMode.year => StatsSummaryScope.yearly,
       StatsLayoutMode.month => StatsSummaryScope.monthly,
     };
+    final resolvedQuery = query ?? _searchQuery;
+    final transactions = widget.store.transactions;
+    final categories = widget.store.categories;
     final key = StatsRenderFrameKey(
-      dataRevision: (
-        transactions: widget.store.transactions,
-        categories: widget.store.categories,
-      ),
+      dataRevision: (transactions: transactions, categories: categories),
       activeType: activeType,
       summaryScope: summaryScope,
       year: year,
       month: month,
       categoryIds: categoryIds,
       vendorNames: vendorNames,
-      query: _searchQuery,
+      query: resolvedQuery,
       threshold: threshold,
     );
-    final frame = _renderFrameCache.resolve(key, () {
-      DebugConsole.log(
-        '[Perf] Stats frame build type=${activeType.name} '
-        'transactions=${widget.store.transactions.length}',
-      );
-      return StatsRenderFrame.build(
+    return _StatsFrameTarget(
+      key: key,
+      request: StatsRenderFrameRequest(
         year: year,
+        month: month,
         activeType: activeType,
         thresholdValue: threshold,
-        transactions: widget.store.transactions,
-        categories: widget.store.categories,
-        selectedCategoryIds: categoryIds,
-        vendorFilters: vendorNames,
+        transactions: transactions,
+        categories: categories,
+        selectedCategoryIds: Set<int>.unmodifiable(categoryIds),
+        vendorFilters: Set<String>.unmodifiable(vendorNames),
         summaryScope: summaryScope,
-        month: month,
-        query: _searchQuery,
+        query: resolvedQuery,
         today: widget.store.currentDate,
-        thresholdResolver: clampThreshold
-            ? (requested, observedMaximum) => _statsThresholdRange(
-                observedMax: observedMaximum,
-                fallbackMax: 50000,
-              ).snap(requested)
-            : null,
-      );
+      ),
+    );
+  }
+
+  StatsRenderFrame? _frameForBuild(_StatsFrameTarget target) {
+    final lastFrame = _lastRenderFrame;
+    if (lastFrame != null && _lastRenderFrameKey == target.key) {
+      return lastFrame;
+    }
+    final cached = _renderFrameCache.lookup(target.key);
+    if (cached != null) {
+      final needsAtomicState =
+          _pendingActiveType != null ||
+          cached.yearData.thresholdValue != _thresholdValue;
+      if (needsAtomicState) {
+        _scheduleCachedFramePublication(target, cached);
+        return null;
+      }
+      _lastRenderFrame = cached;
+      _lastRenderFrameKey = target.key;
+      return cached;
+    }
+    _scheduleFrameRequest(target);
+    return null;
+  }
+
+  void _scheduleCachedFramePublication(
+    _StatsFrameTarget target,
+    StatsRenderFrame frame,
+  ) {
+    if (_scheduledFrameTarget?.key == target.key) return;
+    final generation = ++_frameRequestGeneration;
+    _scheduledFrameTarget = target;
+    if (_frameRequestScheduled) return;
+    _frameRequestScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _frameRequestScheduled = false;
+      final scheduled = _scheduledFrameTarget;
+      _scheduledFrameTarget = null;
+      if (!mounted ||
+          scheduled == null ||
+          generation != _frameRequestGeneration) {
+        return;
+      }
+      _publishFrame(scheduled, frame, generation);
     });
-    final effectiveThreshold = frame.yearData.thresholdValue;
-    if (effectiveThreshold != threshold) {
-      _renderFrameCache.seed(
-        StatsRenderFrameKey(
-          dataRevision: (
-            transactions: widget.store.transactions,
-            categories: widget.store.categories,
+  }
+
+  void _scheduleFrameRequest(_StatsFrameTarget target) {
+    if (_inFlightFrameKey == target.key ||
+        _scheduledFrameTarget?.key == target.key) {
+      return;
+    }
+    _frameRequestGeneration += 1;
+    _scheduledFrameTarget = target;
+    if (_frameRequestScheduled) return;
+    _frameRequestScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _frameRequestScheduled = false;
+      final scheduled = _scheduledFrameTarget;
+      _scheduledFrameTarget = null;
+      if (!mounted || scheduled == null) return;
+      final generation = _frameRequestGeneration;
+      final cached = _renderFrameCache.lookup(scheduled.key);
+      if (cached != null) {
+        _publishFrame(scheduled, cached, generation);
+        return;
+      }
+      _inFlightFrameKey = scheduled.key;
+      DebugConsole.log(
+        '[Perf] Stats frame worker request type=${scheduled.request.activeType.name} '
+        'transactions=${scheduled.request.transactions.length}',
+      );
+      _renderFrameWorker
+          .build(scheduled.request)
+          .then(
+            (frame) {
+              if (_inFlightFrameKey == scheduled.key) {
+                _inFlightFrameKey = null;
+              }
+              _publishFrame(scheduled, frame, generation);
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              if (_inFlightFrameKey == scheduled.key) {
+                _inFlightFrameKey = null;
+              }
+              DebugConsole.log('[Perf] Stats frame worker failed: $error');
+            },
+          );
+    });
+    SchedulerBinding.instance.scheduleFrame();
+  }
+
+  void _publishFrame(
+    _StatsFrameTarget target,
+    StatsRenderFrame frame,
+    int generation,
+  ) {
+    if (!mounted || generation != _frameRequestGeneration) return;
+    if (_currentFrameTarget().key != target.key) return;
+    final effectiveKey = target.keyWithThreshold(frame.yearData.thresholdValue);
+    final published = _renderFrameCache.resolve(effectiveKey, () => frame);
+    setState(() {
+      _lastRenderFrame = published;
+      _lastRenderFrameKey = effectiveKey;
+      _activeType = target.request.activeType;
+      _pendingActiveType = null;
+      _thresholdValue = published.yearData.thresholdValue;
+    });
+    DebugConsole.log(
+      '[Perf] Stats frame worker publish type=${target.request.activeType.name} '
+      'generation=$generation',
+    );
+  }
+
+  Widget _buildFramePending(
+    ExpenseTheme resolvedTheme, {
+    required TransactionType activeType,
+  }) {
+    return KeyedSubtree(
+      key: const ValueKey('stats-frame-pending'),
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              const SizedBox(height: TransactionHeaderMetrics.contentTop),
+              TransactionTypePills(
+                activeType: activeType,
+                surfaceColor: resolvedTheme.logBox,
+                surfaceStyle: resolvedTheme.buttonSurfaceStyle,
+                accentColor: resolvedTheme.accent,
+                shadowEnabled: true,
+                onChanged: _setActiveType,
+              ),
+              Expanded(
+                child: ColoredBox(
+                  key: const ValueKey('stats-type-switch-frozen'),
+                  color: resolvedTheme.appBackground,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: resolvedTheme.accent,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          activeType: activeType,
-          summaryScope: summaryScope,
-          year: year,
-          month: month,
-          categoryIds: categoryIds,
-          vendorNames: vendorNames,
-          query: _searchQuery,
-          threshold: effectiveThreshold,
-        ),
-        frame,
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: LinearProgressIndicator(
+              key: const ValueKey('stats-type-switch-pending'),
+              minHeight: 2,
+              color: resolvedTheme.accent,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<_StatsBuiltFrame> _buildFrameAsync(_StatsFrameTarget target) async {
+    final cached = _renderFrameCache.lookup(target.key);
+    if (cached != null) {
+      return _StatsBuiltFrame(
+        frame: cached,
+        key: target.keyWithThreshold(cached.yearData.thresholdValue),
       );
     }
-    _lastRenderFrame = frame;
-    return frame;
+    final frame = await _renderFrameWorker.build(target.request);
+    return _StatsBuiltFrame(
+      frame: frame,
+      key: target.keyWithThreshold(frame.yearData.thresholdValue),
+    );
   }
 
   Widget _buildHeaderCard({
@@ -823,14 +938,6 @@ class _StatsPageState extends State<StatsPage>
     );
   }
 
-  double _clampThresholdToCurrentScope(double value) {
-    final observedMax = _resolveRenderFrame().observedMaximum;
-    return _statsThresholdRange(
-      observedMax: observedMax,
-      fallbackMax: 50000,
-    ).snap(value);
-  }
-
   String _scopeChipText(StatsYearData data) {
     final selectedCount = data.selectedCategoryIds.length;
     return selectedCount == 0 ? 'MIND' : selectedCount.toString();
@@ -851,42 +958,11 @@ class _StatsPageState extends State<StatsPage>
   void _setActiveType(TransactionType type) {
     if (_activeType == type && _pendingActiveType == null) return;
     _discardPendingThresholdStep();
-    _activeTypePublicationGeneration += 1;
-    final generation = _activeTypePublicationGeneration;
     if (_activeType == type) {
       setState(() => _pendingActiveType = null);
       return;
     }
     setState(() => _pendingActiveType = type);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || generation != _activeTypePublicationGeneration) return;
-      SchedulerBinding.instance.scheduleFrame();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || generation != _activeTypePublicationGeneration) {
-          return;
-        }
-        final targetType = _pendingActiveType;
-        if (targetType == null || targetType == _activeType) return;
-        final categoryIds = _selectedScopeByType[targetType] ?? const <int>{};
-        final vendorNames = widget.store.activeMerchantFilters;
-        final frame = _resolveRenderFrameFor(
-          activeType: targetType,
-          threshold: _thresholdValue,
-          layoutMode: _layoutMode,
-          year: _year,
-          month: _month,
-          categoryIds: categoryIds,
-          vendorNames: vendorNames,
-          clampThreshold: true,
-        );
-        _storeThresholdClampPending = false;
-        setState(() {
-          _activeType = targetType;
-          _pendingActiveType = null;
-          _thresholdValue = frame.yearData.thresholdValue;
-        });
-      });
-    });
   }
 
   Widget _pageOneContent({
@@ -1033,7 +1109,6 @@ class _StatsPageState extends State<StatsPage>
     _discardPendingThresholdStep();
     setState(() {
       _selectedScopeByType[_activeType] = ids;
-      _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
       _scopeSheetOpen = false;
     });
   }
@@ -1079,7 +1154,6 @@ class _StatsPageState extends State<StatsPage>
             setState(() {
               _selectedScopeByType[_activeType] = {...selected}
                 ..remove(category.transactionCategoryID);
-              _thresholdValue = _clampThresholdToCurrentScope(_thresholdValue);
             });
           },
         ),
@@ -1213,6 +1287,34 @@ class _StatsPageState extends State<StatsPage>
           .catchError((_) {}),
     );
   }
+}
+
+class _StatsFrameTarget {
+  const _StatsFrameTarget({required this.key, required this.request});
+
+  final StatsRenderFrameKey key;
+  final StatsRenderFrameRequest request;
+
+  StatsRenderFrameKey keyWithThreshold(double threshold) {
+    return StatsRenderFrameKey(
+      dataRevision: key.dataRevision,
+      activeType: key.activeType,
+      summaryScope: key.summaryScope,
+      year: key.year,
+      month: key.month,
+      categoryIds: key.categoryIds,
+      vendorNames: key.vendorNames,
+      query: key.query,
+      threshold: threshold,
+    );
+  }
+}
+
+class _StatsBuiltFrame {
+  const _StatsBuiltFrame({required this.frame, required this.key});
+
+  final StatsRenderFrame frame;
+  final StatsRenderFrameKey key;
 }
 
 class _StatsHeaderVisual {

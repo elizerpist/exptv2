@@ -156,6 +156,10 @@ class StatsRenderFrameCache {
     return next;
   }
 
+  StatsRenderFrame? lookup(StatsRenderFrameKey key) {
+    return key == _key ? _frame : null;
+  }
+
   void seed(StatsRenderFrameKey key, StatsRenderFrame frame) {
     _key = key;
     _frame = frame;

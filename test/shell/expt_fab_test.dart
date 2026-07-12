@@ -56,6 +56,155 @@ void main() {
     expect(pressed, 1);
   });
 
+  testWidgets(
+    'FAB horizontal drag shows right direction, strength, and exact offset',
+    (tester) async {
+      final steps = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ExptFab(onPressed: () {}, onHorizontalDragStep: steps.add),
+            ),
+          ),
+        ),
+      );
+
+      final fab = find.byKey(const ValueKey('expt-fab'));
+      final restingCenter = tester.getCenter(fab);
+      final gesture = await tester.startGesture(restingCenter);
+
+      await gesture.moveTo(restingCenter + const Offset(1, 0));
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-right-active')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-speed-slow')),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(fab), restingCenter + const Offset(2, 0));
+      expect(steps, isEmpty);
+
+      await gesture.moveTo(restingCenter + const Offset(30, 0));
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-right-active')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-speed-slow')),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(fab), restingCenter + const Offset(2, 0));
+      expect(steps, isEmpty);
+
+      await gesture.moveTo(restingCenter + const Offset(100, 0));
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-speed-medium')),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(fab), restingCenter + const Offset(4, 0));
+
+      await gesture.moveTo(restingCenter + const Offset(160, 0));
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-speed-fast')),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(fab), restingCenter + const Offset(6, 0));
+
+      await gesture.up();
+    },
+  );
+
+  testWidgets(
+    'FAB horizontal drag shows left feedback then cleans up and suppresses tap',
+    (tester) async {
+      var pressed = 0;
+      final steps = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ExptFab(
+                onPressed: () => pressed += 1,
+                onHorizontalDragStep: steps.add,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final fab = find.byKey(const ValueKey('expt-fab'));
+      final restingCenter = tester.getCenter(fab);
+      final gesture = await tester.startGesture(restingCenter);
+      await gesture.moveTo(restingCenter - const Offset(100, 0));
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-left-active')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-speed-medium')),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(fab), restingCenter - const Offset(4, 0));
+      expect(steps, [-1]);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('expt-fab-joystick-left-active')),
+        findsNothing,
+      );
+      expect(tester.getCenter(fab), restingCenter);
+      expect(pressed, 0);
+
+      await tester.tap(fab);
+      await tester.pumpAndSettle();
+      expect(pressed, 1);
+    },
+  );
+
+  testWidgets('FAB horizontal threshold stays at 32 px and cancel cleans up', (
+    tester,
+  ) async {
+    final steps = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ExptFab(onPressed: () {}, onHorizontalDragStep: steps.add),
+          ),
+        ),
+      ),
+    );
+
+    final fab = find.byKey(const ValueKey('expt-fab'));
+    final restingCenter = tester.getCenter(fab);
+    final gesture = await tester.startGesture(restingCenter);
+    await gesture.moveBy(const Offset(31, 0));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(steps, isEmpty);
+
+    await gesture.moveBy(const Offset(1, 0));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(steps, [1]);
+
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('expt-fab-joystick-right-active')),
+      findsNothing,
+    );
+    expect(tester.getCenter(fab), restingCenter);
+  });
+
   testWidgets('FAB joystick accelerates threshold upward with finger height', (
     tester,
   ) async {
