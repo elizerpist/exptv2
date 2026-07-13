@@ -29,6 +29,7 @@ import 'widgets/header_card/fast_info_panel.dart';
 import 'widgets/header_card/header_fast_info_surface.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
+import 'widgets/experimental/spendee_test_dashboard.dart';
 import 'models/limit_allocation_data.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/slide_up_menu_card.dart';
@@ -67,6 +68,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onBackheaderLiveTunerRequested,
     this.onPickSummaryMonth,
     this.onNotificationPressed,
+    this.onSettingsPressed,
     this.notificationUnreadCount = 0,
     this.logBottomPadding = 96,
     this.budgetEditorActiveKey,
@@ -91,6 +93,7 @@ class TransactionHomePage extends StatefulWidget {
   final Future<NativeYearMonthSelection?> Function(DateTime initial)?
   onPickSummaryMonth;
   final VoidCallback? onNotificationPressed;
+  final VoidCallback? onSettingsPressed;
   final int notificationUnreadCount;
   final double logBottomPadding;
   final ValueNotifier<String?>? budgetEditorActiveKey;
@@ -217,6 +220,20 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           final budgetHostItem = widget.onBudgetTargetEditorRequested == null
               ? _budgetEditorItem ?? _defaultBudgetEditorItem()
               : null;
+
+          if (expenseTheme.settings.dashboardDesignMode ==
+              DashboardDesignMode.spendeeTest) {
+            return SpendeeTestDashboard(
+              store: widget.store,
+              expenseTheme: expenseTheme,
+              onSettingsPressed: widget.onSettingsPressed,
+              onPickSummaryMonth: _pickSummaryMonth,
+              onEditTransaction: widget.onEditTransaction,
+              onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
+              onVendorSheetRequested: _openVendorSheet,
+              logBottomPadding: widget.logBottomPadding,
+            );
+          }
 
           return Stack(
             clipBehavior: Clip.none,
@@ -784,6 +801,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
           setState(() => _balanceHidden = !_balanceHidden);
         },
         onCategoryPressed: _openCategoryMenu,
+        onSettingsPressed: widget.onSettingsPressed,
         onNotificationPressed: widget.onNotificationPressed,
         notificationUnreadCount: widget.notificationUnreadCount,
         onVerticalDragUpdate: _handleHeaderDragUpdate,

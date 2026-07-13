@@ -178,6 +178,33 @@ enum AppDesignProfile {
   }
 }
 
+enum DashboardDesignMode {
+  current('current'),
+  spendeeTest('spendeeTest');
+
+  const DashboardDesignMode(this.nativeValue);
+  final String nativeValue;
+
+  static DashboardDesignMode fromAny(Object? value) {
+    final raw = value?.toString();
+    return DashboardDesignMode.values.firstWhere(
+      (item) => item.nativeValue == raw,
+      orElse: () => DashboardDesignMode.current,
+    );
+  }
+
+  String get displayTitle => switch (this) {
+    DashboardDesignMode.current => 'Jelenlegi',
+    DashboardDesignMode.spendeeTest => 'Új Spendee',
+  };
+
+  String get description => switch (this) {
+    DashboardDesignMode.current => 'A stabil, jelenlegi főmenü layout.',
+    DashboardDesignMode.spendeeTest =>
+      'Kísérleti C1-C2-C3 header és logbox dashboard.',
+  };
+}
+
 enum AppColorMode {
   turquoise('turquoise'),
   pink('pink');
@@ -408,6 +435,7 @@ class AppThemeSettings {
     this.centerBadgeColoredBackgroundOpacity =
         kCenterBadgeColoredBackgroundOpacityDefault,
     this.fabSize = kFabSizeDefault,
+    this.dashboardDesignMode = DashboardDesignMode.current,
   }) : summaryPillSurfaceStyle = buttonSurfaceStyle;
 
   factory AppThemeSettings.defaults() {
@@ -445,6 +473,7 @@ class AppThemeSettings {
           kCenterBadgeColoredBackgroundOpacityDefault,
       appColor: AppColorMode.turquoise,
       fabSize: kFabSizeDefault,
+      dashboardDesignMode: DashboardDesignMode.current,
     );
   }
 
@@ -555,6 +584,9 @@ class AppThemeSettings {
         min: kFabSizeMin,
         max: kFabSizeMax,
       ),
+      dashboardDesignMode: DashboardDesignMode.fromAny(
+        map['dashboardDesignMode'],
+      ),
     );
   }
 
@@ -589,6 +621,7 @@ class AppThemeSettings {
   final int centerBadgeColoredBackgroundOpacity;
   final AppColorMode appColor;
   final int fabSize;
+  final DashboardDesignMode dashboardDesignMode;
 
   AppDesignProfile get designProfile {
     return buttonSurfaceStyle == ExpenseSurfaceInteraction.neutralInset
@@ -630,6 +663,7 @@ class AppThemeSettings {
           centerBadgeColoredBackgroundOpacity,
       'appColor': appColor.nativeValue,
       'fabSize': fabSize,
+      'dashboardDesignMode': dashboardDesignMode.nativeValue,
     };
   }
 
@@ -664,6 +698,7 @@ class AppThemeSettings {
     int? centerBadgeColoredBackgroundOpacity,
     AppColorMode? appColor,
     int? fabSize,
+    DashboardDesignMode? dashboardDesignMode,
   }) {
     return AppThemeSettings(
       magnetType: magnetType ?? this.magnetType,
@@ -723,6 +758,7 @@ class AppThemeSettings {
       fabSize: fabSize == null
           ? this.fabSize
           : fabSize.clamp(kFabSizeMin, kFabSizeMax).toInt(),
+      dashboardDesignMode: dashboardDesignMode ?? this.dashboardDesignMode,
     );
   }
 

@@ -37,6 +37,7 @@ class TransactionHeaderCard extends StatelessWidget {
     this.showBalanceVisibilityButton = true,
     this.drawSurface = true,
     this.onBalanceVisibilityPressed,
+    this.onSettingsPressed,
     this.onNotificationPressed,
     this.notificationUnreadCount = 0,
     this.slideProgress,
@@ -70,6 +71,7 @@ class TransactionHeaderCard extends StatelessWidget {
   final bool showBalanceVisibilityButton;
   final bool drawSurface;
   final VoidCallback? onBalanceVisibilityPressed;
+  final VoidCallback? onSettingsPressed;
   final VoidCallback? onNotificationPressed;
   final int notificationUnreadCount;
   final double? slideProgress;
@@ -261,11 +263,17 @@ class TransactionHeaderCard extends StatelessWidget {
             if (onNotificationPressed != null)
               Positioned(
                 top: TransactionHeaderMetrics.titleTop - 4,
-                right: 25,
+                right: onSettingsPressed == null ? 25 : 68,
                 child: _HeaderNotificationButton(
                   unreadCount: notificationUnreadCount,
                   onPressed: onNotificationPressed!,
                 ),
+              ),
+            if (onSettingsPressed != null)
+              Positioned(
+                top: TransactionHeaderMetrics.titleTop - 4,
+                right: 25,
+                child: _HeaderSettingsButton(onPressed: onSettingsPressed!),
               ),
           ],
         ),
@@ -301,6 +309,47 @@ class TransactionHeaderCard extends StatelessWidget {
       height: height,
       width: double.infinity,
       child: slidingHeader,
+    );
+  }
+}
+
+class _HeaderSettingsButton extends StatelessWidget {
+  const _HeaderSettingsButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        key: const ValueKey('header-settings-button'),
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.88),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.gray200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                offset: const Offset(0, 2),
+                blurRadius: 5,
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.settings_outlined,
+            color: AppColors.gray800,
+            size: 19,
+          ),
+        ),
+      ),
     );
   }
 }

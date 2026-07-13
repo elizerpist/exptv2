@@ -273,6 +273,99 @@ void main() {
     expect(borderRadius.topLeft.x, 18);
   });
 
+  testWidgets(
+    'header settings button opens settings overlay without shell nav',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('header-settings-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('header-settings-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-root-back')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
+      expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('settings-root-back')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'spendee test dashboard renders real logs and snaps header to C2',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = <String, Object?>{
+        'magnetType': 'fade',
+        'cardColor': 'lightgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'gray',
+        'boxColor': 'gray',
+        'backheaderStyle': 'classic',
+        'dashboardDesignMode': 'spendeeTest',
+      };
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+        findsOneWidget,
+      );
+      expect(find.text('Test Store'), findsOneWidget);
+      expect(find.text('Q'), findsWidgets);
+
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-test-header-handle')),
+        const Offset(0, 96),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-category-avatar-6')),
+        findsOneWidget,
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-test-header-handle')),
+        const Offset(0, 240),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('shell keeps the body stable while the keyboard opens', (
     tester,
   ) async {

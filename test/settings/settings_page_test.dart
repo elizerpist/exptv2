@@ -14,10 +14,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/settings_page_methods');
   final savedParserRules = <Map<dynamic, dynamic>>[];
+  final updatedThemeSettings = <Map<dynamic, dynamic>>[];
   final calls = <String>[];
 
   setUp(() {
     savedParserRules.clear();
+    updatedThemeSettings.clear();
     calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -62,6 +64,12 @@ void main() {
                   'biometricLabel': 'Ujjlenyomat elerheto',
                 },
               };
+            case 'expenseUpdateThemeSettings':
+              final payload = Map<dynamic, dynamic>.from(
+                call.arguments as Map<dynamic, dynamic>,
+              );
+              updatedThemeSettings.add(payload);
+              return payload;
             case 'expenseSetSecurityPin':
               return <String, Object?>{
                 'pinEnabled': true,
@@ -215,6 +223,7 @@ void main() {
 
   Widget buildSubject({
     ValueChanged<SecuritySettings>? onSecuritySettingsChanged,
+    VoidCallback? onBackToHome,
   }) {
     final bridge = NativeBridge(
       methodChannel: channel,
@@ -225,6 +234,7 @@ void main() {
         store: EventStore(bridge, realtimeEnabled: false),
         nativeBridge: bridge,
         onSecuritySettingsChanged: onSecuritySettingsChanged,
+        onBackToHome: onBackToHome,
       ),
     );
   }
@@ -254,6 +264,44 @@ void main() {
     expect(find.text('Ghost logbox'), findsNothing);
     expect(find.text('Ismétlődő tranzakciók'), findsNothing);
     expect(find.text('Statisztikák'), findsNothing);
+  });
+
+  testWidgets('root settings saves the dashboard design mode selector', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildSubject());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard design'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('settings-dashboard-design-current')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('settings-dashboard-design-spendee-test')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings-dashboard-design-spendee-test')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(updatedThemeSettings, hasLength(1));
+    expect(updatedThemeSettings.single['dashboardDesignMode'], 'spendeeTest');
+  });
+
+  testWidgets('header settings mode exposes a root back button', (
+    tester,
+  ) async {
+    var closed = false;
+    await tester.pumpWidget(buildSubject(onBackToHome: () => closed = true));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('settings-root-back')));
+    await tester.pumpAndSettle();
+
+    expect(closed, isTrue);
   });
 
   testWidgets('opens theme and FastInfo submenus', (tester) async {

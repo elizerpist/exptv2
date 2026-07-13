@@ -90,6 +90,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late AppTab _pageActiveTab;
   final Map<AppTab, Widget> _retainedTabPages = <AppTab, Widget>{};
   var _homeBlockingOverlayOpen = false;
+  var _headerSettingsOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
@@ -226,6 +227,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       fastInfoConfig: _fastInfoConfig,
       logBottomPadding: _rightFabLogBottomPadding(fabSize),
       onNotificationPressed: _handleHeaderNotificationPressed,
+      onSettingsPressed: _openHeaderSettings,
       notificationUnreadCount: _notificationStore.unreadCount,
       onEditTransaction: _openEditTransaction,
       onDeleteTransactionRequested: _confirmDeleteTransaction,
@@ -644,6 +646,22 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     _selectTab(AppTab.notifications);
   }
 
+  void _openHeaderSettings() {
+    DebugConsole.log('[Settings] header overlay open requested');
+    _sheetHostKey.currentState?.closeAll();
+    widget.store.setSettingsActiveMenuKey('root');
+    setState(() {
+      _headerSettingsOpen = true;
+      _homeBlockingOverlayOpen = false;
+    });
+  }
+
+  void _closeHeaderSettings() {
+    if (!_headerSettingsOpen) return;
+    DebugConsole.log('[Settings] header overlay close requested');
+    setState(() => _headerSettingsOpen = false);
+  }
+
   void _openEditTransaction(TransactionRecord transaction) {
     final requestedAt = DateTime.now();
     DebugConsole.log(
@@ -874,7 +892,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               ],
             ),
           ),
-          if (!_homeBlockingOverlayOpen) ...shellNavigation,
+          if (!_homeBlockingOverlayOpen && !_headerSettingsOpen)
+            ...shellNavigation,
           DebugFloatingButton(
             bottomOffset: _rightFabDebugBottomOffset(
               _themeSettings.fabSize.toDouble(),
@@ -897,6 +916,21 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               onThemeSettingsChanged: _queueHomeThemeSettings,
             ),
           ),
+          if (_headerSettingsOpen)
+            Positioned.fill(
+              child: SettingsPage(
+                key: const ValueKey('header-settings-overlay'),
+                store: widget.store,
+                nativeBridge: widget.nativeBridge,
+                googleSheetsSyncController: widget.googleSheetsSyncController,
+                expenseTheme: expenseTheme,
+                onThemeSettingsChanged: _applyThemeSettings,
+                onFastInfoConfigChanged: _applyFastInfoConfig,
+                onSecuritySettingsChanged: widget.onSecuritySettingsChanged,
+                onOpenTransaction: _openTransactionFromPushLog,
+                onBackToHome: _closeHeaderSettings,
+              ),
+            ),
           if (!_coldStartReady)
             Positioned.fill(
               child: ColoredBox(
