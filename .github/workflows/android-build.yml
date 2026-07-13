@@ -46,13 +46,17 @@ jobs:
       - name: Run Flutter tests
         run: flutter test
 
-      - name: Upload Flutter test failure images
+      - name: Publish Flutter test failure images for diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-test-failures-${{ github.sha }}
-          path: test/failures/
-          if-no-files-found: ignore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -d test/failures ]; then
+            SHORT_SHA="${GITHUB_SHA::7}"
+            ARCHIVE="flutter-test-failures-${SHORT_SHA}.tar.gz"
+            tar -czf "$ARCHIVE" test/failures
+            gh release upload debug-latest "$ARCHIVE" --clobber
+          fi
 
       - name: Run Android unit tests
         run: |
