@@ -101,9 +101,9 @@ void main() {
     expect(release.springBack, isFalse);
 
     controller.beginDrag();
-    update = controller.dragBy(8);
+    update = controller.dragBy(30);
     expect(update.tick, isTrue);
-    expect(update.height, greaterThan(geometry.stage2Height));
+    expect(update.height, geometry.stage2Height + 18);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage1);
     expect(release.springBack, isFalse);
@@ -122,6 +122,196 @@ void main() {
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage2);
     expect(release.springBack, isTrue);
+  });
+
+  test('header controller keeps Stage 1 armed across positive drag frames', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+
+    controller.beginDrag();
+    expect(controller.dragBy(40).tick, isFalse);
+    expect(controller.dragBy(40).tick, isTrue);
+    expect(controller.dragBy(4).tick, isFalse);
+
+    final release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage1);
+    expect(release.springBack, isFalse);
+  });
+
+  test('header controller keeps Stage 2 armed across positive drag frames', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+    controller.beginDrag();
+    controller.dragBy(90);
+    controller.release();
+
+    controller.beginDrag();
+    expect(controller.dragBy(100).tick, isTrue);
+    expect(controller.dragBy(121).tick, isTrue);
+    expect(controller.dragBy(4).tick, isFalse);
+
+    final release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage2);
+    expect(release.springBack, isFalse);
+  });
+
+  test(
+    'header controller disarms Stage 1 after reversing below its trigger',
+    () {
+      final controller = SpendeeHeaderStageController(
+        geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+      );
+
+      controller.beginDrag();
+      controller.dragBy(40);
+      expect(controller.dragBy(40).tick, isTrue);
+      controller.dragBy(-20);
+
+      final release = controller.release();
+      expect(release.targetStage, SpendeeHeaderStage.stage0);
+      expect(release.springBack, isTrue);
+    },
+  );
+
+  test(
+    'header controller disarms Stage 2 after reversing below its trigger',
+    () {
+      final controller = SpendeeHeaderStageController(
+        geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+      );
+      controller.beginDrag();
+      controller.dragBy(90);
+      controller.release();
+
+      controller.beginDrag();
+      controller.dragBy(100);
+      expect(controller.dragBy(121).tick, isTrue);
+      controller.dragBy(-2);
+
+      final release = controller.release();
+      expect(release.targetStage, SpendeeHeaderStage.stage0);
+      expect(release.springBack, isFalse);
+    },
+  );
+
+  test(
+    'header controller preserves settled Stage 1 across geometry changes',
+    () {
+      final controller = SpendeeHeaderStageController(
+        geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+      );
+      controller.beginDrag();
+      controller.dragBy(90);
+      controller.release();
+      const replacement = SpendeeHeaderStageGeometry(
+        headerTop: 110,
+        stage0Height: 120,
+        stage1Height: 320,
+        stage2Height: 640,
+        contentGap: 6,
+      );
+
+      controller.replaceGeometry(replacement);
+
+      expect(controller.geometry, same(replacement));
+      expect(controller.stage, SpendeeHeaderStage.stage1);
+      expect(controller.currentHeight, replacement.stage1Height);
+    },
+  );
+
+  test(
+    'header controller preserves settled Stage 2 across geometry changes',
+    () {
+      final controller = SpendeeHeaderStageController(
+        geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+      );
+      controller.beginDrag();
+      controller.dragBy(90);
+      controller.release();
+      controller.beginDrag();
+      controller.dragBy(230);
+      controller.release();
+      const replacement = SpendeeHeaderStageGeometry(
+        headerTop: 110,
+        stage0Height: 120,
+        stage1Height: 320,
+        stage2Height: 640,
+        contentGap: 6,
+      );
+
+      controller.replaceGeometry(replacement);
+
+      expect(controller.geometry, same(replacement));
+      expect(controller.stage, SpendeeHeaderStage.stage2);
+      expect(controller.currentHeight, replacement.stage2Height);
+    },
+  );
+
+  test('geometry changes preserve an armed positive drag offset', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+    const replacement = SpendeeHeaderStageGeometry(
+      headerTop: 110,
+      stage0Height: 120,
+      stage1Height: 320,
+      stage2Height: 640,
+      contentGap: 6,
+    );
+    controller.beginDrag();
+    controller.dragBy(40);
+    expect(controller.dragBy(40).tick, isTrue);
+
+    controller.replaceGeometry(replacement);
+
+    expect(controller.stage, SpendeeHeaderStage.stage0);
+    expect(controller.currentHeight, replacement.stage0Height + 80);
+    expect(controller.dragBy(4).tick, isFalse);
+    expect(controller.release().targetStage, SpendeeHeaderStage.stage1);
+  });
+
+  test('geometry changes preserve a negative drag offset', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+    const replacement = SpendeeHeaderStageGeometry(
+      headerTop: 110,
+      stage0Height: 120,
+      stage1Height: 320,
+      stage2Height: 640,
+      contentGap: 6,
+    );
+    controller.beginDrag();
+    expect(controller.dragBy(-20).height, controller.geometry.stage0Height);
+
+    controller.replaceGeometry(replacement);
+    final update = controller.dragBy(80);
+
+    expect(update.height, replacement.stage0Height + 60);
+    expect(update.tick, isFalse);
+    expect(controller.release().targetStage, SpendeeHeaderStage.stage0);
+  });
+
+  test('threshold ticks are scoped to one pointer sequence', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+    controller.beginDrag();
+    controller.dragBy(40);
+    expect(controller.dragBy(40).tick, isTrue);
+    expect(controller.dragBy(-20).tick, isFalse);
+    expect(controller.dragBy(20).tick, isFalse);
+    expect(controller.release().targetStage, SpendeeHeaderStage.stage1);
+
+    controller.beginDrag();
+    expect(controller.dragBy(1).tick, isTrue);
+    controller.dragBy(-1);
+    controller.release();
+
+    controller.beginDrag();
+    expect(controller.dragBy(1).tick, isTrue);
   });
 
   test(
