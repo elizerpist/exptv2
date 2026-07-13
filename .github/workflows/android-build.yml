@@ -46,6 +46,14 @@ jobs:
       - name: Run Flutter tests
         run: flutter test
 
+      - name: Upload Flutter test failure images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-failures-${{ github.sha }}
+          path: test/failures/
+          if-no-files-found: ignore
+
       - name: Run Android unit tests
         run: |
           cd android
