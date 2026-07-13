@@ -24,6 +24,7 @@ final updatedThemeSettings = <Map<dynamic, dynamic>>[];
 final recurringRulesPayload = <Map<String, Object?>>[];
 final deletedTransactionIds = <int>[];
 Map<String, Object?>? themeSettingsOverride;
+Map<String, Object?>? expenseBootstrapOverride;
 var firstLaunchNotificationPromptEnabled = false;
 var firstLaunchNotificationPromptCalls = 0;
 
@@ -40,6 +41,7 @@ void main() {
     recurringRulesPayload.clear();
     deletedTransactionIds.clear();
     themeSettingsOverride = null;
+    expenseBootstrapOverride = null;
     firstLaunchNotificationPromptEnabled = false;
     firstLaunchNotificationPromptCalls = 0;
     SharedPreferences.setMockInitialValues({});
@@ -49,12 +51,22 @@ void main() {
           (call) async => false,
         );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('flutter_keyboard_controller/keyboard_events'),
+          (call) async => null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('exptv2/keyboard_insets'),
+          (call) async => null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
           call,
         ) async {
           if (call.method == 'loadEvents') return <Map<String, Object?>>[];
           if (call.method == 'expenseLoadBootstrap') {
-            return expenseBootstrapPayload();
+            return expenseBootstrapOverride ?? expenseBootstrapPayload();
           }
           if (call.method == 'expenseLoadSettings') {
             return <String, Object?>{
@@ -94,7 +106,8 @@ void main() {
             return recurringRulesPayload;
           }
           if (call.method == 'expenseListCategories') {
-            return (expenseBootstrapPayload()['categories']
+            return ((expenseBootstrapOverride ??
+                    expenseBootstrapPayload())['categories']
                 as List<Map<String, Object?>>);
           }
           if (call.method == 'expenseAddTransaction') {
@@ -196,6 +209,16 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('exptv2/native_ime_sheet'),
+          null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('flutter_keyboard_controller/keyboard_events'),
+          null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('exptv2/keyboard_insets'),
           null,
         );
   });
@@ -400,6 +423,441 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'spendee header keeps its snapped stage when viewport geometry changes',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = <String, Object?>{
+        'magnetType': 'fade',
+        'cardColor': 'lightgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'gray',
+        'boxColor': 'gray',
+        'backheaderStyle': 'classic',
+        'dashboardDesignMode': 'spendeeTest',
+      };
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-test-header-handle')),
+        const Offset(0, 96),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      tester.view.physicalSize = const Size(412, 893);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+        reason: 'A MediaQuery geometry update must not reset Stage 1.',
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-test-header-handle')),
+        const Offset(0, 240),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+
+      tester.view.physicalSize = const Size(412, 891);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+        reason: 'A MediaQuery geometry update must not reset Stage 2.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'spendee header keeps armed snaps across physical drag frames without overflow',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = <String, Object?>{
+        'magnetType': 'fade',
+        'cardColor': 'lightgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'gray',
+        'boxColor': 'gray',
+        'backheaderStyle': 'classic',
+        'dashboardDesignMode': 'spendeeTest',
+      };
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      final headerCard = find.byKey(const ValueKey('spendee-test-header-card'));
+      final homeContent = find.byKey(
+        const ValueKey('spendee-test-home-content'),
+      );
+      expect(headerCard, findsOneWidget);
+      expect(homeContent, findsOneWidget);
+      final initialHeaderHeight = tester.getSize(headerCard).height;
+      final initialContentTop = tester.getTopLeft(homeContent).dy;
+
+      var handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      var gesture = await tester.startGesture(tester.getCenter(handle));
+      for (final delta in const [40.0, 40.0, 4.0]) {
+        await gesture.moveBy(Offset(0, delta));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(
+          tester.getTopLeft(homeContent).dy - initialContentTop,
+          closeTo(tester.getSize(headerCard).height - initialHeaderHeight, .01),
+          reason: 'Home content must follow the live header delta exactly.',
+        );
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+        reason: 'A later pointer frame must not disarm the Stage 1 tick.',
+      );
+
+      handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      gesture = await tester.startGesture(tester.getCenter(handle));
+      for (final delta in const [100.0, 121.0, 80.0]) {
+        await gesture.moveBy(Offset(0, delta));
+        await tester.pump();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'The live Stage 2 pull must not overflow before release.',
+        );
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+        reason: 'A later pointer frame must not disarm the Stage 2 tick.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('spendee Stage 0 matches the computed Color Lab C1 geometry', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const ValueKey('spendee-test-header-card'));
+    final brand = find.byKey(const ValueKey('spendee-test-brand-lockup'));
+    final logo = find.byKey(const ValueKey('spendee-test-brand-logo'));
+    final homeContent = find.byKey(const ValueKey('spendee-test-home-content'));
+    final typeRow = find.byKey(const ValueKey('spendee-test-type-row'));
+    final incomePill = find.byKey(
+      const ValueKey('spendee-test-income-type-pill'),
+    );
+    final expensePill = find.byKey(
+      const ValueKey('spendee-test-expense-type-pill'),
+    );
+    final summary = find.byKey(const ValueKey('spendee-test-summary-pill'));
+    final search = find.byKey(const ValueKey('spendee-test-search-pill'));
+
+    expect(header, findsOneWidget);
+    expect(brand, findsOneWidget);
+    expect(logo, findsOneWidget);
+    expect(homeContent, findsOneWidget);
+    expect(typeRow, findsOneWidget);
+    expect(incomePill, findsOneWidget);
+    expect(expensePill, findsOneWidget);
+    expect(search, findsOneWidget);
+    expect(find.text('BUDGET'), findsOneWidget);
+    expect(find.textContaining('Elköltve'), findsNothing);
+
+    expect(tester.getRect(header), const Rect.fromLTWH(20, 104, 372, 104));
+    expect(tester.getRect(brand), const Rect.fromLTWH(22, 48, 312, 42));
+    expect(tester.getSize(logo), const Size.square(79.5));
+    expect(tester.getTopLeft(homeContent), const Offset(0, 212));
+    expect(tester.getRect(typeRow), const Rect.fromLTWH(0, 212, 412, 66));
+    expect(tester.getRect(incomePill), const Rect.fromLTWH(28, 224, 173, 42));
+    expect(tester.getRect(expensePill), const Rect.fromLTWH(211, 224, 173, 42));
+    final incomeDecoration =
+        tester
+                .widget<Container>(
+                  find.descendant(
+                    of: incomePill,
+                    matching: find.byType(Container),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    final expenseDecoration =
+        tester
+                .widget<Container>(
+                  find.descendant(
+                    of: expensePill,
+                    matching: find.byType(Container),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(incomeDecoration.boxShadow, const <BoxShadow>[
+      BoxShadow(
+        color: Color.fromRGBO(15, 23, 42, .08),
+        offset: Offset(0, 10),
+        blurRadius: 23,
+      ),
+    ]);
+    expect(expenseDecoration.boxShadow, const <BoxShadow>[
+      BoxShadow(
+        color: Color.fromRGBO(245, 54, 141, .22),
+        offset: Offset(0, 12),
+        blurRadius: 24,
+      ),
+    ]);
+    expect(tester.getRect(summary), const Rect.fromLTWH(28, 278, 356, 59));
+    expect(tester.getRect(search), const Rect.fromLTWH(28, 349, 356, 45));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'spendee physical popout return cycle and carousel stay exception free',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = _spendeeThemeSettings();
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      Future<void> dragHandle(List<double> deltas) async {
+        final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+        final gesture = await tester.startGesture(tester.getCenter(handle));
+        for (final delta in deltas) {
+          await gesture.moveBy(Offset(0, delta));
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+
+      await dragHandle(const [40, 40, 4]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      final carousel = find.byKey(
+        const ValueKey('spendee-test-context-carousel'),
+      );
+      final horizontal = await tester.startGesture(tester.getCenter(carousel));
+      await horizontal.moveBy(const Offset(-72, 0));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await horizontal.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [8]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [80]);
+      await dragHandle(const [12, -12]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [100, 121, 4]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [8]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [221]);
+      await dragHandle(const [8, -8]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'spendee Stage 1 and 2 support zero one and many real-shaped categories',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = _spendeeThemeSettings();
+
+      for (final scenario in const <(int, int)>[(0, 0), (1, 1), (7, 400)]) {
+        final (categoryCount, transactionCount) = scenario;
+        expenseBootstrapOverride = _spendeeBootstrapPayload(
+          expenseCategoryCount: categoryCount,
+          transactionCount: transactionCount,
+        );
+        await tester.pumpWidget(buildApp());
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        await tester.drag(
+          find.byKey(const ValueKey('spendee-test-header-handle')),
+          const Offset(0, 96),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        final avatars = find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'spendee-test-category-avatar-',
+              ),
+        );
+        expect(avatars, findsNWidgets(categoryCount.clamp(0, 5)));
+
+        await tester.drag(
+          find.byKey(const ValueKey('spendee-test-header-handle')),
+          const Offset(0, 240),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.drag(
+          find.byKey(const ValueKey('spendee-test-header-handle')),
+          const Offset(0, 8),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.drag(
+          find.byKey(const ValueKey('spendee-test-header-handle')),
+          const Offset(0, 8),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('spendee C1 C2 C3 and menu match reviewed golden renders', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = _spendeeThemeSettings();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-header-golden-boundary')),
+      matchesGoldenFile('goldens/spendeetest/c1_header.png'),
+    );
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-header-menu-golden-boundary')),
+      matchesGoldenFile('goldens/spendeetest/menu_button.png'),
+    );
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      matchesGoldenFile('goldens/spendeetest/c1_dashboard.png'),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-test-header-handle')),
+      const Offset(0, 96),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      matchesGoldenFile('goldens/spendeetest/c2_dashboard.png'),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-test-header-handle')),
+      const Offset(0, 240),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      matchesGoldenFile('goldens/spendeetest/c3_dashboard.png'),
+    );
+  });
 
   testWidgets('shell keeps the body stable while the keyboard opens', (
     tester,
@@ -2266,6 +2724,59 @@ Map<String, Object?> expenseBootstrapPayload() {
         'isCustomIcon': true,
       },
     ],
+    'transactions': transactions,
+  };
+}
+
+Map<String, Object?> _spendeeThemeSettings() {
+  return <String, Object?>{
+    'magnetType': 'fade',
+    'cardColor': 'lightgray',
+    'theme': 'Türkiz',
+    'backgroundColor': 'gray',
+    'boxColor': 'gray',
+    'backheaderStyle': 'classic',
+    'dashboardDesignMode': 'spendeeTest',
+  };
+}
+
+Map<String, Object?> _spendeeBootstrapPayload({
+  required int expenseCategoryCount,
+  required int transactionCount,
+}) {
+  final categories = List<Map<String, Object?>>.generate(
+    expenseCategoryCount,
+    (index) => <String, Object?>{
+      'transactionCategoryID': 100 + index,
+      'name': 'Kategória ${index + 1}',
+      'type': 'kiadás',
+      'colorSlot': index % 21,
+      'iconSlot': index % 8,
+      'backgroundColor': '#06b6d4',
+      'hasLimit': index.isEven,
+      'limitAmount': index.isEven ? 100000 + index * 10000 : 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    },
+  );
+  final transactions = expenseCategoryCount == 0
+      ? <Map<String, Object?>>[]
+      : List<Map<String, Object?>>.generate(
+          transactionCount,
+          (index) => <String, Object?>{
+            'id': 900000 + index,
+            'date': '2026.07.${(index % 28 + 1).toString().padLeft(2, '0')}',
+            'time': '${(index % 24).toString().padLeft(2, '0')}:30:00',
+            'merchant': 'Teszt kereskedő $index',
+            'amount': -(100 + index),
+            'userAssignedName': null,
+            'transactionCategoryID':
+                categories[index %
+                    expenseCategoryCount]['transactionCategoryID'],
+          },
+        );
+  return <String, Object?>{
+    'categories': categories,
     'transactions': transactions,
   };
 }

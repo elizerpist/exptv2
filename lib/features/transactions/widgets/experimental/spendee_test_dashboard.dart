@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/category_color_manager.dart';
@@ -16,16 +17,11 @@ import '../../state/transaction_store.dart';
 import '../category_menu/category_icon_badge.dart';
 import '../transaction_log_box.dart';
 import 'spendee_center_carousel_controller.dart';
+import 'spendee_header_glass.dart';
 import 'spendee_header_stage_controller.dart';
+import 'spendee_header_visual_spec.dart';
 
-const _budgetHeaderGradientColors = <Color>[
-  Color(0xFFBDF5FF),
-  Color(0xFF06B6D4),
-  Color(0xFF0057D9),
-];
-
-const _budgetHeaderGradientStops = <double>[0, .5, 1];
-const _centerCarouselVisualSlotDistance = 64.0;
+final _budgetHeaderVisualSpec = SpendeeHeaderVisualSpec.budgetDefault();
 
 class SpendeeTestDashboard extends StatefulWidget {
   const SpendeeTestDashboard({
@@ -53,7 +49,8 @@ class SpendeeTestDashboard extends StatefulWidget {
   State<SpendeeTestDashboard> createState() => _SpendeeTestDashboardState();
 }
 
-class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
+class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
+    with SingleTickerProviderStateMixin {
   SpendeeHeaderStageController? _stageController;
   SpendeeHeaderStage _stage = SpendeeHeaderStage.stage0;
   var _headerHeight = 104.0;
@@ -61,9 +58,22 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
   var _springBack = false;
   var _carouselLiveTicked = false;
   var _carouselVisualDx = 0.0;
-  var _carouselSettling = false;
   SpendeeCenterCarouselController? _carouselController;
+  late final AnimationController _carouselReleaseController;
+  var _carouselMotionSerial = 0;
   int? _selectedCategoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    _carouselReleaseController = AnimationController(vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _carouselReleaseController.dispose();
+    super.dispose();
+  }
 
   SpendeeHeaderStageGeometry _geometryFor(BuildContext context) {
     return SpendeeHeaderStageGeometry.html(
@@ -74,8 +84,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
   SpendeeHeaderStageController _controllerFor(BuildContext context) {
     final geometry = _geometryFor(context);
     final existing = _stageController;
-    if (existing != null &&
-        existing.geometry.stage2Height == geometry.stage2Height) {
+    if (existing != null) {
+      existing.replaceGeometry(geometry);
+      _headerHeight = existing.currentHeight;
       return existing;
     }
     final controller = SpendeeHeaderStageController(geometry: geometry);
@@ -158,9 +169,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
   }
 
   void _handleCarouselDragStart(DragStartDetails details) {
+    _carouselMotionSerial += 1;
+    _carouselReleaseController.stop();
     setState(() {
       _carouselLiveTicked = false;
-      _carouselSettling = false;
       _carouselVisualDx = 0;
       _carouselController = SpendeeCenterCarouselController(
         itemCount: _activeCategories.length,
@@ -200,56 +212,109 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
     if (categories.length < 2 || controller == null) {
       return;
     }
-    final plan = controller.releasePlan(
-      velocityDx: details.velocity.pixelsPerSecond.dx,
+    unawaited(
+      _releaseCarouselBelt(
+        controller: controller,
+        velocityDx: details.velocity.pixelsPerSecond.dx,
+        liveTicked: _carouselLiveTicked,
+        serial: _carouselMotionSerial,
+      ),
     );
-    final steps = _carouselLiveTicked ? plan.velocitySteps : plan.steps;
-    _carouselController = null;
-    _carouselLiveTicked = false;
-    if (steps <= 0) {
-      setState(() {
-        _carouselSettling = true;
-        _carouselVisualDx = 0;
-      });
-      return;
-    }
-    unawaited(_tickCarouselBySteps(steps: steps, swipedLeft: plan.swipedLeft));
   }
 
-  Future<void> _tickCarouselBySteps({
-    required int steps,
-    required bool swipedLeft,
+  Future<void> _releaseCarouselBelt({
+    required SpendeeCenterCarouselController controller,
+    required double velocityDx,
+    required bool liveTicked,
+    required int serial,
   }) async {
-    final categories = _activeCategories;
-    if (categories.length < 2) return;
-    final boundedSteps = steps.clamp(1, categories.length - 1).toInt();
-    setState(() => _carouselSettling = true);
-    for (var step = 0; step < boundedSteps; step += 1) {
-      if (!mounted) return;
-      setState(() {
-        _carouselVisualDx = swipedLeft
-            ? -_centerCarouselVisualSlotDistance
-            : _centerCarouselVisualSlotDistance;
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 72));
-      if (!mounted) return;
-      final current = _selectedCategoryIndex();
-      final next = swipedLeft
-          ? (current + 1) % categories.length
-          : (current - 1 + categories.length) % categories.length;
-      final category = categories[next];
-      HapticFeedback.selectionClick();
-      setState(() {
-        _selectedCategoryId = category.transactionCategoryID;
-        _carouselVisualDx = 0;
-      });
-      widget.store.setCategoryFilter(category);
-      if (step < boundedSteps - 1) {
-        await Future<void>.delayed(const Duration(milliseconds: 72));
+    final motion = controller.releaseMotion(
+      velocityDx: velocityDx,
+      liveTicked: liveTicked,
+    );
+    _carouselLiveTicked = false;
+    try {
+      if (motion.initialTravel.abs() >= .5) {
+        await _animateCarouselTravel(
+          controller: controller,
+          travel: motion.initialTravel,
+          duration: motion.initialDuration,
+          curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
+        );
+      }
+      if (!mounted || serial != _carouselMotionSerial) return;
+      final settleTravel = controller.settleTravel(
+        preferredDxDirection: motion.preferredDxDirection,
+        allowDirectionalSnap: motion.directionalSnapAllowed,
+      );
+      if (settleTravel.abs() >= .5) {
+        await _animateCarouselTravel(
+          controller: controller,
+          travel: settleTravel,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    } on TickerCanceled {
+      return;
+    } finally {
+      if (mounted && serial == _carouselMotionSerial) {
+        _carouselController = null;
+        setState(() {
+          _carouselVisualDx = 0;
+        });
       }
     }
-    if (!mounted) return;
-    setState(() => _carouselSettling = false);
+  }
+
+  Future<void> _animateCarouselTravel({
+    required SpendeeCenterCarouselController controller,
+    required double travel,
+    required Duration duration,
+    required Curve curve,
+  }) async {
+    _carouselReleaseController.stop();
+    _carouselReleaseController.duration = duration;
+    var lastValue = 0.0;
+    final animation = Tween<double>(begin: 0, end: travel).animate(
+      CurvedAnimation(parent: _carouselReleaseController, curve: curve),
+    );
+    void applyFrame() {
+      final delta = animation.value - lastValue;
+      lastValue = animation.value;
+      if (delta == 0 || !mounted) return;
+      _applyCarouselMotionDelta(controller, delta);
+    }
+
+    animation.addListener(applyFrame);
+    try {
+      await _carouselReleaseController.forward(from: 0).orCancel;
+    } finally {
+      animation.removeListener(applyFrame);
+    }
+  }
+
+  void _applyCarouselMotionDelta(
+    SpendeeCenterCarouselController controller,
+    double deltaDx,
+  ) {
+    final categories = _activeCategories;
+    if (categories.length < 2) return;
+    final update = controller.applyDragDelta(deltaDx);
+    TransactionCategory? latestCategory;
+    for (final index in update.tickedIndexes) {
+      latestCategory = categories[index % categories.length];
+      HapticFeedback.selectionClick();
+    }
+    if (latestCategory != null) {
+      widget.store.setCategoryFilter(latestCategory);
+    }
+    setState(() {
+      if (latestCategory != null) {
+        _selectedCategoryId = latestCategory.transactionCategoryID;
+      }
+      _carouselVisualDx = update.residualDx;
+    });
   }
 
   @override
@@ -275,11 +340,11 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
             key: const ValueKey('spendee-test-header-outer-glow'),
             duration: animationDuration,
             curve: animationCurve,
-            left: -36,
-            right: -36,
-            top: 24,
-            height: 264 + _headerHeight - geometry.stage0Height,
-            child: const _HeaderOuterGlow(),
+            left: -_budgetHeaderVisualSpec.glow.horizontalOverflow,
+            right: -_budgetHeaderVisualSpec.glow.horizontalOverflow,
+            top: _budgetHeaderVisualSpec.glow.top,
+            height: _budgetHeaderVisualSpec.glow.heightForHeader(_headerHeight),
+            child: SpendeeHeaderOuterGlowSurface(spec: _budgetHeaderVisualSpec),
           ),
           AnimatedPositioned(
             duration: animationDuration,
@@ -289,6 +354,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
             right: 0,
             bottom: 0,
             child: _SpendeeHomeContent(
+              key: const ValueKey('spendee-test-home-content'),
               store: widget.store,
               expenseTheme: widget.expenseTheme,
               stage: _stage,
@@ -304,25 +370,37 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
             right: 20,
             top: geometry.headerTop,
             child: AnimatedContainer(
+              key: const ValueKey('spendee-test-header-card'),
               duration: animationDuration,
               curve: animationCurve,
               height: _headerHeight,
-              child: _SpendeeBudgetHeaderCard(
-                stage: _stage,
-                selectedCategory: _selectedCategory,
-                selectedBar: _selectedBar,
-                bars: widget.store.categoryBudgetBars,
-                categories: _activeCategories,
-                onHandleDragStart: _beginHeaderDrag,
-                onHandleDragUpdate: _updateHeaderDrag,
-                onHandleDragEnd: _endHeaderDrag,
-                onCategoryTap: _selectCategory,
-                carouselOffset: _carouselVisualDx,
-                carouselSettling: _carouselSettling,
-                onCarouselDragStart: _handleCarouselDragStart,
-                onCarouselDragUpdate: _handleCarouselDragUpdate,
-                onCarouselDragEnd: _handleCarouselDragEnd,
+              child: RepaintBoundary(
+                key: const ValueKey('spendee-test-header-golden-boundary'),
+                child: _SpendeeBudgetHeaderCard(
+                  stage: _stage,
+                  selectedCategory: _selectedCategory,
+                  selectedBar: _selectedBar,
+                  bars: widget.store.categoryBudgetBars,
+                  categories: _activeCategories,
+                  onHandleDragStart: _beginHeaderDrag,
+                  onHandleDragUpdate: _updateHeaderDrag,
+                  onHandleDragEnd: _endHeaderDrag,
+                  onCategoryTap: _selectCategory,
+                  carouselOffset: _carouselVisualDx,
+                  onCarouselDragStart: _handleCarouselDragStart,
+                  onCarouselDragUpdate: _handleCarouselDragUpdate,
+                  onCarouselDragEnd: _handleCarouselDragEnd,
+                ),
               ),
+            ),
+          ),
+          const Positioned(
+            left: 22,
+            right: 78,
+            top: 48,
+            height: 42,
+            child: _SpendeeBrandLockup(
+              key: ValueKey('spendee-test-brand-lockup'),
             ),
           ),
           if (widget.onSettingsPressed != null)
@@ -351,7 +429,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.onHandleDragEnd,
     required this.onCategoryTap,
     required this.carouselOffset,
-    required this.carouselSettling,
     required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
     required this.onCarouselDragEnd,
@@ -367,14 +444,12 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final GestureDragEndCallback onHandleDragEnd;
   final ValueChanged<TransactionCategory> onCategoryTap;
   final double carouselOffset;
-  final bool carouselSettling;
   final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
   final GestureDragEndCallback onCarouselDragEnd;
 
   @override
   Widget build(BuildContext context) {
-    final categoryName = selectedCategory?.name ?? 'Budget';
     final bar = selectedBar;
     final headerValue = bar == null
         ? 'Nincs limit'
@@ -386,214 +461,74 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
         ? 0.0
         : (bar.limitAmount - bar.spent).clamp(0.0, double.infinity).toDouble();
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF06B6D4).withValues(alpha: .20),
-            offset: const Offset(0, 18),
-            blurRadius: 42,
+    return SpendeeHeaderGlassSurface(
+      spec: _budgetHeaderVisualSpec,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned(
+            left: 20,
+            top: 28,
+            child: Text('BUDGET', style: _headerLabelStyle),
           ),
-          BoxShadow(
-            color: const Color(0xFF0057D9).withValues(alpha: .16),
-            offset: const Offset(0, 14),
-            blurRadius: 34,
+          Positioned(
+            left: 20,
+            right: 78,
+            top: 48,
+            child: _HeaderValueText(headerValue),
+          ),
+          Positioned(
+            top: _budgetHeaderVisualSpec.menu.top,
+            right: _budgetHeaderVisualSpec.menu.right,
+            child: SpendeeHeaderMenuButton(
+              spec: _budgetHeaderVisualSpec,
+              onPressed: () => HapticFeedback.selectionClick(),
+            ),
+          ),
+          if (stage != SpendeeHeaderStage.stage0)
+            Positioned(
+              left: 16,
+              right: 16,
+              top: 96,
+              height: stage == SpendeeHeaderStage.stage1 ? 130 : 130,
+              child: _BudgetExtendedInfo(
+                categories: categories,
+                selectedCategory: selectedCategory,
+                bars: bars,
+                spentPercent: spentPercent,
+                remaining: remaining,
+                onCategoryTap: onCategoryTap,
+                carouselOffset: carouselOffset,
+                onCarouselDragStart: onCarouselDragStart,
+                onCarouselDragUpdate: onCarouselDragUpdate,
+                onCarouselDragEnd: onCarouselDragEnd,
+              ),
+            ),
+          if (stage == SpendeeHeaderStage.stage2)
+            Positioned(
+              left: 16,
+              right: 16,
+              top: 236,
+              bottom: 18,
+              child: _BudgetPiePanel(
+                bars: bars,
+                selectedCategory: selectedCategory,
+              ),
+            ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: _budgetHeaderVisualSpec.handle.hitHeight,
+            child: SpendeeHeaderHandle(
+              spec: _budgetHeaderVisualSpec,
+              onVerticalDragStart: onHandleDragStart,
+              onVerticalDragUpdate: onHandleDragUpdate,
+              onVerticalDragEnd: onHandleDragEnd,
+            ),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              const _HeaderGlassBackground(
-                key: ValueKey('spendee-test-header-glass-layer'),
-              ),
-              Positioned(
-                left: 20,
-                top: 28,
-                child: Text('Budget', style: _headerLabelStyle),
-              ),
-              Positioned(
-                left: 20,
-                right: 78,
-                top: 48,
-                child: Text(
-                  headerValue,
-                  key: const ValueKey('spendee-test-header-value'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _headerValueStyle,
-                ),
-              ),
-              if (stage == SpendeeHeaderStage.stage0)
-                Positioned(
-                  left: 20,
-                  right: 78,
-                  top: 76,
-                  child: Text(
-                    bar?.hasLimit == true
-                        ? 'Elköltve $spentPercent% · maradt ${_formatFt(remaining)}'
-                        : '$categoryName · nincs limit',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _headerSubStyle,
-                  ),
-                ),
-              Positioned(
-                top: 14,
-                right: 20,
-                child: _HeaderGlassMenuButton(
-                  onPressed: () => HapticFeedback.selectionClick(),
-                ),
-              ),
-              if (stage != SpendeeHeaderStage.stage0)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  top: 96,
-                  height: stage == SpendeeHeaderStage.stage1 ? 130 : 130,
-                  child: _BudgetExtendedInfo(
-                    categories: categories,
-                    selectedCategory: selectedCategory,
-                    bars: bars,
-                    spentPercent: spentPercent,
-                    remaining: remaining,
-                    onCategoryTap: onCategoryTap,
-                    carouselOffset: carouselOffset,
-                    carouselSettling: carouselSettling,
-                    onCarouselDragStart: onCarouselDragStart,
-                    onCarouselDragUpdate: onCarouselDragUpdate,
-                    onCarouselDragEnd: onCarouselDragEnd,
-                  ),
-                ),
-              if (stage == SpendeeHeaderStage.stage2)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  top: 236,
-                  bottom: 18,
-                  child: _BudgetPiePanel(
-                    bars: bars,
-                    selectedCategory: selectedCategory,
-                  ),
-                ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 28,
-                child: GestureDetector(
-                  key: const ValueKey('spendee-test-header-handle'),
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragStart: onHandleDragStart,
-                  onVerticalDragUpdate: onHandleDragUpdate,
-                  onVerticalDragEnd: onHandleDragEnd,
-                  child: Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .86),
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: .13),
-                            offset: const Offset(0, 2),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderOuterGlow extends StatelessWidget {
-  const _HeaderOuterGlow();
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: .24,
-      child: ImageFiltered(
-        imageFilter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(44),
-            gradient: const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: _budgetHeaderGradientColors,
-              stops: _budgetHeaderGradientStops,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderGlassBackground extends StatelessWidget {
-  const _HeaderGlassBackground({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment(-.9, -.55),
-              end: Alignment(.9, .55),
-              colors: _budgetHeaderGradientColors,
-              stops: _budgetHeaderGradientStops,
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(-.72, -.62),
-              radius: .82,
-              colors: [Color(0x85FFFFFF), Color(0x00FFFFFF)],
-              stops: [0, .62],
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(.74, -.64),
-              radius: .78,
-              colors: [Color(0x426B9DE8), Color(0x21FFFFFF), Color(0x00FFFFFF)],
-              stops: [0, .34, .68],
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment(-.72, -1),
-              end: Alignment(.42, 1),
-              colors: [Color(0x47FFFFFF), Color(0x00FFFFFF)],
-              stops: [0, .54],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -607,7 +542,6 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.remaining,
     required this.onCategoryTap,
     required this.carouselOffset,
-    required this.carouselSettling,
     required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
     required this.onCarouselDragEnd,
@@ -620,7 +554,6 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final double remaining;
   final ValueChanged<TransactionCategory> onCategoryTap;
   final double carouselOffset;
-  final bool carouselSettling;
   final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
   final GestureDragEndCallback onCarouselDragEnd;
@@ -664,25 +597,43 @@ class _BudgetExtendedInfo extends StatelessWidget {
               onHorizontalDragEnd: onCarouselDragEnd,
               child: AnimatedContainer(
                 key: const ValueKey('spendee-test-context-carousel'),
-                duration: carouselSettling
-                    ? const Duration(milliseconds: 72)
-                    : Duration.zero,
+                duration: Duration.zero,
                 curve: Curves.easeOutQuad,
                 transform: Matrix4.translationValues(carouselOffset, 0, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final category in _visibleAvatarCategories()) ...[
-                      _ContextAvatar(
-                        category: category,
-                        selected:
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Builder(
+                    builder: (context) {
+                      final visible = _visibleAvatarCategories();
+                      final centerIndex = visible.indexWhere(
+                        (category) =>
                             category.transactionCategoryID ==
                             selectedCategory?.transactionCategoryID,
-                        onTap: () => onCategoryTap(category),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                  ],
+                      );
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (
+                            var index = 0;
+                            index < visible.length;
+                            index++
+                          ) ...[
+                            if (index > 0) const SizedBox(width: 12),
+                            _ContextAvatar(
+                              category: visible[index],
+                              distanceFromCenter: centerIndex < 0
+                                  ? index
+                                  : (index - centerIndex).abs(),
+                              selected:
+                                  visible[index].transactionCategoryID ==
+                                  selectedCategory?.transactionCategoryID,
+                              onTap: () => onCategoryTap(visible[index]),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -732,64 +683,75 @@ class _BudgetExtendedInfo extends StatelessWidget {
 class _ContextAvatar extends StatelessWidget {
   const _ContextAvatar({
     required this.category,
+    required this.distanceFromCenter,
     required this.selected,
     required this.onTap,
   });
 
   final TransactionCategory category;
+  final int distanceFromCenter;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final size = selected ? 66.0 : 46.0;
-    final iconSize = selected ? 30.0 : 22.0;
+    final size = selected ? 66.0 : (distanceFromCenter <= 1 ? 46.0 : 36.0);
+    final iconSize = selected ? 30.0 : (distanceFromCenter <= 1 ? 22.0 : 18.0);
+    final opacity = selected ? 1.0 : (distanceFromCenter <= 1 ? .9 : .72);
     return GestureDetector(
       key: ValueKey(
         'spendee-test-category-avatar-${category.transactionCategoryID}',
       ),
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: CategoryColorManager.gradient(category.colorSlot),
-          border: Border.all(color: Colors.white.withValues(alpha: .58)),
-          boxShadow: [
-            BoxShadow(
-              color: category.slotColor.withValues(alpha: selected ? .24 : .12),
-              offset: Offset(0, selected ? 14 : 9),
-              blurRadius: selected ? 28 : 18,
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.scale(
+          scale: selected ? 1.1 : 1,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: CategoryColorManager.gradient(category.colorSlot),
+              border: Border.all(color: Colors.white.withValues(alpha: .58)),
+              boxShadow: [
+                BoxShadow(
+                  color: selected
+                      ? const Color(0xFFF472B6).withValues(alpha: .24)
+                      : const Color(0xFF0F172A).withValues(alpha: .12),
+                  offset: Offset(0, selected ? 14 : 9),
+                  blurRadius: selected ? 28 : 18,
+                ),
+                if (selected)
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: .46),
+                    spreadRadius: 5,
+                  ),
+              ],
             ),
-            if (selected)
-              BoxShadow(
-                color: Colors.white.withValues(alpha: .46),
-                spreadRadius: 5,
-              ),
-          ],
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CustomPaint(
-              painter: _AvatarTopHighlightPainter(
-                opacity: selected ? .78 : .72,
-              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(
+                  painter: _AvatarTopHighlightPainter(
+                    opacity: selected ? .78 : .72,
+                  ),
+                ),
+                Center(
+                  child: CategoryIconBadge(
+                    category: category,
+                    backgroundColor: Colors.transparent,
+                    size: size,
+                    iconSize: iconSize,
+                    iconStrokeWidth: 1.4,
+                    showShadow: false,
+                    debugSource: 'spendee-test-context-avatar',
+                  ),
+                ),
+              ],
             ),
-            Center(
-              child: CategoryIconBadge(
-                category: category,
-                backgroundColor: Colors.transparent,
-                size: size,
-                iconSize: iconSize,
-                iconStrokeWidth: 1.4,
-                showShadow: false,
-                debugSource: 'spendee-test-context-avatar',
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1181,6 +1143,7 @@ class _BudgetPiePainter extends CustomPainter {
 
 class _SpendeeHomeContent extends StatelessWidget {
   const _SpendeeHomeContent({
+    super.key,
     required this.store,
     required this.expenseTheme,
     required this.stage,
@@ -1202,179 +1165,215 @@ class _SpendeeHomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SizedBox(
-          height: 66,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _SpendeeTypePill(
-                    label: 'Bevétel',
-                    active: store.activeType == TransactionType.income,
-                    activeGradient: const LinearGradient(
-                      colors: [Colors.white, Colors.white],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const fixedDashboardControlsHeight = 66.0 + 59.0 + 12.0 + 45.0;
+        const transactionHeaderHeight = 24.0;
+        final canShowTransactionLog =
+            stage != SpendeeHeaderStage.stage2 &&
+            constraints.maxHeight >=
+                fixedDashboardControlsHeight + transactionHeaderHeight;
+        return Column(
+          children: [
+            SizedBox(
+              key: const ValueKey('spendee-test-type-row'),
+              height: 66,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SpendeeTypePill(
+                        key: const ValueKey('spendee-test-income-type-pill'),
+                        label: 'Bevétel',
+                        active: store.activeType == TransactionType.income,
+                        activeGradient: const LinearGradient(
+                          colors: [Colors.white, Colors.white],
+                        ),
+                        boxShadows: const <BoxShadow>[
+                          BoxShadow(
+                            color: Color.fromRGBO(15, 23, 42, .08),
+                            offset: Offset(0, 10),
+                            blurRadius: 23,
+                          ),
+                        ],
+                        textColor: store.activeType == TransactionType.income
+                            ? const Color(0xFF14213A)
+                            : AppColors.gray500,
+                        onTap: () =>
+                            store.setActiveType(TransactionType.income),
+                      ),
                     ),
-                    textColor: store.activeType == TransactionType.income
-                        ? const Color(0xFF14213A)
-                        : AppColors.gray500,
-                    onTap: () => store.setActiveType(TransactionType.income),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SpendeeTypePill(
-                    label: 'Kiadás',
-                    active: store.activeType == TransactionType.expense,
-                    activeGradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFFFB15C),
-                        Color(0xFFFF6B6B),
-                        Color(0xFFF5368D),
-                      ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _SpendeeTypePill(
+                        key: const ValueKey('spendee-test-expense-type-pill'),
+                        label: 'Kiadás',
+                        active: store.activeType == TransactionType.expense,
+                        activeGradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFFFB15C),
+                            Color(0xFFFF6B6B),
+                            Color(0xFFF5368D),
+                          ],
+                        ),
+                        boxShadows: const <BoxShadow>[
+                          BoxShadow(
+                            color: Color.fromRGBO(245, 54, 141, .22),
+                            offset: Offset(0, 12),
+                            blurRadius: 24,
+                          ),
+                        ],
+                        textColor: store.activeType == TransactionType.expense
+                            ? Colors.white
+                            : AppColors.gray500,
+                        onTap: () =>
+                            store.setActiveType(TransactionType.expense),
+                      ),
                     ),
-                    textColor: store.activeType == TransactionType.expense
-                        ? Colors.white
-                        : AppColors.gray500,
-                    onTap: () => store.setActiveType(TransactionType.expense),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-        GestureDetector(
-          key: const ValueKey('spendee-test-summary-pill'),
-          onTap: onPickSummaryMonth,
-          onDoubleTap: store.resetSummaryToCurrentMonth,
-          onVerticalDragEnd: (_) => store.cycleSummaryWindow(),
-          onHorizontalDragEnd: (details) {
-            final dx = details.velocity.pixelsPerSecond.dx;
-            if (dx == 0) return;
-            store.shiftSummaryPeriod(dx < 0 ? 1 : -1);
-          },
-          child: Container(
-            height: 59,
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: _softWhiteDecoration(18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
+            GestureDetector(
+              onTap: onPickSummaryMonth,
+              onDoubleTap: store.resetSummaryToCurrentMonth,
+              onVerticalDragEnd: (_) => store.cycleSummaryWindow(),
+              onHorizontalDragEnd: (details) {
+                final dx = details.velocity.pixelsPerSecond.dx;
+                if (dx == 0) return;
+                store.shiftSummaryPeriod(dx < 0 ? 1 : -1);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Container(
+                  key: const ValueKey('spendee-test-summary-pill'),
+                  height: 59,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: _softWhiteDecoration(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          store.activeSummaryTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.gray500,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        store.activeSummary.formattedFor(store.activeType),
+                        style: const TextStyle(
+                          color: AppColors.gray800,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Container(
+                key: const ValueKey('spendee-test-search-pill'),
+                height: 45,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: _softWhiteDecoration(20),
+                child: Row(
+                  children: [
+                    IconButton(
+                      key: const ValueKey('spendee-test-search-vendor-button'),
+                      onPressed: onVendorSheetRequested,
+                      icon: const Icon(
+                        Icons.search,
+                        size: 18,
+                        color: AppColors.gray400,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 32,
+                        height: 32,
+                      ),
+                    ),
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey(
+                          'spendee-test-search-input-${store.searchQuery}',
+                        ),
+                        initialValue: store.searchQuery,
+                        onChanged: store.setSearchQuery,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
+                          hintText: 'Keresés tranzakciók között...',
+                          hintStyle: TextStyle(
+                            color: AppColors.gray500,
+                            fontSize: 14,
+                          ),
+                        ),
+                        style: const TextStyle(
+                          color: AppColors.gray800,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (canShowTransactionLog) ...[
+              SizedBox(
+                height: 24,
+                child: Center(
                   child: Text(
-                    store.activeSummaryTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    '${store.visibleTransactions.length} tranzakció',
+                    key: const ValueKey('spendee-test-transaction-count'),
                     style: const TextStyle(
                       color: AppColors.gray500,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ),
-                Text(
-                  store.activeSummary.formattedFor(store.activeType),
-                  style: const TextStyle(
-                    color: AppColors.gray800,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          height: 45,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: _softWhiteDecoration(18),
-          child: Row(
-            children: [
-              IconButton(
-                key: const ValueKey('spendee-test-search-vendor-button'),
-                onPressed: onVendorSheetRequested,
-                icon: const Icon(
-                  Icons.search,
-                  size: 18,
-                  color: AppColors.gray400,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 32,
-                  height: 32,
                 ),
               ),
               Expanded(
-                child: TextFormField(
-                  key: ValueKey(
-                    'spendee-test-search-input-${store.searchQuery}',
-                  ),
-                  initialValue: store.searchQuery,
-                  onChanged: store.setSearchQuery,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                    hintText: 'Keresés tranzakciók között...',
-                    hintStyle: TextStyle(
-                      color: AppColors.gray500,
-                      fontSize: 14,
-                    ),
-                  ),
-                  style: const TextStyle(
-                    color: AppColors.gray800,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: _SpendeeLogList(
+                  entries: store.visibleDisplayLogEntries,
+                  categoriesById: store.categoriesById,
+                  bottomPadding: logBottomPadding,
+                  onFastFilter: (record, _) =>
+                      store.setMerchantFilter(record.displayMerchant),
+                  onRecordTap: onEditTransaction,
+                  onDeleteRequested: onDeleteTransactionRequested,
+                  onCategoryFilter: store.setCategoryFilter,
                 ),
               ),
             ],
-          ),
-        ),
-        if (stage != SpendeeHeaderStage.stage2) ...[
-          SizedBox(
-            height: 24,
-            child: Center(
-              child: Text(
-                '${store.visibleTransactions.length} tranzakció',
-                key: const ValueKey('spendee-test-transaction-count'),
-                style: const TextStyle(
-                  color: AppColors.gray500,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: _SpendeeLogList(
-              entries: store.visibleDisplayLogEntries,
-              categoriesById: store.categoriesById,
-              bottomPadding: logBottomPadding,
-              onFastFilter: (record, _) =>
-                  store.setMerchantFilter(record.displayMerchant),
-              onRecordTap: onEditTransaction,
-              onDeleteRequested: onDeleteTransactionRequested,
-              onCategoryFilter: store.setCategoryFilter,
-            ),
-          ),
-        ],
-      ],
+          ],
+        );
+      },
     );
   }
 }
 
 class _SpendeeTypePill extends StatelessWidget {
   const _SpendeeTypePill({
+    super.key,
     required this.label,
     required this.active,
     required this.activeGradient,
+    required this.boxShadows,
     required this.textColor,
     required this.onTap,
   });
@@ -1382,6 +1381,7 @@ class _SpendeeTypePill extends StatelessWidget {
   final String label;
   final bool active;
   final Gradient activeGradient;
+  final List<BoxShadow> boxShadows;
   final Color textColor;
   final VoidCallback onTap;
 
@@ -1392,16 +1392,10 @@ class _SpendeeTypePill extends StatelessWidget {
       child: Container(
         height: 42,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(21),
           gradient: active ? activeGradient : null,
           color: active ? null : Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .06),
-              offset: const Offset(0, 4),
-              blurRadius: 12,
-            ),
-          ],
+          boxShadow: boxShadows,
         ),
         alignment: Alignment.center,
         child: Text(
@@ -1520,7 +1514,7 @@ class _SpendeeLogBox extends StatelessWidget {
         height: 64.8,
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: _softWhiteDecoration(20),
+        decoration: _softWhiteDecoration(18),
         child: Row(
           children: [
             GestureDetector(
@@ -1657,73 +1651,94 @@ class _AppCornerSettingsButton extends StatelessWidget {
   }
 }
 
-class _HeaderGlassMenuButton extends StatelessWidget {
-  const _HeaderGlassMenuButton({required this.onPressed});
+class _SpendeeBrandLockup extends StatelessWidget {
+  const _SpendeeBrandLockup({super.key});
 
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      key: const ValueKey('spendee-test-header-menu-button'),
-      onTap: onPressed,
-      child: Container(
-        width: 33.6,
-        height: 33.6,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .32),
-          borderRadius: BorderRadius.circular(13.6),
-          border: Border.all(color: Colors.white.withValues(alpha: .48)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.white.withValues(alpha: .54),
-              offset: const Offset(0, 1),
-              blurRadius: 0,
-            ),
-            BoxShadow(
-              color: const Color(0xFF06B6D4).withValues(alpha: .12),
-              offset: const Offset(0, 8),
-              blurRadius: 16,
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            _GlassMenuBar(),
-            SizedBox(height: 3),
-            _GlassMenuBar(),
-            SizedBox(height: 3),
-            _GlassMenuBar(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassMenuBar extends StatelessWidget {
-  const _GlassMenuBar();
+  static const _logoSize = 79.5;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 15,
-      height: 2.6,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xF5FFFFFF), Color(0xB8DEFFFF), Color(0x7595E5EC)],
-          stops: [0, .52, 1],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: .42),
-            offset: const Offset(0, -.6),
-            blurRadius: .2,
+    return IgnorePointer(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: (42 - _logoSize) / 2,
+            width: _logoSize,
+            height: _logoSize,
+            child: Stack(
+              clipBehavior: Clip.none,
+              fit: StackFit.expand,
+              children: [
+                Transform.translate(
+                  offset: const Offset(0, 4),
+                  child: ImageFiltered(
+                    imageFilter: ui.ImageFilter.blur(sigmaX: 4.5, sigmaY: 4.5),
+                    child: SvgPicture.asset(
+                      'assets/brand/final_spendeevector.svg',
+                      colorFilter: const ColorFilter.mode(
+                        Color(0x1A0F172A),
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
+                ),
+                SvgPicture.asset(
+                  'assets/brand/final_spendeevector.svg',
+                  key: const ValueKey('spendee-test-brand-logo'),
+                  fit: BoxFit.contain,
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: _logoSize + 10,
+            top: 0,
+            bottom: 0,
+            right: 0,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'spendee',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: Color(0xFF14213A),
+                      fontSize: 23,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.92,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    const TextSpan(
+                      children: [
+                        TextSpan(text: 'your personal '),
+                        TextSpan(
+                          text: 'financial trainer',
+                          style: TextStyle(color: Color(0xFF06AECA)),
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                    style: const TextStyle(
+                      color: Color(0xFF536078),
+                      fontSize: 11,
+                      height: 1.05,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -.11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -1764,6 +1779,39 @@ String _formatFt(double value) {
   return buffer.toString();
 }
 
+class _HeaderValueText extends StatelessWidget {
+  const _HeaderValueText(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _headerValueStyle.copyWith(
+            shadows: const <Shadow>[],
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = .45
+              ..color = const Color(0x33FFFFFF),
+          ),
+        ),
+        Text(
+          value,
+          key: const ValueKey('spendee-test-header-value'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _headerValueStyle,
+        ),
+      ],
+    );
+  }
+}
+
 const _headerLabelStyle = TextStyle(
   color: Color(0xB814213A),
   fontSize: 11,
@@ -1782,13 +1830,6 @@ const _headerValueStyle = TextStyle(
     Shadow(color: Color(0x6BFFFFFF), offset: Offset(0, 1)),
     Shadow(color: Color(0x38FFFFFF), offset: Offset(0, 2), blurRadius: 8),
   ],
-);
-
-const _headerSubStyle = TextStyle(
-  color: Color(0xB314213A),
-  fontSize: 12,
-  height: 1,
-  fontWeight: FontWeight.w800,
 );
 
 const _budgetMetaStyle = TextStyle(

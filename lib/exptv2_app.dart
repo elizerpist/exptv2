@@ -36,7 +36,10 @@ Future<void> bootstrapCategoryIconsForStartup({
 Future<void> _loadAndWarmCategoryIcons({SharedPreferences? preferences}) async {
   final prefs = preferences ?? await SharedPreferences.getInstance();
   await CategoryIconManager.load(preferences: prefs);
-  await warmUpCategorySlotIconCache(strokeWidth: 1.35);
+  await Future.wait([
+    warmUpCategorySlotIconCache(strokeWidth: 1.35),
+    warmUpCategorySlotIconCache(strokeWidth: 1.4),
+  ]);
   _categoryIconStartupReady = true;
 }
 

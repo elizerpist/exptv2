@@ -30,6 +30,22 @@ class SpendeeCenterCarouselReleasePlan {
   final double velocity;
 }
 
+class SpendeeCenterCarouselMotion {
+  const SpendeeCenterCarouselMotion({
+    required this.initialTravel,
+    required this.preferredDxDirection,
+    required this.directionalSnapAllowed,
+    required this.inertial,
+    required this.initialDuration,
+  });
+
+  final double initialTravel;
+  final int preferredDxDirection;
+  final bool directionalSnapAllowed;
+  final bool inertial;
+  final Duration initialDuration;
+}
+
 class SpendeeCenterCarouselController {
   SpendeeCenterCarouselController({
     required this.itemCount,
@@ -117,5 +133,98 @@ class SpendeeCenterCarouselController {
       distance: distance,
       velocity: velocity,
     );
+  }
+
+  /// Ports the shipping backheader belt release physics without reducing the
+  /// fling to a precomputed number of discrete jumps.
+  SpendeeCenterCarouselMotion releaseMotion({
+    required double velocityDx,
+    required bool liveTicked,
+  }) {
+    final speed = velocityDx.abs();
+    final preferredDxDirection = _preferredDxDirection(
+      velocityDx: velocityDx,
+      residual: _residualDx,
+    );
+    final inertialTravel = speed < 700
+        ? 0.0
+        : (velocityDx * 0.055)
+              .clamp(-slotDistance * 3, slotDistance * 3)
+              .toDouble();
+    final directionalSnapAllowed =
+        inertialTravel != 0 ||
+        liveTicked ||
+        _totalDx.abs() >= slotDistance ||
+        _residualDx.abs() >= slotDistance / 2;
+    final releaseDirection = inertialTravel == 0
+        ? preferredDxDirection
+        : _dxDirection(inertialTravel);
+    final initialTravel = inertialTravel == 0
+        ? _snapTravel(
+            _residualDx,
+            preferredDxDirection: preferredDxDirection,
+            allowDirectionalSnap: directionalSnapAllowed,
+          )
+        : inertialTravel;
+    final duration = inertialTravel == 0
+        ? const Duration(milliseconds: 120)
+        : Duration(milliseconds: (180 + speed * 0.045).clamp(200, 340).round());
+    return SpendeeCenterCarouselMotion(
+      initialTravel: initialTravel,
+      preferredDxDirection: releaseDirection,
+      directionalSnapAllowed: directionalSnapAllowed,
+      inertial: inertialTravel != 0,
+      initialDuration: duration,
+    );
+  }
+
+  double settleTravel({
+    required int preferredDxDirection,
+    required bool allowDirectionalSnap,
+  }) {
+    return _snapTravel(
+      _residualDx,
+      preferredDxDirection: preferredDxDirection,
+      allowDirectionalSnap: allowDirectionalSnap,
+    );
+  }
+
+  double _snapTravel(
+    double residual, {
+    int preferredDxDirection = 0,
+    bool allowDirectionalSnap = false,
+  }) {
+    final residualDirection = _dxDirection(residual);
+    if (allowDirectionalSnap &&
+        preferredDxDirection != 0 &&
+        residualDirection == preferredDxDirection &&
+        residual.abs() >= 16) {
+      return preferredDxDirection < 0
+          ? -slotDistance - residual
+          : slotDistance - residual;
+    }
+    if (residual.abs() >= switchThreshold) {
+      return residual < 0 ? -slotDistance - residual : slotDistance - residual;
+    }
+    return -residual;
+  }
+
+  int _preferredDxDirection({
+    required double velocityDx,
+    required double residual,
+  }) {
+    final velocityDirection = _dxDirection(velocityDx);
+    if (velocityDirection != 0 && velocityDx.abs() >= 50) {
+      return velocityDirection;
+    }
+    final dragDirection = _dxDirection(_totalDx);
+    if (dragDirection != 0) return dragDirection;
+    return _dxDirection(residual);
+  }
+
+  int _dxDirection(double value) {
+    if (value > 0.5) return 1;
+    if (value < -0.5) return -1;
+    return 0;
   }
 }
