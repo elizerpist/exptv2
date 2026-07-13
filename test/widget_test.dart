@@ -304,7 +304,7 @@ void main() {
   );
 
   testWidgets(
-    'spendee test dashboard renders real logs and snaps header to C2',
+    'spendee test dashboard hides shell nav and uses HTML header controls',
     (tester) async {
       tester.view.physicalSize = const Size(412, 892);
       tester.view.devicePixelRatio = 1;
@@ -331,8 +331,35 @@ void main() {
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
         findsOneWidget,
       );
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
+      expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('spendee-test-app-settings-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-header-menu-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-header-settings-button')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-header-outer-glow')),
+        findsOneWidget,
+      );
       expect(find.text('Test Store'), findsOneWidget);
       expect(find.text('Q'), findsWidgets);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-app-settings-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-root-back')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-page')), findsNothing);
 
       await tester.drag(
         find.byKey(const ValueKey('spendee-test-header-handle')),
@@ -348,6 +375,10 @@ void main() {
         find.byKey(const ValueKey('spendee-test-category-avatar-6')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('spendee-test-context-carousel')),
+        findsOneWidget,
+      );
 
       await tester.drag(
         find.byKey(const ValueKey('spendee-test-header-handle')),
@@ -361,6 +392,10 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-budget-pie-focus')),
         findsOneWidget,
       );
     },

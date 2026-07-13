@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +15,17 @@ import '../../models/transaction_record.dart';
 import '../../state/transaction_store.dart';
 import '../category_menu/category_icon_badge.dart';
 import '../transaction_log_box.dart';
+import 'spendee_center_carousel_controller.dart';
 import 'spendee_header_stage_controller.dart';
+
+const _budgetHeaderGradientColors = <Color>[
+  Color(0xFFBDF5FF),
+  Color(0xFF06B6D4),
+  Color(0xFF0057D9),
+];
+
+const _budgetHeaderGradientStops = <double>[0, .5, 1];
+const _centerCarouselVisualSlotDistance = 64.0;
 
 class SpendeeTestDashboard extends StatefulWidget {
   const SpendeeTestDashboard({
@@ -47,7 +59,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
   var _headerHeight = 104.0;
   var _dragging = false;
   var _springBack = false;
-  var _carouselDx = 0.0;
+  var _carouselLiveTicked = false;
+  var _carouselVisualDx = 0.0;
+  var _carouselSettling = false;
+  SpendeeCenterCarouselController? _carouselController;
   int? _selectedCategoryId;
 
   SpendeeHeaderStageGeometry _geometryFor(BuildContext context) {
@@ -126,24 +141,115 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
     });
   }
 
-  void _selectCategory(TransactionCategory category) {
-    HapticFeedback.selectionClick();
+  void _selectCategory(TransactionCategory category, {bool haptic = true}) {
+    if (haptic) HapticFeedback.selectionClick();
     _selectedCategoryId = category.transactionCategoryID;
     widget.store.setCategoryFilter(category);
+  }
+
+  int _selectedCategoryIndex() {
+    final categories = _activeCategories;
+    if (categories.isEmpty) return 0;
+    final selectedId = _selectedCategory?.transactionCategoryID;
+    final index = categories.indexWhere(
+      (category) => category.transactionCategoryID == selectedId,
+    );
+    return index < 0 ? 0 : index;
+  }
+
+  void _handleCarouselDragStart(DragStartDetails details) {
+    setState(() {
+      _carouselLiveTicked = false;
+      _carouselSettling = false;
+      _carouselVisualDx = 0;
+      _carouselController = SpendeeCenterCarouselController(
+        itemCount: _activeCategories.length,
+        initialIndex: _selectedCategoryIndex(),
+      );
+    });
   }
 
   void _handleCarouselDragUpdate(DragUpdateDetails details) {
     final categories = _activeCategories;
     if (categories.length < 2) return;
-    _carouselDx += details.delta.dx;
-    if (_carouselDx.abs() < 54) return;
-    final current = _selectedCategory ?? categories.first;
-    final currentIndex = math.max(0, categories.indexOf(current));
-    final direction = _carouselDx < 0 ? 1 : -1;
-    final nextIndex = (currentIndex + direction) % categories.length;
-    final normalizedIndex = nextIndex < 0 ? categories.length - 1 : nextIndex;
-    _carouselDx = 0;
-    _selectCategory(categories[normalizedIndex]);
+    final controller = _carouselController ??= SpendeeCenterCarouselController(
+      itemCount: categories.length,
+      initialIndex: _selectedCategoryIndex(),
+    );
+    final update = controller.applyDragDelta(details.delta.dx);
+    TransactionCategory? latestCategory;
+    for (final index in update.tickedIndexes) {
+      _carouselLiveTicked = true;
+      latestCategory = categories[index % categories.length];
+      HapticFeedback.selectionClick();
+    }
+    if (latestCategory != null) {
+      widget.store.setCategoryFilter(latestCategory);
+    }
+    setState(() {
+      if (latestCategory != null) {
+        _selectedCategoryId = latestCategory.transactionCategoryID;
+      }
+      _carouselVisualDx = update.residualDx;
+    });
+  }
+
+  void _handleCarouselDragEnd(DragEndDetails details) {
+    final categories = _activeCategories;
+    final controller = _carouselController;
+    if (categories.length < 2 || controller == null) {
+      return;
+    }
+    final plan = controller.releasePlan(
+      velocityDx: details.velocity.pixelsPerSecond.dx,
+    );
+    final steps = _carouselLiveTicked ? plan.velocitySteps : plan.steps;
+    _carouselController = null;
+    _carouselLiveTicked = false;
+    if (steps <= 0) {
+      setState(() {
+        _carouselSettling = true;
+        _carouselVisualDx = 0;
+      });
+      return;
+    }
+    unawaited(_tickCarouselBySteps(steps: steps, swipedLeft: plan.swipedLeft));
+  }
+
+  Future<void> _tickCarouselBySteps({
+    required int steps,
+    required bool swipedLeft,
+  }) async {
+    final categories = _activeCategories;
+    if (categories.length < 2) return;
+    final boundedSteps = steps.clamp(1, categories.length - 1).toInt();
+    setState(() => _carouselSettling = true);
+    for (var step = 0; step < boundedSteps; step += 1) {
+      if (!mounted) return;
+      setState(() {
+        _carouselVisualDx = swipedLeft
+            ? -_centerCarouselVisualSlotDistance
+            : _centerCarouselVisualSlotDistance;
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 72));
+      if (!mounted) return;
+      final current = _selectedCategoryIndex();
+      final next = swipedLeft
+          ? (current + 1) % categories.length
+          : (current - 1 + categories.length) % categories.length;
+      final category = categories[next];
+      HapticFeedback.selectionClick();
+      setState(() {
+        _selectedCategoryId = category.transactionCategoryID;
+        _carouselVisualDx = 0;
+      });
+      widget.store.setCategoryFilter(category);
+      if (step < boundedSteps - 1) {
+        await Future<void>.delayed(const Duration(milliseconds: 72));
+      }
+    }
+    if (!mounted) return;
+    setState(() => _carouselSettling = false);
   }
 
   @override
@@ -165,6 +271,16 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
         key: const ValueKey('spendee-test-dashboard'),
         clipBehavior: Clip.none,
         children: [
+          AnimatedPositioned(
+            key: const ValueKey('spendee-test-header-outer-glow'),
+            duration: animationDuration,
+            curve: animationCurve,
+            left: -36,
+            right: -36,
+            top: 24,
+            height: 264 + _headerHeight - geometry.stage0Height,
+            child: const _HeaderOuterGlow(),
+          ),
           AnimatedPositioned(
             duration: animationDuration,
             curve: animationCurve,
@@ -197,15 +313,26 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard> {
                 selectedBar: _selectedBar,
                 bars: widget.store.categoryBudgetBars,
                 categories: _activeCategories,
-                onSettingsPressed: widget.onSettingsPressed,
                 onHandleDragStart: _beginHeaderDrag,
                 onHandleDragUpdate: _updateHeaderDrag,
                 onHandleDragEnd: _endHeaderDrag,
                 onCategoryTap: _selectCategory,
+                carouselOffset: _carouselVisualDx,
+                carouselSettling: _carouselSettling,
+                onCarouselDragStart: _handleCarouselDragStart,
                 onCarouselDragUpdate: _handleCarouselDragUpdate,
+                onCarouselDragEnd: _handleCarouselDragEnd,
               ),
             ),
           ),
+          if (widget.onSettingsPressed != null)
+            Positioned(
+              top: 48,
+              right: 20,
+              child: _AppCornerSettingsButton(
+                onPressed: widget.onSettingsPressed!,
+              ),
+            ),
         ],
       ),
     );
@@ -219,12 +346,15 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.selectedBar,
     required this.bars,
     required this.categories,
-    required this.onSettingsPressed,
     required this.onHandleDragStart,
     required this.onHandleDragUpdate,
     required this.onHandleDragEnd,
     required this.onCategoryTap,
+    required this.carouselOffset,
+    required this.carouselSettling,
+    required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
+    required this.onCarouselDragEnd,
   });
 
   final SpendeeHeaderStage stage;
@@ -232,12 +362,15 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final CategoryBudgetBarData? selectedBar;
   final List<CategoryBudgetBarData> bars;
   final List<TransactionCategory> categories;
-  final VoidCallback? onSettingsPressed;
   final GestureDragStartCallback onHandleDragStart;
   final GestureDragUpdateCallback onHandleDragUpdate;
   final GestureDragEndCallback onHandleDragEnd;
   final ValueChanged<TransactionCategory> onCategoryTap;
+  final double carouselOffset;
+  final bool carouselSettling;
+  final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
+  final GestureDragEndCallback onCarouselDragEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -259,12 +392,12 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
         border: Border.all(color: Colors.white),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFF472B6).withValues(alpha: .18),
+            color: const Color(0xFF06B6D4).withValues(alpha: .20),
             offset: const Offset(0, 18),
             blurRadius: 42,
           ),
           BoxShadow(
-            color: const Color(0xFF8B5CF6).withValues(alpha: .12),
+            color: const Color(0xFF0057D9).withValues(alpha: .16),
             offset: const Offset(0, 14),
             blurRadius: 34,
           ),
@@ -272,148 +405,195 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFBDF5FF),
-                    Color(0xFF06B6D4),
-                    Color(0xFF0057D9),
-                  ],
-                  stops: [0, .5, 1],
-                ),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const _HeaderGlassBackground(
+                key: ValueKey('spendee-test-header-glass-layer'),
               ),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(-.72, -.62),
-                    radius: .82,
-                    colors: [
-                      Colors.white.withValues(alpha: .52),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+              Positioned(
+                left: 20,
+                top: 28,
+                child: Text('Budget', style: _headerLabelStyle),
               ),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(.72, -.70),
-                    radius: .72,
-                    colors: [
-                      Colors.white.withValues(alpha: .26),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 20,
-              top: 28,
-              child: Text('Budget', style: _headerLabelStyle),
-            ),
-            Positioned(
-              left: 20,
-              right: 78,
-              top: 48,
-              child: Text(
-                headerValue,
-                key: const ValueKey('spendee-test-header-value'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _headerValueStyle,
-              ),
-            ),
-            if (stage == SpendeeHeaderStage.stage0)
               Positioned(
                 left: 20,
                 right: 78,
-                top: 76,
+                top: 48,
                 child: Text(
-                  bar?.hasLimit == true
-                      ? 'Elköltve $spentPercent% · maradt ${_formatFt(remaining)}'
-                      : '$categoryName · nincs limit',
+                  headerValue,
+                  key: const ValueKey('spendee-test-header-value'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _headerSubStyle,
+                  style: _headerValueStyle,
                 ),
               ),
-            if (onSettingsPressed != null)
+              if (stage == SpendeeHeaderStage.stage0)
+                Positioned(
+                  left: 20,
+                  right: 78,
+                  top: 76,
+                  child: Text(
+                    bar?.hasLimit == true
+                        ? 'Elköltve $spentPercent% · maradt ${_formatFt(remaining)}'
+                        : '$categoryName · nincs limit',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _headerSubStyle,
+                  ),
+                ),
               Positioned(
                 top: 14,
                 right: 20,
-                child: _GlossSettingsButton(onPressed: onSettingsPressed!),
-              ),
-            if (stage != SpendeeHeaderStage.stage0)
-              Positioned(
-                left: 16,
-                right: 16,
-                top: 96,
-                height: stage == SpendeeHeaderStage.stage1 ? 130 : 130,
-                child: _BudgetExtendedInfo(
-                  categories: categories,
-                  selectedCategory: selectedCategory,
-                  bars: bars,
-                  spentPercent: spentPercent,
-                  remaining: remaining,
-                  onCategoryTap: onCategoryTap,
-                  onCarouselDragUpdate: onCarouselDragUpdate,
+                child: _HeaderGlassMenuButton(
+                  onPressed: () => HapticFeedback.selectionClick(),
                 ),
               ),
-            if (stage == SpendeeHeaderStage.stage2)
-              Positioned(
-                left: 16,
-                right: 16,
-                top: 236,
-                bottom: 18,
-                child: _BudgetPiePanel(
-                  bars: bars,
-                  selectedCategory: selectedCategory,
+              if (stage != SpendeeHeaderStage.stage0)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  top: 96,
+                  height: stage == SpendeeHeaderStage.stage1 ? 130 : 130,
+                  child: _BudgetExtendedInfo(
+                    categories: categories,
+                    selectedCategory: selectedCategory,
+                    bars: bars,
+                    spentPercent: spentPercent,
+                    remaining: remaining,
+                    onCategoryTap: onCategoryTap,
+                    carouselOffset: carouselOffset,
+                    carouselSettling: carouselSettling,
+                    onCarouselDragStart: onCarouselDragStart,
+                    onCarouselDragUpdate: onCarouselDragUpdate,
+                    onCarouselDragEnd: onCarouselDragEnd,
+                  ),
                 ),
-              ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 28,
-              child: GestureDetector(
-                key: const ValueKey('spendee-test-header-handle'),
-                behavior: HitTestBehavior.opaque,
-                onVerticalDragStart: onHandleDragStart,
-                onVerticalDragUpdate: onHandleDragUpdate,
-                onVerticalDragEnd: onHandleDragEnd,
-                child: Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .86),
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: .13),
-                          offset: const Offset(0, 2),
-                          blurRadius: 8,
-                        ),
-                      ],
+              if (stage == SpendeeHeaderStage.stage2)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  top: 236,
+                  bottom: 18,
+                  child: _BudgetPiePanel(
+                    bars: bars,
+                    selectedCategory: selectedCategory,
+                  ),
+                ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 28,
+                child: GestureDetector(
+                  key: const ValueKey('spendee-test-header-handle'),
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragStart: onHandleDragStart,
+                  onVerticalDragUpdate: onHandleDragUpdate,
+                  onVerticalDragEnd: onHandleDragEnd,
+                  child: Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .86),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: .13),
+                            offset: const Offset(0, 2),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _HeaderOuterGlow extends StatelessWidget {
+  const _HeaderOuterGlow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: .24,
+      child: ImageFiltered(
+        imageFilter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(44),
+            gradient: const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: _budgetHeaderGradientColors,
+              stops: _budgetHeaderGradientStops,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderGlassBackground extends StatelessWidget {
+  const _HeaderGlassBackground({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-.9, -.55),
+              end: Alignment(.9, .55),
+              colors: _budgetHeaderGradientColors,
+              stops: _budgetHeaderGradientStops,
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(-.72, -.62),
+              radius: .82,
+              colors: [Color(0x85FFFFFF), Color(0x00FFFFFF)],
+              stops: [0, .62],
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(.74, -.64),
+              radius: .78,
+              colors: [Color(0x426B9DE8), Color(0x21FFFFFF), Color(0x00FFFFFF)],
+              stops: [0, .34, .68],
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-.72, -1),
+              end: Alignment(.42, 1),
+              colors: [Color(0x47FFFFFF), Color(0x00FFFFFF)],
+              stops: [0, .54],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -426,7 +606,11 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.spentPercent,
     required this.remaining,
     required this.onCategoryTap,
+    required this.carouselOffset,
+    required this.carouselSettling,
+    required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
+    required this.onCarouselDragEnd,
   });
 
   final List<TransactionCategory> categories;
@@ -435,7 +619,11 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final int spentPercent;
   final double remaining;
   final ValueChanged<TransactionCategory> onCategoryTap;
+  final double carouselOffset;
+  final bool carouselSettling;
+  final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
+  final GestureDragEndCallback onCarouselDragEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -452,6 +640,11 @@ class _BudgetExtendedInfo extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
+            color: Colors.white.withValues(alpha: .46),
+            offset: const Offset(0, 1),
+            blurRadius: 0,
+          ),
+          BoxShadow(
             color: Colors.black.withValues(alpha: .08),
             offset: const Offset(0, 6),
             blurRadius: 18,
@@ -466,21 +659,31 @@ class _BudgetExtendedInfo extends StatelessWidget {
             top: 4,
             bottom: 38,
             child: GestureDetector(
+              onHorizontalDragStart: onCarouselDragStart,
               onHorizontalDragUpdate: onCarouselDragUpdate,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (final category in _visibleAvatarCategories()) ...[
-                    _ContextAvatar(
-                      category: category,
-                      selected:
-                          category.transactionCategoryID ==
-                          selectedCategory?.transactionCategoryID,
-                      onTap: () => onCategoryTap(category),
-                    ),
-                    const SizedBox(width: 12),
+              onHorizontalDragEnd: onCarouselDragEnd,
+              child: AnimatedContainer(
+                key: const ValueKey('spendee-test-context-carousel'),
+                duration: carouselSettling
+                    ? const Duration(milliseconds: 72)
+                    : Duration.zero,
+                curve: Curves.easeOutQuad,
+                transform: Matrix4.translationValues(carouselOffset, 0, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final category in _visibleAvatarCategories()) ...[
+                      _ContextAvatar(
+                        category: category,
+                        selected:
+                            category.transactionCategoryID ==
+                            selectedCategory?.transactionCategoryID,
+                        onTap: () => onCategoryTap(category),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -567,19 +770,57 @@ class _ContextAvatar extends StatelessWidget {
               ),
           ],
         ),
-        child: Center(
-          child: CategoryIconBadge(
-            category: category,
-            backgroundColor: Colors.transparent,
-            size: size,
-            iconSize: iconSize,
-            iconStrokeWidth: 1.4,
-            showShadow: false,
-            debugSource: 'spendee-test-context-avatar',
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: _AvatarTopHighlightPainter(
+                opacity: selected ? .78 : .72,
+              ),
+            ),
+            Center(
+              child: CategoryIconBadge(
+                category: category,
+                backgroundColor: Colors.transparent,
+                size: size,
+                iconSize: iconSize,
+                iconStrokeWidth: 1.4,
+                showShadow: false,
+                debugSource: 'spendee-test-context-avatar',
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+}
+
+class _AvatarTopHighlightPainter extends CustomPainter {
+  const _AvatarTopHighlightPainter({required this.opacity});
+
+  final double opacity;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.35
+      ..strokeCap = StrokeCap.round
+      ..color = Colors.white.withValues(alpha: opacity);
+    final inset = stroke.strokeWidth / 2 + 1;
+    final rect = Rect.fromLTWH(
+      inset,
+      inset,
+      size.width - inset * 2,
+      size.height - inset * 2,
+    );
+    canvas.drawArc(rect, math.pi * 1.08, math.pi * .84, false, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AvatarTopHighlightPainter oldDelegate) {
+    return oldDelegate.opacity != opacity;
   }
 }
 
@@ -636,19 +877,28 @@ class _BudgetPiePanel extends StatelessWidget {
     final visibleBars = bars.where((bar) => bar.spent > 0).toList();
     final total = visibleBars.fold<double>(0, (sum, bar) => sum + bar.spent);
     final selectedId = selectedCategory?.transactionCategoryID;
-    return DecoratedBox(
+    final selectedBar = visibleBars.cast<CategoryBudgetBarData?>().firstWhere(
+      (bar) => bar?.targetId == selectedId,
+      orElse: () => visibleBars.isEmpty ? null : visibleBars.first,
+    );
+    final selectedPercent = selectedBar == null || total <= 0
+        ? 0
+        : (selectedBar.spent / total * 100).round();
+    return Container(
       key: const ValueKey('spendee-test-budget-pie-panel'),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(17),
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: .36),
-            Colors.white.withValues(alpha: .15),
-          ],
+          colors: [Color(0x5CFFFFFF), Color(0x26FFFFFF)],
         ),
         boxShadow: [
+          BoxShadow(
+            color: Colors.white.withValues(alpha: .52),
+            offset: const Offset(0, 1),
+            blurRadius: 0,
+          ),
           BoxShadow(
             color: Colors.black.withValues(alpha: .08),
             offset: const Offset(0, 7),
@@ -656,80 +906,190 @@ class _BudgetPiePanel extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Kategória arány', style: _smallCapsStyle),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 88,
-              child: CustomPaint(
-                painter: _BudgetPiePainter(
-                  bars: visibleBars,
-                  total: total,
-                  selectedCategoryId: selectedId,
-                ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(-.72, -.92),
+                radius: .82,
+                colors: [Color(0x99FFFFFF), Color(0x00FFFFFF)],
+                stops: [0, .62],
               ),
             ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.separated(
-                padding: EdgeInsets.zero,
-                itemCount: visibleBars.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 7),
-                itemBuilder: (context, index) {
-                  final bar = visibleBars[index];
-                  final selected = bar.targetId == selectedId;
-                  final percent = total <= 0
-                      ? 0
-                      : (bar.spent / total * 100).round();
-                  return Container(
-                    constraints: const BoxConstraints(minHeight: 25),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? bar.color.withValues(alpha: .18)
-                          : Colors.white.withValues(alpha: .18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: CategoryColorManager.gradient(
-                              bar.category?.colorSlot,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            bar.title,
-                            overflow: TextOverflow.ellipsis,
-                            style: _pieRowStyle,
-                          ),
-                        ),
-                        Text(
-                          '$percent% · ${_formatFt(bar.spent)}',
-                          style: _pieValueStyle,
-                        ),
+                        Text('Kategória arány', style: _smallCapsStyle),
+                        SizedBox(height: 4),
+                        Text('limit mix', style: _pieHeadlineStyle),
                       ],
                     ),
-                  );
-                },
-              ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 112,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 112,
+                        height: 112,
+                        child: CustomPaint(
+                          painter: _BudgetPiePainter(
+                            bars: visibleBars,
+                            total: total,
+                            selectedCategoryId: selectedId,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _BudgetPieFocus(
+                          key: const ValueKey('spendee-test-budget-pie-focus'),
+                          bar: selectedBar,
+                          percent: selectedPercent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: visibleBars.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 7),
+                    itemBuilder: (context, index) {
+                      final bar = visibleBars[index];
+                      final selected = bar.targetId == selectedId;
+                      final percent = total <= 0
+                          ? 0
+                          : (bar.spent / total * 100).round();
+                      return Container(
+                        constraints: const BoxConstraints(minHeight: 25),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: selected
+                              ? RadialGradient(
+                                  center: const Alignment(-1, -1),
+                                  radius: 1.1,
+                                  colors: [
+                                    Colors.white.withValues(alpha: .50),
+                                    bar.color.withValues(alpha: .18),
+                                  ],
+                                )
+                              : null,
+                          color: selected
+                              ? null
+                              : Colors.white.withValues(alpha: .18),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            if (selected)
+                              BoxShadow(
+                                color: bar.color.withValues(alpha: .24),
+                                offset: const Offset(0, 8),
+                                blurRadius: 18,
+                              ),
+                            BoxShadow(
+                              color: Colors.white.withValues(
+                                alpha: selected ? .42 : .24,
+                              ),
+                              offset: const Offset(0, 1),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: CategoryColorManager.gradient(
+                                  bar.category?.colorSlot,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: bar.color.withValues(alpha: .48),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                bar.title,
+                                overflow: TextOverflow.ellipsis,
+                                style: _pieRowStyle,
+                              ),
+                            ),
+                            Text(
+                              '$percent% · ${_formatFt(bar.spent)}',
+                              style: _pieValueStyle,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _BudgetPieFocus extends StatelessWidget {
+  const _BudgetPieFocus({super.key, required this.bar, required this.percent});
+
+  final CategoryBudgetBarData? bar;
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('kiemelt kategória', style: _pieFocusLabelStyle),
+        const SizedBox(height: 5),
+        Text(
+          bar?.title ?? 'Nincs adat',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _pieFocusTitleStyle,
+        ),
+        const SizedBox(height: 5),
+        Text(
+          bar == null
+              ? '0 Ft · 0% a kategória-kosárból'
+              : '${_formatFt(bar!.spent)} · $percent% a kategória-kosárból',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: _pieFocusMetaStyle,
+        ),
+      ],
     );
   }
 }
@@ -749,6 +1109,14 @@ class _BudgetPiePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2 - 8;
+    final shadowPath = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius + 3));
+    canvas.drawShadow(
+      shadowPath,
+      const Color(0xFF0F172A).withValues(alpha: .16),
+      10,
+      false,
+    );
     final basePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 13
@@ -759,6 +1127,21 @@ class _BudgetPiePainter extends CustomPainter {
     for (final bar in bars) {
       final sweep = (bar.spent / total) * math.pi * 2;
       final selected = bar.targetId == selectedCategoryId;
+      if (selected) {
+        final glowPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 19
+          ..strokeCap = StrokeCap.butt
+          ..color = bar.color.withValues(alpha: .42)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: radius),
+          start,
+          sweep,
+          false,
+          glowPaint,
+        );
+      }
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = selected ? 17 : 13
@@ -777,6 +1160,14 @@ class _BudgetPiePainter extends CustomPainter {
       center,
       radius - 15,
       Paint()..color = Colors.white.withValues(alpha: .40),
+    );
+    canvas.drawCircle(
+      center,
+      radius - 15,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white.withValues(alpha: .48),
     );
   }
 
@@ -1226,15 +1617,55 @@ class _SpendeeLogBox extends StatelessWidget {
   }
 }
 
-class _GlossSettingsButton extends StatelessWidget {
-  const _GlossSettingsButton({required this.onPressed});
+class _AppCornerSettingsButton extends StatelessWidget {
+  const _AppCornerSettingsButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      key: const ValueKey('spendee-test-settings-button'),
+      key: const ValueKey('spendee-test-app-settings-button'),
+      onTap: onPressed,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .70),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.white.withValues(alpha: .62)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.white.withValues(alpha: .54),
+              offset: const Offset(0, 1),
+              blurRadius: 0,
+            ),
+            BoxShadow(
+              color: const Color(0xFF1F2D46).withValues(alpha: .10),
+              offset: const Offset(0, 8),
+              blurRadius: 18,
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.settings_outlined,
+          color: Color(0xFF14213A),
+          size: 18,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderGlassMenuButton extends StatelessWidget {
+  const _HeaderGlassMenuButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const ValueKey('spendee-test-header-menu-button'),
       onTap: onPressed,
       child: Container(
         width: 33.6,
@@ -1245,17 +1676,56 @@ class _GlossSettingsButton extends StatelessWidget {
           border: Border.all(color: Colors.white.withValues(alpha: .48)),
           boxShadow: [
             BoxShadow(
-              color: Colors.white.withValues(alpha: .24),
+              color: Colors.white.withValues(alpha: .54),
               offset: const Offset(0, 1),
               blurRadius: 0,
             ),
+            BoxShadow(
+              color: const Color(0xFF06B6D4).withValues(alpha: .12),
+              offset: const Offset(0, 8),
+              blurRadius: 16,
+            ),
           ],
         ),
-        child: const Icon(
-          Icons.settings_outlined,
-          color: Color(0xFF14213A),
-          size: 18,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            _GlassMenuBar(),
+            SizedBox(height: 3),
+            _GlassMenuBar(),
+            SizedBox(height: 3),
+            _GlassMenuBar(),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _GlassMenuBar extends StatelessWidget {
+  const _GlassMenuBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 15,
+      height: 2.6,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xF5FFFFFF), Color(0xB8DEFFFF), Color(0x7595E5EC)],
+          stops: [0, .52, 1],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white.withValues(alpha: .42),
+            offset: const Offset(0, -.6),
+            blurRadius: .2,
+          ),
+        ],
       ),
     );
   }
@@ -1334,6 +1804,37 @@ const _smallCapsStyle = TextStyle(
   height: 1,
   fontWeight: FontWeight.w900,
   letterSpacing: .5,
+);
+
+const _pieHeadlineStyle = TextStyle(
+  color: Color(0xFF14213A),
+  fontSize: 17,
+  height: 1,
+  fontWeight: FontWeight.w900,
+  letterSpacing: -.68,
+);
+
+const _pieFocusLabelStyle = TextStyle(
+  color: Color(0x8514213A),
+  fontSize: 8,
+  height: 1,
+  fontWeight: FontWeight.w900,
+  letterSpacing: .48,
+);
+
+const _pieFocusTitleStyle = TextStyle(
+  color: Color(0xFF14213A),
+  fontSize: 18,
+  height: 1,
+  fontWeight: FontWeight.w900,
+  letterSpacing: -.72,
+);
+
+const _pieFocusMetaStyle = TextStyle(
+  color: Color(0x9414213A),
+  fontSize: 8,
+  height: 1.2,
+  fontWeight: FontWeight.w800,
 );
 
 const _pieRowStyle = TextStyle(

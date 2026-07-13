@@ -78,11 +78,13 @@ class SpendeeHeaderStageController {
     required this.geometry,
     this.stage1TriggerDistance = 72,
     this.stage2TriggerDistance = 220,
+    this.popoutOvershoot = 18,
   }) : _height = geometry.stage0Height;
 
   final SpendeeHeaderStageGeometry geometry;
   final double stage1TriggerDistance;
   final double stage2TriggerDistance;
+  final double popoutOvershoot;
 
   SpendeeHeaderStage _stage = SpendeeHeaderStage.stage0;
   SpendeeHeaderStage? _releaseTarget;
@@ -105,23 +107,32 @@ class SpendeeHeaderStageController {
   }
 
   SpendeeHeaderDragUpdate dragBy(double dy) {
-    if (dy <= 0) {
-      return SpendeeHeaderDragUpdate(height: _height, tick: false);
-    }
-    _dragDistance += dy;
+    _dragDistance = (_dragDistance + dy)
+        .clamp(
+          0.0,
+          geometry.stage2Height - geometry.stage0Height + popoutOvershoot,
+        )
+        .toDouble();
     var tick = false;
     final baseHeight = geometry.heightFor(_stage);
+    final maxHeight = _stage == SpendeeHeaderStage.stage2
+        ? geometry.stage2Height + popoutOvershoot
+        : geometry.stage2Height;
     _height = (baseHeight + _dragDistance)
-        .clamp(geometry.stage0Height, geometry.stage2Height)
+        .clamp(baseHeight, maxHeight)
         .toDouble();
 
     if (_stage == SpendeeHeaderStage.stage0) {
+      _releaseTarget = SpendeeHeaderStage.stage0;
       if (!_stage1Ticked && _dragDistance >= stage1TriggerDistance) {
         _stage1Ticked = true;
         _releaseTarget = SpendeeHeaderStage.stage1;
         tick = true;
       }
     } else if (_stage == SpendeeHeaderStage.stage1) {
+      _releaseTarget = _dragDistance > 0
+          ? SpendeeHeaderStage.stage0
+          : SpendeeHeaderStage.stage1;
       if (!_popoutTicked && _dragDistance > 0) {
         _popoutTicked = true;
         tick = true;
@@ -130,13 +141,19 @@ class SpendeeHeaderStageController {
         _stage2Ticked = true;
         _releaseTarget = SpendeeHeaderStage.stage2;
         tick = true;
+      } else if (_stage2Ticked && _dragDistance < stage2TriggerDistance) {
+        _releaseTarget = _dragDistance > 0
+            ? SpendeeHeaderStage.stage0
+            : SpendeeHeaderStage.stage1;
       }
     } else {
+      _releaseTarget = _dragDistance > 0
+          ? SpendeeHeaderStage.stage1
+          : SpendeeHeaderStage.stage2;
       if (!_popoutTicked && _dragDistance > 0) {
         _popoutTicked = true;
         tick = true;
       }
-      _releaseTarget = SpendeeHeaderStage.stage2;
     }
 
     return SpendeeHeaderDragUpdate(height: _height, tick: tick);

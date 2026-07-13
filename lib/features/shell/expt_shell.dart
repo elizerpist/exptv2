@@ -873,6 +873,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     _logThemeSurfaceOnce(expenseTheme);
     final shellNavigation = _buildShellNavigation(expenseTheme);
+    final spendeeTestHome =
+        _activeTab == AppTab.home &&
+        _themeSettings.dashboardDesignMode == DashboardDesignMode.spendeeTest;
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
@@ -892,7 +895,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               ],
             ),
           ),
-          if (!_homeBlockingOverlayOpen && !_headerSettingsOpen)
+          if (!_homeBlockingOverlayOpen &&
+              !_headerSettingsOpen &&
+              !spendeeTestHome)
             ...shellNavigation,
           DebugFloatingButton(
             bottomOffset: _rightFabDebugBottomOffset(

@@ -1,5 +1,6 @@
 import 'package:exptv2/core/theme/category_color_manager.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/spendee_center_carousel_controller.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_header_stage_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,9 +50,8 @@ void main() {
   });
 
   test('header stage controller arms ticks and snaps between C1-C3 stages', () {
-    final controller = SpendeeHeaderStageController(
-      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
-    );
+    final geometry = SpendeeHeaderStageGeometry.html(screenHeight: 892);
+    final controller = SpendeeHeaderStageController(geometry: geometry);
 
     expect(controller.stage, SpendeeHeaderStage.stage0);
     expect(controller.currentHeight, 104);
@@ -74,6 +74,22 @@ void main() {
     update = controller.dragBy(4);
     expect(update.tick, isTrue);
     release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage0);
+    expect(release.springBack, isFalse);
+
+    controller.beginDrag();
+    update = controller.dragBy(90);
+    expect(update.tick, isTrue);
+    release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage1);
+
+    controller.beginDrag();
+    update = controller.dragBy(12);
+    expect(update.tick, isTrue);
+    expect(update.height, greaterThan(geometry.stage1Height));
+    update = controller.dragBy(-12);
+    expect(update.height, geometry.stage1Height);
+    release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage1);
     expect(release.springBack, isTrue);
 
@@ -87,8 +103,42 @@ void main() {
     controller.beginDrag();
     update = controller.dragBy(8);
     expect(update.tick, isTrue);
+    expect(update.height, greaterThan(geometry.stage2Height));
+    release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage1);
+    expect(release.springBack, isFalse);
+
+    controller.beginDrag();
+    update = controller.dragBy(230);
+    expect(update.tick, isTrue);
+    release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage2);
+
+    controller.beginDrag();
+    update = controller.dragBy(8);
+    expect(update.tick, isTrue);
+    update = controller.dragBy(-8);
+    expect(update.height, geometry.stage2Height);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage2);
     expect(release.springBack, isTrue);
   });
+
+  test(
+    'center carousel controller ports backheader belt inertia and ticks',
+    () {
+      final controller = SpendeeCenterCarouselController(itemCount: 5);
+
+      final update = controller.applyDragDelta(-130);
+      expect(update.index, 2);
+      expect(update.residualDx, -2);
+      expect(update.tickedIndexes, [1, 2]);
+
+      final plan = controller.releasePlan(velocityDx: -2600);
+      expect(plan.swipedLeft, isTrue);
+      expect(plan.distanceSteps, 2);
+      expect(plan.velocitySteps, 2);
+      expect(plan.steps, 4);
+    },
+  );
 }
