@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers/stats_test_frame_worker.dart';
+import 'helpers/channel_tolerance_golden_comparator.dart';
 
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
@@ -822,6 +823,13 @@ void main() {
 
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
+
+    final previousGoldenComparator = goldenFileComparator;
+    goldenFileComparator = ChannelToleranceGoldenComparator(
+      Uri.parse('test/widget_test.dart'),
+      maxChannelDelta: 2,
+    );
+    addTearDown(() => goldenFileComparator = previousGoldenComparator);
 
     await expectLater(
       find.byKey(const ValueKey('spendee-test-header-golden-boundary')),

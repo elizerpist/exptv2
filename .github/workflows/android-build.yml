@@ -46,18 +46,6 @@ jobs:
       - name: Run Flutter tests
         run: flutter test
 
-      - name: Publish Flutter test failure images for diagnostics
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -d test/failures ]; then
-            SHORT_SHA="${GITHUB_SHA::7}"
-            ARCHIVE="flutter-test-failures-${SHORT_SHA}.tar.gz"
-            tar -czf "$ARCHIVE" test/failures
-            gh release upload debug-latest "$ARCHIVE" --clobber
-          fi
-
       - name: Run Android unit tests
         run: |
           cd android
