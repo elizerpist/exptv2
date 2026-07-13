@@ -14,31 +14,31 @@ void main() {
 
   tearDown(CategoryIconManager.resetForTests);
 
-  test('category color manager exposes the expt0926 slot colors', () {
+  test('category color manager exposes the spendee gradient slot colors', () {
     expect(CategoryColorManager.hexes, {
-      0: '#ef4444',
-      1: '#f97316',
-      2: '#eab308',
-      3: '#84cc16',
-      4: '#22c55e',
-      5: '#10b981',
-      6: '#06b6d4',
-      7: '#0ea5e9',
-      8: '#3b82f6',
-      9: '#6366f1',
-      10: '#8b5cf6',
-      11: '#a855f7',
-      12: '#d946ef',
-      13: '#ec4899',
-      14: '#f43f5e',
-      15: '#6b7280',
-      16: '#374151',
-      17: '#1f2937',
-      18: '#064e3b',
-      19: '#7c2d12',
-      20: '#4c1d95',
+      0: '#ff5268',
+      1: '#ff7043',
+      2: '#ffa12b',
+      3: '#ffc233',
+      4: '#f7ea45',
+      5: '#b7ea2a',
+      6: '#5bd265',
+      7: '#24c889',
+      8: '#12b980',
+      9: '#19c0aa',
+      10: '#1bb7d2',
+      11: '#2bc4f3',
+      12: '#3b9df5',
+      13: '#496deb',
+      14: '#5a55df',
+      15: '#7546dc',
+      16: '#8b45ed',
+      17: '#a94ee6',
+      18: '#b84ce0',
+      19: '#d932c9',
+      20: '#f04ab6',
     });
-    expect(CategoryColorManager.color(6).toARGB32(), 0xff06b6d4);
+    expect(CategoryColorManager.color(6).toARGB32(), 0xff5bd265);
     expect(CategoryColorManager.hex(99), '#64748b');
   });
 
@@ -110,7 +110,10 @@ void main() {
     });
 
     expect(category.slotColorHex, CategoryColorManager.hex(9));
-    expect(category.slotColor.toARGB32(), 0xff6366f1);
+    expect(
+      category.slotColor.toARGB32(),
+      CategoryColorManager.color(9).toARGB32(),
+    );
   });
   test('category color resolver prefers live category slot over snapshots', () {
     final category = TransactionCategory.fromMap({
@@ -131,7 +134,7 @@ void main() {
         category: category,
         snapshotHex: '#dc2626',
       ).toARGB32(),
-      0xff6366f1,
+      CategoryColorManager.color(9).toARGB32(),
     );
     expect(CategoryColorResolver.findById([category], 6), same(category));
   });

@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart'
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
+import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -551,7 +552,7 @@ void main() {
       );
       expect(dominant.count, 2);
       expect(dominant.categoryIconSlot, 4);
-      expect(dominant.colorHex, '#84cc16');
+      expect(dominant.colorHex, CategoryColorManager.hex(3));
 
       final fallback = store.vendorFilterSummaries.firstWhere(
         (summary) => summary.name == 'No Category',

@@ -1,6 +1,7 @@
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_summary.dart';
+import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -39,7 +40,7 @@ void main() {
 
     expect(income.normalizedType, TransactionType.income);
     expect(expense.normalizedType, TransactionType.expense);
-    expect(income.slotColorHex, '#eab308');
+    expect(income.slotColorHex, CategoryColorManager.hex(2));
   });
 
   test(
