@@ -51,11 +51,12 @@
       });
 
       const finish = () => {
-        if (settled) return;
-        settled = true;
         frameId = null;
         state = 'finished';
-        resolveFinished(api);
+        if (!settled) {
+          settled = true;
+          resolveFinished(api);
+        }
       };
       const schedule = () => {
         if (state !== 'running' || frameId !== null) return;
@@ -75,18 +76,27 @@
 
       const api = Object.freeze({
         reverse() {
-          if (state !== 'running') return;
+          if (state === 'idle') return;
           direction *= -1;
           lastTimestamp = Number(now()) || 0;
+          if (duration === 0) {
+            progress = direction > 0 ? 1 : 0;
+            onFrame(progress);
+            state = 'finished';
+            return;
+          }
+          if (state === 'finished') state = 'running';
           schedule();
         },
         cancel() {
-          if (settled || state === 'idle') return;
+          if (state === 'idle') return;
           if (frameId !== null) cancelFrame(frameId);
           frameId = null;
           state = 'idle';
-          settled = true;
-          rejectFinished(abortError());
+          if (!settled) {
+            settled = true;
+            rejectFinished(abortError());
+          }
         },
         get finished() {
           return finished;

@@ -87,6 +87,21 @@ const makePlayback = (scheduler, overrides = {}) => {
 
   {
     const scheduler = createScheduler();
+    const { playback, frames } = makePlayback(scheduler);
+    scheduler.step(1000);
+    await playback.finished;
+    assert.strictEqual(playback.playState, 'finished');
+    playback.reverse();
+    assert.strictEqual(playback.playState, 'running');
+    assert.strictEqual(scheduler.pending, 1);
+    scheduler.step(1000);
+    assert.strictEqual(playback.playState, 'finished');
+    assert.strictEqual(playback.currentProgress, 0);
+    assert.deepStrictEqual(frames, [0, 1, 0]);
+  }
+
+  {
+    const scheduler = createScheduler();
     const { playback } = makePlayback(scheduler);
     const rejection = playback.finished.catch((error) => error);
     playback.cancel();
