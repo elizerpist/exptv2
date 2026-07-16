@@ -57,6 +57,21 @@ for (let y = 0; y < 2; y += 1) {
 
 assert.deepStrictEqual([...render(0.4).data], [...middle.data]);
 
+const reusableOutput = solidFrame(0, 0, 0);
+const reusableData = reusableOutput.data;
+const reused = renderer.renderFrame({
+  mode: 'pigment-spread',
+  progress: 0.4,
+  settings,
+  sourceFrame: source,
+  portalBaseFrame: portalBase,
+  portalTargetFrame: portalTarget,
+  outputFrame: reusableOutput,
+});
+assert.strictEqual(reused, reusableOutput);
+assert.strictEqual(reused.data, reusableData);
+assert.deepStrictEqual([...reused.data], [...middle.data]);
+
 const reversed = render(0, {
   sourceFrame: portalTarget,
   portalBaseFrame: portalBase,

@@ -36,7 +36,16 @@
         : transition.createModeSettings(options.mode);
       const progress = Number(options.progress) || 0;
       const { width, height } = source;
-      const data = new Uint8ClampedArray(source.data.length);
+      if (options.outputFrame !== undefined
+        && (!validFrame(options.outputFrame) || !sameSize(source, options.outputFrame))) {
+        return null;
+      }
+      const output = options.outputFrame || {
+        width,
+        height,
+        data: new Uint8ClampedArray(source.data.length),
+      };
+      const { data } = output;
 
       for (let y = 0; y < height; y += 1) {
         const normalizedY = height === 1 ? 0.5 : y / (height - 1);
@@ -66,7 +75,7 @@
         }
       }
 
-      return { width, height, data };
+      return output;
     }
 
     return Object.freeze({ renderFrame });
