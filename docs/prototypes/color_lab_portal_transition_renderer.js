@@ -35,6 +35,8 @@
         ? options.settings
         : transition.createModeSettings(options.mode);
       const progress = Number(options.progress) || 0;
+      const reducedMotion = options.reducedMotion === true;
+      const crossfade = Math.max(0, Math.min(1, progress));
       const { width, height } = source;
       if (options.outputFrame !== undefined
         && (!validFrame(options.outputFrame) || !sameSize(source, options.outputFrame))) {
@@ -51,6 +53,18 @@
         const normalizedY = height === 1 ? 0.5 : y / (height - 1);
         for (let x = 0; x < width; x += 1) {
           const normalizedX = width === 1 ? 0.5 : x / (width - 1);
+          const offset = ((y * width) + x) * 4;
+          if (reducedMotion) {
+            for (let channel = 0; channel < 3; channel += 1) {
+              data[offset + channel] = mix(
+                source.data[offset + channel],
+                portalTarget.data[offset + channel],
+                crossfade,
+              );
+            }
+            data[offset + 3] = 255;
+            continue;
+          }
           const channels = transition.sampleChannels(
             options.mode,
             normalizedX,
@@ -58,7 +72,6 @@
             progress,
             settings,
           );
-          const offset = ((y * width) + x) * 4;
           for (let channel = 0; channel < 3; channel += 1) {
             const stage = mix(
               source.data[offset + channel],

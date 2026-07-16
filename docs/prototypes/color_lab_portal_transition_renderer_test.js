@@ -72,6 +72,23 @@ assert.strictEqual(reused, reusableOutput);
 assert.strictEqual(reused.data, reusableData);
 assert.deepStrictEqual([...reused.data], [...middle.data]);
 
+const reducedMotion = renderer.renderFrame({
+  mode: 'pigment-spread',
+  progress: 0.4,
+  settings,
+  reducedMotion: true,
+  sourceFrame: source,
+  portalBaseFrame: portalBase,
+  portalTargetFrame: portalTarget,
+});
+for (let index = 0; index < reducedMotion.data.length; index += 4) {
+  assert.deepStrictEqual(
+    [...reducedMotion.data.slice(index, index + 4)],
+    [90, 100, 110, 255],
+    'Reduced motion must use one uniform endpoint crossfade without spatial fronts',
+  );
+}
+
 const reversed = render(0, {
   sourceFrame: portalTarget,
   portalBaseFrame: portalBase,
