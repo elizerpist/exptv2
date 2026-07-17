@@ -1,112 +1,125 @@
 # Balance Interior Motion Design
 
 **Date:** 2026-07-17
-**Status:** Approved in conversation; pending implementation
+**Status:** Revised design approved in conversation; pending implementation
 
-## Mandatory references
+## Mandatory References
 
 - User instruction from 2026-07-17 requesting an independently toggleable interior animation for both Balance color regions.
+- User correction from 2026-07-17: the feature must be dedicated to Balance interior motion, not the same background-morph panel/state, while using the same effects and controls 1:1 as Portal background morph.
 - Android screenshot: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-013843.png`.
-- Existing prototype: `docs/prototypes/color_lab.html` and its portal color, energy, background, message, transition, and renderer modules.
+- Existing prototype: `docs/prototypes/color_lab.html`.
+- Source behavior to match 1:1 for effects and controls: `docs/prototypes/color_lab_portal_message_field.js` and `docs/prototypes/color_lab_portal_message_field_renderer.js`.
 - Acceptance checklist: `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md`.
 
-The screenshot is a required implementation input. It shows visible activity around the broad white Balance boundary while most of the turquoise-green and pink-purple interiors remain visually uniform. The new effect must add motion inside those two fields without replacing or contaminating the existing boundary animation.
+The screenshot remains a required implementation input. It shows the mobile Balance header and the protected white boundary corridor. The revised feature must add internal material motion inside the two colored Balance fields without replacing the existing Balance boundary animation or reusing the Portal background-morph UI state.
 
 ## Goal
 
-Add one optional, independently controlled interior-motion layer to the Color Lab test header in Balance mode. The layer makes both colored interiors visibly alive while preserving the white boundary corridor, the current mother-color gradients, and all existing portal effects.
+Add one optional, dedicated Balance-only interior morph layer. It makes the left and right Balance interiors read as internal material murmur (`morajlik belül`), with two independently masked sides, while preserving the existing white boundary corridor and all existing portal effects.
+
+The feature is dedicated: it has its own state, its own controls, its own palette derivation, and its own Balance masks. It must not be the same Portal background-morph panel, not the same enabled flag, and not the same rendered canvas. The effect catalog, labels, per-effect sliders, defaults, clamping, phase behavior, and matter sampling must match Portal background morph 1:1.
 
 ## Scope
 
-The feature applies only in Balance mode because that mode supplies two distinct colored regions and a separating white boundary. It is off by default and can run at the same time as the current boundary, energy, message, background-response, and transition effects.
+The feature applies only in Balance mode because that mode has two colored interiors and a separating white corridor. It is off by default and can run at the same time as the current Balance energy/boundary animation, message morph, background response, full background morph, and transition effects.
 
-This design does not alter the Balance split, money-flow ratio, boundary shape, header content, or the algorithms of existing effects. It does not add free-form color pickers or allow several interior effects to stack simultaneously.
+This design does not alter the Balance split, money-flow ratio, boundary shape, header content, or the algorithms of the existing Portal background-morph feature. It removes the previous custom interior primitive catalog as the accepted target for this feature.
 
-## Control model
+## Control Model
 
-The Color Lab controls gain an optional-effect row consistent with the existing portal-effect rows:
+The Color Lab controls keep a dedicated optional-effect row for Balance interior motion:
 
 - visible label: `PORTÁL BELSŐ MOZGÁS`;
 - independent `KI` / `BE` toggle, defaulting to `KI`;
-- one effect selector;
-- one `Erősség` slider;
-- one `Sebesség` slider.
+- one mode selector dedicated to the interior layer;
+- a dynamic controls viewport dedicated to the selected interior mode;
+- an active-mode reset that resets only the selected interior mode settings.
 
-Only one interior effect can be active at a time. The selected effect, strength, and speed are shared by both sides. The two sides use separate deterministic seeds, phase offsets, and movement directions, so they do not look mirrored or synchronized.
+The interior mode selector must expose the same modes, in the same order, with the same labels as Portal background morph:
 
-## Initial effects
+1. `solid-a` - `Nincs dinamikus effekt`;
+2. `static-matter` - `Statikus köd/szigetek`;
+3. `wandering-mist` - `Vándorló köd`;
+4. `living-archipelago` - `Élő szigetvilág`;
+5. `forming-clouds` - `Keletkező energiafelhők`.
 
-1. **Vándorló köd (`driftingMist`)**: broad translucent gradient bodies drift slowly through each region.
-2. **Belső áramlás (`innerCurrent`)**: elongated, softly feathered streams travel through the interiors.
-3. **Lágy hullám (`softTide`)**: low-frequency bands expand and recede without creating hard stripes.
-4. **Lassú örvény (`slowVortex`)**: wide curved fields turn gently around separate regional centers.
+For each mode, the interior panel renders the same slider/number controls as `PortalMessageField.controlsForMode(mode)`, with the same key, label, min, max, step, default, unit, normalization, and reset behavior. This replaces the earlier single `Erősség` and `Sebesség` controls.
 
-Every option represents a distinct motion model rather than a renamed parameter preset.
+Only one interior mode is active at a time. The selected mode and settings are shared by both sides, but each side uses its own deterministic phase offset and seed offset so the two interiors are not mirrored or synchronized.
 
-## Rendering architecture
+## Effect Behavior
 
-Interior motion is a separate state and renderer unit. It participates in the existing shared animation loop and must not start its own `requestAnimationFrame` loop.
+The dedicated interior model follows the Portal background-morph effect behavior 1:1:
+
+- `solid-a` produces no dynamic internal matter and resolves to the side's light endpoint;
+- `static-matter` is phase invariant;
+- `wandering-mist`, `living-archipelago`, and `forming-clouds` advance with the same phase rules and same sampled matter behavior as Portal background morph;
+- unknown mode identifiers fall back through the same normalization rule as Portal background morph.
+
+The implementation may share a pure sampler/kernel with Portal background morph to avoid drift, but the Balance interior feature must keep separate state objects, phase maps, settings maps, DOM bindings, and render calls.
+
+## Two-Side Palette Model
+
+The revised feature has two dedicated color scales, one per Balance side:
+
+- left side scale: left side's brightest Balance color point to left side's darkest Balance color point;
+- right side scale: right side's brightest Balance color point to right side's darkest Balance color point.
+
+The renderer samples the selected interior matter value inside each side and maps it through that side's own light-to-dark scale. It must not use the Portal background-morph pink/purple palette window for Balance interior rendering. It must not use fixed decorative accent colors.
+
+The brightest/darkest endpoints are derived from the current resolved Balance palette for the specific side, so theme or Balance palette changes update both interior scales immediately.
+
+## Rendering Architecture
+
+Interior motion is a separate state and renderer unit. It participates in the existing shared Balance energy animation frame and must not start its own `requestAnimationFrame` loop.
 
 The visual stack is:
 
-1. resolved Balance mother colors;
-2. interior-motion layer;
+1. resolved Balance base field;
+2. dedicated left and right interior morph fields;
 3. white boundary corridor and its existing animation;
 4. header content, controls, and interaction surfaces.
 
-For each frame, the current Balance geometry produces two mutually exclusive clip masks. A protected corridor covers the full visible white boundary plus a small feather allowance. The left and right interior render passes are clipped to their own masks and cannot draw inside that corridor or the opposite region. Header corner clipping remains authoritative at the outer edge.
+For each frame, current Balance geometry produces two mutually exclusive clip masks. A protected corridor covers the full visible white boundary plus a feather allowance. The left and right interior render passes are clipped to their own masks and cannot draw inside that corridor or the opposite region. Header corner clipping remains authoritative at the outer edge.
 
-Disabling the feature, leaving Balance mode, or hiding the relevant header stops its updates and clears only the interior-motion contribution. Other portal layers retain their state and animation.
+Disabling the feature, leaving Balance mode, hiding the relevant header, or selecting a mode with no animated work stops interior updates and clears only the interior contribution. Other portal layers retain their state and animation.
 
-## Color derivation and compositing
+## Motion Behavior
 
-Colors are derived from the currently resolved mother colors rather than from a fixed decorative palette.
+Both regions run the same selected mode and normalized settings. The two sides differ by deterministic seed offset, phase offset, and preferred coordinate direction. Repeated renders with the same state and timestamp produce the same frame, avoiding flicker and random jumps.
 
-- The green region receives one lighter and one deeper green component while retaining the mother hue family.
-- The pink-purple region receives one component shifted toward pink and one shifted toward violet-purple.
-- Each component is strongest near its soft center, then blends progressively back toward its own mother color.
-- The outer feather reaches the mother color with zero effective contrast, preventing visible blob edges.
-- Blur, alpha, and color mixing are clipped before compositing, so no tinted halo can cross the white corridor.
+The animation should read as internal colored material motion. It must not look like a second boundary, hard-edged particles, or a decorative overlay floating above the Balance field. Under reduced-motion preferences, animated modes render a stable representative frame without temporal progression.
 
-`Erősség` controls contrast and opacity within conservative limits. It does not change the Balance split or boundary width. `Sebesség` controls temporal progression only; it does not change density, color, or mask geometry.
+## Failure and Fallback Behavior
 
-The implementation should reuse the existing portal color-resolution utilities so theme or Balance color changes update the interior palette immediately.
-
-## Motion behavior
-
-Both regions run the same selected effect and normalized speed. Their deterministic seeds, phase offsets, and preferred directions differ. Repeated renders with the same state and timestamp produce the same frame, avoiding flicker and random jumps.
-
-Animation remains broad and low-frequency. It must read as movement within a colored material, not as particles, hard-edged shapes, or a second competing boundary. Under reduced-motion preferences, the renderer shows a stable representative frame without temporal movement.
-
-## Failure and fallback behavior
-
-- An unknown effect identifier falls back to `driftingMist`.
-- Invalid numeric controls are clamped to documented safe ranges.
+- Unknown mode identifiers normalize exactly like Portal background morph.
+- Invalid numeric controls clamp exactly like Portal background morph controls.
 - Missing or degenerate Balance geometry skips the interior pass for that frame.
 - A renderer failure must not suppress the base Balance fill, white boundary, or header content.
 
-## Performance constraints
+## Performance Constraints
 
-- Use the existing frame clock and visibility lifecycle.
-- Reuse paths, gradients, seeded parameters, and offscreen resources where practical.
-- Bound primitive counts for every effect.
-- Respect the prototype's existing device-pixel-ratio cap.
-- When disabled or outside Balance mode, perform no per-frame interior work.
+- Use the existing Balance energy frame clock and visibility lifecycle.
+- Share the pure morph sampler where practical so effect math does not drift from Portal background morph.
+- Bound offscreen frame sizes using the same profile/render-scale rules as Portal background morph unless the implementation plan proves a safer tighter bound.
+- When disabled, outside Balance mode, or not visible, perform no per-frame interior model, palette, or pixel work.
 
 ## Verification
 
 Automated verification covers:
 
-- state defaults, toggle behavior, one-active-effect selection, and control clamping;
-- deterministic side-specific seeds, phases, and directions;
-- mother-color-derived component generation and edge blending;
-- unknown-effect fallback and inactive-mode short-circuiting;
-- renderer pixel checks proving temporal change inside both colored regions;
-- renderer pixel checks proving that the protected white corridor remains free of green, pink, and purple contamination;
-- integration checks for the new control row and all four options.
+- dedicated default-off state independent from Portal background-morph state;
+- exact mode order, labels, control schemas, defaults, normalization, and reset behavior matching Portal background morph;
+- per-side light-to-dark palette derivation from the current Balance side colors;
+- phase-invariant `static-matter` and moving animated modes matching Portal background morph signatures;
+- left and right side independence through deterministic seed/phase offsets;
+- inactive-mode and disabled short-circuiting with zero interior work;
+- protected white-corridor masking with no green/pink/purple contamination;
+- integration checks for the dedicated control row, mode selector, dynamic controls, reset, and shared-loop render call.
 
-Visual verification uses the mandatory screenshot as the baseline and captures the same mobile header at multiple animation timestamps. Review must confirm visible interior activity on both sides, no hard internal contours, no boundary bleed, no text/control overlap, and no regression to existing boundary motion.
+Visual verification uses the mandatory screenshot as the baseline and captures the same mobile header at multiple animation timestamps. Review must confirm visible internal moraj on both sides, no hard internal contours, no boundary bleed, no text/control overlap, and no regression to existing Balance boundary motion.
 
-## Acceptance boundary
+## Acceptance Boundary
 
-The feature is complete only when every item in `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md` is `DONE`. Passing tests or a served prototype alone does not override incomplete visual or behavioral requirements.
+The feature is complete only when every current item in `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md` is `DONE` or explicitly deferred by the user. Passing tests or a served prototype alone does not override incomplete visual or behavioral requirements.
