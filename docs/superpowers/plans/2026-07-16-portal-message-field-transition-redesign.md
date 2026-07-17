@@ -59,7 +59,7 @@
 - Produces browser/CommonJS `PortalMessageField` with `modeOrder`, `modeLabels`, `animatedModes`, `defaults`, palette delegates, `controlsForMode(mode)`, `createModeSettings(mode)`, `normalizeValue(meta,value)`, `sampleMatter(mode,x,y,phase,settings)`, `advancePhase(mode,phase,elapsed,settings)`, and `renderProfile(mode)`.
 - `sampleMatter` always returns a finite number in `[0,1]`; zero means exact A and one means exact B.
 
-- [ ] **Step 1: Write the failing field-model test**
+- [x] **Step 1: Write the failing field-model test**
 
 Create a Node `assert` test containing these exact contracts:
 
@@ -128,13 +128,13 @@ for (const mode of field.animatedModes) {
 console.log('Portal message field checks passed');
 ```
 
-- [ ] **Step 2: Run the new test and witness RED**
+- [x] **Step 2: Run the new test and witness RED**
 
 Run `node docs/prototypes/color_lab_portal_message_field_test.js`.
 
 Expected: exit 1 with `MODULE_NOT_FOUND` for `color_lab_portal_message_field.js`.
 
-- [ ] **Step 3: Implement the exact schemas and deterministic field helpers**
+- [x] **Step 3: Implement the exact schemas and deterministic field helpers**
 
 Use a UMD wrapper that receives `PortalMessageColor`. Define frozen schemas with these keys and exact `min/max/step/default/unit` tuples:
 
@@ -289,7 +289,7 @@ function sampleFormingClouds(x, y, phase, s) {
 }
 ```
 
-- [ ] **Step 4: Run model verification**
+- [x] **Step 4: Run model verification**
 
 Run:
 
@@ -300,7 +300,7 @@ node --check docs/prototypes/color_lab_portal_message_field.js
 
 Expected: `Portal message field checks passed`; syntax exits 0.
 
-- [ ] **Step 5: Commit the isolated model**
+- [x] **Step 5: Commit the isolated model**
 
 ```bash
 git add docs/prototypes/color_lab_portal_message_field.js docs/prototypes/color_lab_portal_message_field_test.js
@@ -322,7 +322,7 @@ git commit -m "feat: add portal message matter field"
 - Produces `PortalMessageFieldRenderer.renderFrame(options)` returning `{ width, height, data }` or `null` for invalid colors/options.
 - `data` is an opaque `Uint8ClampedArray`; each RGB channel is direct interpolation `A + (B-A)*mask`.
 
-- [ ] **Step 1: Write the failing renderer test**
+- [x] **Step 1: Write the failing renderer test**
 
 ```js
 const assert = require('assert');
@@ -357,13 +357,13 @@ assert.strictEqual(renderer.renderFrame(null), null);
 console.log('Portal message field renderer checks passed');
 ```
 
-- [ ] **Step 2: Run the renderer test and witness RED**
+- [x] **Step 2: Run the renderer test and witness RED**
 
 Run `node docs/prototypes/color_lab_portal_message_field_renderer_test.js`.
 
 Expected: `MODULE_NOT_FOUND` for the renderer.
 
-- [ ] **Step 3: Implement direct color interpolation**
+- [x] **Step 3: Implement direct color interpolation**
 
 Use the established UMD pattern and this pixel loop:
 
@@ -384,7 +384,7 @@ for (let y = 0; y < height; y += 1) {
 
 Clamp dimensions to 1–2048 and require six-digit hex colors. Do not apply black, gray, luminance, blend-mode, or alpha veils.
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 Run the model and renderer tests plus `node --check` for both modules. Expected: both pass messages and exit 0. Then commit only the two new renderer files with `git commit -m "feat: render portal message matter field"`.
 
@@ -405,7 +405,7 @@ Run the model and renderer tests plus `node --check` for both modules. Expected:
 - `PortalMessageTransitionRenderer.renderFrame` consumes equal-size `sourceFrame`, `portalBaseFrame`, and `portalTargetFrame`, then returns a same-size RGBA frame.
 - Composition order is `mix(source, portalBase, base)` followed by `mix(result, portalTarget, matter)`.
 
-- [ ] **Step 1: Write failing transition-model assertions**
+- [x] **Step 1: Write failing transition-model assertions**
 
 Assert exact order/labels:
 
@@ -448,7 +448,7 @@ const expected = {
 };
 ```
 
-- [ ] **Step 2: Witness model RED, then implement it**
+- [x] **Step 2: Witness model RED, then implement it**
 
 Run the missing-module test. Implement frozen schemas, normalization, seeded 2D noise, and three distinct samplers. Force exact endpoints before mode dispatch:
 
@@ -522,11 +522,11 @@ function liquidChannels(x, y, progress, s) {
 }
 ```
 
-- [ ] **Step 3: Write failing compositor tests**
+- [x] **Step 3: Write failing compositor tests**
 
 Use three 2×2 frames with solid RGB values: source `[10,20,30]`, Portal base `[110,120,130]`, and Portal target `[210,220,230]`. Assert progress 0 equals source byte-for-byte, progress 1 equals target byte-for-byte, all intermediate channels are bounded by source/target extrema, alpha stays 255, reverse input frames swaps endpoints, mismatched dimensions return `null`, and output is deterministic.
 
-- [ ] **Step 4: Implement the compositor**
+- [x] **Step 4: Implement the compositor**
 
 For each pixel, sample `{base,matter}` and perform:
 
@@ -537,7 +537,7 @@ const output = mixPixel(stage, portalTarget, channels.matter);
 
 Validate `{width,height,data}` and equal dimensions before allocating output. Never mutate input arrays.
 
-- [ ] **Step 5: Run and commit the transition core**
+- [x] **Step 5: Run and commit the transition core**
 
 Run both transition tests and syntax checks. Expected: `Portal transition checks passed` and `Portal transition renderer checks passed`. Commit only these four new files with `git commit -m "feat: add portal background transition core"`.
 
@@ -556,11 +556,11 @@ Run both transition tests and syntax checks. Expected: `Portal transition checks
 - Playback exposes Web-Animation-compatible `reverse()`, `cancel()`, `finished`, `playState`, `currentProgress`, and `currentTime` so it can join `activeAnimations`.
 - Options are `{ duration, startProgress, direction, now, requestFrame, cancelFrame, onFrame }`.
 
-- [ ] **Step 1: Write a deterministic fake-clock RED test**
+- [x] **Step 1: Write a deterministic fake-clock RED test**
 
 Create a scheduler that stores callbacks and advances timestamps manually. Assert a 1000 ms forward playback emits 0, .5, 1 and resolves at 1; reversing at .6 continues smoothly to .3 then 0; starting at 1 with direction -1 reaches 0; `cancel()` stops queued frames and rejects `finished` with an `AbortError`; duration 0 commits the selected boundary synchronously.
 
-- [ ] **Step 2: Implement continuous reversal**
+- [x] **Step 2: Implement continuous reversal**
 
 Use this tick relationship:
 
@@ -574,7 +574,7 @@ else frameId = requestFrame(tick);
 
 `reverse()` flips only `direction`, resets `lastTimestamp` from `now()`, and schedules a frame if needed; it never resets progress. `cancel()` calls `cancelFrame`, marks `playState='idle'`, and rejects once. Freeze the returned API except for getter-backed state.
 
-- [ ] **Step 3: Run and commit**
+- [x] **Step 3: Run and commit**
 
 Run the player test and syntax check. Expected: `Portal transition player checks passed`. Commit the two isolated files with `git commit -m "feat: add reversible portal transition player"`.
 
@@ -592,7 +592,7 @@ Run the player test and syntax check. Expected: `Portal transition player checks
 - `PortalMessageMorph.buildTransition` continues to produce content `outgoing`, `incoming`, `duration`, `easing`, `direction`, and mode metadata.
 - It no longer produces colored accent frames or an accent origin. Local color reaction belongs only to `PortalMessageBackground`.
 
-- [ ] **Step 1: Add a failing content-only assertion**
+- [x] **Step 1: Add a failing content-only assertion**
 
 For every foreground mode, add:
 
@@ -607,11 +607,11 @@ Run `node docs/prototypes/color_lab_portal_message_test.js`.
 
 Expected: FAIL because current descriptors contain `accent` and some contain `accentOrigin`.
 
-- [ ] **Step 2: Remove accent construction from all four descriptors**
+- [x] **Step 2: Remove accent construction from all four descriptors**
 
 Delete each `accent` array and `accentOrigin` return property. Keep text shadow values used directly on glyphs, because they are part of the foreground descriptor; forbid only separate colored backdrop output. Ensure reduced-motion descriptors remain opacity-only.
 
-- [ ] **Step 3: Run protected pure regressions**
+- [x] **Step 3: Run protected pure regressions**
 
 ```bash
 node docs/prototypes/color_lab_portal_message_test.js
@@ -640,7 +640,7 @@ Expected: all three pass messages and syntax exit 0. Do not commit these already
 - State flags are `textMorphEnabled`, `textBackgroundEnabled`, and `fullBackgroundMorphEnabled`.
 - Local response mode remains stored as `backgroundMode`; its explicit disabled state is the independent switch, not a misleading residual foreground accent.
 
-- [ ] **Step 1: Add failing static contracts for layer ancestry and switches**
+- [x] **Step 1: Add failing static contracts for layer ancestry and switches**
 
 Add assertions that the header contains, in this order:
 
@@ -658,7 +658,7 @@ Run `node docs/prototypes/color_lab_static_test.js`.
 
 Expected: FAIL at the new full-header layer/switch assertion.
 
-- [ ] **Step 2: Rewrite the header markup and CSS paint order**
+- [x] **Step 2: Rewrite the header markup and CSS paint order**
 
 Replace the visual portion of the test header with:
 
@@ -682,7 +682,7 @@ Replace the visual portion of the test header with:
 
 Both canvases and the response use `position:absolute; inset:0; width:100%; height:100%; border-radius:inherit; z-index:0; pointer-events:none; contain:paint`. The transition canvas follows the field canvas in DOM paint order. Delete every accent selector. Keep `.mind-portal-content-viewport { inset:16px 17px; z-index:3; overflow:hidden; }` only for text.
 
-- [ ] **Step 3: Add compact accessible toggle UI**
+- [x] **Step 3: Add compact accessible toggle UI**
 
 Place one button in each relevant panel title:
 
@@ -694,7 +694,7 @@ Place one button in each relevant panel title:
 
 Use the matching panel's existing title label plus toggle; do not create a taller wrapper. Style 38×24 px pills with `touch-action:manipulation`; `[aria-pressed="false"]` reads `Ki` through text synchronization and uses neutral gray, while true uses the current purple/pink accent.
 
-- [ ] **Step 4: Make the local text reaction independent and truly clearable**
+- [x] **Step 4: Make the local text reaction independent and truly clearable**
 
 Initialize:
 
@@ -711,7 +711,7 @@ Keep `none` in the pure module as its deterministic fallback, but remove it from
 
 Keep the existing `seam-flare` ID/label for control compatibility, but remove financial split ownership: its configured center is always the text focus at 50%/50%, and its CSS combines a bounded radial mask with the luminous membrane. Remove `moneyFlowSeamPercent` use from response construction and replace its test with assertions that income 0, 50, and 100 produce identical text-centered configuration.
 
-- [ ] **Step 5: Implement generic switch behavior**
+- [x] **Step 5: Implement generic switch behavior**
 
 Add:
 
@@ -753,11 +753,11 @@ For this task's working checkpoint, define `applyPortalBackgroundEndpoint(wrap,s
 
 Bind all three buttons once. `applyPortalContentEndpoint` sets only header content-state and panel `aria-hidden`; it does not set the final controller state. Turning a layer on while settled changes no endpoint.
 
-- [ ] **Step 6: Make delivery build animations conditionally**
+- [x] **Step 6: Make delivery build animations conditionally**
 
 In `runPortalMessageMorph`, remove accent lookup and animation. Push outgoing/incoming only when `textMorphEnabled`; otherwise call `applyPortalContentEndpoint` before starting remaining layers. Build/push the response only when `textBackgroundEnabled`. Use role `text-background`. If no layer creates an animation, commit immediately. Keep `updatePortalMessageTrigger` and the shared reverse loop.
 
-- [ ] **Step 7: Run the current regressions**
+- [x] **Step 7: Run the current regressions**
 
 ```bash
 node docs/prototypes/color_lab_static_test.js
@@ -783,7 +783,7 @@ Expected: all pass. Run `git diff --check`; do not stage shared files.
 - Runtime state names use `messageFieldMode`, `messageFieldCenter`, `messageFieldWindow`, `messageFieldSettingsByMode`, and `messageFieldPhaseByMode`.
 - The existing white/pink/purple palette controls remain, but A and B are material colors instead of left/right anchors.
 
-- [ ] **Step 1: Replace old selector/source assertions with failing new contracts**
+- [x] **Step 1: Replace old selector/source assertions with failing new contracts**
 
 Require exact `Portal végállapot` option order:
 
@@ -797,11 +797,11 @@ Require exact `Portal végállapot` option order:
 
 Assert the message menu contains none of `dual-tide`, `magnetic-membrane`, `breathing-lens`, `cellular-field`, while the separate Balance energy menu still contains them. Assert the new field scripts load and runtime calls `PortalMessageFieldRenderer.renderFrame` and `PortalMessageField.advancePhase` without calling `MindPortalEnergy.advancePhase` inside the field-runtime block.
 
-- [ ] **Step 2: Update the panel without increasing its footprint unnecessarily**
+- [x] **Step 2: Update the panel without increasing its footprint unnecessarily**
 
 Rename the existing message-color panel heading to `Portal háttér-morph`. Its first compact select row is labeled `Portal végállapot` and uses the exact options above. Keep the palette row visible for all modes. Hide only the numbered field-control viewport for `solid-a`; show it for `static-matter` and all dynamic modes. Preserve the deferred window input behavior and window-opacity separation.
 
-- [ ] **Step 3: Replace message-color state and renderer calls**
+- [x] **Step 3: Replace message-color state and renderer calls**
 
 Initialize the new settings/phase maps from `PortalMessageField.modeOrder.slice(1)` and `animatedModes`. Use defaults:
 
@@ -813,7 +813,7 @@ messageFieldWindow: PortalMessageField.defaults.windowSize,
 
 Rewrite palette/control functions to consume `PortalMessageField`. `drawPortalMessageFieldFrame` obtains `profile = PortalMessageField.renderProfile(mode)`, advances phase only for animated modes, renders at `profile.renderScale`, throttles by `profile.frameMs`, and uses the dedicated field canvas/context. Use one rAF and the existing IntersectionObserver/reduced-motion lifecycle.
 
-- [ ] **Step 4: Implement deterministic endpoint ownership**
+- [x] **Step 4: Implement deterministic endpoint ownership**
 
 Add this single endpoint function and route commit, no-canvas fallback, opacity changes, and immediate-switch behavior through it:
 
@@ -839,11 +839,11 @@ function applyPortalBackgroundEndpoint(wrap, state, targetState) {
 
 If canvas is unavailable, set `--portal-message-solid-a` from the sampled palette and show a full-header solid-A CSS layer at the Portal endpoint. Never fall back to a left/right gradient.
 
-- [ ] **Step 5: Preserve settled field-only preview**
+- [x] **Step 5: Preserve settled field-only preview**
 
 Adapt the existing 180 ms ghost-canvas preview: snapshot the outgoing field, render the new field, crossfade only the two field canvases, and never call `runPortalMessageMorph`. Palette/field mode/field control changes during an active delivery are deferred until endpoint commit; settled changes cancel and replace the prior preview.
 
-- [ ] **Step 6: Run field integration verification**
+- [x] **Step 6: Run field integration verification**
 
 Run static, old portal regressions, both new field suites, syntax checks, and `git diff --check`. Expected: all pass, exact new dropdown order, no old message-field IDs, unchanged Balance IDs, and no touch source differences. Do not stage shared files.
 
@@ -862,23 +862,23 @@ Run static, old portal regressions, both new field suites, syntax checks, and `g
 - Runtime helpers are `capturePortalBalanceFrame`, `capturePortalTargetFrames`, `drawPortalTransitionProgress`, `startPortalBackgroundTransition`, `clearPortalBackgroundTransition`, and `renderPortalTransitionControls`.
 - One custom playback enters `activeAnimations` with role `full-background`.
 
-- [ ] **Step 1: Add failing transition UI/runtime assertions**
+- [x] **Step 1: Add failing transition UI/runtime assertions**
 
 Require a second select inside the full-background panel with exact order `pigment-spread`, `island-takeover`, `liquid-remap`, followed by active-only numbered slider/manual controls and reset. Require script order: field renderer → transition model → transition renderer → transition player → inline runtime. Require transition canvas full-header ancestry and runtime use of `PortalTransitionPlayer.createPlayback` plus role `full-background`.
 
-- [ ] **Step 2: Add transition controls**
+- [x] **Step 2: Add transition controls**
 
 Render `PortalMessageTransition.controlsForMode(activeMode)` using the established numbered row pattern. Range updates are immediate. Manual inputs allow a temporarily empty value and commit/clamp only on Enter, change, or blur. Preserve settings per mode; reset only the active transition. Mode changes during delivery are stored and take effect on the next toggle.
 
-- [ ] **Step 3: Capture a Balance frame from authoritative state**
+- [x] **Step 3: Capture a Balance frame from authoritative state**
 
 Create an opaque RGBA frame at the transition render size. Read `ensureMindPortalEnergyState(header)`, computed `--mind-portal-color-a/b`, signature, ratio, current energy mode/settings/phase. For Money-flow static, call `MindPortalEnergy.sampleMoneyFlowColor(palette, income, {coordinate:nx,light:0,chroma:0})`. For animated Balance modes call `sampleMoneyFlowField`; for other modes call `sampleField` and `sampleColor`. Exclude touch ripples and pigment trails because those remain a separate live layer above the transition.
 
-- [ ] **Step 4: Capture Portal A and live target frames**
+- [x] **Step 4: Capture Portal A and live target frames**
 
 Render `portalBaseFrame` with `solid-a` and `portalTargetFrame` with the selected message field at its current phase, both using the same width/height and sampled Portal A/B. Do not mutate the live field state during capture.
 
-- [ ] **Step 5: Start the custom full-background animation**
+- [x] **Step 5: Start the custom full-background animation**
 
 Implement:
 
@@ -910,15 +910,15 @@ function startPortalBackgroundTransition(wrap, state, targetState) {
 
 `drawPortalTransitionProgress` calls the transition renderer, writes one `ImageData`, and keeps only the transition canvas at current window opacity. At completion, `commitPortalMessageState` clears the transition canvas and calls `applyPortalBackgroundEndpoint` for the settled target.
 
-- [ ] **Step 6: Join shared reversal without replacing the array**
+- [x] **Step 6: Join shared reversal without replacing the array**
 
 Push `{role:'full-background', animation:playback}` into the same `activeAnimations` array. The existing opposite-target path calls `.reverse()` on WAAPI and custom entries. Do not reconstruct frames during in-flight reversal. Starting from a settled message captures the current live Portal frame before playing 1→0.
 
-- [ ] **Step 7: Implement full-background off during playback**
+- [x] **Step 7: Implement full-background off during playback**
 
 When its switch turns off, cancel only role `full-background`, clear the transition canvas, and call `applyPortalBackgroundEndpoint(wrap,state,state.targetState)`. Leave foreground and text-background animations running. The canceled `finished` rejection is already consumed by the group's `.catch`; final commit remains token guarded.
 
-- [ ] **Step 8: Run transition integration verification**
+- [x] **Step 8: Run transition integration verification**
 
 Run all pure transition/field tests, static test, old portal tests, and syntax checks. Expected: all pass; static source proves custom and WAAPI animations share reversal, disabled background snaps to the distinct endpoint, and no visual layer is nested in the content viewport. Run `git diff --check`; do not stage shared files.
 
@@ -931,29 +931,29 @@ Run all pure transition/field tests, static test, old portal tests, and syntax c
 - Modify: `docs/prototypes/color_lab.html:12957-14610`
 - Modify: `docs/prototypes/color_lab_static_test.js:2290-2490,5120-5160`
 
-- [ ] **Step 1: Add failing switch/reversal/fallback source contracts**
+- [x] **Step 1: Add failing switch/reversal/fallback source contracts**
 
 Assert: each switch cancels only its own roles; text off calls `applyPortalContentEndpoint`; text-background off calls `clearPortalBackgroundOverlay`; full-background off calls endpoint switch; reduced motion passes 160 ms descriptors; no canvas uses solid A; no WAAPI commits content/local endpoint without leaving both panels visible; one `IntersectionObserver` and one rAF own the live Portal field; transition buffers are reused.
 
-- [ ] **Step 2: Harden commit and cancellation order**
+- [x] **Step 2: Harden commit and cancellation order**
 
 At every commit: cancel settled previews, cancel/copy then clear active animations, clear transition playback/canvas, set `currentState/targetState`, apply content endpoint, apply local response rest only when enabled/message, and apply full background endpoint. Increment the animation token before starting and before forced cancellation so stale promises cannot recommit an obsolete target.
 
-- [ ] **Step 3: Implement reduced-motion and capability fallbacks**
+- [x] **Step 3: Implement reduced-motion and capability fallbacks**
 
 Reduced motion uses opacity-only foreground/local response and a 160 ms full endpoint crossfade; render one deterministic Portal field frame. If Canvas 2D is absent, use full-header solid A. If WAAPI is absent, content and local reaction commit immediately; the custom background player may still run when Canvas/rAF exist. If rAF is absent, all three layers commit deterministic endpoints immediately.
 
 Route the existing `Ablak opacity` control through one `syncPortalVisibleBackgroundOpacity(wrap,alpha)` helper. While Balance is settled it updates only the Balance pseudo/canvas; while a Portal message is settled it updates only the message field; while a full-background transition is active it updates only the transition canvas and keeps both endpoint sources hidden. It must not alter content, local text reaction, touch opacity, or transition progress.
 
-- [ ] **Step 4: Extend scroll routing to both new control viewports**
+- [x] **Step 4: Extend scroll routing to both new control viewports**
 
 Add `data-portal-message-field-controls-scroll` and `data-portal-transition-controls-scroll` to the existing selector. Keep the vertical-on-range gesture arbitration unchanged. Confirm only the header has `touch-action:none`; panels, selects, toggles, ranges, number inputs, reset, and trigger use normal pan/tap behavior.
 
-- [ ] **Step 5: Protect the touch implementation**
+- [x] **Step 5: Protect the touch implementation**
 
 Keep the current pointer handlers and `.common-mind-portal-layer`, trail-dot, ripple, and release CSS byte-identical. Run the existing source/hash assertions. If a layer-order adjustment is necessary, change only z-index/DOM placement outside the protected block.
 
-- [ ] **Step 6: Run the full automated suite**
+- [x] **Step 6: Run the full automated suite**
 
 ```bash
 node docs/prototypes/color_lab_static_test.js
@@ -980,7 +980,7 @@ Expected: eleven pass messages. Run `node --check` on every `color_lab_portal_*.
 - Modify: `docs/superpowers/checklists/2026-07-11-color-lab-html-prototype-checklist.md:373-380, end evidence section`
 - Modify: this plan's checkboxes as each witnessed step completes.
 
-- [ ] **Step 1: Parse the inline script and check whitespace**
+- [x] **Step 1: Parse the inline script and check whitespace**
 
 Run:
 
@@ -999,7 +999,7 @@ git diff --check
 
 Expected: `Inline scripts parse: 1`; diff check exits 0.
 
-- [ ] **Step 2: Run HTTP source smoke**
+- [x] **Step 2: Run HTTP source smoke**
 
 Start `python3 -m http.server 8765 --directory docs/prototypes` in a PTY. In a second shell run this exact loop:
 
@@ -1012,7 +1012,7 @@ echo 'HTTP portal redesign source checks passed'
 
 Expected: `HTTP portal redesign source checks passed`. Stop the server afterward.
 
-- [ ] **Step 3: Re-run every automated test from Task 9**
+- [x] **Step 3: Re-run every automated test from Task 9**
 
 Expected: all eleven suites pass again after documentation changes. Do not use an earlier run as evidence.
 
@@ -1031,11 +1031,11 @@ Open the served prototype on the phone and capture screenshots in `/storage/emul
 
 Open the latest files directly and compare them with `COLOR-LAB-333`–`340`. If a visual fails, leave its requirement `PARTIAL` or `NOT DONE`, add the evidence, and return to the responsible task.
 
-- [ ] **Step 5: Update checklist statuses honestly**
+- [x] **Step 5: Update checklist statuses honestly**
 
 For each `COLOR-LAB-333`–`340`, record exact automated commands and screenshot filenames. Set `DONE` only when its automated and Android acceptance conditions both pass. Use `PARTIAL` when implementation/tests pass but required mobile visual evidence is incomplete. Keep superseded `COLOR-LAB-328`, `330`, and `332` as historical `NOT DONE` entries and describe their replacement rather than reviving them.
 
-- [ ] **Step 6: Final shared-file safety review**
+- [x] **Step 6: Final shared-file safety review**
 
 Run `git status --short`, `git diff --stat`, and `git diff --check`. Confirm no Flutter file, Balance mode implementation, touch implementation, unrelated screen, or user-owned file was overwritten. Do not stage the shared dirty HTML, static test, or checklist. Report isolated module commits separately from shared working-tree changes.
 
