@@ -74,12 +74,19 @@ class RecurringAlarmProcessResult {
 
 class RecurringAlarmService {
   RecurringAlarmService({MethodChannel? methodChannel})
-    : _methodChannel =
+    : _enabled = true,
+      _methodChannel =
           methodChannel ?? const MethodChannel('exptv2/recurring_alarm');
 
+  RecurringAlarmService.disabled()
+    : _enabled = false,
+      _methodChannel = const MethodChannel('exptv2/recurring_alarm');
+
+  final bool _enabled;
   final MethodChannel _methodChannel;
 
   Future<bool> syncRecurringAlarms() async {
+    if (!_enabled) return false;
     final synced = await _methodChannel.invokeMethod<bool>(
       'syncRecurringAlarms',
     );
@@ -89,6 +96,7 @@ class RecurringAlarmService {
   Future<RecurringAlarmProcessResult> processRecurringNow({
     DateTime? targetDate,
   }) async {
+    if (!_enabled) return _emptyProcessResult();
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'processRecurringNow',
       {
@@ -96,14 +104,13 @@ class RecurringAlarmService {
           'targetMillis': targetDate.millisecondsSinceEpoch,
       },
     );
-    return RecurringAlarmProcessResult.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmProcessResult.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmProcessResult> setDebugDateOverride(
     DateTime targetDate,
   ) async {
+    if (!_enabled) return _emptyProcessResult();
     final normalizedTarget = DateTime(
       targetDate.year,
       targetDate.month,
@@ -113,45 +120,49 @@ class RecurringAlarmService {
       'setDebugDateOverride',
       {'targetMillis': normalizedTarget.millisecondsSinceEpoch},
     );
-    return RecurringAlarmProcessResult.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmProcessResult.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmDebugState> clearDebugDateOverride() async {
+    if (!_enabled) return _emptyDebugState();
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'clearDebugDateOverride',
     );
-    return RecurringAlarmDebugState.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmDebugState.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmDebugState> scheduleDebugTestAlarm({
     Duration delay = const Duration(minutes: 2),
   }) async {
+    if (!_enabled) return _emptyDebugState();
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'scheduleRecurringDebugTestAlarm',
       {'delayMillis': delay.inMilliseconds},
     );
-    return RecurringAlarmDebugState.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmDebugState.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<RecurringAlarmDebugState> loadDebugState() async {
+    if (!_enabled) return _emptyDebugState();
     final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'loadRecurringAlarmDebugState',
     );
-    return RecurringAlarmDebugState.fromMap(
-      map ?? <dynamic, dynamic>{},
-    );
+    return RecurringAlarmDebugState.fromMap(map ?? <dynamic, dynamic>{});
   }
 
   Future<bool> clearDebugLog() async {
+    if (!_enabled) return false;
     final cleared = await _methodChannel.invokeMethod<bool>(
       'clearRecurringAlarmDebugLog',
     );
     return cleared ?? false;
   }
+
+  RecurringAlarmDebugState _emptyDebugState() => const RecurringAlarmDebugState(
+    effectiveMillis: null,
+    usingOverride: false,
+  );
+
+  RecurringAlarmProcessResult _emptyProcessResult() =>
+      RecurringAlarmProcessResult(state: _emptyDebugState(), processedCount: 0);
 }

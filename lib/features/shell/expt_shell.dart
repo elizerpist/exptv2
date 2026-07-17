@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/debug/debug_console.dart';
@@ -112,7 +113,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     DebugConsole.log('[Shell] start');
     _activeTab = _tabFromStoreKey(widget.store.shellActiveTabKey);
     _pageActiveTab = _activeTab;
-    _recurringAlarmService = RecurringAlarmService();
+    _recurringAlarmService = kIsWeb
+        ? RecurringAlarmService.disabled()
+        : RecurringAlarmService();
     _notificationStore = NotificationStore(
       NotificationRepository(widget.nativeBridge),
     );
@@ -122,11 +125,13 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onNotificationsMayHaveChanged:
           _refreshNotificationsAfterTransactionChange,
     );
-    _nativeImeSheetBridge = NativeImeSheetBridge(
-      onTransactionCommitted: _handleNativeTransactionCommitted,
-      onSheetClosed: _handleNativeSheetClosed,
-      onDebugLog: (message) async => DebugConsole.log(message),
-    );
+    _nativeImeSheetBridge = kIsWeb
+        ? NativeImeSheetBridge.disabled()
+        : NativeImeSheetBridge(
+            onTransactionCommitted: _handleNativeTransactionCommitted,
+            onSheetClosed: _handleNativeSheetClosed,
+            onDebugLog: (message) async => DebugConsole.log(message),
+          );
     _transactionHomePage = _buildTransactionHomePage();
     _statsSnapshotRepository = NativeStatsSnapshotRepository(
       widget.nativeBridge,

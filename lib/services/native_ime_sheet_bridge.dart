@@ -9,7 +9,8 @@ class NativeImeSheetBridge {
     Future<void> Function()? onSheetClosed,
     Future<void> Function(Map<dynamic, dynamic> state)? onSheetStateChanged,
     Future<void> Function(String message)? onDebugLog,
-  }) : _methodChannel =
+  }) : _enabled = true,
+       _methodChannel =
            methodChannel ?? const MethodChannel('exptv2/native_ime_sheet'),
        _onTransactionCommitted = onTransactionCommitted,
        _onSheetClosed = onSheetClosed,
@@ -23,6 +24,15 @@ class NativeImeSheetBridge {
     }
   }
 
+  NativeImeSheetBridge.disabled()
+    : _enabled = false,
+      _methodChannel = const MethodChannel('exptv2/native_ime_sheet'),
+      _onTransactionCommitted = null,
+      _onSheetClosed = null,
+      _onSheetStateChanged = null,
+      _onDebugLog = null;
+
+  final bool _enabled;
   final MethodChannel _methodChannel;
   final Future<void> Function()? _onTransactionCommitted;
   final Future<void> Function()? _onSheetClosed;
@@ -61,14 +71,17 @@ class NativeImeSheetBridge {
   }
 
   Future<void> openProbe() async {
+    if (!_enabled) return;
     await _methodChannel.invokeMethod<void>('openProbe');
   }
 
   Future<void> closeProbe() async {
+    if (!_enabled) return;
     await _methodChannel.invokeMethod<void>('closeProbe');
   }
 
   Future<bool> openAddTransaction({required TransactionType type}) async {
+    if (!_enabled) return false;
     try {
       final opened = await _methodChannel.invokeMethod<bool>(
         'openAddTransaction',
@@ -83,6 +96,7 @@ class NativeImeSheetBridge {
   }
 
   Future<Map<dynamic, dynamic>> getInitialState() async {
+    if (!_enabled) return <dynamic, dynamic>{};
     final state = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
       'getInitialState',
     );
@@ -90,18 +104,22 @@ class NativeImeSheetBridge {
   }
 
   Future<void> closeSheet() async {
+    if (!_enabled) return;
     await _methodChannel.invokeMethod<void>('closeSheet');
   }
 
   Future<void> notifyTransactionCommitted() async {
+    if (!_enabled) return;
     await _methodChannel.invokeMethod<void>('transactionCommitted');
   }
 
   Future<void> notifyContentReady() async {
+    if (!_enabled) return;
     await _methodChannel.invokeMethod<void>('contentReady');
   }
 
   void dispose() {
+    if (!_enabled) return;
     if (_onTransactionCommitted != null ||
         _onSheetClosed != null ||
         _onSheetStateChanged != null ||

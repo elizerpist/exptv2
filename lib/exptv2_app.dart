@@ -1,9 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/keyboard/app_keyboard_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/security_gate.dart';
 import 'features/shell/expt_shell.dart';
@@ -67,7 +68,7 @@ class _Exptv2AppState extends State<Exptv2App> {
   void initState() {
     super.initState();
     unawaited(bootstrapCategoryIconsForStartup());
-    unawaited(_initGoogleSheetsSync());
+    if (!kIsWeb) unawaited(_initGoogleSheetsSync());
   }
 
   @override
@@ -101,7 +102,7 @@ class _Exptv2AppState extends State<Exptv2App> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardProvider(
+    return AppKeyboardProvider(
       child: MaterialApp(
         title: 'Exptv2',
         debugShowCheckedModeBanner: false,

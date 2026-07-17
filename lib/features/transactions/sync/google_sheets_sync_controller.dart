@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/platform/network_failure.dart';
 import '../data/transaction_repository.dart';
 import '../export/transaction_export_row.dart';
 import '../models/transaction_record.dart';
@@ -79,7 +78,7 @@ class GoogleSheetsSyncController extends ChangeNotifier {
       notifyListeners();
       await _sync(api);
     } catch (error) {
-      final failedStatus = error is SocketException
+      final failedStatus = isNetworkFailure(error)
           ? GoogleSheetsSyncStatus.waitingForNetwork
           : GoogleSheetsSyncStatus.failed;
       await _recordFailure(
@@ -202,7 +201,7 @@ class GoogleSheetsSyncController extends ChangeNotifier {
       await _store.save(_settings);
       _setStatus(GoogleSheetsSyncStatus.idle);
     } catch (error) {
-      final failedStatus = error is SocketException
+      final failedStatus = isNetworkFailure(error)
           ? GoogleSheetsSyncStatus.waitingForNetwork
           : GoogleSheetsSyncStatus.failed;
       await _recordFailure(error, failedStatus);
