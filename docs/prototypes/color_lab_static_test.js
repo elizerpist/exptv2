@@ -2267,7 +2267,7 @@ assert(
     html.includes('settingsByMode') &&
     html.includes('function resetPortalMessageMode(wrap)') &&
     html.includes('initPortalMessageMorphLab();') &&
-    /document\.querySelectorAll\('\[data-mind-portal-energy-controls-scroll\], \[data-portal-message-controls-scroll\], \[data-portal-background-controls-scroll\], \[data-portal-message-field-controls-scroll\], \[data-portal-transition-controls-scroll\]'\)/.test(html),
+    /document\.querySelectorAll\('\[data-mind-portal-energy-controls-scroll\], \[data-portal-message-controls-scroll\], \[data-portal-background-controls-scroll\], \[data-portal-interior-motion-controls-scroll\], \[data-portal-message-field-controls-scroll\], \[data-portal-transition-controls-scroll\]'\)/.test(html),
   'Message morph controls must render only the active schema with synchronized range/manual inputs, isolated reset, and shared vertical scroll routing',
 );
 const portalBackgroundHeaderBlock = html.match(
@@ -2608,7 +2608,7 @@ assert(
     portalMessageFieldRuntimeBlock.includes('--portal-message-solid-a') &&
     portalMessageFieldRuntimeBlock.includes("canvas?.getContext('2d', { alpha: true })") &&
     portalMessageFieldRuntimeBlock.includes('ctx ? true : false') &&
-    /document\.querySelectorAll\('\[data-mind-portal-energy-controls-scroll\], \[data-portal-message-controls-scroll\], \[data-portal-background-controls-scroll\], \[data-portal-message-field-controls-scroll\], \[data-portal-transition-controls-scroll\]'\)/.test(
+    /document\.querySelectorAll\('\[data-mind-portal-energy-controls-scroll\], \[data-portal-message-controls-scroll\], \[data-portal-background-controls-scroll\], \[data-portal-interior-motion-controls-scroll\], \[data-portal-message-field-controls-scroll\], \[data-portal-transition-controls-scroll\]'\)/.test(
       html,
     ),
   'Portal field rendering must use its own profile-driven rAF lifecycle, viewport gating, reduced-motion still, and solid-A CSS fallback',
@@ -2711,7 +2711,7 @@ assert(
     portalBackgroundRuntimeBlock.includes("number.addEventListener('change'") &&
     portalBackgroundRuntimeBlock.includes("number.addEventListener('blur'") &&
     !portalBackgroundRuntimeBlock.includes("number.addEventListener('input'") &&
-    /document\.querySelectorAll\('\[data-mind-portal-energy-controls-scroll\], \[data-portal-message-controls-scroll\], \[data-portal-background-controls-scroll\], \[data-portal-message-field-controls-scroll\], \[data-portal-transition-controls-scroll\]'\)/.test(
+    /document\.querySelectorAll\('\[data-mind-portal-energy-controls-scroll\], \[data-portal-message-controls-scroll\], \[data-portal-background-controls-scroll\], \[data-portal-interior-motion-controls-scroll\], \[data-portal-message-field-controls-scroll\], \[data-portal-transition-controls-scroll\]'\)/.test(
       html,
     ),
   'Background controls must preserve per-mode settings, reset only the active mode, defer manual commits, preview holds, and join vertical scroll routing',
@@ -5351,10 +5351,19 @@ assert(
 );
 assert.ok(html.includes('data-portal-interior-motion-row'));
 assert.ok(html.includes('data-portal-interior-motion-toggle'));
-assert.ok(html.includes('data-portal-interior-motion-effect'));
-assert.ok(html.includes('data-portal-interior-motion-strength'));
-assert.ok(html.includes('data-portal-interior-motion-speed'));
-for (const value of ['driftingMist', 'innerCurrent', 'softTide', 'slowVortex']) {
+assert.ok(html.includes('data-portal-interior-motion-mode-select'));
+assert.ok(html.includes('data-portal-interior-motion-mode-reset'));
+assert.ok(html.includes('data-portal-interior-motion-controls-scroll'));
+assert.ok(!html.includes('data-portal-interior-motion-effect'));
+assert.ok(!html.includes('data-portal-interior-motion-strength'));
+assert.ok(!html.includes('data-portal-interior-motion-speed'));
+for (const value of [
+  'solid-a',
+  'static-matter',
+  'wandering-mist',
+  'living-archipelago',
+  'forming-clouds',
+]) {
   assert.ok(html.includes(`value="${value}"`));
 }
 assert.ok(html.includes('renderPortalInteriorMotion'));
@@ -5515,17 +5524,14 @@ const portalInteriorIntegrationRuntime = portalInteriorFrameRuntime.slice(
 );
 assert(
   portalInteriorRendererGuardIndex > portalInteriorBaseFrameIndex &&
-    portalInteriorIntegrationRuntime.includes('left: MindPortalEnergy.moneyFlowPaletteHex[0]') &&
-    /right:\s*MindPortalEnergy\.moneyFlowPaletteHex\[\s*MindPortalEnergy\.moneyFlowPaletteHex\.length - 1\s*\]/.test(
-      portalInteriorIntegrationRuntime,
-    ) &&
+    portalInteriorIntegrationRuntime.includes('const resolvedBalanceColors = MindPortalEnergy.moneyFlowPaletteHex;') &&
     portalInteriorIntegrationRuntime.includes('const currentBoundaryEdgesAt = (pixelY) => {') &&
     /MindPortalEnergy\.sampleMoneyFlowField\(\s*activeMode,\s*0\.5,\s*normalizedY,\s*phase,\s*incomePercent,\s*settings,\s*\)/.test(
       portalInteriorIntegrationRuntime,
     ) &&
-    portalInteriorIntegrationRuntime.includes('timeMs: state.reducedMotion ? 0 : now') &&
-    portalInteriorIntegrationRuntime.includes('leftMother: resolvedBalanceColors.left') &&
-    portalInteriorIntegrationRuntime.includes('rightMother: resolvedBalanceColors.right') &&
+    portalInteriorIntegrationRuntime.includes('phase: state.reducedMotion ? 0 : state.portalInteriorMotionState.phaseByMode?.[state.portalInteriorMotionState.mode]') &&
+    portalInteriorIntegrationRuntime.includes('leftColors: resolvedBalanceColors.slice(0, 2)') &&
+    portalInteriorIntegrationRuntime.includes('rightColors: resolvedBalanceColors.slice(-2)') &&
     portalInteriorIntegrationRuntime.includes('leftXAt: (y) => currentBoundaryEdgesAt(y).left') &&
     portalInteriorIntegrationRuntime.includes('rightXAt: (y) => currentBoundaryEdgesAt(y).right') &&
     portalInteriorIntegrationRuntime.includes('featherPx: Math.max(3, currentBoundaryFeatherPx)'),
@@ -5534,7 +5540,7 @@ assert(
 const mindPortalEnergyStateRuntime = extractFunctionSource('ensureMindPortalEnergyState');
 assert(
   mindPortalEnergyStateRuntime.includes("typeof PortalInteriorMotion !== 'undefined'") &&
-    /portalInteriorMotionState:[\s\S]*?PortalInteriorMotion\.DEFAULT_INTERIOR_MOTION_STATE[\s\S]*?:\s*\{[\s\S]*?enabled:\s*false,[\s\S]*?effect:\s*'driftingMist',[\s\S]*?strength:\s*0\.36,[\s\S]*?speed:\s*0\.42,[\s\S]*?\}/.test(
+    /portalInteriorMotionState:[\s\S]*?PortalInteriorMotion\.normalizeInteriorMotionState\(\s*PortalInteriorMotion\.DEFAULT_INTERIOR_MOTION_STATE,?\s*\)[\s\S]*?:\s*\{[\s\S]*?enabled:\s*false,[\s\S]*?mode:\s*'wandering-mist',[\s\S]*?settingsByMode:\s*\{},[\s\S]*?phaseByMode:\s*\{},[\s\S]*?\}/.test(
       mindPortalEnergyStateRuntime,
     ),
   'Missing optional interior model globals must fall back to an independent disabled default state',
@@ -5543,18 +5549,19 @@ const portalInteriorControlSyncRuntime = extractFunctionSource(
   'syncPortalInteriorMotionControls',
 );
 assert(
-  /<select(?=[^>]*data-portal-interior-motion-effect)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
+  /<select(?=[^>]*data-portal-interior-motion-mode-select)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
     rebuiltPortalLab,
   ) &&
-    /<input(?=[^>]*data-portal-interior-motion-strength)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
+    /<button(?=[^>]*data-portal-interior-motion-mode-reset)[^>]*>Aktív mód reset<\/button>/.test(
       rebuiltPortalLab,
     ) &&
-    /<input(?=[^>]*data-portal-interior-motion-speed)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
-      rebuiltPortalLab,
-    ) &&
-    portalInteriorControlSyncRuntime.includes('[effect, strength, speed].forEach') &&
+    portalInteriorControlSyncRuntime.includes('data-portal-interior-motion-control-range') &&
+    portalInteriorControlSyncRuntime.includes('PortalInteriorMotion.controlsForMode(activeMode).forEach') &&
+    portalInteriorControlSyncRuntime.includes('PortalInteriorMotion.normalizeValue(meta, sourceValue)') &&
+    portalInteriorControlSyncRuntime.includes('viewport.replaceChildren(fragment)') &&
+    portalInteriorControlSyncRuntime.includes('[modeSelect, resetButton].forEach') &&
     portalInteriorControlSyncRuntime.includes('control.disabled = !enabled'),
-  'Interior controls must start natively disabled and only model-backed sync may enable them',
+  'Interior controls must start natively disabled and render dedicated Portal background-morph controls when enabled',
 );
 assert(
   /--mind-portal-color-a:[^;]+;[\s\S]*?--mind-portal-color-b:[^;]+;/.test(html) &&

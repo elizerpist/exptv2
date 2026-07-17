@@ -1,85 +1,142 @@
 "use strict";
+
 const assert = require("node:assert/strict");
+const field = require("./color_lab_portal_message_field.js");
 const api = require("./color_lab_portal_interior_motion.js");
 
-assert.deepEqual(api.EFFECT_IDS, [
-  "driftingMist", "innerCurrent", "softTide", "slowVortex",
-]);
-assert.deepEqual(api.DEFAULT_INTERIOR_MOTION_STATE, {
-  enabled: false,
-  effect: "driftingMist",
-  strength: 0.36,
-  speed: 0.42,
-});
-assert.deepEqual(api.normalizeInteriorMotionState({
-  enabled: 1, effect: "invalid", strength: 3, speed: -1,
-}), {
-  enabled: true, effect: "driftingMist", strength: 1, speed: 0,
-});
+const schemaTuple = (meta) => [
+  meta.key,
+  meta.label,
+  meta.min,
+  meta.max,
+  meta.step,
+  meta.default,
+  meta.unit,
+];
 
-const palette = api.deriveInteriorPalette("#36c9b8", "#d890ef");
-assert.equal(palette.left.mother, "#36c9b8");
-assert.equal(palette.right.mother, "#d890ef");
-assert.ok(palette.left.lightnessA > palette.left.motherLightness);
-assert.ok(palette.left.lightnessB < palette.left.motherLightness);
-assert.ok(palette.right.hueA > 300 || palette.right.hueA < 20);
-assert.ok(palette.right.hueB >= 255 && palette.right.hueB <= 300);
+assert.deepEqual(api.MODE_IDS, field.modeOrder);
+assert.deepEqual(api.MODE_LABELS, field.modeLabels);
+assert.deepEqual(api.ANIMATED_MODE_IDS, field.animatedModes);
+assert.equal(api.DEFAULT_INTERIOR_MOTION_STATE.enabled, false);
+assert.equal(api.DEFAULT_INTERIOR_MOTION_STATE.mode, field.defaults.mode);
+assert.deepEqual(
+  Object.keys(api.DEFAULT_INTERIOR_MOTION_STATE.settingsByMode),
+  field.modeOrder.slice(1),
+);
+assert.deepEqual(
+  Object.keys(api.DEFAULT_INTERIOR_MOTION_STATE.phaseByMode),
+  field.animatedModes,
+);
 
-const left = api.createSideMotion("innerCurrent", "left", 1200, 0.5);
-const right = api.createSideMotion("innerCurrent", "right", 1200, 0.5);
-assert.notEqual(left.seed, right.seed);
-assert.notEqual(left.phase, right.phase);
-assert.equal(left.direction, 1);
-assert.equal(right.direction, -1);
-assert.deepEqual(api.createSideMotion("innerCurrent", "left", 1200, 0.5), left);
-
-const expectedCounts = {
-  driftingMist: 4,
-  innerCurrent: 3,
-  softTide: 3,
-  slowVortex: 3,
-};
-const expectedAlpha = 0.04 + (0.4 * 0.22);
-const assertPrimitiveFrame = (frame, effect, sidePalette) => {
-  assert.equal(frame.primitives.length, expectedCounts[effect]);
-  frame.primitives.forEach((primitive, index) => {
-    assert.ok(primitive.geometry && typeof primitive.geometry === "object");
-    assert.ok(Object.values(primitive.geometry).every((value) => (
-      Number.isFinite(value) && value >= 0 && value <= 1
-    )));
-    assert.equal(
-      primitive.innerColor,
-      index % 2 === 0 ? sidePalette.accentA : sidePalette.accentB,
-    );
-    assert.equal(primitive.edgeColor, sidePalette.mother);
-    assert.equal(primitive.alpha, expectedAlpha);
-  });
-};
-
-const signatures = api.EFFECT_IDS.map((effect) => {
-  const leftOptions = {
-    effect, side: "left", width: 220, height: 88,
-    timeMs: 1200, speed: 0.5, strength: 0.4,
-    palette: palette.left,
-  };
-  const leftFrame = api.createInteriorPrimitives(leftOptions);
-  assertPrimitiveFrame(leftFrame, effect, palette.left);
-  assert.deepEqual(api.createInteriorPrimitives(leftOptions), leftFrame);
-
-  const rightOptions = { ...leftOptions, side: "right", palette: palette.right };
-  const rightFrame = api.createInteriorPrimitives(rightOptions);
-  assertPrimitiveFrame(rightFrame, effect, palette.right);
-  assert.deepEqual(api.createInteriorPrimitives(rightOptions), rightFrame);
-  assert.equal(rightFrame.side, "right");
-  assert.equal(rightFrame.motion.direction, -1);
-  assert.notEqual(rightFrame.motion.seed, leftFrame.motion.seed);
-  assert.notEqual(rightFrame.motion.phase, leftFrame.motion.phase);
-  assert.notDeepEqual(
-    rightFrame.primitives.map((primitive) => primitive.geometry),
-    leftFrame.primitives.map((primitive) => primitive.geometry),
+for (const mode of field.modeOrder) {
+  assert.deepEqual(
+    api.controlsForMode(mode).map(schemaTuple),
+    field.controlsForMode(mode).map(schemaTuple),
+    `${mode} controls must match Portal background morph`,
   );
+  assert.deepEqual(
+    api.createModeSettings(mode),
+    field.createModeSettings(mode),
+    `${mode} defaults must match Portal background morph`,
+  );
+}
 
-  return leftFrame.primitives.map((primitive) => primitive.kind).join(",");
+const normalized = api.normalizeInteriorMotionState({
+  enabled: 1,
+  mode: "invalid",
+  settingsByMode: {
+    "wandering-mist": {
+      coverage: -100,
+      strength: 999,
+      scale: "",
+      softness: 83.4,
+      driftSpeed: 22,
+      curl: 44,
+      morphRate: 28,
+      detail: 24,
+      seed: 311,
+    },
+  },
+  phaseByMode: {
+    "wandering-mist": 4.25,
+    "forming-clouds": "bad",
+  },
 });
-assert.equal(new Set(signatures).size, api.EFFECT_IDS.length);
+assert.equal(normalized.enabled, true);
+assert.equal(normalized.mode, "solid-a");
+assert.equal(
+  normalized.settingsByMode["wandering-mist"].coverage,
+  field.controlsForMode("wandering-mist")[0].min,
+);
+assert.equal(
+  normalized.settingsByMode["wandering-mist"].strength,
+  field.controlsForMode("wandering-mist")[1].max,
+);
+assert.equal(
+  normalized.settingsByMode["wandering-mist"].scale,
+  field.createModeSettings("wandering-mist").scale,
+);
+assert.equal(normalized.settingsByMode["wandering-mist"].softness, 83);
+assert.equal(normalized.phaseByMode["wandering-mist"], 4.25);
+assert.equal(normalized.phaseByMode["forming-clouds"], 0);
+
+const palettes = api.deriveInteriorPalettes({
+  leftColors: ["#49cfc5", "#8defe5"],
+  rightColors: ["#f7b2f5", "#d8b4fe"],
+});
+assert.deepEqual(palettes.left, {
+  light: "#8defe5",
+  dark: "#49cfc5",
+});
+assert.deepEqual(palettes.right, {
+  light: "#f7b2f5",
+  dark: "#d8b4fe",
+});
+
+const leftSide = api.createSideRenderOptions({
+  mode: "wandering-mist",
+  side: "left",
+  phase: 2.5,
+  settings: field.createModeSettings("wandering-mist"),
+});
+const rightSide = api.createSideRenderOptions({
+  mode: "wandering-mist",
+  side: "right",
+  phase: 2.5,
+  settings: field.createModeSettings("wandering-mist"),
+});
+assert.equal(leftSide.mode, "wandering-mist");
+assert.equal(rightSide.mode, "wandering-mist");
+assert.notEqual(leftSide.phase, rightSide.phase);
+assert.notEqual(leftSide.settings.seed, rightSide.settings.seed);
+assert.equal(leftSide.flipX, false);
+assert.equal(rightSide.flipX, true);
+assert.deepEqual(
+  api.createSideRenderOptions({
+    mode: "wandering-mist",
+    side: "left",
+    phase: 2.5,
+    settings: field.createModeSettings("wandering-mist"),
+  }),
+  leftSide,
+);
+
+const stillPhase = api.advanceInteriorPhase(
+  "static-matter",
+  8,
+  1,
+  field.createModeSettings("static-matter"),
+);
+assert.equal(stillPhase, 8);
+const movingPhase = api.advanceInteriorPhase(
+  "wandering-mist",
+  8,
+  1,
+  field.createModeSettings("wandering-mist"),
+);
+assert.equal(
+  movingPhase,
+  field.advancePhase("wandering-mist", 8, 1, field.createModeSettings("wandering-mist")),
+);
+
 console.log("Portal interior motion model checks passed");

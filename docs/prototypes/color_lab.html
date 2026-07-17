@@ -1076,6 +1076,7 @@
     [data-mind-portal-mode-reset],
     [data-portal-message-mode-reset],
     [data-portal-background-mode-reset],
+    [data-portal-interior-motion-mode-reset],
     [data-portal-message-field-mode-reset],
     [data-portal-transition-mode-reset] {
       min-height: 25px;
@@ -1111,6 +1112,7 @@
     [data-mind-portal-mode-reset],
     [data-portal-message-mode-reset],
     [data-portal-background-mode-reset],
+    [data-portal-interior-motion-mode-reset],
     [data-portal-message-field-mode-reset],
     [data-portal-transition-mode-reset] {
       min-height: 25px;
@@ -11187,23 +11189,21 @@
                 <button type="button" class="portal-option-open mind-portal-panel-toggle" aria-expanded="false" aria-label="Belső mozgás beállításai" data-portal-interior-motion-expand data-portal-panel-toggle>›</button>
                 <div class="portal-option-panel" data-portal-interior-motion-panel data-portal-panel-body>
                   <label class="mind-portal-mode-select-row">
-                    <select data-portal-interior-motion-effect disabled aria-label="Portál belső mozgás effekt">
-                      <option value="driftingMist" selected>Vándorló köd</option>
-                      <option value="innerCurrent">Belső áramlás</option>
-                      <option value="softTide">Lágy hullám</option>
-                      <option value="slowVortex">Lassú örvény</option>
+                    <select data-portal-interior-motion-mode-select disabled aria-label="Portál belső mozgás morph">
+                      <option value="solid-a">Nincs dinamikus effekt</option>
+                      <option value="static-matter">Statikus köd/szigetek</option>
+                      <option value="wandering-mist" selected>Vándorló köd</option>
+                      <option value="living-archipelago">Élő szigetvilág</option>
+                      <option value="forming-clouds">Keletkező energiafelhők</option>
                     </select>
                   </label>
-                  <label class="mind-portal-signature-row no-window-input">
-                    <span>Erősség</span>
-                    <input type="range" min="0" max="100" step="1" value="36" data-portal-interior-motion-strength disabled aria-label="Portál belső mozgás erősség">
-                    <em data-portal-interior-motion-strength-value>36%</em>
-                  </label>
-                  <label class="mind-portal-signature-row no-window-input">
-                    <span>Sebesség</span>
-                    <input type="range" min="0" max="100" step="1" value="42" data-portal-interior-motion-speed disabled aria-label="Portál belső mozgás sebesség">
-                    <em data-portal-interior-motion-speed-value>42%</em>
-                  </label>
+                  <div class="mind-portal-energy-controls mind-portal-interior-motion-controls" data-portal-interior-motion-controls>
+                    <div class="mind-portal-energy-controls-head">
+                      <strong data-portal-interior-motion-controls-title>Vándorló köd</strong>
+                      <button type="button" data-portal-interior-motion-mode-reset disabled>Aktív mód reset</button>
+                    </div>
+                    <div class="mind-portal-energy-controls-scroll" data-portal-interior-motion-controls-scroll></div>
+                  </div>
                 </div>
               </section>
               <div class="mind-portal-message-panel" data-portal-message-panel data-portal-collapsible-panel data-default-collapsed="true" data-portal-panel-collapsed="true">
@@ -13816,12 +13816,11 @@
       }
     }
 
-    const portalInteriorMotionEffectLabels = Object.freeze({
-      driftingMist: 'VÁNDORLÓ KÖD',
-      innerCurrent: 'BELSŐ ÁRAMLÁS',
-      softTide: 'LÁGY HULLÁM',
-      slowVortex: 'LASSÚ ÖRVÉNY',
-    });
+    function portalInteriorMotionModeLabel(mode) {
+      if (typeof PortalInteriorMotion === 'undefined') return 'VÁNDORLÓ KÖD';
+      const activeMode = PortalInteriorMotion.normalizeMode(mode);
+      return (PortalInteriorMotion.MODE_LABELS[activeMode] || 'Vándorló köd').toUpperCase();
+    }
 
     const mindPortalIdleStates = new WeakMap();
 
@@ -13858,12 +13857,14 @@
           typeof PortalInteriorMotion !== 'undefined' &&
           PortalInteriorMotion.DEFAULT_INTERIOR_MOTION_STATE
         )
-          ? { ...PortalInteriorMotion.DEFAULT_INTERIOR_MOTION_STATE }
+          ? PortalInteriorMotion.normalizeInteriorMotionState(
+            PortalInteriorMotion.DEFAULT_INTERIOR_MOTION_STATE,
+          )
           : {
             enabled: false,
-            effect: 'driftingMist',
-            strength: 0.36,
-            speed: 0.42,
+            mode: 'wandering-mist',
+            settingsByMode: {},
+            phaseByMode: {},
           },
       };
       mindPortalIdleStates.set(header, state);
@@ -13874,14 +13875,23 @@
       const wrap = header?.closest('[data-mind-portal-test-header]');
       const row = wrap?.querySelector('[data-portal-interior-motion-row]');
       if (!header || !row) return;
-      const { portalInteriorMotionState } = ensureMindPortalEnergyState(header);
+      const state = ensureMindPortalEnergyState(header);
+      if (typeof PortalInteriorMotion !== 'undefined') {
+        state.portalInteriorMotionState = PortalInteriorMotion.normalizeInteriorMotionState(
+          state.portalInteriorMotionState,
+        );
+      }
+      const { portalInteriorMotionState } = state;
       const toggle = row.querySelector('[data-portal-interior-motion-toggle]');
-      const effect = row.querySelector('[data-portal-interior-motion-effect]');
-      const strength = row.querySelector('[data-portal-interior-motion-strength]');
-      const speed = row.querySelector('[data-portal-interior-motion-speed]');
+      const modeSelect = row.querySelector('[data-portal-interior-motion-mode-select]');
+      const resetButton = row.querySelector('[data-portal-interior-motion-mode-reset]');
+      const controls = row.querySelector('[data-portal-interior-motion-controls]');
+      const viewport = row.querySelector('[data-portal-interior-motion-controls-scroll]');
+      const controlsTitle = row.querySelector('[data-portal-interior-motion-controls-title]');
       const enabled = portalInteriorMotionState.enabled === true;
-      const strengthValue = Math.round(portalInteriorMotionState.strength * 100);
-      const speedValue = Math.round(portalInteriorMotionState.speed * 100);
+      const activeMode = typeof PortalInteriorMotion !== 'undefined'
+        ? PortalInteriorMotion.normalizeMode(portalInteriorMotionState.mode)
+        : 'wandering-mist';
       row.dataset.portalInteriorMotionEnabled = enabled ? 'true' : 'false';
       if (toggle) {
         toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
@@ -13889,16 +13899,68 @@
       }
       const label = row.querySelector('[data-portal-interior-motion-label]');
       if (label) {
-        label.textContent = portalInteriorMotionEffectLabels[portalInteriorMotionState.effect];
+        label.textContent = portalInteriorMotionModeLabel(activeMode);
       }
-      if (effect) effect.value = portalInteriorMotionState.effect;
-      if (strength) strength.value = String(strengthValue);
-      if (speed) speed.value = String(speedValue);
-      const strengthOutput = row.querySelector('[data-portal-interior-motion-strength-value]');
-      const speedOutput = row.querySelector('[data-portal-interior-motion-speed-value]');
-      if (strengthOutput) strengthOutput.textContent = `${strengthValue}%`;
-      if (speedOutput) speedOutput.textContent = `${speedValue}%`;
-      [effect, strength, speed].forEach((control) => {
+      if (modeSelect) modeSelect.value = activeMode;
+      if (controlsTitle && typeof PortalInteriorMotion !== 'undefined') {
+        controlsTitle.textContent = PortalInteriorMotion.MODE_LABELS[activeMode] || '';
+      }
+      if (viewport && typeof PortalInteriorMotion !== 'undefined') {
+        const modeSettings = portalInteriorMotionState.settingsByMode[activeMode] || {};
+        const fragment = document.createDocumentFragment();
+        PortalInteriorMotion.controlsForMode(activeMode).forEach((meta, index) => {
+          const rowControl = document.createElement('label');
+          rowControl.className = 'mind-portal-energy-row';
+          rowControl.dataset.portalInteriorMotionControlKey = meta.key;
+          const numberBadge = document.createElement('b');
+          numberBadge.textContent = String(index + 1).padStart(2, '0');
+          const text = document.createElement('span');
+          text.textContent = meta.unit ? `${meta.label} · ${meta.unit}` : meta.label;
+          const range = document.createElement('input');
+          range.type = 'range';
+          range.min = String(meta.min);
+          range.max = String(meta.max);
+          range.step = String(meta.step);
+          range.value = String(modeSettings[meta.key]);
+          range.setAttribute('data-portal-interior-motion-control-range', meta.key);
+          range.setAttribute('aria-label', `${PortalInteriorMotion.MODE_LABELS[activeMode]} · ${meta.label}`);
+          const number = document.createElement('input');
+          number.type = 'number';
+          number.min = String(meta.min);
+          number.max = String(meta.max);
+          number.step = String(meta.step);
+          number.value = range.value;
+          number.setAttribute('data-portal-interior-motion-control-number', meta.key);
+          number.setAttribute('aria-label', `${PortalInteriorMotion.MODE_LABELS[activeMode]} · ${meta.label} manual`);
+          const write = (source) => {
+            const sourceValue = source.value === ''
+              ? state.portalInteriorMotionState.settingsByMode[activeMode][meta.key]
+              : source.value;
+            const value = PortalInteriorMotion.normalizeValue(meta, sourceValue);
+            state.portalInteriorMotionState.settingsByMode[activeMode][meta.key] = value;
+            range.value = String(value);
+            number.value = String(value);
+            header.setAttribute(`data-portal-interior-motion-control-${meta.key}`, String(value));
+            state.lastFrameTime = 0;
+          };
+          range.addEventListener('input', () => write(range));
+          range.addEventListener('change', () => write(range));
+          number.addEventListener('change', () => write(number));
+          number.addEventListener('blur', () => write(number));
+          number.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter') return;
+            write(number);
+            number.blur();
+          });
+          range.disabled = !enabled;
+          number.disabled = !enabled;
+          rowControl.append(numberBadge, text, range, number);
+          fragment.append(rowControl);
+        });
+        viewport.replaceChildren(fragment);
+      }
+      if (controls) controls.hidden = false;
+      [modeSelect, resetButton].forEach((control) => {
         if (control) control.disabled = !enabled;
       });
     }
@@ -13909,6 +13971,8 @@
       state.portalInteriorMotionState = PortalInteriorMotion.normalizeInteriorMotionState({
         ...state.portalInteriorMotionState,
         ...patch,
+        settingsByMode: patch.settingsByMode || state.portalInteriorMotionState.settingsByMode,
+        phaseByMode: patch.phaseByMode || state.portalInteriorMotionState.phaseByMode,
       });
       syncPortalInteriorMotionControls(header);
       state.lastFrameTime = 0;
@@ -13924,9 +13988,8 @@
         wrap.dataset.portalInteriorMotionBound = 'true';
         ensureMindPortalEnergyState(header);
         const toggle = row.querySelector('[data-portal-interior-motion-toggle]');
-        const effect = row.querySelector('[data-portal-interior-motion-effect]');
-        const strength = row.querySelector('[data-portal-interior-motion-strength]');
-        const speed = row.querySelector('[data-portal-interior-motion-speed]');
+        const modeSelect = row.querySelector('[data-portal-interior-motion-mode-select]');
+        const resetButton = row.querySelector('[data-portal-interior-motion-mode-reset]');
         row.querySelector('.portal-option-summary[data-portal-interior-motion-expand]')
           ?.addEventListener('click', () => {
             setPortalControlPanelCollapsed(
@@ -13940,14 +14003,19 @@
             enabled: !state.portalInteriorMotionState.enabled,
           });
         });
-        effect?.addEventListener('change', () => {
-          setPortalInteriorMotionState(header, { effect: effect.value });
+        modeSelect?.addEventListener('change', () => {
+          setPortalInteriorMotionState(header, { mode: modeSelect.value });
         });
-        strength?.addEventListener('input', () => {
-          setPortalInteriorMotionState(header, { strength: Number(strength.value) / 100 });
-        });
-        speed?.addEventListener('input', () => {
-          setPortalInteriorMotionState(header, { speed: Number(speed.value) / 100 });
+        resetButton?.addEventListener('click', () => {
+          const state = ensureMindPortalEnergyState(header);
+          const activeMode = PortalInteriorMotion.normalizeMode(
+            state.portalInteriorMotionState.mode,
+          );
+          const settingsByMode = {
+            ...state.portalInteriorMotionState.settingsByMode,
+            [activeMode]: PortalInteriorMotion.createModeSettings(activeMode),
+          };
+          setPortalInteriorMotionState(header, { settingsByMode });
         });
         syncPortalInteriorMotionControls(header);
       });
@@ -15647,6 +15715,20 @@
           settings.speed,
         );
       }
+      if (
+        interiorMotionActive &&
+        typeof PortalInteriorMotion !== 'undefined' &&
+        !state.reducedMotion
+      ) {
+        const interiorMode = state.portalInteriorMotionState.mode;
+        state.portalInteriorMotionState.phaseByMode[interiorMode] =
+          PortalInteriorMotion.advanceInteriorPhase(
+            interiorMode,
+            state.portalInteriorMotionState.phaseByMode?.[interiorMode],
+            elapsedSeconds,
+            state.portalInteriorMotionState.settingsByMode?.[interiorMode],
+          );
+      }
       if (now - state.lastFrameTime < settings.frameMs) return;
       state.lastFrameTime = now;
       const bounds = header.getBoundingClientRect();
@@ -15748,12 +15830,7 @@
       }
       ctx.putImageData(image, 0, 0);
       if (interiorMotionActive) {
-        const resolvedBalanceColors = {
-          left: MindPortalEnergy.moneyFlowPaletteHex[0],
-          right: MindPortalEnergy.moneyFlowPaletteHex[
-            MindPortalEnergy.moneyFlowPaletteHex.length - 1
-          ],
-        };
+        const resolvedBalanceColors = MindPortalEnergy.moneyFlowPaletteHex;
         const currentBoundaryFeatherPx = 3;
         const currentBoundaryHalfWidthPx = Number(settings.seamSoftness) * (width - 1);
         const currentBoundaryEdgesAt = (pixelY) => {
@@ -15779,9 +15856,9 @@
           state: state.portalInteriorMotionState,
           width,
           height,
-          timeMs: state.reducedMotion ? 0 : now,
-          leftMother: resolvedBalanceColors.left,
-          rightMother: resolvedBalanceColors.right,
+          phase: state.reducedMotion ? 0 : state.portalInteriorMotionState.phaseByMode?.[state.portalInteriorMotionState.mode],
+          leftColors: resolvedBalanceColors.slice(0, 2),
+          rightColors: resolvedBalanceColors.slice(-2),
           boundary: {
             leftXAt: (y) => currentBoundaryEdgesAt(y).left,
             rightXAt: (y) => currentBoundaryEdgesAt(y).right,
@@ -15855,7 +15932,7 @@
     }
 
     function initMindPortalControlScrollRouting() {
-      document.querySelectorAll('[data-mind-portal-energy-controls-scroll], [data-portal-message-controls-scroll], [data-portal-background-controls-scroll], [data-portal-message-field-controls-scroll], [data-portal-transition-controls-scroll]').forEach((viewport) => {
+      document.querySelectorAll('[data-mind-portal-energy-controls-scroll], [data-portal-message-controls-scroll], [data-portal-background-controls-scroll], [data-portal-interior-motion-controls-scroll], [data-portal-message-field-controls-scroll], [data-portal-transition-controls-scroll]').forEach((viewport) => {
         if (viewport.dataset.mindPortalScrollBound === 'true') return;
         viewport.dataset.mindPortalScrollBound = 'true';
         let gesture = null;
