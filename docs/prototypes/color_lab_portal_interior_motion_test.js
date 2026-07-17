@@ -33,15 +33,53 @@ assert.equal(left.direction, 1);
 assert.equal(right.direction, -1);
 assert.deepEqual(api.createSideMotion("innerCurrent", "left", 1200, 0.5), left);
 
+const expectedCounts = {
+  driftingMist: 4,
+  innerCurrent: 3,
+  softTide: 3,
+  slowVortex: 3,
+};
+const expectedAlpha = 0.04 + (0.4 * 0.22);
+const assertPrimitiveFrame = (frame, effect, sidePalette) => {
+  assert.equal(frame.primitives.length, expectedCounts[effect]);
+  frame.primitives.forEach((primitive, index) => {
+    assert.ok(primitive.geometry && typeof primitive.geometry === "object");
+    assert.ok(Object.values(primitive.geometry).every((value) => (
+      Number.isFinite(value) && value >= 0 && value <= 1
+    )));
+    assert.equal(
+      primitive.innerColor,
+      index % 2 === 0 ? sidePalette.accentA : sidePalette.accentB,
+    );
+    assert.equal(primitive.edgeColor, sidePalette.mother);
+    assert.equal(primitive.alpha, expectedAlpha);
+  });
+};
+
 const signatures = api.EFFECT_IDS.map((effect) => {
-  const frame = api.createInteriorPrimitives({
+  const leftOptions = {
     effect, side: "left", width: 220, height: 88,
     timeMs: 1200, speed: 0.5, strength: 0.4,
     palette: palette.left,
-  });
-  assert.ok(frame.primitives.length >= 2);
-  assert.ok(frame.primitives.every((p) => p.edgeColor === palette.left.mother));
-  return frame.primitives.map((p) => p.kind).join(",");
+  };
+  const leftFrame = api.createInteriorPrimitives(leftOptions);
+  assertPrimitiveFrame(leftFrame, effect, palette.left);
+  assert.deepEqual(api.createInteriorPrimitives(leftOptions), leftFrame);
+
+  const rightOptions = { ...leftOptions, side: "right", palette: palette.right };
+  const rightFrame = api.createInteriorPrimitives(rightOptions);
+  assertPrimitiveFrame(rightFrame, effect, palette.right);
+  assert.deepEqual(api.createInteriorPrimitives(rightOptions), rightFrame);
+  assert.equal(rightFrame.side, "right");
+  assert.equal(rightFrame.motion.direction, -1);
+  assert.notEqual(rightFrame.motion.seed, leftFrame.motion.seed);
+  assert.notEqual(rightFrame.motion.phase, leftFrame.motion.phase);
+  assert.notDeepEqual(
+    rightFrame.primitives.map((primitive) => primitive.geometry),
+    leftFrame.primitives.map((primitive) => primitive.geometry),
+  );
+
+  return leftFrame.primitives.map((primitive) => primitive.kind).join(",");
 });
 assert.equal(new Set(signatures).size, api.EFFECT_IDS.length);
 console.log("Portal interior motion model checks passed");
