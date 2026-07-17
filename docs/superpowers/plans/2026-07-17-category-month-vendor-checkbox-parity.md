@@ -85,5 +85,5 @@
 - [x] **Step 3: Update checklist statuses**
   - Mark only verified requirements `DONE`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - Commit only files touched for this task, excluding unrelated dirty `color_lab*` files and `test/failures/`.
