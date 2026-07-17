@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const model = require("./color_lab_portal_interior_motion.js");
 const api = require("./color_lab_portal_interior_motion_renderer.js");
 
 function createFakeContext(options = {}) {
@@ -78,6 +79,150 @@ const boundary = {
   rightXAt: (y) => 132 + Math.sin(y / 20) * 4,
   featherPx: 5,
 };
+
+const palette = model.deriveInteriorPalette("#36c9b8", "#d890ef");
+const paletteThemes = [
+  ["#49cfc5", "#d8b4fe"],
+  ["#36c9b8", "#d890ef"],
+  ["#22b89f", "#e879f9"],
+].map(([leftMother, rightMother]) => ({
+  leftMother,
+  rightMother,
+  derived: model.deriveInteriorPalette(leftMother, rightMother),
+}));
+const hueDistance = (a, b) => Math.abs((((a - b) + 540) % 360) - 180);
+paletteThemes.forEach(({ leftMother, rightMother, derived }) => {
+  assert.equal(derived.left.mother, leftMother);
+  assert.equal(derived.right.mother, rightMother);
+  assert.equal(derived.left.hueA, derived.left.motherHue);
+  assert.equal(derived.left.hueB, derived.left.motherHue);
+  assert.ok(derived.left.lightnessA > derived.left.motherLightness);
+  assert.ok(derived.left.lightnessB < derived.left.motherLightness);
+  assert.ok(
+    hueDistance(derived.right.hueA, 332) < hueDistance(derived.right.motherHue, 332),
+  );
+  assert.ok(
+    hueDistance(derived.right.hueB, 274) < hueDistance(derived.right.motherHue, 274),
+  );
+});
+assert.equal(new Set(paletteThemes.map(({ derived }) => derived.left.accentA)).size, 3);
+assert.equal(new Set(paletteThemes.map(({ derived }) => derived.left.accentB)).size, 3);
+assert.equal(new Set(paletteThemes.map(({ derived }) => derived.right.accentA)).size, 3);
+assert.equal(new Set(paletteThemes.map(({ derived }) => derived.right.accentB)).size, 3);
+
+const frameFor = (side, timeMs) => model.createInteriorPrimitives({
+  effect: "innerCurrent",
+  side,
+  width: 220,
+  height: 88,
+  timeMs,
+  speed: 0.5,
+  strength: 0.4,
+  palette: palette[side],
+});
+const leftFrame0 = frameFor("left", 0);
+const leftFrame900 = frameFor("left", 900);
+const repeatLeftFrame900 = frameFor("left", 900);
+const rightFrame0 = frameFor("right", 0);
+const rightFrame900 = frameFor("right", 900);
+const rightFrame1800 = frameFor("right", 1800);
+
+assert.notDeepEqual(leftFrame0.primitives, leftFrame900.primitives);
+assert.notDeepEqual(rightFrame0.primitives, rightFrame900.primitives);
+assert.notDeepEqual(leftFrame900.primitives, rightFrame900.primitives);
+assert.deepEqual(leftFrame900, repeatLeftFrame900);
+assert.notDeepEqual(rightFrame900.primitives, rightFrame1800.primitives);
+
+const isolationOptions = {
+  effect: "innerCurrent",
+  side: "left",
+  width: 220,
+  height: 88,
+  timeMs: 900,
+  palette: palette.left,
+};
+const strength0Frame = model.createInteriorPrimitives({
+  ...isolationOptions, speed: 0.5, strength: 0,
+});
+const strength100Frame = model.createInteriorPrimitives({
+  ...isolationOptions, speed: 0.5, strength: 1,
+});
+assert.deepEqual(strength0Frame.motion, strength100Frame.motion);
+assert.deepEqual(
+  strength0Frame.primitives.map((primitive) => primitive.geometry),
+  strength100Frame.primitives.map((primitive) => primitive.geometry),
+);
+assert.deepEqual(
+  strength0Frame.primitives.map(({ kind, innerColor, edgeColor }) => ({
+    kind, innerColor, edgeColor,
+  })),
+  strength100Frame.primitives.map(({ kind, innerColor, edgeColor }) => ({
+    kind, innerColor, edgeColor,
+  })),
+);
+assert.ok(strength0Frame.primitives.every((primitive) => primitive.alpha === 0.04));
+assert.ok(strength100Frame.primitives.every((primitive) => primitive.alpha === 0.26));
+
+const speed0Frame = model.createInteriorPrimitives({
+  ...isolationOptions, speed: 0, strength: 0.4,
+});
+const speed100Frame = model.createInteriorPrimitives({
+  ...isolationOptions, speed: 1, strength: 0.4,
+});
+assert.notEqual(speed0Frame.motion.phase, speed100Frame.motion.phase);
+assert.notDeepEqual(
+  speed0Frame.primitives.map((primitive) => primitive.geometry),
+  speed100Frame.primitives.map((primitive) => primitive.geometry),
+);
+assert.deepEqual(
+  speed0Frame.primitives.map(({ kind, innerColor, edgeColor, alpha }) => ({
+    kind, innerColor, edgeColor, alpha,
+  })),
+  speed100Frame.primitives.map(({ kind, innerColor, edgeColor, alpha }) => ({
+    kind, innerColor, edgeColor, alpha,
+  })),
+);
+
+const splitWidth = 220;
+const splitHeight = 88;
+const splitFeatherPx = 5;
+[0.35, 0.5, 0.65].forEach((splitRatio) => {
+  const splitBoundary = {
+    leftXAt: (y) => (splitWidth * splitRatio) + Math.sin(y / 16) * 2 - 7,
+    rightXAt: (y) => (splitWidth * splitRatio) + Math.sin(y / 16) * 2 + 7,
+    featherPx: splitFeatherPx,
+  };
+  const splitPolygons = api.buildInteriorRegionPolygons({
+    width: splitWidth,
+    height: splitHeight,
+    boundary: splitBoundary,
+    samples: 32,
+  });
+  const leftSamples = splitPolygons.left.slice(0, -2);
+  const rightSamples = splitPolygons.right.slice(0, -2);
+  assert.equal(leftSamples.length, 33);
+  assert.equal(rightSamples.length, 33);
+  leftSamples.forEach((point) => {
+    assert.ok(
+      point.x <= splitBoundary.leftXAt(point.y) - splitFeatherPx,
+      `${splitRatio} left sample crossed its protected edge at y=${point.y}`,
+    );
+  });
+  rightSamples.forEach((point) => {
+    assert.ok(
+      point.x >= splitBoundary.rightXAt(point.y) + splitFeatherPx,
+      `${splitRatio} right sample crossed its protected edge at y=${point.y}`,
+    );
+  });
+  leftSamples.forEach((leftPoint, index) => {
+    const corridorWidth = rightSamples[index].x - leftPoint.x;
+    assert.ok(
+      corridorWidth > 0,
+      `${splitRatio} protected corridor collapsed at y=${leftPoint.y}`,
+    );
+  });
+});
+
 const polygons = api.buildInteriorRegionPolygons({
   width: 240, height: 96, boundary, samples: 24,
 });
@@ -354,11 +499,28 @@ const renderOptions = {
   leftMother: "#36c9b8",
   rightMother: "#d890ef",
 };
-const off = api.renderPortalInteriorMotion(createFakeContext(), {
+const assertInactiveInteriorLifecycle = (options, label) => {
+  const inactiveCtx = createFakeContext();
+  const result = api.renderPortalInteriorMotion(inactiveCtx, options);
+  assert.deepEqual(result, {
+    rendered: false, leftPrimitiveCount: 0, rightPrimitiveCount: 0,
+  }, `${label} must report zero primitives`);
+  assert.equal(inactiveCtx.gradients.length, 0, `${label} must create zero gradients`);
+  assert.equal(
+    inactiveCtx.calls.filter((call) => call.name === "fill").length,
+    0,
+    `${label} must draw zero primitives`,
+  );
+  assert.deepEqual(inactiveCtx.calls, [], `${label} must not touch the canvas`);
+};
+assertInactiveInteriorLifecycle({
   ...renderOptions,
   state: { enabled: false },
-});
-assert.deepEqual(off, { rendered: false, leftPrimitiveCount: 0, rightPrimitiveCount: 0 });
+}, "disabled Balance interior motion");
+assertInactiveInteriorLifecycle({
+  ...renderOptions,
+  mode: "message",
+}, "enabled non-Balance interior motion");
 
 [
   { ...renderOptions, state: undefined },

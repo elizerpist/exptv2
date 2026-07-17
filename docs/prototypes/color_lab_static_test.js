@@ -5359,6 +5359,16 @@ for (const value of ['driftingMist', 'innerCurrent', 'softTide', 'slowVortex']) 
 }
 assert.ok(html.includes('renderPortalInteriorMotion'));
 assert.ok(!/portalInteriorMotion[\s\S]{0,300}requestAnimationFrame/.test(html));
+const portalInteriorControlLifecycle = [
+  extractFunctionSource('setPortalInteriorMotionState'),
+  extractFunctionSource('initPortalInteriorMotionControls'),
+].join('\n');
+for (const scheduler of ['requestAnimationFrame', 'setInterval(', 'setTimeout(']) {
+  assert.ok(
+    !portalInteriorControlLifecycle.includes(scheduler),
+    `Portal interior controls must not create an interior-specific scheduler: ${scheduler}`,
+  );
+}
 const portalInteriorMotionModelScript = 'src="./color_lab_portal_interior_motion.js"';
 const portalInteriorMotionRendererScript =
   'src="./color_lab_portal_interior_motion_renderer.js"';
