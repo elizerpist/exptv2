@@ -5407,6 +5407,14 @@ assert(
   'Interior eligibility must require the current Balance mode, enabled state, and renderer availability',
 );
 const portalInteriorEligibility = portalInteriorEligibilityMatch?.[1] || '';
+const portalEnergyMotionEligibilityMatch = portalInteriorFrameRuntime.match(
+  /const\s+([A-Za-z_$][\w$]*)\s*=\s*Boolean\(\s*settings\s*&&\s*settings\.strength > 0\s*&&\s*\(!state\.reducedMotion \|\| state\.reducedMotionOverride\)\s*\);/,
+);
+assert(
+  portalEnergyMotionEligibilityMatch,
+  'Existing Balance energy motion must have eligibility independent from interior motion',
+);
+const portalEnergyMotionEligibility = portalEnergyMotionEligibilityMatch?.[1] || '';
 const portalInteriorElapsedTimeIndex = portalInteriorFrameRuntime.indexOf(
   'const elapsedSeconds',
 );
@@ -5416,27 +5424,60 @@ const portalInteriorEarlyReturn = portalInteriorFrameRuntime.slice(
 );
 assert(
   new RegExp(
-    `settings\\.strength <= 0\\s*&&\\s*!${portalInteriorEligibility}`,
+    `!${portalEnergyMotionEligibility}\\s*&&\\s*!${portalInteriorEligibility}`,
   ).test(portalInteriorEarlyReturn),
-  'Energy strength zero must not gate an independently enabled Balance interior layer',
-);
-assert(
-  new RegExp(
-    `\\(state\\.reducedMotion && !state\\.reducedMotionOverride\\)\\s*&&\\s*!${portalInteriorEligibility}`,
-  ).test(portalInteriorEarlyReturn),
-  'Reduced motion must retain a reachable stable frame for an enabled Balance interior layer',
+  'A frame may continue when either existing energy motion or Balance interior motion is eligible',
 );
 const portalInteriorPhaseAdvanceIndex = portalInteriorFrameRuntime.indexOf(
   'MindPortalEnergy.advancePhase(',
 );
 const portalInteriorPhaseGuardIndex = portalInteriorFrameRuntime.lastIndexOf(
-  'if (!state.reducedMotion || state.reducedMotionOverride)',
+  `if (${portalEnergyMotionEligibility})`,
   portalInteriorPhaseAdvanceIndex,
+);
+const portalInteriorPhaseGuardRuntime = extractBraceBlock(
+  portalInteriorFrameRuntime,
+  portalInteriorPhaseGuardIndex,
 );
 assert(
   portalInteriorPhaseGuardIndex > portalInteriorElapsedTimeIndex &&
-    portalInteriorPhaseAdvanceIndex > portalInteriorPhaseGuardIndex,
-  'Reduced-motion stable frames must freeze the shared energy phase',
+    portalInteriorPhaseGuardRuntime.includes('MindPortalEnergy.advancePhase('),
+  'Interior-only frames must not advance the shared energy phase',
+);
+const portalEnergyPulseIndex = portalInteriorFrameRuntime.indexOf('pulse = Math.max(');
+const portalEnergyPulseGuardIndex = portalInteriorFrameRuntime.lastIndexOf(
+  `if (${portalEnergyMotionEligibility})`,
+  portalEnergyPulseIndex,
+);
+const portalEnergyPulseGuardRuntime = extractBraceBlock(
+  portalInteriorFrameRuntime,
+  portalEnergyPulseGuardIndex,
+);
+assert(
+  portalEnergyPulseGuardIndex > portalInteriorPhaseGuardIndex &&
+    portalEnergyPulseGuardRuntime.includes('pulse = Math.max(') &&
+    portalEnergyPulseGuardRuntime.includes(
+      'state.ripples = state.ripples.filter(',
+    ),
+  'Interior-only frames must neither compute a temporal pulse nor filter existing ripples',
+);
+const portalEnergyRippleApplicationIndex = portalInteriorFrameRuntime.indexOf(
+  'state.ripples.forEach((ripple) => {',
+);
+const portalEnergyRippleGuardIndex = portalInteriorFrameRuntime.lastIndexOf(
+  `if (${portalEnergyMotionEligibility})`,
+  portalEnergyRippleApplicationIndex,
+);
+const portalEnergyRippleGuardRuntime = extractBraceBlock(
+  portalInteriorFrameRuntime,
+  portalEnergyRippleGuardIndex,
+);
+assert(
+  portalEnergyRippleGuardIndex > portalEnergyPulseGuardIndex &&
+    portalEnergyRippleGuardRuntime.includes('state.ripples.forEach((ripple) => {') &&
+    portalEnergyRippleGuardRuntime.includes('sx += (dx / distance) * ring * 0.018;') &&
+    portalEnergyRippleGuardRuntime.includes('sy += (dy / distance) * ring * 0.014;'),
+  'Interior-only Balance base pixels must not apply ripple deformation',
 );
 const portalInteriorRendererGuardIndex = portalInteriorFrameRuntime.lastIndexOf(
   `if (${portalInteriorEligibility})`,
@@ -5472,6 +5513,23 @@ assert(
     ),
   'Missing optional interior model globals must fall back to an independent disabled default state',
 );
+const portalInteriorControlSyncRuntime = extractFunctionSource(
+  'syncPortalInteriorMotionControls',
+);
+assert(
+  /<select(?=[^>]*data-portal-interior-motion-effect)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
+    rebuiltPortalLab,
+  ) &&
+    /<input(?=[^>]*data-portal-interior-motion-strength)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
+      rebuiltPortalLab,
+    ) &&
+    /<input(?=[^>]*data-portal-interior-motion-speed)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
+      rebuiltPortalLab,
+    ) &&
+    portalInteriorControlSyncRuntime.includes('[effect, strength, speed].forEach') &&
+    portalInteriorControlSyncRuntime.includes('control.disabled = !enabled'),
+  'Interior controls must start natively disabled and only model-backed sync may enable them',
+);
 assert(
   /--mind-portal-color-a:[^;]+;[\s\S]*?--mind-portal-color-b:[^;]+;/.test(html) &&
     /linear-gradient\(90deg, var\(--mind-portal-color-a\) 0%, var\(--mind-portal-color-b\) 100%\)/.test(html),
@@ -5497,7 +5555,7 @@ assert(
     html.includes('MindPortalEnergy.sampleColor') &&
     html.includes('MindPortalEnergy.advancePhase') &&
     html.includes("activeMode === 'static'") &&
-    html.includes('settings.strength <= 0') &&
+    portalInteriorFrameRuntime.includes('settings.strength > 0') &&
     html.includes('IntersectionObserver') &&
     html.includes("window.matchMedia('(prefers-reduced-motion: reduce)')") &&
     html.includes('state.reducedMotion') &&
@@ -5577,6 +5635,31 @@ function extractFunctionSource(name) {
     if (char === '}' && --depth === 0) return html.slice(start, index + 1);
   }
   throw new Error(`Unclosed function source: ${name}`);
+}
+
+function extractBraceBlock(source, start) {
+  assert(start >= 0, 'Missing guarded source block');
+  const bodyStart = source.indexOf('{', start);
+  assert(bodyStart >= 0, 'Missing guarded source block body');
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') depth += 1;
+    if (char === '}' && --depth === 0) return source.slice(start, index + 1);
+  }
+  throw new Error('Unclosed guarded source block');
 }
 
 function sha256(value) {

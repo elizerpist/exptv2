@@ -11187,7 +11187,7 @@
                 <button type="button" class="portal-option-open mind-portal-panel-toggle" aria-expanded="false" aria-label="Belső mozgás beállításai" data-portal-interior-motion-expand data-portal-panel-toggle>›</button>
                 <div class="portal-option-panel" data-portal-interior-motion-panel data-portal-panel-body>
                   <label class="mind-portal-mode-select-row">
-                    <select data-portal-interior-motion-effect aria-label="Portál belső mozgás effekt">
+                    <select data-portal-interior-motion-effect disabled aria-label="Portál belső mozgás effekt">
                       <option value="driftingMist" selected>Vándorló köd</option>
                       <option value="innerCurrent">Belső áramlás</option>
                       <option value="softTide">Lágy hullám</option>
@@ -11196,12 +11196,12 @@
                   </label>
                   <label class="mind-portal-signature-row no-window-input">
                     <span>Erősség</span>
-                    <input type="range" min="0" max="100" step="1" value="36" data-portal-interior-motion-strength aria-label="Portál belső mozgás erősség">
+                    <input type="range" min="0" max="100" step="1" value="36" data-portal-interior-motion-strength disabled aria-label="Portál belső mozgás erősség">
                     <em data-portal-interior-motion-strength-value>36%</em>
                   </label>
                   <label class="mind-portal-signature-row no-window-input">
                     <span>Sebesség</span>
-                    <input type="range" min="0" max="100" step="1" value="42" data-portal-interior-motion-speed aria-label="Portál belső mozgás sebesség">
+                    <input type="range" min="0" max="100" step="1" value="42" data-portal-interior-motion-speed disabled aria-label="Portál belső mozgás sebesség">
                     <em data-portal-interior-motion-speed-value>42%</em>
                   </label>
                 </div>
@@ -15623,12 +15623,16 @@
       const interiorMotionActive = balanceMode &&
         state.portalInteriorMotionState?.enabled === true &&
         typeof PortalInteriorMotionRenderer !== 'undefined';
+      const energyMotionActive = Boolean(
+        settings &&
+        settings.strength > 0 &&
+        (!state.reducedMotion || state.reducedMotionOverride)
+      );
       if (
         activeMode === 'static' ||
         !settings ||
-        (settings.strength <= 0 && !interiorMotionActive) ||
-        !state.visible ||
-        ((state.reducedMotion && !state.reducedMotionOverride) && !interiorMotionActive)
+        (!energyMotionActive && !interiorMotionActive) ||
+        !state.visible
       ) {
         clearMindPortalEnergyCanvas(header, state);
         state.lastNow = now;
@@ -15636,7 +15640,7 @@
       }
       const elapsedSeconds = state.lastNow ? Math.max(0, Math.min(0.12, (now - state.lastNow) / 1000)) : 0;
       state.lastNow = now;
-      if (!state.reducedMotion || state.reducedMotionOverride) {
+      if (energyMotionActive) {
         state.phaseByMode[activeMode] = MindPortalEnergy.advancePhase(
           state.phaseByMode[activeMode],
           elapsedSeconds,
@@ -15675,26 +15679,33 @@
         : null;
       const phase = state.phaseByMode[activeMode];
       const fadeDuration = 1560;
-      const pulse = Math.max(0, 1 - ((now - state.lastPulseTime) / fadeDuration));
-      state.ripples = state.ripples.filter((ripple) => now - ripple.start < fadeDuration * 1.08);
+      let pulse = 0;
+      if (energyMotionActive) {
+        pulse = Math.max(0, 1 - ((now - state.lastPulseTime) / fadeDuration));
+        state.ripples = state.ripples.filter(
+          (ripple) => now - ripple.start < fadeDuration * 1.08,
+        );
+      }
       const image = ctx.createImageData(width, height);
       const data = image.data;
       for (let y = 0; y < height; y += 1) {
         for (let x = 0; x < width; x += 1) {
           let sx = width <= 1 ? 0 : x / (width - 1);
           let sy = height <= 1 ? 0 : y / (height - 1);
-          state.ripples.forEach((ripple) => {
-            const ageRatio = Math.max(0, Math.min(1, (now - ripple.start) / (fadeDuration * 1.08)));
-            const dx = sx - ripple.x;
-            const dy = sy - ripple.y;
-            const distance = Math.hypot(dx, dy) || 0.001;
-            const ring = Math.sin((distance * 10.5) - (ageRatio * Math.PI * 2.2))
-              * Math.exp(-Math.abs(distance - (ageRatio * 0.42)) * 7.2)
-              * (1 - ageRatio)
-              * 0.32;
-            sx += (dx / distance) * ring * 0.018;
-            sy += (dy / distance) * ring * 0.014;
-          });
+          if (energyMotionActive) {
+            state.ripples.forEach((ripple) => {
+              const ageRatio = Math.max(0, Math.min(1, (now - ripple.start) / (fadeDuration * 1.08)));
+              const dx = sx - ripple.x;
+              const dy = sy - ripple.y;
+              const distance = Math.hypot(dx, dy) || 0.001;
+              const ring = Math.sin((distance * 10.5) - (ageRatio * Math.PI * 2.2))
+                * Math.exp(-Math.abs(distance - (ageRatio * 0.42)) * 7.2)
+                * (1 - ageRatio)
+                * 0.32;
+              sx += (dx / distance) * ring * 0.018;
+              sy += (dy / distance) * ring * 0.014;
+            });
+          }
           let color;
           if (MindPortalEnergy.isBalanceMode(activeMode)) {
             const sample = MindPortalEnergy.sampleMoneyFlowField(
