@@ -92,14 +92,16 @@ void main() {
       expect(geometry.headerTop, 104);
       expect(geometry.headerHorizontalInset, 20);
       expect(geometry.stage0Height, 104);
-      expect(geometry.stage1Height, 284);
+      expect(geometry.stage1Height, 238);
       expect(geometry.contentGap, 4);
       expect(geometry.stage2SafetyBottom, 18);
+      expect(geometry.bottomNavHeight, 80);
       expect(geometry.typeRowHeight, 66);
       expect(geometry.summaryVisibleHeight, 59);
       expect(geometry.searchTopGap, 12);
       expect(geometry.searchVisibleHeight, 45);
-      expect(geometry.stage2HeightFor(892), 584);
+      expect(geometry.searchPillHeight, 46);
+      expect(geometry.stage2HeightFor(892), 510);
       expect(geometry.contentTopFor(geometry.stage0Height), 212);
     });
 
@@ -149,7 +151,27 @@ void main() {
       expect(glow.radialMaskStops, const <double>[0, 0.46, 0.72, 0.90, 1]);
       expect(glow.radialMaskOpacities, const <double>[1, 0.88, 0.56, 0.18, 0]);
       expect(glow.heightForHeader(104), 264);
-      expect(glow.heightForHeader(284), 444);
+      expect(glow.heightForHeader(238), 398);
+    });
+
+    test('centralizes the approved C2 and C3 budget-stage geometry', () {
+      final budget = SpendeeHeaderVisualSpec.budgetDefault().budget;
+
+      expect(budget.stage1HorizontalInset, 16);
+      expect(budget.stage1Top, 96);
+      expect(budget.stage1Height, 130);
+      expect(budget.avatarSizes, const <double>[36, 46, 66]);
+      expect(budget.avatarIconSizes, const <double>[17, 22, 30]);
+      expect(budget.stage2Top, 236);
+      expect(budget.stage2Bottom, 18);
+      expect(budget.donutVisualSize, 112);
+      expect(budget.donutCoordinateSize, 120);
+      expect(budget.donutRadius, 40);
+      expect(budget.donutBaseStrokeWidth, 13);
+      expect(budget.donutSelectedStrokeWidth, 17);
+      expect(budget.donutCenterRadius, 29);
+      expect(budget.donutSelectedGlowBlur, 8);
+      expect(budget.donutSelectedGlowOpacity, 1);
     });
 
     test('centralizes the exact HTML menu and handle tokens', () {

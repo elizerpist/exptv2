@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../settings/models/app_theme_settings.dart';
 import '../models/transaction_category.dart';
 import '../models/transaction_record.dart';
-import 'category_menu/category_icon_badge.dart';
+import 'glossy_category_avatar.dart';
 
 typedef TransactionLogContextCallback =
     void Function(TransactionRecord record, TransactionCategory? category);
@@ -62,8 +62,6 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
   bool _deleteFrozen = false;
   bool _bodyPressed = false;
   Timer? _bodyReleaseTimer;
-  String? _avatarIconSignature;
-  Widget? _avatarIcon;
 
   bool get _hasCustomName =>
       widget.record.userAssignedName?.trim().isNotEmpty ?? false;
@@ -199,40 +197,12 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
     return (topLeft & box.size).contains(globalPosition);
   }
 
-  Widget _stableAvatarIcon({required bool uncategorized}) {
-    final category = widget.category;
-    final signature = [
-      widget.record.id,
-      category?.transactionCategoryID,
-      category?.iconSlot,
-      uncategorized,
-    ].join(':');
-    if (_avatarIconSignature != signature || _avatarIcon == null) {
-      _avatarIconSignature = signature;
-      _avatarIcon = CategoryIconBadge(
-        key: ValueKey('transaction-logbox-avatar-icon-${widget.record.id}'),
-        category: category,
-        backgroundColor: Colors.transparent,
-        size: 46,
-        iconSize: 28,
-        iconStrokeWidth: 1.35,
-        showShadow: false,
-        showQuestionMark: uncategorized,
-        debugSource: 'transaction-logbox',
-      );
-    }
-    return _avatarIcon!;
-  }
-
   @override
   Widget build(BuildContext context) {
     final amountColor = widget.record.type == TransactionType.income
         ? AppColors.income
         : AppColors.expense;
     final uncategorized = widget.category == null;
-    final avatarColor = uncategorized
-        ? AppColors.gray500
-        : widget.category!.slotColor;
     return GestureDetector(
       key: ValueKey('transaction-logbox-${widget.record.id}'),
       behavior: HitTestBehavior.opaque,
@@ -321,21 +291,20 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                       _bodyPressed &&
                                       widget.avatarSurfaceStyle.hasPressEffect,
                                   builder: (context, avatarPressed) {
-                                    return ExpenseSurfaceContainer(
-                                      surfaceKey: ValueKey(
+                                    return GlossyCategoryAvatar(
+                                      key: ValueKey(
                                         'transaction-logbox-avatar-surface-${widget.record.id}',
                                       ),
-                                      style: widget.avatarSurfaceStyle,
-                                      color: avatarColor,
-                                      primaryColor: avatarColor,
-                                      primary: true,
-                                      borderRadius: BorderRadius.circular(23),
-                                      pressed: avatarPressed,
-                                      width: 46,
-                                      height: 46,
-                                      child: _stableAvatarIcon(
-                                        uncategorized: uncategorized,
+                                      iconKey: ValueKey<String>(
+                                        'transaction-logbox-avatar-icon-${widget.record.id}',
                                       ),
+                                      category: widget.category,
+                                      size: 46,
+                                      iconSize: 28,
+                                      iconStrokeWidth: 1.35,
+                                      selected: avatarPressed,
+                                      showQuestionMark: uncategorized,
+                                      debugSource: 'transaction-logbox',
                                     );
                                   },
                                 ),

@@ -1,3 +1,5 @@
+import 'spendee_header_visual_spec.dart';
+
 enum SpendeeHeaderStage { stage0, stage1, stage2 }
 
 class SpendeeHeaderStageGeometry {
@@ -10,28 +12,13 @@ class SpendeeHeaderStageGeometry {
   });
 
   factory SpendeeHeaderStageGeometry.html({required double screenHeight}) {
-    const headerTop = 104.0;
-    const stage0Height = 104.0;
-    const stage1Height = 284.0;
-    const contentGap = 4.0;
-    const typeRowHeight = 66.0;
-    const summaryVisibleHeight = 59.0;
-    const searchTopGap = 12.0;
-    const searchVisibleHeight = 45.0;
-    final safetyTop = screenHeight - 18.0;
-    final stage2VisibleStackHeight =
-        typeRowHeight +
-        summaryVisibleHeight +
-        searchTopGap +
-        searchVisibleHeight;
-    final stage2Height =
-        safetyTop - headerTop - contentGap - stage2VisibleStackHeight;
+    final source = SpendeeHeaderVisualSpec.budgetDefault().geometry;
     return SpendeeHeaderStageGeometry(
-      headerTop: headerTop,
-      stage0Height: stage0Height,
-      stage1Height: stage1Height,
-      stage2Height: stage2Height,
-      contentGap: contentGap,
+      headerTop: source.headerTop,
+      stage0Height: source.stage0Height,
+      stage1Height: source.stage1Height,
+      stage2Height: source.stage2HeightFor(screenHeight),
+      contentGap: source.contentGap,
     );
   }
 
@@ -55,10 +42,15 @@ class SpendeeHeaderStageGeometry {
 }
 
 class SpendeeHeaderDragUpdate {
-  const SpendeeHeaderDragUpdate({required this.height, required this.tick});
+  const SpendeeHeaderDragUpdate({
+    required this.height,
+    required this.tickCount,
+  });
 
   final double height;
-  final bool tick;
+  final int tickCount;
+
+  bool get tick => tickCount > 0;
 }
 
 class SpendeeHeaderRelease {
@@ -76,15 +68,17 @@ class SpendeeHeaderRelease {
 class SpendeeHeaderStageController {
   SpendeeHeaderStageController({
     required SpendeeHeaderStageGeometry geometry,
-    this.stage1TriggerDistance = 72,
-    this.stage2TriggerDistance = 220,
+    double? stage1TriggerDistance,
+    double? stage2TriggerDistance,
     this.popoutOvershoot = 18,
-  }) : _geometry = geometry,
+  }) : _stage1TriggerDistance = stage1TriggerDistance,
+       _stage2TriggerDistance = stage2TriggerDistance,
+       _geometry = geometry,
        _settledHeight = geometry.stage0Height,
        _height = geometry.stage0Height;
 
-  final double stage1TriggerDistance;
-  final double stage2TriggerDistance;
+  final double? _stage1TriggerDistance;
+  final double? _stage2TriggerDistance;
   final double popoutOvershoot;
 
   SpendeeHeaderStageGeometry _geometry;
@@ -100,11 +94,22 @@ class SpendeeHeaderStageController {
   SpendeeHeaderStageGeometry get geometry => _geometry;
   SpendeeHeaderStage get stage => _settledStage;
   double get currentHeight => _height;
+  double get stage1TriggerDistance =>
+      _stage1TriggerDistance ??
+      (geometry.stage1Height - geometry.stage0Height)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+  double get stage2TriggerDistance =>
+      _stage2TriggerDistance ??
+      (geometry.stage2Height - geometry.stage1Height)
+          .clamp(0.0, double.infinity)
+          .toDouble();
 
   void replaceGeometry(SpendeeHeaderStageGeometry geometry) {
     _geometry = geometry;
     _settledHeight = geometry.heightFor(_settledStage);
     _height = _heightForDragOffset();
+    _armedTarget = _targetForDragOffset();
   }
 
   void beginDrag() {
@@ -120,50 +125,39 @@ class SpendeeHeaderStageController {
   SpendeeHeaderDragUpdate dragBy(double dy) {
     _dragOffset += dy;
     _height = _heightForDragOffset();
-    var tick = false;
+    var tickCount = 0;
 
     if (_settledStage == SpendeeHeaderStage.stage0) {
-      _armedTarget = _dragOffset >= stage1TriggerDistance
-          ? SpendeeHeaderStage.stage1
-          : SpendeeHeaderStage.stage0;
       if (!_stage1Ticked && _dragOffset >= stage1TriggerDistance) {
         _stage1Ticked = true;
-        tick = true;
+        tickCount += 1;
       }
     } else if (_settledStage == SpendeeHeaderStage.stage1) {
-      if (_dragOffset <= 0) {
-        _armedTarget = SpendeeHeaderStage.stage1;
-      } else if (_dragOffset >= stage2TriggerDistance) {
-        _armedTarget = SpendeeHeaderStage.stage2;
-      } else {
-        _armedTarget = SpendeeHeaderStage.stage0;
-      }
       if (!_popoutTicked && _dragOffset > 0) {
         _popoutTicked = true;
-        tick = true;
+        tickCount += 1;
       }
       if (!_stage2Ticked && _dragOffset >= stage2TriggerDistance) {
         _stage2Ticked = true;
-        tick = true;
+        tickCount += 1;
       }
     } else {
-      _armedTarget = _dragOffset > 0
-          ? SpendeeHeaderStage.stage1
-          : SpendeeHeaderStage.stage2;
       if (!_popoutTicked && _dragOffset > 0) {
         _popoutTicked = true;
-        tick = true;
+        tickCount += 1;
       }
     }
+    _armedTarget = _targetForDragOffset();
 
-    return SpendeeHeaderDragUpdate(height: _height, tick: tick);
+    return SpendeeHeaderDragUpdate(height: _height, tickCount: tickCount);
   }
 
   SpendeeHeaderRelease release() {
     final target = _armedTarget;
-    final springBack = target == _settledStage;
+    final targetHeight = geometry.heightFor(target);
+    final springBack = (_height - targetHeight).abs() > 0.5;
     _settledStage = target;
-    _settledHeight = geometry.heightFor(target);
+    _settledHeight = targetHeight;
     _height = _settledHeight;
     _dragOffset = 0;
     _armedTarget = target;
@@ -175,14 +169,35 @@ class SpendeeHeaderStageController {
   }
 
   double _heightForDragOffset() {
-    final dragCeiling = _settledStage == SpendeeHeaderStage.stage2
-        ? _settledHeight + popoutOvershoot
-        : geometry.stage2Height;
+    final dragCeiling = switch (_settledStage) {
+      SpendeeHeaderStage.stage0 => geometry.stage2Height,
+      SpendeeHeaderStage.stage1 => geometry.stage2Height + popoutOvershoot,
+      SpendeeHeaderStage.stage2 => _settledHeight + popoutOvershoot,
+    };
     final maxHeight = dragCeiling < _settledHeight
         ? _settledHeight
         : dragCeiling;
     return (_settledHeight + _dragOffset)
         .clamp(_settledHeight, maxHeight)
         .toDouble();
+  }
+
+  SpendeeHeaderStage _targetForDragOffset() {
+    return switch (_settledStage) {
+      SpendeeHeaderStage.stage0 =>
+        _dragOffset >= stage1TriggerDistance
+            ? SpendeeHeaderStage.stage1
+            : SpendeeHeaderStage.stage0,
+      SpendeeHeaderStage.stage1 =>
+        _dragOffset <= 0
+            ? SpendeeHeaderStage.stage1
+            : _dragOffset >= stage2TriggerDistance
+            ? SpendeeHeaderStage.stage2
+            : SpendeeHeaderStage.stage0,
+      SpendeeHeaderStage.stage2 =>
+        _dragOffset > 0
+            ? SpendeeHeaderStage.stage1
+            : SpendeeHeaderStage.stage2,
+    };
   }
 }

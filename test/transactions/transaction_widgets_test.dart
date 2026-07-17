@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/widgets/category_menu/category_icon_badge.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
+import 'package:exptv2/features/transactions/widgets/glossy_category_avatar.dart';
 import 'package:exptv2/features/transactions/widgets/search_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_pill.dart';
 import 'package:exptv2/features/transactions/widgets/summary_scope_picker_sheet.dart';
@@ -906,10 +907,14 @@ void main() {
     expect(rowDecoration.color, AppColors.gray200);
     expect(rowDecoration.gradient, isNull);
 
-    final avatarSurface = tester.widget<Container>(
+    final avatar = tester.widget<GlossyCategoryAvatar>(
       find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
     );
-    expect(avatarSurface.decoration, isA<BoxDecoration>());
+    expect(avatar.category, same(category));
+    expect(avatar.size, 46);
+    expect(avatar.iconSize, 28);
+    expect(avatar.iconStrokeWidth, 1.35);
+    expect(avatar.debugSource, 'transaction-logbox');
   });
 
   testWidgets('transaction avatar lets the 3D surface own its background', (
@@ -937,35 +942,51 @@ void main() {
     expect(badge.iconStrokeWidth, 1.35);
   });
 
-  testWidgets('logbox avatar icon is stable across parent refreshes', (
-    tester,
-  ) async {
-    final record = sampleRecord();
-    final category = sampleCategory();
-    late StateSetter refresh;
+  testWidgets(
+    'logbox avatar keeps stable public keys across parent refreshes',
+    (tester) async {
+      final record = sampleRecord();
+      final category = sampleCategory();
+      late StateSetter refresh;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StatefulBuilder(
-          builder: (context, setState) {
-            refresh = setState;
-            return TransactionLogBox(record: record, category: category);
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              refresh = setState;
+              return TransactionLogBox(record: record, category: category);
+            },
+          ),
         ),
-      ),
-    );
+      );
 
-    final iconFinder = find.byKey(
-      ValueKey('transaction-logbox-avatar-icon-${record.id}'),
-    );
-    final before = tester.widget<CategoryIconBadge>(iconFinder);
+      final avatarFinder = find.byKey(
+        ValueKey('transaction-logbox-avatar-surface-${record.id}'),
+      );
+      final iconFinder = find.byKey(
+        ValueKey('transaction-logbox-avatar-icon-${record.id}'),
+      );
+      final beforeAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
+      final before = tester.widget<CategoryIconBadge>(iconFinder);
+      expect(
+        find.descendant(
+          of: avatarFinder,
+          matching: find.byType(CategoryIconBadge),
+        ),
+        findsOneWidget,
+      );
 
-    refresh(() {});
-    await tester.pump();
+      refresh(() {});
+      await tester.pump();
 
-    final after = tester.widget<CategoryIconBadge>(iconFinder);
-    expect(identical(after, before), isTrue);
-  });
+      final afterAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
+      final after = tester.widget<CategoryIconBadge>(iconFinder);
+      expect(afterAvatar.key, beforeAvatar.key);
+      expect(after.key, before.key);
+      expect(after.category, same(category));
+      expect(after.iconStrokeWidth, 1.35);
+    },
+  );
 
   test('category slot icon rewrites stroke width without changing size', () {
     const svg =
@@ -1056,11 +1077,12 @@ void main() {
     final question = tester.widget<Icon>(find.byIcon(Icons.question_mark));
     expect(question.color, AppColors.white);
 
-    final avatarSurface = tester.widget<Container>(
+    final avatar = tester.widget<GlossyCategoryAvatar>(
       find.byKey(ValueKey('transaction-logbox-avatar-surface-${record.id}')),
     );
-    final decoration = avatarSurface.decoration! as BoxDecoration;
-    expect(decoration.color, AppColors.gray500);
+    expect(avatar.category, isNull);
+    expect(avatar.showQuestionMark, isTrue);
+    expect(avatar.size, 46);
 
     await tester.tap(
       find.byKey(ValueKey('transaction-logbox-avatar-${record.id}')),
@@ -1097,9 +1119,10 @@ void main() {
     );
     final releasedRowDecoration =
         tester.widget<Container>(rowFinder).decoration! as BoxDecoration;
-    final releasedAvatarDecoration =
-        tester.widget<Container>(avatarSurfaceFinder).decoration!
-            as BoxDecoration;
+    final releasedAvatar = tester.widget<GlossyCategoryAvatar>(
+      avatarSurfaceFinder,
+    );
+    expect(releasedAvatar.selected, isFalse);
 
     final gesture = await tester.startGesture(
       tester.getCenter(
@@ -1110,11 +1133,11 @@ void main() {
 
     final rowDecoration =
         tester.widget<Container>(rowFinder).decoration! as BoxDecoration;
-    final avatarDecoration =
-        tester.widget<Container>(avatarSurfaceFinder).decoration!
-            as BoxDecoration;
+    final pressedAvatar = tester.widget<GlossyCategoryAvatar>(
+      avatarSurfaceFinder,
+    );
     expect(rowDecoration, releasedRowDecoration);
-    expect(avatarDecoration, isNot(releasedAvatarDecoration));
+    expect(pressedAvatar.selected, isTrue);
 
     await gesture.up();
     await tester.pumpAndSettle();
@@ -1153,8 +1176,8 @@ void main() {
     final cardRect = tester.getRect(cardFinder);
     final releasedDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
-    final releasedAvatarDecoration =
-        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    final releasedAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
+    expect(releasedAvatar.selected, isFalse);
 
     final gesture = await tester.startGesture(
       Offset(cardRect.right - 12, cardRect.top + 12),
@@ -1163,20 +1186,18 @@ void main() {
 
     final pressedDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
-    final pressedAvatarDecoration =
-        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    final pressedAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
     expect(pressedDecoration, isNot(releasedDecoration));
-    expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
+    expect(pressedAvatar.selected, isTrue);
 
     await gesture.up();
     await tester.pumpAndSettle();
 
     final finalDecoration =
         tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
-    final finalAvatarDecoration =
-        tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+    final finalAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
     expect(finalDecoration.boxShadow, isNotNull);
-    expect(finalAvatarDecoration, releasedAvatarDecoration);
+    expect(finalAvatar.selected, isFalse);
     expect(bodyTaps, 1);
     expect(categoryTaps, 0);
   });
@@ -1212,8 +1233,8 @@ void main() {
       final cardRect = tester.getRect(cardFinder);
       final releasedDecoration =
           tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
-      final releasedAvatarDecoration =
-          tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+      final releasedAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
+      expect(releasedAvatar.selected, isFalse);
 
       final gesture = await tester.startGesture(
         Offset(cardRect.right - 12, cardRect.top + 12),
@@ -1222,10 +1243,9 @@ void main() {
 
       final pressedDecoration =
           tester.widget<Container>(cardFinder).decoration! as BoxDecoration;
-      final pressedAvatarDecoration =
-          tester.widget<Container>(avatarFinder).decoration! as BoxDecoration;
+      final pressedAvatar = tester.widget<GlossyCategoryAvatar>(avatarFinder);
       expect(pressedDecoration, isNot(releasedDecoration));
-      expect(pressedAvatarDecoration, isNot(releasedAvatarDecoration));
+      expect(pressedAvatar.selected, isTrue);
 
       await gesture.up();
       await tester.pumpAndSettle();
@@ -1700,13 +1720,10 @@ void main() {
         'surface key=transaction-logbox-content-250905 style=neutralInset',
       ),
     );
-    expect(
-      DebugConsole.allText,
-      contains(
-        'surface key=transaction-logbox-avatar-surface-250905 '
-        'style=neutralInset',
-      ),
+    final avatar = tester.widget<GlossyCategoryAvatar>(
+      find.byKey(const ValueKey('transaction-logbox-avatar-surface-250905')),
     );
+    expect(avatar.selected, isTrue);
   });
 
   testWidgets(
@@ -1745,13 +1762,10 @@ void main() {
           'offset=0,2',
         ),
       );
-      expect(
-        DebugConsole.allText,
-        contains(
-          'surface key=transaction-logbox-avatar-surface-250905 '
-          'style=neutralInset profile=standard',
-        ),
+      final avatar = tester.widget<GlossyCategoryAvatar>(
+        find.byKey(const ValueKey('transaction-logbox-avatar-surface-250905')),
       );
+      expect(avatar.selected, isTrue);
 
       DebugConsole.clear();
       await tester.tap(

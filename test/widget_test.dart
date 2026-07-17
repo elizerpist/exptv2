@@ -10,6 +10,7 @@ import 'package:exptv2/features/transactions/widgets/add_transaction_sheet.dart'
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/state/event_store.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +29,20 @@ Map<String, Object?>? themeSettingsOverride;
 Map<String, Object?>? expenseBootstrapOverride;
 var firstLaunchNotificationPromptEnabled = false;
 var firstLaunchNotificationPromptCalls = 0;
+
+Future<void> _dragSpendeeHeaderByExactDelta(
+  WidgetTester tester,
+  double delta,
+) async {
+  final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+  final gesture = await tester.startGesture(tester.getCenter(handle));
+  await gesture.moveBy(const Offset(0, kTouchSlop + 1));
+  await tester.pump();
+  await gesture.moveBy(Offset(0, delta));
+  await tester.pump();
+  await gesture.up();
+  await tester.pumpAndSettle();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -385,18 +400,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('settings-page')), findsNothing);
 
-      await tester.drag(
-        find.byKey(const ValueKey('spendee-test-header-handle')),
-        const Offset(0, 96),
-      );
-      await tester.pumpAndSettle();
+      await _dragSpendeeHeaderByExactDelta(tester, 134);
 
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('spendee-test-category-avatar-6')),
+        find.byKey(const ValueKey('spendee-test-category-avatar-6-selected')),
         findsOneWidget,
       );
       expect(
@@ -404,11 +415,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.drag(
-        find.byKey(const ValueKey('spendee-test-header-handle')),
-        const Offset(0, 240),
-      );
-      await tester.pumpAndSettle();
+      await _dragSpendeeHeaderByExactDelta(tester, 272);
 
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
@@ -445,11 +452,7 @@ void main() {
       await tester.pumpWidget(buildApp());
       await tester.pumpAndSettle();
 
-      await tester.drag(
-        find.byKey(const ValueKey('spendee-test-header-handle')),
-        const Offset(0, 96),
-      );
-      await tester.pumpAndSettle();
+      await _dragSpendeeHeaderByExactDelta(tester, 134);
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
         findsOneWidget,
@@ -464,11 +467,7 @@ void main() {
         reason: 'A MediaQuery geometry update must not reset Stage 1.',
       );
 
-      await tester.drag(
-        find.byKey(const ValueKey('spendee-test-header-handle')),
-        const Offset(0, 240),
-      );
-      await tester.pumpAndSettle();
+      await _dragSpendeeHeaderByExactDelta(tester, 272);
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
         findsOneWidget,
@@ -517,7 +516,7 @@ void main() {
 
       var handle = find.byKey(const ValueKey('spendee-test-header-handle'));
       var gesture = await tester.startGesture(tester.getCenter(handle));
-      for (final delta in const [40.0, 40.0, 4.0]) {
+      for (final delta in const [100.0, 34.0, 4.0]) {
         await gesture.moveBy(Offset(0, delta));
         await tester.pump();
         expect(tester.takeException(), isNull);
@@ -538,7 +537,7 @@ void main() {
 
       handle = find.byKey(const ValueKey('spendee-test-header-handle'));
       gesture = await tester.startGesture(tester.getCenter(handle));
-      for (final delta in const [100.0, 121.0, 80.0]) {
+      for (final delta in const [100.0, 172.0, 80.0]) {
         await gesture.moveBy(Offset(0, delta));
         await tester.pump();
         expect(
@@ -605,8 +604,8 @@ void main() {
     expect(find.textContaining('Elköltve'), findsNothing);
 
     expect(tester.getRect(header), const Rect.fromLTWH(20, 104, 372, 104));
-    expect(tester.getRect(brand), const Rect.fromLTWH(22, 48, 312, 42));
-    expect(tester.getSize(logo), const Size.square(79.5));
+    expect(tester.getRect(brand), const Rect.fromLTWH(0, 33.3, 412, 118));
+    expect(tester.getRect(logo), const Rect.fromLTWH(30, 39.3, 47.88, 47.88));
     expect(tester.getTopLeft(homeContent), const Offset(0, 212));
     expect(tester.getRect(typeRow), const Rect.fromLTWH(0, 212, 412, 66));
     expect(tester.getRect(incomePill), const Rect.fromLTWH(28, 224, 173, 42));
@@ -675,7 +674,7 @@ void main() {
         expect(tester.takeException(), isNull);
       }
 
-      await dragHandle(const [40, 40, 4]);
+      await dragHandle(const [100, 34, 4]);
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
         findsOneWidget,
@@ -701,14 +700,14 @@ void main() {
         findsOneWidget,
       );
 
-      await dragHandle(const [80]);
+      await dragHandle(const [134]);
       await dragHandle(const [12, -12]);
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
         findsOneWidget,
       );
 
-      await dragHandle(const [100, 121, 4]);
+      await dragHandle(const [100, 172, 4]);
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
         findsOneWidget,
@@ -720,7 +719,7 @@ void main() {
         findsOneWidget,
       );
 
-      await dragHandle(const [221]);
+      await dragHandle(const [272]);
       await dragHandle(const [8, -8]);
       expect(
         find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
@@ -749,11 +748,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
 
-        await tester.drag(
-          find.byKey(const ValueKey('spendee-test-header-handle')),
-          const Offset(0, 96),
-        );
-        await tester.pumpAndSettle();
+        await _dragSpendeeHeaderByExactDelta(tester, 134);
         expect(
           find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
           findsOneWidget,
@@ -769,11 +764,7 @@ void main() {
         );
         expect(avatars, findsNWidgets(categoryCount.clamp(0, 5)));
 
-        await tester.drag(
-          find.byKey(const ValueKey('spendee-test-header-handle')),
-          const Offset(0, 240),
-        );
-        await tester.pumpAndSettle();
+        await _dragSpendeeHeaderByExactDelta(tester, 272);
         expect(
           find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
           findsOneWidget,
@@ -784,22 +775,14 @@ void main() {
         );
         expect(tester.takeException(), isNull);
 
-        await tester.drag(
-          find.byKey(const ValueKey('spendee-test-header-handle')),
-          const Offset(0, 8),
-        );
-        await tester.pumpAndSettle();
+        await _dragSpendeeHeaderByExactDelta(tester, 8);
         expect(
           find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
           findsOneWidget,
         );
         expect(tester.takeException(), isNull);
 
-        await tester.drag(
-          find.byKey(const ValueKey('spendee-test-header-handle')),
-          const Offset(0, 8),
-        );
-        await tester.pumpAndSettle();
+        await _dragSpendeeHeaderByExactDelta(tester, 8);
         expect(
           find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
           findsOneWidget,
@@ -844,22 +827,14 @@ void main() {
       matchesGoldenFile('goldens/spendeetest/c1_dashboard.png'),
     );
 
-    await tester.drag(
-      find.byKey(const ValueKey('spendee-test-header-handle')),
-      const Offset(0, 96),
-    );
-    await tester.pumpAndSettle();
+    await _dragSpendeeHeaderByExactDelta(tester, 134);
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byKey(const ValueKey('spendee-test-dashboard')),
       matchesGoldenFile('goldens/spendeetest/c2_dashboard.png'),
     );
 
-    await tester.drag(
-      find.byKey(const ValueKey('spendee-test-header-handle')),
-      const Offset(0, 240),
-    );
-    await tester.pumpAndSettle();
+    await _dragSpendeeHeaderByExactDelta(tester, 272);
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byKey(const ValueKey('spendee-test-dashboard')),

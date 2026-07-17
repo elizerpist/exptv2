@@ -189,6 +189,31 @@ class SpendeeCenterCarouselController {
     );
   }
 
+  double travelToIndex(int targetIndex) {
+    if (itemCount < 2) return -_residualDx;
+    final boundedTarget = targetIndex % itemCount;
+    final normalizedTarget = boundedTarget < 0
+        ? boundedTarget + itemCount
+        : boundedTarget;
+    if (normalizedTarget == _index) return -_residualDx;
+
+    final forwardSteps = (normalizedTarget - _index) % itemCount;
+    final normalizedForward = forwardSteps < 0
+        ? forwardSteps + itemCount
+        : forwardSteps;
+    final backwardSteps = (_index - normalizedTarget) % itemCount;
+    final normalizedBackward = backwardSteps < 0
+        ? backwardSteps + itemCount
+        : backwardSteps;
+
+    if (normalizedBackward < normalizedForward) {
+      return normalizedBackward * slotDistance - _residualDx;
+    }
+    return -normalizedForward * slotDistance - _residualDx;
+  }
+
+  double cancelTravel() => -_residualDx;
+
   double _snapTravel(
     double residual, {
     int preferredDxDirection = 0,

@@ -20,6 +20,7 @@ class SpendeeHeaderVisualSpec {
     required this.geometry,
     required this.glass,
     required this.glow,
+    required this.budget,
     required this.menu,
     required this.handle,
   });
@@ -58,9 +59,11 @@ class SpendeeHeaderVisualSpec {
         headerTop: 104,
         headerHorizontalInset: 20,
         stage0Height: 104,
-        stage1Height: 284,
+        stage1Height: 238,
         contentGap: 4,
         stage2SafetyBottom: 18,
+        bottomNavHeight: 80,
+        searchPillHeight: 46,
         typeRowHeight: 66,
         summaryVisibleHeight: 59,
         searchTopGap: 12,
@@ -107,6 +110,24 @@ class SpendeeHeaderVisualSpec {
     verticalFadeHeight: 48,
     radialMaskStops: <double>[0, 0.46, 0.72, 0.90, 1],
     radialMaskOpacities: <double>[1, 0.88, 0.56, 0.18, 0],
+  );
+
+  static const SpendeeBudgetStageSpec _htmlBudget = SpendeeBudgetStageSpec._(
+    stage1HorizontalInset: 16,
+    stage1Top: 96,
+    stage1Height: 130,
+    avatarSizes: <double>[36, 46, 66],
+    avatarIconSizes: <double>[17, 22, 30],
+    stage2Top: 236,
+    stage2Bottom: 18,
+    donutVisualSize: 112,
+    donutCoordinateSize: 120,
+    donutRadius: 40,
+    donutBaseStrokeWidth: 13,
+    donutSelectedStrokeWidth: 17,
+    donutCenterRadius: 29,
+    donutSelectedGlowBlur: 8,
+    donutSelectedGlowOpacity: 1,
   );
 
   static const SpendeeHeaderMenuSpec _htmlMenu = SpendeeHeaderMenuSpec._(
@@ -181,6 +202,7 @@ class SpendeeHeaderVisualSpec {
       geometry: _htmlGeometry,
       glass: _htmlGlass,
       glow: _htmlGlow,
+      budget: _htmlBudget,
       menu: _htmlMenu,
       handle: _htmlHandle,
     );
@@ -199,6 +221,7 @@ class SpendeeHeaderVisualSpec {
   final SpendeeHeaderGeometrySpec geometry;
   final SpendeeHeaderGlassSpec glass;
   final SpendeeHeaderGlowSpec glow;
+  final SpendeeBudgetStageSpec budget;
   final SpendeeHeaderMenuSpec menu;
   final SpendeeHeaderHandleSpec handle;
 
@@ -256,6 +279,8 @@ class SpendeeHeaderGeometrySpec {
     required this.stage1Height,
     required this.contentGap,
     required this.stage2SafetyBottom,
+    required this.bottomNavHeight,
+    required this.searchPillHeight,
     required this.typeRowHeight,
     required this.summaryVisibleHeight,
     required this.searchTopGap,
@@ -269,6 +294,8 @@ class SpendeeHeaderGeometrySpec {
   final double stage1Height;
   final double contentGap;
   final double stage2SafetyBottom;
+  final double bottomNavHeight;
+  final double searchPillHeight;
   final double typeRowHeight;
   final double summaryVisibleHeight;
   final double searchTopGap;
@@ -279,7 +306,8 @@ class SpendeeHeaderGeometrySpec {
 
   double stage2HeightFor(double screenHeight) =>
       screenHeight -
-      stage2SafetyBottom -
+      bottomNavHeight -
+      searchTopGap -
       headerTop -
       contentGap -
       stage2VisibleStackHeight;
@@ -355,6 +383,44 @@ class SpendeeHeaderGlowSpec {
 
   double heightForHeader(double headerHeight) =>
       baseHeight + headerHeight - baselineHeaderHeight;
+}
+
+/// Budget C2/C3 geometry from the approved HTML stage layers and donut SVG.
+@immutable
+class SpendeeBudgetStageSpec {
+  const SpendeeBudgetStageSpec._({
+    required this.stage1HorizontalInset,
+    required this.stage1Top,
+    required this.stage1Height,
+    required this.avatarSizes,
+    required this.avatarIconSizes,
+    required this.stage2Top,
+    required this.stage2Bottom,
+    required this.donutVisualSize,
+    required this.donutCoordinateSize,
+    required this.donutRadius,
+    required this.donutBaseStrokeWidth,
+    required this.donutSelectedStrokeWidth,
+    required this.donutCenterRadius,
+    required this.donutSelectedGlowBlur,
+    required this.donutSelectedGlowOpacity,
+  });
+
+  final double stage1HorizontalInset;
+  final double stage1Top;
+  final double stage1Height;
+  final List<double> avatarSizes;
+  final List<double> avatarIconSizes;
+  final double stage2Top;
+  final double stage2Bottom;
+  final double donutVisualSize;
+  final double donutCoordinateSize;
+  final double donutRadius;
+  final double donutBaseStrokeWidth;
+  final double donutSelectedStrokeWidth;
+  final double donutCenterRadius;
+  final double donutSelectedGlowBlur;
+  final double donutSelectedGlowOpacity;
 }
 
 /// Foreground menu geometry and inset/gradient tokens from HTML lines 932–952

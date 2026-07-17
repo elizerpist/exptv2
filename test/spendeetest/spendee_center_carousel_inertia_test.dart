@@ -63,5 +63,43 @@ void main() {
       expect(settled.index, 1);
       expect(settled.residualDx, 0);
     });
+
+    test('programmatic selection travels the shortest ticking wheel path', () {
+      final controller = SpendeeCenterCarouselController(itemCount: 6);
+
+      final travel = controller.travelToIndex(4);
+
+      expect(travel, 128);
+      final settled = controller.applyDragDelta(travel);
+      expect(settled.tickedIndexes, [5, 4]);
+      expect(settled.index, 4);
+      expect(settled.residualDx, 0);
+    });
+
+    test('programmatic selection compensates any live residual offset', () {
+      final controller = SpendeeCenterCarouselController(itemCount: 6);
+      controller.applyDragDelta(-10);
+
+      final travel = controller.travelToIndex(2);
+
+      expect(travel, -118);
+      final settled = controller.applyDragDelta(travel);
+      expect(settled.tickedIndexes, [1, 2]);
+      expect(settled.index, 2);
+      expect(settled.residualDx, 0);
+    });
+
+    test('a cancelled gesture settles without adding a directional tick', () {
+      final controller = SpendeeCenterCarouselController(itemCount: 6);
+      final dragged = controller.applyDragDelta(-26);
+      expect(dragged.index, 0);
+      expect(dragged.residualDx, -26);
+
+      final settled = controller.applyDragDelta(controller.cancelTravel());
+
+      expect(settled.tickedIndexes, isEmpty);
+      expect(settled.index, 0);
+      expect(settled.residualDx, 0);
+    });
   });
 }

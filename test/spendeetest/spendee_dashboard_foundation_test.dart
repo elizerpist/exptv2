@@ -42,30 +42,33 @@ void main() {
 
     expect(geometry.headerTop, 104);
     expect(geometry.stage0Height, 104);
-    expect(geometry.stage1Height, 284);
-    expect(geometry.stage2Height, 584);
+    expect(geometry.stage1Height, 238);
+    expect(geometry.stage2Height, 510);
     expect(geometry.contentTopFor(SpendeeHeaderStage.stage0), 212);
-    expect(geometry.contentTopFor(SpendeeHeaderStage.stage1), 392);
-    expect(geometry.contentTopFor(SpendeeHeaderStage.stage2), 692);
+    expect(geometry.contentTopFor(SpendeeHeaderStage.stage1), 346);
+    expect(geometry.contentTopFor(SpendeeHeaderStage.stage2), 618);
   });
 
-  test('header stage controller arms ticks and snaps between C1-C3 stages', () {
+  test('header stage controller arms ticks at exact C2 and C3 bottoms', () {
     final geometry = SpendeeHeaderStageGeometry.html(screenHeight: 892);
     final controller = SpendeeHeaderStageController(geometry: geometry);
+    final stage1Trigger = geometry.stage1Height - geometry.stage0Height;
+    final stage2Trigger = geometry.stage2Height - geometry.stage1Height;
 
     expect(controller.stage, SpendeeHeaderStage.stage0);
     expect(controller.currentHeight, 104);
 
     controller.beginDrag();
-    var update = controller.dragBy(50);
+    var update = controller.dragBy(stage1Trigger - 1);
     expect(update.tick, isFalse);
     var release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage0);
     expect(release.springBack, isTrue);
 
     controller.beginDrag();
-    update = controller.dragBy(90);
+    update = controller.dragBy(stage1Trigger);
     expect(update.tick, isTrue);
+    expect(update.height, geometry.stage1Height);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage1);
     expect(release.springBack, isFalse);
@@ -75,27 +78,20 @@ void main() {
     expect(update.tick, isTrue);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage0);
-    expect(release.springBack, isFalse);
+    expect(release.springBack, isTrue);
 
     controller.beginDrag();
-    update = controller.dragBy(90);
-    expect(update.tick, isTrue);
-    release = controller.release();
-    expect(release.targetStage, SpendeeHeaderStage.stage1);
-
-    controller.beginDrag();
-    update = controller.dragBy(12);
+    update = controller.dragBy(stage1Trigger + 12);
     expect(update.tick, isTrue);
     expect(update.height, greaterThan(geometry.stage1Height));
-    update = controller.dragBy(-12);
-    expect(update.height, geometry.stage1Height);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage1);
     expect(release.springBack, isTrue);
 
     controller.beginDrag();
-    update = controller.dragBy(230);
+    update = controller.dragBy(stage2Trigger);
     expect(update.tick, isTrue);
+    expect(update.height, geometry.stage2Height);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage2);
     expect(release.springBack, isFalse);
@@ -106,19 +102,12 @@ void main() {
     expect(update.height, geometry.stage2Height + 18);
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage1);
-    expect(release.springBack, isFalse);
+    expect(release.springBack, isTrue);
 
     controller.beginDrag();
-    update = controller.dragBy(230);
+    update = controller.dragBy(stage2Trigger + 8);
     expect(update.tick, isTrue);
-    release = controller.release();
-    expect(release.targetStage, SpendeeHeaderStage.stage2);
-
-    controller.beginDrag();
-    update = controller.dragBy(8);
-    expect(update.tick, isTrue);
-    update = controller.dragBy(-8);
-    expect(update.height, geometry.stage2Height);
+    expect(update.height, greaterThan(geometry.stage2Height));
     release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage2);
     expect(release.springBack, isTrue);
@@ -130,13 +119,13 @@ void main() {
     );
 
     controller.beginDrag();
-    expect(controller.dragBy(40).tick, isFalse);
-    expect(controller.dragBy(40).tick, isTrue);
+    expect(controller.dragBy(100).tick, isFalse);
+    expect(controller.dragBy(34).tick, isTrue);
     expect(controller.dragBy(4).tick, isFalse);
 
     final release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage1);
-    expect(release.springBack, isFalse);
+    expect(release.springBack, isTrue);
   });
 
   test('header controller keeps Stage 2 armed across positive drag frames', () {
@@ -144,17 +133,35 @@ void main() {
       geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
     );
     controller.beginDrag();
-    controller.dragBy(90);
+    controller.dragBy(134);
     controller.release();
 
     controller.beginDrag();
     expect(controller.dragBy(100).tick, isTrue);
-    expect(controller.dragBy(121).tick, isTrue);
-    expect(controller.dragBy(4).tick, isFalse);
+    expect(controller.dragBy(172).tick, isTrue);
+    final overshoot = controller.dragBy(4);
+    expect(overshoot.tick, isFalse);
+    expect(overshoot.height, greaterThan(controller.geometry.stage2Height));
 
     final release = controller.release();
     expect(release.targetStage, SpendeeHeaderStage.stage2);
-    expect(release.springBack, isFalse);
+    expect(release.springBack, isTrue);
+  });
+
+  test('one large Stage 1 frame reports both crossed haptic thresholds', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+    controller.beginDrag();
+    controller.dragBy(134);
+    controller.release();
+
+    controller.beginDrag();
+    final update = controller.dragBy(272);
+
+    expect(update.tickCount, 2);
+    expect(update.tick, isTrue);
+    expect(controller.release().targetStage, SpendeeHeaderStage.stage2);
   });
 
   test(
@@ -165,8 +172,8 @@ void main() {
       );
 
       controller.beginDrag();
-      controller.dragBy(40);
-      expect(controller.dragBy(40).tick, isTrue);
+      controller.dragBy(100);
+      expect(controller.dragBy(34).tick, isTrue);
       controller.dragBy(-20);
 
       final release = controller.release();
@@ -182,17 +189,17 @@ void main() {
         geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
       );
       controller.beginDrag();
-      controller.dragBy(90);
+      controller.dragBy(134);
       controller.release();
 
       controller.beginDrag();
       controller.dragBy(100);
-      expect(controller.dragBy(121).tick, isTrue);
+      expect(controller.dragBy(172).tick, isTrue);
       controller.dragBy(-2);
 
       final release = controller.release();
       expect(release.targetStage, SpendeeHeaderStage.stage0);
-      expect(release.springBack, isFalse);
+      expect(release.springBack, isTrue);
     },
   );
 
@@ -203,7 +210,7 @@ void main() {
         geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
       );
       controller.beginDrag();
-      controller.dragBy(90);
+      controller.dragBy(134);
       controller.release();
       const replacement = SpendeeHeaderStageGeometry(
         headerTop: 110,
@@ -228,10 +235,10 @@ void main() {
         geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
       );
       controller.beginDrag();
-      controller.dragBy(90);
+      controller.dragBy(134);
       controller.release();
       controller.beginDrag();
-      controller.dragBy(230);
+      controller.dragBy(272);
       controller.release();
       const replacement = SpendeeHeaderStageGeometry(
         headerTop: 110,
@@ -249,7 +256,7 @@ void main() {
     },
   );
 
-  test('geometry changes preserve an armed positive drag offset', () {
+  test('geometry changes re-evaluate an armed positive drag offset', () {
     final controller = SpendeeHeaderStageController(
       geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
     );
@@ -261,15 +268,15 @@ void main() {
       contentGap: 6,
     );
     controller.beginDrag();
-    controller.dragBy(40);
-    expect(controller.dragBy(40).tick, isTrue);
+    controller.dragBy(100);
+    expect(controller.dragBy(34).tick, isTrue);
 
     controller.replaceGeometry(replacement);
 
     expect(controller.stage, SpendeeHeaderStage.stage0);
-    expect(controller.currentHeight, replacement.stage0Height + 80);
+    expect(controller.currentHeight, replacement.stage0Height + 134);
     expect(controller.dragBy(4).tick, isFalse);
-    expect(controller.release().targetStage, SpendeeHeaderStage.stage1);
+    expect(controller.release().targetStage, SpendeeHeaderStage.stage0);
   });
 
   test('geometry changes preserve a negative drag offset', () {
@@ -299,8 +306,8 @@ void main() {
       geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
     );
     controller.beginDrag();
-    controller.dragBy(40);
-    expect(controller.dragBy(40).tick, isTrue);
+    controller.dragBy(100);
+    expect(controller.dragBy(34).tick, isTrue);
     expect(controller.dragBy(-20).tick, isFalse);
     expect(controller.dragBy(20).tick, isFalse);
     expect(controller.release().targetStage, SpendeeHeaderStage.stage1);
