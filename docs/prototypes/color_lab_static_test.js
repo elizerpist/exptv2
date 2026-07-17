@@ -5204,7 +5204,10 @@ assert(
 const rebuiltPortalStart = html.indexOf(
   '<div class="mind-portal-test-header-wrap" data-mind-portal-test-header>',
 );
-const rebuiltPortalEnd = html.indexOf('</section>', rebuiltPortalStart);
+const rebuiltPortalEnd = html.indexOf(
+  '<section class="palette-area structured-palette" id="alternativePalette"',
+  rebuiltPortalStart,
+);
 const rebuiltPortalLab = html.slice(rebuiltPortalStart, rebuiltPortalEnd);
 assert(rebuiltPortalStart >= 0, 'Missing standalone portal test lab');
 assert(
@@ -5346,6 +5349,31 @@ assert(
   html.includes('src="./color_lab_portal_energy.js"'),
   'The color lab must load the pure portal energy module before its inline controller',
 );
+assert.ok(html.includes('data-portal-interior-motion-row'));
+assert.ok(html.includes('data-portal-interior-motion-toggle'));
+assert.ok(html.includes('data-portal-interior-motion-effect'));
+assert.ok(html.includes('data-portal-interior-motion-strength'));
+assert.ok(html.includes('data-portal-interior-motion-speed'));
+for (const value of ['driftingMist', 'innerCurrent', 'softTide', 'slowVortex']) {
+  assert.ok(html.includes(`value="${value}"`));
+}
+assert.ok(html.includes('renderPortalInteriorMotion'));
+assert.ok(!/portalInteriorMotion[\s\S]{0,300}requestAnimationFrame/.test(html));
+const portalInteriorMotionModelScript = 'src="./color_lab_portal_interior_motion.js"';
+const portalInteriorMotionRendererScript =
+  'src="./color_lab_portal_interior_motion_renderer.js"';
+const inlineColorLabController = '<script>\n    const selectionState = {';
+assert(
+  html.includes(portalInteriorMotionModelScript) &&
+    html.includes(portalInteriorMotionRendererScript) &&
+    html.indexOf('src="./color_lab_portal_transition_player.js"') <
+      html.indexOf(portalInteriorMotionModelScript) &&
+    html.indexOf(portalInteriorMotionModelScript) <
+      html.indexOf(portalInteriorMotionRendererScript) &&
+    html.indexOf(portalInteriorMotionRendererScript) <
+      html.indexOf(inlineColorLabController),
+  'Portal interior motion scripts must load model-before-renderer after dependencies and before the inline controller',
+);
 assert(
   /--mind-portal-color-a:[^;]+;[\s\S]*?--mind-portal-color-b:[^;]+;/.test(html) &&
     /linear-gradient\(90deg, var\(--mind-portal-color-a\) 0%, var\(--mind-portal-color-b\) 100%\)/.test(html),
@@ -5397,17 +5425,17 @@ assert(
 );
 assert.strictEqual(
   (rebuiltPortalLab.match(/data-portal-collapsible-panel/g) || []).length,
-  6,
+  7,
   'Every standalone test-portal control container below the header must be a collapsible panel',
 );
 assert.strictEqual(
   (rebuiltPortalLab.match(/data-portal-panel-toggle/g) || []).length,
-  6,
+  7,
   'Every collapsible Portal panel must expose its own chevron toggle button',
 );
 assert.strictEqual(
   (rebuiltPortalLab.match(/data-portal-panel-body/g) || []).length,
-  6,
+  7,
   'Every collapsible Portal panel must wrap its editable content in a collapsible body',
 );
 assert(
