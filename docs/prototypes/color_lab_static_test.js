@@ -5374,6 +5374,104 @@ assert(
       html.indexOf(inlineColorLabController),
   'Portal interior motion scripts must load model-before-renderer after dependencies and before the inline controller',
 );
+const portalInteriorFrameRuntime = extractFunctionSource('drawMindPortalEnergyFrame');
+const portalInteriorRendererCall =
+  'PortalInteriorMotionRenderer.renderPortalInteriorMotion(ctx, {';
+const portalInteriorRendererCallIndex = portalInteriorFrameRuntime.indexOf(
+  portalInteriorRendererCall,
+);
+const portalInteriorBaseFrameIndex = portalInteriorFrameRuntime.indexOf(
+  'ctx.putImageData(image, 0, 0);',
+);
+const portalInteriorFrameFinalizationIndex = portalInteriorFrameRuntime.indexOf(
+  'canvas.style.opacity = getMindPortalBaseCanvasOpacity(header);',
+);
+assert.strictEqual(
+  (portalInteriorFrameRuntime.match(
+    /PortalInteriorMotionRenderer\.renderPortalInteriorMotion\(/g,
+  ) || []).length,
+  1,
+  'The shared Balance frame must contain exactly one interior renderer call',
+);
+assert(
+  portalInteriorBaseFrameIndex >= 0 &&
+    portalInteriorRendererCallIndex > portalInteriorBaseFrameIndex &&
+    portalInteriorFrameFinalizationIndex > portalInteriorRendererCallIndex,
+  'The interior renderer must run after Balance base pixels and before frame finalization',
+);
+const portalInteriorEligibilityMatch = portalInteriorFrameRuntime.match(
+  /const\s+([A-Za-z_$][\w$]*)\s*=\s*balanceMode\s*&&\s*state\.portalInteriorMotionState\?\.enabled\s*===\s*true\s*&&\s*typeof PortalInteriorMotionRenderer\s*!==\s*'undefined';/,
+);
+assert(
+  portalInteriorEligibilityMatch,
+  'Interior eligibility must require the current Balance mode, enabled state, and renderer availability',
+);
+const portalInteriorEligibility = portalInteriorEligibilityMatch?.[1] || '';
+const portalInteriorElapsedTimeIndex = portalInteriorFrameRuntime.indexOf(
+  'const elapsedSeconds',
+);
+const portalInteriorEarlyReturn = portalInteriorFrameRuntime.slice(
+  portalInteriorFrameRuntime.indexOf('if ('),
+  portalInteriorElapsedTimeIndex,
+);
+assert(
+  new RegExp(
+    `settings\\.strength <= 0\\s*&&\\s*!${portalInteriorEligibility}`,
+  ).test(portalInteriorEarlyReturn),
+  'Energy strength zero must not gate an independently enabled Balance interior layer',
+);
+assert(
+  new RegExp(
+    `\\(state\\.reducedMotion && !state\\.reducedMotionOverride\\)\\s*&&\\s*!${portalInteriorEligibility}`,
+  ).test(portalInteriorEarlyReturn),
+  'Reduced motion must retain a reachable stable frame for an enabled Balance interior layer',
+);
+const portalInteriorPhaseAdvanceIndex = portalInteriorFrameRuntime.indexOf(
+  'MindPortalEnergy.advancePhase(',
+);
+const portalInteriorPhaseGuardIndex = portalInteriorFrameRuntime.lastIndexOf(
+  'if (!state.reducedMotion || state.reducedMotionOverride)',
+  portalInteriorPhaseAdvanceIndex,
+);
+assert(
+  portalInteriorPhaseGuardIndex > portalInteriorElapsedTimeIndex &&
+    portalInteriorPhaseAdvanceIndex > portalInteriorPhaseGuardIndex,
+  'Reduced-motion stable frames must freeze the shared energy phase',
+);
+const portalInteriorRendererGuardIndex = portalInteriorFrameRuntime.lastIndexOf(
+  `if (${portalInteriorEligibility})`,
+  portalInteriorRendererCallIndex,
+);
+const portalInteriorIntegrationRuntime = portalInteriorFrameRuntime.slice(
+  portalInteriorRendererGuardIndex,
+  portalInteriorFrameFinalizationIndex,
+);
+assert(
+  portalInteriorRendererGuardIndex > portalInteriorBaseFrameIndex &&
+    portalInteriorIntegrationRuntime.includes('left: MindPortalEnergy.moneyFlowPaletteHex[0]') &&
+    /right:\s*MindPortalEnergy\.moneyFlowPaletteHex\[\s*MindPortalEnergy\.moneyFlowPaletteHex\.length - 1\s*\]/.test(
+      portalInteriorIntegrationRuntime,
+    ) &&
+    portalInteriorIntegrationRuntime.includes('const currentBoundaryEdgesAt = (pixelY) => {') &&
+    /MindPortalEnergy\.sampleMoneyFlowField\(\s*activeMode,\s*0\.5,\s*normalizedY,\s*phase,\s*incomePercent,\s*settings,\s*\)/.test(
+      portalInteriorIntegrationRuntime,
+    ) &&
+    portalInteriorIntegrationRuntime.includes('timeMs: state.reducedMotion ? 0 : now') &&
+    portalInteriorIntegrationRuntime.includes('leftMother: resolvedBalanceColors.left') &&
+    portalInteriorIntegrationRuntime.includes('rightMother: resolvedBalanceColors.right') &&
+    portalInteriorIntegrationRuntime.includes('leftXAt: (y) => currentBoundaryEdgesAt(y).left') &&
+    portalInteriorIntegrationRuntime.includes('rightXAt: (y) => currentBoundaryEdgesAt(y).right') &&
+    portalInteriorIntegrationRuntime.includes('featherPx: Math.max(3, currentBoundaryFeatherPx)'),
+  'The enabled Balance guard must contain the live boundary adapter and normalized current-frame renderer contract',
+);
+const mindPortalEnergyStateRuntime = extractFunctionSource('ensureMindPortalEnergyState');
+assert(
+  mindPortalEnergyStateRuntime.includes("typeof PortalInteriorMotion !== 'undefined'") &&
+    /portalInteriorMotionState:[\s\S]*?PortalInteriorMotion\.DEFAULT_INTERIOR_MOTION_STATE[\s\S]*?:\s*\{[\s\S]*?enabled:\s*false,[\s\S]*?effect:\s*'driftingMist',[\s\S]*?strength:\s*0\.36,[\s\S]*?speed:\s*0\.42,[\s\S]*?\}/.test(
+      mindPortalEnergyStateRuntime,
+    ),
+  'Missing optional interior model globals must fall back to an independent disabled default state',
+);
 assert(
   /--mind-portal-color-a:[^;]+;[\s\S]*?--mind-portal-color-b:[^;]+;/.test(html) &&
     /linear-gradient\(90deg, var\(--mind-portal-color-a\) 0%, var\(--mind-portal-color-b\) 100%\)/.test(html),

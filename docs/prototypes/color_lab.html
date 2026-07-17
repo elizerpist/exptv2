@@ -13854,9 +13854,17 @@
         reducedMotionOverride: false,
         reducedMotionQuery,
         reducedMotionListener: null,
-        portalInteriorMotionState: {
-          ...PortalInteriorMotion.DEFAULT_INTERIOR_MOTION_STATE,
-        },
+        portalInteriorMotionState: (
+          typeof PortalInteriorMotion !== 'undefined' &&
+          PortalInteriorMotion.DEFAULT_INTERIOR_MOTION_STATE
+        )
+          ? { ...PortalInteriorMotion.DEFAULT_INTERIOR_MOTION_STATE }
+          : {
+            enabled: false,
+            effect: 'driftingMist',
+            strength: 0.36,
+            speed: 0.42,
+          },
       };
       mindPortalIdleStates.set(header, state);
       return state;
@@ -15611,12 +15619,16 @@
     function drawMindPortalEnergyFrame(header, canvas, ctx, state, now) {
       const activeMode = state.activeMode;
       const settings = state.settingsByMode[activeMode];
+      const balanceMode = MindPortalEnergy.isBalanceMode(activeMode);
+      const interiorMotionActive = balanceMode &&
+        state.portalInteriorMotionState?.enabled === true &&
+        typeof PortalInteriorMotionRenderer !== 'undefined';
       if (
         activeMode === 'static' ||
         !settings ||
-        settings.strength <= 0 ||
+        (settings.strength <= 0 && !interiorMotionActive) ||
         !state.visible ||
-        (state.reducedMotion && !state.reducedMotionOverride)
+        ((state.reducedMotion && !state.reducedMotionOverride) && !interiorMotionActive)
       ) {
         clearMindPortalEnergyCanvas(header, state);
         state.lastNow = now;
@@ -15624,11 +15636,13 @@
       }
       const elapsedSeconds = state.lastNow ? Math.max(0, Math.min(0.12, (now - state.lastNow) / 1000)) : 0;
       state.lastNow = now;
-      state.phaseByMode[activeMode] = MindPortalEnergy.advancePhase(
-        state.phaseByMode[activeMode],
-        elapsedSeconds,
-        settings.speed,
-      );
+      if (!state.reducedMotion || state.reducedMotionOverride) {
+        state.phaseByMode[activeMode] = MindPortalEnergy.advancePhase(
+          state.phaseByMode[activeMode],
+          elapsedSeconds,
+          settings.speed,
+        );
+      }
       if (now - state.lastFrameTime < settings.frameMs) return;
       state.lastFrameTime = now;
       const bounds = header.getBoundingClientRect();
@@ -15648,7 +15662,6 @@
         styles.getPropertyValue('--mind-portal-color-b'),
         { r: 53, g: 199, b: 110 },
       );
-      const balanceMode = MindPortalEnergy.isBalanceMode(activeMode);
       const incomePercent = Math.max(
         0,
         Math.min(
@@ -15723,11 +15736,7 @@
         }
       }
       ctx.putImageData(image, 0, 0);
-      if (
-        balanceMode &&
-        typeof PortalInteriorMotionRenderer !== 'undefined' &&
-        state.portalInteriorMotionState
-      ) {
+      if (interiorMotionActive) {
         const resolvedBalanceColors = {
           left: MindPortalEnergy.moneyFlowPaletteHex[0],
           right: MindPortalEnergy.moneyFlowPaletteHex[
