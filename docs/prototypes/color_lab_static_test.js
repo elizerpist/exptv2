@@ -5359,14 +5359,19 @@ for (const value of ['driftingMist', 'innerCurrent', 'softTide', 'slowVortex']) 
 }
 assert.ok(html.includes('renderPortalInteriorMotion'));
 assert.ok(!/portalInteriorMotion[\s\S]{0,300}requestAnimationFrame/.test(html));
-const portalInteriorControlLifecycle = [
-  extractFunctionSource('setPortalInteriorMotionState'),
-  extractFunctionSource('initPortalInteriorMotionControls'),
-].join('\n');
+const portalInteriorLifecycleFunctionNames = [
+  'ensureMindPortalEnergyState',
+  'syncPortalInteriorMotionControls',
+  'setPortalInteriorMotionState',
+  'initPortalInteriorMotionControls',
+];
+const portalInteriorControlLifecycle = portalInteriorLifecycleFunctionNames
+  .map((functionName) => extractFunctionSource(functionName))
+  .join('\n');
 for (const scheduler of ['requestAnimationFrame', 'setInterval(', 'setTimeout(']) {
   assert.ok(
     !portalInteriorControlLifecycle.includes(scheduler),
-    `Portal interior controls must not create an interior-specific scheduler: ${scheduler}`,
+    `Portal interior state/control/helper lifecycle must not create a private scheduler: ${scheduler}`,
   );
 }
 const portalInteriorMotionModelScript = 'src="./color_lab_portal_interior_motion.js"';
@@ -5387,9 +5392,13 @@ assert(
 const portalInteriorFrameRuntime = extractFunctionSource('drawMindPortalEnergyFrame');
 const portalInteriorRendererCall =
   'PortalInteriorMotionRenderer.renderPortalInteriorMotion(ctx, {';
+const portalInteriorRendererCallPattern =
+  /\brenderPortalInteriorMotion\s*\(/g;
 const portalInteriorRendererCallIndex = portalInteriorFrameRuntime.indexOf(
   portalInteriorRendererCall,
 );
+const portalInteriorFrameStartIndex = html.indexOf(portalInteriorFrameRuntime);
+const portalInteriorDocumentCallIndex = html.indexOf(portalInteriorRendererCall);
 const portalInteriorBaseFrameIndex = portalInteriorFrameRuntime.indexOf(
   'ctx.putImageData(image, 0, 0);',
 );
@@ -5397,17 +5406,24 @@ const portalInteriorFrameFinalizationIndex = portalInteriorFrameRuntime.indexOf(
   'canvas.style.opacity = getMindPortalBaseCanvasOpacity(header);',
 );
 assert.strictEqual(
-  (portalInteriorFrameRuntime.match(
-    /PortalInteriorMotionRenderer\.renderPortalInteriorMotion\(/g,
-  ) || []).length,
+  (html.match(portalInteriorRendererCallPattern) || []).length,
+  1,
+  'The full Color Lab document must contain exactly one interior renderer invocation',
+);
+assert.strictEqual(
+  (portalInteriorFrameRuntime.match(portalInteriorRendererCallPattern) || []).length,
   1,
   'The shared Balance frame must contain exactly one interior renderer call',
 );
 assert(
+  portalInteriorFrameStartIndex >= 0 &&
+    portalInteriorDocumentCallIndex >= portalInteriorFrameStartIndex &&
+    portalInteriorDocumentCallIndex <
+      portalInteriorFrameStartIndex + portalInteriorFrameRuntime.length &&
   portalInteriorBaseFrameIndex >= 0 &&
     portalInteriorRendererCallIndex > portalInteriorBaseFrameIndex &&
     portalInteriorFrameFinalizationIndex > portalInteriorRendererCallIndex,
-  'The interior renderer must run after Balance base pixels and before frame finalization',
+  'The sole interior renderer call must belong to the shared Balance frame, after base pixels and before finalization',
 );
 const portalInteriorEligibilityMatch = portalInteriorFrameRuntime.match(
   /const\s+([A-Za-z_$][\w$]*)\s*=\s*balanceMode\s*&&\s*state\.portalInteriorMotionState\?\.enabled\s*===\s*true\s*&&\s*typeof PortalInteriorMotionRenderer\s*!==\s*'undefined';/,

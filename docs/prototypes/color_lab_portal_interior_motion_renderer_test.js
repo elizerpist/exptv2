@@ -163,12 +163,28 @@ assert.deepEqual(
 assert.ok(strength0Frame.primitives.every((primitive) => primitive.alpha === 0.04));
 assert.ok(strength100Frame.primitives.every((primitive) => primitive.alpha === 0.26));
 
-const speed0Frame = model.createInteriorPrimitives({
-  ...isolationOptions, speed: 0, strength: 0.4,
+const speedFrameAt = (speed, timeMs) => model.createInteriorPrimitives({
+  ...isolationOptions, timeMs, speed, strength: 0.4,
 });
-const speed100Frame = model.createInteriorPrimitives({
-  ...isolationOptions, speed: 1, strength: 0.4,
-});
+const speed0InitialFrame = speedFrameAt(0, 0);
+const speed100InitialFrame = speedFrameAt(1, 0);
+const speed0Frame = speedFrameAt(0, 900);
+const speed100Frame = speedFrameAt(1, 900);
+assert.deepEqual(speed0InitialFrame, speed100InitialFrame);
+const forwardPhaseDelta = (initialFrame, nextFrame) => (
+  ((nextFrame.motion.phase - initialFrame.motion.phase) % 1) + 1
+) % 1;
+const speed0PhaseDelta = Number(forwardPhaseDelta(
+  speed0InitialFrame,
+  speed0Frame,
+).toFixed(6));
+const speed100PhaseDelta = Number(forwardPhaseDelta(
+  speed100InitialFrame,
+  speed100Frame,
+).toFixed(6));
+assert.equal(speed0PhaseDelta, 0.0315);
+assert.equal(speed100PhaseDelta, 0.2295);
+assert.ok(speed100PhaseDelta > speed0PhaseDelta);
 assert.notEqual(speed0Frame.motion.phase, speed100Frame.motion.phase);
 assert.notDeepEqual(
   speed0Frame.primitives.map((primitive) => primitive.geometry),
@@ -705,9 +721,12 @@ assert.deepEqual(api.renderPortalInteriorMotion(throwingCtx, renderOptions), {
 assert.equal(throwingCtx.calls.filter((call) => call.name === "save").length, 2);
 assert.equal(throwingCtx.calls.filter((call) => call.name === "restore").length, 2);
 
-const browserCalls = { palettes: [], frames: [] };
+const browserCalls = { normalizations: [], palettes: [], frames: [] };
 const browserModel = {
-  normalizeInteriorMotionState(state) { return state; },
+  normalizeInteriorMotionState(state) {
+    browserCalls.normalizations.push(state);
+    return state;
+  },
   deriveInteriorPalette(leftMother, rightMother) {
     browserCalls.palettes.push({ leftMother, rightMother });
     return {
@@ -736,18 +755,45 @@ vm.runInNewContext(
   browserRoot,
 );
 assert.equal(typeof browserRoot.PortalInteriorMotionRenderer.renderPortalInteriorMotion, "function");
+const browserRenderOptions = {
+  ...renderOptions,
+  width: 40,
+  height: 20,
+  boundary: { leftXAt: () => 15, rightXAt: () => 25, featherPx: 2 },
+};
+const assertBrowserModelInactive = (options, label) => {
+  const inactiveCtx = createFakeContext();
+  const result = browserRoot.PortalInteriorMotionRenderer.renderPortalInteriorMotion(
+    inactiveCtx,
+    options,
+  );
+  assert.equal(result.rendered, false, `${label} must not render`);
+  assert.equal(result.leftPrimitiveCount, 0, `${label} must report zero left primitives`);
+  assert.equal(result.rightPrimitiveCount, 0, `${label} must report zero right primitives`);
+  assert.deepEqual(inactiveCtx.calls, [], `${label} must not touch the canvas`);
+};
+assertBrowserModelInactive({
+  ...browserRenderOptions,
+  mode: "message",
+}, "VM non-Balance interior motion");
+assert.equal(browserCalls.normalizations.length, 0);
+assert.equal(browserCalls.palettes.length, 0);
+assert.equal(browserCalls.frames.length, 0);
+assertBrowserModelInactive({
+  ...browserRenderOptions,
+  state: { enabled: false },
+}, "VM disabled Balance interior motion");
+assert.equal(browserCalls.normalizations.length, 1);
+assert.equal(browserCalls.palettes.length, 0);
+assert.equal(browserCalls.frames.length, 0);
 const browserResult = browserRoot.PortalInteriorMotionRenderer.renderPortalInteriorMotion(
   createFakeContext(),
-  {
-    ...renderOptions,
-    width: 40,
-    height: 20,
-    boundary: { leftXAt: () => 15, rightXAt: () => 25, featherPx: 2 },
-  },
+  browserRenderOptions,
 );
 assert.equal(browserResult.rendered, true);
 assert.equal(browserResult.leftPrimitiveCount, 1);
 assert.equal(browserResult.rightPrimitiveCount, 1);
+assert.equal(browserCalls.normalizations.length, 2);
 assert.deepEqual(browserCalls.palettes, [{
   leftMother: "#36c9b8", rightMother: "#d890ef",
 }]);
