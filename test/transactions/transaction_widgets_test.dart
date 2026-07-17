@@ -335,6 +335,41 @@ void main() {
     expect(applied!.month, 5);
   });
 
+  testWidgets('summary month row uses category-style selected marker', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SummaryScopePickerSheet(
+            initialSelection: const SummaryScopeSelection(
+              yearEnabled: true,
+              monthEnabled: true,
+              year: 2026,
+              month: 5,
+            ),
+            accentColor: AppColors.primary,
+            buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralInset,
+            onApply: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('summary-scope-month-active-border')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('Év-summary-scope-switch')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('summary-scope-month-active-border')),
+      findsNothing,
+    );
+  });
+
   testWidgets('search pill shows merchant filter capsule', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

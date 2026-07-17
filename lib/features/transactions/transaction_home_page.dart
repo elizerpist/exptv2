@@ -2120,7 +2120,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
                           color: widget.cardSurfaceColor,
                           borderRadius: radius,
                           pressed: pressed,
-                          padding: const EdgeInsets.fromLTRB(10, 76, 10, 12),
+                          padding: const EdgeInsets.fromLTRB(12, 82, 12, 14),
                           neutralBorder: Border.all(color: AppColors.gray200),
                           neutralShadow: categoryNeutralShadow(
                             widget.cardSurfaceStyle,
@@ -2166,6 +2166,9 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
                         if (widget.selected &&
                             !widget.cardSurfaceStyle.hasPressEffect)
                           CategoryActiveBorder(
+                            key: ValueKey(
+                              'vendor-filter-active-border-${widget.summary.name}',
+                            ),
                             radius: radius,
                             color: widget.accentColor,
                           ),
@@ -2307,7 +2310,7 @@ class _VendorFilterRowState extends State<_VendorFilterRow> {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               height: 1,
               fontWeight: FontWeight.w700,
               color: AppColors.gray800,
