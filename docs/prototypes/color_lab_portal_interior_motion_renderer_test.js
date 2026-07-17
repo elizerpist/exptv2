@@ -8,27 +8,41 @@ const api = require("./color_lab_portal_interior_motion_renderer.js");
 function createFakeContext(options = {}) {
   const calls = [];
   const colorStops = [];
+  const gradients = [];
   const occurrences = new Map();
-  const record = (name, args = []) => {
-    calls.push({ name, args: [...args] });
+  const record = (name, args = [], details = {}) => {
+    calls.push({ name, args: [...args], ...details });
     const occurrence = (occurrences.get(name) || 0) + 1;
     occurrences.set(name, occurrence);
     if (options.throwAt?.[name] === occurrence) {
       throw new Error(`forced ${name} failure`);
     }
+    if (options.throwWhen?.({ name, args: [...args], calls, occurrence })) {
+      throw new Error(`forced ${name} failure`);
+    }
   };
   const createGradient = (name, args) => {
-    record(name, args);
+    const gradient = {
+      id: gradients.length,
+      name,
+      args: [...args],
+      colorStops: [],
+    };
+    gradients.push(gradient);
+    record(name, args, { gradientId: gradient.id });
     return {
       addColorStop(offset, color) {
-        colorStops.push({ offset, color });
-        record("addColorStop", [offset, color]);
+        const colorStop = { gradientId: gradient.id, offset, color };
+        colorStops.push(colorStop);
+        gradient.colorStops.push(colorStop);
+        record("addColorStop", [offset, color], { gradientId: gradient.id });
       },
     };
   };
   return {
     calls,
     colorStops,
+    gradients,
     globalAlpha: 1,
     lineWidth: 1,
     save() { record("save"); },
@@ -74,6 +88,35 @@ assert.equal(polygons.left.at(-3).y, 96);
 assert.deepEqual(polygons.left.slice(-2), [{ x: 0, y: 96 }, { x: 0, y: 0 }]);
 assert.deepEqual(polygons.right.slice(-2), [{ x: 240, y: 96 }, { x: 240, y: 0 }]);
 
+const exactPolygons = api.buildInteriorRegionPolygons({
+  width: 20,
+  height: 8,
+  samples: 4,
+  boundary: {
+    leftXAt: (y) => 4 + (y / 2),
+    rightXAt: (y) => 12 + (y / 4),
+    featherPx: 2,
+  },
+});
+assert.deepEqual(exactPolygons.left, [
+  { x: 2, y: 0 },
+  { x: 3, y: 2 },
+  { x: 4, y: 4 },
+  { x: 5, y: 6 },
+  { x: 6, y: 8 },
+  { x: 0, y: 8 },
+  { x: 0, y: 0 },
+]);
+assert.deepEqual(exactPolygons.right, [
+  { x: 14, y: 0 },
+  { x: 14.5, y: 2 },
+  { x: 15, y: 4 },
+  { x: 15.5, y: 6 },
+  { x: 16, y: 8 },
+  { x: 20, y: 8 },
+  { x: 20, y: 0 },
+]);
+
 const clamped = api.buildInteriorRegionPolygons({
   width: 240,
   height: 96,
@@ -91,42 +134,156 @@ assert.deepEqual(api.buildInteriorRegionPolygons({
   boundary: { leftXAt: () => Number.NaN, rightXAt: () => 132, featherPx: 5 },
 }), { left: [], right: [] });
 
-const painterCases = [
-  ["radialEllipse", {
-    centerX: 0.4, centerY: 0.5, radiusX: 0.2, radiusY: 0.3, rotation: 0.25,
-  }, "createRadialGradient", ["ellipse", "fill"]],
+const contourFailures = [];
+const contourCheck = (name, check) => {
+  try {
+    check();
+  } catch (error) {
+    contourFailures.push(`${name}: ${error.message}`);
+  }
+};
+const assertClose = (actual, expected, message) => {
+  assert.ok(Math.abs(actual - expected) <= 1e-9, `${message}: expected ${expected}, got ${actual}`);
+};
+const assertArrayClose = (actual, expected, message) => {
+  assert.equal(actual.length, expected.length, `${message} length`);
+  actual.forEach((value, index) => assertClose(value, expected[index], `${message}[${index}]`));
+};
+const softAlphaAt = (position, alpha) => {
+  if (position >= 1) return 0;
+  if (position <= 0.58) return alpha + (((alpha * 0.48) - alpha) * (position / 0.58));
+  return (alpha * 0.48) * (1 - ((position - 0.58) / 0.42));
+};
+const assertSoftStops = (gradient) => {
+  assert.deepEqual(gradient.colorStops.map((stop) => stop.offset), [0, 0.58, 1]);
+  assert.equal(gradient.colorStops[0].color, "rgba(171, 205, 239, 0.2)");
+  assert.equal(gradient.colorStops[1].color, "rgba(171, 205, 239, 0.096)");
+  assert.equal(gradient.colorStops[2].color, "rgba(54, 201, 184, 0)");
+};
+const directPrimitive = (kind, geometry) => ({
+  kind,
+  geometry,
+  innerColor: "#abcdef",
+  edgeColor: "#36c9b8",
+  alpha: 0.2,
+});
+const directBounds = { x: 10, y: 20, width: 200, height: 80 };
+
+const ellipseCtx = createFakeContext();
+assert.equal(api.drawInteriorPrimitive(ellipseCtx, directPrimitive("radialEllipse", {
+  centerX: 0.4,
+  centerY: 0.5,
+  radiusX: 0.2,
+  radiusY: 0.3,
+  rotation: 0.25,
+}), directBounds), true);
+contourCheck("ellipse short-axis contour alpha", () => {
+  const gradient = ellipseCtx.gradients[0];
+  const ellipse = ellipseCtx.calls.find((call) => call.name === "ellipse");
+  const shortAxisPosition = ellipse.args[3] / gradient.args[5];
+  const contourAlpha = softAlphaAt(shortAxisPosition, 0.2);
+  assert.equal(
+    contourAlpha,
+    0,
+    `short-axis position ${shortAxisPosition} retains alpha ${contourAlpha}`,
+  );
+});
+contourCheck("ellipse normalized rotated field geometry", () => {
+  assert.equal(ellipseCtx.gradients.length, 1);
+  assert.equal(ellipseCtx.gradients[0].name, "createRadialGradient");
+  assertArrayClose(ellipseCtx.gradients[0].args, [0, 0, 0, 0, 0, 1], "ellipse gradient");
+  const ellipse = ellipseCtx.calls.find((call) => call.name === "ellipse");
+  assertArrayClose(ellipse.args, [0, 0, 1, 1, 0, 0, Math.PI * 2], "unit ellipse contour");
+  const transforms = ellipseCtx.calls.filter((call) => (
+    ["translate", "rotate", "scale"].includes(call.name)
+  ));
+  assert.deepEqual(transforms.map((call) => call.name), [
+    "translate", "rotate", "scale", "scale", "rotate", "translate",
+  ]);
+  assertArrayClose(transforms[0].args, [90, 60], "ellipse translate");
+  assertArrayClose(transforms[1].args, [Math.PI / 2], "ellipse rotation");
+  assertArrayClose(transforms[2].args, [40, 24], "ellipse scale");
+  assertArrayClose(transforms[3].args, [1 / 40, 1 / 24], "ellipse inverse scale");
+  assertArrayClose(transforms[4].args, [-Math.PI / 2], "ellipse inverse rotation");
+  assertArrayClose(transforms[5].args, [-90, -60], "ellipse inverse translate");
+  assertSoftStops(ellipseCtx.gradients[0]);
+  assert.equal(ellipseCtx.calls.filter((call) => call.name === "save").length, 0);
+  assert.equal(ellipseCtx.calls.filter((call) => call.name === "restore").length, 0);
+});
+
+const fieldCases = [
   ["linearRibbon", {
     startX: 0.1, startY: 0.2, controlX: 0.5, controlY: 0.8,
     endX: 0.9, endY: 0.3, thickness: 0.08,
-  }, "createLinearGradient", ["bezierCurveTo", "stroke"]],
+  }],
   ["sineBand", {
     anchorX: 0.4, anchorY: 0.5, amplitude: 0.1, frequency: 0.3,
     phase: 0.2, thickness: 0.06,
-  }, "createLinearGradient", ["lineTo", "stroke"]],
+  }],
   ["radialArc", {
     centerX: 0.45, centerY: 0.55, radius: 0.3, start: 0.2,
     span: 0.4, thickness: 0.05,
-  }, "createRadialGradient", ["arc", "stroke"]],
+  }],
 ];
-painterCases.forEach(([kind, geometry, gradientCall, shapeCalls]) => {
-  const ctx = createFakeContext();
-  assert.equal(api.drawInteriorPrimitive(ctx, {
-    kind,
-    geometry,
-    innerColor: "#abcdef",
-    edgeColor: "#36c9b8",
-    alpha: 0.2,
-  }, { x: 10, y: 20, width: 200, height: 80 }), true);
-  assert.equal(ctx.calls.filter((call) => call.name === gradientCall).length, 1);
-  shapeCalls.forEach((name) => {
-    assert.ok(ctx.calls.some((call) => call.name === name), `${kind} must call ${name}`);
+fieldCases.forEach(([kind, geometry]) => {
+  const fieldCtx = createFakeContext();
+  assert.equal(api.drawInteriorPrimitive(
+    fieldCtx,
+    directPrimitive(kind, geometry),
+    directBounds,
+  ), true);
+  contourCheck(`${kind} complete 2-D feather and caps`, () => {
+    const lateralAlpha = softAlphaAt(0.5, 0.2);
+    assert.equal(
+      fieldCtx.calls.filter((call) => call.name === "createLinearGradient").length,
+      0,
+      `${kind} 1-D field leaves lateral/cap alpha ${lateralAlpha}`,
+    );
+    assert.equal(
+      fieldCtx.calls.filter((call) => call.name === "stroke").length,
+      0,
+      `${kind} stroke leaves a nonzero boundary/cap alpha ${lateralAlpha}`,
+    );
+    const arcs = fieldCtx.calls.filter((call) => call.name === "arc");
+    assert.equal(fieldCtx.gradients.length, arcs.length);
+    assert.ok(arcs.length > 1, `${kind} requires multiple bounded 2-D stamps`);
+    assert.ok(arcs.length <= 32, `${kind} exceeds the deterministic 32-stamp bound`);
+    arcs.forEach((arc, index) => {
+      const gradient = fieldCtx.gradients[index];
+      assert.equal(gradient.name, "createRadialGradient");
+      assertArrayClose(
+        gradient.args,
+        [arc.args[0], arc.args[1], 0, arc.args[0], arc.args[1], arc.args[2]],
+        `${kind} stamp ${index} support`,
+      );
+      assertArrayClose(arc.args.slice(3), [0, Math.PI * 2], `${kind} stamp ${index} cap`);
+      assertSoftStops(gradient);
+      if (index > 0) {
+        const previous = arcs[index - 1];
+        const distance = Math.hypot(
+          arc.args[0] - previous.args[0],
+          arc.args[1] - previous.args[1],
+        );
+        assert.ok(
+          distance <= (arc.args[2] + previous.args[2]) + 1e-9,
+          `${kind} stamps ${index - 1}/${index} leave a support gap`,
+        );
+      }
+    });
+    const repeatCtx = createFakeContext();
+    assert.equal(api.drawInteriorPrimitive(
+      repeatCtx,
+      directPrimitive(kind, geometry),
+      directBounds,
+    ), true);
+    assert.deepEqual(
+      repeatCtx.gradients.map((gradient) => gradient.args),
+      fieldCtx.gradients.map((gradient) => gradient.args),
+      `${kind} stamp field must be deterministic`,
+    );
+    assert.equal(fieldCtx.calls.filter((call) => call.name === "save").length, 0);
+    assert.equal(fieldCtx.calls.filter((call) => call.name === "restore").length, 0);
   });
-  assert.deepEqual(ctx.colorStops.map((stop) => stop.offset), [0, 0.58, 1]);
-  assert.match(ctx.colorStops[0].color, /^rgba\(171, 205, 239, 0\.2\)$/);
-  assert.match(ctx.colorStops[1].color, /^rgba\(171, 205, 239, 0\.096/);
-  assert.match(ctx.colorStops[2].color, /^rgba\(54, 201, 184, 0\)$/);
-  assert.equal(ctx.calls.filter((call) => call.name === "save").length, 0);
-  assert.equal(ctx.calls.filter((call) => call.name === "restore").length, 0);
 });
 assert.equal(api.drawInteriorPrimitive(createFakeContext(), {
   kind: "unknown", geometry: {}, innerColor: "#abcdef", edgeColor: "#36c9b8", alpha: 0.2,
@@ -149,6 +306,7 @@ const off = api.renderPortalInteriorMotion(createFakeContext(), {
 assert.deepEqual(off, { rendered: false, leftPrimitiveCount: 0, rightPrimitiveCount: 0 });
 
 [
+  { ...renderOptions, state: undefined },
   { ...renderOptions, mode: "message" },
   { ...renderOptions, width: 0 },
   { ...renderOptions, height: 0 },
@@ -160,6 +318,18 @@ assert.deepEqual(off, { rendered: false, leftPrimitiveCount: 0, rightPrimitiveCo
   {
     ...renderOptions,
     boundary: { leftXAt: () => 5, rightXAt: () => 132, featherPx: 5 },
+  },
+  {
+    ...renderOptions,
+    boundary: { leftXAt: () => 104, rightXAt: () => 235, featherPx: 5 },
+  },
+  {
+    ...renderOptions,
+    boundary: { leftXAt: () => 130, rightXAt: () => 120, featherPx: 5 },
+  },
+  {
+    ...renderOptions,
+    boundary: { leftXAt: () => 136, rightXAt: () => 120, featherPx: 5 },
   },
 ].forEach((options) => {
   const ctx = createFakeContext();
@@ -194,26 +364,124 @@ assert.equal(ctx.calls.some((call) => (
   && /(?:#fff(?:fff)?|white|rgba?\(255,\s*255,\s*255)/i.test(String(call.args[0]))
 )), false);
 
-const saveIndices = ctx.calls.reduce((indices, call, index) => (
-  call.name === "save" ? [...indices, index] : indices
-), []);
-const restoreIndices = ctx.calls.reduce((indices, call, index) => (
-  call.name === "restore" ? [...indices, index] : indices
-), []);
-assert.equal(saveIndices.length, 2);
-assert.equal(restoreIndices.length, 2);
-saveIndices.forEach((start, passIndex) => {
-  const pass = ctx.calls.slice(start, restoreIndices[passIndex] + 1).map((call) => call.name);
-  const clipIndex = pass.indexOf("clip");
-  assert.equal(pass[0], "save");
-  assert.equal(pass.at(-1), "restore");
-  assert.ok(pass.indexOf("beginPath") > 0 && pass.indexOf("beginPath") < clipIndex);
-  assert.ok(pass.indexOf("closePath") > 0 && pass.indexOf("closePath") < clipIndex);
+const savedPasses = (calls) => {
+  const saveIndices = calls.reduce((indices, call, index) => (
+    call.name === "save" ? [...indices, index] : indices
+  ), []);
+  const restoreIndices = calls.reduce((indices, call, index) => (
+    call.name === "restore" ? [...indices, index] : indices
+  ), []);
+  assert.equal(saveIndices.length, restoreIndices.length);
+  return saveIndices.map((start, index) => calls.slice(start, restoreIndices[index] + 1));
+};
+const passes = savedPasses(ctx.calls);
+assert.equal(passes.length, 2);
+passes.forEach((pass) => {
+  const names = pass.map((call) => call.name);
+  const clipIndex = names.indexOf("clip");
+  assert.equal(names[0], "save");
+  assert.equal(names.at(-1), "restore");
+  assert.ok(names.indexOf("beginPath") > 0 && names.indexOf("beginPath") < clipIndex);
+  assert.ok(names.indexOf("closePath") > 0 && names.indexOf("closePath") < clipIndex);
   assert.ok(clipIndex > 0);
-  assert.ok(pass.slice(clipIndex + 1, -1).some((name) => ["fill", "stroke"].includes(name)));
+  assert.ok(names.slice(clipIndex + 1, -1).some((name) => name === "fill"));
+});
+[
+  "rgba(54, 201, 184, 0)",
+  "rgba(216, 144, 239, 0)",
+].forEach((expectedMotherStop, passIndex) => {
+  const edgeStops = passes[passIndex].filter((call) => (
+    call.name === "addColorStop" && call.args[0] === 1
+  ));
+  assert.ok(edgeStops.length > 0);
+  assert.ok(edgeStops.every((call) => call.args[1] === expectedMotherStop));
+  const middleStops = passes[passIndex].filter((call) => (
+    call.name === "addColorStop" && call.args[0] === 0.58
+  ));
+  assert.ok(middleStops.length > 0);
+  assert.ok(middleStops.every((call) => (
+    /^rgba\(\d+, \d+, \d+, 0\.06144\)$/.test(call.args[1])
+  )));
 });
 
-const throwingCtx = createFakeContext({ throwAt: { fill: 5 } });
+const lastCallBefore = (calls, endIndex, name) => {
+  for (let index = endIndex - 1; index >= 0; index -= 1) {
+    if (calls[index].name === name) return calls[index];
+  }
+  return null;
+};
+const softSupports = (pass) => pass.flatMap((call, index) => {
+  if (call.name === "arc"
+    && Math.abs(call.args[3]) <= 1e-9
+    && Math.abs(call.args[4] - (Math.PI * 2)) <= 1e-9) {
+    return [{
+      minX: call.args[0] - call.args[2],
+      maxX: call.args[0] + call.args[2],
+      minY: call.args[1] - call.args[2],
+      maxY: call.args[1] + call.args[2],
+    }];
+  }
+  if (call.name !== "ellipse") return [];
+  const translation = lastCallBefore(pass, index, "translate");
+  const rotation = lastCallBefore(pass, index, "rotate");
+  const scale = lastCallBefore(pass, index, "scale");
+  if (!translation || !rotation || !scale) return [];
+  const [centerX, centerY] = translation.args;
+  const [radiusX, radiusY] = scale.args;
+  const angle = rotation.args[0];
+  const extentX = Math.hypot(radiusX * Math.cos(angle), radiusY * Math.sin(angle));
+  const extentY = Math.hypot(radiusX * Math.sin(angle), radiusY * Math.cos(angle));
+  return [{
+    minX: centerX - extentX,
+    maxX: centerX + extentX,
+    minY: centerY - extentY,
+    maxY: centerY + extentY,
+  }];
+});
+
+["driftingMist", "innerCurrent", "softTide", "slowVortex"].forEach((effect) => {
+  const supportCtx = createFakeContext();
+  const supportResult = api.renderPortalInteriorMotion(supportCtx, {
+    ...renderOptions,
+    state: { ...renderOptions.state, effect },
+  });
+  contourCheck(`${effect} support fits before protected clip`, () => {
+    assert.equal(supportResult.rendered, true);
+    const supportPolygons = api.buildInteriorRegionPolygons({
+      width: renderOptions.width,
+      height: renderOptions.height,
+      boundary,
+    });
+    const sampledCount = supportPolygons.left.length - 2;
+    const leftSafeEdge = Math.min(
+      ...supportPolygons.left.slice(0, sampledCount).map((point) => point.x),
+    );
+    const rightSafeEdge = Math.max(
+      ...supportPolygons.right.slice(0, sampledCount).map((point) => point.x),
+    );
+    const supportPasses = savedPasses(supportCtx.calls);
+    assert.equal(supportPasses.length, 2);
+    supportPasses.forEach((pass, passIndex) => {
+      const supports = softSupports(pass);
+      assert.ok(supports.length > 0, `${effect} pass ${passIndex} has no 2-D support`);
+      supports.forEach((support) => {
+        assert.ok(support.minY >= -1e-9 && support.maxY <= renderOptions.height + 1e-9);
+        if (passIndex === 0) assert.ok(support.maxX <= leftSafeEdge + 1e-9);
+        else assert.ok(support.minX >= rightSafeEdge - 1e-9);
+      });
+    });
+  });
+});
+
+if (contourFailures.length > 0) {
+  assert.fail(`2-D contour checks failed:\n${contourFailures.join("\n")}`);
+}
+
+const throwingCtx = createFakeContext({
+  throwWhen: ({ name, calls }) => (
+    name === "fill" && calls.filter((call) => call.name === "clip").length === 2
+  ),
+});
 assert.deepEqual(api.renderPortalInteriorMotion(throwingCtx, renderOptions), {
   rendered: false, leftPrimitiveCount: 0, rightPrimitiveCount: 0,
 });
