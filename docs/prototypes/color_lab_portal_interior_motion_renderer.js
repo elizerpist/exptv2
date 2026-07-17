@@ -167,7 +167,7 @@
         probes.push(point);
         if (index > 0) cumulativeLengths.push(length);
       }
-      const targetSpacing = Math.max(1, radius * 1.5);
+      const targetSpacing = radius * 1.5;
       const stampCount = Math.max(
         2,
         Math.min(MAX_SOFT_STAMPS, Math.ceil(length / targetSpacing) + 1),
@@ -191,19 +191,53 @@
       });
     }
 
+    function fitStampPoints(points, bounds, radius) {
+      return points.map((point) => ({
+        x: clamp(point.x, bounds.x + radius, bounds.x + bounds.width - radius),
+        y: clamp(point.y, bounds.y + radius, bounds.y + bounds.height - radius),
+      }));
+    }
+
+    function maximumStampGap(points) {
+      let maximum = 0;
+      for (let index = 1; index < points.length; index += 1) {
+        maximum = Math.max(maximum, Math.hypot(
+          points[index].x - points[index - 1].x,
+          points[index].y - points[index - 1].y,
+        ));
+      }
+      return maximum;
+    }
+
+    function resolveStampField(bounds, rawRadius, pointAt) {
+      const maximumRadius = Math.min(bounds.width, bounds.height) / 2;
+      const requestedRadius = Math.min(Math.abs(rawRadius), maximumRadius);
+      if (!Number.isFinite(requestedRadius) || requestedRadius <= 0) return null;
+      const rawPoints = adaptiveStampPoints(pointAt, requestedRadius);
+      if (rawPoints.length < 2) return null;
+
+      const candidate = (radius) => {
+        const points = fitStampPoints(rawPoints, bounds, radius);
+        return { radius, points, gap: maximumStampGap(points) };
+      };
+      let field = candidate(requestedRadius);
+      if (field.gap <= (field.radius * 2) + 1e-9) return field;
+
+      const adaptedRadius = Math.min(maximumRadius, field.gap / 2);
+      field = candidate(adaptedRadius);
+      if (field.gap <= (field.radius * 2) + 1e-9) return field;
+      if (adaptedRadius < maximumRadius) {
+        field = candidate(maximumRadius);
+        if (field.gap <= (field.radius * 2) + 1e-9) return field;
+      }
+      return null;
+    }
+
     function drawSoftStampField(ctx, primitive, bounds, rawRadius, pointAt) {
-      const radius = Math.min(
-        Math.abs(rawRadius),
-        bounds.width / 2,
-        bounds.height / 2,
-      );
-      if (!Number.isFinite(radius) || radius <= 0) return false;
-      const points = adaptiveStampPoints(pointAt, radius);
-      if (points.length < 2) return false;
-      points.forEach((point) => {
-        const centerX = clamp(point.x, bounds.x + radius, bounds.x + bounds.width - radius);
-        const centerY = clamp(point.y, bounds.y + radius, bounds.y + bounds.height - radius);
-        drawCircularSoftStamp(ctx, primitive, centerX, centerY, radius);
+      const field = resolveStampField(bounds, rawRadius, pointAt);
+      if (!field) return false;
+      field.points.forEach((point) => {
+        drawCircularSoftStamp(ctx, primitive, point.x, point.y, field.radius);
       });
       return true;
     }

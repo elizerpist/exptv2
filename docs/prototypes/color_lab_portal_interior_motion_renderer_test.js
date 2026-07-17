@@ -248,8 +248,13 @@ fieldCases.forEach(([kind, geometry]) => {
     assert.equal(fieldCtx.gradients.length, arcs.length);
     assert.ok(arcs.length > 1, `${kind} requires multiple bounded 2-D stamps`);
     assert.ok(arcs.length <= 32, `${kind} exceeds the deterministic 32-stamp bound`);
+    const requestedRadius = Math.abs(geometry.thickness) * Math.min(
+      directBounds.width,
+      directBounds.height,
+    );
     arcs.forEach((arc, index) => {
       const gradient = fieldCtx.gradients[index];
+      assertClose(arc.args[2], requestedRadius, `${kind} requested radius ${index}`);
       assert.equal(gradient.name, "createRadialGradient");
       assertArrayClose(
         gradient.args,
@@ -284,6 +289,56 @@ fieldCases.forEach(([kind, geometry]) => {
     assert.equal(fieldCtx.calls.filter((call) => call.name === "save").length, 0);
     assert.equal(fieldCtx.calls.filter((call) => call.name === "restore").length, 0);
   });
+});
+
+const thinRibbon = directPrimitive("linearRibbon", {
+  startX: 0,
+  startY: 0.5,
+  controlX: 0.5,
+  controlY: 0.5,
+  endX: 1,
+  endY: 0.5,
+  thickness: 0.001,
+});
+const thinBounds = { x: 0, y: 0, width: 200, height: 80 };
+const thinCtx = createFakeContext();
+assert.equal(api.drawInteriorPrimitive(thinCtx, thinRibbon, thinBounds), true);
+contourCheck("thin capped field adapts radius without gaps", () => {
+  const arcs = thinCtx.calls.filter((call) => call.name === "arc");
+  assert.ok(arcs.length > 1 && arcs.length <= 32);
+  arcs.forEach((arc, index) => {
+    const [centerX, centerY, radius] = arc.args;
+    assert.ok(centerX - radius >= -1e-9 && centerX + radius <= 200 + 1e-9);
+    assert.ok(centerY - radius >= -1e-9 && centerY + radius <= 80 + 1e-9);
+    if (index > 0) {
+      const previous = arcs[index - 1];
+      const distance = Math.hypot(
+        centerX - previous.args[0],
+        centerY - previous.args[1],
+      );
+      assert.ok(
+        distance <= (radius + previous.args[2]) + 1e-9,
+        `thin stamps ${index - 1}/${index} gap ${distance} > ${radius + previous.args[2]}`,
+      );
+    }
+  });
+  assert.ok(arcs[0].args[2] > 0.08, "thin field must increase its infeasible requested radius");
+  const repeatCtx = createFakeContext();
+  assert.equal(api.drawInteriorPrimitive(repeatCtx, thinRibbon, thinBounds), true);
+  assert.deepEqual(
+    repeatCtx.gradients.map((gradient) => gradient.args),
+    thinCtx.gradients.map((gradient) => gradient.args),
+  );
+});
+
+contourCheck("impossible thin field fails before drawing", () => {
+  const impossibleCtx = createFakeContext();
+  assert.equal(api.drawInteriorPrimitive(
+    impossibleCtx,
+    thinRibbon,
+    { x: 0, y: 0, width: 1000, height: 1 },
+  ), false);
+  assert.deepEqual(impossibleCtx.calls, []);
 });
 assert.equal(api.drawInteriorPrimitive(createFakeContext(), {
   kind: "unknown", geometry: {}, innerColor: "#abcdef", edgeColor: "#36c9b8", alpha: 0.2,
