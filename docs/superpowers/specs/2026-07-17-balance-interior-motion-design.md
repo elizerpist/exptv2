@@ -9,21 +9,22 @@
 - User correction from 2026-07-17: the feature must be dedicated to Balance interior motion, not the same background-morph panel/state, while using the same effects and controls 1:1 as Portal background morph.
 - Android screenshot baseline: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-013843.png`.
 - Android screenshot correction source: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-130441.png`, where the earlier implementation left a visible light/white center band because the interior morph respected a no-draw corridor.
+- Android screenshot layer-correction source: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-132149.png`, where the split-mask fix removed the original white center gradient because the interior morph became a replacement layer instead of a top overlay.
 - Existing prototype: `docs/prototypes/color_lab.html`.
 - Source behavior to match 1:1 for effects and controls: `docs/prototypes/color_lab_portal_message_field.js` and `docs/prototypes/color_lab_portal_message_field_renderer.js`.
 - Acceptance checklist: `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md`.
 
-The screenshots remain required implementation inputs. The latest correction establishes that the center transition is not an empty protected white corridor: the interior morph must reach the center transition on both sides, using the left side's light green and the right side's light magenta/purple, while preventing green/magenta cross-over.
+The screenshots remain required implementation inputs. The latest correction establishes the intended layer model: the original animated Balance gradient remains the lower layer, including the turquoise-white-magenta-purple transition, and the interior morph is a separate upper overlay. The overlay is one common field, not two side-clipped fields.
 
 ## Goal
 
-Add one optional, dedicated Balance-only interior morph layer. It makes the left and right Balance interiors read as internal material murmur (`morajlik belül`), with two independently masked sides that meet at the center split without leaving a blank/light no-draw band, while preserving all existing portal effects.
+Add one optional, dedicated Balance-only interior morph overlay. It makes the Balance field read as internal material murmur (`morajlik belül`) while preserving the original animated turquoise-white-magenta-purple Balance gradient underneath.
 
 The feature is dedicated: it has its own state, its own controls, its own palette derivation, and its own Balance masks. It must not be the same Portal background-morph panel, not the same enabled flag, and not the same rendered canvas. The effect catalog, labels, per-effect sliders, defaults, clamping, phase behavior, and matter sampling must match Portal background morph 1:1.
 
 ## Scope
 
-The feature applies only in Balance mode because that mode has two colored interiors with a light center transition. It is off by default and can run at the same time as the current Balance energy/boundary animation, message morph, background response, full background morph, and transition effects.
+The feature applies only in Balance mode because that mode has two colored interiors with a light center transition. It is off by default and can run at the same time as the current Balance energy/boundary animation, message morph, background response, full background morph, and transition effects. The interior layer must not replace or flatten the lower Balance gradient.
 
 This design does not alter the Balance split, money-flow ratio, boundary shape, header content, or the algorithms of the existing Portal background-morph feature. It removes the previous custom interior primitive catalog as the accepted target for this feature.
 
@@ -62,14 +63,14 @@ The implementation may share a pure sampler/kernel with Portal background morph 
 
 ## Two-Side Palette Model
 
-The revised feature has two dedicated color scales, one per Balance side:
+The revised feature keeps two dedicated tint endpoints for the upper overlay:
 
-- left side scale: left side's brightest Balance color point to left side's darkest Balance color point;
-- right side scale: right side's brightest Balance color point to right side's darkest Balance color point.
+- A-region overlay tint: the known darker green endpoint from the current Balance palette;
+- B-region overlay tint: the known darker purple/lilac endpoint from the current Balance palette.
 
-The renderer samples the selected interior matter value inside each side and maps it through that side's own light-to-dark scale. It must not use the Portal background-morph pink/purple palette window for Balance interior rendering. It must not use fixed decorative accent colors.
+The renderer samples one shared interior matter field across the full Balance header. It maps that shared matter to an alpha/tint overlay: green-tinted where the lower Balance field reads as A/turquoise, purple-tinted where it reads as B/magenta-lilac, with a smooth tint transition. It must not use the Portal background-morph pink/purple palette window for Balance interior rendering. It must not use fixed decorative accent colors.
 
-The brightest/darkest endpoints are derived from the current resolved Balance palette for the specific side, so theme or Balance palette changes update both interior scales immediately.
+The dark tint endpoints are derived from the current resolved Balance palette, so theme or Balance palette changes update the overlay immediately.
 
 ## Rendering Architecture
 
@@ -78,17 +79,17 @@ Interior motion is a separate state and renderer unit. It participates in the ex
 The visual stack is:
 
 1. resolved Balance base field;
-2. dedicated left and right interior morph fields;
+2. one common translucent interior morph overlay;
 3. existing Balance center/boundary animation;
 4. header content, controls, and interaction surfaces.
 
-For each frame, current Balance geometry produces two mutually exclusive clip masks. The masks meet at the current center split: the left morph may draw up to the split using only the left light-to-dark scale, and the right morph may draw from the split using only the right light-to-dark scale. There is no protected blank/no-draw center corridor. Header corner clipping remains authoritative at the outer edge.
+For each frame, the lower Balance renderer first draws the original animated money-flow palette (`#49cfc5 → #8defe5 → #f8e8f3 → #f7b2f5 → #d8b4fe`) with its existing smooth center transition. The interior renderer then draws a translucent overlay over the full Balance canvas. It does not clip to left/right masks and it does not clear, replace, or repaint the base gradient. Header corner clipping remains authoritative at the outer edge.
 
 Disabling the feature, leaving Balance mode, hiding the relevant header, or selecting a mode with no animated work stops interior updates and clears only the interior contribution. Other portal layers retain their state and animation.
 
 ## Motion Behavior
 
-Both regions run the same selected mode and normalized settings. The two sides differ by deterministic seed offset, phase offset, and preferred coordinate direction. Repeated renders with the same state and timestamp produce the same frame, avoiding flicker and random jumps.
+The overlay runs one selected mode and one normalized settings set across the full Balance field. Repeated renders with the same state and timestamp produce the same frame, avoiding flicker and random jumps.
 
 The animation should read as internal colored material motion. It must not look like a second boundary, hard-edged particles, or a decorative overlay floating above the Balance field. Under reduced-motion preferences, animated modes render a stable representative frame without temporal progression.
 
@@ -113,13 +114,14 @@ Automated verification covers:
 - dedicated default-off state independent from Portal background-morph state;
 - exact mode order, labels, control schemas, defaults, normalization, and reset behavior matching Portal background morph;
 - per-side light-to-dark palette derivation from the current Balance side colors;
+- preservation of the original lower Balance gradient before overlay rendering;
 - phase-invariant `static-matter` and moving animated modes matching Portal background morph signatures;
-- left and right side independence through deterministic seed/phase offsets;
+- one shared overlay field with no left/right clipping;
 - inactive-mode and disabled short-circuiting with zero interior work;
-- center-split masking with no blank/no-draw corridor and no green/pink/purple cross-over;
+- translucent overlay rendering using darker green and darker purple tint endpoints without removing the white center gradient;
 - integration checks for the dedicated control row, mode selector, dynamic controls, reset, and shared-loop render call.
 
-Visual verification uses the mandatory screenshots as the baseline/correction sources and captures the same mobile header at multiple animation timestamps. Review must confirm visible internal moraj on both sides, no hard internal contours, no center white band caused by skipped drawing, no green/magenta cross-over, no text/control overlap, and no regression to existing Balance boundary motion.
+Visual verification uses the mandatory screenshots as the baseline/correction sources and captures the same mobile header at multiple animation timestamps. Review must confirm the original turquoise-white-magenta-purple lower gradient is visible, the upper morph reads as internal movement rather than replacement color, no text/control overlap occurs, and existing Balance boundary motion is preserved.
 
 ## Acceptance Boundary
 

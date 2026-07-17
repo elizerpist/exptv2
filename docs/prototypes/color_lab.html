@@ -15831,26 +15831,7 @@
       ctx.putImageData(image, 0, 0);
       if (interiorMotionActive) {
         const resolvedBalanceColors = MindPortalEnergy.moneyFlowPaletteHex;
-        const currentBoundaryFeatherPx = 3;
-        const currentBoundaryHalfWidthPx = Number(settings.seamSoftness) * (width - 1);
-        const currentBoundaryEdgesAt = (pixelY) => {
-          const normalizedY = height <= 1
-            ? 0
-            : Math.max(0, Math.min(1, Number(pixelY) / (height - 1)));
-          const sample = MindPortalEnergy.sampleMoneyFlowField(
-            activeMode,
-            0.5,
-            normalizedY,
-            phase,
-            incomePercent,
-            settings,
-          );
-          const boundaryX = sample.boundary * (width - 1);
-          return {
-            left: boundaryX - currentBoundaryHalfWidthPx,
-            right: boundaryX + currentBoundaryHalfWidthPx,
-          };
-        };
+        const balanceSplit = MindPortalEnergy.moneyFlowStopPositions(incomePercent)[2];
         PortalInteriorMotionRenderer.renderPortalInteriorMotion(ctx, {
           mode: 'balance',
           state: state.portalInteriorMotionState,
@@ -15859,11 +15840,8 @@
           phase: state.reducedMotion ? 0 : state.portalInteriorMotionState.phaseByMode?.[state.portalInteriorMotionState.mode],
           leftColors: resolvedBalanceColors.slice(0, 2),
           rightColors: resolvedBalanceColors.slice(-2),
-          boundary: {
-            leftXAt: (y) => currentBoundaryEdgesAt(y).left,
-            rightXAt: (y) => currentBoundaryEdgesAt(y).right,
-            featherPx: Math.max(3, currentBoundaryFeatherPx),
-          },
+          split: balanceSplit,
+          transitionWidth: 0.36,
         });
       }
       canvas.style.opacity = getMindPortalBaseCanvasOpacity(header);

@@ -17,7 +17,8 @@
 - For every mode, control key, label, min, max, step, default, unit, normalization, and reset must match `PortalMessageField.controlsForMode(mode)`.
 - Left and right sides share selected mode/settings but use deterministic nonmatching seed and phase offsets.
 - Each side has its own light-to-dark scale derived from that side's current Balance colors.
-- The two side masks meet at the current center split; there is no protected blank/no-draw corridor. The left side may draw into the center transition only with its own green scale, and the right side only with its own magenta/purple scale.
+- Revised layer model approved on 2026-07-17: the original animated turquoise-white-magenta-purple Balance gradient remains the lower layer, and the interior morph is one common translucent upper overlay.
+- The upper overlay must not clip to left/right masks, must not clear or replace the lower gradient, and must tint with the known darker green in A areas and known darker purple/lilac in B areas.
 - Reuse the existing Balance frame clock; do not add another `requestAnimationFrame` loop.
 - Add no runtime dependency.
 - Completion requires `COLOR-LAB-384` through `COLOR-LAB-395` to be `DONE` or explicitly deferred.
@@ -67,3 +68,26 @@
 - [x] HTTP-smoke `docs/prototypes/color_lab.html#mindHeaderScaleLab` from the local server.
 - [x] Update checklist rows honestly; do not mark Android visual rows DONE without actual Android screenshots or explicit deferral.
 - [x] Commit the implementation.
+
+### Task 5: Common Overlay Layer Redesign
+
+**Files:**
+- Modify: `docs/prototypes/color_lab_portal_interior_motion_renderer_test.js`
+- Modify: `docs/prototypes/color_lab_static_test.js`
+- Modify: `docs/prototypes/color_lab_portal_interior_motion_renderer.js`
+- Modify: `docs/prototypes/color_lab.html`
+- Modify: `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md`
+
+**Interfaces:**
+- Consumes: `PortalInteriorMotion.normalizeInteriorMotionState(state)`, `PortalInteriorMotion.deriveInteriorPalettes(options)`, `PortalMessageField.sampleMatter(mode, x, y, phase, settings)`.
+- Produces: `PortalInteriorMotionRenderer.renderPortalInteriorMotion(ctx, options)` as a shared overlay renderer returning `{ rendered, overlayPixelCount }`.
+
+- [x] Write failing renderer tests requiring a single unmasked overlay: zero `clip()` calls, `rgba(...)` fill styles with alpha below 1, and an `overlayPixelCount` result.
+- [x] Run `node docs/prototypes/color_lab_portal_interior_motion_renderer_test.js` and confirm RED against the split-mask renderer.
+- [x] Write failing static integration tests requiring the renderer call to happen after `ctx.putImageData(image, 0, 0)`, without a `boundary` object, and with current Balance colors passed for tint derivation.
+- [x] Run `node docs/prototypes/color_lab_static_test.js` and confirm RED.
+- [x] Replace split-mask rendering with one full-canvas overlay pass. Sample `PortalMessageField.sampleMatter` once per pixel, derive dark green/purple tint endpoints from the current Balance colors, use a smooth horizontal tint mix, and draw only `rgba(...)` pixels so the lower gradient remains visible.
+- [x] Update `drawMindPortalEnergyFrame` to pass `leftColors`, `rightColors`, and `split`/transition data only; remove live boundary mask construction from the interior renderer call.
+- [x] Run renderer/static tests and confirm GREEN.
+- [x] Run the full targeted verification suite, HTTP smoke, and `git diff --check`.
+- [x] Open the Color Lab preview with a new cache-buster and commit the redesign.

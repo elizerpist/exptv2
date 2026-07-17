@@ -5525,17 +5525,18 @@ const portalInteriorIntegrationRuntime = portalInteriorFrameRuntime.slice(
 assert(
   portalInteriorRendererGuardIndex > portalInteriorBaseFrameIndex &&
     portalInteriorIntegrationRuntime.includes('const resolvedBalanceColors = MindPortalEnergy.moneyFlowPaletteHex;') &&
-    portalInteriorIntegrationRuntime.includes('const currentBoundaryEdgesAt = (pixelY) => {') &&
-    /MindPortalEnergy\.sampleMoneyFlowField\(\s*activeMode,\s*0\.5,\s*normalizedY,\s*phase,\s*incomePercent,\s*settings,\s*\)/.test(
-      portalInteriorIntegrationRuntime,
-    ) &&
+    portalInteriorIntegrationRuntime.includes('const balanceSplit = MindPortalEnergy.moneyFlowStopPositions(incomePercent)[2];') &&
     portalInteriorIntegrationRuntime.includes('phase: state.reducedMotion ? 0 : state.portalInteriorMotionState.phaseByMode?.[state.portalInteriorMotionState.mode]') &&
     portalInteriorIntegrationRuntime.includes('leftColors: resolvedBalanceColors.slice(0, 2)') &&
     portalInteriorIntegrationRuntime.includes('rightColors: resolvedBalanceColors.slice(-2)') &&
-    portalInteriorIntegrationRuntime.includes('leftXAt: (y) => currentBoundaryEdgesAt(y).left') &&
-    portalInteriorIntegrationRuntime.includes('rightXAt: (y) => currentBoundaryEdgesAt(y).right') &&
-    portalInteriorIntegrationRuntime.includes('featherPx: Math.max(3, currentBoundaryFeatherPx)'),
-  'The enabled Balance guard must contain the live boundary adapter and normalized current-frame renderer contract',
+    portalInteriorIntegrationRuntime.includes('split: balanceSplit') &&
+    portalInteriorIntegrationRuntime.includes('transitionWidth: 0.36') &&
+    !portalInteriorIntegrationRuntime.includes('currentBoundaryEdgesAt') &&
+    !portalInteriorIntegrationRuntime.includes('boundary: {') &&
+    !portalInteriorIntegrationRuntime.includes('leftXAt:') &&
+    !portalInteriorIntegrationRuntime.includes('rightXAt:') &&
+    !portalInteriorIntegrationRuntime.includes('featherPx:'),
+  'The enabled Balance guard must pass a common translucent overlay contract without boundary masks',
 );
 const mindPortalEnergyStateRuntime = extractFunctionSource('ensureMindPortalEnergyState');
 assert(
