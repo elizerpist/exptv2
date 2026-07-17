@@ -17,7 +17,7 @@
 - For every mode, control key, label, min, max, step, default, unit, normalization, and reset must match `PortalMessageField.controlsForMode(mode)`.
 - Left and right sides share selected mode/settings but use deterministic nonmatching seed and phase offsets.
 - Each side has its own light-to-dark scale derived from that side's current Balance colors.
-- The full white boundary plus feather allowance is a protected no-draw corridor.
+- The two side masks meet at the current center split; there is no protected blank/no-draw corridor. The left side may draw into the center transition only with its own green scale, and the right side only with its own magenta/purple scale.
 - Reuse the existing Balance frame clock; do not add another `requestAnimationFrame` loop.
 - Add no runtime dependency.
 - Completion requires `COLOR-LAB-384` through `COLOR-LAB-395` to be `DONE` or explicitly deferred.
@@ -43,7 +43,7 @@
 
 ### Task 2: Masked Pixel-Field Renderer
 
-- [x] Write failing renderer tests proving `renderPortalInteriorMotion` calls no primitive painters, returns left/right pixel work, protects the corridor, and changes animated modes over phase.
+- [x] Write failing renderer tests proving `renderPortalInteriorMotion` calls no primitive painters, returns left/right pixel work, uses two non-crossing masks that meet at the center split, and changes animated modes over phase.
 - [x] Run `node docs/prototypes/color_lab_portal_interior_motion_renderer_test.js` and confirm RED against the primitive renderer.
 - [x] Rework the renderer to build left/right masks and render sampled Portal background-morph matter through each side's light-to-dark palette.
 - [x] Run renderer tests and confirm GREEN.

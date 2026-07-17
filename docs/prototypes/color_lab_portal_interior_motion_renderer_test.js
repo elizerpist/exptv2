@@ -36,11 +36,20 @@ const polygons = api.buildInteriorRegionPolygons({
   samples: 16,
 });
 assert.ok(polygons.left.every((point, index) => (
-  index >= 17 || point.x <= boundary.leftXAt(point.y) - boundary.featherPx
+  index >= 17 ||
+    point.x === (boundary.leftXAt(point.y) + boundary.rightXAt(point.y)) / 2
 )));
 assert.ok(polygons.right.every((point, index) => (
-  index >= 17 || point.x >= boundary.rightXAt(point.y) + boundary.featherPx
+  index >= 17 ||
+    point.x === (boundary.leftXAt(point.y) + boundary.rightXAt(point.y)) / 2
 )));
+polygons.left.slice(0, -2).forEach((point, index) => {
+  assert.equal(
+    point.x,
+    polygons.right[index].x,
+    "Interior masks must meet at the center split with no blank corridor",
+  );
+});
 
 const state = motion.normalizeInteriorMotionState({
   enabled: true,
@@ -95,6 +104,39 @@ assert.equal(animatedCtx0.calls.some((call) => call.name === "arc"), false);
 assert.ok(animatedCtx0.calls.some((call) => (
   call.name === "fillStyle" && String(call.args[0]).includes("rgb(")
 )));
+
+const styleBeforeFillAt = (ctx, x, y) => {
+  let currentStyle = null;
+  for (const call of ctx.calls) {
+    if (call.name === "fillStyle") currentStyle = call.args[0];
+    if (call.name === "fillRect" && call.args[0] === x && call.args[1] === y) {
+      return currentStyle;
+    }
+  }
+  return null;
+};
+const centerLightCtx = createFakeContext();
+api.renderPortalInteriorMotion(centerLightCtx, {
+  ...renderOptions,
+  width: 16,
+  height: 4,
+  boundary: {
+    leftXAt: () => 6,
+    rightXAt: () => 10,
+    featherPx: 4,
+  },
+  phase: 0,
+});
+assert.equal(
+  styleBeforeFillAt(centerLightCtx, 7, 0),
+  "rgb(141, 239, 229)",
+  "Left interior must reach the center gradient as light green",
+);
+assert.equal(
+  styleBeforeFillAt(centerLightCtx, 8, 0),
+  "rgb(247, 178, 245)",
+  "Right interior must reach the center gradient as light magenta",
+);
 
 const animatedCtx3 = createFakeContext();
 api.renderPortalInteriorMotion(animatedCtx3, {

@@ -7,22 +7,23 @@
 
 - User instruction from 2026-07-17 requesting an independently toggleable interior animation for both Balance color regions.
 - User correction from 2026-07-17: the feature must be dedicated to Balance interior motion, not the same background-morph panel/state, while using the same effects and controls 1:1 as Portal background morph.
-- Android screenshot: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-013843.png`.
+- Android screenshot baseline: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-013843.png`.
+- Android screenshot correction source: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260717-130441.png`, where the earlier implementation left a visible light/white center band because the interior morph respected a no-draw corridor.
 - Existing prototype: `docs/prototypes/color_lab.html`.
 - Source behavior to match 1:1 for effects and controls: `docs/prototypes/color_lab_portal_message_field.js` and `docs/prototypes/color_lab_portal_message_field_renderer.js`.
 - Acceptance checklist: `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md`.
 
-The screenshot remains a required implementation input. It shows the mobile Balance header and the protected white boundary corridor. The revised feature must add internal material motion inside the two colored Balance fields without replacing the existing Balance boundary animation or reusing the Portal background-morph UI state.
+The screenshots remain required implementation inputs. The latest correction establishes that the center transition is not an empty protected white corridor: the interior morph must reach the center transition on both sides, using the left side's light green and the right side's light magenta/purple, while preventing green/magenta cross-over.
 
 ## Goal
 
-Add one optional, dedicated Balance-only interior morph layer. It makes the left and right Balance interiors read as internal material murmur (`morajlik belül`), with two independently masked sides, while preserving the existing white boundary corridor and all existing portal effects.
+Add one optional, dedicated Balance-only interior morph layer. It makes the left and right Balance interiors read as internal material murmur (`morajlik belül`), with two independently masked sides that meet at the center split without leaving a blank/light no-draw band, while preserving all existing portal effects.
 
 The feature is dedicated: it has its own state, its own controls, its own palette derivation, and its own Balance masks. It must not be the same Portal background-morph panel, not the same enabled flag, and not the same rendered canvas. The effect catalog, labels, per-effect sliders, defaults, clamping, phase behavior, and matter sampling must match Portal background morph 1:1.
 
 ## Scope
 
-The feature applies only in Balance mode because that mode has two colored interiors and a separating white corridor. It is off by default and can run at the same time as the current Balance energy/boundary animation, message morph, background response, full background morph, and transition effects.
+The feature applies only in Balance mode because that mode has two colored interiors with a light center transition. It is off by default and can run at the same time as the current Balance energy/boundary animation, message morph, background response, full background morph, and transition effects.
 
 This design does not alter the Balance split, money-flow ratio, boundary shape, header content, or the algorithms of the existing Portal background-morph feature. It removes the previous custom interior primitive catalog as the accepted target for this feature.
 
@@ -78,10 +79,10 @@ The visual stack is:
 
 1. resolved Balance base field;
 2. dedicated left and right interior morph fields;
-3. white boundary corridor and its existing animation;
+3. existing Balance center/boundary animation;
 4. header content, controls, and interaction surfaces.
 
-For each frame, current Balance geometry produces two mutually exclusive clip masks. A protected corridor covers the full visible white boundary plus a feather allowance. The left and right interior render passes are clipped to their own masks and cannot draw inside that corridor or the opposite region. Header corner clipping remains authoritative at the outer edge.
+For each frame, current Balance geometry produces two mutually exclusive clip masks. The masks meet at the current center split: the left morph may draw up to the split using only the left light-to-dark scale, and the right morph may draw from the split using only the right light-to-dark scale. There is no protected blank/no-draw center corridor. Header corner clipping remains authoritative at the outer edge.
 
 Disabling the feature, leaving Balance mode, hiding the relevant header, or selecting a mode with no animated work stops interior updates and clears only the interior contribution. Other portal layers retain their state and animation.
 
@@ -115,10 +116,10 @@ Automated verification covers:
 - phase-invariant `static-matter` and moving animated modes matching Portal background morph signatures;
 - left and right side independence through deterministic seed/phase offsets;
 - inactive-mode and disabled short-circuiting with zero interior work;
-- protected white-corridor masking with no green/pink/purple contamination;
+- center-split masking with no blank/no-draw corridor and no green/pink/purple cross-over;
 - integration checks for the dedicated control row, mode selector, dynamic controls, reset, and shared-loop render call.
 
-Visual verification uses the mandatory screenshot as the baseline and captures the same mobile header at multiple animation timestamps. Review must confirm visible internal moraj on both sides, no hard internal contours, no boundary bleed, no text/control overlap, and no regression to existing Balance boundary motion.
+Visual verification uses the mandatory screenshots as the baseline/correction sources and captures the same mobile header at multiple animation timestamps. Review must confirm visible internal moraj on both sides, no hard internal contours, no center white band caused by skipped drawing, no green/magenta cross-over, no text/control overlap, and no regression to existing Balance boundary motion.
 
 ## Acceptance Boundary
 

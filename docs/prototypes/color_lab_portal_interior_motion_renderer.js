@@ -54,8 +54,13 @@
           if (!Number.isFinite(leftBoundaryX) || !Number.isFinite(rightBoundaryX)) {
             return emptyPolygons();
           }
-          left.push({ x: clamp(leftBoundaryX - featherPx, 0, width), y });
-          right.push({ x: clamp(rightBoundaryX + featherPx, 0, width), y });
+          const centerBoundaryX = typeof boundary.centerXAt === 'function'
+            ? Number(boundary.centerXAt(y))
+            : (leftBoundaryX + rightBoundaryX) / 2;
+          if (!Number.isFinite(centerBoundaryX)) return emptyPolygons();
+          const splitX = clamp(centerBoundaryX, 0, width);
+          left.push({ x: splitX, y });
+          right.push({ x: splitX, y });
         }
       } catch (error) {
         return emptyPolygons();
@@ -77,7 +82,7 @@
       return Math.abs(doubledArea) / 2;
     }
 
-    function hasProtectedGeometry(polygons) {
+    function hasSplitGeometry(polygons) {
       if (!polygons
         || !Array.isArray(polygons.left)
         || !Array.isArray(polygons.right)
@@ -86,17 +91,17 @@
         || polygonArea(polygons.right) <= 0) return false;
       const sampledPointCount = polygons.left.length - 2;
       for (let index = 0; index < sampledPointCount; index += 1) {
-        if (polygons.left[index].x >= polygons.right[index].x) return false;
+        if (polygons.left[index].x > polygons.right[index].x) return false;
       }
       return true;
     }
 
-    function protectedDrawingBounds(polygons, width, height) {
+    function splitDrawingBounds(polygons, width, height) {
       const sampledPointCount = polygons.left.length - 2;
-      const leftEdge = Math.min(
+      const leftEdge = Math.max(
         ...polygons.left.slice(0, sampledPointCount).map((point) => point.x),
       );
-      const rightEdge = Math.max(
+      const rightEdge = Math.min(
         ...polygons.right.slice(0, sampledPointCount).map((point) => point.x),
       );
       if (!Number.isFinite(leftEdge)
@@ -214,8 +219,8 @@
         boundary: options.boundary,
         samples: options.samples,
       });
-      if (!hasProtectedGeometry(polygons)) return off();
-      const drawingBounds = protectedDrawingBounds(polygons, width, height);
+      if (!hasSplitGeometry(polygons)) return off();
+      const drawingBounds = splitDrawingBounds(polygons, width, height);
       if (!drawingBounds) return off();
 
       try {
