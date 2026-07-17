@@ -35,6 +35,8 @@ The Color Lab controls keep a dedicated optional-effect row for Balance interior
 - visible label: `PORTÁL BELSŐ MOZGÁS`;
 - independent `KI` / `BE` toggle, defaulting to `KI`;
 - one mode selector dedicated to the interior layer;
+- a secondary upper-layer rotation toggle, defaulting to `KI`;
+- a secondary upper-layer rotation speed slider/number control;
 - a dynamic controls viewport dedicated to the selected interior mode;
 - an active-mode reset that resets only the selected interior mode settings.
 
@@ -47,6 +49,8 @@ The interior mode selector must expose the same modes, in the same order, with t
 5. `forming-clouds` - `Keletkező energiafelhők`.
 
 For each mode, the interior panel renders the same slider/number controls as `PortalMessageField.controlsForMode(mode)`, with the same key, label, min, max, step, default, unit, normalization, and reset behavior. This replaces the earlier single `Erősség` and `Sebesség` controls.
+
+The rotation controls are extra upper-layer controls and are not part of the Portal background-morph effect schemas. They rotate the overlay sampling plane only; they do not rotate the header canvas, lower Balance gradient, text, controls, or color tint map.
 
 Only one interior mode is active at a time. The selected mode and settings are shared by both sides, but each side uses its own deterministic phase offset and seed offset so the two interiors are not mirrored or synchronized.
 
@@ -91,6 +95,10 @@ Disabling the feature, leaving Balance mode, hiding the relevant header, or sele
 
 The overlay runs one selected mode and one normalized settings set across the full Balance field. Repeated renders with the same state and timestamp produce the same frame, avoiding flicker and random jumps.
 
+When overlay rotation is enabled, the renderer rotates the morph sampler's coordinate plane around the header center. At 0 degrees the motion keeps the current horizontal read; around 90 degrees the same plane can read as bottom-to-top or top-to-bottom movement. Rotation speed controls how fast this sampling plane turns.
+
+The rotation uses a width-based virtual square sampling field, not the visible header rectangle as the full field. This creates off-window wandering: when the plane rotates toward vertical movement, the travel distance is based on the header width rather than the much smaller header height, so the motion can enter and leave from outside the visible top/bottom instead of only drifting through the center band.
+
 The animation should read as internal colored material motion. It must not look like a second boundary, hard-edged particles, or a decorative overlay floating above the Balance field. Under reduced-motion preferences, animated modes render a stable representative frame without temporal progression.
 
 ## Failure and Fallback Behavior
@@ -117,6 +125,8 @@ Automated verification covers:
 - preservation of the original lower Balance gradient before overlay rendering;
 - phase-invariant `static-matter` and moving animated modes matching Portal background morph signatures;
 - one shared overlay field with no left/right clipping;
+- upper-layer rotation toggle/speed normalization and UI sync;
+- width-based virtual-square sampling with off-window overscan for rotated vertical movement;
 - inactive-mode and disabled short-circuiting with zero interior work;
 - translucent overlay rendering using darker green and darker purple tint endpoints without removing the white center gradient;
 - integration checks for the dedicated control row, mode selector, dynamic controls, reset, and shared-loop render call.

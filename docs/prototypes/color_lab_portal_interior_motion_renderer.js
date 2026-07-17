@@ -19,6 +19,7 @@
     });
     const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
     const clamp01 = (value) => clamp(Number.isFinite(value) ? value : 0, 0, 1);
+    const round12 = (value) => Math.round(value * 1e12) / 1e12;
     const canCall = (ctx, methods) => (
       ctx && typeof ctx === 'object' && methods.every((method) => typeof ctx[method] === 'function')
     );
@@ -47,6 +48,37 @@
       const rounded = Math.round(clamp(value, 0, 1) * 1000) / 1000;
       return rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
     };
+    const rotationAngle = (phase, rotationEnabled, rotationSpeed) => {
+      if (rotationEnabled !== true) return 0;
+      const speed = clamp(Number(rotationSpeed) || 0, 0, 100);
+      if (speed <= 0) return 0;
+      return (Number(phase) || 0) * (speed / 100) * Math.PI * 2;
+    };
+
+    function projectInteriorOverlaySamplePoint(options = {}) {
+      const width = Math.max(1, Number(options.width) || 1);
+      const height = Math.max(1, Number(options.height) || 1);
+      const spanPx = Math.max(width, height);
+      const angle = rotationAngle(
+        options.phase,
+        options.rotationEnabled,
+        options.rotationSpeed,
+      );
+      const px = (clamp01(Number(options.x)) - 0.5) * width;
+      const py = (clamp01(Number(options.y)) - 0.5) * height;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const rotatedX = (px * cos) - (py * sin);
+      const rotatedY = (px * sin) + (py * cos);
+      return {
+        x: round12(clamp01(0.5 + (rotatedX / spanPx))),
+        y: round12(clamp01(0.5 + (rotatedY / spanPx))),
+        angle: round12(angle),
+        spanPx: round12(spanPx),
+        overscanX: round12(Math.max(0, (spanPx - width) / 2)),
+        overscanY: round12(Math.max(0, (spanPx - height) / 2)),
+      };
+    }
 
     function renderPortalInteriorMotion(ctx, options = {}) {
       const off = emptyRenderResult;
@@ -115,10 +147,19 @@
           const normalizedY = height <= 1 ? 0.5 : clamp01(y / (height - 1));
           for (let x = 0; x < xEnd; x += 1) {
             const normalizedX = width <= 1 ? 0.5 : clamp01(x / (width - 1));
+            const samplePoint = projectInteriorOverlaySamplePoint({
+              x: normalizedX,
+              y: normalizedY,
+              width,
+              height,
+              phase,
+              rotationEnabled: state.rotationEnabled === true,
+              rotationSpeed: state.rotationSpeed,
+            });
             const matter = field.sampleMatter(
               mode,
-              normalizedX,
-              normalizedY,
+              samplePoint.x,
+              samplePoint.y,
               phase,
               settings,
             );
@@ -146,6 +187,7 @@
     }
 
     return Object.freeze({
+      projectInteriorOverlaySamplePoint,
       renderPortalInteriorMotion,
     });
   },

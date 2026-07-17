@@ -12,6 +12,15 @@
   const MODE_LABELS = Object.freeze({ ...(field?.modeLabels || {}) });
   const ANIMATED_MODE_IDS = Object.freeze((field?.animatedModes || []).slice());
   const DEFAULT_MODE = field?.defaults?.mode || MODE_IDS[0] || 'solid-a';
+  const ROTATION_SPEED_META = Object.freeze({
+    key: 'rotationSpeed',
+    label: 'Rotáció sebesség',
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 28,
+    unit: '%',
+  });
 
   const cloneSettings = (settings) => ({ ...(settings || {}) });
   const deepFreeze = (value) => {
@@ -50,6 +59,10 @@
       : Number(value);
   }
 
+  function normalizeRotationSpeed(value) {
+    return normalizeValue(ROTATION_SPEED_META, value);
+  }
+
   function createInteriorSettingsByMode() {
     return Object.fromEntries(
       MODE_IDS.slice(1).map((mode) => [mode, createModeSettings(mode)]),
@@ -73,6 +86,8 @@
   const DEFAULT_INTERIOR_MOTION_STATE = deepFreeze({
     enabled: false,
     mode: DEFAULT_MODE,
+    rotationEnabled: false,
+    rotationSpeed: ROTATION_SPEED_META.default,
     settingsByMode: createInteriorSettingsByMode(),
     phaseByMode: createInteriorPhaseByMode(),
   });
@@ -91,6 +106,8 @@
     return {
       enabled: Boolean(input.enabled),
       mode: normalizeMode(input.mode),
+      rotationEnabled: Boolean(input.rotationEnabled),
+      rotationSpeed: normalizeRotationSpeed(input.rotationSpeed),
       settingsByMode,
       phaseByMode,
     };
@@ -184,6 +201,7 @@
     MODE_IDS,
     MODE_LABELS,
     ANIMATED_MODE_IDS,
+    ROTATION_SPEED_META,
     DEFAULT_INTERIOR_MOTION_STATE,
     normalizeMode,
     controlsForMode,
@@ -191,6 +209,7 @@
     createInteriorSettingsByMode,
     createInteriorPhaseByMode,
     normalizeValue,
+    normalizeRotationSpeed,
     normalizeModeSettings,
     normalizeInteriorMotionState,
     deriveInteriorPalettes,

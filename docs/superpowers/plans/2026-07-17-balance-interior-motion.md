@@ -19,6 +19,8 @@
 - Each side has its own light-to-dark scale derived from that side's current Balance colors.
 - Revised layer model approved on 2026-07-17: the original animated turquoise-white-magenta-purple Balance gradient remains the lower layer, and the interior morph is one common translucent upper overlay.
 - The upper overlay must not clip to left/right masks, must not clear or replace the lower gradient, and must tint with the known darker green in A areas and known darker purple/lilac in B areas.
+- The upper overlay has extra rotation controls: `Rotáció` KI/BE and `Rotáció sebesség`; these rotate only the morph sampling plane.
+- Rotated sampling must use a width-based virtual square with off-window overscan so vertical movement has width-distance travel, not only the visible header height.
 - Reuse the existing Balance frame clock; do not add another `requestAnimationFrame` loop.
 - Add no runtime dependency.
 - Completion requires `COLOR-LAB-384` through `COLOR-LAB-395` to be `DONE` or explicitly deferred.
@@ -91,3 +93,31 @@
 - [x] Run renderer/static tests and confirm GREEN.
 - [x] Run the full targeted verification suite, HTTP smoke, and `git diff --check`.
 - [x] Open the Color Lab preview with a new cache-buster and commit the redesign.
+
+### Task 6: Upper Overlay Rotation Controls and Overscan Sampling
+
+**Files:**
+- Modify: `docs/prototypes/color_lab_portal_interior_motion_test.js`
+- Modify: `docs/prototypes/color_lab_portal_interior_motion_renderer_test.js`
+- Modify: `docs/prototypes/color_lab_static_test.js`
+- Modify: `docs/prototypes/color_lab_portal_interior_motion.js`
+- Modify: `docs/prototypes/color_lab_portal_interior_motion_renderer.js`
+- Modify: `docs/prototypes/color_lab.html`
+- Modify: `docs/superpowers/checklists/2026-07-17-balance-interior-motion-checklist.md`
+
+**Interfaces:**
+- Consumes: existing `PortalInteriorMotion.normalizeInteriorMotionState(state)` and `PortalInteriorMotionRenderer.renderPortalInteriorMotion(ctx, options)`.
+- Produces: top-level `rotationEnabled` and `rotationSpeed` in the interior state, plus `PortalInteriorMotionRenderer.projectInteriorOverlaySamplePoint(options)` for testing the rotated width-based virtual sampling field.
+
+- [x] Write failing model tests for `rotationEnabled`, `rotationSpeed`, and `normalizeRotationSpeed`.
+- [x] Run `node docs/prototypes/color_lab_portal_interior_motion_test.js` and confirm RED.
+- [x] Write failing renderer tests proving rotation changes projected sample coordinates, speed 0 leaves projection unrotated, and the virtual sample field uses width-based overscan for short headers.
+- [x] Run `node docs/prototypes/color_lab_portal_interior_motion_renderer_test.js` and confirm RED.
+- [x] Write failing static tests for the `Rotáció` toggle and `Rotáció sebesség` range/number controls, disabled-state sync, and renderer call receiving normalized rotation state.
+- [x] Run `node docs/prototypes/color_lab_static_test.js` and confirm RED.
+- [x] Add rotation state and normalization to `PortalInteriorMotion`.
+- [x] Add virtual-square rotated sample projection to the renderer and use it before `PortalMessageField.sampleMatter`.
+- [x] Add the rotation controls to `color_lab.html` and sync them with the interior state.
+- [x] Run model, renderer, and static tests and confirm GREEN.
+- [x] Run the full targeted verification suite, syntax checks, HTTP smoke, and `git diff --check`.
+- [x] Open the Color Lab preview with a new cache-buster and commit.

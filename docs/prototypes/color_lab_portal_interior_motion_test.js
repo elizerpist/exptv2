@@ -17,8 +17,19 @@ const schemaTuple = (meta) => [
 assert.deepEqual(api.MODE_IDS, field.modeOrder);
 assert.deepEqual(api.MODE_LABELS, field.modeLabels);
 assert.deepEqual(api.ANIMATED_MODE_IDS, field.animatedModes);
+assert.deepEqual(api.ROTATION_SPEED_META, {
+  key: "rotationSpeed",
+  label: "Rotáció sebesség",
+  min: 0,
+  max: 100,
+  step: 1,
+  default: 28,
+  unit: "%",
+});
 assert.equal(api.DEFAULT_INTERIOR_MOTION_STATE.enabled, false);
 assert.equal(api.DEFAULT_INTERIOR_MOTION_STATE.mode, field.defaults.mode);
+assert.equal(api.DEFAULT_INTERIOR_MOTION_STATE.rotationEnabled, false);
+assert.equal(api.DEFAULT_INTERIOR_MOTION_STATE.rotationSpeed, 28);
 assert.deepEqual(
   Object.keys(api.DEFAULT_INTERIOR_MOTION_STATE.settingsByMode),
   field.modeOrder.slice(1),
@@ -61,9 +72,17 @@ const normalized = api.normalizeInteriorMotionState({
     "wandering-mist": 4.25,
     "forming-clouds": "bad",
   },
+  rotationEnabled: 1,
+  rotationSpeed: 999,
 });
 assert.equal(normalized.enabled, true);
 assert.equal(normalized.mode, "solid-a");
+assert.equal(normalized.rotationEnabled, true);
+assert.equal(normalized.rotationSpeed, 100);
+assert.equal(api.normalizeRotationSpeed(""), 28);
+assert.equal(api.normalizeRotationSpeed(-20), 0);
+assert.equal(api.normalizeRotationSpeed(42.4), 42);
+assert.equal(api.normalizeRotationSpeed(999), 100);
 assert.equal(
   normalized.settingsByMode["wandering-mist"].coverage,
   field.controlsForMode("wandering-mist")[0].min,

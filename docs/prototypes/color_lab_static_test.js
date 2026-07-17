@@ -5354,6 +5354,9 @@ assert.ok(html.includes('data-portal-interior-motion-toggle'));
 assert.ok(html.includes('data-portal-interior-motion-mode-select'));
 assert.ok(html.includes('data-portal-interior-motion-mode-reset'));
 assert.ok(html.includes('data-portal-interior-motion-controls-scroll'));
+assert.ok(html.includes('data-portal-interior-motion-rotation-toggle'));
+assert.ok(html.includes('data-portal-interior-motion-rotation-speed-range'));
+assert.ok(html.includes('data-portal-interior-motion-rotation-speed-number'));
 assert.ok(!html.includes('data-portal-interior-motion-effect'));
 assert.ok(!html.includes('data-portal-interior-motion-strength'));
 assert.ok(!html.includes('data-portal-interior-motion-speed'));
@@ -5559,10 +5562,23 @@ assert(
     portalInteriorControlSyncRuntime.includes('data-portal-interior-motion-control-range') &&
     portalInteriorControlSyncRuntime.includes('PortalInteriorMotion.controlsForMode(activeMode).forEach') &&
     portalInteriorControlSyncRuntime.includes('PortalInteriorMotion.normalizeValue(meta, sourceValue)') &&
+    portalInteriorControlSyncRuntime.includes('PortalInteriorMotion.normalizeRotationSpeed') &&
+    portalInteriorControlSyncRuntime.includes('rotationToggle.setAttribute') &&
+    portalInteriorControlSyncRuntime.includes('state.portalInteriorMotionState.rotationEnabled') &&
+    portalInteriorControlSyncRuntime.includes('state.portalInteriorMotionState.rotationSpeed') &&
     portalInteriorControlSyncRuntime.includes('viewport.replaceChildren(fragment)') &&
     portalInteriorControlSyncRuntime.includes('[modeSelect, resetButton].forEach') &&
     portalInteriorControlSyncRuntime.includes('control.disabled = !enabled'),
-  'Interior controls must start natively disabled and render dedicated Portal background-morph controls when enabled',
+  'Interior controls must start natively disabled and render dedicated Portal background-morph plus overlay rotation controls when enabled',
+);
+const portalInteriorInitRuntime = extractFunctionSource('initPortalInteriorMotionControls');
+assert(
+  portalInteriorInitRuntime.includes("row.querySelector('[data-portal-interior-motion-rotation-toggle]')") &&
+    portalInteriorInitRuntime.includes("row.querySelector('[data-portal-interior-motion-rotation-speed-range]')") &&
+    portalInteriorInitRuntime.includes("row.querySelector('[data-portal-interior-motion-rotation-speed-number]')") &&
+    portalInteriorInitRuntime.includes('rotationEnabled: !state.portalInteriorMotionState.rotationEnabled') &&
+    portalInteriorInitRuntime.includes('rotationSpeed: value'),
+  'Interior initialization must wire the rotation toggle and speed controls into the dedicated state',
 );
 assert(
   /--mind-portal-color-a:[^;]+;[\s\S]*?--mind-portal-color-b:[^;]+;/.test(html) &&

@@ -36,11 +36,73 @@ const rgbaAlpha = (style) => {
   const match = String(style).match(/^rgba\(\d+,\s*\d+,\s*\d+,\s*(0(?:\.\d+)?|1(?:\.0+)?)\)$/);
   return match ? Number(match[1]) : NaN;
 };
+const round12 = (value) => Math.round(value * 1e12) / 1e12;
 
 assert.equal(
   Object.prototype.hasOwnProperty.call(api, "buildInteriorRegionPolygons"),
   false,
   "Interior motion overlay must not expose split-mask polygon helpers",
+);
+assert.equal(typeof api.projectInteriorOverlaySamplePoint, "function");
+assert.deepEqual(
+  api.projectInteriorOverlaySamplePoint({
+    x: 0.5,
+    y: 0,
+    width: 160,
+    height: 40,
+    phase: 0.25,
+    rotationEnabled: false,
+    rotationSpeed: 100,
+  }),
+  {
+    x: 0.5,
+    y: 0.375,
+    angle: 0,
+    spanPx: 160,
+    overscanX: 0,
+    overscanY: 60,
+  },
+  "Unrotated overlay sampling must use a width-based virtual field with vertical overscan",
+);
+assert.deepEqual(
+  api.projectInteriorOverlaySamplePoint({
+    x: 0,
+    y: 0.5,
+    width: 160,
+    height: 40,
+    phase: 0.25,
+    rotationEnabled: true,
+    rotationSpeed: 100,
+  }),
+  {
+    x: 0.5,
+    y: 0,
+    angle: round12(Math.PI / 2),
+    spanPx: 160,
+    overscanX: 0,
+    overscanY: 60,
+  },
+  "A 90-degree rotation must turn the horizontal plane into a vertical travel axis",
+);
+assert.deepEqual(
+  api.projectInteriorOverlaySamplePoint({
+    x: 0,
+    y: 0.5,
+    width: 160,
+    height: 40,
+    phase: 0.25,
+    rotationEnabled: true,
+    rotationSpeed: 0,
+  }),
+  {
+    x: 0,
+    y: 0.5,
+    angle: 0,
+    spanPx: 160,
+    overscanX: 0,
+    overscanY: 60,
+  },
+  "Enabled rotation with zero speed must keep the sampling plane unrotated",
 );
 
 const staticSettings = motion.createInteriorSettingsByMode();
@@ -148,6 +210,23 @@ assert.notDeepEqual(
   animatedCtx0.calls.filter((call) => call.name === "fillStyle").map((call) => call.args[0]),
   animatedCtx3.calls.filter((call) => call.name === "fillStyle").map((call) => call.args[0]),
   "wandering-mist overlay must visibly change across phase",
+);
+
+const rotatedStaticState = motion.normalizeInteriorMotionState({
+  ...staticState,
+  rotationEnabled: true,
+  rotationSpeed: 100,
+});
+const rotatedStaticCtx = createFakeContext();
+api.renderPortalInteriorMotion(rotatedStaticCtx, {
+  ...renderOptions,
+  state: rotatedStaticState,
+  phase: 0.25,
+});
+assert.notDeepEqual(
+  overlayCtx.calls.filter((call) => call.name === "fillStyle").map((call) => call.args[0]),
+  rotatedStaticCtx.calls.filter((call) => call.name === "fillStyle").map((call) => call.args[0]),
+  "Rotating the overlay sampling plane must change the sampled matter pattern",
 );
 
 const staticCtx0 = createFakeContext();

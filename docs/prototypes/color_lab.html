@@ -11202,6 +11202,17 @@
                       <strong data-portal-interior-motion-controls-title>Vándorló köd</strong>
                       <button type="button" data-portal-interior-motion-mode-reset disabled>Aktív mód reset</button>
                     </div>
+                    <div class="mind-portal-signature-row" data-portal-interior-motion-rotation-row>
+                      <b>↻</b>
+                      <span>Rotáció</span>
+                      <button type="button" class="portal-option-toggle mind-portal-layer-toggle" aria-pressed="false" data-portal-interior-motion-rotation-toggle disabled>KI</button>
+                    </div>
+                    <label class="mind-portal-energy-row" data-portal-interior-motion-rotation-speed-row>
+                      <b>R</b>
+                      <span>Rotáció sebesség · %</span>
+                      <input type="range" min="0" max="100" step="1" value="28" aria-label="Belső mozgás rotáció sebesség" data-portal-interior-motion-rotation-speed-range disabled>
+                      <input type="number" min="0" max="100" step="1" value="28" inputmode="numeric" aria-label="Belső mozgás rotáció sebesség manual" data-portal-interior-motion-rotation-speed-number disabled>
+                    </label>
                     <div class="mind-portal-energy-controls-scroll" data-portal-interior-motion-controls-scroll></div>
                   </div>
                 </div>
@@ -13863,6 +13874,8 @@
           : {
             enabled: false,
             mode: 'wandering-mist',
+            rotationEnabled: false,
+            rotationSpeed: 28,
             settingsByMode: {},
             phaseByMode: {},
           },
@@ -13885,6 +13898,9 @@
       const toggle = row.querySelector('[data-portal-interior-motion-toggle]');
       const modeSelect = row.querySelector('[data-portal-interior-motion-mode-select]');
       const resetButton = row.querySelector('[data-portal-interior-motion-mode-reset]');
+      const rotationToggle = row.querySelector('[data-portal-interior-motion-rotation-toggle]');
+      const rotationSpeedRange = row.querySelector('[data-portal-interior-motion-rotation-speed-range]');
+      const rotationSpeedNumber = row.querySelector('[data-portal-interior-motion-rotation-speed-number]');
       const controls = row.querySelector('[data-portal-interior-motion-controls]');
       const viewport = row.querySelector('[data-portal-interior-motion-controls-scroll]');
       const controlsTitle = row.querySelector('[data-portal-interior-motion-controls-title]');
@@ -13902,6 +13918,25 @@
         label.textContent = portalInteriorMotionModeLabel(activeMode);
       }
       if (modeSelect) modeSelect.value = activeMode;
+      const rotationSpeed = typeof PortalInteriorMotion !== 'undefined'
+        ? PortalInteriorMotion.normalizeRotationSpeed(
+          state.portalInteriorMotionState.rotationSpeed,
+        )
+        : state.portalInteriorMotionState.rotationSpeed;
+      state.portalInteriorMotionState.rotationSpeed = rotationSpeed;
+      if (rotationToggle) {
+        rotationToggle.setAttribute(
+          'aria-pressed',
+          state.portalInteriorMotionState.rotationEnabled ? 'true' : 'false',
+        );
+        rotationToggle.textContent = state.portalInteriorMotionState.rotationEnabled ? 'BE' : 'KI';
+        rotationToggle.disabled = !enabled;
+      }
+      [rotationSpeedRange, rotationSpeedNumber].forEach((control) => {
+        if (!control) return;
+        control.value = String(state.portalInteriorMotionState.rotationSpeed);
+        control.disabled = !enabled;
+      });
       if (controlsTitle && typeof PortalInteriorMotion !== 'undefined') {
         controlsTitle.textContent = PortalInteriorMotion.MODE_LABELS[activeMode] || '';
       }
@@ -13990,6 +14025,9 @@
         const toggle = row.querySelector('[data-portal-interior-motion-toggle]');
         const modeSelect = row.querySelector('[data-portal-interior-motion-mode-select]');
         const resetButton = row.querySelector('[data-portal-interior-motion-mode-reset]');
+        const rotationToggle = row.querySelector('[data-portal-interior-motion-rotation-toggle]');
+        const rotationSpeedRange = row.querySelector('[data-portal-interior-motion-rotation-speed-range]');
+        const rotationSpeedNumber = row.querySelector('[data-portal-interior-motion-rotation-speed-number]');
         row.querySelector('.portal-option-summary[data-portal-interior-motion-expand]')
           ?.addEventListener('click', () => {
             setPortalControlPanelCollapsed(
@@ -14005,6 +14043,25 @@
         });
         modeSelect?.addEventListener('change', () => {
           setPortalInteriorMotionState(header, { mode: modeSelect.value });
+        });
+        rotationToggle?.addEventListener('click', () => {
+          const state = ensureMindPortalEnergyState(header);
+          setPortalInteriorMotionState(header, {
+            rotationEnabled: !state.portalInteriorMotionState.rotationEnabled,
+          });
+        });
+        const writeRotationSpeed = (source) => {
+          const value = PortalInteriorMotion.normalizeRotationSpeed(source.value);
+          setPortalInteriorMotionState(header, { rotationSpeed: value });
+        };
+        rotationSpeedRange?.addEventListener('input', () => writeRotationSpeed(rotationSpeedRange));
+        rotationSpeedRange?.addEventListener('change', () => writeRotationSpeed(rotationSpeedRange));
+        rotationSpeedNumber?.addEventListener('change', () => writeRotationSpeed(rotationSpeedNumber));
+        rotationSpeedNumber?.addEventListener('blur', () => writeRotationSpeed(rotationSpeedNumber));
+        rotationSpeedNumber?.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          writeRotationSpeed(rotationSpeedNumber);
+          rotationSpeedNumber.blur();
         });
         resetButton?.addEventListener('click', () => {
           const state = ensureMindPortalEnergyState(header);
