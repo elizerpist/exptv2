@@ -1,4 +1,5 @@
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/core/platform/browser_fullscreen_controller.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/main.dart';
@@ -239,12 +240,17 @@ void main() {
         );
   });
 
-  Widget buildApp({NativeBridge? nativeBridge, EventStore? store}) {
+  Widget buildApp({
+    NativeBridge? nativeBridge,
+    EventStore? store,
+    BrowserFullscreenController? browserFullscreenController,
+  }) {
     final bridge = nativeBridge ?? NativeBridge();
     return Exptv2App(
       store: store ?? EventStore(bridge, realtimeEnabled: false),
       nativeBridge: bridge,
       statsRenderFrameWorker: const TestImmediateStatsFrameWorker(),
+      browserFullscreenController: browserFullscreenController,
     );
   }
 
@@ -342,95 +348,205 @@ void main() {
     },
   );
 
-  testWidgets(
-    'spendee test dashboard hides shell nav and uses HTML header controls',
-    (tester) async {
-      tester.view.physicalSize = const Size(412, 892);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      themeSettingsOverride = <String, Object?>{
-        'magnetType': 'fade',
-        'cardColor': 'lightgray',
-        'theme': 'Türkiz',
-        'backgroundColor': 'gray',
-        'boxColor': 'gray',
-        'backheaderStyle': 'classic',
-        'dashboardDesignMode': 'spendeeTest',
-      };
+  testWidgets('spendee test dashboard uses specialized shell navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
 
-      await tester.pumpWidget(buildApp());
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('spendee-test-dashboard')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
-      expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('spendee-test-app-settings-button')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-header-menu-button')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-header-settings-button')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-header-outer-glow')),
-        findsOneWidget,
-      );
-      expect(find.text('Test Store'), findsOneWidget);
-      expect(find.text('Q'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Stats'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-settings-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-fullscreen-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-header-settings-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-header-outer-glow')),
+      findsOneWidget,
+    );
+    expect(find.text('Test Store'), findsOneWidget);
+    expect(find.text('Q'), findsWidgets);
 
-      await tester.tap(
-        find.byKey(const ValueKey('spendee-test-app-settings-button')),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('settings-root-back')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    expect(find.text('Stats'), findsNothing);
 
-      await _dragSpendeeHeaderByExactDelta(tester, 134);
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-home')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      findsOneWidget,
+    );
 
-      expect(
-        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-category-avatar-6-selected')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-context-carousel')),
-        findsOneWidget,
-      );
+    await _dragSpendeeHeaderByExactDelta(tester, 134);
 
-      await _dragSpendeeHeaderByExactDelta(tester, 272);
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-6-selected')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-context-carousel')),
+      findsOneWidget,
+    );
 
-      expect(
-        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-budget-pie-focus')),
-        findsOneWidget,
-      );
-    },
-  );
+    await _dragSpendeeHeaderByExactDelta(tester, 272);
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-focus')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('spendee test normalizes a persisted Stats tab to Dashboard', (
+    tester,
+  ) async {
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+    final bridge = NativeBridge();
+    final store = EventStore(bridge, realtimeEnabled: false)
+      ..shellActiveTabKey = 'stats';
+
+    await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+    await tester.pumpAndSettle();
+
+    expect(store.shellActiveTabKey, 'home');
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    expect(find.text('Stats'), findsNothing);
+  });
+
+  testWidgets('spendee test exposes reactive browser fullscreen control', (
+    tester,
+  ) async {
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+    final driver = _WidgetTestBrowserFullscreenDriver();
+    final controller = BrowserFullscreenController(driver);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(buildApp(browserFullscreenController: controller));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-settings-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-fullscreen-button')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-app-fullscreen-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(driver.enterCalls, 1);
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+
+    driver.setFullscreenExternally(false);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+  });
+
+  testWidgets('spendee test center FAB opens the transaction editor', (
+    tester,
+  ) async {
+    themeSettingsOverride = _spendeeThemeSettings();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+  });
 
   testWidgets(
     'spendee header keeps its snapped stage when viewport geometry changes',
@@ -2838,4 +2954,46 @@ double _transactionEditorDateTimeSaveGap(WidgetTester tester) {
       .getRect(find.byKey(const ValueKey('transaction-save-button')))
       .top;
   return saveTop - dateTimeBottom;
+}
+
+class _WidgetTestBrowserFullscreenDriver implements BrowserFullscreenDriver {
+  var _isFullscreen = false;
+  var enterCalls = 0;
+  var exitCalls = 0;
+  final List<VoidCallback> _listeners = <VoidCallback>[];
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  bool get isFullscreen => _isFullscreen;
+
+  @override
+  void addStateListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeStateListener(VoidCallback listener) =>
+      _listeners.remove(listener);
+
+  @override
+  Future<void> enter() async {
+    enterCalls += 1;
+    setFullscreenExternally(true);
+  }
+
+  @override
+  Future<void> exit() async {
+    exitCalls += 1;
+    setFullscreenExternally(false);
+  }
+
+  void setFullscreenExternally(bool value) {
+    _isFullscreen = value;
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+
+  @override
+  void dispose() => _listeners.clear();
 }

@@ -44,6 +44,14 @@ void main() {
     expect(fabCenter.dx, closeTo(206, 0.01));
     expect(fabCenter.dx, lessThan(settingsCenter.dx));
     expect(dashboardCenter.dy, closeTo(settingsCenter.dy, 0.01));
+
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    final fabSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('expt-fab')),
+    );
+    final decoration = fabSurface.decoration! as BoxDecoration;
+    final radius = decoration.borderRadius! as BorderRadius;
+    expect(radius.topLeft.x, closeTo(fabRect.width / 2, 0.01));
   });
 
   testWidgets('dispatches destinations and existing FAB gestures', (

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/keyboard/app_keyboard_provider.dart';
+import 'core/platform/browser_fullscreen_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/security_gate.dart';
 import 'features/shell/expt_shell.dart';
@@ -51,12 +52,14 @@ class Exptv2App extends StatefulWidget {
     required this.nativeBridge,
     this.statsRenderFrameWorker,
     this.webPreviewFrameEnabled,
+    this.browserFullscreenController,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
   final StatsRenderFrameWorker? statsRenderFrameWorker;
   final bool? webPreviewFrameEnabled;
+  final BrowserFullscreenController? browserFullscreenController;
 
   @override
   State<Exptv2App> createState() => _Exptv2AppState();
@@ -124,6 +127,7 @@ class _Exptv2AppState extends State<Exptv2App> {
             nativeBridge: widget.nativeBridge,
             googleSheetsSyncController: _googleSheetsSyncController,
             statsRenderFrameWorker: widget.statsRenderFrameWorker,
+            browserFullscreenController: widget.browserFullscreenController,
             onSecuritySettingsChanged: _securityGateController.updateSettings,
           ),
         ),

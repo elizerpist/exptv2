@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/platform/browser_fullscreen_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/category_color_manager.dart';
 import '../../../settings/theme/expense_theme.dart';
@@ -29,7 +30,7 @@ class SpendeeTestDashboard extends StatefulWidget {
     super.key,
     required this.store,
     required this.expenseTheme,
-    required this.onSettingsPressed,
+    this.browserFullscreenController,
     required this.onPickSummaryMonth,
     required this.onEditTransaction,
     required this.onDeleteTransactionRequested,
@@ -39,7 +40,7 @@ class SpendeeTestDashboard extends StatefulWidget {
 
   final TransactionStore store;
   final ExpenseTheme expenseTheme;
-  final VoidCallback? onSettingsPressed;
+  final BrowserFullscreenController? browserFullscreenController;
   final VoidCallback onPickSummaryMonth;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final TransactionDeleteRequest? onDeleteTransactionRequested;
@@ -560,12 +561,22 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               onLogoTap: _openLogoEditor,
             ),
           ),
-          if (widget.onSettingsPressed != null)
+          if (widget.browserFullscreenController case final controller?)
             Positioned(
               top: 48,
               right: 20,
-              child: _AppCornerSettingsButton(
-                onPressed: widget.onSettingsPressed!,
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, child) {
+                  if (!controller.isAvailable) {
+                    return const SizedBox.shrink();
+                  }
+                  return _AppCornerFullscreenButton(
+                    fullscreen: controller.isFullscreen,
+                    requestPending: controller.requestPending,
+                    onPressed: () => unawaited(controller.toggle()),
+                  );
+                },
               ),
             ),
         ],
@@ -1807,40 +1818,50 @@ class _SpendeeLogBox extends StatelessWidget {
   }
 }
 
-class _AppCornerSettingsButton extends StatelessWidget {
-  const _AppCornerSettingsButton({required this.onPressed});
+class _AppCornerFullscreenButton extends StatelessWidget {
+  const _AppCornerFullscreenButton({
+    required this.fullscreen,
+    required this.requestPending,
+    required this.onPressed,
+  });
 
+  final bool fullscreen;
+  final bool requestPending;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      key: const ValueKey('spendee-test-app-settings-button'),
-      onTap: onPressed,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .70),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white.withValues(alpha: .62)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.white.withValues(alpha: .54),
-              offset: const Offset(0, 1),
-              blurRadius: 0,
-            ),
-            BoxShadow(
-              color: const Color(0xFF1F2D46).withValues(alpha: .10),
-              offset: const Offset(0, 8),
-              blurRadius: 18,
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.settings_outlined,
-          color: Color(0xFF14213A),
-          size: 18,
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .70),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white.withValues(alpha: .62)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white.withValues(alpha: .54),
+            offset: const Offset(0, 1),
+            blurRadius: 0,
+          ),
+          BoxShadow(
+            color: const Color(0xFF1F2D46).withValues(alpha: .10),
+            offset: const Offset(0, 8),
+            blurRadius: 18,
+          ),
+        ],
+      ),
+      child: IconButton(
+        key: const ValueKey('spendee-test-app-fullscreen-button'),
+        tooltip: fullscreen
+            ? 'Kilépés a teljes képernyőből'
+            : 'Teljes képernyő',
+        padding: EdgeInsets.zero,
+        onPressed: requestPending ? null : onPressed,
+        icon: Icon(
+          fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+          color: const Color(0xFF14213A),
+          size: 20,
         ),
       ),
     );

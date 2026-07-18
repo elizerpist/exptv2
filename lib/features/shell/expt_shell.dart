@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../core/debug/debug_console.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/keyboard/keyboard_inset_follower.dart';
+import '../../core/platform/browser_fullscreen_controller.dart';
+import '../../core/platform/browser_fullscreen_controller_factory.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -49,6 +51,7 @@ import '../transactions/widgets/slide_up_menu_card.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
+import 'widgets/spendee_test_bottom_nav.dart';
 
 class ExptShell extends StatefulWidget {
   const ExptShell({
@@ -58,6 +61,7 @@ class ExptShell extends StatefulWidget {
     this.googleSheetsSyncController,
     this.statsRenderFrameCache,
     this.statsRenderFrameWorker,
+    this.browserFullscreenController,
     this.onSecuritySettingsChanged,
   });
 
@@ -66,6 +70,7 @@ class ExptShell extends StatefulWidget {
   final GoogleSheetsSyncController? googleSheetsSyncController;
   final StatsRenderFrameCache? statsRenderFrameCache;
   final StatsRenderFrameWorker? statsRenderFrameWorker;
+  final BrowserFullscreenController? browserFullscreenController;
   final ValueChanged<SecuritySettings>? onSecuritySettingsChanged;
 
   @override
@@ -85,6 +90,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late final NotificationStore _notificationStore;
   late final NativeImeSheetBridge _nativeImeSheetBridge;
   late final RecurringAlarmService _recurringAlarmService;
+  late final BrowserFullscreenController _browserFullscreenController;
+  late final bool _ownsBrowserFullscreenController;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
   final _statsPageController = StatsPageController();
@@ -113,6 +120,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     DebugConsole.log('[Shell] start');
     _activeTab = _tabFromStoreKey(widget.store.shellActiveTabKey);
     _pageActiveTab = _activeTab;
+    _ownsBrowserFullscreenController =
+        widget.browserFullscreenController == null;
+    _browserFullscreenController =
+        widget.browserFullscreenController ??
+        createBrowserFullscreenController();
     _recurringAlarmService = kIsWeb
         ? RecurringAlarmService.disabled()
         : RecurringAlarmService();
@@ -165,6 +177,9 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     _nativeImeSheetBridge.dispose();
+    if (_ownsBrowserFullscreenController) {
+      _browserFullscreenController.dispose();
+    }
     _notificationStore.removeListener(_handleNotificationStoreChanged);
     _notificationStore.dispose();
     super.dispose();
@@ -226,11 +241,16 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   TransactionHomePage _buildTransactionHomePage() {
     final fabSize = _themeSettings.fabSize.toDouble();
+    final logBottomPadding =
+        _themeSettings.dashboardDesignMode == DashboardDesignMode.spendeeTest
+        ? AppDimensions.bottomNavHeight + 16
+        : _rightFabLogBottomPadding(fabSize);
     return TransactionHomePage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       fastInfoConfig: _fastInfoConfig,
-      logBottomPadding: _rightFabLogBottomPadding(fabSize),
+      logBottomPadding: logBottomPadding,
+      browserFullscreenController: _browserFullscreenController,
       onNotificationPressed: _handleHeaderNotificationPressed,
       onSettingsPressed: _openHeaderSettings,
       notificationUnreadCount: _notificationStore.unreadCount,
@@ -438,13 +458,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   Future<void> _loadShellSettings() async {
     final payload = await widget.nativeBridge.expenseLoadSettings();
     if (!mounted) return;
+    var normalizedHiddenTab = false;
     setState(() {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      normalizedHiddenTab = _normalizeSpendeeNavigationTab();
       _refreshRetainedTabPages();
     });
+    if (normalizedHiddenTab) {
+      widget.store.setShellActiveTabKey(AppTab.home.id);
+    }
   }
 
   void _handleNotificationStoreChanged() {
@@ -489,12 +514,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
+    var normalizedHiddenTab = false;
     setState(() {
       _themeSettings = settings;
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      normalizedHiddenTab = _normalizeSpendeeNavigationTab();
       _refreshRetainedTabPages();
     });
+    if (normalizedHiddenTab) {
+      widget.store.setShellActiveTabKey(AppTab.home.id);
+    }
     DebugConsole.log(
       '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
     );
@@ -645,6 +675,22 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     _sheetHostKey.currentState?.openRecurring();
   }
+
+  bool _normalizeSpendeeNavigationTab() {
+    if (_themeSettings.dashboardDesignMode != DashboardDesignMode.spendeeTest ||
+        _isSpendeeNavigationTab(_activeTab)) {
+      return false;
+    }
+    _activeTab = AppTab.home;
+    _pageActiveTab = AppTab.home;
+    _homeBlockingOverlayOpen = false;
+    _headerSettingsOpen = false;
+    _retainedTabPages.putIfAbsent(AppTab.home, () => _transactionHomePage);
+    return true;
+  }
+
+  bool _isSpendeeNavigationTab(AppTab tab) =>
+      tab == AppTab.home || tab == AppTab.settings;
 
   void _handleHeaderNotificationPressed() {
     DebugConsole.log('[Notification] header bell open requested');
@@ -838,6 +884,29 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     ];
   }
 
+  List<Widget> _buildSpendeeTestShellNavigation(ExpenseTheme expenseTheme) {
+    return [
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: SpendeeTestBottomNav(
+          activeTab: _activeTab,
+          surfaceColor: expenseTheme.logBox,
+          surfaceStyle: expenseTheme.bottomNavSurfaceStyle,
+          buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+          accentColor: expenseTheme.accent,
+          accentLightColor: expenseTheme.accentLight,
+          activeBackgroundColor: expenseTheme.activeBackground,
+          fabSize: expenseTheme.settings.fabSize.toDouble(),
+          onTabSelected: _selectTab,
+          onFabPressed: _handleFabPressed,
+          onFabLongPress: _handleFabLongPressed,
+        ),
+      ),
+    ];
+  }
+
   Widget _buildShellPage(AppTab tab, ExpenseTheme expenseTheme) {
     switch (tab) {
       case AppTab.home:
@@ -877,10 +946,12 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     _logThemeSurfaceOnce(expenseTheme);
-    final shellNavigation = _buildShellNavigation(expenseTheme);
-    final spendeeTestHome =
-        _activeTab == AppTab.home &&
+    final spendeeTestMode =
         _themeSettings.dashboardDesignMode == DashboardDesignMode.spendeeTest;
+    final spendeeNavigationTab = _isSpendeeNavigationTab(_activeTab);
+    final shellNavigation = spendeeTestMode
+        ? _buildSpendeeTestShellNavigation(expenseTheme)
+        : _buildShellNavigation(expenseTheme);
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
@@ -902,7 +973,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           ),
           if (!_homeBlockingOverlayOpen &&
               !_headerSettingsOpen &&
-              !spendeeTestHome)
+              (!spendeeTestMode || spendeeNavigationTab))
             ...shellNavigation,
           DebugFloatingButton(
             bottomOffset: _rightFabDebugBottomOffset(

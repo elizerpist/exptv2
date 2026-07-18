@@ -272,7 +272,6 @@ Future<void> _pumpDashboard(WidgetTester tester) async {
         body: SpendeeTestDashboard(
           store: store,
           expenseTheme: ExpenseTheme.fromSettings(AppThemeSettings.defaults()),
-          onSettingsPressed: () {},
           onPickSummaryMonth: () {},
           onEditTransaction: (_) {},
           onDeleteTransactionRequested: (_) async => true,

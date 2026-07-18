@@ -102,6 +102,7 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
                 primaryColor: widget.accentColor,
                 surfaceStyle: widget.buttonSurfaceStyle,
                 size: widget.fabSize,
+                borderRadius: widget.fabSize / 2,
                 onPressed: widget.onFabPressed,
                 onLongPress: widget.onFabLongPress,
               ),

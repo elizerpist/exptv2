@@ -19,6 +19,7 @@ class ExptFab extends StatefulWidget {
     this.onVerticalDragStep,
     this.icon = Icons.add,
     this.size = AppDimensions.fabSize,
+    this.borderRadius = 18,
   });
 
   final VoidCallback onPressed;
@@ -29,6 +30,7 @@ class ExptFab extends StatefulWidget {
   final ValueChanged<int>? onVerticalDragStep;
   final IconData icon;
   final double size;
+  final double borderRadius;
 
   @override
   State<ExptFab> createState() => _ExptFabState();
@@ -95,7 +97,7 @@ class _ExptFabState extends State<ExptFab> {
     return ExpensePressable(
       enabled: widget.surfaceStyle.hasPressEffect,
       builder: (context, pressed) {
-        final borderRadius = BorderRadius.circular(18);
+        final borderRadius = BorderRadius.circular(widget.borderRadius);
         final shapeBorder = RoundedRectangleBorder(borderRadius: borderRadius);
         return Listener(
           behavior: HitTestBehavior.opaque,

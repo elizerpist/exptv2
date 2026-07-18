@@ -5,6 +5,7 @@ import 'package:flutter/physics.dart';
 
 import '../../core/debug/debug_console.dart';
 import '../../core/keyboard/keyboard_inset_follower.dart';
+import '../../core/platform/browser_fullscreen_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/theme/expense_theme.dart';
@@ -72,6 +73,7 @@ class TransactionHomePage extends StatefulWidget {
     this.notificationUnreadCount = 0,
     this.logBottomPadding = 96,
     this.budgetEditorActiveKey,
+    this.browserFullscreenController,
   });
 
   final TransactionStore store;
@@ -97,6 +99,7 @@ class TransactionHomePage extends StatefulWidget {
   final int notificationUnreadCount;
   final double logBottomPadding;
   final ValueNotifier<String?>? budgetEditorActiveKey;
+  final BrowserFullscreenController? browserFullscreenController;
 
   @override
   State<TransactionHomePage> createState() => _TransactionHomePageState();
@@ -226,7 +229,7 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             return SpendeeTestDashboard(
               store: widget.store,
               expenseTheme: expenseTheme,
-              onSettingsPressed: widget.onSettingsPressed,
+              browserFullscreenController: widget.browserFullscreenController,
               onPickSummaryMonth: _pickSummaryMonth,
               onEditTransaction: widget.onEditTransaction,
               onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
