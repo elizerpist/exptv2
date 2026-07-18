@@ -138,7 +138,6 @@ class RecurringGhostLogBox extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               ghost.isPushTriggered
@@ -149,12 +148,16 @@ class RecurringGhostLogBox extends StatelessWidget {
               color: AppColors.gray500,
             ),
             const SizedBox(width: 4),
-            Text(
-              ghost.isPushTriggered ? 'Várható · push' : 'Várható · idő',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gray500,
+            Expanded(
+              child: Text(
+                ghost.isPushTriggered ? 'Várható · push' : 'Várható · idő',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.gray500,
+                ),
               ),
             ),
           ],

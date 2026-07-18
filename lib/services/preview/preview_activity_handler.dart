@@ -120,8 +120,9 @@ class PreviewActivityHandler implements PreviewMethodHandler {
           );
           if (year != null && timestamp.year != year) return false;
           if (month != null && timestamp.month != month) return false;
-          if (status != 'all' && row['status']?.toString() != status)
+          if (status != 'all' && row['status']?.toString() != status) {
             return false;
+          }
           if (packageName != null &&
               packageName.isNotEmpty &&
               row['packageName']?.toString() != packageName) {

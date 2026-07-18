@@ -50,11 +50,13 @@ class Exptv2App extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     this.statsRenderFrameWorker,
+    this.webPreviewFrameEnabled,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
   final StatsRenderFrameWorker? statsRenderFrameWorker;
+  final bool? webPreviewFrameEnabled;
 
   @override
   State<Exptv2App> createState() => _Exptv2AppState();
@@ -107,6 +109,10 @@ class _Exptv2AppState extends State<Exptv2App> {
         title: 'Exptv2',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
+        builder: (context, child) => _WebPreviewFrame(
+          enabled: widget.webPreviewFrameEnabled ?? kIsWeb,
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: SecurityGate(
           controller: _securityGateController,
           nativeBridge: widget.nativeBridge,
@@ -121,6 +127,43 @@ class _Exptv2AppState extends State<Exptv2App> {
             onSecuritySettingsChanged: _securityGateController.updateSettings,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _WebPreviewFrame extends StatelessWidget {
+  const _WebPreviewFrame({required this.enabled, required this.child});
+
+  static const maxWidth = 480.0;
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    final mediaQuery = MediaQuery.of(context);
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.clamp(0.0, maxWidth).toDouble();
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              key: const ValueKey('web-preview-frame'),
+              width: width,
+              height: constraints.maxHeight,
+              child: MediaQuery(
+                data: mediaQuery.copyWith(
+                  size: Size(width, mediaQuery.size.height),
+                ),
+                child: child,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
