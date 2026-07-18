@@ -69,6 +69,7 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
         color: widget.surfaceColor,
         borderRadius: BorderRadius.zero,
         animatePress: false,
+        clipContent: false,
         height: AppDimensions.bottomNavHeight,
         padding: const EdgeInsets.symmetric(
           horizontal: AppDimensions.bottomNavHorizontalPadding,
@@ -96,8 +97,12 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
                 _buildItem(AppTab.settings),
               ],
             ),
-            Align(
+            OverflowBox(
               alignment: Alignment.center,
+              minWidth: 0,
+              maxWidth: double.infinity,
+              minHeight: 0,
+              maxHeight: double.infinity,
               child: ExptFab(
                 primaryColor: widget.accentColor,
                 surfaceStyle: widget.buttonSurfaceStyle,

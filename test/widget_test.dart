@@ -455,7 +455,40 @@ void main() {
     );
   });
 
-  testWidgets('spendee test normalizes a persisted Stats tab to Dashboard', (
+  testWidgets(
+    'dashboard design switch replaces navigation while Settings is active',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-dashboard-design-spendee-test')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('spendee-test-bottom-nav')),
+        findsOneWidget,
+      );
+      expect(find.text('Stats'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-dashboard-design-current')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-bottom-nav')),
+        findsNothing,
+      );
+      expect(find.text('Stats'), findsOneWidget);
+    },
+  );
+
+  testWidgets('spendee test normalizes persisted hidden tabs to Dashboard', (
     tester,
   ) async {
     themeSettingsOverride = <String, Object?>{
@@ -467,23 +500,28 @@ void main() {
       'backheaderStyle': 'classic',
       'dashboardDesignMode': 'spendeeTest',
     };
-    final bridge = NativeBridge();
-    final store = EventStore(bridge, realtimeEnabled: false)
-      ..shellActiveTabKey = 'stats';
+    for (final hiddenTab in <String>['stats', 'notifications']) {
+      final bridge = NativeBridge();
+      final store = EventStore(bridge, realtimeEnabled: false)
+        ..shellActiveTabKey = hiddenTab;
 
-    await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+      await tester.pumpAndSettle();
 
-    expect(store.shellActiveTabKey, 'home');
-    expect(
-      find.byKey(const ValueKey('spendee-test-dashboard')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-bottom-nav')),
-      findsOneWidget,
-    );
-    expect(find.text('Stats'), findsNothing);
+      expect(store.shellActiveTabKey, 'home');
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-bottom-nav')),
+        findsOneWidget,
+      );
+      expect(find.text('Stats'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('spendee test exposes reactive browser fullscreen control', (
@@ -529,6 +567,47 @@ void main() {
     expect(find.byIcon(Icons.fullscreen), findsOneWidget);
   });
 
+  testWidgets('spendee test accepts a replacement fullscreen controller', (
+    tester,
+  ) async {
+    themeSettingsOverride = _spendeeThemeSettings();
+    final bridge = NativeBridge();
+    final store = EventStore(bridge, realtimeEnabled: false);
+    final firstDriver = _WidgetTestBrowserFullscreenDriver();
+    final firstController = BrowserFullscreenController(firstDriver);
+    final secondDriver = _WidgetTestBrowserFullscreenDriver();
+    final secondController = BrowserFullscreenController(secondDriver);
+    addTearDown(firstController.dispose);
+    addTearDown(secondController.dispose);
+
+    await tester.pumpWidget(
+      buildApp(
+        nativeBridge: bridge,
+        store: store,
+        browserFullscreenController: firstController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    firstDriver.setFullscreenExternally(true);
+    await tester.pump();
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+
+    await tester.pumpWidget(
+      buildApp(
+        nativeBridge: bridge,
+        store: store,
+        browserFullscreenController: secondController,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    secondDriver.setFullscreenExternally(true);
+    await tester.pump();
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+  });
+
   testWidgets('spendee test center FAB opens the transaction editor', (
     tester,
   ) async {
@@ -537,6 +616,9 @@ void main() {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
+    final settingsTarget = tester.getCenter(
+      find.byKey(const ValueKey('bottom-nav-settings')),
+    );
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
@@ -546,6 +628,56 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(settingsTarget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('spendee test center FAB works from Settings', (tester) async {
+    themeSettingsOverride = _spendeeThemeSettings();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    final dashboardTarget = tester.getCenter(
+      find.byKey(const ValueKey('bottom-nav-home')),
+    );
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(dashboardTarget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

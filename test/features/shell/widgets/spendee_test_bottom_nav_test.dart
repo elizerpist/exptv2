@@ -1,5 +1,7 @@
+import 'package:exptv2/core/theme/app_colors.dart';
 import 'package:exptv2/features/shell/app_tab.dart';
 import 'package:exptv2/features/shell/widgets/spendee_test_bottom_nav.dart';
+import 'package:exptv2/features/settings/theme/expense_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -72,8 +74,23 @@ void main() {
       ),
     );
 
+    Color navSurfaceColor(AppTab tab) {
+      final container = tester.widget<Container>(
+        find.byKey(ValueKey('bottom-nav-${tab.id}-surface')),
+      );
+      return (container.decoration! as BoxDecoration).color!;
+    }
+
+    expect(navSurfaceColor(AppTab.home), AppColors.primaryActiveBackground);
+    expect(navSurfaceColor(AppTab.settings), AppColors.white);
+
     await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+    await tester.pump();
+    expect(navSurfaceColor(AppTab.home), AppColors.white);
+    expect(navSurfaceColor(AppTab.settings), AppColors.primaryActiveBackground);
+
     await tester.tap(find.byKey(const ValueKey('bottom-nav-home')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('expt-fab')));
     await tester.longPress(find.byKey(const ValueKey('expt-fab')));
     await tester.pump();
@@ -81,6 +98,37 @@ void main() {
     expect(selectedTabs, <AppTab>[AppTab.settings, AppTab.home]);
     expect(fabTaps, 1);
     expect(fabLongPresses, 1);
+  });
+
+  testWidgets('does not clip the largest configured FAB', (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        SpendeeTestBottomNav(
+          activeTab: AppTab.home,
+          fabSize: 88,
+          onTabSelected: (_) {},
+          onFabPressed: () {},
+        ),
+      ),
+    );
+
+    final navigationSurface = tester.widget<ExpenseSurfaceContainer>(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey('expt-bottom-nav')),
+            matching: find.byType(ExpenseSurfaceContainer),
+          )
+          .first,
+    );
+    expect(navigationSurface.clipContent, isFalse);
+
+    final navigationRect = tester.getRect(
+      find.byKey(const ValueKey('expt-bottom-nav')),
+    );
+    final fabRect = tester.getRect(find.byKey(const ValueKey('expt-fab')));
+    expect(fabRect.height, 88);
+    expect(fabRect.top, lessThan(navigationRect.top));
+    expect(fabRect.bottom, greaterThan(navigationRect.bottom));
   });
 }
 

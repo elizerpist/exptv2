@@ -108,7 +108,7 @@ The browser integration is isolated behind a conditional platform adapter. Share
 - Rapid repeated fullscreen taps must not issue overlapping enter/exit requests.
 - Disposing the dashboard removes browser event listeners.
 - A design-mode change while Settings is active immediately selects the correct navigation model without showing stale items.
-- Opening a shell sheet or blocking overlay hides the specialized navigation and FAB using the existing rules.
+- A page-owned blocking overlay hides the specialized navigation and FAB. A shell-owned sheet preserves their state underneath the sheet but covers and blocks their complete hit area, matching the existing shell behavior.
 - Narrow mobile and desktop browser viewports must not overflow, overlap content, or move the center FAB away from the bar center.
 - Browser fullscreen is verified in Chrome; no user-agent-specific Chrome branch is required when the standard API is available.
 
@@ -129,18 +129,29 @@ The browser integration is isolated behind a conditional platform adapter. Share
 
 | ID | Source | Intended code area | Acceptance condition | Verification method | Status |
 |---|---|---|---|---|---|
-| `NAV-001` | User: only Dashboard, center FAB, Settings in the new design | `expt_shell.dart`, design-specific bottom-nav widget | The `spendeeTest` bar has exactly those three ordered positions and matches the Color Lab structure | Widget structure/geometry tests and mobile screenshot | NOT DONE |
-| `NAV-002` | User excluded other menu items | Shell navigation selection | Stats and Notifications are absent from the specialized bar, including after startup from a persisted hidden destination | Widget tests with persisted active-tab fixtures | NOT DONE |
-| `NAV-003` | User requested an active bottom nav | Shell tab handling and retained pages | Dashboard and Settings switch correctly, show the correct active state, and the specialized bar remains present on both pages | Interaction tests | NOT DONE |
-| `FAB-001` | User requested the FAB in the center | Specialized bar and existing `ExptFab` callbacks | FAB is centered and tap/long press retain add-transaction/recurring-manager behavior | Geometry and interaction tests | NOT DONE |
-| `LAYOUT-001` | Approved Color Lab reference | Specialized bar and dashboard content padding | The bar and FAB do not overlap content at mobile or desktop sizes | Widget geometry tests and screenshots | NOT DONE |
-| `FULL-001` | User replaced the upper Settings shortcut | `spendee_test_dashboard.dart` | The old top-right Settings button is removed; Settings is reachable from the bottom bar | Widget tests | NOT DONE |
-| `FULL-002` | User requested fullscreen in Chrome only | Browser fullscreen adapter and dashboard button | Chrome button enters/exits document fullscreen and reflects browser-driven state changes | Adapter tests plus manual Chrome verification | NOT DONE |
-| `FULL-003` | User excluded APK behavior | Conditional platform adapter and dashboard presentation | Android/native mode renders no top-right fullscreen button and imports no browser API | VM widget test and analyze | NOT DONE |
-| `REG-001` | Existing app behavior outside new design | Existing `ExptBottomNav`, right FAB, shell tests | Normal design retains Home / Stats / Settings and its right-positioned FAB | Existing and focused regression tests | NOT DONE |
-| `VER-001` | Global completion rules | Tests, analyze, web compile, screenshots | All targeted/full relevant checks pass and screenshots are inspected before completion is claimed | Recorded command output and image inspection | NOT DONE |
+| `NAV-001` | User: only Dashboard, center FAB, Settings in the new design | `expt_shell.dart`, design-specific bottom-nav widget | The `spendeeTest` bar has exactly those three ordered positions and matches the Color Lab structure | Widget structure/geometry tests and mobile screenshot | DONE |
+| `NAV-002` | User excluded other menu items | Shell navigation selection | Stats and Notifications are absent from the specialized bar, including after startup from a persisted hidden destination | Widget tests with persisted active-tab fixtures | DONE |
+| `NAV-003` | User requested an active bottom nav | Shell tab handling and retained pages | Dashboard and Settings switch correctly, show the correct active state, and the specialized bar remains present on both pages | Interaction tests | DONE |
+| `FAB-001` | User requested the FAB in the center | Specialized bar and existing `ExptFab` callbacks | FAB is centered and tap/long press retain add-transaction/recurring-manager behavior | Geometry and interaction tests | DONE |
+| `LAYOUT-001` | Approved Color Lab reference | Specialized bar and dashboard content padding | The bar and FAB do not overlap content at mobile or desktop sizes | Widget geometry tests and screenshots | DONE |
+| `FULL-001` | User replaced the upper Settings shortcut | `spendee_test_dashboard.dart` | The old top-right Settings button is removed; Settings is reachable from the bottom bar | Widget tests | DONE |
+| `FULL-002` | User requested fullscreen in Chrome only | Browser fullscreen adapter and dashboard button | Chrome button enters/exits document fullscreen and reflects browser-driven state changes | Adapter tests plus real browser verification | DONE |
+| `FULL-003` | User excluded APK behavior | Conditional platform adapter and dashboard presentation | Android/native mode renders no top-right fullscreen button and imports no browser API | VM widget test and analyze | DONE |
+| `REG-001` | Existing app behavior outside new design | Existing `ExptBottomNav`, right FAB, shell tests | Normal design retains Home / Stats / Settings and its right-positioned FAB | Existing and focused regression tests | DONE |
+| `VER-001` | Global completion rules | Tests, analyze, web compile, screenshots | All targeted/full relevant checks pass and screenshots are inspected before completion is claimed | Recorded command output and image inspection | DONE |
 
 Completion requires every checklist item to be `DONE` or an explicit user-approved deferral. Compilation or a successful web build alone is not completion.
+
+## Verification evidence
+
+- Focused controller, specialized-navigation, shell-integration, and Spendee interaction tests passed. Review follow-up coverage includes the 88px FAB boundary, active-tab treatment, controller replacement, hidden Notifications normalization, runtime design switching, Settings FAB long press, and sheet hit-area suppression.
+- `flutter test test/web_preview/exptv2_web_preview_test.dart`: 8 tests passed.
+- Final full `flutter test`: 971 tests passed in 13 minutes 7 seconds.
+- Final `flutter analyze`: no issues found in 59.5 seconds.
+- Final `flutter build web --debug`: completed in 189.2 seconds, including the Wasm compatibility dry run.
+- Real headed Chromium at `412x915`, running the final web build: the Fullscreen API reported available; the dashboard control entered document fullscreen, changed to the exit control, exited fullscreen, and emitted no fullscreen errors.
+- Fresh final `412x915` mobile and `1280x900` desktop Dashboard screenshots were inspected. They show only Dashboard, the centered circular FAB, and Settings; Stats is absent and the navigation does not overlap the transaction content.
+- The updated C1, C2, and C3 dashboard goldens passed in the full suite. Native widget verification confirms that the fullscreen control is absent with the non-web adapter.
 
 ## Scope boundaries
 

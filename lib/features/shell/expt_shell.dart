@@ -90,8 +90,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late final NotificationStore _notificationStore;
   late final NativeImeSheetBridge _nativeImeSheetBridge;
   late final RecurringAlarmService _recurringAlarmService;
-  late final BrowserFullscreenController _browserFullscreenController;
-  late final bool _ownsBrowserFullscreenController;
+  late BrowserFullscreenController _browserFullscreenController;
+  late bool _ownsBrowserFullscreenController;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
   final _statsPageController = StatsPageController();
@@ -168,6 +168,27 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
     unawaited(_loadShellSettings());
+  }
+
+  @override
+  void didUpdateWidget(covariant ExptShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(
+      oldWidget.browserFullscreenController,
+      widget.browserFullscreenController,
+    )) {
+      return;
+    }
+    if (_ownsBrowserFullscreenController) {
+      _browserFullscreenController.dispose();
+    }
+    _ownsBrowserFullscreenController =
+        widget.browserFullscreenController == null;
+    _browserFullscreenController =
+        widget.browserFullscreenController ??
+        createBrowserFullscreenController();
+    _transactionHomePage = _buildTransactionHomePage();
+    _refreshRetainedTabPages();
   }
 
   @override
