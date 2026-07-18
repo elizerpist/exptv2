@@ -120,15 +120,25 @@ The browser URL is `http://127.0.0.1:8766`.
 
 | ID | Source | Intended code area | Acceptance condition | Verification method | Status |
 |---|---|---|---|---|---|
-| `WEB-RUN-001` | User requested the complete Exptv2 app in a browser | `web/`, `lib/main.dart`, platform factory | `lib/main.dart` app loads at `127.0.0.1:8766` without an APK | Web compile, server HTTP smoke test, screenshot | NOT DONE |
-| `WEB-UI-001` | User is developing UI design | Existing app widget tree and platform adapters | All main screens, dialogs, and Flutter fallback sheets can be opened in a mobile browser viewport | Navigation interaction tests and screenshots | NOT DONE |
-| `WEB-DATA-001` | User selected in-memory sample data | Preview memory state and fixtures | Realistic data populates Home, Stats, Notifications, Settings, filters, limits, and recurring views | Fixture and widget assertions | NOT DONE |
-| `WEB-CRUD-001` | User required every screen and CRUD to work | Preview transport method handlers | Every transaction, category, limit, recurring, notification, parser, and settings mutation exposed by the preview UI updates all consumers during the session | Method inventory plus unit and interaction tests | NOT DONE |
-| `WEB-NATIVE-001` | Android notification, biometric, and accessibility features must be disabled | Capability adapters and startup services | Android-only actions never invoke missing web channels or block startup | Platform capability tests and async exception capture | NOT DONE |
-| `WEB-HOT-001` | Preview is for rapid UI iteration | Flutter web-server workflow | Dart/UI edits can be hot reloaded without a GitHub APK build | Live web-server reload check | NOT DONE |
-| `WEB-ANDROID-001` | Web preview must not regress the app | Native channel transport and existing tests | Android continues to select the current channel-backed behavior | Existing bridge tests, full targeted test suite, analyze | NOT DONE |
+| `WEB-RUN-001` | User requested the complete Exptv2 app in a browser | `web/`, `lib/main.dart`, platform factory | `lib/main.dart` app loads at `127.0.0.1:8766` without an APK | Web compile, server HTTP smoke test, screenshot | DONE |
+| `WEB-UI-001` | User is developing UI design | Existing app widget tree and platform adapters | All main screens, dialogs, and Flutter fallback sheets can be opened in a mobile browser viewport | Navigation interaction tests and screenshots | DONE |
+| `WEB-DATA-001` | User selected in-memory sample data | Preview memory state and fixtures | Realistic data populates Home, Stats, Notifications, Settings, filters, limits, and recurring views | Fixture and widget assertions | DONE |
+| `WEB-CRUD-001` | User required every screen and CRUD to work | Preview transport method handlers | Every transaction, category, limit, recurring, notification, parser, and settings mutation exposed by the preview UI updates all consumers during the session | Method inventory plus unit and interaction tests | DONE |
+| `WEB-NATIVE-001` | Android notification, biometric, and accessibility features must be disabled | Capability adapters and startup services | Android-only actions never invoke missing web channels or block startup | Platform capability tests and async exception capture | DONE |
+| `WEB-HOT-001` | Preview is for rapid UI iteration | Flutter web-server workflow | Dart/UI edits can be hot reloaded without a GitHub APK build | Live web-server reload check | PARTIAL |
+| `WEB-ANDROID-001` | Web preview must not regress the app | Native channel transport and existing tests | Android continues to select the current channel-backed behavior | Existing bridge tests, full targeted test suite, analyze | DONE |
 
 Completion requires every checklist item to be `DONE` or an explicit user-approved deferral. A successful web compile alone is not completion.
+
+### Verification evidence (2026-07-18)
+
+- `WEB-RUN-001`: `flutter build web --debug` completed in 159.4 seconds with a successful Wasm dry run. The foreground web-server reported `lib/main.dart is being served at http://127.0.0.1:8766`; HTTP GET returned 200 for `/`, `flutter_bootstrap.js`, and `main.dart.js`. The phone browser URL was opened with `termux-open-url`.
+- `WEB-UI-001`: `test/web_preview/exptv2_web_preview_test.dart` navigates Home, Stats, Settings, Notifications, transaction/category/recurring sheets at `412x915`, and the primary surfaces plus Flutter transaction fallback at `1280x900` inside the 480-pixel web frame. All three golden PNGs were opened and inspected for blank output, clipping, overlap, stretching, and overflow markers.
+- `WEB-DATA-001`: `test/services/preview/preview_native_state_test.dart` verifies deterministic current, adjacent, and prior-year data plus reset/deep-copy behavior; production-tree assertions verify data on Home, Stats, Notifications, Settings, recurring, and limit surfaces.
+- `WEB-CRUD-001`: preview handler and real `NativeBridge` decoder tests cover transaction, category, limit, recurring transaction/rule, notification, parser, settings, export, stats, and reset methods. Production UI tests cover transaction/category CRUD, limit save, recurring toggle/delete, notification read/delete, and theme/notification/parser mutations.
+- `WEB-NATIVE-001`: web adapter tests, disabled capability handler tests, production-tree async exception checks, and the successful web compile prove unavailable Android channels do not block startup.
+- `WEB-HOT-001`: the foreground `flutter run -d web-server` session remains active and `r` recompiles in 4.6 seconds, but reports `Recompile complete. No client connected.` Android Chrome cannot install the Dart Debug Chrome extension required by Flutter's web-server device. The supported phone workflow is `r` followed by a browser refresh; true state-preserving hot reload remains unverified and is not claimed.
+- `WEB-ANDROID-001`: the full Flutter suite passed 956 tests in 7 minutes 49 seconds, the targeted preview/bridge suite passed 39 tests, and `flutter analyze` reported no issues. Native MethodChannel constructors and method names remain covered by existing contract tests.
 
 ## Scope boundaries
 
