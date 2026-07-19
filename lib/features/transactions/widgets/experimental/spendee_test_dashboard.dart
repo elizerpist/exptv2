@@ -156,6 +156,7 @@ enum _HeaderDesignMenuAction {
   avatarsHtmlC2Glass,
   avatarsLiquidGlass,
   avatarsAcrylic,
+  avatar3dEffectToggle,
   avatarTopHighlightToggle,
   chartGlass,
   chartBackground,
@@ -328,6 +329,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarSurface = _PanelSurface.glass;
   var _chartSurface = _PanelSurface.glass;
   var _chartListSurface = _ChartListSurface.original;
+  var _avatar3dEffectEnabled = true;
   var _avatarTopHighlightEnabled = true;
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
@@ -1134,6 +1136,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           child: const Text('Avatarok: Acrylic'),
         ),
         CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-effect-3d-toggle'),
+          value: _HeaderDesignMenuAction.avatar3dEffectToggle,
+          checked: _avatar3dEffectEnabled,
+          height: 38,
+          child: const Text('Avatar 3D'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
           key: const ValueKey(
             'spendee-test-avatar-effect-top-highlight-toggle',
           ),
@@ -1380,6 +1389,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           _avatarSurface = _PanelSurface.liquidGlass;
         case _HeaderDesignMenuAction.avatarsAcrylic:
           _avatarSurface = _PanelSurface.acrylic;
+        case _HeaderDesignMenuAction.avatar3dEffectToggle:
+          _avatar3dEffectEnabled = !_avatar3dEffectEnabled;
         case _HeaderDesignMenuAction.avatarTopHighlightToggle:
           _avatarTopHighlightEnabled = !_avatarTopHighlightEnabled;
         case _HeaderDesignMenuAction.chartGlass:
@@ -1634,9 +1645,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     setState(() {
       _budgetPendingLimitAmountsByKey[item.key] = normalized;
     });
-    unawaited(
-      _saveBudgetItemLimit(item, normalized, notifyStore: notifyStore),
-    );
+    unawaited(_saveBudgetItemLimit(item, normalized, notifyStore: notifyStore));
   }
 
   Future<void> _saveBudgetItemLimit(
@@ -1779,6 +1788,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   pulsingBudgetItemKey: _pulsingBudgetItemKey,
                   carouselOffset: _carouselVisualDx,
                   pressedBudgetItemKey: _budgetLimitEditItem?.key,
+                  avatar3dEffectEnabled: _avatar3dEffectEnabled,
                   avatarTopHighlightEnabled: _avatarTopHighlightEnabled,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
@@ -1862,6 +1872,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.pulsingBudgetItemKey,
     required this.carouselOffset,
     required this.pressedBudgetItemKey,
+    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
@@ -1905,6 +1916,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final String? pulsingBudgetItemKey;
   final double carouselOffset;
   final String? pressedBudgetItemKey;
+  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
@@ -1996,6 +2008,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               pulsingItemKey: pulsingBudgetItemKey,
               carouselOffset: carouselOffset,
               pressedItemKey: pressedBudgetItemKey,
+              avatar3dEffectEnabled: avatar3dEffectEnabled,
               avatarTopHighlightEnabled: avatarTopHighlightEnabled,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
@@ -3267,6 +3280,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.pulsingItemKey,
     required this.carouselOffset,
     required this.pressedItemKey,
+    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -3287,6 +3301,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final String? pulsingItemKey;
   final double carouselOffset;
   final String? pressedItemKey;
+  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -3334,6 +3349,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 pulsingItemKey: pulsingItemKey,
                 carouselOffset: carouselOffset,
                 pressedItemKey: pressedItemKey,
+                avatar3dEffectEnabled: avatar3dEffectEnabled,
                 avatarTopHighlightEnabled: avatarTopHighlightEnabled,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
@@ -3678,6 +3694,7 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.pulsingItemKey,
     required this.carouselOffset,
     required this.pressedItemKey,
+    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onItemTap,
     required this.onItemLongPressStart,
@@ -3691,6 +3708,7 @@ class _ContextAvatarBelt extends StatelessWidget {
   final String? pulsingItemKey;
   final double carouselOffset;
   final String? pressedItemKey;
+  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
@@ -3735,6 +3753,7 @@ class _ContextAvatarBelt extends StatelessWidget {
                 onLongPressCancel: onItemLongPressCancel,
                 pulsing: slot.item.key == pulsingItemKey,
                 pressed: slot.item.key == pressedItemKey,
+                avatar3dEffectEnabled: avatar3dEffectEnabled,
                 avatarTopHighlightEnabled: avatarTopHighlightEnabled,
               ),
           ],
@@ -3800,6 +3819,7 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.onLongPressCancel,
     required this.pulsing,
     required this.pressed,
+    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
   });
 
@@ -3813,6 +3833,7 @@ class _PositionedContextAvatar extends StatelessWidget {
   final GestureLongPressCancelCallback onLongPressCancel;
   final bool pulsing;
   final bool pressed;
+  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
 
   @override
@@ -3835,6 +3856,7 @@ class _PositionedContextAvatar extends StatelessWidget {
         selected: slot.selected,
         pulsing: pulsing,
         pressed: pressed,
+        avatar3dEffectEnabled: avatar3dEffectEnabled,
         avatarTopHighlightEnabled: avatarTopHighlightEnabled,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
@@ -3893,7 +3915,7 @@ double _lerpDouble(double begin, double end, double amount) {
   return begin + (end - begin) * _clampUnit(amount);
 }
 
-class _ContextAvatar extends StatelessWidget {
+class _ContextAvatar extends StatefulWidget {
   const _ContextAvatar({
     required this.item,
     required this.size,
@@ -3902,6 +3924,7 @@ class _ContextAvatar extends StatelessWidget {
     required this.selected,
     required this.pulsing,
     required this.pressed,
+    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onTap,
     required this.onLongPressStart,
@@ -3917,6 +3940,7 @@ class _ContextAvatar extends StatelessWidget {
   final bool selected;
   final bool pulsing;
   final bool pressed;
+  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
@@ -3925,60 +3949,143 @@ class _ContextAvatar extends StatelessWidget {
   final GestureLongPressCancelCallback onLongPressCancel;
 
   @override
+  State<_ContextAvatar> createState() => _ContextAvatarState();
+}
+
+class _ContextAvatarState extends State<_ContextAvatar> {
+  static const _holdPreviewDelay = Duration(milliseconds: 140);
+
+  Timer? _holdPreviewTimer;
+  var _holdPreviewPressed = false;
+
+  @override
+  void dispose() {
+    _holdPreviewTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleHoldPreview() {
+    _holdPreviewTimer?.cancel();
+    _holdPreviewTimer = Timer(_holdPreviewDelay, () {
+      if (!mounted || _holdPreviewPressed) return;
+      setState(() => _holdPreviewPressed = true);
+    });
+  }
+
+  void _clearHoldPreview() {
+    _holdPreviewTimer?.cancel();
+    _holdPreviewTimer = null;
+    if (!_holdPreviewPressed || !mounted) return;
+    setState(() => _holdPreviewPressed = false);
+  }
+
+  void _handleLongPressStart(LongPressStartDetails details) {
+    _holdPreviewTimer?.cancel();
+    _holdPreviewTimer = null;
+    widget.onLongPressStart(details);
+  }
+
+  void _handleLongPressEnd(LongPressEndDetails details) {
+    _clearHoldPreview();
+    widget.onLongPressEnd(details);
+  }
+
+  void _handleLongPressCancel() {
+    _clearHoldPreview();
+    widget.onLongPressCancel();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final category = item.category?.category;
-    final progress = _budgetItemProgress(item);
-    final keyBase = _budgetAvatarKeyBase(item);
-    return GestureDetector(
-      key: _budgetAvatarKey(item, selected: selected),
-      onTap: onTap,
-      onLongPressStart: onLongPressStart,
-      onLongPressMoveUpdate: onLongPressMoveUpdate,
-      onLongPressEnd: onLongPressEnd,
-      onLongPressCancel: onLongPressCancel,
-      child: AnimatedScale(
-        key: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
-        scale: pressed ? .8 : 1.0,
-        duration: const Duration(milliseconds: 55),
-        curve: Curves.easeOutCubic,
-        child: RepaintBoundary(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              if (category != null)
-                GlossyCategoryAvatar(
-                  category: category,
-                  size: size,
-                  iconSize: iconSize,
-                  selected: selected,
-                  pulsing: pulsing,
-                  opacity: opacity,
-                  showTopHighlight: avatarTopHighlightEnabled,
-                  debugSource: 'spendee-test-context-avatar',
-                )
-              else
-                _OverviewBudgetAvatar(
-                  item: item,
-                  size: size,
-                  iconSize: iconSize,
-                  opacity: opacity,
-                  selected: selected,
-                  pulsing: pulsing,
-                  topHighlightEnabled: avatarTopHighlightEnabled,
-                  keyBase: keyBase,
-                ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    key: ValueKey('spendee-test-avatar-progress-$keyBase'),
-                    painter: _BudgetAvatarProgressPainter(
-                      progress: progress,
-                      selected: selected,
+    final category = widget.item.category?.category;
+    final progress = _budgetItemProgress(widget.item);
+    final keyBase = _budgetAvatarKeyBase(widget.item);
+    final selected = widget.selected;
+    final pressed = widget.pressed || _holdPreviewPressed;
+    final accent = _budgetItemAccent(widget.item);
+    return Listener(
+      onPointerDown: (_) => _scheduleHoldPreview(),
+      onPointerUp: (_) => _clearHoldPreview(),
+      onPointerCancel: (_) => _clearHoldPreview(),
+      child: GestureDetector(
+        key: _budgetAvatarKey(widget.item, selected: selected),
+        onTap: widget.onTap,
+        onLongPressStart: _handleLongPressStart,
+        onLongPressMoveUpdate: widget.onLongPressMoveUpdate,
+        onLongPressEnd: _handleLongPressEnd,
+        onLongPressCancel: _handleLongPressCancel,
+        child: AnimatedScale(
+          key: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
+          scale: pressed ? .8 : 1.0,
+          duration: const Duration(milliseconds: 55),
+          curve: Curves.easeOutCubic,
+          child: RepaintBoundary(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (selected)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        key: ValueKey(
+                          'spendee-test-avatar-outer-halo-progress-$keyBase',
+                        ),
+                        painter: _BudgetAvatarOuterHaloProgressPainter(
+                          progress: progress,
+                          selected: selected,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ],
+                if (category != null)
+                  GlossyCategoryAvatar(
+                    category: category,
+                    size: widget.size,
+                    iconSize: widget.iconSize,
+                    selected: selected,
+                    pulsing: widget.pulsing,
+                    opacity: widget.opacity,
+                    showTopHighlight: false,
+                    debugSource: 'spendee-test-context-avatar',
+                  )
+                else
+                  _OverviewBudgetAvatar(
+                    item: widget.item,
+                    size: widget.size,
+                    iconSize: widget.iconSize,
+                    opacity: widget.opacity,
+                    selected: selected,
+                    pulsing: widget.pulsing,
+                    topHighlightEnabled: false,
+                    keyBase: keyBase,
+                  ),
+                if (widget.avatar3dEffectEnabled)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        key: ValueKey('spendee-test-avatar-3d-effect-$keyBase'),
+                        painter: _BudgetAvatar3DEffectPainter(
+                          selected: selected,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (widget.avatarTopHighlightEnabled)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        key: ValueKey(
+                          'spendee-test-avatar-top-highlight-$keyBase',
+                        ),
+                        painter: _BudgetAvatarTopHighlightPainter(
+                          selected: selected,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -4169,8 +4276,72 @@ class _BudgetAvatarTopHighlightPainter extends CustomPainter {
   }
 }
 
-class _BudgetAvatarProgressPainter extends CustomPainter {
-  const _BudgetAvatarProgressPainter({
+class _BudgetAvatar3DEffectPainter extends CustomPainter {
+  const _BudgetAvatar3DEffectPainter({
+    required this.selected,
+    required this.color,
+  });
+
+  final bool selected;
+  final Color color;
+
+  bool get drawsWhiteArc => false;
+  bool get usesAccentColor => true;
+  bool get hasInnerDepthShadow => true;
+  double get strokeInset => 3.0;
+  double get startRadians => math.pi * .12;
+  double get sweepRadians => math.pi * .76;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = selected ? 3.2 : 2.6;
+    final inset = strokeInset + stroke / 2;
+    final rect = Rect.fromLTWH(
+      inset,
+      inset,
+      size.width - inset * 2,
+      size.height - inset * 2,
+    );
+    final clipPath = Path()
+      ..addOval(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.save();
+    canvas.clipPath(clipPath, doAntiAlias: true);
+    canvas.drawArc(
+      rect.shift(Offset(0, selected ? 1.6 : 1.2)),
+      startRadians,
+      sweepRadians,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke + 1.4
+        ..strokeCap = StrokeCap.round
+        ..color = const Color(
+          0xFF0F172A,
+        ).withValues(alpha: selected ? .24 : .18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4),
+    );
+    canvas.drawArc(
+      rect,
+      startRadians,
+      sweepRadians,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..color = color.withValues(alpha: selected ? .62 : .46),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BudgetAvatar3DEffectPainter oldDelegate) {
+    return oldDelegate.selected != selected || oldDelegate.color != color;
+  }
+}
+
+class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
+  const _BudgetAvatarOuterHaloProgressPainter({
     required this.progress,
     required this.selected,
   });
@@ -4178,29 +4349,34 @@ class _BudgetAvatarProgressPainter extends CustomPainter {
   final double progress;
   final bool selected;
   Color get progressColor => Colors.white;
-  bool get usesOuterAvatarOutline => true;
-  bool get drawsInnerProgressRing => false;
+  bool get usesOuterGlassHalo => true;
+  bool get drawsInsideAvatarBody => false;
+  bool get clockwise => true;
+  double get startRadians => -math.pi / 2;
+  double get strokeWidth => selected ? 10.0 : 8.0;
+  double get avatarOutset => strokeWidth / 2;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = selected ? 2.5 : 1.8;
+    final stroke = strokeWidth;
+    final outset = avatarOutset;
     final rect = Rect.fromLTWH(
-      -stroke / 2,
-      -stroke / 2,
-      size.width + stroke,
-      size.height + stroke,
+      -outset,
+      -outset,
+      size.width + outset * 2,
+      size.height + outset * 2,
     );
     canvas.drawOval(
       rect,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..color = progressColor.withValues(alpha: selected ? .20 : .08),
+        ..color = progressColor.withValues(alpha: selected ? .12 : .06),
     );
     if (progress <= 0) return;
     canvas.drawArc(
       rect,
-      -math.pi / 2,
+      startRadians,
       math.pi * 2 * progress,
       false,
       Paint()
@@ -4209,8 +4385,8 @@ class _BudgetAvatarProgressPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..color = progressColor.withValues(
           alpha: _lerpDouble(
-            selected ? .24 : .12,
-            selected ? .52 : .34,
+            selected ? .22 : .12,
+            selected ? .58 : .38,
             progress,
           ),
         ),
@@ -4218,7 +4394,9 @@ class _BudgetAvatarProgressPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BudgetAvatarProgressPainter oldDelegate) {
+  bool shouldRepaint(
+    covariant _BudgetAvatarOuterHaloProgressPainter oldDelegate,
+  ) {
     return oldDelegate.progress != progress || oldDelegate.selected != selected;
   }
 }

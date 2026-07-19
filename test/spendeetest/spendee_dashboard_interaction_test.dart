@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:exptv2/core/debug/debug_console.dart';
@@ -148,7 +149,13 @@ void main() {
       ),
     );
     expect(selectedAvatar.iconSize, 30);
-    expect((selectedAvatar as dynamic).showTopHighlight, isTrue);
+    expect((selectedAvatar as dynamic).showTopHighlight, isFalse);
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-top-highlight-category-1'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -2355,19 +2362,33 @@ void main() {
     }
   });
 
-  testWidgets('header menu toggles top highlight without bottom arc overlays', (
+  testWidgets('header menu toggles colored avatar depth and top highlights', (
     tester,
   ) async {
     await _pumpDashboard(tester);
     await _dragHeaderBy(tester, 134);
     await tester.pumpAndSettle();
 
-    expect(_avatar3dEffectFinders(), findsNothing);
+    final categoryDepth = find.byKey(
+      const ValueKey('spendee-test-avatar-3d-effect-category-1'),
+    );
+    expect(categoryDepth, findsOneWidget);
+    final depthPainter =
+        tester.widget<CustomPaint>(categoryDepth).painter as dynamic;
+    expect(depthPainter.drawsWhiteArc, isFalse);
+    expect(depthPainter.usesAccentColor, isTrue);
+    expect(depthPainter.hasInnerDepthShadow, isTrue);
     expect(
       find.byKey(
         const ValueKey(
           'spendee-test-avatar-top-highlight-overview-expense_budget-all_time-all',
         ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-top-highlight-category-1'),
       ),
       findsOneWidget,
     );
@@ -2382,7 +2403,7 @@ void main() {
               )
               as dynamic)
           .showTopHighlight,
-      isTrue,
+      isFalse,
     );
 
     await tester.tap(
@@ -2391,7 +2412,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('spendee-test-avatar-effect-3d-toggle')),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.byKey(
@@ -2400,6 +2421,16 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-avatar-effect-3d-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(_avatar3dEffectFinders(), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(
         const ValueKey('spendee-test-avatar-effect-top-highlight-toggle'),
@@ -2411,6 +2442,12 @@ void main() {
         const ValueKey(
           'spendee-test-avatar-top-highlight-overview-expense_budget-all_time-all',
         ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-top-highlight-category-1'),
       ),
       findsNothing,
     );
@@ -2429,7 +2466,9 @@ void main() {
     );
   });
 
-  testWidgets('avatar progress ring is white limit progress', (tester) async {
+  testWidgets('avatar outer glass halo is white limit progress', (
+    tester,
+  ) async {
     final store = TransactionStore(
       _DashboardTestRepository(),
       clock: () => DateTime(2026, 7, 17),
@@ -2446,14 +2485,20 @@ void main() {
     await _dragHeaderBy(tester, 134);
     await tester.pumpAndSettle();
 
+    expect(_avatarLegacyProgressFinders(), findsNothing);
     final progressPaint = tester.widget<CustomPaint>(
-      find.byKey(const ValueKey('spendee-test-avatar-progress-category-1')),
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
     );
     final painter = progressPaint.painter as dynamic;
     expect(painter.progress, closeTo(75240 / 80000, .001));
     expect(painter.progressColor, Colors.white);
-    expect(painter.usesOuterAvatarOutline, isTrue);
-    expect(painter.drawsInnerProgressRing, isFalse);
+    expect(painter.usesOuterGlassHalo, isTrue);
+    expect(painter.drawsInsideAvatarBody, isFalse);
+    expect(painter.startRadians, closeTo(-math.pi / 2, .001));
+    expect(painter.clockwise, isTrue);
+    expect(painter.strokeWidth, greaterThanOrEqualTo(8));
   });
 
   testWidgets('long press avatar shrinks while limit edit is active', (
@@ -2484,6 +2529,19 @@ void main() {
     final avatar = find.byKey(
       const ValueKey('spendee-test-category-avatar-1-selected'),
     );
+
+    final previewGesture = await tester.startGesture(tester.getCenter(avatar));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(.8, .001));
+
+    await previewGesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
+
+    await tester.tap(avatar);
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
+
     final gesture = await tester.startGesture(tester.getCenter(avatar));
     await tester.pump(const Duration(milliseconds: 650));
 
@@ -3235,6 +3293,14 @@ Finder _avatar3dEffectFinders() {
     final key = widget.key;
     return key is ValueKey<String> &&
         key.value.startsWith('spendee-test-avatar-3d-effect-');
+  });
+}
+
+Finder _avatarLegacyProgressFinders() {
+  return find.byWidgetPredicate((widget) {
+    final key = widget.key;
+    return key is ValueKey<String> &&
+        key.value.startsWith('spendee-test-avatar-progress-');
   });
 }
 
