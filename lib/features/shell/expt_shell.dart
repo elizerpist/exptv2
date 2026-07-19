@@ -676,8 +676,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   void _handleFabPressed() {
     if (_activeTab == AppTab.stats) {
-      DebugConsole.log('[Stats] threshold sheet open requested source=fab');
-      _statsPageController.openThresholdSheet();
+      DebugConsole.log('[Stats] threshold sheet inactive source=fab');
       return;
     }
     final requestedAt = DateTime.now();
@@ -897,9 +896,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           onHorizontalDragStep: _activeTab == AppTab.stats
               ? _statsPageController.stepSnapshot
               : null,
-          onVerticalDragStep: _activeTab == AppTab.stats
-              ? _statsPageController.stepThreshold
-              : null,
+          onVerticalDragStep: null,
         ),
       ),
     ];

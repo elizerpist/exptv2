@@ -1236,7 +1236,7 @@ void main() {
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
     var fab = tester.widget<ExptFab>(find.byType(ExptFab));
     expect(fab.onHorizontalDragStep, isNotNull);
-    expect(fab.onVerticalDragStep, isNotNull);
+    expect(fab.onVerticalDragStep, isNull);
 
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
@@ -1346,7 +1346,7 @@ void main() {
     expect(firstLaunchNotificationPromptCalls, 1);
   });
 
-  testWidgets('FAB opens stats threshold sheet on the stats tab', (
+  testWidgets('FAB does not open the inactive stats threshold sheet', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -1357,8 +1357,8 @@ void main() {
 
     await _tapFab(tester);
 
-    expect(find.byKey(const ValueKey('stats-threshold-sheet')), findsOneWidget);
-    expect(find.byKey(const ValueKey('stats-snapshot-row')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-threshold-sheet')), findsNothing);
+    expect(find.byKey(const ValueKey('stats-snapshot-row')), findsNothing);
     expect(find.text('Új kiadási tranzakció'), findsNothing);
     expect(find.text('Tranzakció neve'), findsNothing);
   });

@@ -21,6 +21,10 @@ class GlossyCategoryAvatar extends StatelessWidget {
     this.pulsing = false,
     this.showQuestionMark = false,
     this.showTopHighlight = true,
+    this.showBodyHighlight = true,
+    this.bodyHighlightStrength = 1,
+    this.bodyHighlightKey,
+    this.scaleSelection = true,
   });
 
   final TransactionCategory? category;
@@ -33,6 +37,10 @@ class GlossyCategoryAvatar extends StatelessWidget {
   final bool pulsing;
   final bool showQuestionMark;
   final bool showTopHighlight;
+  final bool showBodyHighlight;
+  final double bodyHighlightStrength;
+  final Key? bodyHighlightKey;
+  final bool scaleSelection;
 
   final Key? iconKey;
 
@@ -43,7 +51,10 @@ class GlossyCategoryAvatar extends StatelessWidget {
     final gradient = colorSlot == null
         ? LinearGradient(colors: [fallbackColor, fallbackColor])
         : CategoryColorManager.gradient(colorSlot);
-    final effectiveScale = selected ? (pulsing ? 1.18 : 1.1) : 1.0;
+    final highlightStrength = bodyHighlightStrength.clamp(0.0, 1.0).toDouble();
+    final effectiveScale = scaleSelection && selected
+        ? (pulsing ? 1.18 : 1.1)
+        : 1.0;
     return Opacity(
       opacity: opacity,
       child: AnimatedScale(
@@ -57,16 +68,18 @@ class GlossyCategoryAvatar extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(
-              center: const Alignment(-0.28, -0.56),
-              radius: 1.15,
-              colors: [
-                Colors.white.withValues(alpha: .26),
-                Colors.white.withValues(alpha: .08),
-                Colors.transparent,
-              ],
-              stops: const [0, .25, .50],
-            ),
+            gradient: showBodyHighlight && highlightStrength > 0
+                ? RadialGradient(
+                    center: const Alignment(-0.28, -0.56),
+                    radius: 1.15,
+                    colors: [
+                      Colors.white.withValues(alpha: .26 * highlightStrength),
+                      Colors.white.withValues(alpha: .08 * highlightStrength),
+                      Colors.transparent,
+                    ],
+                    stops: const [0, .25, .50],
+                  )
+                : null,
             boxShadow: [
               BoxShadow(
                 color: const Color(
@@ -104,20 +117,26 @@ class GlossyCategoryAvatar extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: const Alignment(-0.32, -0.60),
-                        radius: 1.1,
-                        colors: [
-                          Colors.white.withValues(alpha: .22),
-                          Colors.white.withValues(alpha: .08),
-                          Colors.transparent,
-                        ],
-                        stops: const [.0, .28, .52],
+                  if (showBodyHighlight && highlightStrength > 0)
+                    DecoratedBox(
+                      key: bodyHighlightKey,
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(-0.32, -0.60),
+                          radius: 1.1,
+                          colors: [
+                            Colors.white.withValues(
+                              alpha: .22 * highlightStrength,
+                            ),
+                            Colors.white.withValues(
+                              alpha: .08 * highlightStrength,
+                            ),
+                            Colors.transparent,
+                          ],
+                          stops: const [.0, .28, .52],
+                        ),
                       ),
                     ),
-                  ),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
