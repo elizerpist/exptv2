@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/theme/expense_theme.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
@@ -1171,6 +1172,121 @@ void main() {
     expect(chartLeftInset, closeTo(rightInset, 1.5));
     expect(scoreGap, closeTo(rightInset, 1.5));
     expect(chartRect.height, greaterThan(66));
+  });
+
+  testWidgets('budget interactions do not build mind stats frames', (
+    tester,
+  ) async {
+    final builds = _captureMindStatsBuilds();
+    await _pumpDashboard(tester, repository: _MindDashboardStatsRepository());
+    builds.clear();
+
+    await _dragHeaderBy(tester, 134);
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final carouselGesture = find.byKey(
+      const ValueKey('spendee-test-context-carousel-gesture'),
+    );
+    expect(carouselGesture, findsOneWidget);
+    final gesture = await tester.startGesture(
+      tester.getCenter(carouselGesture),
+    );
+    await gesture.moveBy(const Offset(-34, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await gesture.moveBy(const Offset(-34, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      builds,
+      isEmpty,
+      reason:
+          'Budget header/avatar motion should stay on the old smooth path and '
+          'must not pay the Mind stats-frame cost.',
+    );
+  });
+
+  testWidgets('mind interactions reuse cached stats frame and log cache misses', (
+    tester,
+  ) async {
+    final builds = _captureMindStatsBuilds();
+    DebugConsole.clear();
+    final store = await _pumpDashboard(
+      tester,
+      repository: _MindDashboardStatsRepository(),
+    );
+    builds.clear();
+    DebugConsole.clear();
+
+    await _switchToMindBackground(tester);
+    expect(builds, hasLength(1));
+    expect(builds.single.reason, 'header-background-mind');
+    expect(builds.single.modeKey, 'sum');
+    expect(builds.single.activeType, TransactionType.expense);
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (line) =>
+              line.contains('[Perf] SpendeeTest MindStats cache_miss') &&
+              line.contains('reason=header-background-mind') &&
+              line.contains('mode=sum') &&
+              line.contains('type=expense'),
+        ),
+      ),
+    );
+
+    builds.clear();
+    DebugConsole.clear();
+    final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+    final drag = await tester.startGesture(tester.getCenter(handle));
+    for (var index = 0; index < 4; index += 1) {
+      await drag.moveBy(const Offset(0, 18));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await drag.up();
+    await tester.pump();
+
+    expect(
+      builds,
+      isEmpty,
+      reason:
+          'Mind header drag changes only geometry; unchanged stats inputs must '
+          'reuse the cached frame.',
+    );
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (line) =>
+              line.contains('[Perf] SpendeeTest header_drag') &&
+              line.contains('background=mind') &&
+              line.contains('updates=4'),
+        ),
+      ),
+    );
+
+    builds.clear();
+    DebugConsole.clear();
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-income-type-pill')),
+    );
+    await tester.pumpAndSettle();
+    expect(builds, hasLength(1));
+    expect(builds.single.activeType, TransactionType.income);
+
+    builds.clear();
+    DebugConsole.clear();
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.yearly,
+        year: 2026,
+      ),
+    );
+    await tester.pump();
+    expect(builds, hasLength(1));
+    expect(builds.single.modeKey, 'yearly');
   });
 
   testWidgets('mind stage content follows summary pill scope', (tester) async {
@@ -2521,6 +2637,13 @@ CustomPaint _mindCustomPaint(WidgetTester tester, Key chartKey, Key paintKey) {
   return tester.widget<CustomPaint>(
     find.descendant(of: find.byKey(chartKey), matching: find.byKey(paintKey)),
   );
+}
+
+List<SpendeeMindStatsFrameBuildEvent> _captureMindStatsBuilds() {
+  final builds = <SpendeeMindStatsFrameBuildEvent>[];
+  SpendeeMindStatsFrame.debugBuildObserver = builds.add;
+  addTearDown(() => SpendeeMindStatsFrame.debugBuildObserver = null);
+  return builds;
 }
 
 List<String> _seriesPointSignature(Iterable<dynamic> points) {

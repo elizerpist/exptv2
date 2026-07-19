@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/debug/debug_console.dart';
 import '../../../../core/platform/browser_fullscreen_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/category_color_manager.dart';
@@ -42,6 +43,107 @@ enum _ChartListSurface { none, original, htmlC2Glass, liquidGlass, acrylic }
 enum _Stage2BudgetPage { categories, vendors }
 
 enum _HeaderBackgroundMode { budget, mind }
+
+class _MindStatsFrameCacheKey {
+  _MindStatsFrameCacheKey({
+    required this.summaryWindow,
+    required this.referenceYear,
+    required this.referenceMonth,
+    required this.referenceDay,
+    required this.currentYear,
+    required this.currentMonth,
+    required this.currentDay,
+    required this.activeType,
+    required this.searchQuery,
+    required this.activeCategoryIds,
+    required this.activeMerchantFilters,
+    required this.transactions,
+    required this.categories,
+  });
+
+  factory _MindStatsFrameCacheKey.fromStore(TransactionStore store) {
+    final reference = store.summaryReferenceDate;
+    final current = store.currentDate;
+    return _MindStatsFrameCacheKey(
+      summaryWindow: store.summaryWindow,
+      referenceYear: reference.year,
+      referenceMonth: reference.month,
+      referenceDay: reference.day,
+      currentYear: current.year,
+      currentMonth: current.month,
+      currentDay: current.day,
+      activeType: store.activeType,
+      searchQuery: store.searchQuery,
+      activeCategoryIds: (store.activeCategoryIds.toList()..sort()),
+      activeMerchantFilters: (store.activeMerchantFilters.toList()..sort()),
+      transactions: store.transactions,
+      categories: store.categories,
+    );
+  }
+
+  final SummaryWindow summaryWindow;
+  final int referenceYear;
+  final int referenceMonth;
+  final int referenceDay;
+  final int currentYear;
+  final int currentMonth;
+  final int currentDay;
+  final TransactionType activeType;
+  final String searchQuery;
+  final List<int> activeCategoryIds;
+  final List<String> activeMerchantFilters;
+  final List<TransactionRecord> transactions;
+  final List<TransactionCategory> categories;
+
+  String get categoryFilterLabel =>
+      activeCategoryIds.isEmpty ? 'all' : activeCategoryIds.join(',');
+  String get merchantFilterLabel =>
+      activeMerchantFilters.isEmpty ? 'all' : activeMerchantFilters.join('|');
+
+  @override
+  bool operator ==(Object other) {
+    return other is _MindStatsFrameCacheKey &&
+        other.summaryWindow == summaryWindow &&
+        other.referenceYear == referenceYear &&
+        other.referenceMonth == referenceMonth &&
+        other.referenceDay == referenceDay &&
+        other.currentYear == currentYear &&
+        other.currentMonth == currentMonth &&
+        other.currentDay == currentDay &&
+        other.activeType == activeType &&
+        other.searchQuery == searchQuery &&
+        identical(other.transactions, transactions) &&
+        identical(other.categories, categories) &&
+        _listEquals(other.activeCategoryIds, activeCategoryIds) &&
+        _listEquals(other.activeMerchantFilters, activeMerchantFilters);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    summaryWindow,
+    referenceYear,
+    referenceMonth,
+    referenceDay,
+    currentYear,
+    currentMonth,
+    currentDay,
+    activeType,
+    searchQuery,
+    identityHashCode(transactions),
+    identityHashCode(categories),
+    Object.hashAll(activeCategoryIds),
+    Object.hashAll(activeMerchantFilters),
+  );
+}
+
+bool _listEquals<T>(List<T> left, List<T> right) {
+  if (identical(left, right)) return true;
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
+}
 
 enum _HeaderDesignMenuAction {
   headerBackgroundBudget,
@@ -236,6 +338,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _mindStage2Surface = _PanelSurface.glass;
   var _mindStage1Softness = 0.0;
   var _mindStage2Softness = 0.0;
+  _MindStatsFrameCacheKey? _mindStatsFrameCacheKey;
+  SpendeeMindStatsFrame? _mindStatsFrameCache;
+  Stopwatch? _headerDragStopwatch;
+  var _headerDragUpdateCount = 0;
+  Stopwatch? _carouselDragStopwatch;
+  var _carouselDragUpdateCount = 0;
   Timer? _avatarPulseTimer;
   final Map<FluviLogoArc, FluviLogoFill> _logoFills =
       Map<FluviLogoArc, FluviLogoFill>.of(FluviLogoSvg.defaultFills);
@@ -300,9 +408,81 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     return null;
   }
 
+  SpendeeMindStatsFrame _mindStatsFrameFor(
+    TransactionStore store, {
+    required String reason,
+  }) {
+    final key = _MindStatsFrameCacheKey.fromStore(store);
+    final cachedKey = _mindStatsFrameCacheKey;
+    final cachedFrame = _mindStatsFrameCache;
+    if (cachedKey == key && cachedFrame != null) return cachedFrame;
+
+    final stopwatch = Stopwatch()..start();
+    final frame = SpendeeMindStatsFrame.fromStore(store, reason: reason);
+    stopwatch.stop();
+    _mindStatsFrameCacheKey = key;
+    _mindStatsFrameCache = frame;
+    DebugConsole.log(
+      '[Perf] SpendeeTest MindStats cache_miss reason=$reason '
+      'mode=${frame.modeKey} scope=${frame.summaryScope.name} '
+      'type=${store.activeType.name} transactions=${store.transactions.length} '
+      'categories=${store.categories.length} '
+      'categoryFilter=${key.categoryFilterLabel} '
+      'merchantFilter=${key.merchantFilterLabel} '
+      'query=${store.searchQuery.isEmpty ? "-" : store.searchQuery} '
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+    );
+    return frame;
+  }
+
+  void _startInteractionPerf(String interaction) {
+    if (interaction == 'header_drag') {
+      _headerDragUpdateCount = 0;
+      _headerDragStopwatch = Stopwatch()..start();
+      return;
+    }
+    if (interaction == 'carousel_drag') {
+      _carouselDragUpdateCount = 0;
+      _carouselDragStopwatch = Stopwatch()..start();
+    }
+  }
+
+  void _logHeaderDragPerf({
+    required SpendeeHeaderStage targetStage,
+    required double targetHeight,
+    required bool springBack,
+  }) {
+    final stopwatch = _headerDragStopwatch;
+    stopwatch?.stop();
+    DebugConsole.log(
+      '[Perf] SpendeeTest header_drag background=${_headerBackgroundMode.name} '
+      'surface=${_headerSurface.name} targetStage=${targetStage.name} '
+      'updates=$_headerDragUpdateCount height=${targetHeight.toStringAsFixed(1)} '
+      'springBack=$springBack elapsed=${stopwatch?.elapsedMilliseconds ?? 0}ms',
+    );
+    _headerDragStopwatch = null;
+    _headerDragUpdateCount = 0;
+  }
+
+  void _logCarouselDragPerf(String outcome, {double? velocityDx}) {
+    final stopwatch = _carouselDragStopwatch;
+    stopwatch?.stop();
+    DebugConsole.log(
+      '[Perf] SpendeeTest carousel_drag background=${_headerBackgroundMode.name} '
+      'surface=${_avatarSurface.name} outcome=$outcome '
+      'updates=$_carouselDragUpdateCount selected=${_selectedCategoryId ?? -1} '
+      'residual=${_carouselVisualDx.toStringAsFixed(1)} '
+      'velocity=${(velocityDx ?? 0).toStringAsFixed(1)} '
+      'elapsed=${stopwatch?.elapsedMilliseconds ?? 0}ms',
+    );
+    _carouselDragStopwatch = null;
+    _carouselDragUpdateCount = 0;
+  }
+
   void _beginHeaderDrag(DragStartDetails details) {
     final controller = _controllerFor(context);
     controller.beginDrag();
+    _startInteractionPerf('header_drag');
     setState(() {
       _dragging = true;
       _springBack = false;
@@ -312,6 +492,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void _updateHeaderDrag(DragUpdateDetails details) {
     final controller = _controllerFor(context);
     final update = controller.dragBy(details.delta.dy);
+    _headerDragUpdateCount += 1;
     for (var index = 0; index < update.tickCount; index++) {
       HapticFeedback.selectionClick();
     }
@@ -324,6 +505,11 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void _endHeaderDrag(DragEndDetails details) {
     final controller = _controllerFor(context);
     final release = controller.release();
+    _logHeaderDragPerf(
+      targetStage: release.targetStage,
+      targetHeight: release.targetHeight,
+      springBack: release.springBack,
+    );
     setState(() {
       _dragging = false;
       _springBack = release.springBack;
@@ -429,6 +615,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void _handleCarouselDragStart(DragStartDetails details) {
     _carouselMotionSerial += 1;
     _carouselReleaseController.stop();
+    _startInteractionPerf('carousel_drag');
     setState(() {
       _carouselLiveTicked = false;
       _carouselVisualDx = 0;
@@ -442,6 +629,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void _handleCarouselDragUpdate(DragUpdateDetails details) {
     final categories = _activeCategories;
     if (categories.length < 2) return;
+    _carouselDragUpdateCount += 1;
     final controller = _carouselController ??= SpendeeCenterCarouselController(
       itemCount: categories.length,
       initialIndex: _selectedCategoryIndex(),
@@ -471,6 +659,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (categories.length < 2 || controller == null) {
       return;
     }
+    _logCarouselDragPerf(
+      'release',
+      velocityDx: details.velocity.pixelsPerSecond.dx,
+    );
     unawaited(
       _releaseCarouselBelt(
         controller: controller,
@@ -484,6 +676,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void _handleCarouselDragCancel() {
     final controller = _carouselController;
     if (controller == null) return;
+    _logCarouselDragPerf('cancel');
     unawaited(
       _cancelCarouselBelt(
         controller: controller,
@@ -1153,6 +1346,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         ? Curves.elasticOut
         : Curves.easeOutCubic;
 
+    final isMindBackground =
+        _headerBackgroundMode == _HeaderBackgroundMode.mind;
+    final mindStatsFrame = isMindBackground
+        ? _mindStatsFrameFor(widget.store, reason: 'header-background-mind')
+        : null;
+
     return ColoredBox(
       key: ValueKey('spendee-test-dashboard-stage-${_stage.name}'),
       color: const Color(0xFFF1F5F9),
@@ -1200,7 +1399,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   categories: _activeCategories,
                   stage2Page: _stage2Page,
                   headerBackgroundMode: _headerBackgroundMode,
-                  mindStatsFrame: SpendeeMindStatsFrame.fromStore(widget.store),
+                  mindStatsFrame: mindStatsFrame,
                   onStage2PreviousPage: _showPreviousStage2Page,
                   onStage2NextPage: _showNextStage2Page,
                   onHandleDragStart: _beginHeaderDrag,
@@ -1316,7 +1515,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final List<TransactionCategory> categories;
   final _Stage2BudgetPage stage2Page;
   final _HeaderBackgroundMode headerBackgroundMode;
-  final SpendeeMindStatsFrame mindStatsFrame;
+  final SpendeeMindStatsFrame? mindStatsFrame;
   final VoidCallback onStage2PreviousPage;
   final VoidCallback onStage2NextPage;
   final GestureDragStartCallback onHandleDragStart;
@@ -1460,7 +1659,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     final content = isMindBackground
         ? _SpendeeMindHeaderContent(
             stage: stage,
-            statsFrame: mindStatsFrame,
+            statsFrame: mindStatsFrame!,
             stage1Surface: mindStage1Surface,
             stage2Surface: mindStage2Surface,
             stage1Softness: mindStage1Softness,

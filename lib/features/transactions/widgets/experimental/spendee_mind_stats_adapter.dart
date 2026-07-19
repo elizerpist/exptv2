@@ -6,6 +6,27 @@ import '../../models/summary_window.dart';
 import '../../models/transaction_category.dart';
 import '../../state/transaction_store.dart';
 
+typedef SpendeeMindStatsFrameBuildObserver =
+    void Function(SpendeeMindStatsFrameBuildEvent event);
+
+class SpendeeMindStatsFrameBuildEvent {
+  const SpendeeMindStatsFrameBuildEvent({
+    required this.reason,
+    required this.modeKey,
+    required this.activeType,
+    required this.transactionCount,
+    required this.categoryCount,
+    required this.elapsedMilliseconds,
+  });
+
+  final String reason;
+  final String modeKey;
+  final TransactionType activeType;
+  final int transactionCount;
+  final int categoryCount;
+  final int elapsedMilliseconds;
+}
+
 class SpendeeMindStatsFrame {
   const SpendeeMindStatsFrame({
     required this.summaryScope,
@@ -29,7 +50,13 @@ class SpendeeMindStatsFrame {
   List<StatsSeriesPoint> get activeScoreLine => activeSeries.scoreLine;
   double get activeScore => activeSeries.kontrollScore;
 
-  static SpendeeMindStatsFrame fromStore(TransactionStore store) {
+  static SpendeeMindStatsFrameBuildObserver? debugBuildObserver;
+
+  static SpendeeMindStatsFrame fromStore(
+    TransactionStore store, {
+    String reason = 'direct',
+  }) {
+    final stopwatch = Stopwatch()..start();
     final reference = store.summaryReferenceDate;
     final scope = switch (store.summaryWindow) {
       SummaryWindow.monthly => StatsSummaryScope.monthly,
@@ -55,7 +82,7 @@ class SpendeeMindStatsFrame {
       year: reference.year,
       month: reference.month,
     );
-    return SpendeeMindStatsFrame(
+    final frame = SpendeeMindStatsFrame(
       summaryScope: scope,
       periodLabel: store.activePeriodLabel,
       modeKey: modeKey,
@@ -65,6 +92,18 @@ class SpendeeMindStatsFrame {
       expenseFrame: expenseFrame,
       incomeFrame: incomeFrame,
     );
+    stopwatch.stop();
+    debugBuildObserver?.call(
+      SpendeeMindStatsFrameBuildEvent(
+        reason: reason,
+        modeKey: modeKey,
+        activeType: store.activeType,
+        transactionCount: store.transactions.length,
+        categoryCount: store.categories.length,
+        elapsedMilliseconds: stopwatch.elapsedMilliseconds,
+      ),
+    );
+    return frame;
   }
 
   static StatsRenderFrame _buildFrame({
