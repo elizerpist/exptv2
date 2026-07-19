@@ -1062,7 +1062,7 @@ void main() {
     );
   });
 
-  testWidgets('mind stage0 score chart draws only the traffic line', (
+  testWidgets('mind stage0 score chart uses the Stats FastInfo style', (
     tester,
   ) async {
     await _pumpDashboard(tester, repository: _MindDashboardStatsRepository());
@@ -1074,7 +1074,9 @@ void main() {
       const ValueKey('spendee-test-mind-score-fastinfo-paint'),
     );
 
-    expect((paint.painter as dynamic).drawsBackground, isFalse);
+    final painter = paint.painter as dynamic;
+    expect(painter.drawsBackground, isTrue);
+    expect(painter.drawsEndpointBadge, isTrue);
   });
 
   testWidgets('mind acrylic header design paints over the colored header', (
@@ -2353,25 +2355,14 @@ void main() {
     }
   });
 
-  testWidgets('header menu toggles avatar 3d and top highlight effects', (
+  testWidgets('header menu toggles top highlight without bottom arc overlays', (
     tester,
   ) async {
     await _pumpDashboard(tester);
     await _dragHeaderBy(tester, 134);
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(
-        const ValueKey(
-          'spendee-test-avatar-3d-effect-overview-expense_budget-all_time-all',
-        ),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-avatar-3d-effect-category-1')),
-      findsOneWidget,
-    );
+    expect(_avatar3dEffectFinders(), findsNothing);
     expect(
       find.byKey(
         const ValueKey(
@@ -2400,7 +2391,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('spendee-test-avatar-effect-3d-toggle')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(
@@ -2409,19 +2400,6 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('spendee-test-avatar-effect-3d-toggle')),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('spendee-test-avatar-3d-effect-category-1')),
-      findsNothing,
-    );
-
-    await tester.tap(
-      find.byKey(const ValueKey('spendee-test-header-menu-button')),
-    );
-    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(
         const ValueKey('spendee-test-avatar-effect-top-highlight-toggle'),
@@ -2474,7 +2452,8 @@ void main() {
     final painter = progressPaint.painter as dynamic;
     expect(painter.progress, closeTo(75240 / 80000, .001));
     expect(painter.progressColor, Colors.white);
-    expect(painter.drawsBaseRing, isTrue);
+    expect(painter.usesOuterAvatarOutline, isTrue);
+    expect(painter.drawsInnerProgressRing, isFalse);
   });
 
   testWidgets('long press avatar shrinks while limit edit is active', (
@@ -2666,6 +2645,50 @@ void main() {
           .data,
       contains('81 000 Ft'),
     );
+  });
+
+  testWidgets('limit ticks save without store notify storms until release', (
+    tester,
+  ) async {
+    final repository = _SavingDashboardTestRepository();
+    final store = _CountingTransactionStore(repository);
+    await store.start();
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.monthly,
+        year: 2026,
+        month: 7,
+      ),
+    );
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    store.resetAccessCounts();
+
+    final avatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(avatar));
+    await tester.pump(const Duration(milliseconds: 650));
+    await gesture.moveBy(const Offset(0, -52));
+    await tester.pump(const Duration(milliseconds: 90));
+
+    expect(
+      repository.savedLimitPayloads,
+      isNotEmpty,
+      reason: 'Limit ticks still persist automatically while swiping.',
+    );
+    expect(
+      store.listenerNotifications,
+      0,
+      reason:
+          'Tick saves must not notify the whole store and trigger Stats '
+          'prewarm/content rebuild storms before release.',
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(store.listenerNotifications, lessThanOrEqualTo(1));
   });
 
   testWidgets('very long press avatar clears category limit', (tester) async {
@@ -3207,6 +3230,14 @@ bool _isTranslucentWhite(Color color) {
   return color.a > 0 && color.r > .85 && color.g > .85 && color.b > .85;
 }
 
+Finder _avatar3dEffectFinders() {
+  return find.byWidgetPredicate((widget) {
+    final key = widget.key;
+    return key is ValueKey<String> &&
+        key.value.startsWith('spendee-test-avatar-3d-effect-');
+  });
+}
+
 int _stackChildIndexContainingKey(Stack stack, Key key) {
   return stack.children.indexWhere((child) => _widgetContainsKey(child, key));
 }
@@ -3304,6 +3335,7 @@ class _CountingTransactionStore extends TransactionStore {
   var visibleDisplayLogEntriesAccesses = 0;
   var visibleGhostTransactionsAccesses = 0;
   var categoryFilterChanges = 0;
+  var listenerNotifications = 0;
 
   void resetAccessCounts() {
     fastInfoMetricsAccesses = 0;
@@ -3311,6 +3343,7 @@ class _CountingTransactionStore extends TransactionStore {
     visibleDisplayLogEntriesAccesses = 0;
     visibleGhostTransactionsAccesses = 0;
     categoryFilterChanges = 0;
+    listenerNotifications = 0;
   }
 
   @override
@@ -3350,6 +3383,12 @@ class _CountingTransactionStore extends TransactionStore {
   void clearCategoryFilter() {
     categoryFilterChanges += 1;
     super.clearCategoryFilter();
+  }
+
+  @override
+  void notifyListeners() {
+    listenerNotifications += 1;
+    super.notifyListeners();
   }
 }
 

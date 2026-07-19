@@ -156,7 +156,6 @@ enum _HeaderDesignMenuAction {
   avatarsHtmlC2Glass,
   avatarsLiquidGlass,
   avatarsAcrylic,
-  avatar3dEffectToggle,
   avatarTopHighlightToggle,
   chartGlass,
   chartBackground,
@@ -329,7 +328,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarSurface = _PanelSurface.glass;
   var _chartSurface = _PanelSurface.glass;
   var _chartListSurface = _ChartListSurface.original;
-  var _avatar3dEffectEnabled = true;
   var _avatarTopHighlightEnabled = true;
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
@@ -1136,13 +1134,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           child: const Text('Avatarok: Acrylic'),
         ),
         CheckedPopupMenuItem<_HeaderDesignMenuAction>(
-          key: const ValueKey('spendee-test-avatar-effect-3d-toggle'),
-          value: _HeaderDesignMenuAction.avatar3dEffectToggle,
-          checked: _avatar3dEffectEnabled,
-          height: 38,
-          child: const Text('Avatar 3D'),
-        ),
-        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
           key: const ValueKey(
             'spendee-test-avatar-effect-top-highlight-toggle',
           ),
@@ -1389,8 +1380,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           _avatarSurface = _PanelSurface.liquidGlass;
         case _HeaderDesignMenuAction.avatarsAcrylic:
           _avatarSurface = _PanelSurface.acrylic;
-        case _HeaderDesignMenuAction.avatar3dEffectToggle:
-          _avatar3dEffectEnabled = !_avatar3dEffectEnabled;
         case _HeaderDesignMenuAction.avatarTopHighlightToggle:
           _avatarTopHighlightEnabled = !_avatarTopHighlightEnabled;
         case _HeaderDesignMenuAction.chartGlass:
@@ -1583,7 +1572,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       if (_budgetLimitEditLastDy.abs() > 5) return;
       _budgetLimitClearedByVeryLong = true;
       HapticFeedback.heavyImpact();
-      _setBudgetItemLimitAmount(item, 0);
+      _setBudgetItemLimitAmount(item, 0, notifyStore: true);
     });
   }
 
@@ -1636,18 +1625,25 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (mounted) setState(() {});
   }
 
-  void _setBudgetItemLimitAmount(BackheaderBudgetItem item, double amount) {
+  void _setBudgetItemLimitAmount(
+    BackheaderBudgetItem item,
+    double amount, {
+    bool notifyStore = false,
+  }) {
     final normalized = amount <= 0 ? 0.0 : (amount / 1000).round() * 1000.0;
     setState(() {
       _budgetPendingLimitAmountsByKey[item.key] = normalized;
     });
-    unawaited(_saveBudgetItemLimit(item, normalized));
+    unawaited(
+      _saveBudgetItemLimit(item, normalized, notifyStore: notifyStore),
+    );
   }
 
   Future<void> _saveBudgetItemLimit(
     BackheaderBudgetItem item,
-    double amount,
-  ) async {
+    double amount, {
+    bool notifyStore = true,
+  }) async {
     final normalized = math.max(0.0, amount).toDouble();
     final overview = item.overview;
     final category = item.category;
@@ -1657,12 +1653,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           overview.kind,
           limitAmount: normalized,
           alertActive: normalized > 0,
+          notify: notifyStore,
         );
       } else if (category != null) {
         await widget.store.saveCategoryLimitForBarInline(
           category,
           limitAmount: normalized,
           alertActive: normalized > 0,
+          notify: notifyStore,
         );
       }
     } catch (error) {
@@ -1781,7 +1779,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   pulsingBudgetItemKey: _pulsingBudgetItemKey,
                   carouselOffset: _carouselVisualDx,
                   pressedBudgetItemKey: _budgetLimitEditItem?.key,
-                  avatar3dEffectEnabled: _avatar3dEffectEnabled,
                   avatarTopHighlightEnabled: _avatarTopHighlightEnabled,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
@@ -1865,7 +1862,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.pulsingBudgetItemKey,
     required this.carouselOffset,
     required this.pressedBudgetItemKey,
-    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
@@ -1909,7 +1905,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final String? pulsingBudgetItemKey;
   final double carouselOffset;
   final String? pressedBudgetItemKey;
-  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
@@ -2001,7 +1996,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               pulsingItemKey: pulsingBudgetItemKey,
               carouselOffset: carouselOffset,
               pressedItemKey: pressedBudgetItemKey,
-              avatar3dEffectEnabled: avatar3dEffectEnabled,
               avatarTopHighlightEnabled: avatarTopHighlightEnabled,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
@@ -2138,7 +2132,7 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
           child: _MindFastInfoScoreChart(
             activeType: statsFrame.activeFrame.yearData.activeType,
             series: statsFrame.activeFrame.categoryScopeSeries,
-            bareLine: true,
+            bareLine: false,
             plotLeftInset: scorePlotLeftInset,
           ),
         ),
@@ -2244,6 +2238,7 @@ class _MindFastInfoScorePainter extends CustomPainter {
 
   double get score => series.kontrollScore;
   bool get drawsBackground => !bareLine;
+  bool get drawsEndpointBadge => !bareLine;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -3259,9 +3254,9 @@ Color _mindHexColor(String hex, {required Color fallback}) {
 }
 
 Color _mindScoreColor(double score) {
-  if (score >= 70) return const Color(0xFF22C55E);
-  if (score >= 40) return const Color(0xFFF59E0B);
-  return const Color(0xFFEF4444);
+  if (score < 45) return const Color(0xFFEF4444);
+  if (score < 60) return const Color(0xFFFBBF24);
+  return const Color(0xFF22C55E);
 }
 
 class _BudgetExtendedInfo extends StatelessWidget {
@@ -3272,7 +3267,6 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.pulsingItemKey,
     required this.carouselOffset,
     required this.pressedItemKey,
-    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -3293,7 +3287,6 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final String? pulsingItemKey;
   final double carouselOffset;
   final String? pressedItemKey;
-  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -3341,7 +3334,6 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 pulsingItemKey: pulsingItemKey,
                 carouselOffset: carouselOffset,
                 pressedItemKey: pressedItemKey,
-                avatar3dEffectEnabled: avatar3dEffectEnabled,
                 avatarTopHighlightEnabled: avatarTopHighlightEnabled,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
@@ -3686,7 +3678,6 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.pulsingItemKey,
     required this.carouselOffset,
     required this.pressedItemKey,
-    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onItemTap,
     required this.onItemLongPressStart,
@@ -3700,7 +3691,6 @@ class _ContextAvatarBelt extends StatelessWidget {
   final String? pulsingItemKey;
   final double carouselOffset;
   final String? pressedItemKey;
-  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
@@ -3745,7 +3735,6 @@ class _ContextAvatarBelt extends StatelessWidget {
                 onLongPressCancel: onItemLongPressCancel,
                 pulsing: slot.item.key == pulsingItemKey,
                 pressed: slot.item.key == pressedItemKey,
-                avatar3dEffectEnabled: avatar3dEffectEnabled,
                 avatarTopHighlightEnabled: avatarTopHighlightEnabled,
               ),
           ],
@@ -3811,7 +3800,6 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.onLongPressCancel,
     required this.pulsing,
     required this.pressed,
-    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
   });
 
@@ -3825,7 +3813,6 @@ class _PositionedContextAvatar extends StatelessWidget {
   final GestureLongPressCancelCallback onLongPressCancel;
   final bool pulsing;
   final bool pressed;
-  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
 
   @override
@@ -3848,7 +3835,6 @@ class _PositionedContextAvatar extends StatelessWidget {
         selected: slot.selected,
         pulsing: pulsing,
         pressed: pressed,
-        avatar3dEffectEnabled: avatar3dEffectEnabled,
         avatarTopHighlightEnabled: avatarTopHighlightEnabled,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
@@ -3916,7 +3902,6 @@ class _ContextAvatar extends StatelessWidget {
     required this.selected,
     required this.pulsing,
     required this.pressed,
-    required this.avatar3dEffectEnabled,
     required this.avatarTopHighlightEnabled,
     required this.onTap,
     required this.onLongPressStart,
@@ -3932,7 +3917,6 @@ class _ContextAvatar extends StatelessWidget {
   final bool selected;
   final bool pulsing;
   final bool pressed;
-  final bool avatar3dEffectEnabled;
   final bool avatarTopHighlightEnabled;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
@@ -3955,54 +3939,47 @@ class _ContextAvatar extends StatelessWidget {
       child: AnimatedScale(
         key: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
         scale: pressed ? .8 : 1.0,
-        duration: const Duration(milliseconds: 110),
+        duration: const Duration(milliseconds: 55),
         curve: Curves.easeOutCubic,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (category != null)
-              GlossyCategoryAvatar(
-                category: category,
-                size: size,
-                iconSize: iconSize,
-                selected: selected,
-                pulsing: pulsing,
-                opacity: opacity,
-                showTopHighlight: avatarTopHighlightEnabled,
-                debugSource: 'spendee-test-context-avatar',
-              )
-            else
-              _OverviewBudgetAvatar(
-                item: item,
-                size: size,
-                iconSize: iconSize,
-                opacity: opacity,
-                selected: selected,
-                pulsing: pulsing,
-                topHighlightEnabled: avatarTopHighlightEnabled,
-                keyBase: keyBase,
-              ),
-            if (avatar3dEffectEnabled)
+        child: RepaintBoundary(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (category != null)
+                GlossyCategoryAvatar(
+                  category: category,
+                  size: size,
+                  iconSize: iconSize,
+                  selected: selected,
+                  pulsing: pulsing,
+                  opacity: opacity,
+                  showTopHighlight: avatarTopHighlightEnabled,
+                  debugSource: 'spendee-test-context-avatar',
+                )
+              else
+                _OverviewBudgetAvatar(
+                  item: item,
+                  size: size,
+                  iconSize: iconSize,
+                  opacity: opacity,
+                  selected: selected,
+                  pulsing: pulsing,
+                  topHighlightEnabled: avatarTopHighlightEnabled,
+                  keyBase: keyBase,
+                ),
               Positioned.fill(
                 child: IgnorePointer(
                   child: CustomPaint(
-                    key: ValueKey('spendee-test-avatar-3d-effect-$keyBase'),
-                    painter: _BudgetAvatar3DEffectPainter(selected: selected),
+                    key: ValueKey('spendee-test-avatar-progress-$keyBase'),
+                    painter: _BudgetAvatarProgressPainter(
+                      progress: progress,
+                      selected: selected,
+                    ),
                   ),
                 ),
               ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  key: ValueKey('spendee-test-avatar-progress-$keyBase'),
-                  painter: _BudgetAvatarProgressPainter(
-                    progress: progress,
-                    selected: selected,
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -4192,43 +4169,6 @@ class _BudgetAvatarTopHighlightPainter extends CustomPainter {
   }
 }
 
-class _BudgetAvatar3DEffectPainter extends CustomPainter {
-  const _BudgetAvatar3DEffectPainter({required this.selected});
-
-  final bool selected;
-
-  double get strokeInset => 3.0;
-  double get startRadians => math.pi * .12;
-  double get sweepRadians => math.pi * .76;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = selected ? 3.2 : 2.6;
-    final rect = Rect.fromLTWH(
-      strokeInset + stroke / 2,
-      strokeInset + stroke / 2,
-      size.width - (strokeInset + stroke / 2) * 2,
-      size.height - (strokeInset + stroke / 2) * 2,
-    );
-    canvas.drawArc(
-      rect,
-      startRadians,
-      sweepRadians,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..strokeCap = StrokeCap.round
-        ..color = Colors.white.withValues(alpha: selected ? .42 : .30),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BudgetAvatar3DEffectPainter oldDelegate) {
-    return oldDelegate.selected != selected;
-  }
-}
-
 class _BudgetAvatarProgressPainter extends CustomPainter {
   const _BudgetAvatarProgressPainter({
     required this.progress,
@@ -4238,23 +4178,24 @@ class _BudgetAvatarProgressPainter extends CustomPainter {
   final double progress;
   final bool selected;
   Color get progressColor => Colors.white;
-  bool get drawsBaseRing => true;
+  bool get usesOuterAvatarOutline => true;
+  bool get drawsInnerProgressRing => false;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = selected ? 3.4 : 2.6;
+    final stroke = selected ? 2.5 : 1.8;
     final rect = Rect.fromLTWH(
-      stroke / 2 + 1,
-      stroke / 2 + 1,
-      size.width - stroke - 2,
-      size.height - stroke - 2,
+      -stroke / 2,
+      -stroke / 2,
+      size.width + stroke,
+      size.height + stroke,
     );
     canvas.drawOval(
       rect,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..color = progressColor.withValues(alpha: selected ? .23 : .18),
+        ..color = progressColor.withValues(alpha: selected ? .20 : .08),
     );
     if (progress <= 0) return;
     canvas.drawArc(
@@ -4268,8 +4209,8 @@ class _BudgetAvatarProgressPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..color = progressColor.withValues(
           alpha: _lerpDouble(
-            selected ? .38 : .30,
-            selected ? .78 : .64,
+            selected ? .24 : .12,
+            selected ? .52 : .34,
             progress,
           ),
         ),
