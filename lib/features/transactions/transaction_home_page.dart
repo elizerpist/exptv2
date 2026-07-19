@@ -202,27 +202,12 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             );
           }
 
-          final fastInfoMetrics = widget.store.fastInfoMetrics;
-          final visibleTransactions = widget.store.visibleTransactions;
-          final visibleGhostTransactions =
-              widget.store.visibleGhostTransactions;
-          final visibleLogEntries = widget.store.visibleDisplayLogEntries;
-          _logHomeBuildFrame(
-            startedAt: homeBuildStartedAt,
-            entryCount: visibleLogEntries.length,
-            visibleTransactionCount: visibleTransactions.length,
-            visibleGhostCount: visibleGhostTransactions.length,
-          );
           _notifyBlockingOverlay(
             _vendorSheetOpen ||
                 _categoryEditorOpen ||
                 (_budgetEditorItem != null &&
                     widget.onBudgetTargetEditorRequested == null),
           );
-
-          final budgetHostItem = widget.onBudgetTargetEditorRequested == null
-              ? _budgetEditorItem ?? _defaultBudgetEditorItem()
-              : null;
 
           if (expenseTheme.settings.dashboardDesignMode ==
               DashboardDesignMode.spendeeTest) {
@@ -237,6 +222,21 @@ class _TransactionHomePageState extends State<TransactionHomePage>
               logBottomPadding: widget.logBottomPadding,
             );
           }
+
+          final fastInfoMetrics = widget.store.fastInfoMetrics;
+          final visibleTransactions = widget.store.visibleTransactions;
+          final visibleGhostTransactions =
+              widget.store.visibleGhostTransactions;
+          final visibleLogEntries = widget.store.visibleDisplayLogEntries;
+          _logHomeBuildFrame(
+            startedAt: homeBuildStartedAt,
+            entryCount: visibleLogEntries.length,
+            visibleTransactionCount: visibleTransactions.length,
+            visibleGhostCount: visibleGhostTransactions.length,
+          );
+          final budgetHostItem = widget.onBudgetTargetEditorRequested == null
+              ? _budgetEditorItem ?? _defaultBudgetEditorItem()
+              : null;
 
           return Stack(
             clipBehavior: Clip.none,

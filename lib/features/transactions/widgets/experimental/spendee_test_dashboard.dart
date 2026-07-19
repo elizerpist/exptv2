@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +54,6 @@ class _MindStatsFrameCacheKey {
     required this.currentYear,
     required this.currentMonth,
     required this.currentDay,
-    required this.activeType,
     required this.searchQuery,
     required this.activeCategoryIds,
     required this.activeMerchantFilters,
@@ -72,7 +72,6 @@ class _MindStatsFrameCacheKey {
       currentYear: current.year,
       currentMonth: current.month,
       currentDay: current.day,
-      activeType: store.activeType,
       searchQuery: store.searchQuery,
       activeCategoryIds: (store.activeCategoryIds.toList()..sort()),
       activeMerchantFilters: (store.activeMerchantFilters.toList()..sort()),
@@ -88,7 +87,6 @@ class _MindStatsFrameCacheKey {
   final int currentYear;
   final int currentMonth;
   final int currentDay;
-  final TransactionType activeType;
   final String searchQuery;
   final List<int> activeCategoryIds;
   final List<String> activeMerchantFilters;
@@ -110,7 +108,6 @@ class _MindStatsFrameCacheKey {
         other.currentYear == currentYear &&
         other.currentMonth == currentMonth &&
         other.currentDay == currentDay &&
-        other.activeType == activeType &&
         other.searchQuery == searchQuery &&
         identical(other.transactions, transactions) &&
         identical(other.categories, categories) &&
@@ -127,7 +124,6 @@ class _MindStatsFrameCacheKey {
     currentYear,
     currentMonth,
     currentDay,
-    activeType,
     searchQuery,
     identityHashCode(transactions),
     identityHashCode(categories),
@@ -344,6 +340,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _headerDragUpdateCount = 0;
   Stopwatch? _carouselDragStopwatch;
   var _carouselDragUpdateCount = 0;
+  late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
+  late Widget _homeContent;
   Timer? _avatarPulseTimer;
   final Map<FluviLogoArc, FluviLogoFill> _logoFills =
       Map<FluviLogoArc, FluviLogoFill>.of(FluviLogoSvg.defaultFills);
@@ -351,14 +349,53 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   @override
   void initState() {
     super.initState();
+    _stageNotifier = ValueNotifier<SpendeeHeaderStage>(_stage);
+    _homeContent = _buildHomeContent();
     _carouselReleaseController = AnimationController(vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(covariant SpendeeTestDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.store != widget.store ||
+        oldWidget.expenseTheme != widget.expenseTheme ||
+        oldWidget.onPickSummaryMonth != widget.onPickSummaryMonth ||
+        oldWidget.onEditTransaction != widget.onEditTransaction ||
+        oldWidget.onDeleteTransactionRequested !=
+            widget.onDeleteTransactionRequested ||
+        oldWidget.onVendorSheetRequested != widget.onVendorSheetRequested ||
+        oldWidget.logBottomPadding != widget.logBottomPadding) {
+      _homeContent = _buildHomeContent();
+    }
   }
 
   @override
   void dispose() {
     _avatarPulseTimer?.cancel();
+    _stageNotifier.dispose();
     _carouselReleaseController.dispose();
     super.dispose();
+  }
+
+  Widget _buildHomeContent() {
+    return _SpendeeHomeContent(
+      key: const ValueKey('spendee-test-home-content'),
+      store: widget.store,
+      expenseTheme: widget.expenseTheme,
+      stageListenable: _stageNotifier,
+      onPickSummaryMonth: widget.onPickSummaryMonth,
+      onEditTransaction: widget.onEditTransaction,
+      onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
+      onVendorSheetRequested: widget.onVendorSheetRequested,
+      logBottomPadding: widget.logBottomPadding,
+    );
+  }
+
+  void _setStage(SpendeeHeaderStage stage) {
+    _stage = stage;
+    if (_stageNotifier.value != stage) {
+      _stageNotifier.value = stage;
+    }
   }
 
   SpendeeHeaderStageGeometry _geometryFor(BuildContext context) {
@@ -377,7 +414,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     }
     final controller = SpendeeHeaderStageController(geometry: geometry);
     _stageController = controller;
-    _stage = controller.stage;
+    _setStage(controller.stage);
     _headerHeight = controller.currentHeight;
     return controller;
   }
@@ -415,7 +452,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final key = _MindStatsFrameCacheKey.fromStore(store);
     final cachedKey = _mindStatsFrameCacheKey;
     final cachedFrame = _mindStatsFrameCache;
-    if (cachedKey == key && cachedFrame != null) return cachedFrame;
+    if (cachedKey == key && cachedFrame != null) {
+      return _mindStatsFrameWithActiveType(cachedFrame, store.activeType);
+    }
 
     final stopwatch = Stopwatch()..start();
     final frame = SpendeeMindStatsFrame.fromStore(store, reason: reason);
@@ -433,6 +472,24 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
     return frame;
+  }
+
+  SpendeeMindStatsFrame _mindStatsFrameWithActiveType(
+    SpendeeMindStatsFrame frame,
+    TransactionType activeType,
+  ) {
+    final activeFrame = activeType == TransactionType.income
+        ? frame.incomeFrame
+        : frame.expenseFrame;
+    if (identical(frame.activeFrame, activeFrame)) return frame;
+    return SpendeeMindStatsFrame(
+      summaryScope: frame.summaryScope,
+      periodLabel: frame.periodLabel,
+      modeKey: frame.modeKey,
+      activeFrame: activeFrame,
+      expenseFrame: frame.expenseFrame,
+      incomeFrame: frame.incomeFrame,
+    );
   }
 
   void _startInteractionPerf(String interaction) {
@@ -498,7 +555,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     }
     setState(() {
       _headerHeight = update.height;
-      _stage = controller.stage;
+      _setStage(controller.stage);
     });
   }
 
@@ -513,7 +570,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     setState(() {
       _dragging = false;
       _springBack = release.springBack;
-      _stage = release.targetStage;
+      _setStage(release.targetStage);
       _headerHeight = release.targetHeight;
     });
   }
@@ -1366,17 +1423,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
             left: 0,
             right: 0,
             bottom: 0,
-            child: _SpendeeHomeContent(
-              key: const ValueKey('spendee-test-home-content'),
-              store: widget.store,
-              expenseTheme: widget.expenseTheme,
-              stage: _stage,
-              onPickSummaryMonth: widget.onPickSummaryMonth,
-              onEditTransaction: widget.onEditTransaction,
-              onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
-              onVendorSheetRequested: widget.onVendorSheetRequested,
-              logBottomPadding: widget.logBottomPadding,
-            ),
+            child: _homeContent,
           ),
           Positioned(
             left: 20,
@@ -4397,7 +4444,7 @@ class _SpendeeHomeContent extends StatefulWidget {
     super.key,
     required this.store,
     required this.expenseTheme,
-    required this.stage,
+    required this.stageListenable,
     required this.onPickSummaryMonth,
     required this.onEditTransaction,
     required this.onDeleteTransactionRequested,
@@ -4407,7 +4454,7 @@ class _SpendeeHomeContent extends StatefulWidget {
 
   final TransactionStore store;
   final ExpenseTheme expenseTheme;
-  final SpendeeHeaderStage stage;
+  final ValueListenable<SpendeeHeaderStage> stageListenable;
   final VoidCallback onPickSummaryMonth;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final TransactionDeleteRequest? onDeleteTransactionRequested;
@@ -4418,6 +4465,18 @@ class _SpendeeHomeContent extends StatefulWidget {
   State<_SpendeeHomeContent> createState() => _SpendeeHomeContentState();
 }
 
+class _SpendeeHomeLogSnapshot {
+  const _SpendeeHomeLogSnapshot({
+    required this.transactionCount,
+    required this.entries,
+    required this.categoriesById,
+  });
+
+  final int transactionCount;
+  final List<TransactionLogEntry> entries;
+  final Map<int, TransactionCategory> categoriesById;
+}
+
 class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
   static const _summaryDragLimit = 64.0;
   static const _summaryShiftDistance = 34.0;
@@ -4426,6 +4485,47 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
   var _summaryDragDx = 0.0;
   var _summaryDragging = false;
   Offset? _summaryDragStart;
+  _SpendeeHomeLogSnapshot? _logSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.store.addListener(_handleStoreChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SpendeeHomeContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.store != widget.store) {
+      oldWidget.store.removeListener(_handleStoreChanged);
+      widget.store.addListener(_handleStoreChanged);
+      _logSnapshot = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.store.removeListener(_handleStoreChanged);
+    super.dispose();
+  }
+
+  void _handleStoreChanged() {
+    _logSnapshot = null;
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  _SpendeeHomeLogSnapshot _snapshotLogInputs() {
+    final cached = _logSnapshot;
+    if (cached != null) return cached;
+    final snapshot = _SpendeeHomeLogSnapshot(
+      transactionCount: widget.store.visibleTransactions.length,
+      entries: widget.store.visibleDisplayLogEntries,
+      categoriesById: widget.store.categoriesById,
+    );
+    _logSnapshot = snapshot;
+    return snapshot;
+  }
 
   void _handleSummaryPointerDown(PointerDownEvent event) {
     _summaryDragStart = event.position;
@@ -4486,215 +4586,249 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
-    final stage = widget.stage;
     final onPickSummaryMonth = widget.onPickSummaryMonth;
     final onEditTransaction = widget.onEditTransaction;
     final onDeleteTransactionRequested = widget.onDeleteTransactionRequested;
     final onVendorSheetRequested = widget.onVendorSheetRequested;
     final logBottomPadding = widget.logBottomPadding;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const fixedDashboardControlsHeight = 66.0 + 59.0 + 12.0 + 45.0;
-        const transactionHeaderHeight = 24.0;
-        final canShowTransactionLog =
-            stage != SpendeeHeaderStage.stage2 &&
-            constraints.maxHeight >=
-                fixedDashboardControlsHeight + transactionHeaderHeight;
-        return Column(
-          children: [
-            SizedBox(
-              key: const ValueKey('spendee-test-type-row'),
-              height: 66,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _SpendeeTypePill(
-                        key: const ValueKey('spendee-test-income-type-pill'),
-                        label: 'Bevétel',
-                        active: store.activeType == TransactionType.income,
-                        activeGradient: const LinearGradient(
-                          colors: [Colors.white, Colors.white],
-                        ),
-                        boxShadows: const <BoxShadow>[
-                          BoxShadow(
-                            color: Color.fromRGBO(15, 23, 42, .08),
-                            offset: Offset(0, 10),
-                            blurRadius: 23,
-                          ),
-                        ],
-                        textColor: store.activeType == TransactionType.income
-                            ? const Color(0xFF14213A)
-                            : AppColors.gray500,
-                        onTap: () =>
-                            store.setActiveType(TransactionType.income),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _SpendeeTypePill(
-                        key: const ValueKey('spendee-test-expense-type-pill'),
-                        label: 'Kiadás',
-                        active: store.activeType == TransactionType.expense,
-                        activeGradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFFFB15C),
-                            Color(0xFFFF6B6B),
-                            Color(0xFFF5368D),
-                          ],
-                        ),
-                        boxShadows: const <BoxShadow>[
-                          BoxShadow(
-                            color: Color.fromRGBO(15, 23, 42, .08),
-                            offset: Offset(0, 12),
-                            blurRadius: 24,
-                          ),
-                        ],
-                        textColor: store.activeType == TransactionType.expense
-                            ? Colors.white
-                            : AppColors.gray500,
-                        onTap: () =>
-                            store.setActiveType(TransactionType.expense),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Listener(
-              onPointerDown: _handleSummaryPointerDown,
-              onPointerMove: _handleSummaryPointerMove,
-              onPointerUp: _handleSummaryPointerUp,
-              onPointerCancel: _handleSummaryPointerCancel,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onPickSummaryMonth,
-                onDoubleTap: store.resetSummaryToCurrentMonth,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: AnimatedContainer(
-                    key: const ValueKey('spendee-test-summary-pill'),
-                    duration: _summaryDragging
-                        ? Duration.zero
-                        : const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    transform: Matrix4.translationValues(_summaryDragDx, 0, 0),
-                    height: 59,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: _softWhiteDecoration(20),
+    return ValueListenableBuilder<SpendeeHeaderStage>(
+      valueListenable: widget.stageListenable,
+      builder: (context, stage, _) {
+        final contentStartedAt = DateTime.now();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final elapsed = DateTime.now()
+              .difference(contentStartedAt)
+              .inMilliseconds;
+          if (elapsed <= 32) return;
+          DebugConsole.log(
+            '[Perf] SpendeeTest content_frame stage=${stage.name} '
+            'type=${store.activeType.name} elapsed=${elapsed}ms '
+            'jank=true',
+          );
+        });
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            const fixedDashboardControlsHeight = 66.0 + 59.0 + 12.0 + 45.0;
+            const transactionHeaderHeight = 24.0;
+            final canShowTransactionLog =
+                stage != SpendeeHeaderStage.stage2 &&
+                constraints.maxHeight >=
+                    fixedDashboardControlsHeight + transactionHeaderHeight;
+            final logSnapshot = canShowTransactionLog
+                ? _snapshotLogInputs()
+                : null;
+            return Column(
+              children: [
+                SizedBox(
+                  key: const ValueKey('spendee-test-type-row'),
+                  height: 66,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(
-                          child: Text(
-                            store.activeSummaryTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.gray500,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: _SpendeeTypePill(
+                            key: const ValueKey(
+                              'spendee-test-income-type-pill',
                             ),
+                            label: 'Bevétel',
+                            active: store.activeType == TransactionType.income,
+                            activeGradient: const LinearGradient(
+                              colors: [Colors.white, Colors.white],
+                            ),
+                            boxShadows: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color.fromRGBO(15, 23, 42, .08),
+                                offset: Offset(0, 10),
+                                blurRadius: 23,
+                              ),
+                            ],
+                            textColor:
+                                store.activeType == TransactionType.income
+                                ? const Color(0xFF14213A)
+                                : AppColors.gray500,
+                            onTap: () =>
+                                store.setActiveType(TransactionType.income),
                           ),
                         ),
-                        Text(
-                          store.activeSummary.formattedFor(store.activeType),
-                          style: const TextStyle(
-                            color: AppColors.gray800,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _SpendeeTypePill(
+                            key: const ValueKey(
+                              'spendee-test-expense-type-pill',
+                            ),
+                            label: 'Kiadás',
+                            active: store.activeType == TransactionType.expense,
+                            activeGradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFFFFB15C),
+                                Color(0xFFFF6B6B),
+                                Color(0xFFF5368D),
+                              ],
+                            ),
+                            boxShadows: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color.fromRGBO(15, 23, 42, .08),
+                                offset: Offset(0, 12),
+                                blurRadius: 24,
+                              ),
+                            ],
+                            textColor:
+                                store.activeType == TransactionType.expense
+                                ? Colors.white
+                                : AppColors.gray500,
+                            onTap: () =>
+                                store.setActiveType(TransactionType.expense),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Container(
-                key: const ValueKey('spendee-test-search-pill'),
-                height: 45,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: _softWhiteDecoration(20),
-                child: Row(
-                  children: [
-                    IconButton(
-                      key: const ValueKey('spendee-test-search-vendor-button'),
-                      onPressed: onVendorSheetRequested,
-                      icon: const Icon(
-                        Icons.search,
-                        size: 18,
-                        color: AppColors.gray400,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 32,
-                        height: 32,
-                      ),
-                    ),
-                    Expanded(
-                      child: TextFormField(
-                        key: ValueKey(
-                          'spendee-test-search-input-${store.searchQuery}',
+                Listener(
+                  onPointerDown: _handleSummaryPointerDown,
+                  onPointerMove: _handleSummaryPointerMove,
+                  onPointerUp: _handleSummaryPointerUp,
+                  onPointerCancel: _handleSummaryPointerCancel,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onPickSummaryMonth,
+                    onDoubleTap: store.resetSummaryToCurrentMonth,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: AnimatedContainer(
+                        key: const ValueKey('spendee-test-summary-pill'),
+                        duration: _summaryDragging
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        transform: Matrix4.translationValues(
+                          _summaryDragDx,
+                          0,
+                          0,
                         ),
-                        initialValue: store.searchQuery,
-                        onChanged: store.setSearchQuery,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          isDense: true,
-                          hintText: 'Keresés tranzakciók között...',
-                          hintStyle: TextStyle(
-                            color: AppColors.gray500,
-                            fontSize: 14,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          color: AppColors.gray800,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                        height: 59,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: _softWhiteDecoration(20),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                store.activeSummaryTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.gray500,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              store.activeSummary.formattedFor(
+                                store.activeType,
+                              ),
+                              style: const TextStyle(
+                                color: AppColors.gray800,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (canShowTransactionLog) ...[
-              SizedBox(
-                height: 24,
-                child: Center(
-                  child: Text(
-                    '${store.visibleTransactions.length} tranzakció',
-                    key: const ValueKey('spendee-test-transaction-count'),
-                    style: const TextStyle(
-                      color: AppColors.gray500,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: _SpendeeLogList(
-                  entries: store.visibleDisplayLogEntries,
-                  categoriesById: store.categoriesById,
-                  bottomPadding: logBottomPadding,
-                  onFastFilter: (record, _) =>
-                      store.setMerchantFilter(record.displayMerchant),
-                  onRecordTap: onEditTransaction,
-                  onDeleteRequested: onDeleteTransactionRequested,
-                  onCategoryFilter: store.setCategoryFilter,
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Container(
+                    key: const ValueKey('spendee-test-search-pill'),
+                    height: 45,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: _softWhiteDecoration(20),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          key: const ValueKey(
+                            'spendee-test-search-vendor-button',
+                          ),
+                          onPressed: onVendorSheetRequested,
+                          icon: const Icon(
+                            Icons.search,
+                            size: 18,
+                            color: AppColors.gray400,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 32,
+                            height: 32,
+                          ),
+                        ),
+                        Expanded(
+                          child: TextFormField(
+                            key: ValueKey(
+                              'spendee-test-search-input-${store.searchQuery}',
+                            ),
+                            initialValue: store.searchQuery,
+                            onChanged: store.setSearchQuery,
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              hintText: 'Keresés tranzakciók között...',
+                              hintStyle: TextStyle(
+                                color: AppColors.gray500,
+                                fontSize: 14,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              color: AppColors.gray800,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ],
+                if (canShowTransactionLog) ...[
+                  SizedBox(
+                    height: 24,
+                    child: Center(
+                      child: Text(
+                        '${logSnapshot!.transactionCount} tranzakció',
+                        key: const ValueKey('spendee-test-transaction-count'),
+                        style: const TextStyle(
+                          color: AppColors.gray500,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: _SpendeeLogList(
+                      entries: logSnapshot.entries,
+                      categoriesById: logSnapshot.categoriesById,
+                      bottomPadding: logBottomPadding,
+                      onFastFilter: (record, _) =>
+                          store.setMerchantFilter(record.displayMerchant),
+                      onRecordTap: onEditTransaction,
+                      onDeleteRequested: onDeleteTransactionRequested,
+                      onCategoryFilter: store.setCategoryFilter,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         );
       },
     );

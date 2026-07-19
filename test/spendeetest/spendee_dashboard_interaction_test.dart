@@ -4,14 +4,17 @@ import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/theme/expense_theme.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
+import 'package:exptv2/features/transactions/models/fast_info_metric.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/fluvi_logo.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/recurring_rule.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
+import 'package:exptv2/features/transactions/models/transaction_log_entry.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
+import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_header_glass.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_mind_stats_adapter.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_test_dashboard.dart';
@@ -1207,6 +1210,101 @@ void main() {
     );
   });
 
+  testWidgets('spendee test mode skips classic home metrics before dashboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = _CountingTransactionStore(_MindDashboardStatsRepository());
+    await store.start();
+    store.resetAccessCounts();
+    final theme = ExpenseTheme.fromSettings(
+      AppThemeSettings.defaults().copyWith(
+        dashboardDesignMode: DashboardDesignMode.spendeeTest,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionHomePage(store: store, expenseTheme: theme),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(SpendeeTestDashboard), findsOneWidget);
+    expect(
+      store.fastInfoMetricsAccesses,
+      0,
+      reason:
+          'The classic FastInfo metrics are not used by SpendeeTestDashboard '
+          'and are too expensive to compute before returning it.',
+    );
+    expect(
+      store.visibleGhostTransactionsAccesses,
+      0,
+      reason:
+          'SpendeeTestDashboard does not render the classic ghost log input.',
+    );
+  });
+
+  testWidgets('header geometry drag does not requery spendee log content', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = _CountingTransactionStore(_MindDashboardStatsRepository());
+    await store.start();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SpendeeTestDashboard(
+            store: store,
+            expenseTheme: ExpenseTheme.fromSettings(
+              AppThemeSettings.defaults(),
+            ),
+            onPickSummaryMonth: () {},
+            onEditTransaction: (_) {},
+            onDeleteTransactionRequested: (_) async => true,
+            onVendorSheetRequested: () {},
+            logBottomPadding: 0,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    store.resetAccessCounts();
+
+    final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    for (var index = 0; index < 4; index += 1) {
+      await gesture.moveBy(const Offset(0, 12));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      store.visibleTransactionsAccesses,
+      0,
+      reason:
+          'Header geometry-only drag should not rebuild the transaction count.',
+    );
+    expect(
+      store.visibleDisplayLogEntriesAccesses,
+      0,
+      reason:
+          'Header geometry-only drag should not rebuild or requery the log list.',
+    );
+  });
+
   testWidgets('mind interactions reuse cached stats frame and log cache misses', (
     tester,
   ) async {
@@ -1273,8 +1371,17 @@ void main() {
       find.byKey(const ValueKey('spendee-test-income-type-pill')),
     );
     await tester.pumpAndSettle();
-    expect(builds, hasLength(1));
-    expect(builds.single.activeType, TransactionType.income);
+    expect(
+      builds,
+      isEmpty,
+      reason:
+          'The cached Mind frame already contains income and expense frames; '
+          'type switching should only swap activeFrame.',
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-mind-score-fastinfo-income')),
+      findsOneWidget,
+    );
 
     builds.clear();
     DebugConsole.clear();
@@ -2679,6 +2786,47 @@ class _MindDashboardStatsRepository extends _DashboardTestRepository {
           _record(7, 101, 500000, 'Munkahely', date: '2026.03.01'),
         ],
       );
+}
+
+class _CountingTransactionStore extends TransactionStore {
+  _CountingTransactionStore(super.repository)
+    : super(clock: () => DateTime(2026, 7, 17));
+
+  var fastInfoMetricsAccesses = 0;
+  var visibleTransactionsAccesses = 0;
+  var visibleDisplayLogEntriesAccesses = 0;
+  var visibleGhostTransactionsAccesses = 0;
+
+  void resetAccessCounts() {
+    fastInfoMetricsAccesses = 0;
+    visibleTransactionsAccesses = 0;
+    visibleDisplayLogEntriesAccesses = 0;
+    visibleGhostTransactionsAccesses = 0;
+  }
+
+  @override
+  Map<String, FastInfoMetricResult> get fastInfoMetrics {
+    fastInfoMetricsAccesses += 1;
+    return super.fastInfoMetrics;
+  }
+
+  @override
+  List<TransactionRecord> get visibleTransactions {
+    visibleTransactionsAccesses += 1;
+    return super.visibleTransactions;
+  }
+
+  @override
+  List<TransactionLogEntry> get visibleDisplayLogEntries {
+    visibleDisplayLogEntriesAccesses += 1;
+    return super.visibleDisplayLogEntries;
+  }
+
+  @override
+  List<RecurringGhostRecord> get visibleGhostTransactions {
+    visibleGhostTransactionsAccesses += 1;
+    return super.visibleGhostTransactions;
+  }
 }
 
 class _DashboardTestRepository implements TransactionRepositoryContract {
