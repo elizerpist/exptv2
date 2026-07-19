@@ -304,6 +304,7 @@ class _TransactionLogBoxState extends State<TransactionLogBox> {
                                       iconStrokeWidth: 1.35,
                                       selected: avatarPressed,
                                       showQuestionMark: uncategorized,
+                                      showTopHighlight: false,
                                       debugSource: 'transaction-logbox',
                                     );
                                   },

@@ -85,18 +85,7 @@ class SpendeeHeaderVisualSpec {
     diagonalGlossCssAngleDegrees: 164,
     diagonalGlossOpacity: 0.28,
     diagonalGlossEndStop: 0.54,
-    cardShadows: <BoxShadow>[
-      BoxShadow(
-        color: Color.fromRGBO(244, 114, 182, 0.18),
-        offset: Offset(0, 18),
-        blurRadius: 42,
-      ),
-      BoxShadow(
-        color: Color.fromRGBO(139, 92, 246, 0.12),
-        offset: Offset(0, 14),
-        blurRadius: 34,
-      ),
-    ],
+    cardShadows: <BoxShadow>[],
   );
 
   static const SpendeeHeaderGlowSpec _htmlGlow = SpendeeHeaderGlowSpec._(

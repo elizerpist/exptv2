@@ -20,6 +20,7 @@ class GlossyCategoryAvatar extends StatelessWidget {
     this.opacity = 1,
     this.pulsing = false,
     this.showQuestionMark = false,
+    this.showTopHighlight = true,
   });
 
   final TransactionCategory? category;
@@ -31,6 +32,7 @@ class GlossyCategoryAvatar extends StatelessWidget {
   final double opacity;
   final bool pulsing;
   final bool showQuestionMark;
+  final bool showTopHighlight;
 
   final Key? iconKey;
 
@@ -129,11 +131,12 @@ class GlossyCategoryAvatar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  CustomPaint(
-                    painter: _GlossyAvatarRingPainter(
-                      opacity: selected ? .78 : .72,
+                  if (showTopHighlight)
+                    CustomPaint(
+                      painter: _GlossyAvatarRingPainter(
+                        opacity: selected ? .78 : .72,
+                      ),
                     ),
-                  ),
                   Center(
                     child: CategoryIconBadge(
                       key: iconKey,

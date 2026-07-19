@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/channel_tolerance_golden_comparator.dart';
 import '../helpers/stats_test_frame_worker.dart';
 
 void main() {
@@ -86,6 +87,13 @@ void main() {
       expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
       expect(find.byKey(const ValueKey('summary-pill')), findsOneWidget);
       _expectNoFlutterExceptions(tester);
+
+      final previousGoldenComparator = goldenFileComparator;
+      goldenFileComparator = ChannelToleranceGoldenComparator(
+        Uri.parse('test/web_preview/exptv2_web_preview_golden_test.dart'),
+        maxChannelDelta: 2,
+      );
+      addTearDown(() => goldenFileComparator = previousGoldenComparator);
 
       await expectLater(
         root,

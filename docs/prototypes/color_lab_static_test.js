@@ -195,10 +195,14 @@ const required = [
   'function buildCommonMindStage1BoxGraphContent',
   'function spawnCommonHeaderMindPortalTrailPoint',
   'function initCommonHeaderMindPortalTouch',
-  'function focusCommonHeaderMindD1OnLoad',
+  'function moveQueryMenuRowToTop',
+  'function focusQueryMenuQ1OnLoad',
   'function buildCommonMindHeatmapContent',
   'function buildMindHeatmapYearGrid',
   'function buildMindHeatmapMonthGrid',
+  'function removeCommonHeaderBalanceStage2Residue',
+  'function setCommonMindStage1ChartLayerPresentation',
+  'function ensureCommonHeaderMindStage1ChartsLayer',
   'function syncCommonHeaderMindHeatmapLayer',
   'function buildCommonMindMonthlyHeatmapContent',
   'function ensureCommonMindMonthlyStage2Screen',
@@ -275,6 +279,9 @@ const required = [
   'data-mind-portal-signature-slider="balance"',
   'data-mind-portal-signature-slider="limits"',
   'data-mind-portal-signature-slider="cool"',
+  'data-mind-portal-signature-slider="meadow-green"',
+  'data-mind-portal-signature-slider="soft-rainbow"',
+  'data-mind-portal-signature-slider="ocean-blue-serenity"',
   'data-mind-portal-opacity-slider',
   'data-mind-portal-idle-canvas',
   'common-mind-portal-idle-canvas',
@@ -299,7 +306,7 @@ const required = [
   'data-stage2-extra="mind-heatmap"',
   'data-stage2-extra="mind-heatmap-month"',
   'data-heatmap-panel="score-glass"',
-  'data-heatmap-panel="monthly-glass"',
+  'data-heatmap-panel="sum-glass"',
   'data-heatmap-header="compact-no-score"',
   'data-heatmap-grid="month"',
   'data-heatmap-month-view="single"',
@@ -569,10 +576,11 @@ const required = [
   'data-reference="/storage/emulated/0/spendee/fastinfo.png"',
   'data-logo-source="/storage/emulated/0/spendee/Fluvi_vector.svg"',
   'fluvi_vector.svg?v=20260716-fluvi-logo-v1',
-  'id="fluviLogoVariantPreview"',
-  'data-logo-variant-preview="original"',
-  'data-logo-variant-preview="app-harmonized"',
-  'data-logo-variant-preview="portal-emissive"',
+  'id="customGradientPaletteRow"',
+  'data-custom-gradient-palette',
+  'data-custom-gradient-slot="1"',
+  'data-custom-gradient-slot="5"',
+  'data-custom-gradient-boundary-slider="1"',
   'spendee-dashboard-screen',
   'spendee-brand-lockup',
   'spendee-logo',
@@ -647,8 +655,8 @@ for (const token of cleanupForbiddenTokens) {
 const screenCount = (html.match(/class="phone-screen/g) || []).length;
 assert.strictEqual(
   screenCount,
-  33,
-  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B/C/D rows, Query Menu fullscreen screen, Query-row expense and income transaction sheets, nine recurring wizard screens, and three category wizard popup screens after removing legacy 1-4 and S1',
+  34,
+  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B/C/D rows, Query Menu Q1, Q1A category-vendor hierarchy, Query-row expense and income transaction sheets, nine recurring wizard screens, and three category wizard popup screens after removing legacy 1-4 and S1',
 );
 
 const alternativeSection = html.match(
@@ -657,6 +665,19 @@ const alternativeSection = html.match(
 assert(
   alternativeSection,
   'Missing alternative design section with duplicated menus above its structured palette',
+);
+assert(
+  /\.alternative-design > \.screens > \.query-menu-row\s*\{[\s\S]*?order:\s*-100;[\s\S]*?margin:\s*0;[\s\S]*?\}/.test(html) &&
+    html.includes('function moveQueryMenuRowToTop()') &&
+    html.includes("const screens = document.querySelector('#alternativeDesignReview > .screens');") &&
+    html.includes("const queryRow = screens?.querySelector('[data-query-menu-row]');") &&
+    html.includes('screens.firstElementChild !== queryRow') &&
+    html.includes('screens.insertBefore(queryRow, screens.firstElementChild);') &&
+    /function focusQueryMenuQ1OnLoad\(\) \{[\s\S]*?\[data-query-menu-row\] \[data-screen="alt-query-menu-fullscreen"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start' \}\)[\s\S]*?queryQ1\.focus/.test(html) &&
+    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?initQueryMenuPrototype\(\);[\s\S]*?focusQueryMenuQ1OnLoad\(\);/.test(html) &&
+    !html.includes('function focusCommonHeaderMindD1OnLoad') &&
+    !html.includes('focusCommonHeaderMindD1OnLoad();'),
+  'Q row must be the first alternative-design row at refresh and Q1 must receive the post-refresh focus instead of Mind D1',
 );
 assert(
   alternativeSection.indexOf('id="balanceHeaderScaleLab"') > alternativeSection.indexOf('aria-label="Alternatív design app menük"') &&
@@ -1030,12 +1051,10 @@ assert(
     commonHeaderModeArea.indexOf('data-common-header-mode="budget"') <
       commonHeaderModeArea.indexOf('id="budgetHeaderScaleLab"') &&
     commonHeaderModeArea.indexOf('id="budgetHeaderScaleLab"') <
-      commonHeaderModeArea.indexOf('data-query-menu-row') &&
-    commonHeaderModeArea.indexOf('data-query-menu-row') <
       commonHeaderModeArea.indexOf('data-common-header-mode="mind"') &&
     commonHeaderModeArea.indexOf('data-common-header-mode="mind"') <
       commonHeaderModeArea.indexOf('id="mindHeaderScaleLab"'),
-  'Common-header focus modes must be ordered as balance row + slider, budget row + slider, Query Menu row, then mind row + slider',
+  'Common-header focus modes must be ordered as balance row + slider, budget row + slider, then mind row + slider; Query Menu is promoted to the first standalone row at refresh',
 );
 assert.strictEqual(
   (commonHeaderModeArea.match(/data-common-header-mode="(?:balance|budget|mind)"/g) || []).length,
@@ -1048,23 +1067,48 @@ const queryMenuBlock =
   queryMenuStart >= 0 && queryMenuEnd > queryMenuStart
     ? commonHeaderModeArea.slice(queryMenuStart, queryMenuEnd)
     : '';
-assert(queryMenuBlock, 'Missing standalone Query Menu row between C/Budget and D/Mind');
+assert(queryMenuBlock, 'Missing standalone Query Menu row');
+const queryMenuScreenStart = queryMenuBlock.indexOf('data-screen="alt-query-menu-fullscreen"');
+const queryQ1ATitleStart = queryMenuBlock.indexOf('<div class="screen-title">Q1A · Kategória-vendor hierarchia</div>');
+const queryQ1AScreenStart = queryMenuBlock.indexOf(
+  'data-screen="alt-query-menu-category-vendor-hierarchy"',
+  queryMenuScreenStart,
+);
+const queryQ1AScreenEnd = queryMenuBlock.indexOf(
+  'data-screen="alt-query-add-transaction-duplicate"',
+  queryQ1AScreenStart,
+);
+const queryMenuScreenBlock =
+  queryMenuScreenStart >= 0 && queryQ1AScreenStart > queryMenuScreenStart
+    ? queryMenuBlock.slice(queryMenuScreenStart, queryQ1AScreenStart)
+    : '';
+const queryQ1AScreenBlock =
+  queryQ1AScreenStart >= 0 && queryQ1AScreenEnd > queryQ1AScreenStart
+    ? queryMenuBlock.slice(queryQ1AScreenStart, queryQ1AScreenEnd)
+    : '';
+const queryMenuHeaderStart = queryMenuScreenBlock.indexOf('class="query-menu-head"');
+const queryMenuHeaderEnd = queryMenuScreenBlock.indexOf('<div class="query-menu-scroll"', queryMenuHeaderStart);
+const queryMenuHeaderBlock =
+  queryMenuHeaderStart >= 0 && queryMenuHeaderEnd > queryMenuHeaderStart
+    ? queryMenuScreenBlock.slice(queryMenuHeaderStart, queryMenuHeaderEnd)
+    : '';
 assert(
   queryMenuBlock.includes('data-screen="alt-query-menu-fullscreen"') &&
-    queryMenuBlock.includes('data-query-menu-mode="fullscreen"') &&
+    queryMenuBlock.includes('data-query-menu-mode="top-snapshot-tabs"') &&
     queryMenuBlock.includes('data-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-084152.png"') &&
     queryMenuBlock.includes('class="query-menu-route"') &&
     queryMenuBlock.includes('class="query-menu-scroll"') &&
     !queryMenuBlock.includes('data-common-header-mode='),
-  'Query Menu must be a standalone fullscreen phone screen row, not another common-header mode clone',
+  'Query Menu must be a standalone fullscreen phone screen row with Q1 using top snapshot tabs, not another common-header mode clone',
 );
 assert.strictEqual(
   (queryMenuBlock.match(/<div class="screen-column"/g) || []).length,
-  15,
-  'Query Menu row must render exactly fifteen screen columns: Query, Q2 expense, Q3 income, nine common recurring wizard screens, and the three category wizard popup steps',
+  16,
+  'Query Menu row must render exactly sixteen screen columns: Q1, Q1A category-vendor hierarchy, Q2 expense, Q3 income, nine common recurring wizard screens, and the three category wizard popup steps',
 );
 const queryRowScreenOrder = [
   queryMenuBlock.indexOf('data-screen="alt-query-menu-fullscreen"'),
+  queryMenuBlock.indexOf('data-screen="alt-query-menu-category-vendor-hierarchy"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-transaction-duplicate"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-income-transaction"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-type"'),
@@ -1083,7 +1127,62 @@ const queryRowScreenOrder = [
 assert(
   queryRowScreenOrder.every((index) => index >= 0) &&
     queryRowScreenOrder.every((index, idx, arr) => idx === 0 || arr[idx - 1] < index),
-  'Query Menu row screen order must be Q1 menu, Q2 expense, Q3 income, Q4 shared type choice, Q5-Q8 time wizard, Q9-Q12 push wizard, then Q13-Q15 category wizard',
+  'Query Menu row screen order must be Q1 menu, Q1A category-vendor hierarchy, Q2 expense, Q3 income, Q4 shared type choice, Q5-Q8 time wizard, Q9-Q12 push wizard, then Q13-Q15 category wizard',
+);
+assert(
+  !queryMenuBlock.includes('data-screen="alt-query-menu-tabbed-groups"') &&
+    !queryMenuBlock.includes('data-screen="alt-query-menu-top-snapshot-tabs"') &&
+    !queryMenuBlock.includes('Q1B ·') &&
+    !queryMenuBlock.includes('Q1C ·') &&
+    !queryMenuBlock.includes('Q1D ·') &&
+    !queryMenuBlock.includes('data-query-alternative=') &&
+    !html.includes('initQueryAlternativePrototype'),
+  'Old Q1 left variants, Q1B-Q1D alternative query-model screens, and their query-alt runtime must be removed',
+);
+assert(
+  queryMenuScreenBlock.includes('data-screen="alt-query-menu-fullscreen"') &&
+    queryMenuScreenBlock.includes('data-query-menu-mode="top-snapshot-tabs"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-container') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-tabs') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-tab="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-tab="snapshot-2026-02-home"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-load="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-load="snapshot-2026-02-home"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-active="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-active="snapshot-2026-02-home"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-add') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-threshold="5000"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-threshold="12000"') &&
+    queryMenuScreenBlock.indexOf('class="query-menu-head"') <
+      queryMenuScreenBlock.indexOf('data-query-top-snapshot-container') &&
+    queryMenuScreenBlock.indexOf('data-query-top-snapshot-container') <
+      queryMenuScreenBlock.indexOf('<div class="query-menu-scroll"') &&
+    !queryMenuScreenBlock.includes('data-query-section="filter-groups"') &&
+    !queryMenuScreenBlock.includes('data-query-section-head-row="filter-groups"') &&
+    queryMenuScreenBlock.includes('2025 Jan') &&
+    queryMenuScreenBlock.includes('2026 Feb'),
+  'Q1 must be the promoted top snapshot-tabs screen with saved snapshot tabs directly under the header, not inside a filter-group section',
+);
+assert(
+  queryQ1AScreenBlock.includes('data-screen="alt-query-menu-category-vendor-hierarchy"') &&
+    queryQ1ATitleStart >= 0 &&
+    queryQ1ATitleStart < queryQ1AScreenStart &&
+    queryQ1AScreenBlock.includes('data-query-menu-mode="category-vendor-hierarchy"') &&
+    queryQ1AScreenBlock.includes('data-query-top-snapshot-container') &&
+    queryQ1AScreenBlock.includes('data-query-section="category-vendors"') &&
+    queryQ1AScreenBlock.includes('data-query-category-vendor-tree') &&
+    queryQ1AScreenBlock.includes('data-query-category-vendor-category="food"') &&
+    queryQ1AScreenBlock.includes('data-query-category-vendor-category-toggle="food"') &&
+    queryQ1AScreenBlock.includes('data-query-category-vendor-vendor="mcdonalds"') &&
+    queryQ1AScreenBlock.includes('data-query-category-vendor-category="home"') &&
+    queryQ1AScreenBlock.includes('data-query-category-vendor-vendor="digi"') &&
+    queryQ1AScreenBlock.includes('data-query-list-search="category-vendor"') &&
+    !queryQ1AScreenBlock.includes('data-query-section="categories"') &&
+    !queryQ1AScreenBlock.includes('data-query-section="vendors"') &&
+    /<button class="query-tree-parent query-category-vendor-parent[^"]*"[^>]*data-query-category-vendor-category="food"[^>]*data-query-category-vendor-category-toggle="food"[\s\S]*?<span class="query-category-color-dot"[\s\S]*?<strong>Élelmiszer<\/strong><em>1\/3<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+      queryQ1AScreenBlock,
+    ),
+  'Q1A must duplicate Q1 as a top-tab screen and replace separate category/vendor sections with a category-parent/vendor-child hierarchy',
 );
 assert(
   queryMenuBlock.includes('data-query-adjacent-duplicate="a5-add-transaction"') &&
@@ -1307,18 +1406,88 @@ assert(
   'Category wizard CSS must draw popup dialogs and an infinite-wheel/ticking visual with large center and smaller side items',
 );
 assert(
-  queryMenuBlock.includes('data-query-preview-card="stage0-header"') &&
-    queryMenuBlock.includes('2026. március') &&
-    queryMenuBlock.includes('248 tranzakció') &&
-    queryMenuBlock.includes('-486 320 Ft') &&
-    queryMenuBlock.includes('-12,4%') &&
-    queryMenuBlock.includes('data-query-view-selector') &&
-    ['sum', 'year', 'month'].every((view) => queryMenuBlock.includes(`data-query-view="${view}"`)),
-  'Query Menu must start with a stage0-style preview card and Sum/Year/Month view selector',
+  /\.query-menu-head\s*\{[\s\S]*?height:\s*var\(--spendee-header-h\);[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?background:[\s\S]*?var\(--category-selector-bg\);[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(
+    html,
+  ) &&
+    !queryMenuBlock.includes('class="query-menu-close"') &&
+    !queryMenuBlock.includes('aria-label="Query menu bezárása"') &&
+    /\.query-menu-summary\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /\.query-menu-summary h3\s*\{[\s\S]*?font-size:\s*23px;[\s\S]*?line-height:\s*1\.08;[\s\S]*?font-weight:\s*850;[\s\S]*?letter-spacing:\s*-\.(?:04|040)em;[\s\S]*?text-shadow:\s*var\(--spendee-balance-ink-shadow\);[\s\S]*?-webkit-text-stroke:\s*\.45px var\(--spendee-balance-ink-stroke\);[\s\S]*?paint-order:\s*stroke fill;[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /\.query-preview-scope-list\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?overflow-x:\s*auto;[\s\S]*?overflow-y:\s*hidden;[\s\S]*?scrollbar-width:\s*none;[\s\S]*?-webkit-overflow-scrolling:\s*touch;[\s\S]*?mask-image:\s*linear-gradient[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /\.query-preview-scope-list::\-webkit-scrollbar\s*\{[\s\S]*?display:\s*none;[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /\.query-preview-scope-list span\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /\.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(38px \+ var\(--spendee-header-h\) \+ 14px\);[\s\S]*?\}/.test(
+      html,
+    ) &&
+    queryMenuHeaderBlock.includes('data-query-header-size="stage0"') &&
+    queryMenuHeaderBlock.includes('data-query-floating-header') &&
+    queryMenuHeaderBlock.includes('data-query-preview-mode="amount-scope"') &&
+    queryMenuHeaderBlock.includes('-486 320 Ft') &&
+    queryMenuHeaderBlock.includes('data-query-scope-list') &&
+    queryMenuHeaderBlock.includes('data-query-scope-overflow="horizontal-scroll"') &&
+    ['2024 Március', '2026 Április', 'Élelmiszer', 'McDonald’s'].every((scope) =>
+      queryMenuHeaderBlock.includes(scope),
+    ) &&
+    !queryMenuScreenBlock.includes('query-preview-card') &&
+    !queryMenuScreenBlock.includes('data-query-preview-card="stage0-header"') &&
+    !queryMenuHeaderBlock.includes('query-menu-brand-logo') &&
+    !queryMenuHeaderBlock.includes('spendee-logo-live-preview') &&
+    !queryMenuHeaderBlock.includes('data-logo-live-preview') &&
+    !queryMenuHeaderBlock.includes('Query mode') &&
+    !queryMenuHeaderBlock.includes('Részletes szűrés és elemzés') &&
+    !queryMenuHeaderBlock.includes('query-menu-orb') &&
+    !queryMenuHeaderBlock.includes('⌕') &&
+    !queryMenuHeaderBlock.includes('248 tranzakció') &&
+    !queryMenuHeaderBlock.includes('<span>tranzakció</span>') &&
+    !queryMenuHeaderBlock.includes('-12,4%') &&
+    !queryMenuHeaderBlock.includes('vs előző hónap') &&
+    !queryMenuBlock.includes('data-query-view-selector') &&
+    !queryMenuBlock.includes('data-query-view=') &&
+    queryMenuBlock.includes('data-query-period-picker') &&
+    queryMenuBlock.includes('data-query-selected-periods="2024-03,2026-04"') &&
+    queryMenuBlock.includes('data-query-period-sum-toggle') &&
+    queryMenuBlock.includes('data-query-tree-dropdown="time"') &&
+    !queryMenuBlock.includes('data-query-tree-trigger') &&
+    !queryMenuBlock.includes('query-tree-trigger') &&
+    !queryMenuBlock.includes('data-query-dropdown-open') &&
+    queryMenuBlock.includes('data-query-tree-menu="time"') &&
+    queryMenuBlock.includes('SUM / Összes időszak') &&
+    !queryMenuBlock.includes('data-query-period-preset-selector') &&
+    !queryMenuBlock.includes('data-query-period-preset=') &&
+    !queryMenuBlock.includes('query-period-preset-selector') &&
+    !queryMenuBlock.includes('data-query-period-selected-months') &&
+    !queryMenuBlock.includes('data-query-period-preset-current') &&
+    !queryMenuBlock.includes('data-query-period-year-stack') &&
+    !queryMenuBlock.includes('query-period-year-block') &&
+    (queryMenuScreenBlock.match(/data-query-period-item="/g) || []).length >= 36 &&
+    queryMenuBlock.includes('data-query-period-year-toggle="2026"') &&
+    queryMenuBlock.includes('data-query-period-year-toggle="2025"') &&
+    queryMenuBlock.includes('data-query-period-year-toggle="2024"') &&
+    queryMenuBlock.includes('data-query-tree-level="child"') &&
+    queryMenuBlock.includes('data-query-period-item="2024-03"') &&
+    queryMenuBlock.includes('data-query-period-item="2026-04"') &&
+    !queryMenuBlock.includes('data-query-period-selection-list') &&
+    !queryMenuScreenBlock.includes('data-query-period-remove=') &&
+    queryMenuBlock.includes('data-query-selected-period') &&
+    !queryMenuBlock.includes('data-query-period-summary') &&
+    !queryMenuBlock.includes('query-period-summary') &&
+    ['2024 Március', '2026 Április'].every((period) => queryMenuBlock.includes(period)),
+  'Query Menu must use one top floating stage0-sized query-colored amount/scope header without a second preview header, icon, or slogan',
 );
 for (const section of ['view-components', 'categories', 'vendors', 'refinements']) {
   assert(
     queryMenuBlock.includes(`data-query-section="${section}"`) &&
+      queryMenuBlock.includes(`data-query-section-head-row="${section}"`) &&
       queryMenuBlock.includes(`data-query-section-head="${section}"`) &&
       queryMenuBlock.includes(`data-query-section-body="${section}"`) &&
       queryMenuBlock.includes(`data-query-collapsible="${section}"`),
@@ -1326,38 +1495,231 @@ for (const section of ['view-components', 'categories', 'vendors', 'refinements'
   );
 }
 assert(
-  queryMenuBlock.includes('data-query-multiselect="view-periods"') &&
-    queryMenuBlock.includes('data-query-multiselect="categories"') &&
-    queryMenuBlock.includes('data-query-multiselect="vendors"') &&
+  queryMenuScreenBlock.indexOf('data-query-section="vendors"') <
+    queryMenuScreenBlock.indexOf('data-query-section="refinements"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-container') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-tabs') &&
+    queryMenuScreenBlock.includes('data-query-last-loaded-group="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-tab="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-tab="snapshot-2026-02-home"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-load="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-top-snapshot-active="snapshot-2025-01-food"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-periods="2025-01"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-categories="Élelmiszer"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-threshold="5000"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-refinements="amount"') &&
+    !queryMenuScreenBlock.includes('data-query-section="filter-groups"') &&
+    !queryMenuScreenBlock.includes('data-query-saved-group-list') &&
+    !queryMenuScreenBlock.includes('data-query-snapshot-detail-title') &&
+    queryMenuScreenBlock.includes('2025 Jan · Élelmiszer') &&
+    queryMenuScreenBlock.includes('2026 Feb · Lakás'),
+  'Q1 must render saved snapshot state as top tabs under the header and must not keep the old detailed filter-group snapshot section',
+);
+assert(
+  queryMenuBlock.includes('data-query-period-picker') &&
+  queryMenuBlock.includes('data-query-tree-dropdown="time"') &&
+    !queryMenuBlock.includes('data-query-period-selection-list') &&
+    !queryMenuBlock.includes('query-period-selected-list') &&
+    queryMenuBlock.includes('data-query-tree-dropdown="categories"') &&
+    queryMenuBlock.includes('data-query-tree-dropdown="vendors"') &&
+    queryMenuBlock.includes('data-query-category-list') &&
+    queryMenuBlock.includes('data-query-list-search="category"') &&
+    queryMenuBlock.includes('data-query-list-search="vendor"') &&
+    queryMenuBlock.indexOf('data-query-list-search="category"') < queryMenuBlock.indexOf('data-query-category-all-sticky') &&
+    queryMenuBlock.indexOf('data-query-list-search="vendor"') < queryMenuBlock.indexOf('data-query-tree-menu="vendors"') &&
+    queryMenuBlock.includes('data-query-filter-all="category"') &&
+    queryMenuBlock.includes('data-query-category-dot') &&
+    !queryMenuBlock.includes('data-query-filter-parent="category"') &&
+    !queryMenuBlock.includes('cat-expense') &&
+    !queryMenuBlock.includes('cat-income') &&
+    !queryMenuBlock.includes('>Kiadások<') &&
+    !queryMenuBlock.includes('>Bevételek<') &&
+    queryMenuBlock.includes('data-query-filter-parent="vendor"') &&
     queryMenuBlock.includes('data-query-threshold="amount"') &&
     queryMenuBlock.includes('data-query-refinement="weekend"') &&
     queryMenuBlock.includes('data-query-refinement="recurring"') &&
     queryMenuBlock.includes('data-query-refinement="fixed"') &&
     queryMenuBlock.includes('data-query-refinement="outliers"'),
-  'Query Menu must combine view, category, vendor, threshold, and refinement filters in one scrollable surface',
+  'Query Menu must combine view, category, vendor, filter-group, threshold, and refinement filters in one scrollable surface with search pills above category/vendor lists',
 );
 assert(
-  queryMenuBlock.includes('class="query-apply-bar"') &&
-    queryMenuBlock.includes('class="query-apply-pill"') &&
+  queryMenuBlock.includes('data-query-section-icon="time"') &&
+    queryMenuBlock.includes("url('/assets/icons/lucide/chart-candlestick.svg')") &&
+    queryMenuBlock.includes('data-query-section-icon="categories"') &&
+    queryMenuBlock.includes("url('/assets/icons/lucide/handbag.svg')") &&
+    queryMenuBlock.includes('data-query-section-icon="vendors"') &&
+    queryMenuBlock.includes("url('/assets/icons/lucide/store.svg')") &&
+    !queryMenuBlock.includes('<span class="query-section-icon">▦</span>') &&
+    !queryMenuBlock.includes('<span class="query-section-icon">◌</span>') &&
+    !queryMenuBlock.includes('<span class="query-section-icon">⌘</span>'),
+  'Query section title markers for time, categories, and vendors must use real lucide icons instead of offset glyphs',
+);
+assert(
+  queryMenuBlock.includes('data-query-section-head-row="view-components"') &&
+    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="view-components" aria-expanded="true">') &&
+    queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-period-clear aria-label="Időszak kijelölések törlése">×</button>') &&
+    queryMenuBlock.includes('data-query-section-head-row="categories"') &&
+    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="categories" aria-expanded="true">') &&
+    queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-filter-clear="category" aria-label="Kategória kijelölések törlése">×</button>') &&
+    queryMenuBlock.includes('data-query-section-head-row="vendors"') &&
+    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="vendors" aria-expanded="true">') &&
+    queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-filter-clear="vendor" aria-label="Vendor kijelölések törlése">×</button>'),
+  'Time, category, and vendor section headers must own the clear controls beside the expand/collapse control',
+);
+assert(
+  /data-query-section-head-row="view-components"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="view-components" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-period-clear aria-label="Időszak kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="view-components" aria-expanded="true"><em data-query-selected-period>2 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
+    queryMenuBlock,
+  ) &&
+    /data-query-section-head-row="categories"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="categories" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-filter-clear="category" aria-label="Kategória kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="categories" aria-expanded="true"><em data-query-section-count="categories">3 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    /data-query-section-head-row="vendors"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="vendors" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-filter-clear="vendor" aria-label="Vendor kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="vendors" aria-expanded="true"><em data-query-section-count="vendors">1 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
+      queryMenuBlock,
+    ),
+  'Time, category, and vendor section headers must render the X clear control directly before the active-count status',
+);
+assert(
+  queryMenuBlock.includes('data-query-period-sum-sticky') &&
+    /<button class="query-tree-parent query-period-sum-row mixed"[^>]*data-query-period-sum-toggle[\s\S]*?<strong>SUM \/ Összes időszak<\/strong><em>2\/36<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    /<button class="query-tree-parent mixed"[^>]*data-query-period-year-toggle="2026"[^>]*aria-pressed="mixed"><strong>2026<\/strong><em>1\/12<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    /<button class="query-tree-parent mixed"[^>]*data-query-period-year-toggle="2024"[^>]*aria-pressed="mixed"><strong>2024<\/strong><em>1\/12<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    /data-query-period-item="2024-03"[^>]*aria-pressed="true"><span>Március<\/span><span class="query-check selected">✓<\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    /data-query-period-item="2026-04"[^>]*aria-pressed="true"><span>Április<\/span><span class="query-check selected">✓<\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    /data-query-period-item="2026-05"[^>]*aria-pressed="false"><span>Május<\/span><span class="query-check"><\/span><\/button>/.test(
+      queryMenuBlock,
+    ) &&
+    queryMenuBlock.includes('<em data-query-selected-period>2 aktív</em>') &&
+    !queryMenuBlock.includes('data-query-trigger-shell="time"') &&
+    queryMenuBlock.includes('data-query-period-clear') &&
+    !queryMenuBlock.includes('data-query-period-summary') &&
+    !queryMenuBlock.includes('query-period-summary') &&
+    !queryMenuBlock.includes('data-query-period-remove') &&
+    !queryMenuBlock.includes('2 hónap</em>') &&
+    !queryMenuBlock.includes('2 kiválasztva') &&
+    !queryMenuBlock.includes('2 hónap kiválasztva'),
+  'Query time picker must use category-style right-side checkboxes for month/year rows, keep SUM sticky as the first list row, and show active-count copy',
+);
+assert(
+  queryMenuBlock.includes('data-query-filter-clear="category"') &&
+    queryMenuBlock.includes('data-query-filter-clear="vendor"') &&
+    !queryMenuBlock.includes('data-query-trigger-shell="categories"') &&
+    !queryMenuBlock.includes('data-query-tree-trigger="categories"') &&
+    !queryMenuBlock.includes('data-query-tree-trigger="vendors"'),
+  'Category and vendor clear-all controls must live in section headers without inner dropdown trigger pills',
+);
+assert(
+  queryMenuBlock.includes('data-query-category-all-sticky') &&
+    /<button class="query-tree-parent query-category-all-row mixed"[^>]*data-query-filter-all="category"[^>]*aria-pressed="mixed"><strong>Mind \/ Összes kategória<\/strong><em>3\/7<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+      queryMenuBlock,
+    ),
+  'Category dropdown must start with a sticky select-all row that mirrors the time SUM row',
+);
+assert(
+  queryMenuScreenBlock.includes('data-query-threshold-editor') &&
+    queryMenuScreenBlock.includes('data-query-threshold-value') &&
+    queryMenuScreenBlock.includes('data-query-threshold-value-input') &&
+    queryMenuScreenBlock.includes('data-query-threshold-slider') &&
+    !queryMenuScreenBlock.includes('class="query-threshold-value-input"') &&
+    !/<button class="query-threshold-value"[\s\S]*?data-query-threshold-value/.test(queryMenuScreenBlock) &&
+    /<input class="query-threshold-value"[^>]*data-query-threshold-value[^>]*data-query-threshold-value-input[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(
+      queryMenuScreenBlock,
+    ) &&
+    /data-query-threshold-slider[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(queryMenuScreenBlock),
+  'Q1 refinement amount threshold must render one tappable/editable numeric value directly above the slider, without a duplicate text input pill',
+);
+assert(
+  !queryMenuBlock.includes('class="query-apply-bar"') &&
+    !queryMenuBlock.includes('class="query-apply-pill"') &&
+    queryMenuBlock.includes('class="category-selector-footer vendor-selector-footer query-selector-footer"') &&
+    queryMenuBlock.includes('class="category-selector-footer-actions vendor-selector-footer-actions query-selector-footer-actions"') &&
+    queryMenuBlock.includes('class="category-selector-cancel vendor-selector-cancel query-selector-cancel"') &&
+    queryMenuBlock.includes('class="category-selector-apply vendor-selector-apply query-selector-apply"') &&
     queryMenuBlock.includes('5 aktív feltétel') &&
     queryMenuBlock.includes('248 találat') &&
-    queryMenuBlock.includes('Alkalmaz'),
-  'Query Menu must end with a sticky Apply pill summary bar',
+    queryMenuBlock.includes('Cancel') &&
+    queryMenuBlock.includes('OK'),
+  'Query Menu must end with an A3-style sticky footer summary plus Cancel/OK actions',
 );
 assert(
   /\.query-menu-screen\s*\{[\s\S]*?background:\s*var\(--category-selector-bg\);[\s\S]*?\}/.test(html) &&
     /\.query-menu-route\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(html) &&
     /\.query-menu-scroll\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?overflow-y:\s*auto;[\s\S]*?-webkit-overflow-scrolling:\s*touch;[\s\S]*?\}/.test(html) &&
     /\.query-section\s*\{[\s\S]*?border-radius:\s*22px;[\s\S]*?background:\s*rgba\(255,255,255,\.88\);[\s\S]*?\}/.test(html) &&
+    /\.query-section-head\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) 24px auto;[\s\S]*?\}/.test(html) &&
+    /\.query-section-main\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(0,\s*1fr\);[\s\S]*?\}/.test(html) &&
+    /\.query-section-clear\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
+    /\.query-section-status\s*\{[\s\S]*?grid-template-columns:\s*auto 18px;[\s\S]*?\}/.test(html) &&
+    /\.query-list-search-pill\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-group-card\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-group-add\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-saved-group-load\s*\{[\s\S]*?display:\s*grid;[\s\S]*?text-align:\s*left;[\s\S]*?\}/.test(html) &&
+    /\.query-saved-group-active\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
+    /\.query-saved-group-detail\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-top-snapshot-container\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?border-radius:\s*22px;[\s\S]*?\}/.test(html) &&
+    /\.query-menu-route\[data-query-top-snapshot-route\] \.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(38px \+ var\(--spendee-header-h\) \+ 92px\);[\s\S]*?\}/.test(html) &&
+    /\.query-top-snapshot-tabs\s*\{[\s\S]*?display:\s*flex;[\s\S]*?overflow-x:\s*auto;[\s\S]*?\}/.test(html) &&
+    /\.query-top-snapshot-tab\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-top-snapshot-active\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
+    /\.query-top-snapshot-add\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-tabs\s*\{[\s\S]*?display:\s*flex;[\s\S]*?overflow-x:\s*auto;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-tab\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-tab-remove\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-tab-add\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-filter-tab-panel\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-threshold-editor\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    /\.query-threshold-value\s*\{[\s\S]*?border-radius:\s*16px;[\s\S]*?\}/.test(html) &&
+    /\.query-threshold-slider\s*\{[\s\S]*?accent-color:\s*#06b6d4;[\s\S]*?\}/.test(html) &&
+    /\.query-period-picker\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    /\.query-tree-dropdown\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*8px;[\s\S]*?\}/.test(html) &&
+    !html.includes('.query-tree-trigger') &&
+    /\.query-tree-menu\s*\{[\s\S]*?max-height:\s*220px;[\s\S]*?overflow-y:\s*auto;[\s\S]*?\}/.test(html) &&
+    /\.query-period-sum-group\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*0;[\s\S]*?z-index:\s*3;[\s\S]*?\}/.test(html) &&
+    /\.query-tree-parent\s*\{[\s\S]*?grid-template-columns:\s*22px minmax\(0,\s*1fr\) auto auto;[\s\S]*?\}/.test(html) &&
+    /\.query-period-tree-dropdown \.query-tree-parent\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) auto auto 22px;[\s\S]*?\}/.test(html) &&
+    /\.query-category-list \.query-tree-parent\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) auto auto 22px;[\s\S]*?\}/.test(html) &&
+    /\.query-category-vendor-tree\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*8px;[\s\S]*?\}/.test(html) &&
+    /\.query-row-transaction-count\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?font-size:\s*9px;[\s\S]*?white-space:\s*nowrap;[\s\S]*?\}/.test(html) &&
+    /\.query-category-vendor-parent\s*\{[\s\S]*?grid-template-columns:\s*18px minmax\(0,\s*1fr\) auto auto 22px;[\s\S]*?\}/.test(html) &&
+    /\.query-period-item\.query-tree-child\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) auto 22px;[\s\S]*?\}/.test(html) &&
+    /\.query-tree-child\s*\{[\s\S]*?padding-left:\s*34px;[\s\S]*?\}/.test(html) &&
+    !html.includes('[data-query-dropdown-open="false"]') &&
+    /\.query-period-sum-row\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.78\);[\s\S]*?\}/.test(html) &&
+    /\.query-category-all-group\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*0;[\s\S]*?z-index:\s*3;[\s\S]*?\}/.test(html) &&
+    /\.query-category-all-row\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.78\);[\s\S]*?\}/.test(html) &&
+    /\.query-period-item\.selected\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.78\);[\s\S]*?\}/.test(html) &&
+    /\.query-filter-tree-item\.selected\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.78\);[\s\S]*?border-color:\s*rgba\(226,232,240,\.48\);[\s\S]*?color:\s*#0f766e;[\s\S]*?box-shadow:\s*none;[\s\S]*?\}/.test(html) &&
+    !/\.query-filter-tree-item\.selected\s*\{[^}]*background:\s*#06b6d4;[^}]*\}/.test(html) &&
+    !/\.query-filter-tree-item\.selected\s*\{[^}]*color:\s*#fff;[^}]*\}/.test(html) &&
+    !/\.query-period-item\.selected\s*\{[^}]*background:\s*#06b6d4;[^}]*\}/.test(html) &&
+    /\.query-section-icon \.slot-icon\s*\{[\s\S]*?width:\s*var\(--icon-size,\s*16px\);[\s\S]*?height:\s*var\(--icon-size,\s*16px\);[\s\S]*?\}/.test(html) &&
+    /\.query-section-copy span\s*\{[\s\S]*?margin-top:\s*5px;[\s\S]*?\}/.test(html) &&
+    /\.query-category-color-dot\s*\{[\s\S]*?background:\s*var\(--category-dot-bg[\s\S]*?\}/.test(html) &&
+    !html.includes('.query-period-selected-list') &&
+    !html.includes('.query-period-summary') &&
     /\.query-section\[data-query-collapsed="true"\] \.query-section-body\s*\{[\s\S]*?display:\s*none;[\s\S]*?\}/.test(html) &&
-    /\.query-apply-bar\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*22px;[\s\S]*?\}/.test(html) &&
-    /\.query-apply-pill\s*\{[\s\S]*?height:\s*48px;[\s\S]*?border-radius:\s*24px;[\s\S]*?\}/.test(html),
-  'Query Menu CSS must create a fullscreen scrollable route with collapsible white sections and sticky bottom Apply pill',
+    /\.query-selector-footer\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) 156px;[\s\S]*?bottom:\s*22px;[\s\S]*?\}/.test(html) &&
+    /\.query-selector-footer-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    !html.includes('.query-apply-bar') &&
+    !html.includes('.query-apply-pill'),
+  'Query Menu CSS must create a fullscreen scrollable route with collapsible white sections and an A3-style sticky footer',
 );
 assert(
   /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-section-head\]'\)[\s\S]*?closest\('\[data-query-section\]'\)[\s\S]*?dataset\.queryCollapsed[\s\S]*?setAttribute\('aria-expanded'/.test(
     html,
   ) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?section\.querySelectorAll\('\[data-query-section-head\]'\)\.forEach\(\(control\) => \{[\s\S]*?control\.setAttribute\('aria-expanded'/.test(
+      html,
+    ) &&
     html.includes('initQueryMenuPrototype();'),
   'Query Menu section headers must toggle their expanded/collapsed state in the prototype',
 );
@@ -1380,10 +1742,91 @@ assert(
     ) &&
     /function setQuerySelectableState\(control,\s*selected\) \{[\s\S]*?aria-pressed[\s\S]*?query-check/.test(html) &&
     /function toggleQuerySelectable\(control\) \{[\s\S]*?data-query-selectable[\s\S]*?syncQueryMenuSelectionSummary/.test(html) &&
-    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-view\]'\)[\s\S]*?querySelectorAll\('\[data-query-selectable\]'\)[\s\S]*?toggleQuerySelectable/.test(
+    /function parseQuerySelectedPeriods\(picker\) \{[\s\S]*?selectedPeriods/.test(html) &&
+    /function getQueryPeriodLabel\(periodValue\) \{[\s\S]*?queryMonthLabels/.test(html) &&
+    /function syncQueryHeaderTimeScope\(route,\s*labels\) \{[\s\S]*?data-query-scope-kind="time"/.test(
+      html,
+    ) &&
+    /function getQueryPeriodListLabel\(selectedPeriods,\s*totalCount\) \{[\s\S]*?return `\$\{selectedPeriods\.length\} aktív`;[\s\S]*?\}/.test(html) &&
+    !html.includes('function getQueryPeriodSummary') &&
+    !/function getQueryHeaderPeriodLabels\(selectedPeriods,\s*totalCount\) \{[\s\S]*?Egyedi[\s\S]*?\}/.test(html) &&
+    /function syncQueryPeriodPicker\(picker\) \{[\s\S]*?data-query-selected-period[\s\S]*?syncQueryHeaderTimeScope/.test(
+      html,
+    ) &&
+    !html.includes('[data-query-period-summary]') &&
+    /function syncQueryPeriodPicker\(picker\) \{[\s\S]*?button\.querySelector\('\.query-check'\)[\s\S]*?check\.textContent = selected \? '✓' : ''/.test(html) &&
+    !html.includes('function toggleQueryDropdown') &&
+    !html.includes('data-query-dropdown-open') &&
+    !html.includes('function setQueryPeriodPreset') &&
+    /function syncQueryPeriodSumRow\(picker,\s*selectedPeriods\) \{[\s\S]*?data-query-period-sum-toggle[\s\S]*?mixed/.test(html) &&
+    /function toggleQueryPeriodSum\(button\) \{[\s\S]*?data-query-period-sum-toggle[\s\S]*?data-query-period-item[\s\S]*?syncQueryPeriodPicker/.test(html) &&
+    /function syncQueryPeriodYearRows\(picker,\s*selectedPeriods\) \{[\s\S]*?data-query-period-year-toggle[\s\S]*?mixed/.test(
+      html,
+    ) &&
+    /function toggleQueryPeriodYear\(button\) \{[\s\S]*?data-query-period-year-toggle[\s\S]*?data-query-period-item[\s\S]*?syncQueryPeriodPicker/.test(
+      html,
+    ) &&
+    /function toggleQueryPeriodItem\(button\) \{[\s\S]*?data-query-period-item[\s\S]*?syncQueryPeriodPicker/.test(
+      html,
+    ) &&
+    /function clearQueryPeriodSelection\(button\) \{[\s\S]*?closest\('\[data-query-section\]'\)[\s\S]*?querySelector\('\[data-query-period-picker\]'\)[\s\S]*?querySelectedPeriods = ''[\s\S]*?syncQueryPeriodPicker/.test(html) &&
+    /function clearQueryFilterSelection\(button\) \{[\s\S]*?dataset\.queryFilterClear[\s\S]*?setQuerySelectableState\(control,\s*false\)[\s\S]*?syncQueryMenuSelectionSummary/.test(html) &&
+    /function syncQueryFilterAllRows\(route\) \{[\s\S]*?data-query-filter-all[\s\S]*?updateQueryTreeParentVisual/.test(html) &&
+    /function toggleQueryFilterAll\(button\) \{[\s\S]*?dataset\.queryFilterAll[\s\S]*?setQuerySelectableState\(control,\s*!allSelected\)[\s\S]*?syncQueryMenuSelectionSummary/.test(html) &&
+    !html.includes('function removeQuerySelectedPeriod') &&
+    !html.includes('[data-query-period-remove]') &&
+    /function toggleQueryFilterTreeParent\(button\) \{[\s\S]*?data-query-filter-parent[\s\S]*?setQuerySelectableState[\s\S]*?syncQueryTreeParentStates/.test(
+      html,
+    ) &&
+    /function syncQueryTreeParentStates\(route\) \{[\s\S]*?data-query-filter-parent[\s\S]*?mixed/.test(html) &&
+    /function syncQueryCategoryVendorTree\(route\) \{[\s\S]*?data-query-category-vendor-category-toggle[\s\S]*?data-query-category-vendor-vendor[\s\S]*?updateQueryTreeParentVisual/.test(
+      html,
+    ) &&
+    /const queryTransactionCounts = \{[\s\S]*?periods:[\s\S]*?'2026-04':\s*18[\s\S]*?categories:[\s\S]*?Élelmiszer:\s*86[\s\S]*?vendors:[\s\S]*?'McDonald’s':\s*16/.test(
+      html,
+    ) &&
+    /function getQueryTransactionCountForRow\(row\) \{[\s\S]*?data-query-period-item[\s\S]*?data-query-period-year-toggle[\s\S]*?data-query-category-vendor-vendor[\s\S]*?return count;[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /function ensureQueryRowTransactionCounts\(route\) \{[\s\S]*?data-query-row-transaction-count[\s\S]*?tranz\.[\s\S]*?insertBefore/.test(
+      html,
+    ) &&
+    /function toggleQueryCategoryVendorCategory\(button\) \{[\s\S]*?data-query-category-vendor-category-toggle[\s\S]*?data-query-category-vendor-vendor[\s\S]*?setQuerySelectableState[\s\S]*?syncQueryCategoryVendorTree/.test(
+      html,
+    ) &&
+    /function syncQueryThresholdEditor\(editor\) \{[\s\S]*?data-query-threshold-slider[\s\S]*?data-query-threshold-value-input[\s\S]*?\}/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-threshold-editor\]'\)[\s\S]*?syncQueryThresholdEditor/.test(html) &&
+    /function selectQueryFilterGroupTab\(button\) \{[\s\S]*?data-query-filter-tab-select[\s\S]*?data-query-filter-tab-panel/.test(html) &&
+    /function removeQueryFilterGroupTab\(button\) \{[\s\S]*?data-query-filter-tab-remove[\s\S]*?remove\(\)/.test(html) &&
+    /function addQueryFilterGroupTab\(button\) \{[\s\S]*?data-query-filter-tab-add[\s\S]*?insertBefore/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-filter-tab-select\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-tab-remove\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-tab-add\]'\)/.test(
+      html,
+    ) &&
+    /function applyQuerySavedGroupSnapshot\(card\) \{[\s\S]*?data-query-last-loaded-group[\s\S]*?data-query-snapshot-threshold[\s\S]*?syncQueryThresholdEditor/.test(
+      html,
+    ) &&
+    /function loadQuerySavedGroupSnapshot\(button\) \{[\s\S]*?data-query-saved-group-load[\s\S]*?applyQuerySavedGroupSnapshot/.test(html) &&
+    /function toggleQuerySavedGroupActive\(button\) \{[\s\S]*?data-query-saved-group-active[\s\S]*?applyQuerySavedGroupSnapshot/.test(html) &&
+    /function addQuerySavedGroupSnapshot\(button\) \{[\s\S]*?data-query-filter-group-add[\s\S]*?data-query-saved-group-list[\s\S]*?insertBefore/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-saved-group-load\]'\)[\s\S]*?querySelectorAll\('\[data-query-saved-group-active\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-group-add\]'\)/.test(
+      html,
+    ) &&
+    /function loadQueryTopSnapshotTab\(button\) \{[\s\S]*?data-query-top-snapshot-load[\s\S]*?applyQuerySavedGroupSnapshot/.test(html) &&
+    /function toggleQueryTopSnapshotActive\(button\) \{[\s\S]*?data-query-top-snapshot-active[\s\S]*?applyQuerySavedGroupSnapshot/.test(html) &&
+    /function addQueryTopSnapshotTab\(button\) \{[\s\S]*?data-query-top-snapshot-add[\s\S]*?data-query-top-snapshot-tabs[\s\S]*?insertBefore/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-top-snapshot-load\]'\)[\s\S]*?querySelectorAll\('\[data-query-top-snapshot-active\]'\)[\s\S]*?querySelectorAll\('\[data-query-top-snapshot-add\]'\)/.test(
+      html,
+    ) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-category-vendor-category-toggle\]'\)[\s\S]*?toggleQueryCategoryVendorCategory/.test(
+      html,
+    ) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?document\.querySelectorAll\('\.query-menu-route'\)\.forEach\(\(route\) => \{[\s\S]*?ensureQueryRowTransactionCounts\(route\)[\s\S]*?syncQueryTreeParentStates/.test(
+      html,
+    ) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-section-head\]'\)[\s\S]*?querySelectorAll\('\[data-query-period-clear\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-clear\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-all\]'\)[\s\S]*?querySelectorAll\('\[data-query-period-sum-toggle\]'\)[\s\S]*?querySelectorAll\('\[data-query-period-year-toggle\]'\)[\s\S]*?querySelectorAll\('\[data-query-period-item\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-parent\]'\)[\s\S]*?querySelectorAll\('\[data-query-selectable\]'\)[\s\S]*?toggleQuerySelectable/.test(
       html,
     ),
-  'Query Menu JS must make view choices and selectable filters tappable with selected/check/summary synchronization',
+  'Query Menu JS must make section expansion, parent toggles, arbitrary month chips, clear-all controls, and category/vendor tree filters tappable with summary synchronization',
 );
 assert(
   /function initCommonHeaderModeRows\(\) \{[\s\S]*?commonHeaderModeDefinitions[\s\S]*?budget[\s\S]*?mind[\s\S]*?createModeScaleLab\(definition\)[\s\S]*?cloneNode\(true\)/.test(html),
@@ -1623,11 +2066,11 @@ assert(
 );
 assert(
   !html.includes('autofocus') &&
-    html.includes('function focusCommonHeaderMindD1OnLoad') &&
-    /function focusCommonHeaderMindD1OnLoad\(\) \{[\s\S]*?\[data-common-header-mode="mind"\][\s\S]*?\[data-screen="alt-common-header-mind-stage0"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start'/.test(html) &&
-    /initCommonHeaderModeRows\(\);[\s\S]*?focusCommonHeaderMindD1OnLoad\(\);[\s\S]*?initBalanceHeaderScaleLab\(\);/.test(html) &&
+    html.includes('function focusQueryMenuQ1OnLoad') &&
+    /function focusQueryMenuQ1OnLoad\(\) \{[\s\S]*?\[data-query-menu-row\] \[data-screen="alt-query-menu-fullscreen"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start'/.test(html) &&
+    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initQueryMenuPrototype\(\);[\s\S]*?focusQueryMenuQ1OnLoad\(\);[\s\S]*?initBalanceHeaderScaleLab\(\);/.test(html) &&
     !html.includes('initMindHeatmapScreens();'),
-  'Refreshing the HTML must not autofocus the keyboard mockup and must scroll/focus the Mind D1 screen after common-header rows are generated without the deleted D-full preview init',
+  'Refreshing the HTML must not autofocus the keyboard mockup and must scroll/focus Q1 after rows are generated without the deleted D-full preview init',
 );
 assert(
   /function buildCommonMindDoubleGraphContent\(kind = 'expense', placement = 'stage1'\) \{[\s\S]*?buildCommonMindMergedBarGraphContent\('income', placement\)[\s\S]*?buildCommonMindMergedBarGraphContent\('expense', placement\)/.test(html) &&
@@ -1644,13 +2087,45 @@ const mindHeatmapFunction = html.slice(
   html.indexOf('function buildCommonMindHeatmapContent'),
   html.indexOf('function ensureCommonHeaderHandle'),
 );
+const syncMindHeatmapFunction = html.slice(
+  html.indexOf('function syncCommonHeaderMindHeatmapLayer'),
+  html.indexOf('function ensureCommonMindMonthlyStage2Screen'),
+);
+const separatedGlassD3ContentStart = html.indexOf('function buildCommonMindSeparatedGlassHeatmapContent');
+const separatedGlassD3ContentFunction = separatedGlassD3ContentStart >= 0
+  ? html.slice(separatedGlassD3ContentStart, html.indexOf('function buildCommonMindHeatmapContent'))
+  : '';
+const separatedGlassD3ScreenStart = html.indexOf('function ensureCommonMindSeparatedGlassD3Screen');
+const separatedGlassD3ScreenFunction = separatedGlassD3ScreenStart >= 0
+  ? html.slice(separatedGlassD3ScreenStart, html.indexOf('function ensureCommonMindMonthlyStage2Screen'))
+  : '';
+const monthlyHeatmapStage2Function = html.slice(
+  html.indexOf('function ensureCommonMindMonthlyStage2Screen'),
+  html.indexOf('function ensureCommonMindSumStage2Screen'),
+);
+const sumHeatmapStage2Function = html.slice(
+  html.indexOf('function ensureCommonMindSumStage2Screen'),
+  html.indexOf('function syncCommonHeaderBudgetPieLayer'),
+);
+const separatedGlassD5ContentStart = html.indexOf('function buildCommonMindSeparatedGlassSumHeatmapContent');
+const separatedGlassD5ContentFunction = separatedGlassD5ContentStart >= 0
+  ? html.slice(separatedGlassD5ContentStart, html.indexOf('function buildCommonMindSeparatedGlassHeatmapContent'))
+  : '';
+const separatedGlassD5ScreenStart = html.indexOf('function ensureCommonMindSeparatedGlassD5Screen');
+const separatedGlassD5ScreenFunction = separatedGlassD5ScreenStart >= 0
+  ? html.slice(separatedGlassD5ScreenStart, html.indexOf('function syncCommonHeaderBudgetPieLayer'))
+  : '';
+const mindStage1ChartPresentationFunction = html.slice(
+  html.indexOf('function setCommonMindStage1ChartLayerPresentation'),
+  html.indexOf('function ensureCommonHeaderMindStage1ChartsLayer'),
+);
+const d4MindChartLayerRule = (html.match(/\.common-focus-layer\.common-mind-box-graph-layer\.common-stage2-mind-chart-panel\s*\{[\s\S]*?\n    \}/) || [''])[0];
+const d4MindChartCardRule = (html.match(/\.common-stage2-mind-chart-panel \.common-mind-box-graph-card\.fastinfo-chart-card\s*\{[\s\S]*?\n    \}/) || [''])[0];
 assert(
   [
     'data-stage2-extra="mind-heatmap"',
     'common-stage2-heatmap-layer',
-    'common-stage2-heatmap-panel',
     'common-stage2-heatmap-scroll',
-    'data-heatmap-panel="score-glass"',
     'buildMindHeatmapYearGrid',
     'StatsYearCalendar',
     'StatsMonthCard.cardHeight',
@@ -1659,8 +2134,11 @@ assert(
     'data-heatmap-grid="year"',
     'data-heatmap-columns="3"',
     'data-heatmap-rows="4"',
-  ].every((token) => mindHeatmapFunction.includes(token)),
-  'D3 mind stage2 must add a scrollable minimalist yearly heatmap layer based on the app StatsYearCalendar/StatsMonthCard model',
+  ].every((token) => mindHeatmapFunction.includes(token)) &&
+    mindHeatmapFunction.includes('common-stage2-heatmap-panel') &&
+    mindHeatmapFunction.includes('data-heatmap-panel="score-glass"') &&
+    !mindHeatmapFunction.includes('common-stage2-heatmap-title'),
+  'D3 mind stage2 must render the yearly month heatmap inside one shared score-glass panel without a title bar',
 );
 assert(
   /function buildMindHeatmapMonthCard\(month, variant = 'compact'\) \{[\s\S]*?data-heatmap-header="compact-no-score"[\s\S]*?<div class="mind-heatmap-month-head">[\s\S]*?<strong>\$\{month\.name\}<\/strong>[\s\S]*?<\/div>[\s\S]*?mind-heatmap-days/.test(html) &&
@@ -1681,70 +2159,147 @@ assert(
 );
 assert(
   /\.mind-heatmap-day::before\s*\{[\s\S]*?background:\s*var\(--heatmap-active-color[\s\S]*?opacity:\s*var\(--heat-alpha[\s\S]*?\}/.test(html) &&
+    /\.mind-heatmap-month-card\[data-heatmap-card-variant="plain"\]\s*\{[\s\S]*?background:\s*rgba\(255,255,255,\.72\);[\s\S]*?box-shadow:\s*0 8px 18px rgba\(31,45,70,\.09\), inset 0 1px 0 rgba\(255,255,255,\.76\);[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-month-card\[data-heatmap-card-variant="frost"\]\s*\{[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-month-card\[data-heatmap-card-variant="aurora"\]\s*\{[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-month-card\[data-heatmap-card-variant="graphite"\]\s*\{[\s\S]*?\}/.test(html),
-  'Heatmap monthcard CSS must keep the three glossy non-white variants for runtime D3/D4 cards and paint cells through a dynamic color overlay',
+  'Heatmap monthcard CSS must expose a plain fastinfo-style card background for D3/D4 and keep cells painted through a dynamic color overlay',
+);
+assert(
+  /\.common-stage2-heatmap-panel \.mind-heatmap-month-card\[data-heatmap-card-variant="plain"\]\s*\{[\s\S]*?background:\s*rgba\(255,255,255,\.38\);[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-sum-heatmap-panel \.mind-heatmap-year-card\s*\{[\s\S]*?background:\s*rgba\(255,255,255,\.38\);[\s\S]*?\}/.test(html),
+  'D3 and D5 inner heatmap cards must have reduced background opacity while their shared glass containers remain intact',
 );
 assert(
   /\.common-header-stage2\[data-stage2-scrollable="true"\]\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(html) &&
     /\.common-stage2-heatmap-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?top:\s*calc\(96px \+ \(var\(--common-header-stage1-h\) - 114px\) \+ 12px\);[\s\S]*?overflow-y:\s*auto;[\s\S]*?overscroll-behavior:\s*contain;[\s\S]*?\}/.test(html) &&
-    /\.common-stage2-heatmap-panel\s*\{[\s\S]*?border-radius:\s*17px;[\s\S]*?backdrop-filter:\s*blur\(12px\);[\s\S]*?\}/.test(html) &&
-    /\.common-stage2-heatmap-panel \.mind-heatmap-month-card\s*\{[\s\S]*?background:\s*rgba\(255,255,255,\.18\);[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-month-head\s*\{[\s\S]*?min-height:\s*12px;[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-weekdays\s*\{[\s\S]*?margin:\s*7px 0 4px;[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
     /\.mind-heatmap-month-card\s*\{[\s\S]*?border-radius:\s*16px;[\s\S]*?\}/.test(html),
-  'D3 heatmap CSS must keep stage2 scroll confined to a score-chart-like glass panel and render compact 3-column month cards',
+  'D3 heatmap CSS must keep stage2 scroll while rendering compact 3-column month cards directly on the header',
 );
 assert(
-  /function syncCommonHeaderMindHeatmapLayer\(row,\s*definition\) \{[\s\S]*?definition\.mode !== 'mind'[\s\S]*?dataset\.stage2Scrollable = 'true'[\s\S]*?buildCommonMindHeatmapContent\(\)[\s\S]*?insertAdjacentHTML/.test(html) &&
+  /function removeCommonHeaderBalanceStage2Residue\(header\)\s*\{[\s\S]*?data-focus-mode-stage1="balance-reserve-summary"[\s\S]*?data-focus-mode-stage2="balance-income-expense"[\s\S]*?data-stage2-extra="balance-diagnostics"[\s\S]*?delete header\.dataset\.balanceDiagnosticsScrollable[\s\S]*?\}/.test(html) &&
+    /function setCommonMindStage1ChartLayerPresentation\(layer,\s*cloneMode\)\s*\{[\s\S]*?cloneMode === 'mind-month-heatmap' \|\| cloneMode === 'mind-separated-glass-d3'[\s\S]*?classList\.toggle\('common-stage2-mind-chart-panel', isGlassChartMode\)[\s\S]*?\}/.test(html) &&
+    !mindStage1ChartPresentationFunction.includes("classList.toggle('common-stage2-heatmap-panel'") &&
+    /function ensureCommonHeaderMindStage1ChartsLayer\(targetHeader,\s*sourceHeader,\s*cloneMode\)\s*\{[\s\S]*?data-stage2-includes-stage1="true"\]\[data-focus-mode-stage1="mind-boxed-graphs-d2"[\s\S]*?existingLayer[\s\S]*?setCommonMindStage1ChartLayerPresentation\(existingLayer,\s*cloneMode\)[\s\S]*?cloneNode\(true\)[\s\S]*?dataset\.stage2CloneMode = cloneMode[\s\S]*?setCommonMindStage1ChartLayerPresentation\(clonedLayer,\s*cloneMode\)[\s\S]*?insertAdjacentElement/.test(html) &&
+    /function syncCommonHeaderMindHeatmapLayer\(row,\s*definition\) \{[\s\S]*?definition\.mode !== 'mind'[\s\S]*?removeCommonHeaderBalanceStage2Residue\(stage2Header\)[\s\S]*?dataset\.stage2Scrollable = 'true'[\s\S]*?buildCommonMindHeatmapContent\(\)[\s\S]*?insertAdjacentHTML/.test(html) &&
+    !syncMindHeatmapFunction.includes('querySelector(\'[data-stage2-includes-stage1="true"]\')?.remove()') &&
     /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?syncCommonHeaderStage2Stage1Layer\(row\)[\s\S]*?syncCommonHeaderMindHeatmapLayer\(row, definition\)/.test(html),
-  'Runtime D rows must attach the heatmap only to Mind stage2 after cloning the active stage1 layer',
+  'Runtime D3 must preserve the mind stage1 two-chart clone while removing only balance residue before attaching the heatmap',
+);
+assert(
+  separatedGlassD3ContentFunction.includes('data-stage2-extra="mind-heatmap-separated-glass"') &&
+    separatedGlassD3ContentFunction.includes('common-stage2-separated-heatmap-layer') &&
+    separatedGlassD3ContentFunction.includes('data-heatmap-view="separate-glass"') &&
+    separatedGlassD3ContentFunction.includes("buildMindHeatmapYearGrid('separate-glass')") &&
+    !separatedGlassD3ContentFunction.includes('common-stage2-heatmap-panel') &&
+    /function resolveMindHeatmapCardVariant\(variant, monthIndex = 1\) \{[\s\S]*?if \(variant === 'separate-glass'\) return 'frost';/.test(html) &&
+    /function setCommonMindStage1ChartLayerPresentation\(layer,\s*cloneMode\)\s*\{[\s\S]*?cloneMode === 'mind-month-heatmap' \|\| cloneMode === 'mind-separated-glass-d3'[\s\S]*?classList\.toggle\('common-stage2-mind-chart-panel', isGlassChartMode\)/.test(html) &&
+    separatedGlassD3ScreenFunction.includes("data-screen', 'alt-common-header-mind-separated-glass-d3'") &&
+    separatedGlassD3ScreenFunction.includes("dataset.mindSeparatedGlassD3Screen = 'true'") &&
+    separatedGlassD3ScreenFunction.includes('D3G ·') &&
+    separatedGlassD3ScreenFunction.includes("ensureCommonHeaderMindStage1ChartsLayer(separatedStage2Header, stage2Header, 'mind-separated-glass-d3')") &&
+    separatedGlassD3ScreenFunction.includes('buildCommonMindSeparatedGlassHeatmapContent()') &&
+    separatedGlassD3ScreenFunction.includes("stage2Column.insertAdjacentElement('afterend', separatedColumn)") &&
+    /function ensureCommonMindMonthlyStage2Screen\(row,\s*definition\) \{[\s\S]*?const separatedGlassColumn = row\.querySelector\('\[data-mind-separated-glass-d3-column="true"\]'\) \|\| stage2Column;[\s\S]*?separatedGlassColumn\.insertAdjacentElement\('afterend', monthlyColumn\)/.test(html) &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?syncCommonHeaderMindHeatmapLayer\(row, definition\);[\s\S]*?ensureCommonMindSeparatedGlassD3Screen\(row, definition\);[\s\S]*?ensureCommonMindMonthlyStage2Screen\(row, definition\);/.test(html) &&
+    /\.common-stage2-separated-heatmap-layer \.mind-heatmap-grid\s*\{[\s\S]*?gap:\s*8px;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-separated-heatmap-layer \.mind-heatmap-month-card\[data-heatmap-card-variant="frost"\]\s*\{[\s\S]*?background:\s*radial-gradient\(circle at 14% 8%, rgba\(255,255,255,\.38\), transparent 40%\),[\s\S]*?linear-gradient\(180deg, rgba\(255,255,255,\.30\), rgba\(255,255,255,\.10\)\);[\s\S]*?border:\s*1px solid rgba\(255,255,255,\.24\);[\s\S]*?backdrop-filter:\s*blur\(16px\);[\s\S]*?\}/.test(html),
+  'D3 alternate must sit beside D3 with separated glass chart cards and separated glass monthcards, without the shared score-glass collector panel',
+);
+assert(
+  separatedGlassD5ContentFunction.includes('data-stage2-extra="mind-heatmap-sum-separated-glass"') &&
+    separatedGlassD5ContentFunction.includes('common-stage2-separated-sum-heatmap-layer') &&
+    separatedGlassD5ContentFunction.includes('data-heatmap-view="sum-separate-glass"') &&
+    separatedGlassD5ContentFunction.includes('buildMindHeatmapSummaryYearGrid()') &&
+    !separatedGlassD5ContentFunction.includes('common-stage2-heatmap-panel') &&
+    /function setCommonMindStage1ChartLayerPresentation\(layer,\s*cloneMode\)\s*\{[\s\S]*?cloneMode === 'mind-month-heatmap' \|\| cloneMode === 'mind-separated-glass-d3' \|\| cloneMode === 'mind-separated-glass-d5'[\s\S]*?classList\.toggle\('common-stage2-mind-chart-panel', isGlassChartMode\)/.test(html) &&
+    separatedGlassD5ScreenFunction.includes("data-screen', 'alt-common-header-mind-separated-glass-d5'") &&
+    separatedGlassD5ScreenFunction.includes("dataset.mindSeparatedGlassD5Screen = 'true'") &&
+    separatedGlassD5ScreenFunction.includes('D5G ·') &&
+    separatedGlassD5ScreenFunction.includes("ensureCommonHeaderMindStage1ChartsLayer(separatedSumStage2Header, stage2Header, 'mind-separated-glass-d5')") &&
+    separatedGlassD5ScreenFunction.includes('buildCommonMindSeparatedGlassSumHeatmapContent()') &&
+    separatedGlassD5ScreenFunction.includes("sumColumn.insertAdjacentElement('afterend', separatedSumColumn)") &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?ensureCommonMindSumStage2Screen\(row, definition\);[\s\S]*?ensureCommonMindSeparatedGlassD5Screen\(row, definition\);/.test(html) &&
+    /\.common-stage2-separated-sum-heatmap-layer \.mind-heatmap-summary-year-grid\s*\{[\s\S]*?gap:\s*6px;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-separated-sum-heatmap-layer \.mind-heatmap-year-card\s*\{[\s\S]*?background:\s*radial-gradient\(circle at 14% 8%, rgba\(255,255,255,\.38\), transparent 40%\),[\s\S]*?linear-gradient\(180deg, rgba\(255,255,255,\.30\), rgba\(255,255,255,\.10\)\);[\s\S]*?border:\s*1px solid rgba\(255,255,255,\.24\);[\s\S]*?backdrop-filter:\s*blur\(16px\);[\s\S]*?\}/.test(html),
+  'D5 alternate must sit beside D5 with separated glass chart cards and separated glass year cards, without the shared sum-glass collector panel',
+);
+assert(
+  /function buildMindHeatmapMonthCard\(month, variant = 'compact'\) \{[\s\S]*?Array\.from\(\{\s*length:\s*month\.days\s*\}[\s\S]*?data-heatmap-day="\$\{day\}"[\s\S]*?<div class="mind-heatmap-days">\$\{dayCells\.join\(''\)\}<\/div>[\s\S]*?\}/.test(html) &&
+    !/function buildMindHeatmapMonthCard\(month, variant = 'compact'\) \{[\s\S]*?blankCells/.test(html) &&
+    !/function buildMindHeatmapMonthCard\(month, variant = 'compact'\) \{[\s\S]*?trailingCells/.test(html) &&
+    !/function buildMindHeatmapMonthCard\(month, variant = 'compact'\) \{[\s\S]*?trailingCount/.test(html) &&
+    !html.includes('mind-heatmap-day blank') &&
+    !/\.mind-heatmap-day\.blank\s*\{/.test(html),
+  'D-row heatmap monthcards must render only real day cells and must not create leading/trailing placeholder day cells',
+);
+assert(
+  /\.common-focus-layer\.common-mind-box-graph-layer\.common-stage2-mind-chart-panel\s*\{[\s\S]*?padding:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;[\s\S]*?\}/.test(html) &&
+    !d4MindChartLayerRule.includes('radial-gradient') &&
+    /\.common-stage2-mind-chart-panel \.common-mind-box-graph-card\.fastinfo-chart-card\s*\{[\s\S]*?background:\s*radial-gradient\(circle at 14% 8%, rgba\(255,255,255,\.38\), transparent 40%\),[\s\S]*?linear-gradient\(180deg, rgba\(255,255,255,\.30\), rgba\(255,255,255,\.10\)\);[\s\S]*?border:\s*1px solid rgba\(255,255,255,\.24\);[\s\S]*?backdrop-filter:\s*blur\(16px\);[\s\S]*?\}/.test(html) &&
+    !d4MindChartCardRule.includes('rgba(255,255,255,.66)') &&
+    !d4MindChartCardRule.includes('rgba(255,255,255,.32)'),
+  'D4 mind-month chart cards must be direct glass containers while the absolute chart layer keeps its original transparent layout',
 );
 assert(
   /function buildMindHeatmapMonthGrid\(month = mindHeatmapYearMonths\[6\], variant = 'month-single'\) \{[\s\S]*?data-heatmap-grid="month"[\s\S]*?data-heatmap-month-view="single"[\s\S]*?data-heatmap-color-scope[\s\S]*?buildMindHeatmapMonthCard\(month, variant\)/.test(html) &&
-    /function buildCommonMindMonthlyHeatmapContent\(\) \{[\s\S]*?data-stage2-extra="mind-heatmap-month"[\s\S]*?common-stage2-month-heatmap-layer[\s\S]*?data-heatmap-panel="monthly-glass"[\s\S]*?buildMindHeatmapMonthGrid\(mindHeatmapYearMonths\[6\], 'month-single'\)/.test(html) &&
-    /function ensureCommonMindMonthlyStage2Screen\(row,\s*definition\) \{[\s\S]*?definition\.mode !== 'mind'[\s\S]*?alt-common-header-mind-month-heatmap-stage2[\s\S]*?D4[\s\S]*?buildCommonMindMonthlyHeatmapContent\(\)[\s\S]*?insertAdjacentElement\('afterend'/.test(html) &&
+    /function buildCommonMindMonthlyHeatmapContent\(\) \{[\s\S]*?data-stage2-extra="mind-heatmap-month"[\s\S]*?common-stage2-month-heatmap-layer[\s\S]*?buildMindHeatmapMonthGrid\(mindHeatmapYearMonths\[6\], 'month-single'\)[\s\S]*?\}/.test(html) &&
+    !/function buildCommonMindMonthlyHeatmapContent\(\) \{[\s\S]*?data-heatmap-panel="monthly-glass"/.test(html) &&
+    !/function buildCommonMindMonthlyHeatmapContent\(\) \{[\s\S]*?common-stage2-heatmap-title/.test(html) &&
+    /function ensureCommonMindMonthlyStage2Screen\(row,\s*definition\) \{[\s\S]*?definition\.mode !== 'mind'[\s\S]*?alt-common-header-mind-month-heatmap-stage2[\s\S]*?D4[\s\S]*?removeCommonHeaderBalanceStage2Residue\(monthlyStage2Header\)[\s\S]*?ensureCommonHeaderMindStage1ChartsLayer\(monthlyStage2Header,\s*stage2Header,\s*'mind-month-heatmap'\)[\s\S]*?buildCommonMindMonthlyHeatmapContent\(\)[\s\S]*?insertAdjacentElement\('afterend'/.test(html) &&
+    !monthlyHeatmapStage2Function.includes('querySelector(\'[data-stage2-includes-stage1="true"]\')?.remove()') &&
     /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?syncCommonHeaderMindHeatmapLayer\(row, definition\);[\s\S]*?ensureCommonMindMonthlyStage2Screen\(row, definition\);/.test(html) &&
     /\.mind-heatmap-month-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?\}/.test(html) &&
-    /\.common-stage2-month-heatmap-panel \.mind-heatmap-day\s*\{[\s\S]*?height:\s*18px;[\s\S]*?\}/.test(html),
-  'D4 beside D3 must be a Mind stage2 phone screen with one colorable monthly day-cell heatmap, not another 12-month year grid',
+    /\.common-stage2-month-heatmap-layer \.mind-heatmap-days\s*\{[\s\S]*?height:\s*100%;[\s\S]*?grid-template-rows:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\);[\s\S]*?align-content:\s*stretch;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-month-heatmap-layer \.mind-heatmap-day\s*\{[\s\S]*?height:\s*100%;[\s\S]*?aspect-ratio:\s*auto;[\s\S]*?\}/.test(html),
+  'D4 beside D3 must show one clean monthly heatmap under the preserved mind stage1 charts without balance residue or a glass wrapper',
 );
 const baseHeatmapGridRuleIndex = html.indexOf('.mind-heatmap-grid {');
-const focusedMonthGridRuleIndex = html.indexOf('.common-stage2-month-heatmap-panel .mind-heatmap-month-grid');
+const focusedMonthGridRuleIndex = html.indexOf('.common-stage2-month-heatmap-layer .mind-heatmap-month-grid');
 assert(
   focusedMonthGridRuleIndex > baseHeatmapGridRuleIndex &&
-    /\.common-stage2-month-heatmap-panel \.mind-heatmap-month-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?width:\s*100%;[\s\S]*?\}/.test(html) &&
-    /\.common-stage2-month-heatmap-panel \.mind-heatmap-month-card\s*\{[\s\S]*?width:\s*100%;[\s\S]*?\}/.test(html),
-  'D4 focused monthly heatmap card must override the D3 three-column grid and span the monthly glossy panel width',
+    /\.common-stage2-month-heatmap-layer \.mind-heatmap-month-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?width:\s*100%;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-month-heatmap-layer \.mind-heatmap-month-card\s*\{[\s\S]*?width:\s*100%;[\s\S]*?\}/.test(html),
+  'D4 focused monthly heatmap card must override the D3 three-column grid and span the direct header layer width',
 );
 assert(
-  /const mindHeatmapSummaryYears\s*=\s*\[[\s\S]*?months:\s*\[[\s\S]*?\{ key: 'jan'[\s\S]*?\{ key: 'dec'/.test(html) &&
+  /const mindHeatmapSummaryYears\s*=\s*Array\.from\(\{\s*length:\s*24\s*\}/.test(html) &&
+    /year:\s*String\(2003 \+ index\)/.test(html) &&
+    /months:\s*mindHeatmapSummaryMonthTemplate\.map\(\(month,\s*monthIndex\)/.test(html) &&
     /function buildMindHeatmapYearCard\(year\)\s*\{[\s\S]*?mind-heatmap-year-card[\s\S]*?data-color-target="heatmap-cell-color"[\s\S]*?data-heatmap-color-scope[\s\S]*?mind-year-month-cells[\s\S]*?data-heatmap-month-cell="\$\{month\.key\}"[\s\S]*?--heat-alpha:\$\{mindHeatmapMonthAlpha\(month\)\}/.test(html) &&
-    /function buildCommonMindSumHeatmapContent\(\)\s*\{[\s\S]*?data-stage2-extra="mind-heatmap-sum"[\s\S]*?common-stage2-sum-heatmap-layer[\s\S]*?data-heatmap-grid="sum"[\s\S]*?data-heatmap-panel="sum-glass"[\s\S]*?buildMindHeatmapSummaryYearGrid\(\)/.test(html) &&
-    /function ensureCommonMindSumStage2Screen\(row,\s*definition\)\s*\{[\s\S]*?definition\.mode !== 'mind'[\s\S]*?alt-common-header-mind-sum-stage2[\s\S]*?D5[\s\S]*?buildCommonMindSumHeatmapContent\(\)[\s\S]*?insertAdjacentElement\('afterend'/.test(html) &&
+    /function buildCommonMindSumHeatmapContent\(\)\s*\{[\s\S]*?data-stage2-extra="mind-heatmap-sum"[\s\S]*?common-stage2-sum-heatmap-layer[\s\S]*?data-heatmap-grid="sum"[\s\S]*?buildMindHeatmapSummaryYearGrid\(\)/.test(html) &&
+    /function buildMindHeatmapSummaryYearGrid\(\)\s*\{[\s\S]*?data-heatmap-year-card-count="\$\{mindHeatmapSummaryYears\.length\}"[\s\S]*?data-heatmap-year-columns="4"/.test(html) &&
+    /function buildCommonMindSumHeatmapContent\(\)\s*\{[\s\S]*?class="common-stage2-heatmap-panel common-stage2-sum-heatmap-panel"[\s\S]*?data-heatmap-panel="sum-glass"/.test(html) &&
+    !/function buildCommonMindSumHeatmapContent\(\)\s*\{[\s\S]*?common-stage2-heatmap-title/.test(html) &&
+    /function ensureCommonMindSumStage2Screen\(row,\s*definition\)\s*\{[\s\S]*?definition\.mode !== 'mind'[\s\S]*?alt-common-header-mind-sum-stage2[\s\S]*?D5[\s\S]*?removeCommonHeaderBalanceStage2Residue\(sumStage2Header\)[\s\S]*?ensureCommonHeaderMindStage1ChartsLayer\(sumStage2Header,\s*stage2Header,\s*'mind-sum-heatmap'\)[\s\S]*?buildCommonMindSumHeatmapContent\(\)[\s\S]*?insertAdjacentElement\('afterend'/.test(html) &&
+    !sumHeatmapStage2Function.includes('querySelector(\'[data-stage2-includes-stage1="true"]\')?.remove()') &&
     /function updateCommonHeaderModeRow\(modeSection, definition\)\s*\{[\s\S]*?ensureCommonMindMonthlyStage2Screen\(row, definition\);[\s\S]*?ensureCommonMindSumStage2Screen\(row, definition\);/.test(html),
-  'D5 beside D4 must be a Mind stage2 sum screen with glossy year cards containing 12 colorable month cells',
+  'D5 beside D4 must show clean year cards under the preserved mind stage1 charts without balance residue or a glass wrapper',
 );
 assert(
   /\.common-stage2-sum-heatmap-layer\s*\{[\s\S]*?overflow-y:\s*auto;[\s\S]*?\}/.test(html) &&
-    /\.mind-heatmap-summary-year-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
-    /\.mind-heatmap-year-card\s*\{[\s\S]*?border-radius:\s*17px;[\s\S]*?backdrop-filter:\s*blur\(12px\);[\s\S]*?\}/.test(html) &&
+    /\.mind-heatmap-summary-year-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-sum-heatmap-panel \.mind-heatmap-summary-year-grid\s*\{[\s\S]*?gap:\s*6px;[\s\S]*?\}/.test(html) &&
+    /\.mind-heatmap-year-card\s*\{[\s\S]*?background:\s*rgba\(255,255,255,\.72\);[\s\S]*?box-shadow:\s*0 8px 18px rgba\(31,45,70,\.09\), inset 0 1px 0 rgba\(255,255,255,\.76\);[\s\S]*?\}/.test(html) &&
     /\.mind-year-month-cells\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
     /\.mind-year-month-cell::before\s*\{[\s\S]*?background:\s*var\(--heatmap-active-color[\s\S]*?opacity:\s*var\(--heat-alpha[\s\S]*?\}/.test(html),
-  'D5 sum mode CSS must reuse the glossy heatmap language, arrange year cards in 3 columns, and render month cells as colorable 4x3 mini heatmap cells',
+  'D5 sum mode CSS must arrange clean fastinfo-style year cards in 4 columns and render month cells as colorable 4x3 mini heatmap cells',
 );
 assert(
-  /\.mind-heatmap-summary-year-grid\s+\.mind-heatmap-year-card\s*\{[\s\S]*?gap:\s*5px;[\s\S]*?padding:\s*7px;[\s\S]*?\}/.test(html) &&
-    /\.mind-heatmap-summary-year-grid\s+\.mind-year-month-cells\s*\{[\s\S]*?gap:\s*3px;[\s\S]*?\}/.test(html) &&
-    /\.mind-heatmap-summary-year-grid\s+\.mind-year-month-cell\s*\{[\s\S]*?height:\s*14px;[\s\S]*?border-radius:\s*6px;[\s\S]*?font-size:\s*5px;[\s\S]*?\}/.test(html),
-  'D5 sum year cards must be visibly lower compact cells: only the D5 summary grid uses 7px card padding, 3px month-cell gaps, and 14px month-cell height',
+  /\.common-stage2-sum-heatmap-panel \.mind-heatmap-year-card\s*\{[\s\S]*?gap:\s*3px;[\s\S]*?padding:\s*5px;[\s\S]*?border-radius:\s*12px;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-sum-heatmap-panel \.mind-year-card-head strong\s*\{[\s\S]*?font-size:\s*9px;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-sum-heatmap-panel \.mind-year-month-cells\s*\{[\s\S]*?gap:\s*2px;[\s\S]*?\}/.test(html) &&
+    /\.common-stage2-sum-heatmap-panel \.mind-year-month-cell\s*\{[\s\S]*?height:\s*10px;[\s\S]*?border-radius:\s*4px;[\s\S]*?font-size:\s*4px;[\s\S]*?\}/.test(html),
+  'D5 sum year cards must be recalculated for 12 cards in 4 columns with tighter card padding, headers, month gaps, and 10px month-cell height',
 );
 assert(
   !/if \(variant === 'stage2-scroll'\) return 'aurora';/.test(html) &&
-    /if \(variant === 'stage2-scroll'\) return 'frost';/.test(html),
-  'D3 stage2-scroll monthcards must use the frost glass variant instead of the aurora top-right blue glow',
+    /if \(variant === 'stage2-scroll'\) return 'plain';/.test(html) &&
+    /if \(variant === 'month-single'\) return 'frost';/.test(html),
+  'D3 heatmap monthcards must stay plain inside the glass container while D4 month-single uses the frost glass card background',
 );
 assert(
   !html.includes('data-heatmap-preview="full-year"') &&
@@ -1785,6 +2340,23 @@ assert(
   /function syncCommonHeaderBudgetPieLayer\(row,\s*definition\) \{[\s\S]*?definition\.mode !== 'budget'[\s\S]*?dataset\.stage2Scrollable = 'true'[\s\S]*?dataset\.budgetPieScrollable = 'true'[\s\S]*?buildCommonBudgetCategoryPieContent\(\)[\s\S]*?insertAdjacentHTML/.test(html) &&
     /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?syncCommonHeaderMindHeatmapLayer\(row, definition\)[\s\S]*?syncCommonHeaderBudgetPieLayer\(row, definition\)/.test(html),
   'Runtime C rows must attach the pie layer only to Budget stage2 after stage1 cloning and make that stage2 area scrollable',
+);
+const balanceStage1GlassFunctionStart = html.indexOf('function ensureCommonBalanceStage1GlassScreen');
+const balanceStage1GlassFunction = balanceStage1GlassFunctionStart >= 0
+  ? html.slice(balanceStage1GlassFunctionStart, html.indexOf('function syncCommonBudgetCorePartition'))
+  : '';
+assert(
+  balanceStage1GlassFunction.includes('[data-balance-stage1-glass-screen="true"]') &&
+    balanceStage1GlassFunction.includes("definition.mode !== 'balance'") &&
+    balanceStage1GlassFunction.includes('[data-screen="alt-common-header-stage1"]') &&
+    balanceStage1GlassFunction.includes("data-screen', 'alt-common-header-stage1-glass-fastinfo'") &&
+    balanceStage1GlassFunction.includes("dataset.balanceStage1GlassScreen = 'true'") &&
+    balanceStage1GlassFunction.includes("dataset.balanceStage1GlassFastinfo = 'true'") &&
+    balanceStage1GlassFunction.includes('B2G ·') &&
+    balanceStage1GlassFunction.includes("stage1Column.insertAdjacentElement('afterend', glassColumn)") &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?syncCommonHeaderStage2Stage1Layer\(row\);[\s\S]*?ensureCommonBalanceStage1GlassScreen\(row, definition\);[\s\S]*?syncCommonHeaderMindHeatmapLayer\(row, definition\);/.test(html) &&
+    /\.common-header-mode\[data-common-header-mode="balance"\]\s+\[data-balance-stage1-glass-fastinfo="true"\]\s+\.common-balance-stage1-card-grid \.fastinfo-chart-card\s*\{[\s\S]*?background:\s*radial-gradient\(circle at 14% 8%, rgba\(255,255,255,\.38\), transparent 40%\),[\s\S]*?linear-gradient\(180deg, rgba\(255,255,255,\.30\), rgba\(255,255,255,\.10\)\);[\s\S]*?border:\s*1px solid rgba\(255,255,255,\.24\);[\s\S]*?backdrop-filter:\s*blur\(16px\);[\s\S]*?\}/.test(html),
+  'B2 alternate must clone B2 beside the original and scope glass material to all B2 fastinfo cards without leaking to other modes',
 );
 assert(
   /function syncCommonHeaderStage2Stage1Layer\(row\) \{[\s\S]*?clonedLayer\.dataset\.stage2CloneMode = row\.dataset\.commonHeaderModeRow \|\| '';[\s\S]*?if \(row\.dataset\.commonHeaderModeRow === 'budget'\) \{[\s\S]*?clonedLayer\.dataset\.stage2BudgetAvatars = 'true';[\s\S]*?\}/.test(html) &&
@@ -2100,7 +2672,7 @@ assert(
     !/\.common-mind-portal-layer\s*\{[\s\S]*?rgba\(67,21,146/.test(html) &&
     !/\.common-mind-portal-layer::before\s*\{[\s\S]*?rgba\(255,57,194/.test(html) &&
     /function initCommonHeaderMindPortalTouch\(\) \{[\s\S]*?querySelectorAll\('\[data-common-header-mode="mind"\] \.common-header-card'\)[\s\S]*?data-mind-portal-touch[\s\S]*?data-mind-portal-layer[\s\S]*?--mind-portal-touch-x[\s\S]*?--mind-portal-touch-y[\s\S]*?--mind-portal-touch-opacity[\s\S]*?setPointerCapture[\s\S]*?pointermove[\s\S]*?pointerup[\s\S]*?pointercancel/.test(html) &&
-    /initCommonHeaderModeRows\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?focusCommonHeaderMindD1OnLoad\(\);/.test(html) &&
+    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?focusQueryMenuQ1OnLoad\(\);/.test(html) &&
     !/document\.querySelectorAll\('\.common-header-card'\)[\s\S]*?data-mind-portal-touch/.test(html),
   'D/Mind common-header cards must get a separate touch-sensitive portal layer with idle vortex motion and pointer-following pink/purple bloom without attaching it to B/C rows or changing the value-locked base gradient',
 );
@@ -2175,6 +2747,61 @@ assert(
   /\.common-header-title\s*\{[\s\S]*?top:\s*28px;[\s\S]*?font-size:\s*11px;[\s\S]*?text-transform:\s*uppercase;[\s\S]*?\}/.test(html) &&
     !/data-d1-schedee-brand-font="outfit"\]\s+\.common-header-title\s*\{[\s\S]*?(font-size|top|text-transform):/.test(html),
   'Mind D1 Schedee font must inherit the same common-header title size, uppercase treatment, and top position as D2 instead of overriding title metrics',
+);
+const commonMindD1FontVariantRuntime = [
+  extractFunctionSource('syncCommonMindD1FontVariantRow'),
+  extractFunctionSource('updateCommonHeaderModeRow'),
+].join('\n');
+for (const [id, label] of [
+  ['inter', 'Inter'],
+  ['satoshi', 'Satoshi'],
+  ['plus-jakarta-sans', 'Plus Jakarta Sans'],
+  ['sf-pro', 'SF Pro'],
+  ['manrope', 'Manrope'],
+  ['poppins', 'Poppins'],
+]) {
+  assert(
+    html.includes(`id: '${id}'`) &&
+      html.includes(`label: '${label}'`) &&
+      html.includes(`data-d1-font-variant="${id}"`),
+    `Missing Mind D1 font variant contract for ${label}`,
+  );
+}
+assert(
+  html.includes("reference: '/storage/emulated/0/spendee/betuk.png'") &&
+    html.includes('const commonMindD1FontVariants = Object.freeze([') &&
+    commonMindD1FontVariantRuntime.includes("modeSection.querySelector('[data-common-mind-d1-font-row]')?.remove()") &&
+    commonMindD1FontVariantRuntime.includes("fontRow.dataset.commonMindD1FontRow = 'true'") &&
+    commonMindD1FontVariantRuntime.includes('const column = sourceColumn.cloneNode(true);') &&
+    commonMindD1FontVariantRuntime.includes('screen.dataset.d1FontVariant = variant.id') &&
+    commonMindD1FontVariantRuntime.includes("screen.dataset.d1FontReference = variant.reference") &&
+    commonMindD1FontVariantRuntime.includes("screen.dataset.screen = `alt-common-header-mind-d1-font-${variant.id}`") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-font-family', variant.fontStack)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-lockup-top', variant.lockupTop)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-logo-x', variant.logoX)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-logo-y', variant.logoY)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-logo-size', variant.logoSize)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-wordmark-x', variant.wordmarkX)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-wordmark-y', variant.wordmarkY)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-wordmark-size', variant.wordmarkSize)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-tagline-gap', variant.taglineGap)") &&
+    commonMindD1FontVariantRuntime.includes("screen.style.setProperty('--d1-tagline-ratio', String(variant.taglineRatio))") &&
+    commonMindD1FontVariantRuntime.includes('syncCommonMindD1FontVariantRow(modeSection, definition);'),
+  'Mind mode must create a six-screen D1 font variant row cloned from D1 and styled from the betuk.png reference',
+);
+assert(
+  /\.common-header-mode\[data-common-header-mode="mind"\]\s+\.common-mind-d1-font-row\s*\{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*28px;[\s\S]*?width:\s*max-content;[\s\S]*?\}/.test(html) &&
+    /\.common-header-mode\[data-common-header-mode="mind"\]\s+\[data-d1-font-variant\]\s*\{[\s\S]*?font-family:\s*var\(--d1-font-family\);[\s\S]*?--d1-lockup-top:\s*33\.3px;[\s\S]*?--d1-wordmark-size:\s*30\.096px;[\s\S]*?--d1-logo-x:\s*30px;[\s\S]*?--d1-logo-y:\s*6px;[\s\S]*?--d1-logo-size:\s*47\.88px;[\s\S]*?--d1-wordmark-x:\s*82\.25px;[\s\S]*?--d1-wordmark-y:\s*10\.602px;[\s\S]*?--d1-tagline-gap:\s*1\.368px;[\s\S]*?--d1-tagline-ratio:\s*\.46;[\s\S]*?\}/.test(html) &&
+    /\.common-header-mode\[data-common-header-mode="mind"\]\s+\[data-d1-font-variant\]\s+\.spendee-brand-lockup\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?top:\s*var\(--d1-lockup-top\);[\s\S]*?height:\s*118px;[\s\S]*?display:\s*block;[\s\S]*?gap:\s*0;[\s\S]*?\}/.test(html) &&
+    /\.common-header-mode\[data-common-header-mode="mind"\]\s+\[data-d1-font-variant\]\s+\.spendee-logo\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*var\(--d1-logo-x\);[\s\S]*?top:\s*var\(--d1-logo-y\);[\s\S]*?width:\s*var\(--d1-logo-size\);[\s\S]*?height:\s*var\(--d1-logo-size\);[\s\S]*?\}/.test(html) &&
+    /\.common-header-mode\[data-common-header-mode="mind"\]\s+\[data-d1-font-variant\]\s+\.spendee-copy\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*var\(--d1-wordmark-x\);[\s\S]*?top:\s*var\(--d1-wordmark-y\);[\s\S]*?\}/.test(html) &&
+    (html.match(/lockupTop:\s*'33\.3px'/g) || []).length >= 6 &&
+    (html.match(/wordmarkSize:\s*'30\.096px'/g) || []).length >= 6 &&
+    (html.match(/taglineGap:\s*'1\.368px'/g) || []).length >= 6 &&
+    (html.match(/logoSize:\s*'47\.88px'/g) || []).length >= 5 &&
+    html.includes("logoSize: '45.144px'") &&
+    /\.common-header-mode\[data-common-header-mode="mind"\]\s+\[data-d1-font-variant="sf-pro"\]\s*\{[\s\S]*?--d1-logo-size:\s*45\.144px;[\s\S]*?--d1-tagline-ratio:\s*\.43;[\s\S]*?\}/.test(html),
+  'Mind D1 font variant row must render logo and labels another 5% smaller without changing motto-to-header padding',
 );
 assert(
   c2ConvexBadgeRule.includes('overflow: hidden;') &&
@@ -2381,7 +3008,7 @@ assert(
     portalTransitionControlsRuntime.includes("number.addEventListener('change'") &&
     portalTransitionControlsRuntime.includes("number.addEventListener('blur'") &&
     !portalTransitionControlsRuntime.includes("number.addEventListener('input'") &&
-    /function capturePortalBalanceFrame\([\s\S]*?sampleMoneyFlowColor\([\s\S]*?sampleMoneyFlowField\([\s\S]*?sampleField\(/.test(html) &&
+    /function capturePortalBalanceFrame\([\s\S]*?sampleMoneyFlowField\([\s\S]*?sampleMindPortalActivePaletteColor\([\s\S]*?sampleField\(/.test(html) &&
     /function capturePortalTargetFrames\([\s\S]*?mode:\s*'solid-a'[\s\S]*?portalTargetFrame/.test(html) &&
     /function drawPortalTransitionProgress\([\s\S]*?PortalMessageTransitionRenderer\.renderFrame\([\s\S]*?putImageData/.test(html) &&
     /function startPortalBackgroundTransition\([\s\S]*?PortalMessageTransition\.buildDescriptor\([\s\S]*?hidePortalEndpointSources\(wrap\);[\s\S]*?PortalTransitionPlayer\.createPlayback\(/.test(html) &&
@@ -2576,7 +3203,9 @@ assert(
     portalMessageFieldRuntimeBlock.includes('function setPortalMessageFieldMode(wrap, mode)') &&
     portalMessageFieldRuntimeBlock.includes('function resetPortalMessageFieldMode(wrap)') &&
     portalMessageFieldRuntimeBlock.includes('PortalMessageField.controlsForMode(activeMode)') &&
-    portalMessageFieldRuntimeBlock.includes('PortalMessageField.sampleWindow(') &&
+    portalMessageFieldRuntimeBlock.includes('getMindPortalActivePalette(header)') &&
+    portalMessageFieldRuntimeBlock.includes('sampleMindPortalActivePaletteStop(header') &&
+    portalMessageFieldRuntimeBlock.includes('--portal-message-field-scale-gradient') &&
     portalMessageFieldRuntimeBlock.includes('data-portal-message-field-control-range') &&
     portalMessageFieldRuntimeBlock.includes('data-portal-message-field-control-number') &&
     portalMessageFieldRuntimeBlock.includes('data-portal-message-field-a-swatch') &&
@@ -2733,18 +3362,36 @@ const mindPortalSignaturePanelBlock = mindPortalSignaturePanelStart >= 0
 const mindPortalTestCopyRule =
   html.match(/\.mind-portal-test-copy\s*\{[\s\S]*?\n    \}/)?.[0] || '';
 assert(mindPortalSignaturePanelBlock, 'Missing standalone portal signature panel before the interaction opacity control');
+const universalSignatureKinds = [
+  ['balance', 'Traffic'],
+  ['limits', 'Limit'],
+  ['cool', 'Cool'],
+  ['meadow-green', 'Meadow green'],
+  ['soft-rainbow', 'Soft rainbow'],
+  ['ocean-blue-serenity', 'Ocean blue serenity'],
+];
+assert.strictEqual(
+  (mindPortalSignaturePanelBlock.match(/data-mind-portal-signature-slider=/g) || []).length,
+  7,
+  'Standalone portal signature panel must expose Traffic, Limit, Cool, Money flow, Meadow green, Soft rainbow, and Ocean blue serenity sliders',
+);
+assert.strictEqual(
+  (mindPortalSignaturePanelBlock.match(/class="mind-portal-signature-window-input"/g) || []).length,
+  6,
+  'Every non-Money-flow signature slider must expose the same right-side 10-100 window-size input',
+);
+const moneyFlowSignatureRow =
+  mindPortalSignaturePanelBlock.match(/<label class="mind-portal-signature-row no-window-input" data-signature-kind="money-flow">[\s\S]*?<\/label>/)?.[0] || '';
 assert(
-  ['balance', 'limits', 'cool'].every((kind) =>
+  universalSignatureKinds.every(([kind, label]) =>
     new RegExp(
-      `data-signature-kind="${kind}"[\\s\\S]*?data-mind-portal-signature-slider="${kind}"[\\s\\S]*?<input class="mind-portal-signature-window-input"(?=[^>]*min="10")(?=[^>]*max="100")(?=[^>]*step="1")(?=[^>]*data-mind-portal-signature-window-input="${kind}")`,
+      `data-signature-kind="${kind}"[\\s\\S]*?<span>${label}<\\/span>[\\s\\S]*?data-mind-portal-signature-slider="${kind}"[\\s\\S]*?<input class="mind-portal-signature-window-input"(?=[^>]*min="10")(?=[^>]*max="100")(?=[^>]*step="1")(?=[^>]*data-mind-portal-signature-window-input="${kind}")`,
     ).test(mindPortalSignaturePanelBlock),
   ) &&
     /data-signature-kind="money-flow"[\s\S]*?data-mind-portal-signature-slider="money-flow"[\s\S]*?data-mind-portal-signature-value="money-flow"/.test(
       mindPortalSignaturePanelBlock,
     ) &&
-    !/data-signature-kind="money-flow"[\s\S]*?data-mind-portal-signature-window-input/.test(
-      mindPortalSignaturePanelBlock,
-    ) &&
+    !moneyFlowSignatureRow.includes('data-mind-portal-signature-window-input') &&
     !mindPortalSignaturePanelBlock.includes('data-mind-portal-money-flow-input') &&
     mindPortalSignaturePanelBlock.includes('data-mind-portal-window-opacity-slider') &&
     mindPortalSignaturePanelBlock.includes('data-mind-portal-window-opacity-value') &&
@@ -2757,7 +3404,13 @@ assert(
     /\.mind-portal-signature-window-input\s*\{[\s\S]*?width:\s*54px;[\s\S]*?text-align:\s*center;[\s\S]*?\}/.test(
       html,
     ) &&
-    /function buildMindPortalSignature\(kind, center, windowSize = 28\) \{[\s\S]*?const boundedHalfWindow = clampValue\(Number\(windowSize\), 10, 100\) \/ 2;[\s\S]*?a: sample\(boundedCenter - boundedHalfWindow\),[\s\S]*?b: sample\(boundedCenter \+ boundedHalfWindow\),/.test(
+    /const mindPortalSignaturePalettes = Object\.freeze\(\{[\s\S]*?meadow-green[\s\S]*?soft-rainbow[\s\S]*?ocean-blue-serenity[\s\S]*?\}\);/.test(
+      html,
+    ) &&
+    /function sampleMindPortalSignatureColor\(kind, position\) \{[\s\S]*?mindPortalSignaturePalettes\[kind\][\s\S]*?sampleScaleColor\(palette, position\)/.test(
+      html,
+    ) &&
+    /function buildMindPortalSignature\(kind, center, windowSize = 28\) \{[\s\S]*?const boundedHalfWindow = clampValue\(Number\(windowSize\), 10, 100\) \/ 2;[\s\S]*?a: sampleMindPortalSignatureColor\(kind, boundedCenter - boundedHalfWindow\),[\s\S]*?b: sampleMindPortalSignatureColor\(kind, boundedCenter \+ boundedHalfWindow\),/.test(
       html,
     ) &&
     /function applyMindPortalSignature\(kind, center, windowSize = 28\) \{[\s\S]*?const boundedWindow = clampValue\(Number\(windowSize\), 10, 100\);[\s\S]*?buildMindPortalSignature\(kind, boundedCenter, boundedWindow\)[\s\S]*?data-mind-portal-signature-window-input/.test(
@@ -2780,8 +3433,17 @@ assert(
     ) &&
     !mindPortalTestCopyRule.includes('--mind-portal-window-opacity') &&
     !/opacity\s*:\s*var\(--mind-portal-window-opacity/.test(mindPortalTestCopyRule),
-  'Standalone portal signature controls must use 10-100 window inputs only for Traffic/Limit/Cool, keep Money flow slider-only, and expose a background-only portal window opacity slider',
+  'Standalone portal signature controls must use 10-100 window inputs for every non-Money-flow source, keep Money flow slider-only, and expose a background-only portal window opacity slider',
 );
+for (const [paletteName, colors] of [
+  ['Meadow green', ['#D9ED92', '#B5E48C', '#99D98C', '#76C893', '#52B69A', '#34A0A4', '#168AAD', '#1A759F', '#1E6091', '#184E77']],
+  ['Soft rainbow', ['#FBF8CC', '#FDE4CF', '#FFCFD2', '#F1C0E8', '#CFBAF0', '#A3C4F3', '#90DBF4', '#8EECF5', '#98F5E1', '#B9FBC0']],
+  ['Ocean blue serenity', ['#CAF0F8', '#ADE8F4', '#90E0EF', '#48CAE4', '#00B4D8', '#0096C7', '#0077B6']],
+]) {
+  for (const color of colors) {
+    assert(html.includes(color), `Missing ${paletteName} test-header color: ${color}`);
+  }
+}
 const mindPortalSignatureControlsStart = html.indexOf('function initMindPortalTestSignatureControls');
 const mindPortalSignatureControlsEnd =
   mindPortalSignatureControlsStart >= 0
@@ -4682,9 +5344,10 @@ assert(
   html.indexOf('id="selectedPaletteRow"') > html.indexOf('id="alternativePalette"') &&
     html.indexOf('id="selectedPaletteRow"') < html.indexOf('id="alternativeAppPaletteRow"') &&
     html.indexOf('id="alternativeAppPaletteRow"') < html.indexOf('id="alternativeSlotPaletteRow"') &&
-    html.indexOf('id="alternativeSlotPaletteRow"') < html.indexOf('id="spendeeLogoEditor"') &&
+    html.indexOf('id="alternativeSlotPaletteRow"') < html.indexOf('id="customGradientPaletteRow"') &&
+    html.indexOf('id="customGradientPaletteRow"') < html.indexOf('id="spendeeLogoEditor"') &&
     html.indexOf('id="spendeeLogoEditor"') < html.indexOf('</section>\n      </section>\n    </section>\n    </section>\n  </main>'),
-  'The cleaned palette order must be selected source row, app shades, current 21-slot Fluvi row, then logo editor',
+  'The cleaned palette order must be selected source row, app shades, current 21-slot Fluvi row, custom gradients, then logo editor',
 );
 assert(
   /\.logo-editor-section \{[\s\S]*?min-width:\s*var\(--screen-w\);[\s\S]*?width:\s*max\(var\(--screen-w\),\s*100%\);/.test(
@@ -4700,22 +5363,78 @@ assert(
   'Logo editor must render a large SVG stage for the tappable whole logo arcs',
 );
 assert(
-  logoEditorSection.includes('id="fluviLogoVariantPreview"') &&
-    (logoEditorSection.match(/data-logo-variant-card/g) || []).length === 3 &&
-    logoEditorSection.includes('Eredeti Fluvi') &&
-    logoEditorSection.includes('App-harmonizált') &&
-    logoEditorSection.includes('Portal emissive'),
-  'Logo editor must show exactly three Fluvi colour recommendation preview cards beside the large editor',
+  !logoEditorSection.includes('id="fluviLogoVariantPreview"') &&
+    !logoEditorSection.includes('data-logo-variant-card') &&
+    !logoEditorSection.includes('Eredeti Fluvi') &&
+    !logoEditorSection.includes('App-harmonizált') &&
+    !logoEditorSection.includes('Portal emissive'),
+  'Logo colour recommendation preview cards must be removed while the large editor remains',
 );
 assert(
-  logoEditorSection.includes('data-logo-abc-scale-panel') &&
-    logoEditorSection.includes('data-logo-scale-center-slider') &&
-    logoEditorSection.includes('data-logo-scale-window-input') &&
-    logoEditorSection.includes('data-logo-scale-stop="a"') &&
-    logoEditorSection.includes('data-logo-scale-stop="b"') &&
-    logoEditorSection.includes('data-logo-scale-stop="c"') &&
-    logoEditorSection.includes('data-logo-scale-no-colour'),
-  'Logo editor must include a customizable A/B/C scale with center slider, manual window input, tappable A/B/C stop squares, and a No colour palette element',
+  !logoEditorSection.includes('data-logo-abc-scale-panel') &&
+    !logoEditorSection.includes('data-logo-scale-center-slider') &&
+    !logoEditorSection.includes('data-logo-scale-window-input') &&
+    !logoEditorSection.includes('data-logo-scale-stop=') &&
+    !logoEditorSection.includes('data-logo-scale-no-colour'),
+  'The old logo A/B/C scale and its slider must be removed',
+);
+const customGradientPaletteStart = html.indexOf('<section class="palette-section custom-gradient-palette-section"');
+const customGradientPaletteEnd = customGradientPaletteStart >= 0
+  ? html.indexOf('<section class="palette-section logo-editor-section"', customGradientPaletteStart)
+  : -1;
+const customGradientPaletteSection = customGradientPaletteStart >= 0 &&
+  customGradientPaletteEnd > customGradientPaletteStart
+  ? html.slice(customGradientPaletteStart, customGradientPaletteEnd)
+  : '';
+assert(customGradientPaletteSection, 'Missing lower Custom gradient palette section before the logo editor');
+assert.strictEqual(
+  (customGradientPaletteSection.match(/data-custom-gradient-slot=/g) || []).length,
+  5,
+  'The lower custom gradient palette must expose exactly five custom slots',
+);
+assert.strictEqual(
+  (customGradientPaletteSection.match(/data-custom-gradient-swatch=/g) || []).length,
+  5,
+  'Every custom gradient slot must expose a tappable swatch',
+);
+assert.strictEqual(
+  (customGradientPaletteSection.match(/data-custom-gradient-boundary-slider=/g) || []).length,
+  5,
+  'Every custom gradient slot must expose one compact boundary slider',
+);
+for (const endpoint of ['left', 'right']) {
+  assert.strictEqual(
+    (customGradientPaletteSection.match(new RegExp(`data-custom-gradient-endpoint="${endpoint}"`, 'g')) || []).length,
+    5,
+    `Every custom gradient slot must expose a ${endpoint} endpoint button`,
+  );
+}
+assert(
+  html.includes('const customGradientStates =') &&
+    html.includes('function buildCustomGradientCss(slotState)') &&
+    html.includes('function updateCustomGradientSlot(slotId)') &&
+    html.includes('function initCustomGradientPalette()') &&
+    html.includes('initCustomGradientPalette();') &&
+    /function applySelectedColor\(target\) \{[\s\S]*?selectionState\.selectedColor\.includes\('gradient'\)[\s\S]*?target\.style\.background = selectionState\.selectedColor;/.test(
+      html,
+    ),
+  'Custom gradient slots must maintain state, select through the normal swatch path, and apply gradients to generic backgrounds',
+);
+const customGradientBoundaryRuntime = [
+  extractFunctionSource('normalizeCustomGradientBoundary'),
+  extractFunctionSource('buildCustomGradientCss'),
+  extractFunctionSource('initCustomGradientPalette'),
+].join('\n');
+assert(
+  customGradientBoundaryRuntime.includes('function normalizeCustomGradientBoundary(value, fallback = 50)') &&
+    customGradientBoundaryRuntime.includes('Number.isFinite(numeric)') &&
+    customGradientBoundaryRuntime.includes('clampValue(numeric, 0, 100)') &&
+    customGradientBoundaryRuntime.includes('normalizeCustomGradientBoundary(slotState.boundary)') &&
+    customGradientBoundaryRuntime.includes('normalizeCustomGradientBoundary(slider.value, slotState.boundary)') &&
+    customGradientBoundaryRuntime.includes("slider?.addEventListener('change'") &&
+    !customGradientBoundaryRuntime.includes('Number(slotState.boundary) || 50') &&
+    !customGradientBoundaryRuntime.includes('Number(slider.value) || 50'),
+  'Custom gradient boundary sliders must preserve the full 0-100 range, including values below 50',
 );
 assert(
   /function initSpendeeLogoEditor\(\) \{[\s\S]*?fetch\('fluvi_vector\.svg\?v=20260716-fluvi-logo-v1'\)[\s\S]*?renderLogoSvgPaths\(svg, parsedSvg, true\);[\s\S]*?document\.querySelectorAll\('\[data-logo-live-preview\]'\)\.forEach/.test(
@@ -4724,18 +5443,11 @@ assert(
   'Logo editor must load the Fluvi SVG asset, render the tappable editor logo and render every app mock logo as a live SVG preview',
 );
 assert(
-  /function getFluviLogoContinuousVariantStops\(variant\) \{[\s\S]*?original[\s\S]*?#00edf5[\s\S]*?#5385ff[\s\S]*?#9a4efd[\s\S]*?#ce51fa[\s\S]*?app-harmonized[\s\S]*?#22d3ee[\s\S]*?#246efb[\s\S]*?#8b5cf6[\s\S]*?#ce51fa[\s\S]*?portal-emissive[\s\S]*?#246efb[\s\S]*?#8b5cf6[\s\S]*?#ce51fa[\s\S]*?#fbcfe8[\s\S]*?return palettes\[variant\] \|\| palettes\.original;/.test(
-    html,
-  ) &&
-    /function applyFluviLogoContinuousVariantGradient\(svg, variant\) \{[\s\S]*?getFluviLogoContinuousVariantStops\(variant\)[\s\S]*?linearGradient\.setAttribute\('gradientUnits', 'userSpaceOnUse'\)[\s\S]*?querySelectorAll\('\[data-logo-editor-path\]'\)\.forEach\(\(path\) => \{[\s\S]*?path\.setAttribute\('fill', `url\(#\$\{gradientId\}\)`\);/.test(
-      html,
-    ) &&
-    /function renderFluviLogoVariantPreviews\(parsedSvg\) \{[\s\S]*?\[data-logo-variant-preview\][\s\S]*?renderLogoSvgPaths\(previewSvg, parsedSvg, false\);[\s\S]*?applyFluviLogoContinuousVariantGradient/.test(
-      html,
-    ) &&
-    /renderFluviLogoVariantPreviews\(parsedSvg\);/.test(html) &&
-    !/function applyFluviLogoVariantPalette\(svg, variant\) \{[\s\S]*?setLogoPathGradient/.test(html),
-  'Logo editor recommendation previews must render as one continuous SVG-level gradient field, not path-by-path gradients that create hard seams inside the Fluvi mark',
+  !html.includes('function getFluviLogoContinuousVariantStops') &&
+    !html.includes('function applyFluviLogoContinuousVariantGradient') &&
+    !html.includes('function renderFluviLogoVariantPreviews') &&
+    !html.includes('renderFluviLogoVariantPreviews(parsedSvg);'),
+  'Removed logo recommendation preview code must not remain in the runtime',
 );
 assert(
   /function renderLogoSvgPaths\(svg, parsedSvg, editable\) \{[\s\S]*?path\.dataset\.logoEditorPath = path\.id;[\s\S]*?if \(editable\) \{[\s\S]*?path\.dataset\.colorTarget = 'logo-path';[\s\S]*?path\.classList\.add\('logo-editor-path'\);[\s\S]*?\} else \{[\s\S]*?path\.classList\.add\('logo-live-preview-path'\);/.test(
@@ -4744,10 +5456,12 @@ assert(
   'Logo renderer must make only editor paths tappable while live-preview paths stay passive but addressable by path id',
 );
 assert(
-  /function initLogoAbcScale\(\) \{[\s\S]*?data-logo-scale-stop[\s\S]*?selectionState\.selectedRole === 'no-colour'[\s\S]*?stopKey === 'c'[\s\S]*?setLogoAbcStop\(stopKey, null\)[\s\S]*?data-logo-scale-center-slider[\s\S]*?data-logo-scale-window-input/.test(html) &&
-    /function applyLogoAbcScaleToAllLogos\(\) \{[\s\S]*?document\.querySelectorAll\('\[data-logo-live-preview\], #spendeeLogoEditorSvg'\)[\s\S]*?applyLogoAbcScaleToSvg/.test(html) &&
-    /function applyLogoAbcScaleToSvg\(svg\) \{[\s\S]*?gradientUnits', 'userSpaceOnUse'[\s\S]*?querySelectorAll\('\[data-logo-editor-path\]'\)\.forEach\(\(path\) => \{[\s\S]*?path\.setAttribute\('fill', `url\(#\$\{gradientId\}\)`\)/.test(html),
-  'Logo A/B/C scale controller must use selected palette/no-colour input and apply one continuous SVG-level field to every logo path',
+  !html.includes('function initLogoAbcScale') &&
+    !html.includes('function applyLogoAbcScaleToAllLogos') &&
+    !html.includes('function applyLogoAbcScaleToSvg') &&
+    !html.includes('logoAbcScaleState') &&
+    !html.includes('initLogoAbcScale();'),
+  'Removed logo A/B/C scale controller code must not remain in the runtime',
 );
 assert(
   /function applySelectedLogoPathColor\(target\) \{[\s\S]*?resolveLogoEditorColor\(selectionState\.selectedColor\)[\s\S]*?setLogoPathGradient\(target, resolvedColor\)[\s\S]*?syncLogoLivePreviews\(target\.dataset\.logoEditorPath, resolvedColor\)[\s\S]*?logo-path-applied/.test(
@@ -5211,25 +5925,30 @@ const rebuiltPortalEnd = html.indexOf(
 const rebuiltPortalLab = html.slice(rebuiltPortalStart, rebuiltPortalEnd);
 assert(rebuiltPortalStart >= 0, 'Missing standalone portal test lab');
 assert(
-  rebuiltPortalLab.includes('data-mind-portal-mode="static"'),
-  'The rebuilt portal must load in exact static A/B mode',
+  rebuiltPortalLab.includes('data-mind-portal-mode="dual-tide"') &&
+    /<option value="dual-tide" selected>Kettős árapály<\/option>/.test(rebuiltPortalLab) &&
+    rebuiltPortalLab.includes('<span data-mind-portal-mode-label>Kettős árapály</span>'),
+  'The rebuilt portal must start with a visible animated energy field instead of a static-only A/B layer',
 );
 assert.strictEqual(
   (rebuiltPortalLab.match(/data-mind-portal-signature-slider=/g) || []).length,
-  4,
-  'Static portal controls must expose Traffic, Limit, Cool, and Money flow sliders',
+  7,
+  'Static portal controls must expose Traffic, Limit, Cool, Money flow, Meadow green, Soft rainbow, and Ocean blue serenity sliders',
 );
 for (const token of [
   'data-mind-portal-signature-slider="money-flow"',
   'data-mind-portal-signature-value="money-flow"',
+  'data-mind-portal-signature-slider="meadow-green"',
+  'data-mind-portal-signature-slider="soft-rainbow"',
+  'data-mind-portal-signature-slider="ocean-blue-serenity"',
   '50–50',
 ]) {
   assert(rebuiltPortalLab.includes(token), `Missing Money-flow UI token: ${token}`);
 }
 assert(
   !rebuiltPortalLab.includes('data-mind-portal-money-flow-input') &&
-    !/data-signature-kind="money-flow"[\s\S]*?class="mind-portal-signature-window-input"/.test(
-      rebuiltPortalLab,
+    !(rebuiltPortalLab.match(/<label class="mind-portal-signature-row no-window-input" data-signature-kind="money-flow">[\s\S]*?<\/label>/)?.[0] || '').includes(
+      'class="mind-portal-signature-window-input"',
     ),
   'Money-flow must be slider-only in the rebuilt portal and must not expose a numeric/text input beside the slider',
 );
@@ -5245,6 +5964,8 @@ for (const color of [
 assert(
   html.includes('function applyMindPortalMoneyFlow(incomePercent)') &&
     html.includes('MindPortalEnergy.moneyFlowStopPositions') &&
+    html.includes('data-mind-portal-active-palette') &&
+    html.includes('data-mind-portal-active-palette-positions') &&
     html.includes("data-mind-portal-signature-source', 'money-flow'") &&
     html.includes('data-mind-portal-money-flow-income') &&
     html.includes('`${income}–${expense}`') &&
@@ -5297,22 +6018,66 @@ assert.strictEqual(
 );
 assert(
   html.includes('MindPortalEnergy.controlsForMode(mode)') &&
-    html.includes('MindPortalEnergy.isBalanceMode(mode)') &&
     html.includes('MindPortalEnergy.isBalanceMode(activeMode)') &&
     html.includes('MindPortalEnergy.sampleMoneyFlowField(') &&
-    html.includes('MindPortalEnergy.sampleMoneyFlowColor(') &&
-    html.includes('applyMindPortalMoneyFlow(ratioSlider?.value || 50)'),
-  'Balance modes must use active schemas and a semantic branch in the existing canvas lifecycle',
+    html.includes('MindPortalEnergy.samplePaletteColor(') &&
+    html.includes('function getMindPortalActivePalette(header)') &&
+    html.includes('function sampleMindPortalActivePaletteColor(header, sample)') &&
+    !html.includes('applyMindPortalMoneyFlow(ratioSlider?.value || 50)'),
+  'Every energy mode must keep its field schema while sampling the active color palette instead of forcing Money-flow',
 );
+const setMindPortalEnergyModeRuntime = extractFunctionSource('setMindPortalEnergyMode');
 assert(
-  html.includes('function leaveMindPortalMoneyFlowState(header)') &&
-    /function applyMindPortalTestHeaderColors\(source, a, b\) \{[\s\S]*?header\.removeAttribute\('data-mind-portal-money-flow-income'\)[\s\S]*?leaveMindPortalMoneyFlowState\(header\)/.test(
-      html,
+  !html.includes('function leaveMindPortalMoneyFlowState(header)') &&
+    !/setMindPortalEnergyMode\(header,\s*'static'\)/.test(
+      extractFunctionSource('applyMindPortalTestHeaderColors'),
     ) &&
-    /function leaveMindPortalMoneyFlowState\(header\) \{[\s\S]*?MindPortalEnergy\.isBalanceMode\(state\.activeMode\)[\s\S]*?setMindPortalEnergyMode\(header, 'static'\)/.test(
+    !setMindPortalEnergyModeRuntime.includes('applyMindPortalMoneyFlow') &&
+    /function applyMindPortalTestHeaderColors\(source, a, b, options = \{\}\) \{[\s\S]*?data-mind-portal-active-palette/.test(
       html,
     ),
-  'Traffic, Limit, and Cool signature changes must clear Money-flow state and leave Balance-only rendering',
+  'Changing the active color source must not reset the current energy mode, and changing mode must not force Money-flow',
+);
+const syncMindPortalAnimatedPaletteRuntime = extractFunctionSource(
+  'syncMindPortalAnimatedPalette',
+);
+const wakeMindPortalEnergyFrameRuntime = extractFunctionSource(
+  'wakeMindPortalEnergyFrame',
+);
+const scheduleMindPortalEnergyFrameRuntime = extractFunctionSource(
+  'scheduleMindPortalEnergyFrame',
+);
+const updatePortalMessageFieldPaletteRuntime = extractFunctionSource(
+  'updatePortalMessageFieldPalette',
+);
+assert(
+  /function applyMindPortalTestHeaderColors\(source, a, b, options = \{\}\) \{[\s\S]*?header\.setAttribute\('data-mind-portal-active-palette'[\s\S]*?syncMindPortalAnimatedPalette\(header\);/.test(
+    html,
+  ) &&
+    syncMindPortalAnimatedPaletteRuntime.includes('wakeMindPortalEnergyFrame(header, state)') &&
+    syncMindPortalAnimatedPaletteRuntime.includes('messageState.messageFieldDirty = true') &&
+    syncMindPortalAnimatedPaletteRuntime.includes('updatePortalMessageFieldPalette(wrap, messageState)') &&
+    syncMindPortalAnimatedPaletteRuntime.includes('schedulePortalMessageFieldFrame(wrap)') &&
+    syncMindPortalAnimatedPaletteRuntime.includes('syncPortalVisibleBackgroundOpacity(wrap)'),
+  'Changing any testheader color source must invalidate the testheader canvas, interior overlay, message field, and visible background endpoint',
+);
+assert(
+  wakeMindPortalEnergyFrameRuntime.includes('state.visible = true') &&
+    wakeMindPortalEnergyFrameRuntime.includes('state.lastFrameTime = 0') &&
+    wakeMindPortalEnergyFrameRuntime.includes('state.lastNow = performance.now()') &&
+    wakeMindPortalEnergyFrameRuntime.includes('scheduleMindPortalEnergyFrame(header, state)') &&
+    scheduleMindPortalEnergyFrameRuntime.includes('if (state.frame') &&
+    scheduleMindPortalEnergyFrameRuntime.includes('state.frame = 0') &&
+    scheduleMindPortalEnergyFrameRuntime.includes('drawMindPortalEnergyFrame(header, canvas, ctx, state, now)') &&
+    scheduleMindPortalEnergyFrameRuntime.includes('scheduleMindPortalEnergyFrame(header, state)'),
+  'Slider changes and mode changes must be able to wake a stopped shared energy RAF loop, not only update static CSS',
+);
+assert(
+  updatePortalMessageFieldPaletteRuntime.includes('getMindPortalActivePalette(header)') &&
+    updatePortalMessageFieldPaletteRuntime.includes('sampleMindPortalActivePaletteStop(header') &&
+    updatePortalMessageFieldPaletteRuntime.includes('--portal-message-field-scale-gradient') &&
+    !updatePortalMessageFieldPaletteRuntime.includes('PortalMessageField.sampleWindow('),
+  'Portal background-morph/message-field palettes must sample the active testheader palette instead of a dedicated static palette',
 );
 assert(
   rebuiltPortalLab.includes('data-mind-portal-mode-select') &&
@@ -5438,18 +6203,19 @@ assert(
   'The sole interior renderer call must belong to the shared Balance frame, after base pixels and before finalization',
 );
 const portalInteriorEligibilityMatch = portalInteriorFrameRuntime.match(
-  /const\s+([A-Za-z_$][\w$]*)\s*=\s*balanceMode\s*&&\s*state\.portalInteriorMotionState\?\.enabled\s*===\s*true\s*&&\s*typeof PortalInteriorMotionRenderer\s*!==\s*'undefined';/,
+  /const\s+([A-Za-z_$][\w$]*)\s*=\s*state\.portalInteriorMotionState\?\.enabled\s*===\s*true\s*&&\s*typeof PortalInteriorMotionRenderer\s*!==\s*'undefined';/,
 );
 assert(
   portalInteriorEligibilityMatch,
-  'Interior eligibility must require the current Balance mode, enabled state, and renderer availability',
+  'Interior eligibility must require enabled state and renderer availability without being limited to Balance energy modes',
 );
 const portalInteriorEligibility = portalInteriorEligibilityMatch?.[1] || '';
 const portalEnergyMotionEligibilityMatch = portalInteriorFrameRuntime.match(
-  /const\s+([A-Za-z_$][\w$]*)\s*=\s*Boolean\(\s*settings\s*&&\s*settings\.strength > 0\s*&&\s*\(!state\.reducedMotion \|\| state\.reducedMotionOverride\)\s*\);/,
+  /const\s+([A-Za-z_$][\w$]*)\s*=\s*Boolean\(\s*settings\s*&&\s*settings\.strength > 0\s*&&\s*motionAllowed\s*\);/,
 );
 assert(
-  portalEnergyMotionEligibilityMatch,
+  portalInteriorFrameRuntime.includes('const motionAllowed = !state.reducedMotion || state.reducedMotionOverride;') &&
+    portalEnergyMotionEligibilityMatch,
   'Existing Balance energy motion must have eligibility independent from interior motion',
 );
 const portalEnergyMotionEligibility = portalEnergyMotionEligibilityMatch?.[1] || '';
@@ -5463,8 +6229,9 @@ const portalInteriorEarlyReturn = portalInteriorFrameRuntime.slice(
 assert(
   new RegExp(
     `!${portalEnergyMotionEligibility}\\s*&&\\s*!${portalInteriorEligibility}`,
-  ).test(portalInteriorEarlyReturn),
-  'A frame may continue when either existing energy motion or Balance interior motion is eligible',
+  ).test(portalInteriorEarlyReturn) &&
+    !portalInteriorEarlyReturn.includes("activeMode === 'static' ||"),
+  'A frame may continue when either existing energy motion or interior motion is eligible, including static mode plus interior overlay',
 );
 const portalInteriorPhaseAdvanceIndex = portalInteriorFrameRuntime.indexOf(
   'MindPortalEnergy.advancePhase(',
@@ -5526,13 +6293,14 @@ const portalInteriorIntegrationRuntime = portalInteriorFrameRuntime.slice(
   portalInteriorFrameFinalizationIndex,
 );
 assert(
-  portalInteriorRendererGuardIndex > portalInteriorBaseFrameIndex &&
-    portalInteriorIntegrationRuntime.includes('const resolvedBalanceColors = MindPortalEnergy.moneyFlowPaletteHex;') &&
-    portalInteriorIntegrationRuntime.includes('const balanceSplit = MindPortalEnergy.moneyFlowStopPositions(incomePercent)[2];') &&
-    portalInteriorIntegrationRuntime.includes('phase: state.reducedMotion ? 0 : state.portalInteriorMotionState.phaseByMode?.[state.portalInteriorMotionState.mode]') &&
-    portalInteriorIntegrationRuntime.includes('leftColors: resolvedBalanceColors.slice(0, 2)') &&
-    portalInteriorIntegrationRuntime.includes('rightColors: resolvedBalanceColors.slice(-2)') &&
-    portalInteriorIntegrationRuntime.includes('split: balanceSplit') &&
+    portalInteriorRendererGuardIndex > portalInteriorBaseFrameIndex &&
+    portalInteriorIntegrationRuntime.includes('const resolvedInteriorPalette = getMindPortalActivePalette(header);') &&
+    portalInteriorIntegrationRuntime.includes('const interiorSplit = getMindPortalActivePaletteSplit(header);') &&
+    portalInteriorIntegrationRuntime.includes('phase: motionAllowed') &&
+    portalInteriorIntegrationRuntime.includes('state.portalInteriorMotionState.phaseByMode?.[state.portalInteriorMotionState.mode]') &&
+    portalInteriorIntegrationRuntime.includes('leftColors: resolvedInteriorPalette.leftColors') &&
+    portalInteriorIntegrationRuntime.includes('rightColors: resolvedInteriorPalette.rightColors') &&
+    portalInteriorIntegrationRuntime.includes('split: interiorSplit') &&
     portalInteriorIntegrationRuntime.includes('transitionWidth: 0.36') &&
     !portalInteriorIntegrationRuntime.includes('currentBoundaryEdgesAt') &&
     !portalInteriorIntegrationRuntime.includes('boundary: {') &&
@@ -5544,18 +6312,27 @@ assert(
 const mindPortalEnergyStateRuntime = extractFunctionSource('ensureMindPortalEnergyState');
 assert(
   mindPortalEnergyStateRuntime.includes("typeof PortalInteriorMotion !== 'undefined'") &&
-    /portalInteriorMotionState:[\s\S]*?PortalInteriorMotion\.normalizeInteriorMotionState\(\s*PortalInteriorMotion\.DEFAULT_INTERIOR_MOTION_STATE,?\s*\)[\s\S]*?:\s*\{[\s\S]*?enabled:\s*false,[\s\S]*?mode:\s*'wandering-mist',[\s\S]*?settingsByMode:\s*\{},[\s\S]*?phaseByMode:\s*\{},[\s\S]*?\}/.test(
+    /portalInteriorMotionState:[\s\S]*?PortalInteriorMotion\.normalizeInteriorMotionState\(\s*\{[\s\S]*?PortalInteriorMotion\.DEFAULT_INTERIOR_MOTION_STATE,[\s\S]*?enabled:\s*true,[\s\S]*?mode:\s*'wandering-mist'/.test(
+      mindPortalEnergyStateRuntime,
+    ) &&
+    /:\s*\{[\s\S]*?enabled:\s*true,[\s\S]*?mode:\s*'wandering-mist',[\s\S]*?settingsByMode:\s*\{},[\s\S]*?phaseByMode:\s*\{},[\s\S]*?\}/.test(
       mindPortalEnergyStateRuntime,
     ),
-  'Missing optional interior model globals must fall back to an independent disabled default state',
+  'The standalone portal interior model must default to enabled wandering mist, with the same enabled fallback when optional globals are absent',
 );
 const portalInteriorControlSyncRuntime = extractFunctionSource(
   'syncPortalInteriorMotionControls',
 );
 assert(
-  /<select(?=[^>]*data-portal-interior-motion-mode-select)(?=[^>]*\sdisabled(?:\s|>))[^>]*>/.test(
-    rebuiltPortalLab,
-  ) &&
+    /data-portal-interior-motion-row[^>]*data-portal-interior-motion-enabled="true"/.test(
+      rebuiltPortalLab,
+    ) &&
+    /<button(?=[^>]*data-portal-interior-motion-toggle)(?=[^>]*aria-pressed="true")[^>]*>BE<\/button>/.test(
+      rebuiltPortalLab,
+    ) &&
+    /<select(?=[^>]*data-portal-interior-motion-mode-select)(?![^>]*\sdisabled(?:\s|>))[^>]*>/.test(
+      rebuiltPortalLab,
+    ) &&
     /<button(?=[^>]*data-portal-interior-motion-mode-reset)[^>]*>Aktív mód reset<\/button>/.test(
       rebuiltPortalLab,
     ) &&
@@ -5569,7 +6346,7 @@ assert(
     portalInteriorControlSyncRuntime.includes('viewport.replaceChildren(fragment)') &&
     portalInteriorControlSyncRuntime.includes('[modeSelect, resetButton].forEach') &&
     portalInteriorControlSyncRuntime.includes('control.disabled = !enabled'),
-  'Interior controls must start natively disabled and render dedicated Portal background-morph plus overlay rotation controls when enabled',
+  'Interior motion must start enabled in the test header and render dedicated Portal background-morph plus overlay rotation controls',
 );
 const portalInteriorInitRuntime = extractFunctionSource('initPortalInteriorMotionControls');
 assert(
@@ -5577,7 +6354,8 @@ assert(
     portalInteriorInitRuntime.includes("row.querySelector('[data-portal-interior-motion-rotation-speed-range]')") &&
     portalInteriorInitRuntime.includes("row.querySelector('[data-portal-interior-motion-rotation-speed-number]')") &&
     portalInteriorInitRuntime.includes('rotationEnabled: !state.portalInteriorMotionState.rotationEnabled') &&
-    portalInteriorInitRuntime.includes('rotationSpeed: value'),
+    portalInteriorInitRuntime.includes('rotationSpeed: value') &&
+    portalInteriorInitRuntime.includes('enabled: row.dataset.portalInteriorMotionEnabled !== \'false\''),
   'Interior initialization must wire the rotation toggle and speed controls into the dedicated state',
 );
 assert(
@@ -5598,11 +6376,19 @@ assert(
     html.includes('settingsByMode'),
   'The rebuilt portal must generate synchronized maximum-detail controls for only the active mode',
 );
+const mindPortalEnergyStaticStateRuntime = extractFunctionSource('ensureMindPortalEnergyState');
+assert(
+  /const settingsByMode = \{\s*static: MindPortalEnergy\.createModeSettings\('static'\),\s*\};/.test(
+    mindPortalEnergyStaticStateRuntime,
+  ) &&
+    /const phaseByMode = \{\s*static: 0,\s*\};/.test(mindPortalEnergyStaticStateRuntime),
+  'Static mode must own settings and phase so static testheader plus interior overlay can animate without being cleared',
+);
 assert(
   html.includes('function initMindPortalEnergyCanvas()') &&
     html.includes('function drawMindPortalEnergyFrame(') &&
     html.includes('MindPortalEnergy.sampleField') &&
-    html.includes('MindPortalEnergy.sampleColor') &&
+    html.includes('MindPortalEnergy.samplePaletteColor') &&
     html.includes('MindPortalEnergy.advancePhase') &&
     html.includes("activeMode === 'static'") &&
     portalInteriorFrameRuntime.includes('settings.strength > 0') &&
@@ -5611,6 +6397,8 @@ assert(
     html.includes('state.reducedMotion') &&
     html.includes('state.reducedMotionOverride') &&
     html.includes('setMindPortalEnergyMode(header, select.value, true)') &&
+    html.includes("setMindPortalEnergyMode(header, select?.value || 'dual-tide', true)") &&
+    !html.includes("setMindPortalEnergyMode(header, 'static');") &&
     html.includes("header.getAttribute('data-mind-portal-canvas-active') === 'true'"),
   'The rebuilt portal must use one static-aware/offscreen-aware canvas lifecycle and the pure field module',
 );

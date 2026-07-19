@@ -1717,6 +1717,25 @@ void main() {
     expect(categoryName, 'Rr');
   });
 
+  testWidgets('logbox category avatar hides top semicircle highlight', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TransactionLogBox(
+          record: sampleRecord(),
+          category: sampleCategory(),
+        ),
+      ),
+    );
+
+    final avatar = tester.widget<GlossyCategoryAvatar>(
+      find.byKey(const ValueKey('transaction-logbox-avatar-surface-250905')),
+    );
+
+    expect((avatar as dynamic).showTopHighlight, isFalse);
+  });
+
   testWidgets('logbox surfaces do not spam debug logs while released', (
     tester,
   ) async {

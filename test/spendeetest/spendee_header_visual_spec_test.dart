@@ -123,19 +123,7 @@ void main() {
       expect(glass.diagonalGlossOpacity, 0.28);
       expect(glass.diagonalGlossEndStop, 0.54);
 
-      expect(glass.cardShadows, hasLength(2));
-      expect(
-        glass.cardShadows[0].color,
-        const Color.fromRGBO(244, 114, 182, 0.18),
-      );
-      expect(glass.cardShadows[0].offset, const Offset(0, 18));
-      expect(glass.cardShadows[0].blurRadius, 42);
-      expect(
-        glass.cardShadows[1].color,
-        const Color.fromRGBO(139, 92, 246, 0.12),
-      );
-      expect(glass.cardShadows[1].offset, const Offset(0, 14));
-      expect(glass.cardShadows[1].blurRadius, 34);
+      expect(glass.cardShadows, isEmpty);
     });
 
     test('centralizes the intersected outer-glow masks and growth rule', () {

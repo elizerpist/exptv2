@@ -402,7 +402,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('spendee-test-header-outer-glow')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Test Store'), findsOneWidget);
     expect(find.text('Q'), findsWidgets);
@@ -887,7 +887,7 @@ void main() {
     ]);
     expect(expenseDecoration.boxShadow, const <BoxShadow>[
       BoxShadow(
-        color: Color.fromRGBO(245, 54, 141, .22),
+        color: Color.fromRGBO(15, 23, 42, .08),
         offset: Offset(0, 12),
         blurRadius: 24,
       ),

@@ -10,7 +10,11 @@ import '../../../../core/platform/browser_fullscreen_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/category_color_manager.dart';
 import '../../../settings/theme/expense_theme.dart';
+import '../../../stats/data/stats_category_scope_series.dart';
+import '../../../stats/data/stats_render_frame.dart';
+import '../../../stats/data/stats_year_data.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/summary_window.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_log_entry.dart';
 import '../../models/transaction_record.dart';
@@ -19,11 +23,164 @@ import '../glossy_category_avatar.dart';
 import '../transaction_log_box.dart';
 import 'fluvi_logo.dart';
 import 'spendee_center_carousel_controller.dart';
+import 'spendee_acrylic_surface.dart';
 import 'spendee_header_glass.dart';
+import 'spendee_liquid_glass_surface.dart';
 import 'spendee_header_stage_controller.dart';
 import 'spendee_header_visual_spec.dart';
+import 'spendee_mind_stats_adapter.dart';
 
 final _budgetHeaderVisualSpec = SpendeeHeaderVisualSpec.budgetDefault();
+const _defaultHeaderLiquidSoftness = .68;
+
+enum _HeaderSurface { normal, htmlC2Glass, liquidGlass, acrylic }
+
+enum _PanelSurface { background, glass, htmlC2Glass, liquidGlass, acrylic }
+
+enum _ChartListSurface { none, original, htmlC2Glass, liquidGlass, acrylic }
+
+enum _Stage2BudgetPage { categories, vendors }
+
+enum _HeaderBackgroundMode { budget, mind }
+
+enum _HeaderDesignMenuAction {
+  headerBackgroundBudget,
+  headerBackgroundMind,
+  headerNormal,
+  headerHtmlC2Glass,
+  headerLiquidGlass,
+  headerAcrylic,
+  avatarsBackground,
+  avatarsGlass,
+  avatarsHtmlC2Glass,
+  avatarsLiquidGlass,
+  avatarsAcrylic,
+  chartGlass,
+  chartBackground,
+  chartHtmlC2Glass,
+  chartLiquidGlass,
+  chartAcrylic,
+  chartListNone,
+  chartListOriginal,
+  chartListHtmlC2Glass,
+  chartListLiquidGlass,
+  chartListAcrylic,
+  mindStage1Background,
+  mindStage1Glass,
+  mindStage1HtmlC2Glass,
+  mindStage1LiquidGlass,
+  mindStage1Acrylic,
+  mindStage2Background,
+  mindStage2Glass,
+  mindStage2HtmlC2Glass,
+  mindStage2LiquidGlass,
+  mindStage2Acrylic,
+}
+
+class _HeaderLiquidSoftnessMenuEntry
+    extends PopupMenuEntry<_HeaderDesignMenuAction> {
+  const _HeaderLiquidSoftnessMenuEntry({
+    super.key,
+    required this.label,
+    required this.sliderKey,
+    required this.valueKey,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final Key sliderKey;
+  final Key valueKey;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  double get height => 86;
+
+  @override
+  bool represents(_HeaderDesignMenuAction? value) => false;
+
+  @override
+  State<_HeaderLiquidSoftnessMenuEntry> createState() =>
+      _HeaderLiquidSoftnessMenuEntryState();
+}
+
+class _HeaderLiquidSoftnessMenuEntryState
+    extends State<_HeaderLiquidSoftnessMenuEntry> {
+  late double _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = _clampUnit(widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_HeaderLiquidSoftnessMenuEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _value = _clampUnit(widget.value);
+    }
+  }
+
+  void _handleChanged(double value) {
+    final next = _clampUnit(value);
+    setState(() => _value = next);
+    widget.onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF14213A),
+      fontWeight: FontWeight.w700,
+    );
+    final valueStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF64748B),
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 6),
+      child: SizedBox(
+        width: 224,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(widget.label, style: labelStyle)),
+                Text(
+                  '${(_value * 100).round()}%',
+                  key: widget.valueKey,
+                  style: valueStyle,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                activeTrackColor: const Color(0xFF06B6D4),
+                inactiveTrackColor: const Color(0xFFCBD5E1),
+                thumbColor: Colors.white,
+                overlayColor: const Color(0xFF06B6D4).withValues(alpha: .13),
+                valueIndicatorColor: const Color(0xFF14213A),
+              ),
+              child: Slider(
+                key: widget.sliderKey,
+                value: _value,
+                min: 0,
+                max: 1,
+                onChanged: _handleChanged,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class SpendeeTestDashboard extends StatefulWidget {
   const SpendeeTestDashboard({
@@ -65,6 +222,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _carouselMotionSerial = 0;
   int? _selectedCategoryId;
   int? _pulsingCategoryId;
+  var _headerSurface = _HeaderSurface.normal;
+  var _avatarSurface = _PanelSurface.glass;
+  var _chartSurface = _PanelSurface.glass;
+  var _chartListSurface = _ChartListSurface.original;
+  var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
+  var _avatarSurfaceSoftness = 0.0;
+  var _chartSurfaceSoftness = 0.0;
+  var _chartListSurfaceSoftness = 0.0;
+  var _stage2Page = _Stage2BudgetPage.categories;
+  var _headerBackgroundMode = _HeaderBackgroundMode.budget;
+  var _mindStage1Surface = _PanelSurface.glass;
+  var _mindStage2Surface = _PanelSurface.glass;
+  var _mindStage1Softness = 0.0;
+  var _mindStage2Softness = 0.0;
   Timer? _avatarPulseTimer;
   final Map<FluviLogoArc, FluviLogoFill> _logoFills =
       Map<FluviLogoArc, FluviLogoFill>.of(FluviLogoSvg.defaultFills);
@@ -461,6 +632,508 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     );
   }
 
+  Future<void> _openHeaderDesignMenu(BuildContext menuContext) async {
+    HapticFeedback.selectionClick();
+    final action = await showMenu<_HeaderDesignMenuAction>(
+      context: menuContext,
+      position: _headerDesignMenuPosition(menuContext),
+      color: Colors.white.withValues(alpha: .94),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 14,
+      items: [
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          key: ValueKey('spendee-test-header-design-menu'),
+          enabled: false,
+          height: 34,
+          child: Text(
+            'Header design',
+            style: TextStyle(
+              color: Color(0xFF14213A),
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Header background'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-background-budget'),
+          value: _HeaderDesignMenuAction.headerBackgroundBudget,
+          checked: _headerBackgroundMode == _HeaderBackgroundMode.budget,
+          height: 38,
+          child: const Text('Background: Budget'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-background-mind'),
+          value: _HeaderDesignMenuAction.headerBackgroundMind,
+          checked: _headerBackgroundMode == _HeaderBackgroundMode.mind,
+          height: 38,
+          child: const Text('Background: Mind'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Header'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-surface-normal'),
+          value: _HeaderDesignMenuAction.headerNormal,
+          checked: _headerSurface == _HeaderSurface.normal,
+          height: 38,
+          child: const Text('Header: normál'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-surface-html-c2-glass'),
+          value: _HeaderDesignMenuAction.headerHtmlC2Glass,
+          checked: _headerSurface == _HeaderSurface.htmlC2Glass,
+          height: 38,
+          child: const Text('Header: C2 design'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-surface-liquid-glass'),
+          value: _HeaderDesignMenuAction.headerLiquidGlass,
+          checked: _headerSurface == _HeaderSurface.liquidGlass,
+          height: 38,
+          child: const Text('Header: liquid glass'),
+        ),
+        if (_headerSurface == _HeaderSurface.liquidGlass)
+          _HeaderLiquidSoftnessMenuEntry(
+            key: const ValueKey('spendee-test-header-liquid-softness-entry'),
+            label: 'Header liquid lágyság',
+            sliderKey: const ValueKey(
+              'spendee-test-header-liquid-softness-slider',
+            ),
+            valueKey: const ValueKey(
+              'spendee-test-header-liquid-softness-value',
+            ),
+            value: _headerLiquidSoftness,
+            onChanged: _setHeaderLiquidSoftness,
+          ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-surface-acrylic'),
+          value: _HeaderDesignMenuAction.headerAcrylic,
+          checked: _headerSurface == _HeaderSurface.acrylic,
+          height: 38,
+          child: const Text('Header: Acrylic'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Avatarok'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-surface-background'),
+          value: _HeaderDesignMenuAction.avatarsBackground,
+          checked: _avatarSurface == _PanelSurface.background,
+          height: 38,
+          child: const Text('Avatarok: nincs háttér'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-surface-glass'),
+          value: _HeaderDesignMenuAction.avatarsGlass,
+          checked: _avatarSurface == _PanelSurface.glass,
+          height: 38,
+          child: const Text('Avatarok: régi glass'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-surface-html-c2-glass'),
+          value: _HeaderDesignMenuAction.avatarsHtmlC2Glass,
+          checked: _avatarSurface == _PanelSurface.htmlC2Glass,
+          height: 38,
+          child: const Text('Avatarok: HTML C2 glass'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-surface-liquid-glass'),
+          value: _HeaderDesignMenuAction.avatarsLiquidGlass,
+          checked: _avatarSurface == _PanelSurface.liquidGlass,
+          height: 38,
+          child: const Text('Avatarok: liquid glass'),
+        ),
+        if (_avatarSurface == _PanelSurface.liquidGlass)
+          _HeaderLiquidSoftnessMenuEntry(
+            key: const ValueKey('spendee-test-avatar-surface-softness-entry'),
+            label: 'Avatar liquid lágyság',
+            sliderKey: const ValueKey(
+              'spendee-test-avatar-surface-softness-slider',
+            ),
+            valueKey: const ValueKey(
+              'spendee-test-avatar-surface-softness-value',
+            ),
+            value: _avatarSurfaceSoftness,
+            onChanged: _setAvatarSurfaceSoftness,
+          ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-surface-acrylic'),
+          value: _HeaderDesignMenuAction.avatarsAcrylic,
+          checked: _avatarSurface == _PanelSurface.acrylic,
+          height: 38,
+          child: const Text('Avatarok: Acrylic'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Diagram'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-surface-glass'),
+          value: _HeaderDesignMenuAction.chartGlass,
+          checked: _chartSurface == _PanelSurface.glass,
+          height: 38,
+          child: const Text('Chart: üvegkonténer'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-surface-background'),
+          value: _HeaderDesignMenuAction.chartBackground,
+          checked: _chartSurface == _PanelSurface.background,
+          height: 38,
+          child: const Text('Chart: háttér'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-surface-html-c2-glass'),
+          value: _HeaderDesignMenuAction.chartHtmlC2Glass,
+          checked: _chartSurface == _PanelSurface.htmlC2Glass,
+          height: 38,
+          child: const Text('Chart: HTML C2 glass'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-surface-liquid-glass'),
+          value: _HeaderDesignMenuAction.chartLiquidGlass,
+          checked: _chartSurface == _PanelSurface.liquidGlass,
+          height: 38,
+          child: const Text('Chart: liquid glass'),
+        ),
+        if (_chartSurface == _PanelSurface.liquidGlass)
+          _HeaderLiquidSoftnessMenuEntry(
+            key: const ValueKey('spendee-test-chart-surface-softness-entry'),
+            label: 'Chart liquid lágyság',
+            sliderKey: const ValueKey(
+              'spendee-test-chart-surface-softness-slider',
+            ),
+            valueKey: const ValueKey(
+              'spendee-test-chart-surface-softness-value',
+            ),
+            value: _chartSurfaceSoftness,
+            onChanged: _setChartSurfaceSoftness,
+          ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-surface-acrylic'),
+          value: _HeaderDesignMenuAction.chartAcrylic,
+          checked: _chartSurface == _PanelSurface.acrylic,
+          height: 38,
+          child: const Text('Chart: Acrylic'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Chart lista mode'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-list-surface-none'),
+          value: _HeaderDesignMenuAction.chartListNone,
+          checked: _chartListSurface == _ChartListSurface.none,
+          height: 38,
+          child: const Text('Lista: nincs pill'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-list-surface-original'),
+          value: _HeaderDesignMenuAction.chartListOriginal,
+          checked: _chartListSurface == _ChartListSurface.original,
+          height: 38,
+          child: const Text('Lista: eredeti'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-list-surface-html-c2-glass'),
+          value: _HeaderDesignMenuAction.chartListHtmlC2Glass,
+          checked: _chartListSurface == _ChartListSurface.htmlC2Glass,
+          height: 38,
+          child: const Text('Lista: C2 CSS'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-list-surface-liquid-glass'),
+          value: _HeaderDesignMenuAction.chartListLiquidGlass,
+          checked: _chartListSurface == _ChartListSurface.liquidGlass,
+          height: 38,
+          child: const Text('Lista: liquid'),
+        ),
+        if (_chartListSurface == _ChartListSurface.liquidGlass)
+          _HeaderLiquidSoftnessMenuEntry(
+            key: const ValueKey('spendee-test-chart-list-softness-entry'),
+            label: 'Lista liquid lágyság',
+            sliderKey: const ValueKey(
+              'spendee-test-chart-list-softness-slider',
+            ),
+            valueKey: const ValueKey('spendee-test-chart-list-softness-value'),
+            value: _chartListSurfaceSoftness,
+            onChanged: _setChartListSurfaceSoftness,
+          ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-chart-list-surface-acrylic'),
+          value: _HeaderDesignMenuAction.chartListAcrylic,
+          checked: _chartListSurface == _ChartListSurface.acrylic,
+          height: 38,
+          child: const Text('Lista: Acrylic'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Mind stage1 container'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage1-surface-background'),
+          value: _HeaderDesignMenuAction.mindStage1Background,
+          checked: _mindStage1Surface == _PanelSurface.background,
+          height: 38,
+          child: const Text('Mind S1: nincs container'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage1-surface-glass'),
+          value: _HeaderDesignMenuAction.mindStage1Glass,
+          checked: _mindStage1Surface == _PanelSurface.glass,
+          height: 38,
+          child: const Text('Mind S1: régi glass'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage1-surface-html-c2-glass'),
+          value: _HeaderDesignMenuAction.mindStage1HtmlC2Glass,
+          checked: _mindStage1Surface == _PanelSurface.htmlC2Glass,
+          height: 38,
+          child: const Text('Mind S1: C2 CSS'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage1-surface-liquid-glass'),
+          value: _HeaderDesignMenuAction.mindStage1LiquidGlass,
+          checked: _mindStage1Surface == _PanelSurface.liquidGlass,
+          height: 38,
+          child: const Text('Mind S1: liquid'),
+        ),
+        if (_mindStage1Surface == _PanelSurface.liquidGlass)
+          _HeaderLiquidSoftnessMenuEntry(
+            key: const ValueKey('spendee-test-mind-stage1-softness-entry'),
+            label: 'Mind stage1 lágyság',
+            sliderKey: const ValueKey(
+              'spendee-test-mind-stage1-softness-slider',
+            ),
+            valueKey: const ValueKey('spendee-test-mind-stage1-softness-value'),
+            value: _mindStage1Softness,
+            onChanged: _setMindStage1Softness,
+          ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage1-surface-acrylic'),
+          value: _HeaderDesignMenuAction.mindStage1Acrylic,
+          checked: _mindStage1Surface == _PanelSurface.acrylic,
+          height: 38,
+          child: const Text('Mind S1: Acrylic'),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<_HeaderDesignMenuAction>(
+          enabled: false,
+          height: 28,
+          child: Text('Mind stage2 container'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage2-surface-background'),
+          value: _HeaderDesignMenuAction.mindStage2Background,
+          checked: _mindStage2Surface == _PanelSurface.background,
+          height: 38,
+          child: const Text('Mind S2: nincs container'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage2-surface-glass'),
+          value: _HeaderDesignMenuAction.mindStage2Glass,
+          checked: _mindStage2Surface == _PanelSurface.glass,
+          height: 38,
+          child: const Text('Mind S2: régi glass'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage2-surface-html-c2-glass'),
+          value: _HeaderDesignMenuAction.mindStage2HtmlC2Glass,
+          checked: _mindStage2Surface == _PanelSurface.htmlC2Glass,
+          height: 38,
+          child: const Text('Mind S2: C2 CSS'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage2-surface-liquid-glass'),
+          value: _HeaderDesignMenuAction.mindStage2LiquidGlass,
+          checked: _mindStage2Surface == _PanelSurface.liquidGlass,
+          height: 38,
+          child: const Text('Mind S2: liquid'),
+        ),
+        if (_mindStage2Surface == _PanelSurface.liquidGlass)
+          _HeaderLiquidSoftnessMenuEntry(
+            key: const ValueKey('spendee-test-mind-stage2-softness-entry'),
+            label: 'Mind stage2 lágyság',
+            sliderKey: const ValueKey(
+              'spendee-test-mind-stage2-softness-slider',
+            ),
+            valueKey: const ValueKey('spendee-test-mind-stage2-softness-value'),
+            value: _mindStage2Softness,
+            onChanged: _setMindStage2Softness,
+          ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-mind-stage2-surface-acrylic'),
+          value: _HeaderDesignMenuAction.mindStage2Acrylic,
+          checked: _mindStage2Surface == _PanelSurface.acrylic,
+          height: 38,
+          child: const Text('Mind S2: Acrylic'),
+        ),
+      ],
+    );
+    if (action == null || !mounted) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      switch (action) {
+        case _HeaderDesignMenuAction.headerBackgroundBudget:
+          _headerBackgroundMode = _HeaderBackgroundMode.budget;
+        case _HeaderDesignMenuAction.headerBackgroundMind:
+          _headerBackgroundMode = _HeaderBackgroundMode.mind;
+        case _HeaderDesignMenuAction.headerNormal:
+          _headerSurface = _HeaderSurface.normal;
+        case _HeaderDesignMenuAction.headerHtmlC2Glass:
+          _headerSurface = _HeaderSurface.htmlC2Glass;
+        case _HeaderDesignMenuAction.headerLiquidGlass:
+          _headerSurface = _HeaderSurface.liquidGlass;
+        case _HeaderDesignMenuAction.headerAcrylic:
+          _headerSurface = _HeaderSurface.acrylic;
+        case _HeaderDesignMenuAction.avatarsBackground:
+          _avatarSurface = _PanelSurface.background;
+        case _HeaderDesignMenuAction.avatarsGlass:
+          _avatarSurface = _PanelSurface.glass;
+        case _HeaderDesignMenuAction.avatarsHtmlC2Glass:
+          _avatarSurface = _PanelSurface.htmlC2Glass;
+        case _HeaderDesignMenuAction.avatarsLiquidGlass:
+          _avatarSurface = _PanelSurface.liquidGlass;
+        case _HeaderDesignMenuAction.avatarsAcrylic:
+          _avatarSurface = _PanelSurface.acrylic;
+        case _HeaderDesignMenuAction.chartGlass:
+          _chartSurface = _PanelSurface.glass;
+        case _HeaderDesignMenuAction.chartBackground:
+          _chartSurface = _PanelSurface.background;
+        case _HeaderDesignMenuAction.chartHtmlC2Glass:
+          _chartSurface = _PanelSurface.htmlC2Glass;
+        case _HeaderDesignMenuAction.chartLiquidGlass:
+          _chartSurface = _PanelSurface.liquidGlass;
+        case _HeaderDesignMenuAction.chartAcrylic:
+          _chartSurface = _PanelSurface.acrylic;
+        case _HeaderDesignMenuAction.chartListNone:
+          _chartListSurface = _ChartListSurface.none;
+        case _HeaderDesignMenuAction.chartListOriginal:
+          _chartListSurface = _ChartListSurface.original;
+        case _HeaderDesignMenuAction.chartListHtmlC2Glass:
+          _chartListSurface = _ChartListSurface.htmlC2Glass;
+        case _HeaderDesignMenuAction.chartListLiquidGlass:
+          _chartListSurface = _ChartListSurface.liquidGlass;
+        case _HeaderDesignMenuAction.chartListAcrylic:
+          _chartListSurface = _ChartListSurface.acrylic;
+        case _HeaderDesignMenuAction.mindStage1Background:
+          _mindStage1Surface = _PanelSurface.background;
+        case _HeaderDesignMenuAction.mindStage1Glass:
+          _mindStage1Surface = _PanelSurface.glass;
+        case _HeaderDesignMenuAction.mindStage1HtmlC2Glass:
+          _mindStage1Surface = _PanelSurface.htmlC2Glass;
+        case _HeaderDesignMenuAction.mindStage1LiquidGlass:
+          _mindStage1Surface = _PanelSurface.liquidGlass;
+        case _HeaderDesignMenuAction.mindStage1Acrylic:
+          _mindStage1Surface = _PanelSurface.acrylic;
+        case _HeaderDesignMenuAction.mindStage2Background:
+          _mindStage2Surface = _PanelSurface.background;
+        case _HeaderDesignMenuAction.mindStage2Glass:
+          _mindStage2Surface = _PanelSurface.glass;
+        case _HeaderDesignMenuAction.mindStage2HtmlC2Glass:
+          _mindStage2Surface = _PanelSurface.htmlC2Glass;
+        case _HeaderDesignMenuAction.mindStage2LiquidGlass:
+          _mindStage2Surface = _PanelSurface.liquidGlass;
+        case _HeaderDesignMenuAction.mindStage2Acrylic:
+          _mindStage2Surface = _PanelSurface.acrylic;
+      }
+    });
+  }
+
+  void _setHeaderLiquidSoftness(double value) {
+    final next = _clampUnit(value);
+    if ((_headerLiquidSoftness - next).abs() < .001) return;
+    setState(() => _headerLiquidSoftness = next);
+  }
+
+  void _setAvatarSurfaceSoftness(double value) {
+    final next = _clampUnit(value);
+    if ((_avatarSurfaceSoftness - next).abs() < .001) return;
+    setState(() => _avatarSurfaceSoftness = next);
+  }
+
+  void _setChartSurfaceSoftness(double value) {
+    final next = _clampUnit(value);
+    if ((_chartSurfaceSoftness - next).abs() < .001) return;
+    setState(() => _chartSurfaceSoftness = next);
+  }
+
+  void _setChartListSurfaceSoftness(double value) {
+    final next = _clampUnit(value);
+    if ((_chartListSurfaceSoftness - next).abs() < .001) return;
+    setState(() => _chartListSurfaceSoftness = next);
+  }
+
+  void _setMindStage1Softness(double value) {
+    final next = _clampUnit(value);
+    if ((_mindStage1Softness - next).abs() < .001) return;
+    setState(() => _mindStage1Softness = next);
+  }
+
+  void _setMindStage2Softness(double value) {
+    final next = _clampUnit(value);
+    if ((_mindStage2Softness - next).abs() < .001) return;
+    setState(() => _mindStage2Softness = next);
+  }
+
+  void _showPreviousStage2Page() {
+    _setStage2Page(
+      _stage2Page == _Stage2BudgetPage.categories
+          ? _Stage2BudgetPage.vendors
+          : _Stage2BudgetPage.categories,
+    );
+  }
+
+  void _showNextStage2Page() {
+    _setStage2Page(
+      _stage2Page == _Stage2BudgetPage.categories
+          ? _Stage2BudgetPage.vendors
+          : _Stage2BudgetPage.categories,
+    );
+  }
+
+  void _setStage2Page(_Stage2BudgetPage page) {
+    if (_stage2Page == page) return;
+    HapticFeedback.selectionClick();
+    setState(() => _stage2Page = page);
+  }
+
+  RelativeRect _headerDesignMenuPosition(BuildContext menuContext) {
+    final button = menuContext.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(menuContext).context.findRenderObject()! as RenderBox;
+    final buttonTopLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
+    final buttonBottomRight = button.localToGlobal(
+      button.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+    return RelativeRect.fromRect(
+      Rect.fromLTRB(
+        buttonTopLeft.dx,
+        buttonBottomRight.dy + 6,
+        buttonBottomRight.dx,
+        buttonBottomRight.dy + 6,
+      ),
+      Offset.zero & overlay.size,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controllerFor(context);
@@ -487,16 +1160,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         key: const ValueKey('spendee-test-dashboard'),
         clipBehavior: Clip.none,
         children: [
-          AnimatedPositioned(
-            key: const ValueKey('spendee-test-header-outer-glow'),
-            duration: animationDuration,
-            curve: animationCurve,
-            left: -_budgetHeaderVisualSpec.glow.horizontalOverflow,
-            right: -_budgetHeaderVisualSpec.glow.horizontalOverflow,
-            top: _budgetHeaderVisualSpec.glow.top,
-            height: _budgetHeaderVisualSpec.glow.heightForHeader(_headerHeight),
-            child: SpendeeHeaderOuterGlowSurface(spec: _budgetHeaderVisualSpec),
-          ),
           AnimatedPositioned(
             duration: animationDuration,
             curve: animationCurve,
@@ -532,8 +1195,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   selectedCategory: _selectedCategory,
                   selectedBar: _selectedBar,
                   bars: widget.store.categoryBudgetBars,
+                  transactions: widget.store.windowedTransactions,
                   budgetLimitAmount: overviewBudgetLimit,
                   categories: _activeCategories,
+                  stage2Page: _stage2Page,
+                  headerBackgroundMode: _headerBackgroundMode,
+                  mindStatsFrame: SpendeeMindStatsFrame.fromStore(widget.store),
+                  onStage2PreviousPage: _showPreviousStage2Page,
+                  onStage2NextPage: _showNextStage2Page,
                   onHandleDragStart: _beginHeaderDrag,
                   onHandleDragUpdate: _updateHeaderDrag,
                   onHandleDragEnd: _endHeaderDrag,
@@ -542,6 +1211,19 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                       _selectCategory(category, animateCarousel: true),
                   pulsingCategoryId: _pulsingCategoryId,
                   carouselOffset: _carouselVisualDx,
+                  headerSurface: _headerSurface,
+                  avatarSurface: _avatarSurface,
+                  chartSurface: _chartSurface,
+                  chartListSurface: _chartListSurface,
+                  headerLiquidSoftness: _headerLiquidSoftness,
+                  avatarSurfaceSoftness: _avatarSurfaceSoftness,
+                  chartSurfaceSoftness: _chartSurfaceSoftness,
+                  chartListSurfaceSoftness: _chartListSurfaceSoftness,
+                  mindStage1Surface: _mindStage1Surface,
+                  mindStage2Surface: _mindStage2Surface,
+                  mindStage1Softness: _mindStage1Softness,
+                  mindStage2Softness: _mindStage2Softness,
+                  onHeaderDesignMenuPressed: _openHeaderDesignMenu,
                   onCarouselDragStart: _handleCarouselDragStart,
                   onCarouselDragUpdate: _handleCarouselDragUpdate,
                   onCarouselDragEnd: _handleCarouselDragEnd,
@@ -591,8 +1273,14 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.selectedCategory,
     required this.selectedBar,
     required this.bars,
+    required this.transactions,
     required this.budgetLimitAmount,
     required this.categories,
+    required this.stage2Page,
+    required this.headerBackgroundMode,
+    required this.mindStatsFrame,
+    required this.onStage2PreviousPage,
+    required this.onStage2NextPage,
     required this.onHandleDragStart,
     required this.onHandleDragUpdate,
     required this.onHandleDragEnd,
@@ -600,6 +1288,19 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.onPieCategoryTap,
     required this.pulsingCategoryId,
     required this.carouselOffset,
+    required this.headerSurface,
+    required this.avatarSurface,
+    required this.chartSurface,
+    required this.chartListSurface,
+    required this.headerLiquidSoftness,
+    required this.avatarSurfaceSoftness,
+    required this.chartSurfaceSoftness,
+    required this.chartListSurfaceSoftness,
+    required this.mindStage1Surface,
+    required this.mindStage2Surface,
+    required this.mindStage1Softness,
+    required this.mindStage2Softness,
+    required this.onHeaderDesignMenuPressed,
     required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
     required this.onCarouselDragEnd,
@@ -610,8 +1311,14 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final TransactionCategory? selectedCategory;
   final CategoryBudgetBarData? selectedBar;
   final List<CategoryBudgetBarData> bars;
+  final List<TransactionRecord> transactions;
   final double budgetLimitAmount;
   final List<TransactionCategory> categories;
+  final _Stage2BudgetPage stage2Page;
+  final _HeaderBackgroundMode headerBackgroundMode;
+  final SpendeeMindStatsFrame mindStatsFrame;
+  final VoidCallback onStage2PreviousPage;
+  final VoidCallback onStage2NextPage;
   final GestureDragStartCallback onHandleDragStart;
   final GestureDragUpdateCallback onHandleDragUpdate;
   final GestureDragEndCallback onHandleDragEnd;
@@ -619,6 +1326,19 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final ValueChanged<TransactionCategory> onPieCategoryTap;
   final int? pulsingCategoryId;
   final double carouselOffset;
+  final _HeaderSurface headerSurface;
+  final _PanelSurface avatarSurface;
+  final _PanelSurface chartSurface;
+  final _ChartListSurface chartListSurface;
+  final double headerLiquidSoftness;
+  final double avatarSurfaceSoftness;
+  final double chartSurfaceSoftness;
+  final double chartListSurfaceSoftness;
+  final _PanelSurface mindStage1Surface;
+  final _PanelSurface mindStage2Surface;
+  final double mindStage1Softness;
+  final double mindStage2Softness;
+  final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
   final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
   final GestureDragEndCallback onCarouselDragEnd;
@@ -632,88 +1352,1339 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
         ? 'Nincs limit'
         : '${_formatFt(bar.spent)} / ${bar.hasLimit ? _formatFt(bar.limitAmount) : '0 Ft'}';
 
-    return SpendeeHeaderGlassSurface(
-      spec: _budgetHeaderVisualSpec,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
+    final budgetContent = Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          left: 20,
+          top: 28,
+          child: Text('BUDGET', style: _headerLabelStyle),
+        ),
+        Positioned(
+          left: 20,
+          right: 78,
+          top: 48,
+          child: _HeaderValueText(headerValue),
+        ),
+        Positioned(
+          key: const ValueKey('spendee-test-header-core-partition'),
+          left: 20,
+          right: 20,
+          top: 78,
+          child: _PartitionBar(
+            key: const ValueKey('spendee-test-partition-bar'),
+            bars: bars,
+            totalLimit: budgetLimitAmount,
+            height: 5,
+          ),
+        ),
+        if (stage != SpendeeHeaderStage.stage0 &&
+            avatarSurface != _PanelSurface.htmlC2Glass)
           Positioned(
             left: 20,
-            top: 28,
-            child: Text('BUDGET', style: _headerLabelStyle),
+            right: 20,
+            top: 88,
+            child: _PartitionSummaryLabel(
+              bars: bars,
+              totalLimit: budgetLimitAmount,
+            ),
           ),
-          Positioned(
-            left: 20,
-            right: 78,
-            top: 48,
-            child: _HeaderValueText(headerValue),
+        Positioned(
+          top: _budgetHeaderVisualSpec.menu.top,
+          right: _budgetHeaderVisualSpec.menu.right,
+          child: Builder(
+            builder: (menuContext) {
+              return SpendeeHeaderMenuButton(
+                spec: _budgetHeaderVisualSpec,
+                onPressed: () => onHeaderDesignMenuPressed(menuContext),
+              );
+            },
           ),
+        ),
+        if (stage != SpendeeHeaderStage.stage0)
           Positioned(
-            key: const ValueKey('spendee-test-header-core-partition'),
+            left: budgetSpec.stage1HorizontalInset,
+            right: budgetSpec.stage1HorizontalInset,
+            top: budgetSpec.stage1Top,
+            height: budgetSpec.stage1Height,
+            child: _BudgetExtendedInfo(
+              categories: categories,
+              selectedCategory: selectedCategory,
+              onCategoryTap: onCategoryTap,
+              pulsingCategoryId: pulsingCategoryId,
+              carouselOffset: carouselOffset,
+              surface: avatarSurface,
+              softness: avatarSurfaceSoftness,
+              showSelectedLabel: avatarSurface != _PanelSurface.htmlC2Glass,
+              onCarouselDragStart: onCarouselDragStart,
+              onCarouselDragUpdate: onCarouselDragUpdate,
+              onCarouselDragEnd: onCarouselDragEnd,
+              onCarouselDragCancel: onCarouselDragCancel,
+            ),
+          ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: _budgetHeaderVisualSpec.handle.hitHeight,
+          child: SpendeeHeaderHandle(
+            spec: _budgetHeaderVisualSpec,
+            onVerticalDragStart: onHandleDragStart,
+            onVerticalDragUpdate: onHandleDragUpdate,
+            onVerticalDragEnd: onHandleDragEnd,
+          ),
+        ),
+        if (stage == SpendeeHeaderStage.stage2)
+          Positioned(
+            left: budgetSpec.stage1HorizontalInset,
+            right: budgetSpec.stage1HorizontalInset,
+            top: budgetSpec.stage2Top,
+            bottom: budgetSpec.stage2Bottom,
+            child: _BudgetPieStage2Layer(
+              bars: bars,
+              transactions: transactions,
+              selectedCategory: selectedCategory,
+              page: stage2Page,
+              onCategoryTap: onPieCategoryTap,
+              onPreviousPage: onStage2PreviousPage,
+              onNextPage: onStage2NextPage,
+              surface: chartSurface,
+              listSurface: chartListSurface,
+              softness: chartSurfaceSoftness,
+              listSoftness: chartListSurfaceSoftness,
+            ),
+          ),
+      ],
+    );
+    final isMindBackground = headerBackgroundMode == _HeaderBackgroundMode.mind;
+    final content = isMindBackground
+        ? _SpendeeMindHeaderContent(
+            stage: stage,
+            statsFrame: mindStatsFrame,
+            stage1Surface: mindStage1Surface,
+            stage2Surface: mindStage2Surface,
+            stage1Softness: mindStage1Softness,
+            stage2Softness: mindStage2Softness,
+            onHeaderDesignMenuPressed: onHeaderDesignMenuPressed,
+            onHandleDragStart: onHandleDragStart,
+            onHandleDragUpdate: onHandleDragUpdate,
+            onHandleDragEnd: onHandleDragEnd,
+          )
+        : budgetContent;
+
+    return _HeaderSurfaceFrame(
+      surface: headerSurface,
+      liquidSoftness: headerLiquidSoftness,
+      background: isMindBackground
+          ? const _MindHeaderGradientBackground(
+              key: ValueKey('spendee-test-mind-page-mind'),
+            )
+          : null,
+      child: content,
+    );
+  }
+}
+
+class _SpendeeMindHeaderContent extends StatelessWidget {
+  const _SpendeeMindHeaderContent({
+    required this.stage,
+    required this.statsFrame,
+    required this.stage1Surface,
+    required this.stage2Surface,
+    required this.stage1Softness,
+    required this.stage2Softness,
+    required this.onHeaderDesignMenuPressed,
+    required this.onHandleDragStart,
+    required this.onHandleDragUpdate,
+    required this.onHandleDragEnd,
+  });
+
+  final SpendeeHeaderStage stage;
+  final SpendeeMindStatsFrame statsFrame;
+  final _PanelSurface stage1Surface;
+  final _PanelSurface stage2Surface;
+  final double stage1Softness;
+  final double stage2Softness;
+  final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
+  final GestureDragStartCallback onHandleDragStart;
+  final GestureDragUpdateCallback onHandleDragUpdate;
+  final GestureDragEndCallback onHandleDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = statsFrame.activeFrame.categoryScopeSeries.kontrollScore;
+    final modeKey = statsFrame.modeKey;
+    const scoreChartRightInset = 18.0;
+    final scoreChartLeft = stage == SpendeeHeaderStage.stage0
+        ? 112.0
+        : scoreChartRightInset;
+    final scoreChartTop = stage == SpendeeHeaderStage.stage0
+        ? 43.0
+        : scoreChartRightInset;
+    final scoreChartHeight = stage == SpendeeHeaderStage.stage0 ? 47.0 : 70.0;
+    final scorePlotLeftInset = stage == SpendeeHeaderStage.stage1 ? 153.0 : 0.0;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          left: 20,
+          top: 28,
+          child: Text('MIND', style: _headerLabelStyle),
+        ),
+        Positioned(
+          left: 20,
+          right: 78,
+          top: 48,
+          child: _HeaderValueText(
+            '${score.round()}/100',
+            valueKey: const ValueKey('spendee-test-mind-header-score-value'),
+          ),
+        ),
+        if (stage == SpendeeHeaderStage.stage0)
+          Positioned(
             left: 20,
             right: 78,
             top: 78,
-            child: _PartitionBar(
-              key: const ValueKey('spendee-test-partition-bar'),
-              bars: bars,
-              totalLimit: budgetLimitAmount,
-              height: 5,
+            child: Text(
+              '${statsFrame.periodLabel} · ${statsFrame.activeFrame.yearData.scopeLabel}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _partitionSummaryStyle,
             ),
           ),
+        Positioned(
+          key: const ValueKey('spendee-test-mind-score-chart'),
+          left: scoreChartLeft,
+          right: scoreChartRightInset,
+          top: scoreChartTop,
+          height: scoreChartHeight,
+          child: _MindFastInfoScoreChart(
+            activeType: statsFrame.activeFrame.yearData.activeType,
+            series: statsFrame.activeFrame.categoryScopeSeries,
+            bareLine: stage != SpendeeHeaderStage.stage2,
+            plotLeftInset: scorePlotLeftInset,
+          ),
+        ),
+        if (stage != SpendeeHeaderStage.stage0)
           Positioned(
-            top: _budgetHeaderVisualSpec.menu.top,
-            right: _budgetHeaderVisualSpec.menu.right,
-            child: SpendeeHeaderMenuButton(
-              spec: _budgetHeaderVisualSpec,
-              onPressed: () => HapticFeedback.selectionClick(),
+            left: _budgetHeaderVisualSpec.budget.stage1HorizontalInset,
+            right: _budgetHeaderVisualSpec.budget.stage1HorizontalInset,
+            top: _budgetHeaderVisualSpec.budget.stage1Top,
+            height: _budgetHeaderVisualSpec.budget.stage1Height,
+            child: _MindStage1BoxedGraphs(
+              key: ValueKey('spendee-test-mind-stage1-$modeKey'),
+              statsFrame: statsFrame,
+              surface: stage1Surface,
+              softness: stage1Softness,
             ),
           ),
-          if (stage != SpendeeHeaderStage.stage0)
-            Positioned(
-              left: budgetSpec.stage1HorizontalInset,
-              right: budgetSpec.stage1HorizontalInset,
-              top: budgetSpec.stage1Top,
-              height: budgetSpec.stage1Height,
-              child: _BudgetExtendedInfo(
-                categories: categories,
-                selectedCategory: selectedCategory,
-                onCategoryTap: onCategoryTap,
-                pulsingCategoryId: pulsingCategoryId,
-                carouselOffset: carouselOffset,
-                onCarouselDragStart: onCarouselDragStart,
-                onCarouselDragUpdate: onCarouselDragUpdate,
-                onCarouselDragEnd: onCarouselDragEnd,
-                onCarouselDragCancel: onCarouselDragCancel,
+        if (stage == SpendeeHeaderStage.stage2)
+          Positioned(
+            left: _budgetHeaderVisualSpec.budget.stage1HorizontalInset,
+            right: _budgetHeaderVisualSpec.budget.stage1HorizontalInset,
+            top: _budgetHeaderVisualSpec.budget.stage2Top,
+            bottom: _budgetHeaderVisualSpec.budget.stage2Bottom,
+            child: _MindStage2Panel(
+              statsFrame: statsFrame,
+              surface: stage2Surface,
+              softness: stage2Softness,
+            ),
+          ),
+        Positioned(
+          top: _budgetHeaderVisualSpec.menu.top,
+          right: _budgetHeaderVisualSpec.menu.right,
+          child: Builder(
+            builder: (menuContext) {
+              return SpendeeHeaderMenuButton(
+                spec: _budgetHeaderVisualSpec,
+                onPressed: () => onHeaderDesignMenuPressed(menuContext),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: _budgetHeaderVisualSpec.handle.hitHeight,
+          child: SpendeeHeaderHandle(
+            spec: _budgetHeaderVisualSpec,
+            onVerticalDragStart: onHandleDragStart,
+            onVerticalDragUpdate: onHandleDragUpdate,
+            onVerticalDragEnd: onHandleDragEnd,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MindFastInfoScoreChart extends StatelessWidget {
+  const _MindFastInfoScoreChart({
+    required this.activeType,
+    required this.series,
+    required this.bareLine,
+    this.plotLeftInset = 0,
+  });
+
+  final TransactionType activeType;
+  final StatsCategoryScopeSeries series;
+  final bool bareLine;
+  final double plotLeftInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final keySuffix = activeType == TransactionType.income
+        ? 'income'
+        : 'expense';
+    return RepaintBoundary(
+      key: ValueKey('spendee-test-mind-score-fastinfo-$keySuffix'),
+      child: CustomPaint(
+        key: const ValueKey('spendee-test-mind-score-fastinfo-paint'),
+        painter: _MindFastInfoScorePainter(
+          activeType: activeType,
+          series: series,
+          bareLine: bareLine,
+          plotLeftInset: plotLeftInset,
+        ),
+      ),
+    );
+  }
+}
+
+class _MindFastInfoScorePainter extends CustomPainter {
+  const _MindFastInfoScorePainter({
+    required this.activeType,
+    required this.series,
+    required this.bareLine,
+    required this.plotLeftInset,
+  });
+
+  final TransactionType activeType;
+  final StatsCategoryScopeSeries series;
+  final bool bareLine;
+  final double plotLeftInset;
+
+  double get score => series.kontrollScore;
+  bool get drawsBackground => !bareLine;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final chart = bareLine
+        ? Rect.fromLTRB(
+            2 + plotLeftInset,
+            4,
+            math.max(3 + plotLeftInset, size.width - 2),
+            math.max(5, size.height - 4),
+          )
+        : Rect.fromLTRB(
+            18,
+            5,
+            math.max(19, size.width - 4),
+            math.max(6, size.height - 13),
+          );
+    if (!bareLine) {
+      final rect = Offset.zero & size;
+      final panel = RRect.fromRectAndRadius(rect, const Radius.circular(8));
+      canvas.drawRRect(
+        panel,
+        Paint()..color = Colors.white.withValues(alpha: .56),
+      );
+      _drawSoftScoreZones(canvas, chart);
+      _drawScoreGrid(canvas, chart);
+    }
+    _drawSegmentedScorePath(canvas, chart, series.scoreLine);
+    if (!bareLine) {
+      _drawScoreEndpoint(canvas, chart, series.scoreLine);
+      _drawEndpointBadge(
+        canvas,
+        chart,
+        series.scoreLine,
+        '${score.round()}/100',
+        _mindScoreColor(score),
+      );
+      _drawAxisValueLabels(canvas, chart);
+      _drawMonthTicks(canvas, chart, series.monthTicks);
+    }
+  }
+
+  void _drawSoftScoreZones(Canvas canvas, Rect chart) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chart, const Radius.circular(7)),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x2122C55E),
+            Color(0x0A22C55E),
+            Color(0x14FBBF24),
+            Color(0x0AEF4444),
+            Color(0x21EF4444),
+          ],
+          stops: [0, .38, .50, .62, 1],
+        ).createShader(chart),
+    );
+  }
+
+  void _drawScoreGrid(Canvas canvas, Rect chart) {
+    final gridPaint = Paint()
+      ..color = AppColors.gray200.withValues(alpha: .55)
+      ..strokeWidth = .8;
+    for (var index = 0; index <= 4; index += 1) {
+      final y = chart.top + chart.height * index / 4;
+      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
+    }
+    final neutralY = chart.bottom - chart.height * .5;
+    canvas.drawLine(
+      Offset(chart.left, neutralY),
+      Offset(chart.right, neutralY),
+      Paint()
+        ..color = const Color(0xFFFBBF24).withValues(alpha: .50)
+        ..strokeWidth = 1,
+    );
+  }
+
+  void _drawSegmentedScorePath(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+  ) {
+    if (points.isEmpty) return;
+    final path = _smoothPathForPoints(chart, points);
+    const zones = [
+      _MindFastInfoScoreZone(from: 0, to: 45, color: Color(0xFFEF4444)),
+      _MindFastInfoScoreZone(from: 45, to: 60, color: Color(0xFFFBBF24)),
+      _MindFastInfoScoreZone(from: 60, to: 100, color: Color(0xFF22C55E)),
+    ];
+    for (final zone in zones) {
+      final top = chart.bottom - chart.height * zone.to / 100;
+      final bottom = chart.bottom - chart.height * zone.from / 100;
+      canvas.save();
+      canvas.clipRect(
+        Rect.fromLTRB(chart.left - 4, top, chart.right + 4, bottom),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = zone.color.withValues(alpha: .96)
+          ..strokeWidth = 2.6
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..style = PaintingStyle.stroke,
+      );
+      canvas.restore();
+    }
+  }
+
+  void _drawScoreEndpoint(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+  ) {
+    if (points.isEmpty) return;
+    final offset = _offsetForPoint(
+      chart,
+      points.last,
+      points.length - 1,
+      points.length,
+    );
+    canvas.drawCircle(offset, 4.6, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      offset,
+      3,
+      Paint()..color = _mindScoreColor(points.last.value),
+    );
+  }
+
+  void _drawEndpointBadge(
+    Canvas canvas,
+    Rect chart,
+    List<StatsSeriesPoint> points,
+    String label,
+    Color color,
+  ) {
+    if (points.isEmpty || chart.width < 80) return;
+    final offset = _offsetForPoint(
+      chart,
+      points.last,
+      points.length - 1,
+      points.length,
+    );
+    final painter = _textPainter(
+      label,
+      TextStyle(color: color, fontSize: 6.2, fontWeight: FontWeight.w800),
+      maxWidth: 42,
+    );
+    final width = painter.width + 8;
+    final left = (offset.dx - width - 2).clamp(
+      chart.left + 2,
+      chart.right - width,
+    );
+    final top = (offset.dy - 7).clamp(chart.top + 1, chart.bottom - 12);
+    final badge = Rect.fromLTWH(left.toDouble(), top.toDouble(), width, 12);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(badge, const Radius.circular(6)),
+      Paint()..color = Colors.white.withValues(alpha: .90),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(badge, const Radius.circular(6)),
+      Paint()
+        ..color = color
+        ..strokeWidth = .9
+        ..style = PaintingStyle.stroke,
+    );
+    painter.paint(
+      canvas,
+      Offset(
+        badge.left + badge.width / 2 - painter.width / 2,
+        badge.top + badge.height / 2 - painter.height / 2,
+      ),
+    );
+  }
+
+  void _drawAxisValueLabels(Canvas canvas, Rect chart) {
+    const labels = [
+      _MindFastInfoAxisLabel(label: '100', value: 1),
+      _MindFastInfoAxisLabel(label: '50', value: .5),
+      _MindFastInfoAxisLabel(label: '0', value: 0),
+    ];
+    const style = TextStyle(
+      color: AppColors.gray600,
+      fontSize: 5.8,
+      fontWeight: FontWeight.w800,
+    );
+    for (final label in labels) {
+      final painter = _textPainter(label.label, style, maxWidth: 18);
+      final y = chart.bottom - chart.height * label.value;
+      painter.paint(
+        canvas,
+        Offset(
+          chart.left - painter.width - 4,
+          (y - painter.height / 2).clamp(
+            chart.top,
+            chart.bottom - painter.height,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _drawMonthTicks(Canvas canvas, Rect chart, List<StatsMonthTick> ticks) {
+    if (ticks.isEmpty || chart.width < 90) return;
+    const style = TextStyle(
+      color: AppColors.gray600,
+      fontSize: 5.6,
+      fontWeight: FontWeight.w800,
+    );
+    for (final tick in ticks.take(5)) {
+      final painter = _textPainter(tick.label, style, maxWidth: 24);
+      final x = chart.left + chart.width * tick.position.clamp(0.0, 1.0);
+      painter.paint(
+        canvas,
+        Offset(
+          (x - painter.width / 2).clamp(
+            chart.left,
+            chart.right - painter.width,
+          ),
+          chart.bottom + 3,
+        ),
+      );
+    }
+  }
+
+  Path _smoothPathForPoints(Rect chart, List<StatsSeriesPoint> points) {
+    final offsets = [
+      for (var index = 0; index < points.length; index += 1)
+        _offsetForPoint(chart, points[index], index, points.length),
+    ];
+    final path = Path();
+    if (offsets.isEmpty) return path;
+    path.moveTo(offsets.first.dx, offsets.first.dy);
+    if (offsets.length < 3) {
+      for (final offset in offsets.skip(1)) {
+        path.lineTo(offset.dx, offset.dy);
+      }
+      return path;
+    }
+    for (var index = 0; index < offsets.length - 1; index += 1) {
+      final p0 = index == 0 ? offsets[index] : offsets[index - 1];
+      final p1 = offsets[index];
+      final p2 = offsets[index + 1];
+      final p3 = index + 2 < offsets.length ? offsets[index + 2] : p2;
+      final c1 = Offset(
+        p1.dx + (p2.dx - p0.dx) / 6,
+        p1.dy + (p2.dy - p0.dy) / 6,
+      );
+      final c2 = Offset(
+        p2.dx - (p3.dx - p1.dx) / 6,
+        p2.dy - (p3.dy - p1.dy) / 6,
+      );
+      path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
+    }
+    return path;
+  }
+
+  Offset _offsetForPoint(
+    Rect chart,
+    StatsSeriesPoint point,
+    int index,
+    int count,
+  ) {
+    final position = point.position ?? (count <= 1 ? .5 : index / (count - 1));
+    return Offset(
+      chart.left + chart.width * position.clamp(0.0, 1.0),
+      chart.bottom - chart.height * (point.value / 100).clamp(0.0, 1.0),
+    );
+  }
+
+  TextPainter _textPainter(
+    String text,
+    TextStyle style, {
+    required double maxWidth,
+  }) {
+    return TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MindFastInfoScorePainter oldDelegate) {
+    return oldDelegate.activeType != activeType ||
+        oldDelegate.series != series ||
+        oldDelegate.bareLine != bareLine ||
+        oldDelegate.plotLeftInset != plotLeftInset;
+  }
+}
+
+class _MindFastInfoScoreZone {
+  const _MindFastInfoScoreZone({
+    required this.from,
+    required this.to,
+    required this.color,
+  });
+
+  final double from;
+  final double to;
+  final Color color;
+}
+
+class _MindFastInfoAxisLabel {
+  const _MindFastInfoAxisLabel({required this.label, required this.value});
+
+  final String label;
+  final double value;
+}
+
+class _MindHeaderGradientBackground extends StatelessWidget {
+  const _MindHeaderGradientBackground({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.centerRight,
+          colors: const [
+            Color(0xFFFF8C1A),
+            Color(0xFFF4DF24),
+            Color(0xFF35C76E),
+          ],
+          stops: const [0, .5, 1],
+        ),
+      ),
+    );
+  }
+}
+
+Widget _wrapPanelSurface({
+  required _PanelSurface surface,
+  required double softness,
+  required String keyBase,
+  required double borderRadius,
+  required Widget child,
+}) {
+  if (surface == _PanelSurface.background) {
+    return KeyedSubtree(key: ValueKey('$keyBase-background'), child: child);
+  }
+  if (surface == _PanelSurface.htmlC2Glass) {
+    return _C2GlassSurface(
+      key: ValueKey('$keyBase-html-c2-glass'),
+      clipKey: ValueKey('$keyBase-html-c2-clip'),
+      paintKey: ValueKey('$keyBase-html-c2-paint'),
+      maskKey: ValueKey('$keyBase-html-c2-mask'),
+      borderRadius: borderRadius,
+      useBottomFade: false,
+      child: child,
+    );
+  }
+  if (surface == _PanelSurface.liquidGlass) {
+    return SpendeeLiquidGlassSurface(
+      key: ValueKey('$keyBase-liquid-glass'),
+      fallbackKey: ValueKey('$keyBase-liquid-fallback'),
+      glareKey: ValueKey('$keyBase-liquid-glare'),
+      borderRadius: borderRadius,
+      softness: softness,
+      child: child,
+    );
+  }
+  if (surface == _PanelSurface.acrylic) {
+    return SpendeeAcrylicSurface(
+      key: ValueKey('$keyBase-acrylic'),
+      fluentKey: ValueKey('$keyBase-acrylic-fluent'),
+      borderRadius: borderRadius,
+      child: child,
+    );
+  }
+  return DecoratedBox(
+    key: ValueKey('$keyBase-glossy'),
+    decoration: _stage1GlassDecoration(),
+    child: child,
+  );
+}
+
+class _MindStage1BoxedGraphs extends StatelessWidget {
+  const _MindStage1BoxedGraphs({
+    super.key,
+    required this.statsFrame,
+    required this.surface,
+    required this.softness,
+  });
+
+  final SpendeeMindStatsFrame statsFrame;
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeType = statsFrame.activeFrame.yearData.activeType;
+    final keySuffix = _mindTypeSuffix(activeType);
+    final typeLabel = activeType == TransactionType.income
+        ? 'Bevételi'
+        : 'Kiadási';
+    final accent = activeType == TransactionType.income
+        ? const Color(0xFF22C55E)
+        : const Color(0xFFEF4444);
+    final content = Padding(
+      key: const ValueKey('spendee-test-mind-stage1-boxed-graphs'),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+      child: Padding(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'előző időszakhoz képest',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _smallCapsStyle,
+                  ),
+                ),
+                Text(
+                  '${statsFrame.activeFrame.categoryScopeSeries.kontrollScore.round()}/100',
+                  key: const ValueKey('spendee-test-mind-score-value'),
+                  style: _pieValueStyle.copyWith(
+                    color: _mindScoreColor(
+                      statsFrame.activeFrame.categoryScopeSeries.kontrollScore,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _MindGraphCard(
+                      key: ValueKey(
+                        'spendee-test-mind-volume-chart-$keySuffix',
+                      ),
+                      surface: surface,
+                      softness: softness,
+                      surfaceKeyBase: 'spendee-test-mind-volume-card',
+                      paintKey: const ValueKey(
+                        'spendee-test-mind-volume-paint',
+                      ),
+                      label: '$typeLabel volumen',
+                      value: _formatFt(
+                        statsFrame.activeFrame.yearData.summaryTotal,
+                      ),
+                      color: accent,
+                      painter: _MindVolumeMiniPainter(
+                        activeType: activeType,
+                        volumePoints: statsFrame.activeVolumePoints,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MindGraphCard(
+                      key: ValueKey(
+                        'spendee-test-mind-pattern-chart-$keySuffix',
+                      ),
+                      surface: surface,
+                      softness: softness,
+                      surfaceKeyBase: 'spendee-test-mind-pattern-card',
+                      paintKey: const ValueKey(
+                        'spendee-test-mind-pattern-paint',
+                      ),
+                      label: '$typeLabel minták',
+                      value: '${statsFrame.activePatternBars.length} minta',
+                      color: accent,
+                      painter: _MindPatternMiniPainter(
+                        activeType: activeType,
+                        patternBars: statsFrame.activePatternBars,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: _budgetHeaderVisualSpec.handle.hitHeight,
-            child: SpendeeHeaderHandle(
-              spec: _budgetHeaderVisualSpec,
-              onVerticalDragStart: onHandleDragStart,
-              onVerticalDragUpdate: onHandleDragUpdate,
-              onVerticalDragEnd: onHandleDragEnd,
+          ],
+        ),
+      ),
+    );
+    return content;
+  }
+}
+
+class _MindGraphCard extends StatelessWidget {
+  const _MindGraphCard({
+    super.key,
+    required this.surface,
+    required this.softness,
+    required this.surfaceKeyBase,
+    required this.paintKey,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.painter,
+  });
+
+  final _PanelSurface surface;
+  final double softness;
+  final String surfaceKeyBase;
+  final Key paintKey;
+  final String label;
+  final String value;
+  final Color color;
+  final CustomPainter painter;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _pieFocusLabelStyle,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _pieFocusMetaStyle.copyWith(color: color),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: CustomPaint(
+              key: paintKey,
+              painter: painter,
+              child: const SizedBox.expand(),
             ),
           ),
-          if (stage == SpendeeHeaderStage.stage2)
-            Positioned(
-              left: budgetSpec.stage1HorizontalInset,
-              right: budgetSpec.stage1HorizontalInset,
-              top: budgetSpec.stage2Top,
-              bottom: budgetSpec.stage2Bottom,
-              child: _BudgetPieStage2Layer(
-                bars: bars,
-                selectedCategory: selectedCategory,
-                onCategoryTap: onPieCategoryTap,
-              ),
+        ],
+      ),
+    );
+    return _wrapPanelSurface(
+      surface: surface,
+      softness: softness,
+      keyBase: surfaceKeyBase,
+      borderRadius: 13,
+      child: content,
+    );
+  }
+}
+
+class _MindStage2Panel extends StatelessWidget {
+  const _MindStage2Panel({
+    required this.statsFrame,
+    required this.surface,
+    required this.softness,
+  });
+
+  final SpendeeMindStatsFrame statsFrame;
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = switch (statsFrame.modeKey) {
+      'monthly' => _MindMonthlyHeatmap(
+        key: const ValueKey('spendee-test-mind-stage2-monthly'),
+        frame: statsFrame.activeFrame,
+        surface: surface,
+        softness: softness,
+      ),
+      'yearly' => _MindYearlyHeatmap(
+        key: const ValueKey('spendee-test-mind-stage2-yearly'),
+        frame: statsFrame.activeFrame,
+        surface: surface,
+        softness: softness,
+      ),
+      _ => _MindSumHeatmap(
+        key: const ValueKey('spendee-test-mind-stage2-sum'),
+        frame: statsFrame.activeFrame,
+        surface: surface,
+        softness: softness,
+      ),
+    };
+    return content;
+  }
+}
+
+class _MindMonthlyHeatmap extends StatelessWidget {
+  const _MindMonthlyHeatmap({
+    super.key,
+    required this.frame,
+    required this.surface,
+    required this.softness,
+  });
+
+  final StatsRenderFrame frame;
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final month = frame.yearData.graphMonths.isNotEmpty
+        ? frame.yearData.graphMonths.first
+        : frame.yearData.months[frame.yearData.graphStartMonth - 1];
+    return _MindHeatmapSurface(
+      key: const ValueKey('spendee-test-mind-monthly-heatmap'),
+      child: _MindMonthCard(
+        month: month,
+        surface: surface,
+        softness: softness,
+        surfaceKeyBase: 'spendee-test-mind-month-${month.month}',
+        single: true,
+      ),
+    );
+  }
+}
+
+class _MindYearlyHeatmap extends StatelessWidget {
+  const _MindYearlyHeatmap({
+    super.key,
+    required this.frame,
+    required this.surface,
+    required this.softness,
+  });
+
+  final StatsRenderFrame frame;
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final months = frame.yearData.graphMonths.isNotEmpty
+        ? frame.yearData.graphMonths
+        : frame.yearData.months;
+    return _MindHeatmapSurface(
+      key: const ValueKey('spendee-test-mind-yearly-heatmap'),
+      child: GridView.count(
+        padding: EdgeInsets.zero,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 3,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
+        childAspectRatio: 1.18,
+        children: [
+          for (final month in months.take(12))
+            _MindMonthCard(
+              month: month,
+              surface: surface,
+              softness: softness,
+              surfaceKeyBase: 'spendee-test-mind-month-${month.month}',
             ),
         ],
       ),
     );
   }
+}
+
+class _MindSumHeatmap extends StatelessWidget {
+  const _MindSumHeatmap({
+    super.key,
+    required this.frame,
+    required this.surface,
+    required this.softness,
+  });
+
+  final StatsRenderFrame frame;
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final years = frame.sumYearSummaries.isNotEmpty
+        ? frame.sumYearSummaries
+        : [
+            StatsSumYearSummary(
+              year: frame.yearData.year,
+              monthTotals: {
+                for (final month in frame.yearData.months)
+                  month.month: month.scopeTotal,
+              },
+              closingAmount:
+                  frame.yearData.canonicalIncomeTotal -
+                  frame.yearData.canonicalExpenseTotal,
+            ),
+          ];
+    return _MindHeatmapSurface(
+      key: const ValueKey('spendee-test-mind-sum-heatmap'),
+      child: GridView.count(
+        padding: EdgeInsets.zero,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
+        childAspectRatio: 1.55,
+        children: [
+          for (final year in years.take(6))
+            _MindYearSummaryCard(
+              year: year,
+              surface: surface,
+              softness: softness,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MindHeatmapSurface extends StatelessWidget {
+  const _MindHeatmapSurface({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(padding: const EdgeInsets.all(10), child: child);
+  }
+}
+
+class _MindMonthCard extends StatelessWidget {
+  const _MindMonthCard({
+    required this.month,
+    required this.surface,
+    required this.softness,
+    required this.surfaceKeyBase,
+    this.single = false,
+  });
+
+  final StatsMonthData month;
+  final _PanelSurface surface;
+  final double softness;
+  final String surfaceKeyBase;
+  final bool single;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = single ? month.days : month.days.take(21).toList();
+    final content = Padding(
+      padding: const EdgeInsets.all(7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            month.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _pieFocusLabelStyle,
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: GridView.count(
+              padding: EdgeInsets.zero,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: single ? 7 : 5,
+              mainAxisSpacing: 3,
+              crossAxisSpacing: 3,
+              children: [
+                for (final day in days)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(
+                        0xFF06B6D4,
+                      ).withValues(alpha: .16 + day.heatmapIntensity * .60),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${day.day}',
+                        style: TextStyle(
+                          color: const Color(
+                            0xFF14213A,
+                          ).withValues(alpha: single ? .72 : 0),
+                          fontSize: single ? 7 : 1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatFt(month.scopeTotal),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _pieFocusMetaStyle,
+          ),
+        ],
+      ),
+    );
+    return _wrapPanelSurface(
+      surface: surface,
+      softness: softness,
+      keyBase: surfaceKeyBase,
+      borderRadius: 13,
+      child: content,
+    );
+  }
+}
+
+class _MindYearSummaryCard extends StatelessWidget {
+  const _MindYearSummaryCard({
+    required this.year,
+    required this.surface,
+    required this.softness,
+  });
+
+  final StatsSumYearSummary year;
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxMonth = year.maxMonthTotal <= 0 ? 1 : year.maxMonthTotal;
+    final content = Padding(
+      padding: const EdgeInsets.all(7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${year.year}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _pieFocusLabelStyle,
+                ),
+              ),
+              Text(
+                _formatFt(year.scopeTotal),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _pieValueStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: GridView.count(
+              padding: EdgeInsets.zero,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 4,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              children: [
+                for (var month = 1; month <= 12; month += 1)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF35C76E).withValues(
+                        alpha:
+                            .16 +
+                            ((year.monthTotals[month] ?? 0) / maxMonth) * .60,
+                      ),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Center(
+                      child: Text(
+                        StatsYearData.monthNames[month - 1].characters.first,
+                        style: const TextStyle(
+                          color: Color(0xFF14213A),
+                          fontSize: 7,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    return _wrapPanelSurface(
+      surface: surface,
+      softness: softness,
+      keyBase: 'spendee-test-mind-year-${year.year}',
+      borderRadius: 13,
+      child: content,
+    );
+  }
+}
+
+class _MindVolumeMiniPainter extends CustomPainter {
+  const _MindVolumeMiniPainter({
+    required this.activeType,
+    required this.volumePoints,
+    required this.color,
+  });
+
+  final TransactionType activeType;
+  final List<StatsSeriesPoint> volumePoints;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _drawMiniGrid(canvas, size);
+    final baselineY = size.height - 1;
+    canvas.drawLine(
+      Offset(0, baselineY),
+      Offset(size.width, baselineY),
+      Paint()
+        ..color = const Color(0xFF14213A).withValues(alpha: .35)
+        ..strokeWidth = 1,
+    );
+    final barWidth = volumePoints.isEmpty
+        ? 0.0
+        : (size.width / (volumePoints.length * 1.8)).clamp(3.0, 9.0);
+    for (var index = 0; index < volumePoints.length; index += 1) {
+      final point = volumePoints[index];
+      final normalized = (point.value / 100).clamp(0.0, 1.0).toDouble();
+      final height = math.max(1.0, normalized * size.height * .82);
+      final x =
+          (point.position ??
+              _normalizedMiniPosition(index, volumePoints.length)) *
+          size.width;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x - barWidth / 2, baselineY - height, barWidth, height),
+          const Radius.circular(3),
+        ),
+        Paint()..color = color.withValues(alpha: .78),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MindVolumeMiniPainter oldDelegate) {
+    return oldDelegate.activeType != activeType ||
+        oldDelegate.volumePoints != volumePoints ||
+        oldDelegate.color != color;
+  }
+}
+
+class _MindPatternMiniPainter extends CustomPainter {
+  const _MindPatternMiniPainter({
+    required this.activeType,
+    required this.patternBars,
+    required this.color,
+  });
+
+  final TransactionType activeType;
+  final List<StatsHelperBar> patternBars;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _drawMiniGrid(canvas, size);
+    final baselineY = size.height - 1;
+    canvas.drawLine(
+      Offset(0, baselineY),
+      Offset(size.width, baselineY),
+      Paint()
+        ..color = const Color(0xFF14213A).withValues(alpha: .35)
+        ..strokeWidth = 1,
+    );
+    final barWidth = patternBars.isEmpty
+        ? 0.0
+        : patternBars.length <= 12
+        ? (size.width / math.max(patternBars.length * 7, 18)).clamp(4.0, 8.0)
+        : (size.width / (patternBars.length * 1.35)).clamp(1.2, 7.0);
+    for (final bar in patternBars) {
+      final normalized = (bar.value / 100).clamp(0.0, 1.0).toDouble();
+      final height = math.max(1.0, normalized * size.height * .82);
+      final x = bar.position.clamp(0.0, 1.0) * size.width;
+      final barColor = _mindHexColor(bar.colorHex, fallback: color);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x - barWidth / 2, baselineY - height, barWidth, height),
+          Radius.circular(math.min(2.4, barWidth / 2)),
+        ),
+        Paint()
+          ..color = barColor.withValues(
+            alpha: (0.34 + normalized * 0.5).clamp(0.34, 0.84),
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MindPatternMiniPainter oldDelegate) {
+    return oldDelegate.activeType != activeType ||
+        oldDelegate.patternBars != patternBars ||
+        oldDelegate.color != color;
+  }
+}
+
+void _drawMiniGrid(Canvas canvas, Size size) {
+  final paint = Paint()
+    ..color = const Color(0xFF14213A).withValues(alpha: .10)
+    ..strokeWidth = 1;
+  for (var i = 1; i <= 3; i += 1) {
+    final y = size.height * i / 4;
+    canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+  }
+}
+
+double _normalizedMiniPosition(int index, int count) {
+  if (count <= 1) return .5;
+  return index / (count - 1);
+}
+
+String _mindTypeSuffix(TransactionType type) {
+  return type == TransactionType.income ? 'income' : 'expense';
+}
+
+Color _mindHexColor(String hex, {required Color fallback}) {
+  final normalized = hex.replaceFirst('#', '');
+  if (normalized.length != 6) return fallback;
+  final value = int.tryParse('FF$normalized', radix: 16);
+  return value == null ? fallback : Color(value);
+}
+
+Color _mindScoreColor(double score) {
+  if (score >= 70) return const Color(0xFF22C55E);
+  if (score >= 40) return const Color(0xFFF59E0B);
+  return const Color(0xFFEF4444);
 }
 
 class _BudgetExtendedInfo extends StatelessWidget {
@@ -723,6 +2694,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.onCategoryTap,
     required this.pulsingCategoryId,
     required this.carouselOffset,
+    required this.surface,
+    required this.softness,
+    required this.showSelectedLabel,
     required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
     required this.onCarouselDragEnd,
@@ -734,6 +2708,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final ValueChanged<TransactionCategory> onCategoryTap;
   final int? pulsingCategoryId;
   final double carouselOffset;
+  final _PanelSurface surface;
+  final double softness;
+  final bool showSelectedLabel;
   final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
   final GestureDragEndCallback onCarouselDragEnd;
@@ -741,134 +2718,584 @@ class _BudgetExtendedInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      key: const ValueKey('spendee-test-budget-stage1-glossy'),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(17),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: .36),
-            Colors.white.withValues(alpha: .16),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: .46),
-            offset: const Offset(0, 1),
-            blurRadius: 0,
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .08),
-            offset: const Offset(0, 6),
-            blurRadius: 18,
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: 10,
-            right: 10,
-            top: 0,
-            bottom: 0,
-            child: GestureDetector(
-              key: const ValueKey('spendee-test-context-carousel-gesture'),
-              behavior: HitTestBehavior.opaque,
-              dragStartBehavior: DragStartBehavior.down,
-              onHorizontalDragStart: onCarouselDragStart,
-              onHorizontalDragUpdate: onCarouselDragUpdate,
-              onHorizontalDragEnd: onCarouselDragEnd,
-              onHorizontalDragCancel: onCarouselDragCancel,
-              child: AnimatedContainer(
-                key: const ValueKey('spendee-test-context-carousel'),
-                duration: Duration.zero,
-                curve: Curves.easeOutQuad,
-                transform: Matrix4.translationValues(carouselOffset, 0, 0),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Builder(
-                    builder: (context) {
-                      final visible = _visibleAvatarCategories();
-                      final centerIndex = visible.indexWhere(
-                        (category) =>
-                            category.transactionCategoryID ==
-                            selectedCategory?.transactionCategoryID,
-                      );
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (
-                            var index = 0;
-                            index < visible.length;
-                            index++
-                          ) ...[
-                            if (index > 0) const SizedBox(width: 12),
-                            _ContextAvatar(
-                              category: visible[index],
-                              distanceFromCenter: centerIndex < 0
-                                  ? index
-                                  : (index - centerIndex).abs(),
-                              selected:
-                                  visible[index].transactionCategoryID ==
-                                  selectedCategory?.transactionCategoryID,
-                              pulsing:
-                                  visible[index].transactionCategoryID ==
-                                  pulsingCategoryId,
-                              onTap: () => onCategoryTap(visible[index]),
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                ),
+    final avatarAreaKey = surface == _PanelSurface.htmlC2Glass
+        ? const ValueKey('spendee-test-budget-stage1-html-c2-avatar-area')
+        : null;
+    final content = Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned(
+          key: avatarAreaKey,
+          left: 10,
+          right: 10,
+          top: 0,
+          bottom: 0,
+          child: GestureDetector(
+            key: const ValueKey('spendee-test-context-carousel-gesture'),
+            behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onHorizontalDragStart: onCarouselDragStart,
+            onHorizontalDragUpdate: onCarouselDragUpdate,
+            onHorizontalDragEnd: onCarouselDragEnd,
+            onHorizontalDragCancel: onCarouselDragCancel,
+            child: AnimatedContainer(
+              key: const ValueKey('spendee-test-context-carousel'),
+              duration: Duration.zero,
+              curve: Curves.easeOutQuad,
+              transform: Matrix4.identity(),
+              child: _ContextAvatarBelt(
+                categories: categories,
+                selectedCategory: selectedCategory,
+                pulsingCategoryId: pulsingCategoryId,
+                carouselOffset: carouselOffset,
+                onCategoryTap: onCategoryTap,
               ),
             ),
           ),
-        ],
+        ),
+        if (showSelectedLabel && selectedCategory != null)
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 9,
+            child: Text(
+              selectedCategory!.name,
+              key: const ValueKey('spendee-test-context-avatar-label'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: _contextAvatarLabelStyle,
+            ),
+          ),
+      ],
+    );
+
+    if (surface == _PanelSurface.background) {
+      return SizedBox.expand(
+        key: const ValueKey('spendee-test-budget-stage1-background'),
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.htmlC2Glass) {
+      return _C2GlassSurface(
+        key: const ValueKey('spendee-test-budget-stage1-html-c2-glass'),
+        clipKey: const ValueKey('spendee-test-budget-stage1-html-c2-clip'),
+        paintKey: const ValueKey('spendee-test-budget-stage1-html-c2-paint'),
+        maskKey: const ValueKey('spendee-test-budget-stage1-html-c2-mask'),
+        borderRadius: 17,
+        useBottomFade: false,
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.liquidGlass) {
+      return SpendeeLiquidGlassSurface(
+        key: const ValueKey('spendee-test-budget-stage1-liquid-glass'),
+        fallbackKey: const ValueKey(
+          'spendee-test-budget-stage1-liquid-fallback',
+        ),
+        glareKey: const ValueKey('spendee-test-budget-stage1-liquid-glare'),
+        borderRadius: 17,
+        softness: softness,
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.acrylic) {
+      return SpendeeAcrylicSurface(
+        key: const ValueKey('spendee-test-budget-stage1-acrylic'),
+        fluentKey: const ValueKey('spendee-test-budget-stage1-acrylic-fluent'),
+        borderRadius: 17,
+        child: content,
+      );
+    }
+
+    return DecoratedBox(
+      key: const ValueKey('spendee-test-budget-stage1-glossy'),
+      decoration: _stage1GlassDecoration(),
+      child: content,
+    );
+  }
+}
+
+class _HeaderSurfaceFrame extends StatelessWidget {
+  const _HeaderSurfaceFrame({
+    required this.surface,
+    required this.liquidSoftness,
+    required this.child,
+    this.background,
+  });
+
+  final _HeaderSurface surface;
+  final double liquidSoftness;
+  final Widget child;
+  final Widget? background;
+
+  @override
+  Widget build(BuildContext context) {
+    if (surface == _HeaderSurface.normal) {
+      return SpendeeHeaderGlassSurface(
+        spec: _budgetHeaderVisualSpec,
+        child: _buildForegroundWithBackground(child),
+      );
+    }
+
+    final radius = _budgetHeaderVisualSpec.glass.radius;
+    final coloredContent = _buildColoredSurfaceContent(child);
+    final surfaceChild = switch (surface) {
+      _HeaderSurface.normal => coloredContent,
+      _HeaderSurface.htmlC2Glass => _C2GlassSurface(
+        key: const ValueKey('spendee-test-header-c2-glass'),
+        clipKey: const ValueKey('spendee-test-header-c2-clip'),
+        paintKey: const ValueKey('spendee-test-header-c2-paint'),
+        maskKey: const ValueKey('spendee-test-header-c2-mask'),
+        borderRadius: radius,
+        useBottomFade: false,
+        child: coloredContent,
+      ),
+      _HeaderSurface.liquidGlass => SpendeeLiquidGlassSurface(
+        key: const ValueKey('spendee-test-header-liquid-glass'),
+        fallbackKey: const ValueKey('spendee-test-header-liquid-fallback'),
+        glareKey: const ValueKey('spendee-test-header-liquid-glare'),
+        borderRadius: radius,
+        softness: liquidSoftness,
+        child: coloredContent,
+      ),
+      _HeaderSurface.acrylic => SpendeeAcrylicSurface(
+        key: const ValueKey('spendee-test-header-acrylic'),
+        fluentKey: const ValueKey('spendee-test-header-acrylic-fluent'),
+        highlightKey: const ValueKey('spendee-test-header-acrylic-highlight'),
+        borderRadius: radius,
+        child: coloredContent,
+      ),
+    };
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: _budgetHeaderVisualSpec.glass.cardShadows,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: surfaceChild,
       ),
     );
   }
 
-  List<TransactionCategory> _visibleAvatarCategories() {
-    if (categories.length <= 5) return categories;
+  Widget _buildForegroundWithBackground(Widget foreground) {
+    final background = this.background;
+    if (background == null) return foreground;
+    return Stack(fit: StackFit.expand, children: [background, foreground]);
+  }
+
+  Widget _buildColoredSurfaceContent(Widget foreground) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [background ?? const _HeaderColoredBase(), foreground],
+    );
+  }
+}
+
+class _HeaderColoredBase extends StatelessWidget {
+  const _HeaderColoredBase();
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      key: const ValueKey('spendee-test-header-colored-base'),
+      opacity: _budgetHeaderVisualSpec.graphicLayerOpacity,
+      child: CustomPaint(
+        painter: SpendeeHeaderGlassPainter(_budgetHeaderVisualSpec),
+      ),
+    );
+  }
+}
+
+class _C2GlassSurface extends StatelessWidget {
+  const _C2GlassSurface({
+    super.key,
+    required this.clipKey,
+    required this.paintKey,
+    required this.maskKey,
+    required this.borderRadius,
+    required this.useBottomFade,
+    required this.child,
+  });
+
+  final Key clipKey;
+  final Key paintKey;
+  final Key maskKey;
+  final double borderRadius;
+  final bool useBottomFade;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = CustomPaint(
+      painter: _C2GlassShadowPainter(borderRadius: borderRadius),
+      child: ClipRRect(
+        key: clipKey,
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: CustomPaint(
+            key: paintKey,
+            foregroundPainter: _C2GlassSurfacePainter(
+              borderRadius: borderRadius,
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+    if (!useBottomFade) return surface;
+
+    return ShaderMask(
+      key: maskKey,
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) => const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.black, Colors.black, Colors.transparent],
+        stops: [0, .75, 1],
+      ).createShader(bounds),
+      child: surface,
+    );
+  }
+}
+
+class _C2GlassShadowPainter extends CustomPainter {
+  const _C2GlassShadowPainter({required this.borderRadius});
+
+  final double borderRadius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(borderRadius));
+    canvas.drawRRect(
+      rrect.shift(const Offset(0, 6)),
+      Paint()
+        ..color = const Color.fromRGBO(15, 23, 42, .08)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _C2GlassShadowPainter oldDelegate) {
+    return oldDelegate.borderRadius != borderRadius;
+  }
+}
+
+class _C2GlassSurfacePainter extends CustomPainter {
+  const _C2GlassSurfacePainter({required this.borderRadius});
+
+  final double borderRadius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(borderRadius));
+    canvas.save();
+    canvas.clipRRect(rrect, doAntiAlias: true);
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = ui.Gradient.linear(rect.topCenter, rect.bottomCenter, const [
+          Color.fromRGBO(255, 255, 255, .36),
+          Color.fromRGBO(255, 255, 255, .16),
+        ]),
+    );
+
+    final radialCenter = Offset(size.width * .14, size.height * .08);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          radialCenter,
+          _farthestCornerRadius(rect, radialCenter),
+          const [
+            Color.fromRGBO(255, 255, 255, .62),
+            Color.fromRGBO(255, 255, 255, 0),
+          ],
+          const [0, .36],
+        ),
+    );
+
+    canvas.drawLine(
+      const Offset(0, .5),
+      Offset(size.width, .5),
+      Paint()
+        ..color = const Color.fromRGBO(255, 255, 255, .46)
+        ..strokeWidth = 1,
+    );
+
+    canvas.restore();
+  }
+
+  double _farthestCornerRadius(Rect rect, Offset center) {
+    return math.max(
+      math.max(
+        (center - rect.topLeft).distance,
+        (center - rect.topRight).distance,
+      ),
+      math.max(
+        (center - rect.bottomLeft).distance,
+        (center - rect.bottomRight).distance,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _C2GlassSurfacePainter oldDelegate) {
+    return oldDelegate.borderRadius != borderRadius;
+  }
+}
+
+BoxDecoration _stage1GlassDecoration() {
+  return BoxDecoration(
+    borderRadius: BorderRadius.circular(17),
+    gradient: LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Colors.white.withValues(alpha: .36),
+        Colors.white.withValues(alpha: .16),
+      ],
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.white.withValues(alpha: .46),
+        offset: const Offset(0, 1),
+        blurRadius: 0,
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: .08),
+        offset: const Offset(0, 6),
+        blurRadius: 18,
+      ),
+    ],
+  );
+}
+
+class _ContextAvatarBelt extends StatelessWidget {
+  const _ContextAvatarBelt({
+    required this.categories,
+    required this.selectedCategory,
+    required this.pulsingCategoryId,
+    required this.carouselOffset,
+    required this.onCategoryTap,
+  });
+
+  final List<TransactionCategory> categories;
+  final TransactionCategory? selectedCategory;
+  final int? pulsingCategoryId;
+  final double carouselOffset;
+  final ValueChanged<TransactionCategory> onCategoryTap;
+
+  static const _slotDistance = 64.0;
+  static const _verticalLift = 4.0;
+  static const _slotOffsets = <int>[-2, -1, 0, 1, 2];
+  static const _slotBuildOrder = <int>[0, -1, 1, -2, 2, -3, 3];
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final center = Offset(
+          constraints.maxWidth / 2,
+          constraints.maxHeight / 2 - _verticalLift,
+        );
+        final slots = _visibleAvatarSlots()
+          ..sort((left, right) {
+            final leftDistance = _logicalOffsetFor(left.slotOffset).abs();
+            final rightDistance = _logicalOffsetFor(right.slotOffset).abs();
+            return rightDistance.compareTo(leftDistance);
+          });
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (final slot in slots)
+              _PositionedContextAvatar(
+                slot: slot,
+                center: center,
+                logicalOffset: _logicalOffsetFor(slot.slotOffset),
+                onTap: () => onCategoryTap(slot.category),
+                pulsing:
+                    slot.category.transactionCategoryID == pulsingCategoryId,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  double _logicalOffsetFor(int slotOffset) =>
+      slotOffset + carouselOffset / _slotDistance;
+
+  List<_ContextAvatarSlot> _visibleAvatarSlots() {
     final selectedIndex = categories.indexWhere(
       (category) =>
           category.transactionCategoryID ==
           selectedCategory?.transactionCategoryID,
     );
-    final center = selectedIndex < 0 ? 0 : selectedIndex;
-    return List<TransactionCategory>.generate(5, (offset) {
-      final index = (center - 2 + offset) % categories.length;
-      return categories[index < 0 ? index + categories.length : index];
-    });
+    final centerIndex = selectedIndex < 0 ? 0 : selectedIndex;
+    final incomingOffset = carouselOffset < -0.5
+        ? 3
+        : carouselOffset > 0.5
+        ? -3
+        : null;
+    final visibleCount = math.min(
+      categories.length,
+      _slotOffsets.length + (incomingOffset == null ? 0 : 1),
+    );
+    final slots = <_ContextAvatarSlot>[];
+    final usedIndexes = <int>{};
+    for (final offset in _slotBuildOrder) {
+      if (offset.abs() > 2 && offset != incomingOffset) continue;
+      if (slots.length == visibleCount) break;
+      final index = _wrappedIndex(centerIndex + offset);
+      if (!usedIndexes.add(index)) continue;
+      slots.add(
+        _ContextAvatarSlot(
+          category: categories[index],
+          slotOffset: offset,
+          selected: offset == 0,
+        ),
+      );
+    }
+    slots.sort((left, right) => left.slotOffset.compareTo(right.slotOffset));
+    return slots;
   }
+
+  int _wrappedIndex(int index) {
+    final wrapped = index % categories.length;
+    return wrapped < 0 ? wrapped + categories.length : wrapped;
+  }
+}
+
+class _ContextAvatarSlot {
+  const _ContextAvatarSlot({
+    required this.category,
+    required this.slotOffset,
+    required this.selected,
+  });
+
+  final TransactionCategory category;
+  final int slotOffset;
+  final bool selected;
+}
+
+class _PositionedContextAvatar extends StatelessWidget {
+  const _PositionedContextAvatar({
+    required this.slot,
+    required this.center,
+    required this.logicalOffset,
+    required this.onTap,
+    required this.pulsing,
+  });
+
+  final _ContextAvatarSlot slot;
+  final Offset center;
+  final double logicalOffset;
+  final VoidCallback onTap;
+  final bool pulsing;
+
+  @override
+  Widget build(BuildContext context) {
+    final position = _visualPosition();
+    final size = _visualSize(position);
+    final iconSize = _visualIconSize(position);
+    final opacity = _visualOpacity(position);
+    return Positioned(
+      left: center.dx + position * _ContextAvatarBelt._slotDistance - size / 2,
+      top: center.dy - size / 2,
+      width: size,
+      height: size,
+      child: _ContextAvatar(
+        category: slot.category,
+        size: size,
+        iconSize: iconSize,
+        opacity: opacity,
+        selected: slot.selected,
+        pulsing: pulsing,
+        onTap: onTap,
+      ),
+    );
+  }
+
+  double _visualPosition() => logicalOffset;
+
+  double _visualSize(double position) {
+    return _sizeForDistance(position.abs());
+  }
+
+  double _visualIconSize(double position) {
+    return _iconSizeForDistance(position.abs());
+  }
+
+  double _visualOpacity(double position) {
+    if (slot.selected) return 1;
+    final distance = position.abs();
+    if (distance <= 1) return _lerpDouble(1, .9, distance);
+    return _lerpDouble(.9, .72, (distance - 1).clamp(0.0, 1.0).toDouble());
+  }
+
+  double _sizeForDistance(double distance) {
+    final sizes = _budgetHeaderVisualSpec.budget.avatarSizes;
+    if (distance <= 1) return _lerpDouble(sizes[2], sizes[1], distance);
+    return _lerpDouble(
+      sizes[1],
+      sizes[0],
+      (distance - 1).clamp(0.0, 1.0).toDouble(),
+    );
+  }
+
+  double _iconSizeForDistance(double distance) {
+    final sizes = _budgetHeaderVisualSpec.budget.avatarIconSizes;
+    if (distance <= 1) return _lerpDouble(sizes[2], sizes[1], distance);
+    return _lerpDouble(
+      sizes[1],
+      sizes[0],
+      (distance - 1).clamp(0.0, 1.0).toDouble(),
+    );
+  }
+}
+
+double _clampUnit(double value) {
+  if (value <= 0) return 0;
+  if (value >= 1) return 1;
+  return value;
+}
+
+double _lerpDouble(double begin, double end, double amount) {
+  return begin + (end - begin) * _clampUnit(amount);
 }
 
 class _ContextAvatar extends StatelessWidget {
   const _ContextAvatar({
     required this.category,
-    required this.distanceFromCenter,
+    required this.size,
+    required this.iconSize,
+    required this.opacity,
     required this.selected,
     required this.pulsing,
     required this.onTap,
   });
 
   final TransactionCategory category;
-  final int distanceFromCenter;
+  final double size;
+  final double iconSize;
+  final double opacity;
   final bool selected;
   final bool pulsing;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final visualIndex = selected ? 2 : (distanceFromCenter <= 1 ? 1 : 0);
-    final size = _budgetHeaderVisualSpec.budget.avatarSizes[visualIndex];
-    final iconSize =
-        _budgetHeaderVisualSpec.budget.avatarIconSizes[visualIndex];
-    final opacity = selected ? 1.0 : (distanceFromCenter <= 1 ? .9 : .72);
     return GestureDetector(
       key: ValueKey(
         selected
@@ -997,34 +3424,141 @@ class _PartitionBar extends StatelessWidget {
   }
 }
 
-class _BudgetPieStage2Layer extends StatelessWidget {
+class _BudgetPieStage2Layer extends StatefulWidget {
   const _BudgetPieStage2Layer({
     required this.bars,
+    required this.transactions,
     required this.selectedCategory,
+    required this.page,
     required this.onCategoryTap,
+    required this.onPreviousPage,
+    required this.onNextPage,
+    required this.surface,
+    required this.listSurface,
+    required this.softness,
+    required this.listSoftness,
   });
 
   final List<CategoryBudgetBarData> bars;
+  final List<TransactionRecord> transactions;
   final TransactionCategory? selectedCategory;
+  final _Stage2BudgetPage page;
   final ValueChanged<TransactionCategory> onCategoryTap;
+  final VoidCallback onPreviousPage;
+  final VoidCallback onNextPage;
+  final _PanelSurface surface;
+  final _ChartListSurface listSurface;
+  final double softness;
+  final double listSoftness;
+
+  @override
+  State<_BudgetPieStage2Layer> createState() => _BudgetPieStage2LayerState();
+}
+
+class _BudgetPieStage2LayerState extends State<_BudgetPieStage2Layer> {
+  static const _swipeThreshold = 48.0;
+
+  var _dragDx = 0.0;
+
+  void _resetDrag() {
+    _dragDx = 0;
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    _dragDx += details.delta.dx;
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final direction = _dragDx.abs() >= _swipeThreshold
+        ? _dragDx
+        : velocity.abs() >= 320
+        ? velocity
+        : 0.0;
+    _resetDrag();
+    if (direction <= -_swipeThreshold || velocity <= -320) {
+      widget.onNextPage();
+      return;
+    }
+    if (direction >= _swipeThreshold || velocity >= 320) {
+      widget.onPreviousPage();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          key: const ValueKey('spendee-test-budget-pie-stage2-layer'),
-          padding: const EdgeInsets.fromLTRB(1, 0, 1, 12),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: _BudgetPiePanel(
-              bars: bars,
-              selectedCategory: selectedCategory,
-              onCategoryTap: onCategoryTap,
+    return GestureDetector(
+      key: const ValueKey('spendee-test-budget-pie-stage2-layer'),
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) => _resetDrag(),
+      onHorizontalDragUpdate: _handleDragUpdate,
+      onHorizontalDragCancel: _resetDrag,
+      onHorizontalDragEnd: _handleDragEnd,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(1, 0, 1, 12),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: _BudgetPiePanel(
+                bars: widget.bars,
+                transactions: widget.transactions,
+                selectedCategory: widget.selectedCategory,
+                page: widget.page,
+                onCategoryTap: widget.onCategoryTap,
+                surface: widget.surface,
+                listSurface: widget.listSurface,
+                softness: widget.softness,
+                listSoftness: widget.listSoftness,
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BudgetShareEntry {
+  const _BudgetShareEntry({
+    required this.key,
+    required this.rowKey,
+    required this.rowSurfaceKeyBase,
+    required this.title,
+    required this.amount,
+    required this.count,
+    required this.color,
+    required this.dotGradient,
+    this.category,
+  });
+
+  final String key;
+  final Key rowKey;
+  final String rowSurfaceKeyBase;
+  final String title;
+  final double amount;
+  final int count;
+  final Color color;
+  final Gradient dotGradient;
+  final TransactionCategory? category;
+}
+
+class _VendorShareAccumulator {
+  const _VendorShareAccumulator({
+    required this.name,
+    required this.amount,
+    required this.count,
+  });
+
+  final String name;
+  final double amount;
+  final int count;
+
+  _VendorShareAccumulator add(double nextAmount) {
+    return _VendorShareAccumulator(
+      name: name,
+      amount: amount + nextAmount,
+      count: count + 1,
     );
   }
 }
@@ -1032,49 +3566,124 @@ class _BudgetPieStage2Layer extends StatelessWidget {
 class _BudgetPiePanel extends StatelessWidget {
   const _BudgetPiePanel({
     required this.bars,
+    required this.transactions,
     required this.selectedCategory,
+    required this.page,
     required this.onCategoryTap,
+    required this.surface,
+    required this.listSurface,
+    required this.softness,
+    required this.listSoftness,
   });
 
   final List<CategoryBudgetBarData> bars;
+  final List<TransactionRecord> transactions;
   final TransactionCategory? selectedCategory;
+  final _Stage2BudgetPage page;
   final ValueChanged<TransactionCategory> onCategoryTap;
+  final _PanelSurface surface;
+  final _ChartListSurface listSurface;
+  final double softness;
+  final double listSoftness;
 
   @override
   Widget build(BuildContext context) {
-    final budgetSpec = _budgetHeaderVisualSpec.budget;
-    final visibleBars = bars.where((bar) => bar.spent > 0).toList();
-    final total = visibleBars.fold<double>(0, (sum, bar) => sum + bar.spent);
-    final selectedId = selectedCategory?.transactionCategoryID;
-    final selectedBar = visibleBars.cast<CategoryBudgetBarData?>().firstWhere(
-      (bar) => bar?.targetId == selectedId,
-      orElse: () => visibleBars.isEmpty ? null : visibleBars.first,
+    final entries = switch (page) {
+      _Stage2BudgetPage.categories => _categoryEntries(),
+      _Stage2BudgetPage.vendors => _vendorEntries(),
+    };
+    final total = entries.fold<double>(0, (sum, entry) => sum + entry.amount);
+    final selectedKey = switch (page) {
+      _Stage2BudgetPage.categories =>
+        selectedCategory?.transactionCategoryID.toString(),
+      _Stage2BudgetPage.vendors => entries.isEmpty ? null : entries.first.key,
+    };
+    final selectedEntry = entries.cast<_BudgetShareEntry?>().firstWhere(
+      (entry) => entry?.key == selectedKey,
+      orElse: () => entries.isEmpty ? null : entries.first,
     );
-    final selectedPercent = selectedBar == null || total <= 0
+    final selectedPercent = selectedEntry == null || total <= 0
         ? 0
-        : (selectedBar.spent / total * 100).round();
+        : (selectedEntry.amount / total * 100).round();
+    final content = _BudgetPieContent(
+      key: ValueKey(
+        page == _Stage2BudgetPage.categories
+            ? 'spendee-test-stage2-page-categories'
+            : 'spendee-test-stage2-page-vendors',
+      ),
+      budgetSpec: _budgetHeaderVisualSpec.budget,
+      entries: entries,
+      total: total,
+      selectedKey: selectedEntry?.key,
+      selectedEntry: selectedEntry,
+      selectedPercent: selectedPercent,
+      eyebrow: page == _Stage2BudgetPage.categories
+          ? 'Kategória arány'
+          : 'Vendor arány',
+      headline: page == _Stage2BudgetPage.categories
+          ? 'limit mix'
+          : selectedCategory?.name ?? 'vendor mix',
+      focusLabel: page == _Stage2BudgetPage.categories
+          ? 'kiemelt kategória'
+          : 'kiemelt vendor',
+      focusTitleKey: ValueKey(
+        page == _Stage2BudgetPage.categories
+            ? 'spendee-test-budget-pie-focus-title'
+            : 'spendee-test-budget-vendor-focus-title',
+      ),
+      focusSuffix: page == _Stage2BudgetPage.categories
+          ? 'a kategória-kosárból'
+          : 'a kategóriából',
+      listSurface: listSurface,
+      listSoftness: listSoftness,
+      onEntryTap: (entry) {
+        final category = entry.category;
+        if (category != null) onCategoryTap(category);
+      },
+    );
+
+    if (surface == _PanelSurface.background) {
+      return KeyedSubtree(
+        key: const ValueKey('spendee-test-budget-pie-background'),
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.htmlC2Glass) {
+      return _C2GlassSurface(
+        key: const ValueKey('spendee-test-budget-pie-html-c2-glass'),
+        clipKey: const ValueKey('spendee-test-budget-pie-html-c2-clip'),
+        paintKey: const ValueKey('spendee-test-budget-pie-html-c2-paint'),
+        maskKey: const ValueKey('spendee-test-budget-pie-html-c2-mask'),
+        borderRadius: 17,
+        useBottomFade: false,
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.liquidGlass) {
+      return SpendeeLiquidGlassSurface(
+        key: const ValueKey('spendee-test-budget-pie-liquid-glass'),
+        fallbackKey: const ValueKey('spendee-test-budget-pie-liquid-fallback'),
+        glareKey: const ValueKey('spendee-test-budget-pie-liquid-glare'),
+        borderRadius: 17,
+        softness: softness,
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.acrylic) {
+      return SpendeeAcrylicSurface(
+        key: const ValueKey('spendee-test-budget-pie-acrylic'),
+        fluentKey: const ValueKey('spendee-test-budget-pie-acrylic-fluent'),
+        borderRadius: 17,
+        child: content,
+      );
+    }
+
     return Container(
       key: const ValueKey('spendee-test-budget-pie-panel'),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(17),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x5CFFFFFF), Color(0x26FFFFFF)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: .52),
-            offset: const Offset(0, 1),
-            blurRadius: 0,
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .08),
-            offset: const Offset(0, 7),
-            blurRadius: 18,
-          ),
-        ],
-      ),
+      decoration: _budgetPieGlassDecoration(),
       child: DecoratedBox(
         decoration: const BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(17)),
@@ -1085,70 +3694,206 @@ class _BudgetPiePanel extends StatelessWidget {
             stops: [0, .62],
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: content,
+      ),
+    );
+  }
+
+  List<_BudgetShareEntry> _categoryEntries() {
+    return [
+      for (final bar in bars.where((bar) => bar.spent > 0))
+        _BudgetShareEntry(
+          key: bar.targetId.toString(),
+          rowKey: ValueKey('spendee-test-budget-pie-row-${bar.targetId}'),
+          rowSurfaceKeyBase: 'spendee-test-budget-pie-row-${bar.targetId}',
+          title: bar.title,
+          amount: bar.spent,
+          count: 1,
+          color: bar.color,
+          dotGradient: CategoryColorManager.gradient(bar.category?.colorSlot),
+          category: bar.category,
+        ),
+    ];
+  }
+
+  List<_BudgetShareEntry> _vendorEntries() {
+    final categoryId = selectedCategory?.transactionCategoryID;
+    if (categoryId == null) return const <_BudgetShareEntry>[];
+    final totals = <String, _VendorShareAccumulator>{};
+    for (final record in transactions) {
+      if (record.transactionCategoryID != categoryId) continue;
+      final amount = record.amount.abs();
+      if (amount <= 0) continue;
+      final rawName = record.displayMerchant.trim();
+      final fallbackName = record.merchant.trim();
+      final name = rawName.isNotEmpty
+          ? rawName
+          : fallbackName.isNotEmpty
+          ? fallbackName
+          : 'Ismeretlen vendor';
+      totals.update(
+        name,
+        (rollup) => rollup.add(amount),
+        ifAbsent: () =>
+            _VendorShareAccumulator(name: name, amount: amount, count: 1),
+      );
+    }
+    final vendors = totals.values.toList()
+      ..sort((left, right) {
+        final totalOrder = right.amount.compareTo(left.amount);
+        if (totalOrder != 0) return totalOrder;
+        return left.name.compareTo(right.name);
+      });
+    return [
+      for (var index = 0; index < vendors.length; index++)
+        _BudgetShareEntry(
+          key: vendors[index].name,
+          rowKey: ValueKey('spendee-test-budget-vendor-row-$index'),
+          rowSurfaceKeyBase: 'spendee-test-budget-vendor-row-$index',
+          title: vendors[index].name,
+          amount: vendors[index].amount,
+          count: vendors[index].count,
+          color: _stage2VendorPalette[index % _stage2VendorPalette.length],
+          dotGradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _stage2VendorPalette[index % _stage2VendorPalette.length]
+                  .withValues(alpha: .78),
+              _stage2VendorPalette[(index + 2) % _stage2VendorPalette.length],
+            ],
+          ),
+        ),
+    ];
+  }
+}
+
+BoxDecoration _budgetPieGlassDecoration() {
+  return BoxDecoration(
+    borderRadius: BorderRadius.circular(17),
+    gradient: const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0x5CFFFFFF), Color(0x26FFFFFF)],
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.white.withValues(alpha: .52),
+        offset: const Offset(0, 1),
+        blurRadius: 0,
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: .08),
+        offset: const Offset(0, 7),
+        blurRadius: 18,
+      ),
+    ],
+  );
+}
+
+class _BudgetPieContent extends StatelessWidget {
+  const _BudgetPieContent({
+    super.key,
+    required this.budgetSpec,
+    required this.entries,
+    required this.total,
+    required this.selectedKey,
+    required this.selectedEntry,
+    required this.selectedPercent,
+    required this.eyebrow,
+    required this.headline,
+    required this.focusLabel,
+    required this.focusTitleKey,
+    required this.focusSuffix,
+    required this.listSurface,
+    required this.listSoftness,
+    required this.onEntryTap,
+  });
+
+  final SpendeeBudgetStageSpec budgetSpec;
+  final List<_BudgetShareEntry> entries;
+  final double total;
+  final String? selectedKey;
+  final _BudgetShareEntry? selectedEntry;
+  final int selectedPercent;
+  final String eyebrow;
+  final String headline;
+  final String focusLabel;
+  final Key focusTitleKey;
+  final String focusSuffix;
+  final _ChartListSurface listSurface;
+  final double listSoftness;
+  final ValueChanged<_BudgetShareEntry> onEntryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Kategória arány', style: _smallCapsStyle),
-                      SizedBox(height: 4),
-                      Text('limit mix', style: _pieHeadlineStyle),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: budgetSpec.donutVisualSize,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: budgetSpec.donutVisualSize,
-                      height: budgetSpec.donutVisualSize,
-                      child: CustomPaint(
-                        painter: _BudgetPiePainter(
-                          bars: visibleBars,
-                          total: total,
-                          selectedCategoryId: selectedId,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BudgetPieFocus(
-                        key: const ValueKey('spendee-test-budget-pie-focus'),
-                        bar: selectedBar,
-                        percent: selectedPercent,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
               Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var index = 0; index < visibleBars.length; index++) ...[
-                    if (index > 0) const SizedBox(height: 7),
-                    _BudgetPieRow(
-                      bar: visibleBars[index],
-                      total: total,
-                      selected: visibleBars[index].targetId == selectedId,
-                      onCategoryTap: onCategoryTap,
-                    ),
-                  ],
+                  Text(eyebrow, style: _smallCapsStyle),
+                  const SizedBox(height: 4),
+                  Text(headline, style: _pieHeadlineStyle),
                 ],
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: budgetSpec.donutVisualSize,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: budgetSpec.donutVisualSize,
+                  height: budgetSpec.donutVisualSize,
+                  child: CustomPaint(
+                    painter: _BudgetPiePainter(
+                      entries: entries,
+                      total: total,
+                      selectedKey: selectedKey,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _BudgetPieFocus(
+                    key: const ValueKey('spendee-test-budget-pie-focus'),
+                    titleKey: focusTitleKey,
+                    entry: selectedEntry,
+                    percent: selectedPercent,
+                    label: focusLabel,
+                    suffix: focusSuffix,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Column(
+            children: [
+              for (var index = 0; index < entries.length; index++) ...[
+                if (index > 0) const SizedBox(height: 7),
+                _BudgetPieRow(
+                  entry: entries[index],
+                  total: total,
+                  selected: entries[index].key == selectedKey,
+                  surface: listSurface,
+                  softness: listSoftness,
+                  onTap: () => onEntryTap(entries[index]),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1156,93 +3901,172 @@ class _BudgetPiePanel extends StatelessWidget {
 
 class _BudgetPieRow extends StatelessWidget {
   const _BudgetPieRow({
-    required this.bar,
+    required this.entry,
     required this.total,
     required this.selected,
-    required this.onCategoryTap,
+    required this.surface,
+    required this.softness,
+    required this.onTap,
   });
 
-  final CategoryBudgetBarData bar;
+  final _BudgetShareEntry entry;
   final double total;
   final bool selected;
-  final ValueChanged<TransactionCategory> onCategoryTap;
+  final _ChartListSurface surface;
+  final double softness;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final percent = total <= 0 ? 0 : (bar.spent / total * 100).round();
+    final percent = total <= 0 ? 0 : (entry.amount / total * 100).round();
+    final child = _BudgetPieRowBody(entry: entry, percent: percent);
     return GestureDetector(
-      key: ValueKey('spendee-test-budget-pie-row-${bar.targetId}'),
+      key: entry.rowKey,
       behavior: HitTestBehavior.opaque,
-      onTap: bar.category == null ? null : () => onCategoryTap(bar.category!),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 25),
+      onTap: onTap,
+      child: switch (surface) {
+        _ChartListSurface.none => _BudgetPieRowPaddedSurface(
+          key: ValueKey('${entry.rowSurfaceKeyBase}-pillless'),
+          child: child,
+        ),
+        _ChartListSurface.original => Container(
+          key: ValueKey('${entry.rowSurfaceKeyBase}-original'),
+          constraints: const BoxConstraints(minHeight: 25),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: _budgetPieRowOriginalDecoration(entry, selected),
+          child: child,
+        ),
+        _ChartListSurface.htmlC2Glass => _C2GlassSurface(
+          key: ValueKey('${entry.rowSurfaceKeyBase}-html-c2-glass'),
+          clipKey: ValueKey('${entry.rowSurfaceKeyBase}-html-c2-clip'),
+          paintKey: ValueKey('${entry.rowSurfaceKeyBase}-html-c2-paint'),
+          maskKey: ValueKey('${entry.rowSurfaceKeyBase}-html-c2-mask'),
+          borderRadius: 12,
+          useBottomFade: false,
+          child: _BudgetPieRowPaddedSurface(child: child),
+        ),
+        _ChartListSurface.liquidGlass => SpendeeLiquidGlassSurface(
+          key: ValueKey('${entry.rowSurfaceKeyBase}-liquid-glass'),
+          fallbackKey: ValueKey('${entry.rowSurfaceKeyBase}-liquid-fallback'),
+          glareKey: ValueKey('${entry.rowSurfaceKeyBase}-liquid-glare'),
+          borderRadius: 12,
+          softness: softness,
+          child: _BudgetPieRowPaddedSurface(child: child),
+        ),
+        _ChartListSurface.acrylic => SpendeeAcrylicSurface(
+          key: ValueKey('${entry.rowSurfaceKeyBase}-acrylic'),
+          fluentKey: ValueKey('${entry.rowSurfaceKeyBase}-acrylic-fluent'),
+          borderRadius: 12,
+          child: _BudgetPieRowPaddedSurface(child: child),
+        ),
+      },
+    );
+  }
+}
+
+class _BudgetPieRowPaddedSurface extends StatelessWidget {
+  const _BudgetPieRowPaddedSurface({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 25),
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? RadialGradient(
-                  center: const Alignment(-1, -1),
-                  radius: 1.1,
-                  colors: [
-                    Colors.white.withValues(alpha: .50),
-                    bar.color.withValues(alpha: .18),
-                  ],
-                )
-              : null,
-          color: selected ? null : Colors.white.withValues(alpha: .18),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            if (selected)
-              BoxShadow(
-                color: bar.color.withValues(alpha: .24),
-                offset: const Offset(0, 8),
-                blurRadius: 18,
-              ),
-            BoxShadow(
-              color: Colors.white.withValues(alpha: selected ? .42 : .24),
-              offset: const Offset(0, 1),
-              blurRadius: 0,
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: CategoryColorManager.gradient(
-                  bar.category?.colorSlot,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: bar.color.withValues(alpha: .48),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                bar.title,
-                overflow: TextOverflow.ellipsis,
-                style: _pieRowStyle,
-              ),
-            ),
-            Text('$percent% · ${_formatFt(bar.spent)}', style: _pieValueStyle),
-          ],
-        ),
+        child: child,
       ),
     );
   }
 }
 
-class _BudgetPieFocus extends StatelessWidget {
-  const _BudgetPieFocus({super.key, required this.bar, required this.percent});
+class _BudgetPieRowBody extends StatelessWidget {
+  const _BudgetPieRowBody({required this.entry, required this.percent});
 
-  final CategoryBudgetBarData? bar;
+  final _BudgetShareEntry entry;
   final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: entry.dotGradient,
+            boxShadow: [
+              BoxShadow(
+                color: entry.color.withValues(alpha: .48),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            entry.title,
+            overflow: TextOverflow.ellipsis,
+            style: _pieRowStyle,
+          ),
+        ),
+        Text('$percent% · ${_formatFt(entry.amount)}', style: _pieValueStyle),
+      ],
+    );
+  }
+}
+
+BoxDecoration _budgetPieRowOriginalDecoration(
+  _BudgetShareEntry entry,
+  bool selected,
+) {
+  return BoxDecoration(
+    gradient: selected
+        ? RadialGradient(
+            center: const Alignment(-1, -1),
+            radius: 1.1,
+            colors: [
+              Colors.white.withValues(alpha: .50),
+              entry.color.withValues(alpha: .18),
+            ],
+          )
+        : null,
+    color: selected ? null : Colors.white.withValues(alpha: .18),
+    borderRadius: BorderRadius.circular(12),
+    boxShadow: [
+      if (selected)
+        BoxShadow(
+          color: entry.color.withValues(alpha: .24),
+          offset: const Offset(0, 8),
+          blurRadius: 18,
+        ),
+      BoxShadow(
+        color: Colors.white.withValues(alpha: selected ? .42 : .24),
+        offset: const Offset(0, 1),
+        blurRadius: 0,
+      ),
+    ],
+  );
+}
+
+class _BudgetPieFocus extends StatelessWidget {
+  const _BudgetPieFocus({
+    super.key,
+    required this.titleKey,
+    required this.entry,
+    required this.percent,
+    required this.label,
+    required this.suffix,
+  });
+
+  final Key titleKey;
+  final _BudgetShareEntry? entry;
+  final int percent;
+  final String label;
+  final String suffix;
 
   @override
   Widget build(BuildContext context) {
@@ -1250,20 +4074,20 @@ class _BudgetPieFocus extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('kiemelt kategória', style: _pieFocusLabelStyle),
+        Text(label, style: _pieFocusLabelStyle),
         const SizedBox(height: 5),
         Text(
-          bar?.title ?? 'Nincs adat',
-          key: const ValueKey('spendee-test-budget-pie-focus-title'),
+          entry?.title ?? 'Nincs adat',
+          key: titleKey,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: _pieFocusTitleStyle,
         ),
         const SizedBox(height: 5),
         Text(
-          bar == null
-              ? '0 Ft · 0% a kategória-kosárból'
-              : '${_formatFt(bar!.spent)} · $percent% a kategória-kosárból',
+          entry == null
+              ? '0 Ft · 0% $suffix'
+              : '${_formatFt(entry!.amount)} · $percent% $suffix',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: _pieFocusMetaStyle,
@@ -1275,14 +4099,14 @@ class _BudgetPieFocus extends StatelessWidget {
 
 class _BudgetPiePainter extends CustomPainter {
   const _BudgetPiePainter({
-    required this.bars,
+    required this.entries,
     required this.total,
-    required this.selectedCategoryId,
+    required this.selectedKey,
   });
 
-  final List<CategoryBudgetBarData> bars;
+  final List<_BudgetShareEntry> entries;
   final double total;
-  final int? selectedCategoryId;
+  final String? selectedKey;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1309,15 +4133,15 @@ class _BudgetPiePainter extends CustomPainter {
     canvas.drawCircle(center, radius, basePaint);
     if (total <= 0) return;
     var start = -math.pi / 2;
-    for (final bar in bars) {
-      final sweep = (bar.spent / total) * math.pi * 2;
-      final selected = bar.targetId == selectedCategoryId;
+    for (final entry in entries) {
+      final sweep = (entry.amount / total) * math.pi * 2;
+      final selected = entry.key == selectedKey;
       if (selected) {
         final glowPaint = Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = selectedStrokeWidth
           ..strokeCap = StrokeCap.butt
-          ..color = bar.color.withValues(
+          ..color = entry.color.withValues(
             alpha: budgetSpec.donutSelectedGlowOpacity,
           )
           ..maskFilter = MaskFilter.blur(
@@ -1336,7 +4160,7 @@ class _BudgetPiePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = selected ? selectedStrokeWidth : baseStrokeWidth
         ..strokeCap = StrokeCap.butt
-        ..color = selected ? bar.color : bar.color.withValues(alpha: .74);
+        ..color = selected ? entry.color : entry.color.withValues(alpha: .74);
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
         start,
@@ -1363,13 +4187,13 @@ class _BudgetPiePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BudgetPiePainter oldDelegate) {
-    return oldDelegate.bars != bars ||
+    return oldDelegate.entries != entries ||
         oldDelegate.total != total ||
-        oldDelegate.selectedCategoryId != selectedCategoryId;
+        oldDelegate.selectedKey != selectedKey;
   }
 }
 
-class _SpendeeHomeContent extends StatelessWidget {
+class _SpendeeHomeContent extends StatefulWidget {
   const _SpendeeHomeContent({
     super.key,
     required this.store,
@@ -1392,7 +4216,84 @@ class _SpendeeHomeContent extends StatelessWidget {
   final double logBottomPadding;
 
   @override
+  State<_SpendeeHomeContent> createState() => _SpendeeHomeContentState();
+}
+
+class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
+  static const _summaryDragLimit = 64.0;
+  static const _summaryShiftDistance = 34.0;
+  static const _summaryWindowCycleDistance = 34.0;
+
+  var _summaryDragDx = 0.0;
+  var _summaryDragging = false;
+  Offset? _summaryDragStart;
+
+  void _handleSummaryPointerDown(PointerDownEvent event) {
+    _summaryDragStart = event.position;
+    if (_summaryDragDx == 0 && !_summaryDragging) return;
+    setState(() {
+      _summaryDragging = false;
+      _summaryDragDx = 0;
+    });
+  }
+
+  void _handleSummaryPointerMove(PointerMoveEvent event) {
+    final start = _summaryDragStart;
+    if (start == null) return;
+    final delta = event.position - start;
+    if (!_summaryDragging) {
+      if (delta.dx.abs() < 8) return;
+      if (delta.dx.abs() < delta.dy.abs()) return;
+    }
+    final next = delta.dx.clamp(-_summaryDragLimit, _summaryDragLimit);
+    if ((next - _summaryDragDx).abs() < .1) return;
+    setState(() {
+      _summaryDragging = true;
+      _summaryDragDx = next.toDouble();
+    });
+  }
+
+  void _handleSummaryPointerUp(PointerUpEvent event) {
+    final start = _summaryDragStart;
+    final delta = start == null
+        ? Offset(_summaryDragDx, 0)
+        : event.position - start;
+    final horizontal = delta.dx.abs();
+    final vertical = delta.dy.abs();
+    if (horizontal >= _summaryShiftDistance && horizontal >= vertical) {
+      if (widget.store.summaryWindow != SummaryWindow.allTime) {
+        unawaited(widget.store.shiftSummaryPeriod(delta.dx < 0 ? 1 : -1));
+      }
+    } else if (vertical >= _summaryWindowCycleDistance &&
+        vertical > horizontal) {
+      unawaited(widget.store.cycleSummaryWindow());
+    }
+    _resetSummaryDrag();
+  }
+
+  void _handleSummaryPointerCancel(PointerCancelEvent event) {
+    _resetSummaryDrag();
+  }
+
+  void _resetSummaryDrag() {
+    _summaryDragStart = null;
+    if (!_summaryDragging && _summaryDragDx == 0) return;
+    setState(() {
+      _summaryDragging = false;
+      _summaryDragDx = 0;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final store = widget.store;
+    final stage = widget.stage;
+    final onPickSummaryMonth = widget.onPickSummaryMonth;
+    final onEditTransaction = widget.onEditTransaction;
+    final onDeleteTransactionRequested = widget.onDeleteTransactionRequested;
+    final onVendorSheetRequested = widget.onVendorSheetRequested;
+    final logBottomPadding = widget.logBottomPadding;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         const fixedDashboardControlsHeight = 66.0 + 59.0 + 12.0 + 45.0;
@@ -1449,7 +4350,7 @@ class _SpendeeHomeContent extends StatelessWidget {
                         ),
                         boxShadows: const <BoxShadow>[
                           BoxShadow(
-                            color: Color.fromRGBO(245, 54, 141, .22),
+                            color: Color.fromRGBO(15, 23, 42, .08),
                             offset: Offset(0, 12),
                             blurRadius: 24,
                           ),
@@ -1465,46 +4366,52 @@ class _SpendeeHomeContent extends StatelessWidget {
                 ),
               ),
             ),
-            GestureDetector(
-              onTap: onPickSummaryMonth,
-              onDoubleTap: store.resetSummaryToCurrentMonth,
-              onVerticalDragEnd: (_) => store.cycleSummaryWindow(),
-              onHorizontalDragEnd: (details) {
-                final dx = details.velocity.pixelsPerSecond.dx;
-                if (dx == 0) return;
-                store.shiftSummaryPeriod(dx < 0 ? 1 : -1);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Container(
-                  key: const ValueKey('spendee-test-summary-pill'),
-                  height: 59,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: _softWhiteDecoration(20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          store.activeSummaryTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.gray500,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+            Listener(
+              onPointerDown: _handleSummaryPointerDown,
+              onPointerMove: _handleSummaryPointerMove,
+              onPointerUp: _handleSummaryPointerUp,
+              onPointerCancel: _handleSummaryPointerCancel,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onPickSummaryMonth,
+                onDoubleTap: store.resetSummaryToCurrentMonth,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: AnimatedContainer(
+                    key: const ValueKey('spendee-test-summary-pill'),
+                    duration: _summaryDragging
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    transform: Matrix4.translationValues(_summaryDragDx, 0, 0),
+                    height: 59,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: _softWhiteDecoration(20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            store.activeSummaryTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.gray500,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        store.activeSummary.formattedFor(store.activeType),
-                        style: const TextStyle(
-                          color: AppColors.gray800,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                        Text(
+                          store.activeSummary.formattedFor(store.activeType),
+                          style: const TextStyle(
+                            color: AppColors.gray800,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1706,7 +4613,7 @@ class _SpendeeLogList extends StatelessWidget {
   }
 }
 
-class _SpendeeLogBox extends StatelessWidget {
+class _SpendeeLogBox extends StatefulWidget {
   const _SpendeeLogBox({
     required this.record,
     required this.category,
@@ -1724,94 +4631,156 @@ class _SpendeeLogBox extends StatelessWidget {
   final ValueChanged<TransactionCategory> onCategoryFilter;
 
   @override
+  State<_SpendeeLogBox> createState() => _SpendeeLogBoxState();
+}
+
+class _SpendeeLogBoxState extends State<_SpendeeLogBox> {
+  static const _filterDistance = 80.0;
+  static const _deleteDistance = 70.0;
+  static const _minFlingVelocity = 200.0;
+  static const _maxVisualOffset = 28.0;
+
+  double _dragDx = 0;
+  bool _triggered = false;
+
+  void _startDrag() {
+    _dragDx = 0;
+    _triggered = false;
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    if (_triggered) return;
+    setState(() => _dragDx += details.delta.dx);
+    _dispatchByDistance();
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    if (!_triggered) {
+      final velocityDx = details.velocity.pixelsPerSecond.dx;
+      if (_dragDx <= -_filterDistance || velocityDx < -_minFlingVelocity) {
+        _triggerFastFilter();
+      } else if (_dragDx >= _deleteDistance || velocityDx > _minFlingVelocity) {
+        _triggerDeleteRequest();
+      }
+    }
+    if (mounted) setState(() => _dragDx = 0);
+  }
+
+  void _dispatchByDistance() {
+    if (_dragDx <= -_filterDistance) {
+      _triggerFastFilter();
+    } else if (_dragDx >= _deleteDistance) {
+      _triggerDeleteRequest();
+    }
+  }
+
+  void _triggerFastFilter() {
+    if (_triggered) return;
+    _triggered = true;
+    widget.onFastFilter(widget.record, widget.category);
+  }
+
+  void _triggerDeleteRequest() {
+    if (_triggered || widget.onDeleteRequested == null) return;
+    _triggered = true;
+    unawaited(
+      Future<bool>.sync(() => widget.onDeleteRequested!(widget.record)),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final record = widget.record;
+    final category = widget.category;
     final amountColor = record.type == TransactionType.income
         ? AppColors.income
         : AppColors.expense;
     return GestureDetector(
       key: ValueKey('spendee-test-logbox-${record.id}'),
-      onTap: () => onTap?.call(record),
-      onHorizontalDragEnd: (details) {
-        final dx = details.velocity.pixelsPerSecond.dx;
-        if (dx < -200) onFastFilter(record, category);
-        if (dx > 200 && onDeleteRequested != null) {
-          onDeleteRequested!(record);
-        }
-      },
-      child: Container(
-        height: 64.8,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: _softWhiteDecoration(18),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: category == null
-                  ? null
-                  : () => onCategoryFilter(category!),
-              child: GlossyCategoryAvatar(
-                category: category,
-                size: 46,
-                iconSize: 28,
-                showQuestionMark: category == null,
-                debugSource: 'spendee-test-logbox',
+      onTap: () => widget.onTap?.call(record),
+      onHorizontalDragStart: (_) => _startDrag(),
+      onHorizontalDragUpdate: _handleDragUpdate,
+      onHorizontalDragCancel: () => setState(() => _dragDx = 0),
+      onHorizontalDragEnd: _handleDragEnd,
+      child: Transform.translate(
+        key: ValueKey('spendee-test-logbox-card-${record.id}'),
+        offset: Offset(_dragDx.clamp(-_maxVisualOffset, _maxVisualOffset), 0),
+        child: Container(
+          height: 64.8,
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: _softWhiteDecoration(18),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: category == null
+                    ? null
+                    : () => widget.onCategoryFilter(category),
+                child: GlossyCategoryAvatar(
+                  category: category,
+                  size: 46,
+                  iconSize: 28,
+                  showQuestionMark: category == null,
+                  showTopHighlight: false,
+                  debugSource: 'spendee-test-logbox',
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.displayMerchant,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.gray800,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      category?.name ?? 'Kategória nélkül',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.gray500,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    record.displayMerchant,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.gray800,
+                    record.displayAmount,
+                    style: TextStyle(
+                      color: amountColor,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    category?.name ?? 'Kategória nélkül',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    record.displayTime,
                     style: const TextStyle(
                       color: AppColors.gray500,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  record.displayAmount,
-                  style: TextStyle(
-                    color: amountColor,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  record.displayTime,
-                  style: const TextStyle(
-                    color: AppColors.gray500,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2466,9 +5435,13 @@ String _formatFt(double value) {
 }
 
 class _HeaderValueText extends StatelessWidget {
-  const _HeaderValueText(this.value);
+  const _HeaderValueText(
+    this.value, {
+    this.valueKey = const ValueKey('spendee-test-header-value'),
+  });
 
   final String value;
+  final Key valueKey;
 
   @override
   Widget build(BuildContext context) {
@@ -2488,13 +5461,49 @@ class _HeaderValueText extends StatelessWidget {
         ),
         Text(
           value,
-          key: const ValueKey('spendee-test-header-value'),
+          key: valueKey,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: _headerValueStyle,
         ),
       ],
     );
+  }
+}
+
+class _PartitionSummaryLabel extends StatelessWidget {
+  const _PartitionSummaryLabel({required this.bars, required this.totalLimit});
+
+  final List<CategoryBudgetBarData> bars;
+  final double totalLimit;
+
+  @override
+  Widget build(BuildContext context) {
+    final spent = bars.fold<double>(0, (sum, bar) => sum + bar.spent);
+    final effectiveLimit = _effectiveLimit();
+    final spentPercent = effectiveLimit > 0
+        ? (math.max(0.0, spent) / effectiveLimit * 100).round()
+        : 0;
+    final remaining = math.max(0.0, effectiveLimit - spent);
+    return Row(
+      key: const ValueKey('spendee-test-partition-summary-label'),
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('Elköltve: $spentPercent%', style: _partitionSummaryStyle),
+        Text('Maradt: ${_formatFt(remaining)}', style: _partitionSummaryStyle),
+      ],
+    );
+  }
+
+  double _effectiveLimit() {
+    if (totalLimit > 0) return totalLimit;
+    return bars
+        .where((bar) => bar.spent > 0 || bar.limitAmount > 0)
+        .fold<double>(
+          0,
+          (sum, bar) =>
+              sum + (bar.limitAmount > 0 ? bar.limitAmount : bar.spent),
+        );
   }
 }
 
@@ -2517,6 +5526,32 @@ const _headerValueStyle = TextStyle(
     Shadow(color: Color(0x38FFFFFF), offset: Offset(0, 2), blurRadius: 8),
   ],
 );
+
+const _partitionSummaryStyle = TextStyle(
+  color: Color(0x9414213A),
+  fontSize: 9,
+  height: 1,
+  fontWeight: FontWeight.w800,
+);
+
+const _contextAvatarLabelStyle = TextStyle(
+  color: Color(0xB814213A),
+  fontSize: 11,
+  height: 1,
+  fontWeight: FontWeight.w900,
+  letterSpacing: .1,
+);
+
+const _stage2VendorPalette = <Color>[
+  Color(0xFF06B6D4),
+  Color(0xFF8B5CF6),
+  Color(0xFFF97316),
+  Color(0xFF22C55E),
+  Color(0xFFEF4444),
+  Color(0xFF0EA5E9),
+  Color(0xFFEAB308),
+  Color(0xFFEC4899),
+];
 
 const _smallCapsStyle = TextStyle(
   color: Color(0xA814213A),

@@ -239,22 +239,48 @@
     ]);
   }
 
-  function sampleMoneyFlowColor(palette, incomePercent, sample) {
-    const positions = moneyFlowStopPositions(incomePercent);
-    const coordinate = clamp01(Number(sample.coordinate));
-    let segment = positions.length - 2;
-    for (let index = 0; index < positions.length - 1; index += 1) {
-      if (coordinate <= positions[index + 1]) {
+  function normalizePalettePositions(palette, positions) {
+    if (
+      Array.isArray(positions) &&
+      positions.length === palette.length &&
+      positions.every((position) => Number.isFinite(Number(position)))
+    ) {
+      const bounded = positions.map((position) => clamp01(Number(position)));
+      bounded[0] = 0;
+      bounded[bounded.length - 1] = 1;
+      return bounded;
+    }
+    return palette.map((_, index) => (
+      palette.length <= 1 ? 0 : index / (palette.length - 1)
+    ));
+  }
+
+  function samplePaletteColor(palette, sample, positions = null) {
+    const safePalette = Array.isArray(palette) && palette.length
+      ? palette
+      : [{ r: 255, g: 255, b: 255 }];
+    if (safePalette.length === 1) {
+      return {
+        r: Math.round(safePalette[0].r),
+        g: Math.round(safePalette[0].g),
+        b: Math.round(safePalette[0].b),
+      };
+    }
+    const resolvedPositions = normalizePalettePositions(safePalette, positions);
+    const coordinate = clamp01(Number(sample.coordinate ?? sample.mix ?? 0.5));
+    let segment = resolvedPositions.length - 2;
+    for (let index = 0; index < resolvedPositions.length - 1; index += 1) {
+      if (coordinate <= resolvedPositions[index + 1]) {
         segment = index;
         break;
       }
     }
-    const width = Math.max(1e-6, positions[segment + 1] - positions[segment]);
-    const amount = clamp01((coordinate - positions[segment]) / width);
+    const width = Math.max(1e-6, resolvedPositions[segment + 1] - resolvedPositions[segment]);
+    const amount = clamp01((coordinate - resolvedPositions[segment]) / width);
     const base = {
-      r: lerp(palette[segment].r, palette[segment + 1].r, amount),
-      g: lerp(palette[segment].g, palette[segment + 1].g, amount),
-      b: lerp(palette[segment].b, palette[segment + 1].b, amount),
+      r: lerp(safePalette[segment].r, safePalette[segment + 1].r, amount),
+      g: lerp(safePalette[segment].g, safePalette[segment + 1].g, amount),
+      b: lerp(safePalette[segment].b, safePalette[segment + 1].b, amount),
     };
     const light = Math.max(-0.22, Math.min(0.22, Number(sample.light) || 0));
     const chroma = Math.max(-0.35, Math.min(0.35, Number(sample.chroma) || 0));
@@ -267,6 +293,10 @@
       g: channel(base.g),
       b: channel(base.b),
     };
+  }
+
+  function sampleMoneyFlowColor(palette, incomePercent, sample) {
+    return samplePaletteColor(palette, sample, moneyFlowStopPositions(incomePercent));
   }
 
   const isBalanceMode = (mode) => balanceModeIds.includes(mode);
@@ -838,6 +868,7 @@
     createModeSettings,
     sampleField,
     sampleColor,
+    samplePaletteColor,
     moneyFlowPaletteHex,
     moneyFlowVisualSplit,
     moneyFlowStopPositions,
