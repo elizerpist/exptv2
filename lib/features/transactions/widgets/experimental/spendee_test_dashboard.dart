@@ -156,6 +156,8 @@ enum _HeaderDesignMenuAction {
   avatarsHtmlC2Glass,
   avatarsLiquidGlass,
   avatarsAcrylic,
+  avatar3dEffectToggle,
+  avatarTopHighlightToggle,
   chartGlass,
   chartBackground,
   chartHtmlC2Glass,
@@ -327,11 +329,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarSurface = _PanelSurface.glass;
   var _chartSurface = _PanelSurface.glass;
   var _chartListSurface = _ChartListSurface.original;
+  var _avatar3dEffectEnabled = true;
+  var _avatarTopHighlightEnabled = true;
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
   var _chartSurfaceSoftness = 0.0;
   var _chartListSurfaceSoftness = 0.0;
-  var _stage2Page = _Stage2BudgetPage.categories;
   var _headerBackgroundMode = _HeaderBackgroundMode.budget;
   var _mindStage1Surface = _PanelSurface.glass;
   var _mindStage2Surface = _PanelSurface.glass;
@@ -1132,6 +1135,22 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           height: 38,
           child: const Text('Avatarok: Acrylic'),
         ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-avatar-effect-3d-toggle'),
+          value: _HeaderDesignMenuAction.avatar3dEffectToggle,
+          checked: _avatar3dEffectEnabled,
+          height: 38,
+          child: const Text('Avatar 3D'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey(
+            'spendee-test-avatar-effect-top-highlight-toggle',
+          ),
+          value: _HeaderDesignMenuAction.avatarTopHighlightToggle,
+          checked: _avatarTopHighlightEnabled,
+          height: 38,
+          child: const Text('Avatar felső fényív'),
+        ),
         const PopupMenuDivider(),
         const PopupMenuItem<_HeaderDesignMenuAction>(
           enabled: false,
@@ -1370,6 +1389,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           _avatarSurface = _PanelSurface.liquidGlass;
         case _HeaderDesignMenuAction.avatarsAcrylic:
           _avatarSurface = _PanelSurface.acrylic;
+        case _HeaderDesignMenuAction.avatar3dEffectToggle:
+          _avatar3dEffectEnabled = !_avatar3dEffectEnabled;
+        case _HeaderDesignMenuAction.avatarTopHighlightToggle:
+          _avatarTopHighlightEnabled = !_avatarTopHighlightEnabled;
         case _HeaderDesignMenuAction.chartGlass:
           _chartSurface = _PanelSurface.glass;
         case _HeaderDesignMenuAction.chartBackground:
@@ -1448,28 +1471,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final next = _clampUnit(value);
     if ((_mindStage2Softness - next).abs() < .001) return;
     setState(() => _mindStage2Softness = next);
-  }
-
-  void _showPreviousStage2Page() {
-    _setStage2Page(
-      _stage2Page == _Stage2BudgetPage.categories
-          ? _Stage2BudgetPage.vendors
-          : _Stage2BudgetPage.categories,
-    );
-  }
-
-  void _showNextStage2Page() {
-    _setStage2Page(
-      _stage2Page == _Stage2BudgetPage.categories
-          ? _Stage2BudgetPage.vendors
-          : _Stage2BudgetPage.categories,
-    );
-  }
-
-  void _setStage2Page(_Stage2BudgetPage page) {
-    if (_stage2Page == page) return;
-    HapticFeedback.selectionClick();
-    setState(() => _stage2Page = page);
   }
 
   List<CategoryBudgetBarData> _previewBudgetBars(
@@ -1575,6 +1576,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitEditLastDy = 0;
     _budgetLimitEditAccumulator = 0;
     _budgetLimitClearedByVeryLong = false;
+    if (mounted) setState(() {});
     HapticFeedback.mediumImpact();
     _budgetLimitVeryLongTimer = Timer(const Duration(milliseconds: 720), () {
       if (!mounted || _budgetLimitEditItem?.key != item.key) return;
@@ -1631,6 +1633,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitEditLastDy = 0;
     _budgetLimitEditAccumulator = 0;
     _budgetLimitClearedByVeryLong = false;
+    if (mounted) setState(() {});
   }
 
   void _setBudgetItemLimitAmount(BackheaderBudgetItem item, double amount) {
@@ -1705,6 +1708,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final selectedBudgetItem = _selectedBudgetItemFor(budgetItems);
     final selectedBar = selectedBudgetItem?.category;
     final selectedCategory = selectedBar?.category;
+    final stage2Page =
+        selectedBudgetItem == null || selectedBudgetItem.overview != null
+        ? _Stage2BudgetPage.categories
+        : _Stage2BudgetPage.vendors;
     var overviewBudgetLimit = 0.0;
     for (final item in overviewBudgetItems) {
       if (item.hasLimit && item.limitAmount > 0) {
@@ -1761,11 +1768,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   transactions: widget.store.windowedTransactions,
                   budgetLimitAmount: overviewBudgetLimit,
                   budgetItems: budgetItems,
-                  stage2Page: _stage2Page,
+                  stage2Page: stage2Page,
                   headerBackgroundMode: _headerBackgroundMode,
                   mindStatsFrame: mindStatsFrame,
-                  onStage2PreviousPage: _showPreviousStage2Page,
-                  onStage2NextPage: _showNextStage2Page,
                   onHandleDragStart: _beginHeaderDrag,
                   onHandleDragUpdate: _updateHeaderDrag,
                   onHandleDragEnd: _endHeaderDrag,
@@ -1775,6 +1780,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   onPieCenterTap: _selectOverviewBudgetItem,
                   pulsingBudgetItemKey: _pulsingBudgetItemKey,
                   carouselOffset: _carouselVisualDx,
+                  pressedBudgetItemKey: _budgetLimitEditItem?.key,
+                  avatar3dEffectEnabled: _avatar3dEffectEnabled,
+                  avatarTopHighlightEnabled: _avatarTopHighlightEnabled,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
                       _handleBudgetItemLongPressMoveUpdate,
@@ -1848,8 +1856,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.stage2Page,
     required this.headerBackgroundMode,
     required this.mindStatsFrame,
-    required this.onStage2PreviousPage,
-    required this.onStage2NextPage,
     required this.onHandleDragStart,
     required this.onHandleDragUpdate,
     required this.onHandleDragEnd,
@@ -1858,6 +1864,9 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.onPieCenterTap,
     required this.pulsingBudgetItemKey,
     required this.carouselOffset,
+    required this.pressedBudgetItemKey,
+    required this.avatar3dEffectEnabled,
+    required this.avatarTopHighlightEnabled,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
     required this.onBudgetItemLongPressEnd,
@@ -1891,8 +1900,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final _Stage2BudgetPage stage2Page;
   final _HeaderBackgroundMode headerBackgroundMode;
   final SpendeeMindStatsFrame? mindStatsFrame;
-  final VoidCallback onStage2PreviousPage;
-  final VoidCallback onStage2NextPage;
   final GestureDragStartCallback onHandleDragStart;
   final GestureDragUpdateCallback onHandleDragUpdate;
   final GestureDragEndCallback onHandleDragEnd;
@@ -1901,6 +1908,9 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final VoidCallback onPieCenterTap;
   final String? pulsingBudgetItemKey;
   final double carouselOffset;
+  final String? pressedBudgetItemKey;
+  final bool avatar3dEffectEnabled;
+  final bool avatarTopHighlightEnabled;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
   final GestureLongPressMoveUpdateCallback onBudgetItemLongPressMoveUpdate;
@@ -1990,6 +2000,9 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               onItemTap: onBudgetItemTap,
               pulsingItemKey: pulsingBudgetItemKey,
               carouselOffset: carouselOffset,
+              pressedItemKey: pressedBudgetItemKey,
+              avatar3dEffectEnabled: avatar3dEffectEnabled,
+              avatarTopHighlightEnabled: avatarTopHighlightEnabled,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
               onItemLongPressEnd: onBudgetItemLongPressEnd,
@@ -2028,8 +2041,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               page: stage2Page,
               onCategoryTap: onPieCategoryTap,
               onCenterTap: onPieCenterTap,
-              onPreviousPage: onStage2PreviousPage,
-              onNextPage: onStage2NextPage,
               surface: chartSurface,
               listSurface: chartListSurface,
               softness: chartSurfaceSoftness,
@@ -3260,6 +3271,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.onItemTap,
     required this.pulsingItemKey,
     required this.carouselOffset,
+    required this.pressedItemKey,
+    required this.avatar3dEffectEnabled,
+    required this.avatarTopHighlightEnabled,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
     required this.onItemLongPressEnd,
@@ -3278,6 +3292,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final String? pulsingItemKey;
   final double carouselOffset;
+  final String? pressedItemKey;
+  final bool avatar3dEffectEnabled;
+  final bool avatarTopHighlightEnabled;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
   final GestureLongPressMoveUpdateCallback onItemLongPressMoveUpdate;
@@ -3323,6 +3340,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 selectedItem: selectedItem,
                 pulsingItemKey: pulsingItemKey,
                 carouselOffset: carouselOffset,
+                pressedItemKey: pressedItemKey,
+                avatar3dEffectEnabled: avatar3dEffectEnabled,
+                avatarTopHighlightEnabled: avatarTopHighlightEnabled,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
                 onItemLongPressMoveUpdate: onItemLongPressMoveUpdate,
@@ -3665,6 +3685,9 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.selectedItem,
     required this.pulsingItemKey,
     required this.carouselOffset,
+    required this.pressedItemKey,
+    required this.avatar3dEffectEnabled,
+    required this.avatarTopHighlightEnabled,
     required this.onItemTap,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -3676,6 +3699,9 @@ class _ContextAvatarBelt extends StatelessWidget {
   final BackheaderBudgetItem? selectedItem;
   final String? pulsingItemKey;
   final double carouselOffset;
+  final String? pressedItemKey;
+  final bool avatar3dEffectEnabled;
+  final bool avatarTopHighlightEnabled;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -3685,8 +3711,8 @@ class _ContextAvatarBelt extends StatelessWidget {
 
   static const _slotDistance = 64.0;
   static const _verticalLift = 4.0;
-  static const _slotOffsets = <int>[-3, -2, -1, 0, 1, 2];
-  static const _slotBuildOrder = <int>[0, -1, 1, -2, 2, -3, 3];
+  static const _slotOffsets = <int>[-2, -1, 0, 1, 2];
+  static const _slotBuildOrder = <int>[0, -1, 1, -2, 2];
 
   @override
   Widget build(BuildContext context) {
@@ -3704,7 +3730,7 @@ class _ContextAvatarBelt extends StatelessWidget {
             return rightDistance.compareTo(leftDistance);
           });
         return Stack(
-          clipBehavior: Clip.none,
+          clipBehavior: Clip.hardEdge,
           children: [
             for (final slot in slots)
               _PositionedContextAvatar(
@@ -3718,6 +3744,9 @@ class _ContextAvatarBelt extends StatelessWidget {
                 onLongPressEnd: onItemLongPressEnd,
                 onLongPressCancel: onItemLongPressCancel,
                 pulsing: slot.item.key == pulsingItemKey,
+                pressed: slot.item.key == pressedItemKey,
+                avatar3dEffectEnabled: avatar3dEffectEnabled,
+                avatarTopHighlightEnabled: avatarTopHighlightEnabled,
               ),
           ],
         );
@@ -3733,19 +3762,10 @@ class _ContextAvatarBelt extends StatelessWidget {
       (item) => item.key == selectedItem?.key,
     );
     final centerIndex = selectedIndex < 0 ? 0 : selectedIndex;
-    final incomingOffset = carouselOffset < -0.5
-        ? 3
-        : carouselOffset > 0.5
-        ? -3
-        : null;
-    final visibleCount = math.min(
-      items.length,
-      _slotOffsets.length + (incomingOffset == null ? 0 : 1),
-    );
+    final visibleCount = math.min(items.length, _slotOffsets.length);
     final slots = <_ContextAvatarSlot>[];
     final usedIndexes = <int>{};
     for (final offset in _slotBuildOrder) {
-      if (!_slotOffsets.contains(offset) && offset != incomingOffset) continue;
       if (slots.length == visibleCount) break;
       final index = _wrappedIndex(centerIndex + offset);
       if (!usedIndexes.add(index)) continue;
@@ -3790,6 +3810,9 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.onLongPressEnd,
     required this.onLongPressCancel,
     required this.pulsing,
+    required this.pressed,
+    required this.avatar3dEffectEnabled,
+    required this.avatarTopHighlightEnabled,
   });
 
   final _ContextAvatarSlot slot;
@@ -3801,6 +3824,9 @@ class _PositionedContextAvatar extends StatelessWidget {
   final GestureLongPressEndCallback onLongPressEnd;
   final GestureLongPressCancelCallback onLongPressCancel;
   final bool pulsing;
+  final bool pressed;
+  final bool avatar3dEffectEnabled;
+  final bool avatarTopHighlightEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -3809,6 +3835,7 @@ class _PositionedContextAvatar extends StatelessWidget {
     final iconSize = _visualIconSize(position);
     final opacity = _visualOpacity(position);
     return Positioned(
+      key: ValueKey('spendee-test-context-avatar-slot-${slot.slotOffset}'),
       left: center.dx + position * _ContextAvatarBelt._slotDistance - size / 2,
       top: center.dy - size / 2,
       width: size,
@@ -3820,6 +3847,9 @@ class _PositionedContextAvatar extends StatelessWidget {
         opacity: opacity,
         selected: slot.selected,
         pulsing: pulsing,
+        pressed: pressed,
+        avatar3dEffectEnabled: avatar3dEffectEnabled,
+        avatarTopHighlightEnabled: avatarTopHighlightEnabled,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
         onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -3885,6 +3915,9 @@ class _ContextAvatar extends StatelessWidget {
     required this.opacity,
     required this.selected,
     required this.pulsing,
+    required this.pressed,
+    required this.avatar3dEffectEnabled,
+    required this.avatarTopHighlightEnabled,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressMoveUpdate,
@@ -3898,6 +3931,9 @@ class _ContextAvatar extends StatelessWidget {
   final double opacity;
   final bool selected;
   final bool pulsing;
+  final bool pressed;
+  final bool avatar3dEffectEnabled;
+  final bool avatarTopHighlightEnabled;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
   final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
@@ -3908,6 +3944,7 @@ class _ContextAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final category = item.category?.category;
     final progress = _budgetItemProgress(item);
+    final keyBase = _budgetAvatarKeyBase(item);
     return GestureDetector(
       key: _budgetAvatarKey(item, selected: selected),
       onTap: onTap,
@@ -3915,43 +3952,69 @@ class _ContextAvatar extends StatelessWidget {
       onLongPressMoveUpdate: onLongPressMoveUpdate,
       onLongPressEnd: onLongPressEnd,
       onLongPressCancel: onLongPressCancel,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          if (category != null)
-            GlossyCategoryAvatar(
-              category: category,
-              size: size,
-              iconSize: iconSize,
-              selected: selected,
-              pulsing: pulsing,
-              opacity: opacity,
-              debugSource: 'spendee-test-context-avatar',
-            )
-          else
-            _OverviewBudgetAvatar(
-              item: item,
-              size: size,
-              iconSize: iconSize,
-              opacity: opacity,
-              selected: selected,
-              pulsing: pulsing,
-            ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _BudgetAvatarProgressPainter(
-                  progress: progress,
-                  selected: selected,
-                  color: _budgetItemAccent(item),
+      child: AnimatedScale(
+        key: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
+        scale: pressed ? .8 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOutCubic,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (category != null)
+              GlossyCategoryAvatar(
+                category: category,
+                size: size,
+                iconSize: iconSize,
+                selected: selected,
+                pulsing: pulsing,
+                opacity: opacity,
+                showTopHighlight: avatarTopHighlightEnabled,
+                debugSource: 'spendee-test-context-avatar',
+              )
+            else
+              _OverviewBudgetAvatar(
+                item: item,
+                size: size,
+                iconSize: iconSize,
+                opacity: opacity,
+                selected: selected,
+                pulsing: pulsing,
+                topHighlightEnabled: avatarTopHighlightEnabled,
+                keyBase: keyBase,
+              ),
+            if (avatar3dEffectEnabled)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    key: ValueKey('spendee-test-avatar-3d-effect-$keyBase'),
+                    painter: _BudgetAvatar3DEffectPainter(selected: selected),
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  key: ValueKey('spendee-test-avatar-progress-$keyBase'),
+                  painter: _BudgetAvatarProgressPainter(
+                    progress: progress,
+                    selected: selected,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+String _budgetAvatarKeyBase(BackheaderBudgetItem item) {
+  final category = item.category?.category;
+  if (category != null) {
+    return 'category-${category.transactionCategoryID}';
+  }
+  return item.key;
 }
 
 Key _budgetAvatarKey(BackheaderBudgetItem item, {required bool selected}) {
@@ -4012,6 +4075,8 @@ class _OverviewBudgetAvatar extends StatelessWidget {
     required this.opacity,
     required this.selected,
     required this.pulsing,
+    required this.topHighlightEnabled,
+    required this.keyBase,
   });
 
   final BackheaderBudgetItem item;
@@ -4020,6 +4085,8 @@ class _OverviewBudgetAvatar extends StatelessWidget {
   final double opacity;
   final bool selected;
   final bool pulsing;
+  final bool topHighlightEnabled;
+  final String keyBase;
 
   @override
   Widget build(BuildContext context) {
@@ -4067,12 +4134,24 @@ class _OverviewBudgetAvatar extends StatelessWidget {
                 ),
             ],
           ),
-          child: Icon(
-            item.overview?.kind == BudgetGoalKind.incomeGoal
-                ? Icons.trending_up_rounded
-                : Icons.account_balance_wallet_rounded,
-            size: iconSize,
-            color: Colors.white.withValues(alpha: .94),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (topHighlightEnabled)
+                CustomPaint(
+                  key: ValueKey('spendee-test-avatar-top-highlight-$keyBase'),
+                  painter: _BudgetAvatarTopHighlightPainter(selected: selected),
+                ),
+              Center(
+                child: Icon(
+                  item.overview?.kind == BudgetGoalKind.incomeGoal
+                      ? Icons.trending_up_rounded
+                      : Icons.account_balance_wallet_rounded,
+                  size: iconSize,
+                  color: Colors.white.withValues(alpha: .94),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -4080,27 +4159,104 @@ class _OverviewBudgetAvatar extends StatelessWidget {
   }
 }
 
+class _BudgetAvatarTopHighlightPainter extends CustomPainter {
+  const _BudgetAvatarTopHighlightPainter({required this.selected});
+
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = selected ? 2.0 : 1.6;
+    final rect = Rect.fromLTWH(
+      stroke + 2,
+      stroke + 2,
+      size.width - (stroke + 2) * 2,
+      size.height - (stroke + 2) * 2,
+    );
+    canvas.drawArc(
+      rect,
+      -math.pi * .88,
+      math.pi * .76,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: selected ? .74 : .58),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BudgetAvatarTopHighlightPainter oldDelegate) {
+    return oldDelegate.selected != selected;
+  }
+}
+
+class _BudgetAvatar3DEffectPainter extends CustomPainter {
+  const _BudgetAvatar3DEffectPainter({required this.selected});
+
+  final bool selected;
+
+  double get strokeInset => 3.0;
+  double get startRadians => math.pi * .12;
+  double get sweepRadians => math.pi * .76;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = selected ? 3.2 : 2.6;
+    final rect = Rect.fromLTWH(
+      strokeInset + stroke / 2,
+      strokeInset + stroke / 2,
+      size.width - (strokeInset + stroke / 2) * 2,
+      size.height - (strokeInset + stroke / 2) * 2,
+    );
+    canvas.drawArc(
+      rect,
+      startRadians,
+      sweepRadians,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: selected ? .42 : .30),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BudgetAvatar3DEffectPainter oldDelegate) {
+    return oldDelegate.selected != selected;
+  }
+}
+
 class _BudgetAvatarProgressPainter extends CustomPainter {
   const _BudgetAvatarProgressPainter({
     required this.progress,
     required this.selected,
-    required this.color,
   });
 
   final double progress;
   final bool selected;
-  final Color color;
+  Color get progressColor => Colors.white;
+  bool get drawsBaseRing => true;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (progress <= 0) return;
-    final stroke = selected ? 3.2 : 2.4;
+    final stroke = selected ? 3.4 : 2.6;
     final rect = Rect.fromLTWH(
       stroke / 2 + 1,
       stroke / 2 + 1,
       size.width - stroke - 2,
       size.height - stroke - 2,
     );
+    canvas.drawOval(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = progressColor.withValues(alpha: selected ? .23 : .18),
+    );
+    if (progress <= 0) return;
     canvas.drawArc(
       rect,
       -math.pi / 2,
@@ -4110,15 +4266,19 @@ class _BudgetAvatarProgressPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
         ..strokeCap = StrokeCap.round
-        ..color = color.withValues(alpha: selected ? .96 : .76),
+        ..color = progressColor.withValues(
+          alpha: _lerpDouble(
+            selected ? .38 : .30,
+            selected ? .78 : .64,
+            progress,
+          ),
+        ),
     );
   }
 
   @override
   bool shouldRepaint(covariant _BudgetAvatarProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.selected != selected ||
-        oldDelegate.color != color;
+    return oldDelegate.progress != progress || oldDelegate.selected != selected;
   }
 }
 
@@ -4238,8 +4398,6 @@ class _BudgetPieStage2Layer extends StatefulWidget {
     required this.page,
     required this.onCategoryTap,
     required this.onCenterTap,
-    required this.onPreviousPage,
-    required this.onNextPage,
     required this.surface,
     required this.listSurface,
     required this.softness,
@@ -4252,8 +4410,6 @@ class _BudgetPieStage2Layer extends StatefulWidget {
   final _Stage2BudgetPage page;
   final ValueChanged<TransactionCategory> onCategoryTap;
   final VoidCallback onCenterTap;
-  final VoidCallback onPreviousPage;
-  final VoidCallback onNextPage;
   final _PanelSurface surface;
   final _ChartListSurface listSurface;
   final double softness;
@@ -4264,44 +4420,11 @@ class _BudgetPieStage2Layer extends StatefulWidget {
 }
 
 class _BudgetPieStage2LayerState extends State<_BudgetPieStage2Layer> {
-  static const _swipeThreshold = 48.0;
-
-  var _dragDx = 0.0;
-
-  void _resetDrag() {
-    _dragDx = 0;
-  }
-
-  void _handleDragUpdate(DragUpdateDetails details) {
-    _dragDx += details.delta.dx;
-  }
-
-  void _handleDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    final direction = _dragDx.abs() >= _swipeThreshold
-        ? _dragDx
-        : velocity.abs() >= 320
-        ? velocity
-        : 0.0;
-    _resetDrag();
-    if (direction <= -_swipeThreshold || velocity <= -320) {
-      widget.onNextPage();
-      return;
-    }
-    if (direction >= _swipeThreshold || velocity >= 320) {
-      widget.onPreviousPage();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       key: const ValueKey('spendee-test-budget-pie-stage2-layer'),
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragStart: (_) => _resetDrag(),
-      onHorizontalDragUpdate: _handleDragUpdate,
-      onHorizontalDragCancel: _resetDrag,
-      onHorizontalDragEnd: _handleDragEnd,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(1, 0, 1, 12),
         child: _BudgetPiePanel(
@@ -4396,6 +4519,11 @@ class _BudgetPiePanel extends StatelessWidget {
       _Stage2BudgetPage.categories => _categoryEntries(),
       _Stage2BudgetPage.vendors => _vendorEntries(),
     };
+    if (entries.isEmpty) {
+      return const SizedBox.shrink(
+        key: ValueKey('spendee-test-budget-pie-empty-hidden'),
+      );
+    }
     final total = entries.fold<double>(0, (sum, entry) => sum + entry.amount);
     final selectedKey = switch (page) {
       _Stage2BudgetPage.categories =>

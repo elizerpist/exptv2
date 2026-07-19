@@ -139,14 +139,16 @@ void main() {
       findsOneWidget,
     );
 
-    final outerAvatar = tester.widget<GlossyCategoryAvatar>(
+    final selectedAvatar = tester.widget<GlossyCategoryAvatar>(
       find.descendant(
-        of: find.byKey(const ValueKey('spendee-test-category-avatar-4')),
+        of: find.byKey(
+          const ValueKey('spendee-test-category-avatar-1-selected'),
+        ),
         matching: find.byType(GlossyCategoryAvatar),
       ),
     );
-    expect(outerAvatar.iconSize, 17);
-    expect((outerAvatar as dynamic).showTopHighlight, isTrue);
+    expect(selectedAvatar.iconSize, 30);
+    expect((selectedAvatar as dynamic).showTopHighlight, isTrue);
   });
 
   testWidgets(
@@ -271,7 +273,7 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey('spendee-test-budget-pie-focus-title')),
+        find.byKey(const ValueKey('spendee-test-budget-vendor-focus-title')),
         findsOneWidget,
       );
       await tester.drag(
@@ -287,6 +289,10 @@ void main() {
       expect(
         find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
         findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+        findsNothing,
       );
     },
   );
@@ -1689,11 +1695,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-row-3-html-c2-glass')),
+      find.byKey(
+        const ValueKey('spendee-test-budget-vendor-row-0-html-c2-glass'),
+      ),
       findsOneWidget,
     );
     final row = find.byKey(
-      const ValueKey('spendee-test-budget-pie-row-3-html-c2-glass'),
+      const ValueKey('spendee-test-budget-vendor-row-0-html-c2-glass'),
     );
     await tester.ensureVisible(row);
     await tester.tap(row);
@@ -1701,10 +1709,12 @@ void main() {
     expect(
       tester
           .widget<Text>(
-            find.byKey(const ValueKey('spendee-test-budget-pie-focus-title')),
+            find.byKey(
+              const ValueKey('spendee-test-budget-vendor-focus-title'),
+            ),
           )
           .data,
-      'Lakás',
+      'Élelmiszer bolt',
     );
 
     await tester.tap(
@@ -1724,7 +1734,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-row-3-liquid-glass')),
+      find.byKey(
+        const ValueKey('spendee-test-budget-vendor-row-0-liquid-glass'),
+      ),
       findsOneWidget,
     );
 
@@ -1741,7 +1753,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-row-3-acrylic')),
+      find.byKey(const ValueKey('spendee-test-budget-vendor-row-0-acrylic')),
       findsOneWidget,
     );
 
@@ -1758,7 +1770,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-row-3-pillless')),
+      find.byKey(const ValueKey('spendee-test-budget-vendor-row-0-pillless')),
       findsOneWidget,
     );
   });
@@ -1899,7 +1911,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-focus-title')),
+      find.byKey(const ValueKey('spendee-test-budget-vendor-focus-title')),
       findsOneWidget,
     );
 
@@ -2314,13 +2326,211 @@ void main() {
     );
   });
 
+  testWidgets('budget carousel renders exactly five bounded avatar slots', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final carousel = find.byKey(
+      const ValueKey('spendee-test-context-carousel'),
+    );
+    final carouselRect = tester.getRect(carousel);
+    final slotFinders = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('spendee-test-context-avatar-slot-');
+    });
+
+    expect(slotFinders, findsNWidgets(5));
+    for (final element in slotFinders.evaluate()) {
+      final key = element.widget.key;
+      expect(key, isA<ValueKey<String>>());
+      final rect = tester.getRect(find.byKey(key!));
+      expect(rect.left, greaterThanOrEqualTo(carouselRect.left));
+      expect(rect.right, lessThanOrEqualTo(carouselRect.right));
+    }
+  });
+
+  testWidgets('header menu toggles avatar 3d and top highlight effects', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-avatar-3d-effect-overview-expense_budget-all_time-all',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-avatar-3d-effect-category-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-avatar-top-highlight-overview-expense_budget-all_time-all',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      (tester.widget<GlossyCategoryAvatar>(
+                find.descendant(
+                  of: find.byKey(
+                    const ValueKey('spendee-test-category-avatar-1-selected'),
+                  ),
+                  matching: find.byType(GlossyCategoryAvatar),
+                ),
+              )
+              as dynamic)
+          .showTopHighlight,
+      isTrue,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('spendee-test-avatar-effect-3d-toggle')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-effect-top-highlight-toggle'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-avatar-effect-3d-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('spendee-test-avatar-3d-effect-category-1')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-effect-top-highlight-toggle'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-avatar-top-highlight-overview-expense_budget-all_time-all',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      (tester.widget<GlossyCategoryAvatar>(
+                find.descendant(
+                  of: find.byKey(
+                    const ValueKey('spendee-test-category-avatar-1-selected'),
+                  ),
+                  matching: find.byType(GlossyCategoryAvatar),
+                ),
+              )
+              as dynamic)
+          .showTopHighlight,
+      isFalse,
+    );
+  });
+
+  testWidgets('avatar progress ring is white limit progress', (tester) async {
+    final store = TransactionStore(
+      _DashboardTestRepository(),
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.monthly,
+        year: 2026,
+        month: 7,
+      ),
+    );
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final progressPaint = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('spendee-test-avatar-progress-category-1')),
+    );
+    final painter = progressPaint.painter as dynamic;
+    expect(painter.progress, closeTo(75240 / 80000, .001));
+    expect(painter.progressColor, Colors.white);
+    expect(painter.drawsBaseRing, isTrue);
+  });
+
+  testWidgets('long press avatar shrinks while limit edit is active', (
+    tester,
+  ) async {
+    final repository = _SavingDashboardTestRepository();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.monthly,
+        year: 2026,
+        month: 7,
+      ),
+    );
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final scaleFinder = find.byKey(
+      const ValueKey('spendee-test-avatar-press-scale-category-1'),
+    );
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
+
+    final avatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(avatar));
+    await tester.pump(const Duration(milliseconds: 650));
+
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(.8, .001));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
+  });
+
   testWidgets(
-    'stage 2 category rows select donut highlight and avatar target',
+    'stage 2 category rows select avatar then switch to vendor chart',
     (tester) async {
       await _pumpDashboard(tester);
       await _dragHeaderBy(tester, 134);
       await tester.pumpAndSettle();
       await _dragHeaderBy(tester, 272);
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('spendee-test-budget-pie-donut')),
+            )
+            .center,
+      );
       await tester.pumpAndSettle();
 
       final row = find.byKey(const ValueKey('spendee-test-budget-pie-row-3'));
@@ -2330,16 +2540,22 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        tester
-            .widget<Text>(
-              find.byKey(const ValueKey('spendee-test-budget-pie-focus-title')),
-            )
-            .data,
-        'Lakás',
+        find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('spendee-test-category-avatar-3-selected')),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey('spendee-test-budget-vendor-focus-title'),
+              ),
+            )
+            .data,
+        'Albérlet',
       );
     },
   );
@@ -2388,12 +2604,20 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsOneWidget,
+    );
 
     await tester.tapAt(donutRect.center + const Offset(34, -18));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('spendee-test-category-avatar-1-selected')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
       findsOneWidget,
     );
   });
@@ -2477,7 +2701,7 @@ void main() {
     expect(repository.savedLimitPayloads.last['limitAmount'], 0);
   });
 
-  testWidgets('stage 2 uses swipe loop navigation without chevrons', (
+  testWidgets('stage 2 follows selected avatar and ignores horizontal swipe', (
     tester,
   ) async {
     await _pumpDashboard(tester);
@@ -2487,8 +2711,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('spendee-test-stage2-prev-page-button')),
@@ -2498,7 +2726,16 @@ void main() {
       find.byKey(const ValueKey('spendee-test-stage2-next-page-button')),
       findsNothing,
     );
-    expect(find.text('Élelmiszer bolt'), findsNothing);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey('spendee-test-budget-vendor-focus-title'),
+            ),
+          )
+          .data,
+      'Élelmiszer bolt',
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
@@ -2509,6 +2746,10 @@ void main() {
     expect(
       find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsNothing,
     );
     expect(
       find.descendant(
@@ -2537,15 +2778,20 @@ void main() {
       'Élelmiszer bolt',
     );
 
-    await tester.drag(
-      find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
-      const Offset(-140, 0),
+    await tester.tapAt(
+      tester
+          .getRect(find.byKey(const ValueKey('spendee-test-budget-pie-donut')))
+          .center,
     );
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
     );
 
     await tester.drag(
@@ -2554,8 +2800,40 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('stage 2 hides chart shell when selected data is empty', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      _DashboardTestRepository(transactions: [_record(2, 2, -31700, 'Busz')]),
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-empty-hidden')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
     );
   });
 

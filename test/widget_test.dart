@@ -1010,17 +1010,31 @@ void main() {
                 'spendee-test-category-avatar-',
               ),
         );
-        expect(avatars, findsNWidgets(categoryCount.clamp(0, 5)));
+        final expectedCategoryAvatars = categoryCount <= 1
+            ? categoryCount
+            : categoryCount.clamp(0, 4);
+        expect(avatars, findsNWidgets(expectedCategoryAvatars));
 
         await _dragSpendeeHeaderByExactDelta(tester, 272);
         expect(
           find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
           findsOneWidget,
         );
-        expect(
-          find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
-          findsOneWidget,
-        );
+        if (categoryCount == 0 || transactionCount == 0) {
+          expect(
+            find.byKey(const ValueKey('spendee-test-budget-pie-empty-hidden')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+            findsNothing,
+          );
+        } else {
+          expect(
+            find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+            findsOneWidget,
+          );
+        }
         expect(tester.takeException(), isNull);
 
         await _dragSpendeeHeaderByExactDelta(tester, 8);
