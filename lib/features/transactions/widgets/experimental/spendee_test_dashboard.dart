@@ -15,7 +15,10 @@ import '../../../settings/theme/expense_theme.dart';
 import '../../../stats/data/stats_category_scope_series.dart';
 import '../../../stats/data/stats_render_frame.dart';
 import '../../../stats/data/stats_year_data.dart';
+import '../../models/backheader_budget_item.dart';
+import '../../models/budget_goal_kind.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/overview_budget_data.dart';
 import '../../models/summary_window.dart';
 import '../../models/transaction_category.dart';
 import '../../models/transaction_log_entry.dart';
@@ -318,8 +321,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   SpendeeCenterCarouselController? _carouselController;
   late final AnimationController _carouselReleaseController;
   var _carouselMotionSerial = 0;
-  int? _selectedCategoryId;
-  int? _pulsingCategoryId;
+  String? _selectedBudgetItemKey;
+  String? _pulsingBudgetItemKey;
   var _headerSurface = _HeaderSurface.normal;
   var _avatarSurface = _PanelSurface.glass;
   var _chartSurface = _PanelSurface.glass;
@@ -343,6 +346,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
   late Widget _homeContent;
   Timer? _avatarPulseTimer;
+  Timer? _budgetLimitVeryLongTimer;
+  BackheaderBudgetItem? _budgetLimitEditItem;
+  double? _budgetLimitEditActivationGlobalY;
+  var _budgetLimitEditLastDy = 0.0;
+  var _budgetLimitEditAccumulator = 0.0;
+  var _budgetLimitClearedByVeryLong = false;
+  final _budgetPendingLimitAmountsByKey = <String, double>{};
   final Map<FluviLogoArc, FluviLogoFill> _logoFills =
       Map<FluviLogoArc, FluviLogoFill>.of(FluviLogoSvg.defaultFills);
 
@@ -372,6 +382,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   @override
   void dispose() {
     _avatarPulseTimer?.cancel();
+    _budgetLimitVeryLongTimer?.cancel();
     _stageNotifier.dispose();
     _carouselReleaseController.dispose();
     super.dispose();
@@ -419,28 +430,40 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     return controller;
   }
 
-  List<TransactionCategory> get _activeCategories =>
-      widget.store.activeCategories;
+  List<BackheaderBudgetItem> get _budgetItems =>
+      widget.store.backheaderBudgetItems;
 
-  TransactionCategory? get _selectedCategory {
-    final categories = _activeCategories;
-    if (categories.isEmpty) return null;
-    final selectedId =
-        _selectedCategoryId ??
-        widget.store.activeCategory?.transactionCategoryID;
-    if (selectedId != null) {
-      for (final category in categories) {
-        if (category.transactionCategoryID == selectedId) return category;
+  BackheaderBudgetItem? _selectedBudgetItemFor(
+    List<BackheaderBudgetItem> items,
+  ) {
+    if (items.isEmpty) return null;
+    final selectedKey = _selectedBudgetItemKey ?? _defaultBudgetItemKey(items);
+    if (selectedKey != null) {
+      for (final item in items) {
+        if (item.key == selectedKey) return item;
       }
     }
-    return categories.first;
+    return _firstCategoryBudgetItem(items) ?? items.first;
   }
 
-  CategoryBudgetBarData? get _selectedBar {
-    final category = _selectedCategory;
-    if (category == null) return null;
-    for (final bar in widget.store.categoryBudgetBars) {
-      if (bar.targetId == category.transactionCategoryID) return bar;
+  String? _defaultBudgetItemKey(List<BackheaderBudgetItem> items) {
+    final activeCategoryId = widget.store.activeCategory?.transactionCategoryID;
+    if (activeCategoryId != null) {
+      for (final item in items) {
+        final category = item.category?.category;
+        if (category?.transactionCategoryID == activeCategoryId) {
+          return item.key;
+        }
+      }
+    }
+    return _firstCategoryBudgetItem(items)?.key ?? items.first.key;
+  }
+
+  BackheaderBudgetItem? _firstCategoryBudgetItem(
+    List<BackheaderBudgetItem> items,
+  ) {
+    for (final item in items) {
+      if (item.category?.category != null) return item;
     }
     return null;
   }
@@ -527,7 +550,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     DebugConsole.log(
       '[Perf] SpendeeTest carousel_drag background=${_headerBackgroundMode.name} '
       'surface=${_avatarSurface.name} outcome=$outcome '
-      'updates=$_carouselDragUpdateCount selected=${_selectedCategoryId ?? -1} '
+      'updates=$_carouselDragUpdateCount '
+      'selected=${_selectedBudgetItemKey ?? 'none'} '
       'residual=${_carouselVisualDx.toStringAsFixed(1)} '
       'velocity=${(velocityDx ?? 0).toStringAsFixed(1)} '
       'elapsed=${stopwatch?.elapsedMilliseconds ?? 0}ms',
@@ -580,55 +604,135 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     bool haptic = true,
     bool animateCarousel = false,
   }) {
-    if (animateCarousel) {
-      unawaited(_animateCarouselToCategory(category, haptic: haptic));
+    final item = _budgetItemForCategory(category);
+    if (item == null) {
+      if (haptic) HapticFeedback.selectionClick();
+      widget.store.setCategoryFilter(category);
       return;
     }
-    _applySelectedCategory(category, haptic: haptic);
+    _selectBudgetItem(item, haptic: haptic, animateCarousel: animateCarousel);
   }
 
-  void _applySelectedCategory(
-    TransactionCategory category, {
+  BackheaderBudgetItem? _budgetItemForCategory(TransactionCategory category) {
+    for (final item in _budgetItems) {
+      final itemCategory = item.category?.category;
+      if (itemCategory?.transactionCategoryID ==
+          category.transactionCategoryID) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  BackheaderBudgetItem? _overviewBudgetItemForActiveType() {
+    for (final item in _budgetItems) {
+      final overview = item.overview;
+      if (overview != null &&
+          overview.kind.transactionType ==
+              widget.store.activeType.nativeValue) {
+        return item;
+      }
+    }
+    return _budgetItems.isEmpty ? null : _budgetItems.first;
+  }
+
+  void _selectOverviewBudgetItem({bool haptic = true}) {
+    final item = _overviewBudgetItemForActiveType();
+    if (item == null) return;
+    _selectBudgetItem(item, haptic: haptic, animateCarousel: true);
+  }
+
+  void _selectBudgetItem(
+    BackheaderBudgetItem item, {
     bool haptic = true,
+    bool animateCarousel = false,
+    bool publishFilter = true,
+  }) {
+    if (animateCarousel) {
+      unawaited(
+        _animateCarouselToBudgetItem(
+          item,
+          haptic: haptic,
+          publishFilter: publishFilter,
+        ),
+      );
+      return;
+    }
+    _applySelectedBudgetItem(
+      item,
+      haptic: haptic,
+      publishFilter: publishFilter,
+    );
+  }
+
+  void _applySelectedBudgetItem(
+    BackheaderBudgetItem item, {
+    bool haptic = true,
+    bool publishFilter = true,
   }) {
     if (haptic) HapticFeedback.selectionClick();
-    _markAvatarPulse(category.transactionCategoryID);
-    widget.store.setCategoryFilter(category);
+    _markAvatarPulse(item.key);
+    if (publishFilter) _publishBudgetItemFilter(item);
     if (!mounted) return;
     setState(() {
-      _selectedCategoryId = category.transactionCategoryID;
+      _selectedBudgetItemKey = item.key;
     });
   }
 
-  void _markAvatarPulse(int categoryId) {
+  void _publishBudgetItemFilter(BackheaderBudgetItem item) {
+    final category = item.category?.category;
+    if (category != null) {
+      final activeIds = widget.store.activeCategoryIds;
+      final alreadyActive =
+          widget.store.activeType == category.normalizedType &&
+          activeIds.length == 1 &&
+          activeIds.contains(category.transactionCategoryID) &&
+          widget.store.searchQuery.isEmpty &&
+          widget.store.activeMerchantFilters.isEmpty;
+      if (!alreadyActive) widget.store.setCategoryFilter(category);
+      return;
+    }
+    final alreadyOverview =
+        widget.store.activeCategoryIds.isEmpty &&
+        widget.store.activeMerchantFilters.isEmpty &&
+        widget.store.searchQuery.isEmpty;
+    if (!alreadyOverview) widget.store.clearCategoryFilter();
+  }
+
+  void _markAvatarPulse(String itemKey) {
     _avatarPulseTimer?.cancel();
     if (!mounted) return;
-    setState(() => _pulsingCategoryId = categoryId);
+    setState(() => _pulsingBudgetItemKey = itemKey);
     _avatarPulseTimer = Timer(const Duration(milliseconds: 190), () {
       if (!mounted) return;
-      setState(() => _pulsingCategoryId = null);
+      setState(() => _pulsingBudgetItemKey = null);
     });
   }
 
-  Future<void> _animateCarouselToCategory(
-    TransactionCategory category, {
+  Future<void> _animateCarouselToBudgetItem(
+    BackheaderBudgetItem item, {
     bool haptic = true,
+    bool publishFilter = true,
   }) async {
-    final categories = _activeCategories;
-    final targetIndex = categories.indexWhere(
-      (item) => item.transactionCategoryID == category.transactionCategoryID,
+    final items = _budgetItems;
+    final targetIndex = items.indexWhere(
+      (candidate) => candidate.key == item.key,
     );
     if (targetIndex < 0) return;
-    final initialIndex = _selectedCategoryIndex();
+    final initialIndex = _selectedBudgetItemIndex(items);
     if (targetIndex == initialIndex) {
-      _applySelectedCategory(category, haptic: haptic);
+      _applySelectedBudgetItem(
+        item,
+        haptic: haptic,
+        publishFilter: publishFilter,
+      );
       return;
     }
     _carouselMotionSerial += 1;
     final serial = _carouselMotionSerial;
     _carouselReleaseController.stop();
     final controller = SpendeeCenterCarouselController(
-      itemCount: categories.length,
+      itemCount: items.length,
       initialIndex: initialIndex,
     );
     final travel = controller.travelToIndex(targetIndex);
@@ -651,7 +755,11 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     } finally {
       if (mounted && serial == _carouselMotionSerial) {
         _carouselController = null;
-        _applySelectedCategory(category, haptic: false);
+        _applySelectedBudgetItem(
+          item,
+          haptic: false,
+          publishFilter: publishFilter,
+        );
         setState(() {
           _carouselVisualDx = 0;
         });
@@ -659,61 +767,60 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     }
   }
 
-  int _selectedCategoryIndex() {
-    final categories = _activeCategories;
-    if (categories.isEmpty) return 0;
-    final selectedId = _selectedCategory?.transactionCategoryID;
-    final index = categories.indexWhere(
-      (category) => category.transactionCategoryID == selectedId,
-    );
+  int _selectedBudgetItemIndex([List<BackheaderBudgetItem>? sourceItems]) {
+    final items = sourceItems ?? _budgetItems;
+    if (items.isEmpty) return 0;
+    final selectedKey = _selectedBudgetItemFor(items)?.key;
+    final index = items.indexWhere((item) => item.key == selectedKey);
     return index < 0 ? 0 : index;
   }
 
   void _handleCarouselDragStart(DragStartDetails details) {
+    _finishBudgetLimitEdit(saveFinal: false);
     _carouselMotionSerial += 1;
     _carouselReleaseController.stop();
     _startInteractionPerf('carousel_drag');
+    final items = _budgetItems;
     setState(() {
       _carouselLiveTicked = false;
       _carouselVisualDx = 0;
       _carouselController = SpendeeCenterCarouselController(
-        itemCount: _activeCategories.length,
-        initialIndex: _selectedCategoryIndex(),
+        itemCount: items.length,
+        initialIndex: _selectedBudgetItemIndex(items),
       );
     });
   }
 
   void _handleCarouselDragUpdate(DragUpdateDetails details) {
-    final categories = _activeCategories;
-    if (categories.length < 2) return;
+    final items = _budgetItems;
+    if (items.length < 2) return;
     _carouselDragUpdateCount += 1;
     final controller = _carouselController ??= SpendeeCenterCarouselController(
-      itemCount: categories.length,
-      initialIndex: _selectedCategoryIndex(),
+      itemCount: items.length,
+      initialIndex: _selectedBudgetItemIndex(items),
     );
     final update = controller.applyDragDelta(details.delta.dx);
-    TransactionCategory? latestCategory;
+    BackheaderBudgetItem? latestItem;
     for (final index in update.tickedIndexes) {
       _carouselLiveTicked = true;
-      latestCategory = categories[index % categories.length];
+      latestItem = items[index % items.length];
       HapticFeedback.selectionClick();
     }
-    if (latestCategory != null) {
-      widget.store.setCategoryFilter(latestCategory);
-      _markAvatarPulse(latestCategory.transactionCategoryID);
+    if (latestItem != null) {
+      _markAvatarPulse(latestItem.key);
     }
     setState(() {
-      if (latestCategory != null) {
-        _selectedCategoryId = latestCategory.transactionCategoryID;
+      if (latestItem != null) {
+        _selectedBudgetItemKey = latestItem.key;
       }
       _carouselVisualDx = update.residualDx;
     });
   }
 
   void _handleCarouselDragEnd(DragEndDetails details) {
-    final categories = _activeCategories;
+    final items = _budgetItems;
     final controller = _carouselController;
-    if (categories.length < 2 || controller == null) {
+    if (items.length < 2 || controller == null) {
       return;
     }
     _logCarouselDragPerf(
@@ -805,6 +912,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     } finally {
       if (mounted && serial == _carouselMotionSerial) {
         _carouselController = null;
+        final item = _selectedBudgetItemFor(_budgetItems);
+        if (item != null) _publishBudgetItemFilter(item);
         setState(() {
           _carouselVisualDx = 0;
         });
@@ -843,21 +952,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     SpendeeCenterCarouselController controller,
     double deltaDx,
   ) {
-    final categories = _activeCategories;
-    if (categories.length < 2) return;
+    final items = _budgetItems;
+    if (items.length < 2) return;
     final update = controller.applyDragDelta(deltaDx);
-    TransactionCategory? latestCategory;
+    BackheaderBudgetItem? latestItem;
     for (final index in update.tickedIndexes) {
-      latestCategory = categories[index % categories.length];
+      latestItem = items[index % items.length];
       HapticFeedback.selectionClick();
     }
-    if (latestCategory != null) {
-      widget.store.setCategoryFilter(latestCategory);
-      _markAvatarPulse(latestCategory.transactionCategoryID);
+    if (latestItem != null) {
+      _markAvatarPulse(latestItem.key);
     }
     setState(() {
-      if (latestCategory != null) {
-        _selectedCategoryId = latestCategory.transactionCategoryID;
+      if (latestItem != null) {
+        _selectedBudgetItemKey = latestItem.key;
       }
       _carouselVisualDx = update.residualDx;
     });
@@ -1364,6 +1472,204 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     setState(() => _stage2Page = page);
   }
 
+  List<CategoryBudgetBarData> _previewBudgetBars(
+    List<CategoryBudgetBarData> bars,
+  ) {
+    return [
+      for (final bar in bars)
+        _budgetPendingLimitAmountsByKey.containsKey(bar.key)
+            ? _previewBudgetBar(
+                bar,
+                _budgetPendingLimitAmountsByKey[bar.key] ?? 0,
+              )
+            : bar,
+    ];
+  }
+
+  CategoryBudgetBarData _previewBudgetBar(
+    CategoryBudgetBarData bar,
+    double amount,
+  ) {
+    final normalized = math.max(0.0, amount).toDouble();
+    final hasLimit = normalized > 0;
+    return CategoryBudgetBarData(
+      key: bar.key,
+      targetType: bar.targetType,
+      targetId: bar.targetId,
+      transactionType: bar.transactionType,
+      window: bar.window,
+      periodKey: bar.periodKey,
+      title: bar.title,
+      spent: bar.spent,
+      hasLimit: hasLimit,
+      limitAmount: hasLimit ? normalized : 0,
+      alertActive: hasLimit,
+      color: bar.color,
+      iconSlot: bar.iconSlot,
+      category: bar.category,
+      sourceLimit: bar.sourceLimit,
+    );
+  }
+
+  List<OverviewBudgetData> _previewOverviewBudgetItems(
+    List<OverviewBudgetData> items,
+  ) {
+    return [
+      for (final item in items)
+        _budgetPendingLimitAmountsByKey.containsKey(item.key)
+            ? _previewOverviewBudgetItem(
+                item,
+                _budgetPendingLimitAmountsByKey[item.key] ?? 0,
+              )
+            : item,
+    ];
+  }
+
+  OverviewBudgetData _previewOverviewBudgetItem(
+    OverviewBudgetData item,
+    double amount,
+  ) {
+    final normalized = math.max(0.0, amount).toDouble();
+    final hasLimit = normalized > 0;
+    return OverviewBudgetData(
+      kind: item.kind,
+      window: item.window,
+      periodKey: item.periodKey,
+      amount: item.amount,
+      hasLimit: hasLimit,
+      limitAmount: hasLimit ? normalized : 0,
+      alertActive: hasLimit,
+      sourceLimit: item.sourceLimit,
+    );
+  }
+
+  List<BackheaderBudgetItem> _previewBudgetItems({
+    required List<OverviewBudgetData> overviewItems,
+    required List<CategoryBudgetBarData> bars,
+  }) {
+    return [
+      for (final overview in overviewItems)
+        BackheaderBudgetItem.overview(overview),
+      for (final bar in bars) BackheaderBudgetItem.category(bar),
+    ];
+  }
+
+  double _budgetItemLimitAmount(BackheaderBudgetItem item) {
+    final pending = _budgetPendingLimitAmountsByKey[item.key];
+    if (pending != null) return pending;
+    final overview = item.overview;
+    if (overview != null) return overview.hasLimit ? overview.limitAmount : 0;
+    final category = item.category;
+    if (category != null) return category.hasLimit ? category.limitAmount : 0;
+    return 0;
+  }
+
+  void _handleBudgetItemLongPressStart(
+    BackheaderBudgetItem item,
+    LongPressStartDetails details,
+  ) {
+    _carouselReleaseController.stop();
+    _budgetLimitVeryLongTimer?.cancel();
+    _budgetLimitEditItem = item;
+    _budgetLimitEditActivationGlobalY = details.globalPosition.dy;
+    _budgetLimitEditLastDy = 0;
+    _budgetLimitEditAccumulator = 0;
+    _budgetLimitClearedByVeryLong = false;
+    HapticFeedback.mediumImpact();
+    _budgetLimitVeryLongTimer = Timer(const Duration(milliseconds: 720), () {
+      if (!mounted || _budgetLimitEditItem?.key != item.key) return;
+      if (_budgetLimitEditLastDy.abs() > 5) return;
+      _budgetLimitClearedByVeryLong = true;
+      HapticFeedback.heavyImpact();
+      _setBudgetItemLimitAmount(item, 0);
+    });
+  }
+
+  void _handleBudgetItemLongPressMoveUpdate(
+    LongPressMoveUpdateDetails details,
+  ) {
+    final item = _budgetLimitEditItem;
+    final activationY = _budgetLimitEditActivationGlobalY;
+    if (item == null || activationY == null) return;
+    final dy = details.globalPosition.dy - activationY;
+    final delta = dy - _budgetLimitEditLastDy;
+    _budgetLimitEditLastDy = dy;
+    if (dy.abs() > 5) _budgetLimitVeryLongTimer?.cancel();
+    _budgetLimitEditAccumulator += -delta;
+    _drainBudgetLimitTicks(item, dy.abs());
+  }
+
+  void _drainBudgetLimitTicks(BackheaderBudgetItem item, double distance) {
+    final largeStep = distance >= 50;
+    final tickDistance = largeStep ? 18.0 : 12.0;
+    final amountStep = largeStep ? 10000.0 : 1000.0;
+    while (_budgetLimitEditAccumulator.abs() >= tickDistance) {
+      final direction = _budgetLimitEditAccumulator > 0 ? 1 : -1;
+      _budgetLimitEditAccumulator -= direction * tickDistance;
+      final next = math
+          .max(0.0, _budgetItemLimitAmount(item) + direction * amountStep)
+          .toDouble();
+      _setBudgetItemLimitAmount(item, next);
+      HapticFeedback.selectionClick();
+      DebugConsole.log(
+        '[Perf] SpendeeTest budget_limit_tick key=${item.key} '
+        'direction=$direction step=${amountStep.round()} '
+        'amount=${next.round()}',
+      );
+    }
+  }
+
+  void _finishBudgetLimitEdit({bool saveFinal = true}) {
+    _budgetLimitVeryLongTimer?.cancel();
+    _budgetLimitVeryLongTimer = null;
+    final item = _budgetLimitEditItem;
+    if (saveFinal && item != null && !_budgetLimitClearedByVeryLong) {
+      unawaited(_saveBudgetItemLimit(item, _budgetItemLimitAmount(item)));
+    }
+    _budgetLimitEditItem = null;
+    _budgetLimitEditActivationGlobalY = null;
+    _budgetLimitEditLastDy = 0;
+    _budgetLimitEditAccumulator = 0;
+    _budgetLimitClearedByVeryLong = false;
+  }
+
+  void _setBudgetItemLimitAmount(BackheaderBudgetItem item, double amount) {
+    final normalized = amount <= 0 ? 0.0 : (amount / 1000).round() * 1000.0;
+    setState(() {
+      _budgetPendingLimitAmountsByKey[item.key] = normalized;
+    });
+    unawaited(_saveBudgetItemLimit(item, normalized));
+  }
+
+  Future<void> _saveBudgetItemLimit(
+    BackheaderBudgetItem item,
+    double amount,
+  ) async {
+    final normalized = math.max(0.0, amount).toDouble();
+    final overview = item.overview;
+    final category = item.category;
+    try {
+      if (overview != null) {
+        await widget.store.saveOverviewLimitInline(
+          overview.kind,
+          limitAmount: normalized,
+          alertActive: normalized > 0,
+        );
+      } else if (category != null) {
+        await widget.store.saveCategoryLimitForBarInline(
+          category,
+          limitAmount: normalized,
+          alertActive: normalized > 0,
+        );
+      }
+    } catch (error) {
+      DebugConsole.log(
+        '[Perf] SpendeeTest budget_limit_save_error key=${item.key} '
+        'amount=${normalized.round()} error=$error',
+      );
+    }
+  }
+
   RelativeRect _headerDesignMenuPosition(BuildContext menuContext) {
     final button = menuContext.findRenderObject()! as RenderBox;
     final overlay =
@@ -1388,8 +1694,19 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   Widget build(BuildContext context) {
     final controller = _controllerFor(context);
     final geometry = controller.geometry;
+    final budgetBars = _previewBudgetBars(widget.store.categoryBudgetBars);
+    final overviewBudgetItems = _previewOverviewBudgetItems(
+      widget.store.overviewBudgetItems,
+    );
+    final budgetItems = _previewBudgetItems(
+      overviewItems: overviewBudgetItems,
+      bars: budgetBars,
+    );
+    final selectedBudgetItem = _selectedBudgetItemFor(budgetItems);
+    final selectedBar = selectedBudgetItem?.category;
+    final selectedCategory = selectedBar?.category;
     var overviewBudgetLimit = 0.0;
-    for (final item in widget.store.overviewBudgetItems) {
+    for (final item in overviewBudgetItems) {
       if (item.hasLimit && item.limitAmount > 0) {
         overviewBudgetLimit = item.limitAmount;
         break;
@@ -1438,12 +1755,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                 key: const ValueKey('spendee-test-header-golden-boundary'),
                 child: _SpendeeBudgetHeaderCard(
                   stage: _stage,
-                  selectedCategory: _selectedCategory,
-                  selectedBar: _selectedBar,
-                  bars: widget.store.categoryBudgetBars,
+                  selectedBudgetItem: selectedBudgetItem,
+                  selectedCategory: selectedCategory,
+                  bars: budgetBars,
                   transactions: widget.store.windowedTransactions,
                   budgetLimitAmount: overviewBudgetLimit,
-                  categories: _activeCategories,
+                  budgetItems: budgetItems,
                   stage2Page: _stage2Page,
                   headerBackgroundMode: _headerBackgroundMode,
                   mindStatsFrame: mindStatsFrame,
@@ -1452,11 +1769,17 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   onHandleDragStart: _beginHeaderDrag,
                   onHandleDragUpdate: _updateHeaderDrag,
                   onHandleDragEnd: _endHeaderDrag,
-                  onCategoryTap: _selectCategory,
+                  onBudgetItemTap: _selectBudgetItem,
                   onPieCategoryTap: (category) =>
                       _selectCategory(category, animateCarousel: true),
-                  pulsingCategoryId: _pulsingCategoryId,
+                  onPieCenterTap: _selectOverviewBudgetItem,
+                  pulsingBudgetItemKey: _pulsingBudgetItemKey,
                   carouselOffset: _carouselVisualDx,
+                  onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
+                  onBudgetItemLongPressMoveUpdate:
+                      _handleBudgetItemLongPressMoveUpdate,
+                  onBudgetItemLongPressEnd: (_) => _finishBudgetLimitEdit(),
+                  onBudgetItemLongPressCancel: _finishBudgetLimitEdit,
                   headerSurface: _headerSurface,
                   avatarSurface: _avatarSurface,
                   chartSurface: _chartSurface,
@@ -1516,12 +1839,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
 class _SpendeeBudgetHeaderCard extends StatelessWidget {
   const _SpendeeBudgetHeaderCard({
     required this.stage,
+    required this.selectedBudgetItem,
     required this.selectedCategory,
-    required this.selectedBar,
     required this.bars,
     required this.transactions,
     required this.budgetLimitAmount,
-    required this.categories,
+    required this.budgetItems,
     required this.stage2Page,
     required this.headerBackgroundMode,
     required this.mindStatsFrame,
@@ -1530,10 +1853,15 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.onHandleDragStart,
     required this.onHandleDragUpdate,
     required this.onHandleDragEnd,
-    required this.onCategoryTap,
+    required this.onBudgetItemTap,
     required this.onPieCategoryTap,
-    required this.pulsingCategoryId,
+    required this.onPieCenterTap,
+    required this.pulsingBudgetItemKey,
     required this.carouselOffset,
+    required this.onBudgetItemLongPressStart,
+    required this.onBudgetItemLongPressMoveUpdate,
+    required this.onBudgetItemLongPressEnd,
+    required this.onBudgetItemLongPressCancel,
     required this.headerSurface,
     required this.avatarSurface,
     required this.chartSurface,
@@ -1554,12 +1882,12 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   });
 
   final SpendeeHeaderStage stage;
+  final BackheaderBudgetItem? selectedBudgetItem;
   final TransactionCategory? selectedCategory;
-  final CategoryBudgetBarData? selectedBar;
   final List<CategoryBudgetBarData> bars;
   final List<TransactionRecord> transactions;
   final double budgetLimitAmount;
-  final List<TransactionCategory> categories;
+  final List<BackheaderBudgetItem> budgetItems;
   final _Stage2BudgetPage stage2Page;
   final _HeaderBackgroundMode headerBackgroundMode;
   final SpendeeMindStatsFrame? mindStatsFrame;
@@ -1568,10 +1896,16 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final GestureDragStartCallback onHandleDragStart;
   final GestureDragUpdateCallback onHandleDragUpdate;
   final GestureDragEndCallback onHandleDragEnd;
-  final ValueChanged<TransactionCategory> onCategoryTap;
+  final ValueChanged<BackheaderBudgetItem> onBudgetItemTap;
   final ValueChanged<TransactionCategory> onPieCategoryTap;
-  final int? pulsingCategoryId;
+  final VoidCallback onPieCenterTap;
+  final String? pulsingBudgetItemKey;
   final double carouselOffset;
+  final void Function(BackheaderBudgetItem, LongPressStartDetails)
+  onBudgetItemLongPressStart;
+  final GestureLongPressMoveUpdateCallback onBudgetItemLongPressMoveUpdate;
+  final GestureLongPressEndCallback onBudgetItemLongPressEnd;
+  final GestureLongPressCancelCallback onBudgetItemLongPressCancel;
   final _HeaderSurface headerSurface;
   final _PanelSurface avatarSurface;
   final _PanelSurface chartSurface;
@@ -1593,10 +1927,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final budgetSpec = _budgetHeaderVisualSpec.budget;
-    final bar = selectedBar;
-    final headerValue = bar == null
-        ? 'Nincs limit'
-        : '${_formatFt(bar.spent)} / ${bar.hasLimit ? _formatFt(bar.limitAmount) : '0 Ft'}';
+    final headerValue = _budgetHeaderValue(selectedBudgetItem);
 
     final budgetContent = Stack(
       fit: StackFit.expand,
@@ -1654,11 +1985,15 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
             top: budgetSpec.stage1Top,
             height: budgetSpec.stage1Height,
             child: _BudgetExtendedInfo(
-              categories: categories,
-              selectedCategory: selectedCategory,
-              onCategoryTap: onCategoryTap,
-              pulsingCategoryId: pulsingCategoryId,
+              items: budgetItems,
+              selectedItem: selectedBudgetItem,
+              onItemTap: onBudgetItemTap,
+              pulsingItemKey: pulsingBudgetItemKey,
               carouselOffset: carouselOffset,
+              onItemLongPressStart: onBudgetItemLongPressStart,
+              onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
+              onItemLongPressEnd: onBudgetItemLongPressEnd,
+              onItemLongPressCancel: onBudgetItemLongPressCancel,
               surface: avatarSurface,
               softness: avatarSurfaceSoftness,
               showSelectedLabel: avatarSurface != _PanelSurface.htmlC2Glass,
@@ -1692,6 +2027,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               selectedCategory: selectedCategory,
               page: stage2Page,
               onCategoryTap: onPieCategoryTap,
+              onCenterTap: onPieCenterTap,
               onPreviousPage: onStage2PreviousPage,
               onNextPage: onStage2NextPage,
               surface: chartSurface,
@@ -1761,14 +2097,10 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
     final score = statsFrame.activeFrame.categoryScopeSeries.kontrollScore;
     final modeKey = statsFrame.modeKey;
     const scoreChartRightInset = 18.0;
-    final scoreChartLeft = stage == SpendeeHeaderStage.stage0
-        ? 112.0
-        : scoreChartRightInset;
-    final scoreChartTop = stage == SpendeeHeaderStage.stage0
-        ? 43.0
-        : scoreChartRightInset;
-    final scoreChartHeight = stage == SpendeeHeaderStage.stage0 ? 47.0 : 70.0;
-    final scorePlotLeftInset = stage == SpendeeHeaderStage.stage1 ? 153.0 : 0.0;
+    const scoreChartLeft = 112.0;
+    const scoreChartTop = 43.0;
+    const scoreChartHeight = 47.0;
+    const scorePlotLeftInset = 0.0;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1786,18 +2118,6 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
             valueKey: const ValueKey('spendee-test-mind-header-score-value'),
           ),
         ),
-        if (stage == SpendeeHeaderStage.stage0)
-          Positioned(
-            left: 20,
-            right: 78,
-            top: 78,
-            child: Text(
-              '${statsFrame.periodLabel} · ${statsFrame.activeFrame.yearData.scopeLabel}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _partitionSummaryStyle,
-            ),
-          ),
         Positioned(
           key: const ValueKey('spendee-test-mind-score-chart'),
           left: scoreChartLeft,
@@ -1807,7 +2127,7 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
           child: _MindFastInfoScoreChart(
             activeType: statsFrame.activeFrame.yearData.activeType,
             series: statsFrame.activeFrame.categoryScopeSeries,
-            bareLine: stage != SpendeeHeaderStage.stage2,
+            bareLine: true,
             plotLeftInset: scorePlotLeftInset,
           ),
         ),
@@ -2935,11 +3255,15 @@ Color _mindScoreColor(double score) {
 
 class _BudgetExtendedInfo extends StatelessWidget {
   const _BudgetExtendedInfo({
-    required this.categories,
-    required this.selectedCategory,
-    required this.onCategoryTap,
-    required this.pulsingCategoryId,
+    required this.items,
+    required this.selectedItem,
+    required this.onItemTap,
+    required this.pulsingItemKey,
     required this.carouselOffset,
+    required this.onItemLongPressStart,
+    required this.onItemLongPressMoveUpdate,
+    required this.onItemLongPressEnd,
+    required this.onItemLongPressCancel,
     required this.surface,
     required this.softness,
     required this.showSelectedLabel,
@@ -2949,11 +3273,16 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.onCarouselDragCancel,
   });
 
-  final List<TransactionCategory> categories;
-  final TransactionCategory? selectedCategory;
-  final ValueChanged<TransactionCategory> onCategoryTap;
-  final int? pulsingCategoryId;
+  final List<BackheaderBudgetItem> items;
+  final BackheaderBudgetItem? selectedItem;
+  final ValueChanged<BackheaderBudgetItem> onItemTap;
+  final String? pulsingItemKey;
   final double carouselOffset;
+  final void Function(BackheaderBudgetItem, LongPressStartDetails)
+  onItemLongPressStart;
+  final GestureLongPressMoveUpdateCallback onItemLongPressMoveUpdate;
+  final GestureLongPressEndCallback onItemLongPressEnd;
+  final GestureLongPressCancelCallback onItemLongPressCancel;
   final _PanelSurface surface;
   final double softness;
   final bool showSelectedLabel;
@@ -2990,22 +3319,26 @@ class _BudgetExtendedInfo extends StatelessWidget {
               curve: Curves.easeOutQuad,
               transform: Matrix4.identity(),
               child: _ContextAvatarBelt(
-                categories: categories,
-                selectedCategory: selectedCategory,
-                pulsingCategoryId: pulsingCategoryId,
+                items: items,
+                selectedItem: selectedItem,
+                pulsingItemKey: pulsingItemKey,
                 carouselOffset: carouselOffset,
-                onCategoryTap: onCategoryTap,
+                onItemTap: onItemTap,
+                onItemLongPressStart: onItemLongPressStart,
+                onItemLongPressMoveUpdate: onItemLongPressMoveUpdate,
+                onItemLongPressEnd: onItemLongPressEnd,
+                onItemLongPressCancel: onItemLongPressCancel,
               ),
             ),
           ),
         ),
-        if (showSelectedLabel && selectedCategory != null)
+        if (showSelectedLabel && selectedItem != null)
           Positioned(
             left: 24,
             right: 24,
             bottom: 9,
             child: Text(
-              selectedCategory!.name,
+              selectedItem!.title,
               key: const ValueKey('spendee-test-context-avatar-label'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -3328,27 +3661,36 @@ BoxDecoration _stage1GlassDecoration() {
 
 class _ContextAvatarBelt extends StatelessWidget {
   const _ContextAvatarBelt({
-    required this.categories,
-    required this.selectedCategory,
-    required this.pulsingCategoryId,
+    required this.items,
+    required this.selectedItem,
+    required this.pulsingItemKey,
     required this.carouselOffset,
-    required this.onCategoryTap,
+    required this.onItemTap,
+    required this.onItemLongPressStart,
+    required this.onItemLongPressMoveUpdate,
+    required this.onItemLongPressEnd,
+    required this.onItemLongPressCancel,
   });
 
-  final List<TransactionCategory> categories;
-  final TransactionCategory? selectedCategory;
-  final int? pulsingCategoryId;
+  final List<BackheaderBudgetItem> items;
+  final BackheaderBudgetItem? selectedItem;
+  final String? pulsingItemKey;
   final double carouselOffset;
-  final ValueChanged<TransactionCategory> onCategoryTap;
+  final ValueChanged<BackheaderBudgetItem> onItemTap;
+  final void Function(BackheaderBudgetItem, LongPressStartDetails)
+  onItemLongPressStart;
+  final GestureLongPressMoveUpdateCallback onItemLongPressMoveUpdate;
+  final GestureLongPressEndCallback onItemLongPressEnd;
+  final GestureLongPressCancelCallback onItemLongPressCancel;
 
   static const _slotDistance = 64.0;
   static const _verticalLift = 4.0;
-  static const _slotOffsets = <int>[-2, -1, 0, 1, 2];
+  static const _slotOffsets = <int>[-3, -2, -1, 0, 1, 2];
   static const _slotBuildOrder = <int>[0, -1, 1, -2, 2, -3, 3];
 
   @override
   Widget build(BuildContext context) {
-    if (categories.isEmpty) return const SizedBox.shrink();
+    if (items.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (context, constraints) {
         final center = Offset(
@@ -3369,9 +3711,13 @@ class _ContextAvatarBelt extends StatelessWidget {
                 slot: slot,
                 center: center,
                 logicalOffset: _logicalOffsetFor(slot.slotOffset),
-                onTap: () => onCategoryTap(slot.category),
-                pulsing:
-                    slot.category.transactionCategoryID == pulsingCategoryId,
+                onTap: () => onItemTap(slot.item),
+                onLongPressStart: (details) =>
+                    onItemLongPressStart(slot.item, details),
+                onLongPressMoveUpdate: onItemLongPressMoveUpdate,
+                onLongPressEnd: onItemLongPressEnd,
+                onLongPressCancel: onItemLongPressCancel,
+                pulsing: slot.item.key == pulsingItemKey,
               ),
           ],
         );
@@ -3383,10 +3729,8 @@ class _ContextAvatarBelt extends StatelessWidget {
       slotOffset + carouselOffset / _slotDistance;
 
   List<_ContextAvatarSlot> _visibleAvatarSlots() {
-    final selectedIndex = categories.indexWhere(
-      (category) =>
-          category.transactionCategoryID ==
-          selectedCategory?.transactionCategoryID,
+    final selectedIndex = items.indexWhere(
+      (item) => item.key == selectedItem?.key,
     );
     final centerIndex = selectedIndex < 0 ? 0 : selectedIndex;
     final incomingOffset = carouselOffset < -0.5
@@ -3395,19 +3739,19 @@ class _ContextAvatarBelt extends StatelessWidget {
         ? -3
         : null;
     final visibleCount = math.min(
-      categories.length,
+      items.length,
       _slotOffsets.length + (incomingOffset == null ? 0 : 1),
     );
     final slots = <_ContextAvatarSlot>[];
     final usedIndexes = <int>{};
     for (final offset in _slotBuildOrder) {
-      if (offset.abs() > 2 && offset != incomingOffset) continue;
+      if (!_slotOffsets.contains(offset) && offset != incomingOffset) continue;
       if (slots.length == visibleCount) break;
       final index = _wrappedIndex(centerIndex + offset);
       if (!usedIndexes.add(index)) continue;
       slots.add(
         _ContextAvatarSlot(
-          category: categories[index],
+          item: items[index],
           slotOffset: offset,
           selected: offset == 0,
         ),
@@ -3418,19 +3762,19 @@ class _ContextAvatarBelt extends StatelessWidget {
   }
 
   int _wrappedIndex(int index) {
-    final wrapped = index % categories.length;
-    return wrapped < 0 ? wrapped + categories.length : wrapped;
+    final wrapped = index % items.length;
+    return wrapped < 0 ? wrapped + items.length : wrapped;
   }
 }
 
 class _ContextAvatarSlot {
   const _ContextAvatarSlot({
-    required this.category,
+    required this.item,
     required this.slotOffset,
     required this.selected,
   });
 
-  final TransactionCategory category;
+  final BackheaderBudgetItem item;
   final int slotOffset;
   final bool selected;
 }
@@ -3441,6 +3785,10 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.center,
     required this.logicalOffset,
     required this.onTap,
+    required this.onLongPressStart,
+    required this.onLongPressMoveUpdate,
+    required this.onLongPressEnd,
+    required this.onLongPressCancel,
     required this.pulsing,
   });
 
@@ -3448,6 +3796,10 @@ class _PositionedContextAvatar extends StatelessWidget {
   final Offset center;
   final double logicalOffset;
   final VoidCallback onTap;
+  final GestureLongPressStartCallback onLongPressStart;
+  final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
+  final GestureLongPressEndCallback onLongPressEnd;
+  final GestureLongPressCancelCallback onLongPressCancel;
   final bool pulsing;
 
   @override
@@ -3462,13 +3814,17 @@ class _PositionedContextAvatar extends StatelessWidget {
       width: size,
       height: size,
       child: _ContextAvatar(
-        category: slot.category,
+        item: slot.item,
         size: size,
         iconSize: iconSize,
         opacity: opacity,
         selected: slot.selected,
         pulsing: pulsing,
         onTap: onTap,
+        onLongPressStart: onLongPressStart,
+        onLongPressMoveUpdate: onLongPressMoveUpdate,
+        onLongPressEnd: onLongPressEnd,
+        onLongPressCancel: onLongPressCancel,
       ),
     );
   }
@@ -3523,42 +3879,246 @@ double _lerpDouble(double begin, double end, double amount) {
 
 class _ContextAvatar extends StatelessWidget {
   const _ContextAvatar({
-    required this.category,
+    required this.item,
     required this.size,
     required this.iconSize,
     required this.opacity,
     required this.selected,
     required this.pulsing,
     required this.onTap,
+    required this.onLongPressStart,
+    required this.onLongPressMoveUpdate,
+    required this.onLongPressEnd,
+    required this.onLongPressCancel,
   });
 
-  final TransactionCategory category;
+  final BackheaderBudgetItem item;
   final double size;
   final double iconSize;
   final double opacity;
   final bool selected;
   final bool pulsing;
   final VoidCallback onTap;
+  final GestureLongPressStartCallback onLongPressStart;
+  final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
+  final GestureLongPressEndCallback onLongPressEnd;
+  final GestureLongPressCancelCallback onLongPressCancel;
 
   @override
   Widget build(BuildContext context) {
+    final category = item.category?.category;
+    final progress = _budgetItemProgress(item);
     return GestureDetector(
-      key: ValueKey(
-        selected
-            ? 'spendee-test-category-avatar-${category.transactionCategoryID}-selected'
-            : 'spendee-test-category-avatar-${category.transactionCategoryID}',
-      ),
+      key: _budgetAvatarKey(item, selected: selected),
       onTap: onTap,
-      child: GlossyCategoryAvatar(
-        category: category,
-        size: size,
-        iconSize: iconSize,
-        selected: selected,
-        pulsing: pulsing,
-        opacity: opacity,
-        debugSource: 'spendee-test-context-avatar',
+      onLongPressStart: onLongPressStart,
+      onLongPressMoveUpdate: onLongPressMoveUpdate,
+      onLongPressEnd: onLongPressEnd,
+      onLongPressCancel: onLongPressCancel,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (category != null)
+            GlossyCategoryAvatar(
+              category: category,
+              size: size,
+              iconSize: iconSize,
+              selected: selected,
+              pulsing: pulsing,
+              opacity: opacity,
+              debugSource: 'spendee-test-context-avatar',
+            )
+          else
+            _OverviewBudgetAvatar(
+              item: item,
+              size: size,
+              iconSize: iconSize,
+              opacity: opacity,
+              selected: selected,
+              pulsing: pulsing,
+            ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _BudgetAvatarProgressPainter(
+                  progress: progress,
+                  selected: selected,
+                  color: _budgetItemAccent(item),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+}
+
+Key _budgetAvatarKey(BackheaderBudgetItem item, {required bool selected}) {
+  final category = item.category?.category;
+  if (category != null) {
+    return ValueKey(
+      selected
+          ? 'spendee-test-category-avatar-${category.transactionCategoryID}-selected'
+          : 'spendee-test-category-avatar-${category.transactionCategoryID}',
+    );
+  }
+  final key = 'spendee-test-budget-avatar-${item.key}';
+  return ValueKey(selected ? '$key-selected' : key);
+}
+
+double _budgetItemProgress(BackheaderBudgetItem item) {
+  final overview = item.overview;
+  if (overview != null) {
+    if (!overview.hasLimit || overview.limitAmount <= 0) return 0;
+    return (overview.amount / overview.limitAmount).clamp(0.0, 1.0).toDouble();
+  }
+  final category = item.category;
+  if (category == null || !category.hasLimit || category.limitAmount <= 0) {
+    return 0;
+  }
+  return (category.spent / category.limitAmount).clamp(0.0, 1.0).toDouble();
+}
+
+Color _budgetItemAccent(BackheaderBudgetItem item) {
+  final category = item.category;
+  if (category != null) return category.color;
+  final overview = item.overview;
+  if (overview?.kind == BudgetGoalKind.incomeGoal) {
+    return const Color(0xFF22C55E);
+  }
+  return const Color(0xFF06B6D4);
+}
+
+String _budgetHeaderValue(BackheaderBudgetItem? item) {
+  if (item == null) return 'Nincs limit';
+  final overview = item.overview;
+  if (overview != null) {
+    return overview.hasLimit
+        ? '${_formatFt(overview.amount)} / ${_formatFt(overview.limitAmount)}'
+        : '${_formatFt(overview.amount)} / 0 Ft';
+  }
+  final category = item.category;
+  if (category == null) return 'Nincs limit';
+  return '${_formatFt(category.spent)} / '
+      '${category.hasLimit ? _formatFt(category.limitAmount) : '0 Ft'}';
+}
+
+class _OverviewBudgetAvatar extends StatelessWidget {
+  const _OverviewBudgetAvatar({
+    required this.item,
+    required this.size,
+    required this.iconSize,
+    required this.opacity,
+    required this.selected,
+    required this.pulsing,
+  });
+
+  final BackheaderBudgetItem item;
+  final double size;
+  final double iconSize;
+  final double opacity;
+  final bool selected;
+  final bool pulsing;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _budgetItemAccent(item);
+    final effectiveScale = selected ? (pulsing ? 1.18 : 1.1) : 1.0;
+    return Opacity(
+      opacity: opacity,
+      child: AnimatedScale(
+        scale: effectiveScale,
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOutBack,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              center: const Alignment(-.34, -.58),
+              radius: 1.2,
+              colors: [
+                Colors.white.withValues(alpha: .34),
+                accent.withValues(alpha: .88),
+                const Color(0xFF0F172A).withValues(alpha: .82),
+              ],
+              stops: const [0, .48, 1],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: selected ? .58 : .46),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(
+                  0xFF0F172A,
+                ).withValues(alpha: selected ? .20 : .15),
+                offset: Offset(0, selected ? 18 : 13),
+                blurRadius: selected ? 32 : 24,
+              ),
+              if (selected)
+                BoxShadow(
+                  color: accent.withValues(alpha: .22),
+                  spreadRadius: 4,
+                  blurRadius: 18,
+                ),
+            ],
+          ),
+          child: Icon(
+            item.overview?.kind == BudgetGoalKind.incomeGoal
+                ? Icons.trending_up_rounded
+                : Icons.account_balance_wallet_rounded,
+            size: iconSize,
+            color: Colors.white.withValues(alpha: .94),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetAvatarProgressPainter extends CustomPainter {
+  const _BudgetAvatarProgressPainter({
+    required this.progress,
+    required this.selected,
+    required this.color,
+  });
+
+  final double progress;
+  final bool selected;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) return;
+    final stroke = selected ? 3.2 : 2.4;
+    final rect = Rect.fromLTWH(
+      stroke / 2 + 1,
+      stroke / 2 + 1,
+      size.width - stroke - 2,
+      size.height - stroke - 2,
+    );
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      math.pi * 2 * progress,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..color = color.withValues(alpha: selected ? .96 : .76),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BudgetAvatarProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.selected != selected ||
+        oldDelegate.color != color;
   }
 }
 
@@ -3677,6 +4237,7 @@ class _BudgetPieStage2Layer extends StatefulWidget {
     required this.selectedCategory,
     required this.page,
     required this.onCategoryTap,
+    required this.onCenterTap,
     required this.onPreviousPage,
     required this.onNextPage,
     required this.surface,
@@ -3690,6 +4251,7 @@ class _BudgetPieStage2Layer extends StatefulWidget {
   final TransactionCategory? selectedCategory;
   final _Stage2BudgetPage page;
   final ValueChanged<TransactionCategory> onCategoryTap;
+  final VoidCallback onCenterTap;
   final VoidCallback onPreviousPage;
   final VoidCallback onNextPage;
   final _PanelSurface surface;
@@ -3740,26 +4302,20 @@ class _BudgetPieStage2LayerState extends State<_BudgetPieStage2Layer> {
       onHorizontalDragUpdate: _handleDragUpdate,
       onHorizontalDragCancel: _resetDrag,
       onHorizontalDragEnd: _handleDragEnd,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(1, 0, 1, 12),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: _BudgetPiePanel(
-                bars: widget.bars,
-                transactions: widget.transactions,
-                selectedCategory: widget.selectedCategory,
-                page: widget.page,
-                onCategoryTap: widget.onCategoryTap,
-                surface: widget.surface,
-                listSurface: widget.listSurface,
-                softness: widget.softness,
-                listSoftness: widget.listSoftness,
-              ),
-            ),
-          );
-        },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(1, 0, 1, 12),
+        child: _BudgetPiePanel(
+          bars: widget.bars,
+          transactions: widget.transactions,
+          selectedCategory: widget.selectedCategory,
+          page: widget.page,
+          onCategoryTap: widget.onCategoryTap,
+          onCenterTap: widget.onCenterTap,
+          surface: widget.surface,
+          listSurface: widget.listSurface,
+          softness: widget.softness,
+          listSoftness: widget.listSoftness,
+        ),
       ),
     );
   }
@@ -3816,6 +4372,7 @@ class _BudgetPiePanel extends StatelessWidget {
     required this.selectedCategory,
     required this.page,
     required this.onCategoryTap,
+    required this.onCenterTap,
     required this.surface,
     required this.listSurface,
     required this.softness,
@@ -3827,6 +4384,7 @@ class _BudgetPiePanel extends StatelessWidget {
   final TransactionCategory? selectedCategory;
   final _Stage2BudgetPage page;
   final ValueChanged<TransactionCategory> onCategoryTap;
+  final VoidCallback onCenterTap;
   final _PanelSurface surface;
   final _ChartListSurface listSurface;
   final double softness;
@@ -3863,12 +4421,6 @@ class _BudgetPiePanel extends StatelessWidget {
       selectedKey: selectedEntry?.key,
       selectedEntry: selectedEntry,
       selectedPercent: selectedPercent,
-      eyebrow: page == _Stage2BudgetPage.categories
-          ? 'Kategória arány'
-          : 'Vendor arány',
-      headline: page == _Stage2BudgetPage.categories
-          ? 'limit mix'
-          : selectedCategory?.name ?? 'vendor mix',
       focusLabel: page == _Stage2BudgetPage.categories
           ? 'kiemelt kategória'
           : 'kiemelt vendor',
@@ -3882,6 +4434,7 @@ class _BudgetPiePanel extends StatelessWidget {
           : 'a kategóriából',
       listSurface: listSurface,
       listSoftness: listSoftness,
+      onCenterTap: onCenterTap,
       onEntryTap: (entry) {
         final category = entry.category;
         if (category != null) onCategoryTap(category);
@@ -4046,13 +4599,12 @@ class _BudgetPieContent extends StatelessWidget {
     required this.selectedKey,
     required this.selectedEntry,
     required this.selectedPercent,
-    required this.eyebrow,
-    required this.headline,
     required this.focusLabel,
     required this.focusTitleKey,
     required this.focusSuffix,
     required this.listSurface,
     required this.listSoftness,
+    required this.onCenterTap,
     required this.onEntryTap,
   });
 
@@ -4062,13 +4614,12 @@ class _BudgetPieContent extends StatelessWidget {
   final String? selectedKey;
   final _BudgetShareEntry? selectedEntry;
   final int selectedPercent;
-  final String eyebrow;
-  final String headline;
   final String focusLabel;
   final Key focusTitleKey;
   final String focusSuffix;
   final _ChartListSurface listSurface;
   final double listSoftness;
+  final VoidCallback onCenterTap;
   final ValueChanged<_BudgetShareEntry> onEntryTap;
 
   @override
@@ -4076,36 +4627,28 @@ class _BudgetPieContent extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(eyebrow, style: _smallCapsStyle),
-                  const SizedBox(height: 4),
-                  Text(headline, style: _pieHeadlineStyle),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           SizedBox(
+            key: const ValueKey('spendee-test-budget-pie-fixed-top'),
             height: budgetSpec.donutVisualSize,
             child: Row(
               children: [
                 SizedBox(
+                  key: const ValueKey('spendee-test-budget-pie-donut'),
                   width: budgetSpec.donutVisualSize,
                   height: budgetSpec.donutVisualSize,
-                  child: CustomPaint(
-                    painter: _BudgetPiePainter(
-                      entries: entries,
-                      total: total,
-                      selectedKey: selectedKey,
+                  child: _BudgetPieHitRegion(
+                    entries: entries,
+                    total: total,
+                    onEntryTap: onEntryTap,
+                    onCenterTap: onCenterTap,
+                    child: CustomPaint(
+                      painter: _BudgetPiePainter(
+                        entries: entries,
+                        total: total,
+                        selectedKey: selectedKey,
+                      ),
                     ),
                   ),
                 ),
@@ -4124,25 +4667,123 @@ class _BudgetPieContent extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Column(
-            children: [
-              for (var index = 0; index < entries.length; index++) ...[
-                if (index > 0) const SizedBox(height: 7),
-                _BudgetPieRow(
-                  entry: entries[index],
+          Expanded(
+            child: ListView.separated(
+              key: const ValueKey('spendee-test-budget-pie-list-scroll'),
+              padding: EdgeInsets.zero,
+              itemCount: entries.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 7),
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return _BudgetPieRow(
+                  entry: entry,
                   total: total,
-                  selected: entries[index].key == selectedKey,
+                  selected: entry.key == selectedKey,
                   surface: listSurface,
                   softness: listSoftness,
-                  onTap: () => onEntryTap(entries[index]),
-                ),
-              ],
-            ],
+                  onTap: () => onEntryTap(entry),
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _BudgetPieHitRegion extends StatelessWidget {
+  const _BudgetPieHitRegion({
+    required this.entries,
+    required this.total,
+    required this.onEntryTap,
+    required this.onCenterTap,
+    required this.child,
+  });
+
+  final List<_BudgetShareEntry> entries;
+  final double total;
+  final ValueChanged<_BudgetShareEntry> onEntryTap;
+  final VoidCallback onCenterTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: (details) {
+        final box = context.findRenderObject() as RenderBox;
+        final target = _hitTest(details.localPosition, box.size);
+        if (target == _BudgetPieTapTarget.center) {
+          onCenterTap();
+          return;
+        }
+        final entry = target.entry;
+        if (entry != null) onEntryTap(entry);
+      },
+      child: child,
+    );
+  }
+
+  _BudgetPieTapTarget _hitTest(Offset position, Size size) {
+    final budgetSpec = _budgetHeaderVisualSpec.budget;
+    final center = Offset(size.width / 2, size.height / 2);
+    final scale =
+        math.min(size.width, size.height) / budgetSpec.donutCoordinateSize;
+    final radius = budgetSpec.donutRadius * scale;
+    final selectedStrokeWidth = budgetSpec.donutSelectedStrokeWidth * scale;
+    final centerRadius = budgetSpec.donutCenterRadius * scale;
+    final distance = (position - center).distance;
+    if (distance <= centerRadius) return _BudgetPieTapTarget.center;
+    if (total <= 0 || entries.isEmpty) return _BudgetPieTapTarget.none;
+    if (distance > radius + selectedStrokeWidth / 2 + 8) {
+      return _BudgetPieTapTarget.none;
+    }
+    if (distance < centerRadius + 3) return _BudgetPieTapTarget.none;
+
+    final angle = math.atan2(position.dy - center.dy, position.dx - center.dx);
+    var normalized = angle + math.pi / 2;
+    while (normalized < 0) {
+      normalized += math.pi * 2;
+    }
+    while (normalized >= math.pi * 2) {
+      normalized -= math.pi * 2;
+    }
+
+    var cursor = 0.0;
+    for (final entry in entries) {
+      final sweep = (entry.amount / total) * math.pi * 2;
+      if (normalized >= cursor && normalized <= cursor + sweep) {
+        return _BudgetPieTapTarget.entry(entry);
+      }
+      cursor += sweep;
+    }
+    return _BudgetPieTapTarget.entry(entries.last);
+  }
+}
+
+class _BudgetPieTapTarget {
+  const _BudgetPieTapTarget._({this.entry, this.isCenter = false});
+
+  const _BudgetPieTapTarget.entry(_BudgetShareEntry entry)
+    : this._(entry: entry);
+
+  static const none = _BudgetPieTapTarget._();
+  static const center = _BudgetPieTapTarget._(isCenter: true);
+
+  final _BudgetShareEntry? entry;
+  final bool isCenter;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _BudgetPieTapTarget &&
+            other.entry == entry &&
+            other.isCenter == isCenter;
+  }
+
+  @override
+  int get hashCode => Object.hash(entry, isCenter);
 }
 
 class _BudgetPieRow extends StatelessWidget {
@@ -5892,14 +6533,6 @@ const _smallCapsStyle = TextStyle(
   height: 1,
   fontWeight: FontWeight.w900,
   letterSpacing: .5,
-);
-
-const _pieHeadlineStyle = TextStyle(
-  color: Color(0xFF14213A),
-  fontSize: 17,
-  height: 1,
-  fontWeight: FontWeight.w900,
-  letterSpacing: -.68,
 );
 
 const _pieFocusLabelStyle = TextStyle(

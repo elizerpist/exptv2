@@ -1141,40 +1141,44 @@ void main() {
     );
   });
 
-  testWidgets('mind stage1 score chart reaches the top and widens from left', (
+  testWidgets('mind score chart keeps the stage0 rect across stages', (
     tester,
   ) async {
     await _pumpDashboard(tester, repository: _MindDashboardStatsRepository());
     await _switchToMindBackground(tester);
+
+    final header = find.byKey(const ValueKey('spendee-test-header-card'));
+    expect(
+      find.descendant(
+        of: header,
+        matching: find.textContaining('Minden kategória'),
+      ),
+      findsNothing,
+      reason: 'The summary pill already owns the filter label.',
+    );
+    final stage0Rect = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-mind-score-chart')),
+    );
+
     await _dragHeaderBy(tester, 134);
     await tester.pump(const Duration(milliseconds: 500));
 
-    final headerRect = tester.getRect(
-      find.byKey(const ValueKey('spendee-test-header-card')),
+    _expectRectsClose(
+      tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-score-chart')),
+      ),
+      stage0Rect,
     );
-    final chartRect = tester.getRect(
-      find.byKey(const ValueKey('spendee-test-mind-score-chart')),
-    );
-    final scoreRect = tester.getRect(
-      find.byKey(const ValueKey('spendee-test-mind-header-score-value')),
-    );
-    final scorePaint = _mindCustomPaint(
-      tester,
-      const ValueKey('spendee-test-mind-score-fastinfo-expense'),
-      const ValueKey('spendee-test-mind-score-fastinfo-paint'),
-    );
-    final rightInset = headerRect.right - chartRect.right;
-    final topInset = chartRect.top - headerRect.top;
-    final chartLeftInset = chartRect.left - headerRect.left;
-    final plotLeft =
-        chartRect.left +
-        ((scorePaint.painter as dynamic).plotLeftInset as double);
-    final scoreGap = plotLeft - scoreRect.right;
 
-    expect(topInset, closeTo(rightInset, 1.5));
-    expect(chartLeftInset, closeTo(rightInset, 1.5));
-    expect(scoreGap, closeTo(rightInset, 1.5));
-    expect(chartRect.height, greaterThan(66));
+    await _dragHeaderBy(tester, 272);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    _expectRectsClose(
+      tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-score-chart')),
+      ),
+      stage0Rect,
+    );
   });
 
   testWidgets('budget interactions do not build mind stats frames', (
@@ -2259,6 +2263,57 @@ void main() {
     expect(translated.transform?.storage[12] ?? 0, 0);
   });
 
+  testWidgets('budget carousel defers store filter while sliding', (
+    tester,
+  ) async {
+    final store = _CountingTransactionStore(_DashboardTestRepository());
+    await store.start();
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    store.resetAccessCounts();
+
+    final carousel = find.byKey(
+      const ValueKey('spendee-test-context-carousel-gesture'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(carousel));
+    await gesture.moveBy(const Offset(-70, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      store.categoryFilterChanges,
+      0,
+      reason:
+          'Carousel sliding should keep selection local and avoid store '
+          'filter/prewarm work until the user releases.',
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(store.categoryFilterChanges, lessThanOrEqualTo(1));
+  });
+
+  testWidgets('budget carousel includes overview budget avatar', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-budget-avatar-overview-expense_budget-all_time-all',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-1-selected')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'stage 2 category rows select donut highlight and avatar target',
     (tester) async {
@@ -2288,6 +2343,139 @@ void main() {
       );
     },
   );
+
+  testWidgets('stage 2 keeps pie fixed and only scrolls the list', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kategória arány'), findsNothing);
+    expect(find.text('limit mix'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-fixed-top')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-list-scroll')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('stage 2 pie center and slices select budget avatars', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    final donutRect = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-donut')),
+    );
+    await tester.tapAt(donutRect.center);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-budget-avatar-overview-expense_budget-all_time-all-selected',
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(donutRect.center + const Offset(34, -18));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-1-selected')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('long press avatar vertical swipe saves live category limits', (
+    tester,
+  ) async {
+    final repository = _SavingDashboardTestRepository();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.monthly,
+        year: 2026,
+        month: 7,
+      ),
+    );
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final avatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(avatar));
+    await tester.pump(const Duration(milliseconds: 650));
+    await gesture.moveBy(const Offset(0, -22));
+    await tester.pump(const Duration(milliseconds: 90));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimitPayloads, isNotEmpty);
+    expect(repository.savedLimitPayloads.last['targetType'], 'category');
+    expect(repository.savedLimitPayloads.last['targetId'], 1);
+    expect(repository.savedLimitPayloads.last['hasLimit'], isTrue);
+    expect(
+      repository.savedLimitPayloads.last['limitAmount'],
+      greaterThan(80000),
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('spendee-test-header-value')))
+          .data,
+      contains('81 000 Ft'),
+    );
+  });
+
+  testWidgets('very long press avatar clears category limit', (tester) async {
+    final repository = _SavingDashboardTestRepository();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.monthly,
+        year: 2026,
+        month: 7,
+      ),
+    );
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final avatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(avatar));
+    await tester.pump(const Duration(milliseconds: 1350));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(repository.savedLimitPayloads, isNotEmpty);
+    expect(repository.savedLimitPayloads.last['targetType'], 'category');
+    expect(repository.savedLimitPayloads.last['targetId'], 1);
+    expect(repository.savedLimitPayloads.last['hasLimit'], isFalse);
+    expect(repository.savedLimitPayloads.last['limitAmount'], 0);
+  });
 
   testWidgets('stage 2 uses swipe loop navigation without chevrons', (
     tester,
@@ -2651,6 +2839,40 @@ Future<TransactionStore> _pumpDashboard(
   return store;
 }
 
+Future<void> _pumpDashboardWithStore(
+  WidgetTester tester,
+  TransactionStore store,
+) async {
+  tester.view.physicalSize = const Size(412, 892);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: ListenableBuilder(
+          listenable: store,
+          builder: (context, _) {
+            return SpendeeTestDashboard(
+              store: store,
+              expenseTheme: ExpenseTheme.fromSettings(
+                AppThemeSettings.defaults(),
+              ),
+              onPickSummaryMonth: () {},
+              onEditTransaction: (_) {},
+              onDeleteTransactionRequested: (_) async => true,
+              onVendorSheetRequested: () {},
+              logBottomPadding: 0,
+            );
+          },
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> _dragHeaderBy(WidgetTester tester, double dy) async {
   final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
   final gesture = await tester.startGesture(tester.getCenter(handle));
@@ -2740,6 +2962,13 @@ bool _widgetContainsKey(Widget widget, Key key) {
   return false;
 }
 
+void _expectRectsClose(Rect actual, Rect expected, {double epsilon = .75}) {
+  expect(actual.left, closeTo(expected.left, epsilon));
+  expect(actual.top, closeTo(expected.top, epsilon));
+  expect(actual.width, closeTo(expected.width, epsilon));
+  expect(actual.height, closeTo(expected.height, epsilon));
+}
+
 CustomPaint _mindCustomPaint(WidgetTester tester, Key chartKey, Key paintKey) {
   return tester.widget<CustomPaint>(
     find.descendant(of: find.byKey(chartKey), matching: find.byKey(paintKey)),
@@ -2796,12 +3025,14 @@ class _CountingTransactionStore extends TransactionStore {
   var visibleTransactionsAccesses = 0;
   var visibleDisplayLogEntriesAccesses = 0;
   var visibleGhostTransactionsAccesses = 0;
+  var categoryFilterChanges = 0;
 
   void resetAccessCounts() {
     fastInfoMetricsAccesses = 0;
     visibleTransactionsAccesses = 0;
     visibleDisplayLogEntriesAccesses = 0;
     visibleGhostTransactionsAccesses = 0;
+    categoryFilterChanges = 0;
   }
 
   @override
@@ -2827,7 +3058,78 @@ class _CountingTransactionStore extends TransactionStore {
     visibleGhostTransactionsAccesses += 1;
     return super.visibleGhostTransactions;
   }
+
+  @override
+  void setCategoryFilters({
+    required TransactionType type,
+    required Set<int> categoryIds,
+  }) {
+    categoryFilterChanges += 1;
+    super.setCategoryFilters(type: type, categoryIds: categoryIds);
+  }
+
+  @override
+  void clearCategoryFilter() {
+    categoryFilterChanges += 1;
+    super.clearCategoryFilter();
+  }
 }
+
+class _SavingDashboardTestRepository extends _DashboardTestRepository {
+  final savedLimitPayloads = <Map<String, Object?>>[];
+  var _nextLimitId = 100;
+
+  @override
+  Future<CategoryLimit> upsertCategoryLimit(
+    Map<String, Object?> payload,
+  ) async {
+    savedLimitPayloads.add(Map<String, Object?>.unmodifiable(payload));
+    final targetType = LimitTargetTypeX.fromAny(payload['targetType']);
+    final targetId = _payloadInt(payload['targetId']);
+    final transactionType = payload['transactionType']?.toString() ?? 'expense';
+    final window = LimitWindowX.fromAny(payload['window']);
+    final periodKey = payload['periodKey']?.toString() ?? 'all';
+    final hasLimit = _payloadBool(payload['hasLimit']);
+    final amount = hasLimit ? _payloadDouble(payload['limitAmount']) : 0.0;
+    final alertActive = hasLimit && _payloadBool(payload['alertActive']);
+    final existingIndex = limits.indexWhere(
+      (limit) =>
+          limit.targetType == targetType &&
+          limit.targetId == targetId &&
+          limit.transactionType == transactionType &&
+          limit.window == window &&
+          limit.periodKey == periodKey,
+    );
+    final saved = CategoryLimit(
+      id: existingIndex >= 0 ? limits[existingIndex].id : _nextLimitId++,
+      targetType: targetType,
+      targetId: targetId,
+      transactionType: transactionType,
+      window: window,
+      periodKey: periodKey,
+      hasLimit: hasLimit,
+      limitAmount: amount,
+      alertActive: alertActive,
+      createdAt: 0,
+      updatedAt: savedLimitPayloads.length,
+    );
+    if (existingIndex >= 0) {
+      limits[existingIndex] = saved;
+    } else {
+      limits.add(saved);
+    }
+    return saved;
+  }
+}
+
+int _payloadInt(Object? value) =>
+    value is int ? value : int.parse(value.toString());
+
+double _payloadDouble(Object? value) =>
+    value is num ? value.toDouble() : double.parse(value.toString());
+
+bool _payloadBool(Object? value) =>
+    value == true || value == 1 || value?.toString() == 'true';
 
 class _DashboardTestRepository implements TransactionRepositoryContract {
   _DashboardTestRepository({

@@ -1535,6 +1535,29 @@ class TransactionStore extends ChangeNotifier {
     _scheduleNotificationRefresh();
   }
 
+  Future<void> saveCategoryLimitForBarInline(
+    CategoryBudgetBarData bar, {
+    required double limitAmount,
+    required bool alertActive,
+    bool notify = true,
+  }) async {
+    final amount = limitAmount < 0 ? 0.0 : limitAmount;
+    final hasLimit = amount > 0;
+    final saved = await _repository.upsertCategoryLimit({
+      'targetType': bar.targetType.nativeValue,
+      'targetId': bar.targetId,
+      'transactionType': bar.transactionType.nativeValue,
+      'window': bar.window.nativeValue,
+      'periodKey': bar.periodKey,
+      'hasLimit': hasLimit,
+      'limitAmount': hasLimit ? amount : 0.0,
+      'alertActive': hasLimit && alertActive,
+    });
+    _replaceSavedLimit(saved);
+    if (notify) notifyListeners();
+    _scheduleNotificationRefresh();
+  }
+
   Future<void> saveOverviewLimit(
     BudgetGoalKind kind, {
     required double limitAmount,
@@ -1557,6 +1580,55 @@ class TransactionStore extends ChangeNotifier {
     });
     await _reload();
     _scheduleNotificationRefresh();
+  }
+
+  Future<void> saveOverviewLimitInline(
+    BudgetGoalKind kind, {
+    required double limitAmount,
+    required bool alertActive,
+    bool notify = true,
+  }) async {
+    final amount = limitAmount < 0 ? 0.0 : limitAmount;
+    final hasLimit = amount > 0;
+    final saved = await _repository.upsertCategoryLimit({
+      'targetType': LimitTargetType.overview.nativeValue,
+      'targetId': 0,
+      'transactionType': kind.transactionType,
+      'window': LimitManager.windowForSummary(_summaryWindow).nativeValue,
+      'periodKey': LimitManager.periodKeyFor(
+        _summaryWindow,
+        _periodReferenceDate,
+      ),
+      'hasLimit': hasLimit,
+      'limitAmount': hasLimit ? amount : 0.0,
+      'alertActive': hasLimit && alertActive,
+    });
+    _replaceSavedLimit(saved);
+    if (notify) notifyListeners();
+    _scheduleNotificationRefresh();
+  }
+
+  void _replaceSavedLimit(CategoryLimit saved) {
+    final index = _limits.indexWhere((limit) => _sameLimitScope(limit, saved));
+    if (index >= 0) {
+      _limits = [
+        for (var i = 0; i < _limits.length; i += 1)
+          if (i == index) saved else _limits[i],
+      ];
+    } else {
+      _limits = [..._limits, saved];
+    }
+    _rebuildPublicViews();
+    _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
+  }
+
+  bool _sameLimitScope(CategoryLimit left, CategoryLimit right) {
+    return left.targetType == right.targetType &&
+        left.targetId == right.targetId &&
+        left.transactionType == right.transactionType &&
+        left.window == right.window &&
+        left.periodKey == right.periodKey;
   }
 
   Future<void> _projectRecurringGhostsForActiveWindow({
