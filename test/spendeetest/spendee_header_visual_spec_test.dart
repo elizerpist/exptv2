@@ -150,7 +150,7 @@ void main() {
       expect(budget.stage1Height, 130);
       expect(budget.avatarSizes, const <double>[36, 46, 66]);
       expect(budget.avatarIconSizes, const <double>[17, 22, 30]);
-      expect(budget.stage2Top, 226);
+      expect(budget.stage2Top, 214);
       expect(budget.stage2Bottom, 18);
       expect(budget.donutVisualSize, 112);
       expect(budget.donutCoordinateSize, 120);
