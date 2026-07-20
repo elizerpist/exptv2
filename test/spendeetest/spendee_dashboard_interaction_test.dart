@@ -2827,6 +2827,185 @@ void main() {
   );
 
   testWidgets(
+    'avatar progress draws optional remaining segment including zero spend limit',
+    (tester) async {
+      final seventyFiveStore = TransactionStore(
+        _DashboardTestRepository(
+          transactions: [_record(1, 1, -75000, 'Bolt')],
+          limitRows: [
+            _limit(1, LimitTargetType.overview, 0, 100000),
+            _limit(2, LimitTargetType.category, 1, 100000),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      await seventyFiveStore.start();
+      seventyFiveStore.commitStatsViewMutation(
+        await seventyFiveStore.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await _pumpDashboardWithStore(tester, seventyFiveStore);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final progressRing = find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      );
+      expect(
+        progressRing,
+        paints
+          ..path()
+          ..path(),
+      );
+      final seventyFivePainter =
+          tester.widget<CustomPaint>(progressRing).painter as dynamic;
+      expect(seventyFivePainter.progress, closeTo(.75, .001));
+      expect(seventyFivePainter.remainingProgress, closeTo(.25, .001));
+      expect(seventyFivePainter.remainingPathDrawPassCount, 1);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-avatar-remaining-toggle')),
+      );
+      await tester.pump();
+      final disabledPainter =
+          tester.widget<CustomPaint>(progressRing).painter as dynamic;
+      expect(disabledPainter.remainingEnabled, isFalse);
+      expect(disabledPainter.remainingPathDrawPassCount, 0);
+      expect(progressRing, paints..path());
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      final zeroSpendStore = TransactionStore(
+        _DashboardTestRepository(
+          transactions: const <TransactionRecord>[],
+          limitRows: [
+            _limit(1, LimitTargetType.overview, 0, 100000),
+            _limit(2, LimitTargetType.category, 1, 100000),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      await zeroSpendStore.start();
+      zeroSpendStore.commitStatsViewMutation(
+        await zeroSpendStore.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await _pumpDashboardWithStore(tester, zeroSpendStore);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final zeroRing = find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      );
+      expect(zeroRing, paints..path());
+      final zeroPainter =
+          tester.widget<CustomPaint>(zeroRing).painter as dynamic;
+      expect(zeroPainter.progress, 0);
+      expect(zeroPainter.hasPositiveLimit, isTrue);
+      expect(zeroPainter.remainingProgress, 1);
+      expect(zeroPainter.progressPathDrawPassCount, 0);
+      expect(zeroPainter.remainingPathDrawPassCount, 1);
+    },
+  );
+
+  testWidgets(
+    'avatar customizer changes remaining opacity and solid threshold colors',
+    (tester) async {
+      final store = TransactionStore(
+        _DashboardTestRepository(
+          transactions: [_record(1, 1, -75000, 'Bolt')],
+          limitRows: [
+            _limit(1, LimitTargetType.overview, 0, 100000),
+            _limit(2, LimitTargetType.category, 1, 100000),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      await store.start();
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await _pumpDashboardWithStore(tester, store);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final selectedAvatar = find.byKey(
+        const ValueKey('spendee-test-category-avatar-1-selected'),
+      );
+      final beforeAvatarRect = tester.getRect(selectedAvatar);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
+      );
+      await tester.pumpAndSettle();
+
+      final opacitySlider = find.byKey(
+        const ValueKey('spendee-test-avatar-remaining-opacity-slider'),
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-avatar-remaining-toggle')),
+        findsOneWidget,
+      );
+      expect(opacitySlider, findsOneWidget);
+      expect(_avatarThresholdSwatches('danger'), findsNWidgets(5));
+      expect(_avatarThresholdSwatches('warning'), findsNWidgets(5));
+
+      await tester.ensureVisible(opacitySlider);
+      await tester.pumpAndSettle();
+      await tester.drag(opacitySlider, const Offset(-28, 0));
+      await tester.pump();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('spendee-test-avatar-threshold-danger-4')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-avatar-threshold-danger-4')),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('spendee-test-avatar-threshold-warning-3')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-avatar-threshold-warning-3')),
+      );
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      final progressPaint = tester.widget<CustomPaint>(
+        find.byKey(
+          const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+        ),
+      );
+      final painter = progressPaint.painter as dynamic;
+      expect(painter.remainingOpacity, lessThan(.45));
+      expect(painter.remainingOpacity, greaterThan(0));
+      expect(painter.dangerProgressColor, const Color(0xFF991B1B));
+      expect(painter.warningProgressColor, const Color(0xFFEA580C));
+      expect(painter.progressColor, const Color(0xFFEA580C));
+      expect(painter.usesSolidThresholdColors, isTrue);
+      expect(painter.progressPathDrawPassCount, 1);
+      expect(painter.remainingPathDrawPassCount, 1);
+      _expectRectsClose(tester.getRect(selectedAvatar), beforeAvatarRect);
+    },
+  );
+
+  testWidgets(
     'selected avatar progress is a single glass ring without inner body border',
     (tester) async {
       await _pumpDashboard(tester);
@@ -3840,6 +4019,8 @@ void main() {
     expect(find.byKey(innerOffsetSliderKey), findsOneWidget);
     expect(find.byKey(outerOffsetSliderKey), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(centerSliderKey));
+    await tester.pumpAndSettle();
     await tester.drag(find.byKey(centerSliderKey), const Offset(80, 0));
     await tester.pumpAndSettle();
     expect(tester.getRect(selectedAvatar).width, greaterThan(beforeWidth));
@@ -4351,6 +4532,14 @@ Finder _avatarLegacyProgressFinders() {
     final key = widget.key;
     return key is ValueKey<String> &&
         key.value.startsWith('spendee-test-avatar-progress-');
+  });
+}
+
+Finder _avatarThresholdSwatches(String group) {
+  return find.byWidgetPredicate((widget) {
+    final key = widget.key;
+    return key is ValueKey<String> &&
+        key.value.startsWith('spendee-test-avatar-threshold-$group-');
   });
 }
 

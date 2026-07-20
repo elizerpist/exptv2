@@ -179,6 +179,22 @@ enum _HeaderDesignMenuAction {
   mindStage2Acrylic,
 }
 
+const _avatarDangerProgressPalette = <Color>[
+  Color(0xFFF87171),
+  Color(0xFFEF4444),
+  Color(0xFFDC2626),
+  Color(0xFFB91C1C),
+  Color(0xFF991B1B),
+];
+
+const _avatarWarningProgressPalette = <Color>[
+  Color(0xFFFBBF24),
+  Color(0xFFF59E0B),
+  Color(0xFFF97316),
+  Color(0xFFEA580C),
+  Color(0xFFC2410C),
+];
+
 class _AvatarProgressFadeControls extends StatefulWidget {
   const _AvatarProgressFadeControls({
     required this.innerFieldKey,
@@ -583,9 +599,17 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
     required this.progressFadeInner,
     required this.progressFadeOuter,
     required this.progressFadeCurve,
+    required this.remainingEnabled,
+    required this.remainingOpacity,
+    required this.dangerProgressColor,
+    required this.warningProgressColor,
     required this.onProgressFadeInnerChanged,
     required this.onProgressFadeOuterChanged,
     required this.onProgressFadeCurveChanged,
+    required this.onRemainingEnabledChanged,
+    required this.onRemainingOpacityChanged,
+    required this.onDangerProgressColorChanged,
+    required this.onWarningProgressColorChanged,
   });
 
   final _AvatarLayoutConfig config;
@@ -595,9 +619,17 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
   final double progressFadeInner;
   final double progressFadeOuter;
   final double progressFadeCurve;
+  final bool remainingEnabled;
+  final double remainingOpacity;
+  final Color dangerProgressColor;
+  final Color warningProgressColor;
   final ValueChanged<double> onProgressFadeInnerChanged;
   final ValueChanged<double> onProgressFadeOuterChanged;
   final ValueChanged<double> onProgressFadeCurveChanged;
+  final ValueChanged<bool> onRemainingEnabledChanged;
+  final ValueChanged<double> onRemainingOpacityChanged;
+  final ValueChanged<Color> onDangerProgressColorChanged;
+  final ValueChanged<Color> onWarningProgressColorChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -668,6 +700,35 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
                       onOuterChanged: onProgressFadeOuterChanged,
                       onCurveChanged: onProgressFadeCurveChanged,
                     ),
+                    _AvatarRemainingControls(
+                      switchKey: const ValueKey(
+                        'spendee-test-avatar-remaining-toggle',
+                      ),
+                      opacitySliderKey: const ValueKey(
+                        'spendee-test-avatar-remaining-opacity-slider',
+                      ),
+                      opacityValueKey: const ValueKey(
+                        'spendee-test-avatar-remaining-opacity-value',
+                      ),
+                      enabled: remainingEnabled,
+                      opacity: remainingOpacity,
+                      onEnabledChanged: onRemainingEnabledChanged,
+                      onOpacityChanged: onRemainingOpacityChanged,
+                    ),
+                    _AvatarThresholdPalette(
+                      group: 'danger',
+                      label: 'Piros',
+                      colors: _avatarDangerProgressPalette,
+                      selectedColor: dangerProgressColor,
+                      onColorChanged: onDangerProgressColorChanged,
+                    ),
+                    _AvatarThresholdPalette(
+                      group: 'warning',
+                      label: 'Narancs',
+                      colors: _avatarWarningProgressPalette,
+                      selectedColor: warningProgressColor,
+                      onColorChanged: onWarningProgressColorChanged,
+                    ),
                     _AvatarLayoutSlider(
                       sliderKey: const ValueKey(
                         'spendee-test-avatar-layout-center-size-slider',
@@ -716,6 +777,182 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarRemainingControls extends StatelessWidget {
+  const _AvatarRemainingControls({
+    required this.switchKey,
+    required this.opacitySliderKey,
+    required this.opacityValueKey,
+    required this.enabled,
+    required this.opacity,
+    required this.onEnabledChanged,
+    required this.onOpacityChanged,
+  });
+
+  final Key switchKey;
+  final Key opacitySliderKey;
+  final Key opacityValueKey;
+  final bool enabled;
+  final double opacity;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<double> onOpacityChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF06B6D4);
+    final clampedOpacity = _clampUnit(opacity);
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF14213A),
+      fontWeight: FontWeight.w800,
+    );
+    final valueStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF64748B),
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Maradék kör', style: labelStyle)),
+              Switch(
+                key: switchKey,
+                value: enabled,
+                activeThumbColor: accent,
+                onChanged: onEnabledChanged,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              SizedBox(width: 104, child: Text('Opacity', style: labelStyle)),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    activeTrackColor: accent,
+                    inactiveTrackColor: const Color(0xFFCBD5E1),
+                    thumbColor: Colors.white,
+                    overlayColor: accent.withValues(alpha: .13),
+                    valueIndicatorColor: const Color(0xFF14213A),
+                  ),
+                  child: Slider(
+                    key: opacitySliderKey,
+                    value: clampedOpacity,
+                    min: 0,
+                    max: 1,
+                    divisions: 40,
+                    onChanged: onOpacityChanged,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '${(clampedOpacity * 100).round()}%',
+                  key: opacityValueKey,
+                  textAlign: TextAlign.right,
+                  style: valueStyle,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarThresholdPalette extends StatelessWidget {
+  const _AvatarThresholdPalette({
+    required this.group,
+    required this.label,
+    required this.colors,
+    required this.selectedColor,
+    required this.onColorChanged,
+  });
+
+  final String group;
+  final String label;
+  final List<Color> colors;
+  final Color selectedColor;
+  final ValueChanged<Color> onColorChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF14213A),
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: labelStyle),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (var index = 0; index < colors.length; index += 1) ...[
+                _AvatarThresholdSwatch(
+                  key: ValueKey('spendee-test-avatar-threshold-$group-$index'),
+                  color: colors[index],
+                  selected: colors[index] == selectedColor,
+                  onTap: () => onColorChanged(colors[index]),
+                ),
+                if (index < colors.length - 1) const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarThresholdSwatch extends StatelessWidget {
+  const _AvatarThresholdSwatch({
+    super.key,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          border: Border.all(
+            color: selected ? const Color(0xFF14213A) : Colors.white,
+            width: selected ? 2.2 : 1.4,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: selected ? .18 : .10),
+              offset: const Offset(0, 3),
+              blurRadius: selected ? 8 : 5,
             ),
           ],
         ),
@@ -839,6 +1076,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarProgressFadeInner = 1.0;
   var _avatarProgressFadeOuter = .1;
   var _avatarProgressFadeCurve = .5;
+  var _avatarRemainingEnabled = true;
+  var _avatarRemainingOpacity = .32;
+  var _avatarDangerProgressColor = _avatarDangerProgressPalette[1];
+  var _avatarWarningProgressColor = _avatarWarningProgressPalette[0];
   var _avatarLayoutConfig = const _AvatarLayoutConfig();
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
@@ -2009,6 +2250,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     var sheetProgressFadeInner = _avatarProgressFadeInner;
     var sheetProgressFadeOuter = _avatarProgressFadeOuter;
     var sheetProgressFadeCurve = _avatarProgressFadeCurve;
+    var sheetRemainingEnabled = _avatarRemainingEnabled;
+    var sheetRemainingOpacity = _avatarRemainingOpacity;
+    var sheetDangerProgressColor = _avatarDangerProgressColor;
+    var sheetWarningProgressColor = _avatarWarningProgressColor;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: false,
@@ -2051,6 +2296,31 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               setState(() => _avatarProgressFadeCurve = clamped);
             }
 
+            void updateRemainingEnabled(bool next) {
+              setSheetState(() => sheetRemainingEnabled = next);
+              if (!mounted) return;
+              setState(() => _avatarRemainingEnabled = next);
+            }
+
+            void updateRemainingOpacity(double next) {
+              final clamped = _clampUnit(next);
+              setSheetState(() => sheetRemainingOpacity = clamped);
+              if (!mounted) return;
+              setState(() => _avatarRemainingOpacity = clamped);
+            }
+
+            void updateDangerProgressColor(Color next) {
+              setSheetState(() => sheetDangerProgressColor = next);
+              if (!mounted) return;
+              setState(() => _avatarDangerProgressColor = next);
+            }
+
+            void updateWarningProgressColor(Color next) {
+              setSheetState(() => sheetWarningProgressColor = next);
+              if (!mounted) return;
+              setState(() => _avatarWarningProgressColor = next);
+            }
+
             return _AvatarLayoutMenuSheet(
               config: sheetConfig,
               onChanged: update,
@@ -2059,9 +2329,17 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               progressFadeInner: sheetProgressFadeInner,
               progressFadeOuter: sheetProgressFadeOuter,
               progressFadeCurve: sheetProgressFadeCurve,
+              remainingEnabled: sheetRemainingEnabled,
+              remainingOpacity: sheetRemainingOpacity,
+              dangerProgressColor: sheetDangerProgressColor,
+              warningProgressColor: sheetWarningProgressColor,
               onProgressFadeInnerChanged: updateProgressFadeInner,
               onProgressFadeOuterChanged: updateProgressFadeOuter,
               onProgressFadeCurveChanged: updateProgressFadeCurve,
+              onRemainingEnabledChanged: updateRemainingEnabled,
+              onRemainingOpacityChanged: updateRemainingOpacity,
+              onDangerProgressColorChanged: updateDangerProgressColor,
+              onWarningProgressColorChanged: updateWarningProgressColor,
             );
           },
         );
@@ -2478,6 +2756,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   avatarProgressFadeInner: _avatarProgressFadeInner,
                   avatarProgressFadeOuter: _avatarProgressFadeOuter,
                   avatarProgressFadeCurve: _avatarProgressFadeCurve,
+                  avatarRemainingEnabled: _avatarRemainingEnabled,
+                  avatarRemainingOpacity: _avatarRemainingOpacity,
+                  avatarDangerProgressColor: _avatarDangerProgressColor,
+                  avatarWarningProgressColor: _avatarWarningProgressColor,
                   avatarLayoutConfig: _avatarLayoutConfig,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
@@ -2570,6 +2852,10 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.avatarProgressFadeInner,
     required this.avatarProgressFadeOuter,
     required this.avatarProgressFadeCurve,
+    required this.avatarRemainingEnabled,
+    required this.avatarRemainingOpacity,
+    required this.avatarDangerProgressColor,
+    required this.avatarWarningProgressColor,
     required this.avatarLayoutConfig,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
@@ -2622,6 +2908,10 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final double avatarProgressFadeInner;
   final double avatarProgressFadeOuter;
   final double avatarProgressFadeCurve;
+  final bool avatarRemainingEnabled;
+  final double avatarRemainingOpacity;
+  final Color avatarDangerProgressColor;
+  final Color avatarWarningProgressColor;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
@@ -2732,6 +3022,10 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               avatarProgressFadeInner: avatarProgressFadeInner,
               avatarProgressFadeOuter: avatarProgressFadeOuter,
               avatarProgressFadeCurve: avatarProgressFadeCurve,
+              avatarRemainingEnabled: avatarRemainingEnabled,
+              avatarRemainingOpacity: avatarRemainingOpacity,
+              avatarDangerProgressColor: avatarDangerProgressColor,
+              avatarWarningProgressColor: avatarWarningProgressColor,
               avatarLayoutConfig: avatarLayoutConfig,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
@@ -4011,6 +4305,10 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.avatarProgressFadeInner,
     required this.avatarProgressFadeOuter,
     required this.avatarProgressFadeCurve,
+    required this.avatarRemainingEnabled,
+    required this.avatarRemainingOpacity,
+    required this.avatarDangerProgressColor,
+    required this.avatarWarningProgressColor,
     required this.avatarLayoutConfig,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -4037,6 +4335,10 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final double avatarProgressFadeInner;
   final double avatarProgressFadeOuter;
   final double avatarProgressFadeCurve;
+  final bool avatarRemainingEnabled;
+  final double avatarRemainingOpacity;
+  final Color avatarDangerProgressColor;
+  final Color avatarWarningProgressColor;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -4090,6 +4392,10 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 avatarProgressFadeInner: avatarProgressFadeInner,
                 avatarProgressFadeOuter: avatarProgressFadeOuter,
                 avatarProgressFadeCurve: avatarProgressFadeCurve,
+                avatarRemainingEnabled: avatarRemainingEnabled,
+                avatarRemainingOpacity: avatarRemainingOpacity,
+                avatarDangerProgressColor: avatarDangerProgressColor,
+                avatarWarningProgressColor: avatarWarningProgressColor,
                 avatarLayoutConfig: avatarLayoutConfig,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
@@ -4440,6 +4746,10 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.avatarProgressFadeInner,
     required this.avatarProgressFadeOuter,
     required this.avatarProgressFadeCurve,
+    required this.avatarRemainingEnabled,
+    required this.avatarRemainingOpacity,
+    required this.avatarDangerProgressColor,
+    required this.avatarWarningProgressColor,
     required this.avatarLayoutConfig,
     required this.onItemTap,
     required this.onItemLongPressStart,
@@ -4459,6 +4769,10 @@ class _ContextAvatarBelt extends StatelessWidget {
   final double avatarProgressFadeInner;
   final double avatarProgressFadeOuter;
   final double avatarProgressFadeCurve;
+  final bool avatarRemainingEnabled;
+  final double avatarRemainingOpacity;
+  final Color avatarDangerProgressColor;
+  final Color avatarWarningProgressColor;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
@@ -4509,6 +4823,10 @@ class _ContextAvatarBelt extends StatelessWidget {
                 avatarProgressFadeInner: avatarProgressFadeInner,
                 avatarProgressFadeOuter: avatarProgressFadeOuter,
                 avatarProgressFadeCurve: avatarProgressFadeCurve,
+                avatarRemainingEnabled: avatarRemainingEnabled,
+                avatarRemainingOpacity: avatarRemainingOpacity,
+                avatarDangerProgressColor: avatarDangerProgressColor,
+                avatarWarningProgressColor: avatarWarningProgressColor,
                 avatarLayoutConfig: avatarLayoutConfig,
               ),
           ],
@@ -4591,6 +4909,10 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.avatarProgressFadeInner,
     required this.avatarProgressFadeOuter,
     required this.avatarProgressFadeCurve,
+    required this.avatarRemainingEnabled,
+    required this.avatarRemainingOpacity,
+    required this.avatarDangerProgressColor,
+    required this.avatarWarningProgressColor,
     required this.avatarLayoutConfig,
   });
 
@@ -4610,6 +4932,10 @@ class _PositionedContextAvatar extends StatelessWidget {
   final double avatarProgressFadeInner;
   final double avatarProgressFadeOuter;
   final double avatarProgressFadeCurve;
+  final bool avatarRemainingEnabled;
+  final double avatarRemainingOpacity;
+  final Color avatarDangerProgressColor;
+  final Color avatarWarningProgressColor;
   final _AvatarLayoutConfig avatarLayoutConfig;
 
   @override
@@ -4639,6 +4965,10 @@ class _PositionedContextAvatar extends StatelessWidget {
         avatarProgressFadeInner: avatarProgressFadeInner,
         avatarProgressFadeOuter: avatarProgressFadeOuter,
         avatarProgressFadeCurve: avatarProgressFadeCurve,
+        avatarRemainingEnabled: avatarRemainingEnabled,
+        avatarRemainingOpacity: avatarRemainingOpacity,
+        avatarDangerProgressColor: avatarDangerProgressColor,
+        avatarWarningProgressColor: avatarWarningProgressColor,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
         onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -4707,6 +5037,10 @@ class _ContextAvatar extends StatefulWidget {
     required this.avatarProgressFadeInner,
     required this.avatarProgressFadeOuter,
     required this.avatarProgressFadeCurve,
+    required this.avatarRemainingEnabled,
+    required this.avatarRemainingOpacity,
+    required this.avatarDangerProgressColor,
+    required this.avatarWarningProgressColor,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressMoveUpdate,
@@ -4727,6 +5061,10 @@ class _ContextAvatar extends StatefulWidget {
   final double avatarProgressFadeInner;
   final double avatarProgressFadeOuter;
   final double avatarProgressFadeCurve;
+  final bool avatarRemainingEnabled;
+  final double avatarRemainingOpacity;
+  final Color avatarDangerProgressColor;
+  final Color avatarWarningProgressColor;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
   final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
@@ -4763,6 +5101,7 @@ class _ContextAvatarState extends State<_ContextAvatar> {
   Widget build(BuildContext context) {
     final category = widget.item.category?.category;
     final progress = _budgetItemProgress(widget.item);
+    final hasPositiveLimit = _budgetItemHasPositiveLimit(widget.item);
     final keyBase = _budgetAvatarKeyBase(widget.item);
     final selected = widget.selected;
     final pressed = widget.pressed || _pointerPressed;
@@ -4795,6 +5134,7 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                         ),
                         painter: _BudgetAvatarOuterHaloProgressPainter(
                           progress: progress,
+                          hasPositiveLimit: hasPositiveLimit,
                           selected: selected,
                           thickness: _avatarProgressStrokeWidth(
                             widget.avatarProgressThickness,
@@ -4803,6 +5143,11 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                           fadeInnerEndpoint: widget.avatarProgressFadeInner,
                           fadeOuterEndpoint: widget.avatarProgressFadeOuter,
                           fadeCurveBalance: widget.avatarProgressFadeCurve,
+                          remainingEnabled: widget.avatarRemainingEnabled,
+                          remainingOpacity: widget.avatarRemainingOpacity,
+                          dangerProgressColor: widget.avatarDangerProgressColor,
+                          warningProgressColor:
+                              widget.avatarWarningProgressColor,
                         ),
                       ),
                     ),
@@ -4898,6 +5243,13 @@ double _budgetItemProgress(BackheaderBudgetItem item) {
   return (category.spent / category.limitAmount).clamp(0.0, 1.0).toDouble();
 }
 
+bool _budgetItemHasPositiveLimit(BackheaderBudgetItem item) {
+  final overview = item.overview;
+  if (overview != null) return overview.hasLimit && overview.limitAmount > 0;
+  final category = item.category;
+  return category != null && category.hasLimit && category.limitAmount > 0;
+}
+
 Color _budgetItemAccent(BackheaderBudgetItem item) {
   final category = item.category;
   if (category != null) return category.color;
@@ -4940,37 +5292,53 @@ String _budgetHeaderValue(BackheaderBudgetItem? item) {
 class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   const _BudgetAvatarOuterHaloProgressPainter({
     required this.progress,
+    required this.hasPositiveLimit,
     required this.selected,
     required this.thickness,
     required double fadeInnerEndpoint,
     required double fadeOuterEndpoint,
     required double fadeCurveBalance,
+    required this.remainingEnabled,
+    required double remainingOpacity,
+    required this.dangerProgressColor,
+    required this.warningProgressColor,
   }) : _fadeInnerEndpoint = fadeInnerEndpoint,
        _fadeOuterEndpoint = fadeOuterEndpoint,
-       _fadeCurveBalance = fadeCurveBalance;
+       _fadeCurveBalance = fadeCurveBalance,
+       _remainingOpacity = remainingOpacity;
 
   final double progress;
+  final bool hasPositiveLimit;
   final bool selected;
   final double thickness;
   final double _fadeInnerEndpoint;
   final double _fadeOuterEndpoint;
   final double _fadeCurveBalance;
+  final bool remainingEnabled;
+  final double _remainingOpacity;
+  final Color dangerProgressColor;
+  final Color warningProgressColor;
   Color get progressColor {
-    if (progress >= .90) return const Color(0xFFEF4444);
-    if (progress >= .75) return const Color(0xFFFBBF24);
+    if (progress >= .90) return dangerProgressColor;
+    if (progress >= .75) return warningProgressColor;
     return Colors.white;
   }
 
+  Color get remainingColor => Colors.white;
   bool get usesOuterGlassHalo => true;
   bool get drawsInsideAvatarBody => false;
   bool get usesRadialFadeStroke => false;
   bool get usesRadialBandFade => true;
   bool get usesAngularFadeStroke => false;
+  bool get usesSolidThresholdColors => true;
   bool get usesLinearRadialFade => (fadeCurveBalance - .5).abs() < .001;
   int get progressDrawPassCount => progress > 0 ? 1 : 0;
   int get progressPathDrawPassCount => progress > 0 ? 1 : 0;
+  int get remainingDrawPassCount => drawsRemainingSegment ? 1 : 0;
+  int get remainingPathDrawPassCount => drawsRemainingSegment ? 1 : 0;
   int get progressStrokeDrawPassCount => 0;
-  int get visibleProgressRingCount => progress > 0 ? 1 : 0;
+  int get visibleProgressRingCount =>
+      progressPathDrawPassCount > 0 || remainingPathDrawPassCount > 0 ? 1 : 0;
   int get trackDrawPassCount => 0;
   int get glowDrawPassCount => 0;
   bool get usesStrokeBlur => false;
@@ -4987,6 +5355,14 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   double get fadeCurveBalance => _clampUnit(_fadeCurveBalance);
   double get innerEdgeAlpha => fadeInnerEndpoint;
   double get outerEdgeAlpha => fadeOuterEndpoint;
+  double get remainingOpacity => _clampUnit(_remainingOpacity);
+  bool get drawsRemainingSegment =>
+      remainingEnabled &&
+      hasPositiveLimit &&
+      remainingOpacity > 0 &&
+      clampedProgress < .999;
+  double get remainingProgress =>
+      drawsRemainingSegment ? 1 - clampedProgress : 0;
   double get outerTransitionStartUnit {
     if (fadeCurveBalance <= .5) return 0;
     return _lerpDouble(0, .94, (fadeCurveBalance - .5) / .5);
@@ -4999,35 +5375,83 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (progress <= 0) return;
+    if (progress <= 0 && !drawsRemainingSegment) return;
     final center = Offset(size.width / 2, size.height / 2);
     final baseRadius = math.min(size.width, size.height) / 2;
     final innerRadius = baseRadius;
     final outerRadius = baseRadius + strokeWidth;
+    if (drawsRemainingSegment) {
+      final remainingPath = _progressRingPath(
+        center: center,
+        innerRadius: innerRadius,
+        outerRadius: outerRadius,
+        progress: remainingProgress,
+        startRadians: startRadians + math.pi * 2 * clampedProgress,
+      );
+      canvas.drawPath(
+        remainingPath,
+        _ringPaint(
+          center: center,
+          innerRadius: innerRadius,
+          outerRadius: outerRadius,
+          color: remainingColor,
+          opacity: remainingOpacity,
+        ),
+      );
+    }
+    if (progress <= 0) return;
     final ringPath = _progressRingPath(
       center: center,
       innerRadius: innerRadius,
       outerRadius: outerRadius,
       progress: clampedProgress,
+      startRadians: startRadians,
     );
-    final paint = Paint()
+    canvas.drawPath(
+      ringPath,
+      _ringPaint(
+        center: center,
+        innerRadius: innerRadius,
+        outerRadius: outerRadius,
+        color: progressColor,
+        opacity: 1,
+      ),
+    );
+  }
+
+  Paint _ringPaint({
+    required Offset center,
+    required double innerRadius,
+    required double outerRadius,
+    required Color color,
+    required double opacity,
+  }) {
+    return Paint()
       ..style = PaintingStyle.fill
       ..isAntiAlias = true
       ..shader = _radialFadeGradient(
         center: center,
         innerRadius: innerRadius,
         outerRadius: outerRadius,
+        color: color,
+        opacity: opacity,
       );
-    canvas.drawPath(ringPath, paint);
   }
 
   Shader _radialFadeGradient({
     required Offset center,
     required double innerRadius,
     required double outerRadius,
+    required Color color,
+    required double opacity,
   }) {
-    final innerColor = progressColor.withValues(alpha: innerEdgeAlpha);
-    final outerColor = progressColor.withValues(alpha: outerEdgeAlpha);
+    final alphaMultiplier = _clampUnit(opacity);
+    final innerColor = color.withValues(
+      alpha: innerEdgeAlpha * alphaMultiplier,
+    );
+    final outerColor = color.withValues(
+      alpha: outerEdgeAlpha * alphaMultiplier,
+    );
     final innerStop = innerRadius / outerRadius;
     double stopForUnit(double unit) {
       return innerStop + (1 - innerStop) * _clampUnit(unit);
@@ -5062,6 +5486,7 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
     required double innerRadius,
     required double outerRadius,
     required double progress,
+    required double startRadians,
   }) {
     final outerRect = Rect.fromCircle(center: center, radius: outerRadius);
     final innerRect = Rect.fromCircle(center: center, radius: innerRadius);
@@ -5092,11 +5517,16 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
     covariant _BudgetAvatarOuterHaloProgressPainter oldDelegate,
   ) {
     return oldDelegate.progress != progress ||
+        oldDelegate.hasPositiveLimit != hasPositiveLimit ||
         oldDelegate.selected != selected ||
         oldDelegate.thickness != thickness ||
         oldDelegate.fadeInnerEndpoint != fadeInnerEndpoint ||
         oldDelegate.fadeOuterEndpoint != fadeOuterEndpoint ||
-        oldDelegate.fadeCurveBalance != fadeCurveBalance;
+        oldDelegate.fadeCurveBalance != fadeCurveBalance ||
+        oldDelegate.remainingEnabled != remainingEnabled ||
+        oldDelegate.remainingOpacity != remainingOpacity ||
+        oldDelegate.dangerProgressColor != dangerProgressColor ||
+        oldDelegate.warningProgressColor != warningProgressColor;
   }
 }
 
