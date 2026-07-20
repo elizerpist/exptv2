@@ -2468,6 +2468,51 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+    'budget carousel threshold release ticks before publishing filter',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final carousel = find.byKey(
+        const ValueKey('spendee-test-context-carousel-gesture'),
+      );
+      DebugConsole.clear();
+      final gesture = await tester.startGesture(tester.getCenter(carousel));
+      await gesture.moveBy(const Offset(-46, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 420));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-category-avatar-2-selected')),
+        findsOneWidget,
+      );
+      final entries = DebugConsole.entries;
+      final tickIndex = entries.indexWhere(
+        (line) =>
+            line.contains('[Perf] SpendeeTest carousel_tick') &&
+            line.contains('selected=category-2-'),
+      );
+      final scheduleIndex = entries.indexWhere(
+        (line) =>
+            line.contains('[Perf] SpendeeTest carousel_filter_schedule') &&
+            line.contains('selected=category-2-'),
+      );
+      expect(
+        tickIndex,
+        greaterThanOrEqualTo(0),
+        reason:
+            'A residual beyond the snap threshold must cross a carousel '
+            'boundary and emit a tick before the filter is scheduled.',
+      );
+      expect(scheduleIndex, greaterThan(tickIndex));
+    },
+  );
+
   testWidgets('side avatar tap recenters through tick steps', (tester) async {
     await _pumpDashboard(tester);
     await _dragHeaderBy(tester, 134);
@@ -3038,81 +3083,80 @@ void main() {
     },
   );
 
-  testWidgets(
-    'selected avatar progress is a single glass ring without inner body border',
-    (tester) async {
-      await _pumpDashboard(tester);
-      await _dragHeaderBy(tester, 134);
-      await tester.pumpAndSettle();
+  testWidgets('selected avatar progress keeps one halo while body border is shared', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
 
-      final selectedCategory = find.byKey(
-        const ValueKey('spendee-test-category-avatar-1-selected'),
-      );
-      expect(selectedCategory, findsOneWidget);
+    final selectedCategory = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    expect(selectedCategory, findsOneWidget);
+    expect(
+      _circularAvatarBodyBorders(tester, selectedCategory),
+      isNotEmpty,
+      reason:
+          'The shared avatar border setting should apply to selected category avatars too.',
+    );
+
+    final categoryProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
+    );
+    final categoryPainter = categoryProgressPaint.painter as dynamic;
+    final categoryProgress = categoryPainter.progress as double;
+    expect(categoryPainter.usesOuterGlassHalo, isTrue);
+    expect(categoryPainter.progressStrokeDrawPassCount, 0);
+    expect(categoryPainter.usesRadialBandFade, isTrue);
+    expect(categoryPainter.usesAngularFadeStroke, isFalse);
+    expect(categoryPainter.drawsSeparateInnerProgressRing, isFalse);
+    expect(
+      categoryPainter.visibleProgressRingCount,
+      categoryProgress > 0 ? 1 : 0,
+    );
+    if (categoryProgress > 0) {
+      expect(categoryPainter.progressDrawPassCount, 1);
+      expect(categoryPainter.progressPathDrawPassCount, 1);
       expect(
-        _circularAvatarBodyBorders(tester, selectedCategory),
-        isEmpty,
-        reason:
-            'Selected category avatars must not draw a second inner ring under the glass progress halo.',
+        categoryPainter.innerEdgeAlpha,
+        greaterThan(categoryPainter.outerEdgeAlpha),
       );
+    } else {
+      expect(categoryPainter.progressDrawPassCount, 0);
+      expect(categoryPainter.progressPathDrawPassCount, 0);
+    }
+    expect(
+      _selectedAvatarOuterGlowShadows(tester, selectedCategory),
+      isEmpty,
+      reason:
+          'The selected avatar body must not add a separate glow ring around the progress bar.',
+    );
 
-      final categoryProgressPaint = tester.widget<CustomPaint>(
-        find.byKey(
-          const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
-        ),
-      );
-      final categoryPainter = categoryProgressPaint.painter as dynamic;
-      final categoryProgress = categoryPainter.progress as double;
-      expect(categoryPainter.usesOuterGlassHalo, isTrue);
-      expect(categoryPainter.progressStrokeDrawPassCount, 0);
-      expect(categoryPainter.usesRadialBandFade, isTrue);
-      expect(categoryPainter.usesAngularFadeStroke, isFalse);
-      expect(categoryPainter.drawsSeparateInnerProgressRing, isFalse);
-      expect(
-        categoryPainter.visibleProgressRingCount,
-        categoryProgress > 0 ? 1 : 0,
-      );
-      if (categoryProgress > 0) {
-        expect(categoryPainter.progressDrawPassCount, 1);
-        expect(categoryPainter.progressPathDrawPassCount, 1);
-        expect(
-          categoryPainter.innerEdgeAlpha,
-          greaterThan(categoryPainter.outerEdgeAlpha),
-        );
-      } else {
-        expect(categoryPainter.progressDrawPassCount, 0);
-        expect(categoryPainter.progressPathDrawPassCount, 0);
-      }
-      expect(
-        _selectedAvatarOuterGlowShadows(tester, selectedCategory),
-        isEmpty,
-        reason:
-            'The selected avatar body must not add a separate glow ring around the progress bar.',
-      );
-
-      await tester.tap(
-        find.byKey(
-          const ValueKey(
-            'spendee-test-budget-avatar-overview-expense_budget-all_time-all',
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      final selectedOverview = find.byKey(
+    await tester.tap(
+      find.byKey(
         const ValueKey(
-          'spendee-test-budget-avatar-overview-expense_budget-all_time-all-selected',
+          'spendee-test-budget-avatar-overview-expense_budget-all_time-all',
         ),
-      );
-      expect(selectedOverview, findsOneWidget);
-      expect(
-        _circularAvatarBodyBorders(tester, selectedOverview),
-        isEmpty,
-        reason:
-            'Selected budget avatars must use the same single progress ring as categories.',
-      );
-    },
-  );
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final selectedOverview = find.byKey(
+      const ValueKey(
+        'spendee-test-budget-avatar-overview-expense_budget-all_time-all-selected',
+      ),
+    );
+    expect(selectedOverview, findsOneWidget);
+    expect(
+      _circularAvatarBodyBorders(tester, selectedOverview),
+      isNotEmpty,
+      reason:
+          'Selected overview avatars should follow the same shared border policy as categories.',
+    );
+  });
 
   testWidgets(
     'avatar progress painter draws one radial path without track or glow',
@@ -3585,6 +3629,87 @@ void main() {
               line.contains('[Perf] SpendeeTest header_drag') &&
               line.contains('targetStage=stage0') &&
               line.contains('springBack=true'),
+        ),
+      ),
+    );
+  });
+
+  testWidgets(
+    'stage 1 collapse keeps the dragged height for spring animation',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final header = find.byKey(const ValueKey('spendee-test-header-card'));
+      final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(0, 4));
+      await tester.pump();
+      final draggedHeight = tester.getSize(header).height;
+      expect(draggedHeight, greaterThan(238));
+
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+        tester.getSize(header).height,
+        greaterThan(104),
+        reason:
+            'The first release frame should animate down from the dragged C2 '
+            'height instead of rebuilding directly at Stage 0 height.',
+      );
+    },
+  );
+
+  testWidgets(
+    'stage 2 collapse keeps the dragged height for spring animation',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+      await _dragHeaderBy(tester, 272);
+      await tester.pumpAndSettle();
+
+      final header = find.byKey(const ValueKey('spendee-test-header-card'));
+      final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(0, 42));
+      await tester.pump();
+      final draggedHeight = tester.getSize(header).height;
+      expect(draggedHeight, greaterThan(510));
+
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+        tester.getSize(header).height,
+        greaterThan(104),
+        reason:
+            'The first release frame should animate down from the dragged C3 '
+            'height instead of rebuilding directly at Stage 0 height.',
+      );
+    },
+  );
+
+  testWidgets('deep stage 0 drag opens stage 2 directly', (tester) async {
+    await _pumpDashboard(tester);
+
+    DebugConsole.clear();
+    await _dragHeaderBy(tester, 406);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+      findsOneWidget,
+    );
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (line) =>
+              line.contains('[Perf] SpendeeTest header_drag') &&
+              line.contains('targetStage=stage2'),
         ),
       ),
     );
@@ -4073,6 +4198,48 @@ void main() {
     );
   });
 
+  testWidgets('avatar layout menu toggles the shared white avatar border', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    GlossyCategoryAvatar selectedAvatar() =>
+        tester.widget<GlossyCategoryAvatar>(
+          find.descendant(
+            of: find.byKey(
+              const ValueKey('spendee-test-category-avatar-1-selected'),
+            ),
+            matching: find.byType(GlossyCategoryAvatar),
+          ),
+        );
+    GlossyCategoryAvatar sideAvatar() => tester.widget<GlossyCategoryAvatar>(
+      find.descendant(
+        of: find.byKey(const ValueKey('spendee-test-category-avatar-2')),
+        matching: find.byType(GlossyCategoryAvatar),
+      ),
+    );
+
+    expect(selectedAvatar().showBodyBorder, isTrue);
+    expect(sideAvatar().showBodyBorder, isTrue);
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
+    );
+    await tester.pumpAndSettle();
+    const borderToggleKey = ValueKey('spendee-test-avatar-border-toggle');
+    await tester.ensureVisible(find.byKey(borderToggleKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(borderToggleKey), findsOneWidget);
+
+    await tester.tap(find.byKey(borderToggleKey));
+    await tester.pumpAndSettle();
+
+    expect(selectedAvatar().showBodyBorder, isFalse);
+    expect(sideAvatar().showBodyBorder, isFalse);
+  });
+
   testWidgets(
     'header value omits slash zero when selected avatar has no limit',
     (tester) async {
@@ -4128,7 +4295,7 @@ void main() {
     expect(merchantCapsule, findsOneWidget);
   });
 
-  testWidgets('stage 2 keeps blank vendor chart when selected data is empty', (
+  testWidgets('stage 2 blocks vendor page when selected category is empty', (
     tester,
   ) async {
     final store = TransactionStore(
@@ -4158,36 +4325,117 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-empty-hidden')),
-      findsNothing,
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsOneWidget,
       reason:
-          'The vendor page should keep an empty chart placeholder instead of '
-          'collapsing when the selected category has no scoped vendor data.',
+          'A selected empty category should keep the shared period category '
+          'chart visible instead of opening an empty vendor page.',
     );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-row-2')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('stage 2 clears stale vendor page after an empty category', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      _DashboardTestRepository(transactions: [_record(1, 1, -42000, 'Piac')]),
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
+      const Offset(-140, 0),
+    );
+    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
       findsOneWidget,
     );
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-category-avatar-2')),
+    );
+    await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-pie-donut')),
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsOneWidget,
     );
     expect(
-      tester
-          .widget<Text>(
-            find.byKey(
-              const ValueKey('spendee-test-budget-vendor-focus-title'),
-            ),
-          )
-          .data,
-      'Nincs adat',
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-budget-pie-row-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsOneWidget,
+      reason:
+          'Selecting a spend category after an empty category should not reuse '
+          'a hidden stale vendor page state.',
     );
     expect(
-      find.byKey(const ValueKey('spendee-test-budget-vendor-row-0')),
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('stage 2 empty period shows a single non-pageable empty panel', (
+    tester,
+  ) async {
+    final store = TransactionStore(
+      _DashboardTestRepository(transactions: const <TransactionRecord>[]),
+      clock: () => DateTime(2026, 7, 17),
+    );
+    await store.start();
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-empty-panel')),
+      findsOneWidget,
+    );
+    expect(find.text('Nincs adat'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsNothing,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
+      const Offset(-140, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-empty-panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
       findsNothing,
     );
   });

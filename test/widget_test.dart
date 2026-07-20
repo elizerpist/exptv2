@@ -1022,7 +1022,7 @@ void main() {
         );
         if (categoryCount == 0 || transactionCount == 0) {
           expect(
-            find.byKey(const ValueKey('spendee-test-budget-pie-empty-hidden')),
+            find.byKey(const ValueKey('spendee-test-stage2-empty-panel')),
             findsOneWidget,
           );
           expect(

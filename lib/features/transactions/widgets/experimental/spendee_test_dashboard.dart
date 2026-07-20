@@ -601,6 +601,7 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
     required this.progressFadeCurve,
     required this.remainingEnabled,
     required this.remainingOpacity,
+    required this.avatarBorderEnabled,
     required this.dangerProgressColor,
     required this.warningProgressColor,
     required this.onProgressFadeInnerChanged,
@@ -608,6 +609,7 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
     required this.onProgressFadeCurveChanged,
     required this.onRemainingEnabledChanged,
     required this.onRemainingOpacityChanged,
+    required this.onAvatarBorderEnabledChanged,
     required this.onDangerProgressColorChanged,
     required this.onWarningProgressColorChanged,
   });
@@ -621,6 +623,7 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
   final double progressFadeCurve;
   final bool remainingEnabled;
   final double remainingOpacity;
+  final bool avatarBorderEnabled;
   final Color dangerProgressColor;
   final Color warningProgressColor;
   final ValueChanged<double> onProgressFadeInnerChanged;
@@ -628,6 +631,7 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
   final ValueChanged<double> onProgressFadeCurveChanged;
   final ValueChanged<bool> onRemainingEnabledChanged;
   final ValueChanged<double> onRemainingOpacityChanged;
+  final ValueChanged<bool> onAvatarBorderEnabledChanged;
   final ValueChanged<Color> onDangerProgressColorChanged;
   final ValueChanged<Color> onWarningProgressColorChanged;
 
@@ -714,6 +718,13 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
                       opacity: remainingOpacity,
                       onEnabledChanged: onRemainingEnabledChanged,
                       onOpacityChanged: onRemainingOpacityChanged,
+                    ),
+                    _AvatarBorderControls(
+                      switchKey: const ValueKey(
+                        'spendee-test-avatar-border-toggle',
+                      ),
+                      enabled: avatarBorderEnabled,
+                      onEnabledChanged: onAvatarBorderEnabledChanged,
                     ),
                     _AvatarThresholdPalette(
                       group: 'danger',
@@ -866,6 +877,53 @@ class _AvatarRemainingControls extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarBorderControls extends StatelessWidget {
+  const _AvatarBorderControls({
+    required this.switchKey,
+    required this.enabled,
+    required this.onEnabledChanged,
+  });
+
+  final Key switchKey;
+  final bool enabled;
+  final ValueChanged<bool> onEnabledChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF06B6D4);
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF14213A),
+      fontWeight: FontWeight.w800,
+    );
+    final valueStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF64748B),
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Fehér avatar border',
+              style: labelStyle,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(enabled ? 'Mind' : 'Nincs', style: valueStyle),
+          const SizedBox(width: 10),
+          Switch(
+            key: switchKey,
+            value: enabled,
+            activeThumbColor: accent,
+            onChanged: onEnabledChanged,
           ),
         ],
       ),
@@ -1080,6 +1138,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarRemainingOpacity = .32;
   var _avatarDangerProgressColor = _avatarDangerProgressPalette[1];
   var _avatarWarningProgressColor = _avatarWarningProgressPalette[0];
+  var _avatarBorderEnabled = true;
   var _avatarLayoutConfig = const _AvatarLayoutConfig();
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
@@ -1416,6 +1475,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   void _showStage2Page(_Stage2BudgetPage page) {
+    if (page == _Stage2BudgetPage.vendors &&
+        !_stage2VendorPageAvailableFor(_selectedBudgetItemFor(_budgetItems))) {
+      return;
+    }
     if (_stage2Page == page) return;
     HapticFeedback.selectionClick();
     setState(() => _stage2Page = page);
@@ -1477,7 +1540,19 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (!mounted) return;
     setState(() {
       _selectedBudgetItemKey = item.key;
+      if (_stage2Page == _Stage2BudgetPage.vendors &&
+          !_stage2VendorPageAvailableFor(item)) {
+        _stage2Page = _Stage2BudgetPage.categories;
+      }
     });
+  }
+
+  bool _stage2VendorPageAvailableFor(BackheaderBudgetItem? item) {
+    final bars = _previewBudgetBars(widget.store.categoryBudgetBars);
+    if (!bars.any((bar) => bar.spent > 0)) return false;
+    final categoryId = item?.category?.category?.transactionCategoryID;
+    if (categoryId == null) return true;
+    return bars.any((bar) => bar.targetId == categoryId && bar.spent > 0);
   }
 
   void _publishBudgetItemFilter(BackheaderBudgetItem item) {
@@ -1736,6 +1811,19 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       velocityDx: velocityDx,
       liveTicked: liveTicked,
     );
+    final releaseItem = _budgetItemAtCarouselIndex(
+      _budgetItems,
+      controller.index,
+    );
+    DebugConsole.log(
+      '[Perf] SpendeeTest carousel_release_plan '
+      'selected=${releaseItem?.key ?? "none"} '
+      'residual=${controller.residualDx.toStringAsFixed(1)} '
+      'velocity=${velocityDx.toStringAsFixed(1)} '
+      'initialTravel=${motion.initialTravel.toStringAsFixed(1)} '
+      'inertial=${motion.inertial} '
+      'snapAllowed=${motion.directionalSnapAllowed}',
+    );
     _carouselLiveTicked = false;
     try {
       if (motion.initialTravel.abs() >= .5) {
@@ -1751,6 +1839,16 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       final settleTravel = controller.settleTravel(
         preferredDxDirection: motion.preferredDxDirection,
         allowDirectionalSnap: motion.directionalSnapAllowed,
+      );
+      final settleItem = _budgetItemAtCarouselIndex(
+        _budgetItems,
+        controller.index,
+      );
+      DebugConsole.log(
+        '[Perf] SpendeeTest carousel_release_settle '
+        'selected=${settleItem?.key ?? "none"} '
+        'residual=${controller.residualDx.toStringAsFixed(1)} '
+        'settleTravel=${settleTravel.toStringAsFixed(1)}',
       );
       if (settleTravel.abs() >= .5) {
         await _animateCarouselTravel(
@@ -1797,10 +1895,17 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     }
 
     animation.addListener(applyFrame);
+    var completed = false;
     try {
       await _carouselReleaseController.forward(from: 0).orCancel;
+      completed = true;
     } finally {
       animation.removeListener(applyFrame);
+    }
+    if (!completed || !mounted || serial != _carouselMotionSerial) return;
+    final remaining = travel - lastValue;
+    if (remaining.abs() > .001) {
+      _applyCarouselMotionDelta(controller, remaining);
     }
   }
 
@@ -2280,6 +2385,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     var sheetRemainingOpacity = _avatarRemainingOpacity;
     var sheetDangerProgressColor = _avatarDangerProgressColor;
     var sheetWarningProgressColor = _avatarWarningProgressColor;
+    var sheetAvatarBorderEnabled = _avatarBorderEnabled;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: false,
@@ -2335,6 +2441,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               setState(() => _avatarRemainingOpacity = clamped);
             }
 
+            void updateAvatarBorderEnabled(bool next) {
+              setSheetState(() => sheetAvatarBorderEnabled = next);
+              if (!mounted) return;
+              setState(() => _avatarBorderEnabled = next);
+            }
+
             void updateDangerProgressColor(Color next) {
               setSheetState(() => sheetDangerProgressColor = next);
               if (!mounted) return;
@@ -2357,6 +2469,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               progressFadeCurve: sheetProgressFadeCurve,
               remainingEnabled: sheetRemainingEnabled,
               remainingOpacity: sheetRemainingOpacity,
+              avatarBorderEnabled: sheetAvatarBorderEnabled,
               dangerProgressColor: sheetDangerProgressColor,
               warningProgressColor: sheetWarningProgressColor,
               onProgressFadeInnerChanged: updateProgressFadeInner,
@@ -2364,6 +2477,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               onProgressFadeCurveChanged: updateProgressFadeCurve,
               onRemainingEnabledChanged: updateRemainingEnabled,
               onRemainingOpacityChanged: updateRemainingOpacity,
+              onAvatarBorderEnabledChanged: updateAvatarBorderEnabled,
               onDangerProgressColorChanged: updateDangerProgressColor,
               onWarningProgressColorChanged: updateWarningProgressColor,
             );
@@ -2719,12 +2833,18 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         : null;
 
     return ColoredBox(
-      key: ValueKey('spendee-test-dashboard-stage-${_stage.name}'),
       color: const Color(0xFFF1F5F9),
       child: Stack(
         key: const ValueKey('spendee-test-dashboard'),
+        fit: StackFit.expand,
         clipBehavior: Clip.none,
         children: [
+          IgnorePointer(
+            child: KeyedSubtree(
+              key: ValueKey('spendee-test-dashboard-stage-${_stage.name}'),
+              child: const SizedBox.expand(),
+            ),
+          ),
           AnimatedPositioned(
             duration: animationDuration,
             curve: animationCurve,
@@ -2786,6 +2906,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   avatarRemainingOpacity: _avatarRemainingOpacity,
                   avatarDangerProgressColor: _avatarDangerProgressColor,
                   avatarWarningProgressColor: _avatarWarningProgressColor,
+                  avatarBorderEnabled: _avatarBorderEnabled,
                   avatarLayoutConfig: _avatarLayoutConfig,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
@@ -2882,6 +3003,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.avatarRemainingOpacity,
     required this.avatarDangerProgressColor,
     required this.avatarWarningProgressColor,
+    required this.avatarBorderEnabled,
     required this.avatarLayoutConfig,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
@@ -2938,6 +3060,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final double avatarRemainingOpacity;
   final Color avatarDangerProgressColor;
   final Color avatarWarningProgressColor;
+  final bool avatarBorderEnabled;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
@@ -3052,6 +3175,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               avatarRemainingOpacity: avatarRemainingOpacity,
               avatarDangerProgressColor: avatarDangerProgressColor,
               avatarWarningProgressColor: avatarWarningProgressColor,
+              avatarBorderEnabled: avatarBorderEnabled,
               avatarLayoutConfig: avatarLayoutConfig,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
@@ -4335,6 +4459,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.avatarRemainingOpacity,
     required this.avatarDangerProgressColor,
     required this.avatarWarningProgressColor,
+    required this.avatarBorderEnabled,
     required this.avatarLayoutConfig,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -4365,6 +4490,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final double avatarRemainingOpacity;
   final Color avatarDangerProgressColor;
   final Color avatarWarningProgressColor;
+  final bool avatarBorderEnabled;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -4422,6 +4548,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 avatarRemainingOpacity: avatarRemainingOpacity,
                 avatarDangerProgressColor: avatarDangerProgressColor,
                 avatarWarningProgressColor: avatarWarningProgressColor,
+                avatarBorderEnabled: avatarBorderEnabled,
                 avatarLayoutConfig: avatarLayoutConfig,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
@@ -4776,6 +4903,7 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.avatarRemainingOpacity,
     required this.avatarDangerProgressColor,
     required this.avatarWarningProgressColor,
+    required this.avatarBorderEnabled,
     required this.avatarLayoutConfig,
     required this.onItemTap,
     required this.onItemLongPressStart,
@@ -4799,6 +4927,7 @@ class _ContextAvatarBelt extends StatelessWidget {
   final double avatarRemainingOpacity;
   final Color avatarDangerProgressColor;
   final Color avatarWarningProgressColor;
+  final bool avatarBorderEnabled;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
@@ -4853,6 +4982,7 @@ class _ContextAvatarBelt extends StatelessWidget {
                 avatarRemainingOpacity: avatarRemainingOpacity,
                 avatarDangerProgressColor: avatarDangerProgressColor,
                 avatarWarningProgressColor: avatarWarningProgressColor,
+                avatarBorderEnabled: avatarBorderEnabled,
                 avatarLayoutConfig: avatarLayoutConfig,
               ),
           ],
@@ -4939,6 +5069,7 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.avatarRemainingOpacity,
     required this.avatarDangerProgressColor,
     required this.avatarWarningProgressColor,
+    required this.avatarBorderEnabled,
     required this.avatarLayoutConfig,
   });
 
@@ -4962,6 +5093,7 @@ class _PositionedContextAvatar extends StatelessWidget {
   final double avatarRemainingOpacity;
   final Color avatarDangerProgressColor;
   final Color avatarWarningProgressColor;
+  final bool avatarBorderEnabled;
   final _AvatarLayoutConfig avatarLayoutConfig;
 
   @override
@@ -4995,6 +5127,7 @@ class _PositionedContextAvatar extends StatelessWidget {
         avatarRemainingOpacity: avatarRemainingOpacity,
         avatarDangerProgressColor: avatarDangerProgressColor,
         avatarWarningProgressColor: avatarWarningProgressColor,
+        avatarBorderEnabled: avatarBorderEnabled,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
         onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -5067,6 +5200,7 @@ class _ContextAvatar extends StatefulWidget {
     required this.avatarRemainingOpacity,
     required this.avatarDangerProgressColor,
     required this.avatarWarningProgressColor,
+    required this.avatarBorderEnabled,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressMoveUpdate,
@@ -5091,6 +5225,7 @@ class _ContextAvatar extends StatefulWidget {
   final double avatarRemainingOpacity;
   final Color avatarDangerProgressColor;
   final Color avatarWarningProgressColor;
+  final bool avatarBorderEnabled;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
   final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
@@ -5192,7 +5327,7 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     bodyHighlightKey: ValueKey(
                       'spendee-test-avatar-body-highlight-$keyBase',
                     ),
-                    showBodyBorder: !selected,
+                    showBodyBorder: widget.avatarBorderEnabled,
                     animateBodySize: false,
                     showSelectedOuterGlow: false,
                     scaleSelection: false,
@@ -5220,7 +5355,7 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     bodyHighlightKey: ValueKey(
                       'spendee-test-avatar-body-highlight-$keyBase',
                     ),
-                    showBodyBorder: !selected,
+                    showBodyBorder: widget.avatarBorderEnabled,
                     animateBodySize: false,
                     showSelectedOuterGlow: false,
                     scaleSelection: false,
@@ -5709,6 +5844,11 @@ class _BudgetPieStage2LayerState extends State<_BudgetPieStage2Layer> {
 
   @override
   Widget build(BuildContext context) {
+    final hasPeriodSpend = _hasPeriodSpend;
+    final canPageToVendors = _canPageToVendors;
+    final effectivePage = canPageToVendors
+        ? widget.page
+        : _Stage2BudgetPage.categories;
     return GestureDetector(
       key: const ValueKey('spendee-test-budget-pie-stage2-layer'),
       behavior: HitTestBehavior.opaque,
@@ -5717,6 +5857,7 @@ class _BudgetPieStage2LayerState extends State<_BudgetPieStage2Layer> {
       onHorizontalDragEnd: (_) {
         final dx = _dragDx;
         _dragDx = 0;
+        if (!canPageToVendors) return;
         if (dx <= -48) {
           widget.onNextPage();
         } else if (dx >= 48) {
@@ -5726,17 +5867,144 @@ class _BudgetPieStage2LayerState extends State<_BudgetPieStage2Layer> {
       onHorizontalDragCancel: () => _dragDx = 0,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(1, 0, 1, 12),
-        child: _BudgetPiePanel(
-          bars: widget.bars,
-          transactions: widget.transactions,
-          selectedCategory: widget.selectedCategory,
-          page: widget.page,
-          onCategoryTap: widget.onCategoryTap,
-          onCenterTap: widget.onCenterTap,
-          surface: widget.surface,
-          listSurface: widget.listSurface,
-          softness: widget.softness,
-          listSoftness: widget.listSoftness,
+        child: hasPeriodSpend
+            ? _BudgetPiePanel(
+                bars: widget.bars,
+                transactions: widget.transactions,
+                selectedCategory: widget.selectedCategory,
+                page: effectivePage,
+                onCategoryTap: widget.onCategoryTap,
+                onCenterTap: widget.onCenterTap,
+                surface: widget.surface,
+                listSurface: widget.listSurface,
+                softness: widget.softness,
+                listSoftness: widget.listSoftness,
+              )
+            : _Stage2EmptyPanel(
+                surface: widget.surface,
+                softness: widget.softness,
+              ),
+      ),
+    );
+  }
+
+  bool get _hasPeriodSpend => widget.bars.any((bar) => bar.spent > 0);
+
+  bool get _canPageToVendors {
+    if (!_hasPeriodSpend) return false;
+    final categoryId = widget.selectedCategory?.transactionCategoryID;
+    if (categoryId == null) return true;
+    return widget.bars.any(
+      (bar) => bar.targetId == categoryId && bar.spent > 0,
+    );
+  }
+}
+
+class _Stage2EmptyPanel extends StatelessWidget {
+  const _Stage2EmptyPanel({required this.surface, required this.softness});
+
+  final _PanelSurface surface;
+  final double softness;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = const _Stage2EmptyContent(
+      key: ValueKey('spendee-test-stage2-empty-panel'),
+    );
+    if (surface == _PanelSurface.background) {
+      return KeyedSubtree(
+        key: const ValueKey('spendee-test-stage2-empty-background'),
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.htmlC2Glass) {
+      return _C2GlassSurface(
+        key: const ValueKey('spendee-test-stage2-empty-html-c2-glass'),
+        clipKey: const ValueKey('spendee-test-stage2-empty-html-c2-clip'),
+        paintKey: const ValueKey('spendee-test-stage2-empty-html-c2-paint'),
+        maskKey: const ValueKey('spendee-test-stage2-empty-html-c2-mask'),
+        borderRadius: 17,
+        useBottomFade: false,
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.liquidGlass) {
+      return SpendeeLiquidGlassSurface(
+        key: const ValueKey('spendee-test-stage2-empty-liquid-glass'),
+        fallbackKey: const ValueKey(
+          'spendee-test-stage2-empty-liquid-fallback',
+        ),
+        glareKey: const ValueKey('spendee-test-stage2-empty-liquid-glare'),
+        borderRadius: 17,
+        softness: softness,
+        child: content,
+      );
+    }
+
+    if (surface == _PanelSurface.acrylic) {
+      return SpendeeAcrylicSurface(
+        key: const ValueKey('spendee-test-stage2-empty-acrylic'),
+        fluentKey: const ValueKey('spendee-test-stage2-empty-acrylic-fluent'),
+        borderRadius: 17,
+        child: content,
+      );
+    }
+
+    return Container(
+      key: const ValueKey('spendee-test-stage2-empty-glass'),
+      decoration: _budgetPieGlassDecoration(),
+      child: ClipRRect(borderRadius: BorderRadius.circular(17), child: content),
+    );
+  }
+}
+
+class _Stage2EmptyContent extends StatelessWidget {
+  const _Stage2EmptyContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: .28),
+                border: Border.all(color: Colors.white.withValues(alpha: .46)),
+              ),
+              child: const Icon(
+                Icons.pie_chart_outline_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Nincs adat',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ebben az időszakban nincs költés.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .78),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );

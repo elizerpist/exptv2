@@ -113,6 +113,40 @@ void main() {
     expect(release.springBack, isTrue);
   });
 
+  test('one deep Stage 0 drag reports both lower haptic thresholds', () {
+    final geometry = SpendeeHeaderStageGeometry.html(screenHeight: 892);
+    final controller = SpendeeHeaderStageController(geometry: geometry);
+    final directStage2Distance =
+        (geometry.stage1Height - geometry.stage0Height) +
+        (geometry.stage2Height - geometry.stage1Height);
+
+    controller.beginDrag();
+    final update = controller.dragBy(directStage2Distance);
+
+    expect(update.tickCount, 2);
+    expect(update.height, geometry.stage2Height);
+    final release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage2);
+    expect(release.springBack, isFalse);
+  });
+
+  test('Stage 0 drag just below direct Stage 2 threshold releases Stage 1', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+
+    controller.beginDrag();
+    final update = controller.dragBy(
+      controller.stage0Stage2TriggerDistance - 1,
+    );
+
+    expect(update.tickCount, 1);
+    expect(update.height, greaterThan(controller.geometry.stage1Height));
+    final release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage1);
+    expect(release.springBack, isTrue);
+  });
+
   test('header controller keeps Stage 1 armed across positive drag frames', () {
     final controller = SpendeeHeaderStageController(
       geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
@@ -367,6 +401,35 @@ void main() {
       expect(plan.distanceSteps, 2);
       expect(plan.velocitySteps, 2);
       expect(plan.steps, 4);
+    },
+  );
+
+  test(
+    'center carousel release settle nudges near-boundary snaps into a tick',
+    () {
+      final controller = SpendeeCenterCarouselController(itemCount: 5);
+      controller.applyDragDelta(-46);
+
+      final motion = controller.releaseMotion(
+        velocityDx: -545,
+        liveTicked: false,
+      );
+      expect(motion.initialTravel, closeTo(-18, .001));
+
+      final underAppliedTravel = motion.initialTravel + .05;
+      final underAppliedUpdate = controller.applyDragDelta(underAppliedTravel);
+      expect(underAppliedUpdate.tickedIndexes, isEmpty);
+      expect(controller.residualDx, closeTo(-63.95, .001));
+
+      final settleTravel = controller.settleTravel(
+        preferredDxDirection: motion.preferredDxDirection,
+        allowDirectionalSnap: motion.directionalSnapAllowed,
+      );
+      expect(settleTravel.abs(), greaterThanOrEqualTo(.5));
+
+      final settledUpdate = controller.applyDragDelta(settleTravel);
+      expect(settledUpdate.tickedIndexes, [1]);
+      expect(settledUpdate.residualDx.abs(), lessThan(1));
     },
   );
 }

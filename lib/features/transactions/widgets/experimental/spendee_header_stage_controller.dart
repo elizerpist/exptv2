@@ -110,6 +110,8 @@ class SpendeeHeaderStageController {
           .toDouble();
   double get stage2Stage0TriggerDistance =>
       _stage2Stage0TriggerDistance ?? popoutOvershoot + 24;
+  double get stage0Stage2TriggerDistance =>
+      stage1TriggerDistance + stage2TriggerDistance;
 
   void replaceGeometry(SpendeeHeaderStageGeometry geometry) {
     _geometry = geometry;
@@ -137,6 +139,10 @@ class SpendeeHeaderStageController {
     if (_settledStage == SpendeeHeaderStage.stage0) {
       if (!_stage1Ticked && _dragOffset >= stage1TriggerDistance) {
         _stage1Ticked = true;
+        tickCount += 1;
+      }
+      if (!_stage2Ticked && _dragOffset >= stage0Stage2TriggerDistance) {
+        _stage2Ticked = true;
         tickCount += 1;
       }
     } else if (_settledStage == SpendeeHeaderStage.stage1) {
@@ -197,7 +203,9 @@ class SpendeeHeaderStageController {
   SpendeeHeaderStage _targetForDragOffset() {
     return switch (_settledStage) {
       SpendeeHeaderStage.stage0 =>
-        _dragOffset >= stage1TriggerDistance
+        _dragOffset >= stage0Stage2TriggerDistance
+            ? SpendeeHeaderStage.stage2
+            : _dragOffset >= stage1TriggerDistance
             ? SpendeeHeaderStage.stage1
             : SpendeeHeaderStage.stage0,
       SpendeeHeaderStage.stage1 =>

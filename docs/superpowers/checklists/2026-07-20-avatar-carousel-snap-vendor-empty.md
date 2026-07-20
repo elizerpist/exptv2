@@ -1,5 +1,11 @@
 # Avatar carousel snap and vendor empty state checklist
 
+Supersession note: `VND-001` was superseded by
+`docs/superpowers/checklists/2026-07-20-stage2-empty-state-paging.md` after the
+user clarified that selected-category-empty periods should keep only the shared
+category chart, and fully empty periods should show a non-pageable empty panel.
+Keep the row below as historical context, not as current acceptance criteria.
+
 | ID | Source instruction | Code area | Acceptance condition | Verification method | Status |
 | --- | --- | --- | --- | --- | --- |
 | CAR-001 | User report: avatar carousel sometimes jumps without animation during random rapid swipes | `lib/features/transactions/widgets/experimental/spendee_test_dashboard.dart` carousel drag/release state | A new carousel drag that starts while a release animation is still settling continues from the live controller residual offset instead of resetting visual offset to zero. | `flutter test test/spendeetest/spendee_dashboard_interaction_test.dart --plain-name "budget carousel continues an interrupted release drag"` and full dashboard interaction suite. | DONE |

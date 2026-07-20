@@ -228,14 +228,23 @@ class SpendeeCenterCarouselController {
         preferredDxDirection != 0 &&
         residualDirection == preferredDxDirection &&
         residual.abs() >= 16) {
-      return preferredDxDirection < 0
-          ? -slotDistance - residual
-          : slotDistance - residual;
+      return _ensureBoundaryTickTravel(
+        preferredDxDirection < 0
+            ? -slotDistance - residual
+            : slotDistance - residual,
+      );
     }
     if (residual.abs() >= switchThreshold) {
-      return residual < 0 ? -slotDistance - residual : slotDistance - residual;
+      return _ensureBoundaryTickTravel(
+        residual < 0 ? -slotDistance - residual : slotDistance - residual,
+      );
     }
     return -residual;
+  }
+
+  double _ensureBoundaryTickTravel(double travel) {
+    if (travel == 0 || travel.abs() >= .5) return travel;
+    return travel.isNegative ? -.5 : .5;
   }
 
   int _preferredDxDirection({
