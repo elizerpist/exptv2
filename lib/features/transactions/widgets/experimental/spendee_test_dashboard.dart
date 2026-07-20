@@ -4451,6 +4451,7 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     ),
                     showBodyBorder: !selected,
                     animateBodySize: false,
+                    showSelectedOuterGlow: false,
                     scaleSelection: false,
                     debugSource: 'spendee-test-context-avatar',
                   )
@@ -4478,6 +4479,7 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     ),
                     showBodyBorder: !selected,
                     animateBodySize: false,
+                    showSelectedOuterGlow: false,
                     scaleSelection: false,
                     debugSource: 'spendee-test-context-avatar-overview',
                   ),
@@ -4581,7 +4583,7 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
 
   bool get usesOuterGlassHalo => true;
   bool get drawsInsideAvatarBody => false;
-  bool get usesRadialFadeStroke => true;
+  bool get usesRadialFadeStroke => false;
   int get progressDrawPassCount => 1;
   int get visibleProgressRingCount => progress > 0 ? 1 : 0;
   int get trackDrawPassCount => 0;
@@ -4610,34 +4612,25 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
       selected ? .70 : .50,
       clampedProgress,
     );
-    final progressColor = this.progressColor;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..color = progressColor.withValues(alpha: progressAlpha);
+    if (clampedProgress >= .999) {
+      canvas.drawCircle(
+        rect.center,
+        math.min(rect.width, rect.height) / 2,
+        paint,
+      );
+      return;
+    }
     canvas.drawArc(
       rect,
       startRadians,
       math.pi * 2 * clampedProgress,
       false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..strokeCap = clampedProgress >= .999 ? StrokeCap.butt : StrokeCap.round
-        ..color = progressColor.withValues(alpha: progressAlpha)
-        ..shader =
-            SweepGradient(
-              startAngle: startRadians,
-              endAngle: startRadians + math.pi * 2,
-              colors: [
-                progressColor.withValues(alpha: progressAlpha * .88),
-                Colors.white.withValues(alpha: selected ? .38 : .24),
-                progressColor.withValues(alpha: progressAlpha),
-                progressColor.withValues(alpha: progressAlpha * .88),
-              ],
-              stops: const [0, .18, .54, 1],
-            ).createShader(
-              Rect.fromCircle(
-                center: rect.center,
-                radius: math.max(rect.width, rect.height) / 2,
-              ),
-            ),
+      paint,
     );
   }
 

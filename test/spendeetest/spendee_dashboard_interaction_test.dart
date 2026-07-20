@@ -2690,6 +2690,12 @@ void main() {
       expect(categoryPainter.usesOuterGlassHalo, isTrue);
       expect(categoryPainter.progressDrawPassCount, 1);
       expect(categoryPainter.drawsSeparateInnerProgressRing, isFalse);
+      expect(
+        _selectedAvatarOuterGlowShadows(tester, selectedCategory),
+        isEmpty,
+        reason:
+            'The selected avatar body must not add a separate glow ring around the progress bar.',
+      );
 
       await tester.tap(
         find.byKey(
@@ -2755,7 +2761,19 @@ void main() {
       expect(painter.visibleProgressRingCount, 1);
       expect(painter.trackDrawPassCount, 0);
       expect(painter.glowDrawPassCount, 0);
+      expect(painter.usesRadialFadeStroke, isFalse);
       expect(painter.usesStrokeBlur, isFalse);
+      expect(
+        progressRing,
+        isNot(paints..something(_progressPaintUsesShader)),
+        reason:
+            'The progress stroke must be solid; a sweep shader creates the unwanted faded lower arc.',
+      );
+      expect(
+        progressRing,
+        isNot(paints..something(_progressPaintUsesMaskFilter)),
+        reason: 'The progress stroke must not add a second blurred/glow ring.',
+      );
     },
   );
 
@@ -3011,7 +3029,7 @@ void main() {
     );
     expect(painter.usesOuterGlassHalo, isTrue);
     expect(painter.drawsInsideAvatarBody, isFalse);
-    expect(painter.usesRadialFadeStroke, isTrue);
+    expect(painter.usesRadialFadeStroke, isFalse);
     expect(painter.progressDrawPassCount, 1);
     expect(painter.drawsSeparateInnerProgressRing, isFalse);
     expect(painter.startRadians, closeTo(-math.pi / 2, .001));
@@ -4164,6 +4182,48 @@ List<BoxDecoration> _circularAvatarBodyBorders(
             decoration.shape == BoxShape.circle && decoration.border != null,
       )
       .toList();
+}
+
+List<BoxShadow> _selectedAvatarOuterGlowShadows(
+  WidgetTester tester,
+  Finder root,
+) {
+  final decoration = _glossyAvatarBodyDecoration(tester, root);
+  return (decoration.boxShadow ?? const <BoxShadow>[])
+      .where((shadow) => shadow.spreadRadius > 0)
+      .toList();
+}
+
+BoxDecoration _glossyAvatarBodyDecoration(WidgetTester tester, Finder root) {
+  final glossyAvatar = tester.widget<GlossyCategoryAvatar>(
+    find.descendant(of: root, matching: find.byType(GlossyCategoryAvatar)),
+  );
+  final bodyContainers = tester
+      .widgetList<AnimatedContainer>(
+        find.descendant(of: root, matching: find.byType(AnimatedContainer)),
+      )
+      .where((container) {
+        final constraints = container.constraints;
+        return constraints?.minWidth == glossyAvatar.size &&
+            constraints?.maxWidth == glossyAvatar.size &&
+            constraints?.minHeight == glossyAvatar.size &&
+            constraints?.maxHeight == glossyAvatar.size;
+      })
+      .toList();
+  expect(bodyContainers, hasLength(1));
+  return bodyContainers.single.decoration! as BoxDecoration;
+}
+
+bool _progressPaintUsesShader(Symbol methodName, List<dynamic> arguments) {
+  if (methodName != #drawArc && methodName != #drawCircle) return false;
+  final paint = arguments.last as Paint;
+  return paint.shader != null;
+}
+
+bool _progressPaintUsesMaskFilter(Symbol methodName, List<dynamic> arguments) {
+  if (methodName != #drawArc && methodName != #drawCircle) return false;
+  final paint = arguments.last as Paint;
+  return paint.maskFilter != null;
 }
 
 CustomPaint _mindCustomPaint(WidgetTester tester, Key chartKey, Key paintKey) {

@@ -29,6 +29,7 @@ class GlossyCategoryAvatar extends StatelessWidget {
     this.bodyHighlightKey,
     this.showBodyBorder = true,
     this.animateBodySize = true,
+    this.showSelectedOuterGlow = true,
     this.scaleSelection = true,
   });
 
@@ -50,6 +51,7 @@ class GlossyCategoryAvatar extends StatelessWidget {
   final Key? bodyHighlightKey;
   final bool showBodyBorder;
   final bool animateBodySize;
+  final bool showSelectedOuterGlow;
   final bool scaleSelection;
 
   final Key? iconKey;
@@ -112,7 +114,7 @@ class GlossyCategoryAvatar extends StatelessWidget {
                 offset: const Offset(0, -1),
                 blurRadius: 4,
               ),
-              if (selected)
+              if (selected && showSelectedOuterGlow)
                 BoxShadow(
                   color: Colors.white.withValues(alpha: .16),
                   spreadRadius: 4,
