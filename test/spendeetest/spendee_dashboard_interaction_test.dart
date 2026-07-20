@@ -2663,6 +2663,147 @@ void main() {
     _expectRectsClose(tester.getRect(selectedAvatar), beforeAvatarRect);
   });
 
+  testWidgets(
+    'selected avatar progress is a single glass ring without inner body border',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final selectedCategory = find.byKey(
+        const ValueKey('spendee-test-category-avatar-1-selected'),
+      );
+      expect(selectedCategory, findsOneWidget);
+      expect(
+        _circularAvatarBodyBorders(tester, selectedCategory),
+        isEmpty,
+        reason:
+            'Selected category avatars must not draw a second inner ring under the glass progress halo.',
+      );
+
+      final categoryProgressPaint = tester.widget<CustomPaint>(
+        find.byKey(
+          const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+        ),
+      );
+      final categoryPainter = categoryProgressPaint.painter as dynamic;
+      expect(categoryPainter.usesOuterGlassHalo, isTrue);
+      expect(categoryPainter.progressDrawPassCount, 1);
+      expect(categoryPainter.drawsSeparateInnerProgressRing, isFalse);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'spendee-test-budget-avatar-overview-expense_budget-all_time-all',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final selectedOverview = find.byKey(
+        const ValueKey(
+          'spendee-test-budget-avatar-overview-expense_budget-all_time-all-selected',
+        ),
+      );
+      expect(selectedOverview, findsOneWidget);
+      expect(
+        _circularAvatarBodyBorders(tester, selectedOverview),
+        isEmpty,
+        reason:
+            'Selected budget avatars must use the same single progress ring as categories.',
+      );
+    },
+  );
+
+  testWidgets(
+    'avatar progress and body share immediate sizing during fast movement',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final selectedAvatar = find.byKey(
+        const ValueKey('spendee-test-category-avatar-1-selected'),
+      );
+      final glossyAvatarFinder = find.descendant(
+        of: selectedAvatar,
+        matching: find.byType(GlossyCategoryAvatar),
+      );
+      expect(glossyAvatarFinder, findsOneWidget);
+      final glossyAvatar = tester.widget<GlossyCategoryAvatar>(
+        glossyAvatarFinder,
+      );
+      final bodyContainers = tester
+          .widgetList<AnimatedContainer>(
+            find.descendant(
+              of: selectedAvatar,
+              matching: find.byType(AnimatedContainer),
+            ),
+          )
+          .where((container) {
+            final constraints = container.constraints;
+            return constraints?.minWidth == glossyAvatar.size &&
+                constraints?.maxWidth == glossyAvatar.size &&
+                constraints?.minHeight == glossyAvatar.size &&
+                constraints?.maxHeight == glossyAvatar.size;
+          })
+          .toList();
+
+      expect(bodyContainers, hasLength(1));
+      expect(
+        bodyContainers.single.duration,
+        Duration.zero,
+        reason:
+            'Context avatar body sizing must not animate separately from the halo during fast grow/shrink movement.',
+      );
+    },
+  );
+
+  testWidgets('avatar layout menu controls circle progress thickness', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final selectedAvatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final beforeAvatarRect = tester.getRect(selectedAvatar);
+    final beforeProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
+    );
+    final beforeStroke =
+        (beforeProgressPaint.painter as dynamic).strokeWidth as double;
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
+    );
+    await tester.pumpAndSettle();
+
+    final slider = find.byKey(
+      const ValueKey('spendee-test-avatar-layout-progress-thickness-slider'),
+    );
+    expect(slider, findsOneWidget);
+    await tester.drag(slider, const Offset(88, 0));
+    await tester.pump();
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    final afterProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
+    );
+    expect(
+      (afterProgressPaint.painter as dynamic).strokeWidth as double,
+      greaterThan(beforeStroke),
+    );
+    _expectRectsClose(tester.getRect(selectedAvatar), beforeAvatarRect);
+  });
+
   testWidgets('budget overview avatar uses the same glossy body and halo ring', (
     tester,
   ) async {
@@ -3962,6 +4103,23 @@ void _expectRectsClose(Rect actual, Rect expected, {double epsilon = .75}) {
   expect(actual.top, closeTo(expected.top, epsilon));
   expect(actual.width, closeTo(expected.width, epsilon));
   expect(actual.height, closeTo(expected.height, epsilon));
+}
+
+List<BoxDecoration> _circularAvatarBodyBorders(
+  WidgetTester tester,
+  Finder root,
+) {
+  return tester
+      .widgetList<DecoratedBox>(
+        find.descendant(of: root, matching: find.byType(DecoratedBox)),
+      )
+      .map((widget) => widget.decoration)
+      .whereType<BoxDecoration>()
+      .where(
+        (decoration) =>
+            decoration.shape == BoxShape.circle && decoration.border != null,
+      )
+      .toList();
 }
 
 CustomPaint _mindCustomPaint(WidgetTester tester, Key chartKey, Key paintKey) {

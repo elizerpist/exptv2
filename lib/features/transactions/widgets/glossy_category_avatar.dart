@@ -27,6 +27,8 @@ class GlossyCategoryAvatar extends StatelessWidget {
     this.showBodyHighlight = true,
     this.bodyHighlightStrength = 1,
     this.bodyHighlightKey,
+    this.showBodyBorder = true,
+    this.animateBodySize = true,
     this.scaleSelection = true,
   });
 
@@ -46,6 +48,8 @@ class GlossyCategoryAvatar extends StatelessWidget {
   final bool showBodyHighlight;
   final double bodyHighlightStrength;
   final Key? bodyHighlightKey;
+  final bool showBodyBorder;
+  final bool animateBodySize;
   final bool scaleSelection;
 
   final Key? iconKey;
@@ -70,7 +74,9 @@ class GlossyCategoryAvatar extends StatelessWidget {
         duration: const Duration(milliseconds: 170),
         curve: Curves.easeOutBack,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: animateBodySize
+              ? const Duration(milliseconds: 180)
+              : Duration.zero,
           curve: Curves.easeOutCubic,
           width: size,
           height: size,
@@ -117,9 +123,13 @@ class GlossyCategoryAvatar extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: gradient,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: selected ? .54 : .50),
-                ),
+                border: showBodyBorder
+                    ? Border.all(
+                        color: Colors.white.withValues(
+                          alpha: selected ? .54 : .50,
+                        ),
+                      )
+                    : null,
                 shape: BoxShape.circle,
               ),
               child: Stack(

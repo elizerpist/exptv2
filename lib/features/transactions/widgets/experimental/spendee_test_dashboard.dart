@@ -366,10 +366,17 @@ class _AvatarLayoutConfig {
 }
 
 class _AvatarLayoutMenuSheet extends StatelessWidget {
-  const _AvatarLayoutMenuSheet({required this.config, required this.onChanged});
+  const _AvatarLayoutMenuSheet({
+    required this.config,
+    required this.onChanged,
+    required this.progressThickness,
+    required this.onProgressThicknessChanged,
+  });
 
   final _AvatarLayoutConfig config;
   final ValueChanged<_AvatarLayoutConfig> onChanged;
+  final double progressThickness;
+  final ValueChanged<double> onProgressThicknessChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -432,6 +439,16 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
             ),
             _AvatarLayoutSlider(
               sliderKey: const ValueKey(
+                'spendee-test-avatar-layout-progress-thickness-slider',
+              ),
+              label: 'Kör vastagság',
+              value: progressThickness,
+              min: 0,
+              max: 1,
+              onChanged: onProgressThicknessChanged,
+            ),
+            _AvatarLayoutSlider(
+              sliderKey: const ValueKey(
                 'spendee-test-avatar-layout-inner-offset-slider',
               ),
               label: 'Belső X offset',
@@ -461,12 +478,16 @@ class _AvatarLayoutSlider extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.min = -1,
+    this.max = 1,
   });
 
   final Key sliderKey;
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
+  final double min;
+  final double max;
 
   @override
   Widget build(BuildContext context) {
@@ -498,8 +519,8 @@ class _AvatarLayoutSlider extends StatelessWidget {
               child: Slider(
                 key: sliderKey,
                 value: value,
-                min: -1,
-                max: 1,
+                min: min,
+                max: max,
                 divisions: 40,
                 onChanged: onChanged,
               ),
@@ -1701,6 +1722,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   Future<void> _openAvatarLayoutMenu() async {
     HapticFeedback.selectionClick();
     var sheetConfig = _avatarLayoutConfig;
+    var sheetProgressThickness = _avatarProgressThickness;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: false,
@@ -1714,9 +1736,18 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               setState(() => _avatarLayoutConfig = next);
             }
 
+            void updateProgressThickness(double next) {
+              final clamped = _clampUnit(next);
+              setSheetState(() => sheetProgressThickness = clamped);
+              if (!mounted) return;
+              setState(() => _avatarProgressThickness = clamped);
+            }
+
             return _AvatarLayoutMenuSheet(
               config: sheetConfig,
               onChanged: update,
+              progressThickness: sheetProgressThickness,
+              onProgressThicknessChanged: updateProgressThickness,
             );
           },
         );
@@ -4418,6 +4449,8 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     bodyHighlightKey: ValueKey(
                       'spendee-test-avatar-body-highlight-$keyBase',
                     ),
+                    showBodyBorder: !selected,
+                    animateBodySize: false,
                     scaleSelection: false,
                     debugSource: 'spendee-test-context-avatar',
                   )
@@ -4443,6 +4476,8 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     bodyHighlightKey: ValueKey(
                       'spendee-test-avatar-body-highlight-$keyBase',
                     ),
+                    showBodyBorder: !selected,
+                    animateBodySize: false,
                     scaleSelection: false,
                     debugSource: 'spendee-test-context-avatar-overview',
                   ),
