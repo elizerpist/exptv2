@@ -4583,6 +4583,10 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   bool get drawsInsideAvatarBody => false;
   bool get usesRadialFadeStroke => true;
   int get progressDrawPassCount => 1;
+  int get visibleProgressRingCount => progress > 0 ? 1 : 0;
+  int get trackDrawPassCount => 0;
+  int get glowDrawPassCount => 0;
+  bool get usesStrokeBlur => false;
   bool get drawsSeparateInnerProgressRing => false;
   bool get clockwise => true;
   double get startRadians => -math.pi / 2;
@@ -4599,33 +4603,41 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
       size.width + outset * 2,
       size.height + outset * 2,
     );
-    canvas.drawOval(
-      rect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .9)
-        ..color = Colors.white.withValues(alpha: selected ? .14 : .07),
-    );
     if (progress <= 0) return;
+    final clampedProgress = progress.clamp(0.0, 1.0).toDouble();
+    final progressAlpha = _lerpDouble(
+      selected ? .44 : .30,
+      selected ? .70 : .50,
+      clampedProgress,
+    );
+    final progressColor = this.progressColor;
     canvas.drawArc(
       rect,
       startRadians,
-      math.pi * 2 * progress,
+      math.pi * 2 * clampedProgress,
       false,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .55)
-        ..color = progressColor.withValues(
-          alpha: _lerpDouble(
-            selected ? .38 : .24,
-            selected ? .66 : .46,
-            progress,
-          ),
-        ),
+        ..strokeCap = clampedProgress >= .999 ? StrokeCap.butt : StrokeCap.round
+        ..color = progressColor.withValues(alpha: progressAlpha)
+        ..shader =
+            SweepGradient(
+              startAngle: startRadians,
+              endAngle: startRadians + math.pi * 2,
+              colors: [
+                progressColor.withValues(alpha: progressAlpha * .88),
+                Colors.white.withValues(alpha: selected ? .38 : .24),
+                progressColor.withValues(alpha: progressAlpha),
+                progressColor.withValues(alpha: progressAlpha * .88),
+              ],
+              stops: const [0, .18, .54, 1],
+            ).createShader(
+              Rect.fromCircle(
+                center: rect.center,
+                radius: math.max(rect.width, rect.height) / 2,
+              ),
+            ),
     );
   }
 

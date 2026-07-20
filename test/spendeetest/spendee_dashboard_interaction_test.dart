@@ -2716,6 +2716,50 @@ void main() {
   );
 
   testWidgets(
+    'avatar progress painter draws one visible stroke without track or glow',
+    (tester) async {
+      final store = TransactionStore(
+        _DashboardTestRepository(),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      await store.start();
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await _pumpDashboardWithStore(tester, store);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final progressRing = find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      );
+      expect(progressRing, findsOneWidget);
+      expect(
+        progressRing,
+        paints..arc(),
+        reason: 'The progress indicator remains a visible circular arc.',
+      );
+      expect(
+        progressRing,
+        isNot(paints..something((methodName, _) => methodName == #drawOval)),
+        reason:
+            'A separate full oval track creates the inner/outer double-ring look in screenshots.',
+      );
+
+      final progressPaint = tester.widget<CustomPaint>(progressRing);
+      final painter = progressPaint.painter as dynamic;
+      expect(painter.visibleProgressRingCount, 1);
+      expect(painter.trackDrawPassCount, 0);
+      expect(painter.glowDrawPassCount, 0);
+      expect(painter.usesStrokeBlur, isFalse);
+    },
+  );
+
+  testWidgets(
     'avatar progress and body share immediate sizing during fast movement',
     (tester) async {
       await _pumpDashboard(tester);
