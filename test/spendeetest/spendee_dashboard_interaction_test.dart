@@ -2379,6 +2379,62 @@ void main() {
     expect(store.categoryFilterChanges, lessThanOrEqualTo(1));
   });
 
+  testWidgets('budget carousel publishes store filter only after idle', (
+    tester,
+  ) async {
+    final store = _CountingTransactionStore(_DashboardTestRepository());
+    await store.start();
+    await _pumpDashboardWithStore(tester, store);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    store.resetAccessCounts();
+
+    final carousel = find.byKey(
+      const ValueKey('spendee-test-context-carousel-gesture'),
+    );
+    final firstGesture = await tester.startGesture(tester.getCenter(carousel));
+    await firstGesture.moveBy(const Offset(-70, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await firstGesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+
+    expect(
+      store.categoryFilterChanges,
+      0,
+      reason:
+          'Release animation must not immediately start store filtering/list '
+          'rebuilds while the user may continue swiping.',
+    );
+
+    final secondGesture = await tester.startGesture(tester.getCenter(carousel));
+    await secondGesture.moveBy(const Offset(-70, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await secondGesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+
+    expect(
+      store.categoryFilterChanges,
+      0,
+      reason:
+          'A newer carousel gesture must cancel the previous pending filter '
+          'publish during rapid back-and-forth swipes.',
+    );
+
+    await tester.pump(const Duration(milliseconds: 420));
+    await tester.pump();
+    expect(
+      store.categoryFilterChanges,
+      1,
+      reason:
+          'Only the latest settled carousel item should publish once after '
+          'the carousel has been idle.',
+    );
+  });
+
   testWidgets('side avatar tap recenters through tick steps', (tester) async {
     await _pumpDashboard(tester);
     await _dragHeaderBy(tester, 134);
@@ -2687,9 +2743,27 @@ void main() {
         ),
       );
       final categoryPainter = categoryProgressPaint.painter as dynamic;
+      final categoryProgress = categoryPainter.progress as double;
       expect(categoryPainter.usesOuterGlassHalo, isTrue);
-      expect(categoryPainter.progressDrawPassCount, 1);
+      expect(categoryPainter.progressStrokeDrawPassCount, 0);
+      expect(categoryPainter.usesRadialBandFade, isTrue);
+      expect(categoryPainter.usesAngularFadeStroke, isFalse);
       expect(categoryPainter.drawsSeparateInnerProgressRing, isFalse);
+      expect(
+        categoryPainter.visibleProgressRingCount,
+        categoryProgress > 0 ? 1 : 0,
+      );
+      if (categoryProgress > 0) {
+        expect(categoryPainter.progressDrawPassCount, 1);
+        expect(categoryPainter.progressPathDrawPassCount, 1);
+        expect(
+          categoryPainter.innerEdgeAlpha,
+          greaterThan(categoryPainter.outerEdgeAlpha),
+        );
+      } else {
+        expect(categoryPainter.progressDrawPassCount, 0);
+        expect(categoryPainter.progressPathDrawPassCount, 0);
+      }
       expect(
         _selectedAvatarOuterGlowShadows(tester, selectedCategory),
         isEmpty,
@@ -2722,7 +2796,7 @@ void main() {
   );
 
   testWidgets(
-    'avatar progress painter draws one visible stroke without track or glow',
+    'avatar progress painter draws one radial path without track or glow',
     (tester) async {
       final store = TransactionStore(
         _DashboardTestRepository(),
@@ -2746,8 +2820,22 @@ void main() {
       expect(progressRing, findsOneWidget);
       expect(
         progressRing,
-        paints..arc(),
-        reason: 'The progress indicator remains a visible circular arc.',
+        paints..path(),
+        reason:
+            'The progress indicator must be one annular path so radial alpha '
+            'does not create a second stroked circle.',
+      );
+      expect(
+        progressRing,
+        isNot(paints..arc()),
+        reason:
+            'A stroked arc can read as separate inner/outer rings once radial '
+            'softening is applied.',
+      );
+      expect(
+        progressRing,
+        isNot(paints..circle()),
+        reason: 'Full-circle progress must not be a stroked circle pass.',
       );
       expect(
         progressRing,
@@ -2763,11 +2851,24 @@ void main() {
       expect(painter.glowDrawPassCount, 0);
       expect(painter.usesRadialFadeStroke, isFalse);
       expect(painter.usesStrokeBlur, isFalse);
+      expect(painter.usesRadialBandFade, isTrue);
+      expect(painter.usesAngularFadeStroke, isFalse);
+      expect(painter.progressPathDrawPassCount, 1);
+      expect(painter.progressStrokeDrawPassCount, 0);
+      expect(painter.innerEdgeAlpha, greaterThan(painter.outerEdgeAlpha));
+      expect(
+        progressRing,
+        paints..something(_progressPathUsesShader),
+        reason:
+            'The single annular path provides the requested radial fade: '
+            'stronger near the avatar, softer at the outside edge.',
+      );
       expect(
         progressRing,
         isNot(paints..something(_progressPaintUsesShader)),
         reason:
-            'The progress stroke must be solid; a sweep shader creates the unwanted faded lower arc.',
+            'The progress must not use a shader-backed stroke; that creates '
+            'the unwanted angular/bottom fade or double-ring look.',
       );
       expect(
         progressRing,
@@ -2911,7 +3012,19 @@ void main() {
       ),
     );
     final overviewPainter = overviewProgressPaint.painter as dynamic;
-    expect(overviewPainter.progressDrawPassCount, 1);
+    final overviewProgress = overviewPainter.progress as double;
+    expect(
+      overviewPainter.visibleProgressRingCount,
+      overviewProgress > 0 ? 1 : 0,
+    );
+    if (overviewProgress > 0) {
+      expect(overviewPainter.progressDrawPassCount, 1);
+      expect(overviewPainter.progressPathDrawPassCount, 1);
+    } else {
+      expect(overviewPainter.progressDrawPassCount, 0);
+      expect(overviewPainter.progressPathDrawPassCount, 0);
+    }
+    expect(overviewPainter.progressStrokeDrawPassCount, 0);
     expect(overviewPainter.drawsSeparateInnerProgressRing, isFalse);
     expect(overviewPainter.strokeWidth, categoryPainter.strokeWidth);
   });
@@ -3030,8 +3143,13 @@ void main() {
     expect(painter.usesOuterGlassHalo, isTrue);
     expect(painter.drawsInsideAvatarBody, isFalse);
     expect(painter.usesRadialFadeStroke, isFalse);
+    expect(painter.usesRadialBandFade, isTrue);
+    expect(painter.usesAngularFadeStroke, isFalse);
     expect(painter.progressDrawPassCount, 1);
+    expect(painter.progressPathDrawPassCount, 1);
+    expect(painter.progressStrokeDrawPassCount, 0);
     expect(painter.drawsSeparateInnerProgressRing, isFalse);
+    expect(painter.innerEdgeAlpha, greaterThan(painter.outerEdgeAlpha));
     expect(painter.startRadians, closeTo(-math.pi / 2, .001));
     expect(painter.clockwise, isTrue);
     expect(painter.strokeWidth, greaterThanOrEqualTo(8));
@@ -4221,9 +4339,21 @@ bool _progressPaintUsesShader(Symbol methodName, List<dynamic> arguments) {
 }
 
 bool _progressPaintUsesMaskFilter(Symbol methodName, List<dynamic> arguments) {
-  if (methodName != #drawArc && methodName != #drawCircle) return false;
+  if (methodName != #drawArc &&
+      methodName != #drawCircle &&
+      methodName != #drawPath) {
+    return false;
+  }
   final paint = arguments.last as Paint;
   return paint.maskFilter != null;
+}
+
+bool _progressPathUsesShader(Symbol methodName, List<dynamic> arguments) {
+  if (methodName != #drawPath) return false;
+  final paint = arguments.last as Paint;
+  return paint.style == PaintingStyle.fill &&
+      paint.shader != null &&
+      paint.maskFilter == null;
 }
 
 CustomPaint _mindCustomPaint(WidgetTester tester, Key chartKey, Key paintKey) {

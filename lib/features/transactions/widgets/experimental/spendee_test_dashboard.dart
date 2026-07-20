@@ -560,6 +560,8 @@ class SpendeeTestDashboard extends StatefulWidget {
 
 class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     with SingleTickerProviderStateMixin {
+  static const _carouselFilterPublishIdleDelay = Duration(milliseconds: 360);
+
   SpendeeHeaderStageController? _stageController;
   SpendeeHeaderStage _stage = SpendeeHeaderStage.stage0;
   var _headerHeight = 104.0;
@@ -569,6 +571,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _carouselVisualDx = 0.0;
   SpendeeCenterCarouselController? _carouselController;
   late final AnimationController _carouselReleaseController;
+  Timer? _budgetFilterPublishTimer;
+  BackheaderBudgetItem? _pendingBudgetFilterItem;
   var _carouselMotionSerial = 0;
   String? _selectedBudgetItemKey;
   String? _pulsingBudgetItemKey;
@@ -634,6 +638,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
 
   @override
   void dispose() {
+    _budgetFilterPublishTimer?.cancel();
     _budgetLimitVeryLongTimer?.cancel();
     _budgetLimitAutoTickTimer?.cancel();
     _stageNotifier.dispose();
@@ -862,6 +867,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final item = _budgetItemForCategory(category);
     if (item == null) {
       if (haptic) HapticFeedback.selectionClick();
+      _cancelPendingBudgetFilterPublish();
       widget.store.setCategoryFilter(category);
       return;
     }
@@ -968,7 +974,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     bool publishFilter = true,
   }) {
     if (haptic) HapticFeedback.selectionClick();
-    if (publishFilter) _publishBudgetItemFilter(item);
+    if (publishFilter) {
+      _cancelPendingBudgetFilterPublish();
+      _publishBudgetItemFilter(item);
+    }
     if (!mounted) return;
     setState(() {
       _selectedBudgetItemKey = item.key;
@@ -995,6 +1004,41 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (!alreadyOverview) widget.store.clearCategoryFilter();
   }
 
+  void _scheduleBudgetItemFilterPublish(BackheaderBudgetItem item) {
+    _pendingBudgetFilterItem = item;
+    _budgetFilterPublishTimer?.cancel();
+    _budgetFilterPublishTimer = Timer(_carouselFilterPublishIdleDelay, () {
+      final pendingItem = _pendingBudgetFilterItem;
+      _pendingBudgetFilterItem = null;
+      _budgetFilterPublishTimer = null;
+      if (!mounted || pendingItem == null) return;
+      BackheaderBudgetItem? currentItem;
+      for (final candidate in _budgetItems) {
+        if (candidate.key == pendingItem.key) {
+          currentItem = candidate;
+          break;
+        }
+      }
+      if (currentItem == null) return;
+      DebugConsole.log(
+        '[Perf] SpendeeTest carousel_filter_publish '
+        'selected=${currentItem.key} delayMs='
+        '${_carouselFilterPublishIdleDelay.inMilliseconds}',
+      );
+      _publishBudgetItemFilter(currentItem);
+    });
+    DebugConsole.log(
+      '[Perf] SpendeeTest carousel_filter_schedule selected=${item.key} '
+      'delayMs=${_carouselFilterPublishIdleDelay.inMilliseconds}',
+    );
+  }
+
+  void _cancelPendingBudgetFilterPublish() {
+    _budgetFilterPublishTimer?.cancel();
+    _budgetFilterPublishTimer = null;
+    _pendingBudgetFilterItem = null;
+  }
+
   Future<void> _animateCarouselToBudgetItem(
     BackheaderBudgetItem item, {
     bool haptic = true,
@@ -1009,16 +1053,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (targetIndex < 0) return;
     final initialIndex = _selectedBudgetItemIndex(items);
     if (targetIndex == initialIndex) {
-      _applySelectedBudgetItem(
-        item,
-        haptic: haptic,
-        publishFilter: publishFilter,
-      );
+      _applySelectedBudgetItem(item, haptic: haptic, publishFilter: false);
+      if (publishFilter) _scheduleBudgetItemFilterPublish(item);
       return;
     }
     _carouselMotionSerial += 1;
     final serial = _carouselMotionSerial;
     _carouselReleaseController.stop();
+    _cancelPendingBudgetFilterPublish();
     DebugConsole.log(
       '[Perf] SpendeeTest carousel_motion_start source=$source '
       'stepMs=${stepDuration.inMilliseconds} '
@@ -1054,11 +1096,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     } finally {
       if (mounted && serial == _carouselMotionSerial) {
         _carouselController = null;
-        _applySelectedBudgetItem(
-          item,
-          haptic: false,
-          publishFilter: publishFilter,
-        );
+        _applySelectedBudgetItem(item, haptic: false, publishFilter: false);
+        if (publishFilter) _scheduleBudgetItemFilterPublish(item);
         setState(() {
           _carouselVisualDx = 0;
         });
@@ -1078,6 +1117,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _finishBudgetLimitEdit(saveFinal: false);
     _carouselMotionSerial += 1;
     _carouselReleaseController.stop();
+    _cancelPendingBudgetFilterPublish();
     _startInteractionPerf('carousel_drag');
     final items = _budgetItems;
     setState(() {
@@ -1207,7 +1247,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       if (mounted && serial == _carouselMotionSerial) {
         _carouselController = null;
         final item = _selectedBudgetItemFor(_budgetItems);
-        if (item != null) _publishBudgetItemFilter(item);
+        if (item != null) _scheduleBudgetItemFilterPublish(item);
         setState(() {
           _carouselVisualDx = 0;
         });
@@ -4584,7 +4624,11 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   bool get usesOuterGlassHalo => true;
   bool get drawsInsideAvatarBody => false;
   bool get usesRadialFadeStroke => false;
-  int get progressDrawPassCount => 1;
+  bool get usesRadialBandFade => true;
+  bool get usesAngularFadeStroke => false;
+  int get progressDrawPassCount => progress > 0 ? 1 : 0;
+  int get progressPathDrawPassCount => progress > 0 ? 1 : 0;
+  int get progressStrokeDrawPassCount => 0;
   int get visibleProgressRingCount => progress > 0 ? 1 : 0;
   int get trackDrawPassCount => 0;
   int get glowDrawPassCount => 0;
@@ -4593,45 +4637,80 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   bool get clockwise => true;
   double get startRadians => -math.pi / 2;
   double get strokeWidth => thickness;
-  double get avatarOutset => strokeWidth / 2;
+  double get avatarOutset => strokeWidth;
+  double get clampedProgress => progress.clamp(0.0, 1.0).toDouble();
+  double get innerEdgeAlpha {
+    return _lerpDouble(
+      selected ? .48 : .34,
+      selected ? .78 : .58,
+      clampedProgress,
+    );
+  }
+
+  double get outerEdgeAlpha {
+    return _lerpDouble(
+      selected ? .16 : .10,
+      selected ? .32 : .22,
+      clampedProgress,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = strokeWidth;
-    final outset = avatarOutset;
-    final rect = Rect.fromLTWH(
-      -outset,
-      -outset,
-      size.width + outset * 2,
-      size.height + outset * 2,
-    );
     if (progress <= 0) return;
-    final clampedProgress = progress.clamp(0.0, 1.0).toDouble();
-    final progressAlpha = _lerpDouble(
-      selected ? .44 : .30,
-      selected ? .70 : .50,
-      clampedProgress,
+    final center = Offset(size.width / 2, size.height / 2);
+    final baseRadius = math.min(size.width, size.height) / 2;
+    final innerRadius = baseRadius;
+    final outerRadius = baseRadius + strokeWidth;
+    final ringPath = _progressRingPath(
+      center: center,
+      innerRadius: innerRadius,
+      outerRadius: outerRadius,
+      progress: clampedProgress,
     );
     final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round
-      ..color = progressColor.withValues(alpha: progressAlpha);
-    if (clampedProgress >= .999) {
-      canvas.drawCircle(
-        rect.center,
-        math.min(rect.width, rect.height) / 2,
-        paint,
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true
+      ..shader = ui.Gradient.radial(
+        center,
+        outerRadius,
+        <Color>[
+          progressColor.withValues(alpha: innerEdgeAlpha),
+          progressColor.withValues(alpha: outerEdgeAlpha),
+        ],
+        <double>[innerRadius / outerRadius, 1],
       );
-      return;
+    canvas.drawPath(ringPath, paint);
+  }
+
+  Path _progressRingPath({
+    required Offset center,
+    required double innerRadius,
+    required double outerRadius,
+    required double progress,
+  }) {
+    final outerRect = Rect.fromCircle(center: center, radius: outerRadius);
+    final innerRect = Rect.fromCircle(center: center, radius: innerRadius);
+    if (progress >= .999) {
+      return Path()
+        ..fillType = PathFillType.evenOdd
+        ..addOval(outerRect)
+        ..addOval(innerRect);
     }
-    canvas.drawArc(
-      rect,
-      startRadians,
-      math.pi * 2 * clampedProgress,
-      false,
-      paint,
-    );
+    final sweep = math.pi * 2 * progress;
+    final endRadians = startRadians + sweep;
+    return Path()
+      ..moveTo(
+        center.dx + math.cos(startRadians) * outerRadius,
+        center.dy + math.sin(startRadians) * outerRadius,
+      )
+      ..arcTo(outerRect, startRadians, sweep, false)
+      ..lineTo(
+        center.dx + math.cos(endRadians) * innerRadius,
+        center.dy + math.sin(endRadians) * innerRadius,
+      )
+      ..arcTo(innerRect, endRadians, -sweep, false)
+      ..close();
   }
 
   @override
