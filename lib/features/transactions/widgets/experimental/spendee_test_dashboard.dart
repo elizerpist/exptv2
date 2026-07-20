@@ -179,6 +179,223 @@ enum _HeaderDesignMenuAction {
   mindStage2Acrylic,
 }
 
+class _AvatarProgressFadeMenuEntry
+    extends PopupMenuEntry<_HeaderDesignMenuAction> {
+  const _AvatarProgressFadeMenuEntry({
+    super.key,
+    required this.innerFieldKey,
+    required this.outerFieldKey,
+    required this.curveSliderKey,
+    required this.curveValueKey,
+    required this.innerValue,
+    required this.outerValue,
+    required this.curveValue,
+    required this.onInnerChanged,
+    required this.onOuterChanged,
+    required this.onCurveChanged,
+  });
+
+  final Key innerFieldKey;
+  final Key outerFieldKey;
+  final Key curveSliderKey;
+  final Key curveValueKey;
+  final double innerValue;
+  final double outerValue;
+  final double curveValue;
+  final ValueChanged<double> onInnerChanged;
+  final ValueChanged<double> onOuterChanged;
+  final ValueChanged<double> onCurveChanged;
+
+  @override
+  double get height => 132;
+
+  @override
+  bool represents(_HeaderDesignMenuAction? value) => false;
+
+  @override
+  State<_AvatarProgressFadeMenuEntry> createState() =>
+      _AvatarProgressFadeMenuEntryState();
+}
+
+class _AvatarProgressFadeMenuEntryState
+    extends State<_AvatarProgressFadeMenuEntry> {
+  late final TextEditingController _innerController;
+  late final TextEditingController _outerController;
+  late double _curveValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _innerController = TextEditingController(
+      text: _formatFadeEndpoint(widget.innerValue),
+    );
+    _outerController = TextEditingController(
+      text: _formatFadeEndpoint(widget.outerValue),
+    );
+    _curveValue = _clampUnit(widget.curveValue);
+  }
+
+  @override
+  void didUpdateWidget(_AvatarProgressFadeMenuEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.innerValue - widget.innerValue).abs() > .001) {
+      _setControllerText(
+        _innerController,
+        _formatFadeEndpoint(widget.innerValue),
+      );
+    }
+    if ((oldWidget.outerValue - widget.outerValue).abs() > .001) {
+      _setControllerText(
+        _outerController,
+        _formatFadeEndpoint(widget.outerValue),
+      );
+    }
+    if ((oldWidget.curveValue - widget.curveValue).abs() > .001) {
+      _curveValue = _clampUnit(widget.curveValue);
+    }
+  }
+
+  @override
+  void dispose() {
+    _innerController.dispose();
+    _outerController.dispose();
+    super.dispose();
+  }
+
+  void _setControllerText(TextEditingController controller, String text) {
+    if (controller.text == text) return;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  void _handleEndpointChanged(String text, ValueChanged<double> onChanged) {
+    final parsed = _parseFadeEndpoint(text);
+    if (parsed == null) return;
+    onChanged(_clampProgressFadeEndpoint(parsed));
+  }
+
+  void _handleCurveChanged(double value) {
+    final next = _clampUnit(value);
+    setState(() => _curveValue = next);
+    widget.onCurveChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF06B6D4);
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF14213A),
+      fontWeight: FontWeight.w800,
+    );
+    final valueStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: const Color(0xFF64748B),
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      child: SizedBox(
+        width: 244,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('Circle fade', style: labelStyle)),
+                Text(
+                  '${(_curveValue * 100).round()}%',
+                  key: widget.curveValueKey,
+                  style: valueStyle,
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                Expanded(
+                  child: _FadeEndpointField(
+                    fieldKey: widget.innerFieldKey,
+                    label: 'Belső',
+                    controller: _innerController,
+                    onChanged: (text) =>
+                        _handleEndpointChanged(text, widget.onInnerChanged),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _FadeEndpointField(
+                    fieldKey: widget.outerFieldKey,
+                    label: 'Külső',
+                    controller: _outerController,
+                    onChanged: (text) =>
+                        _handleEndpointChanged(text, widget.onOuterChanged),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                activeTrackColor: accent,
+                inactiveTrackColor: const Color(0xFFCBD5E1),
+                thumbColor: Colors.white,
+                overlayColor: accent.withValues(alpha: .13),
+                valueIndicatorColor: const Color(0xFF14213A),
+              ),
+              child: Slider(
+                key: widget.curveSliderKey,
+                value: _curveValue,
+                min: 0,
+                max: 1,
+                onChanged: _handleCurveChanged,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FadeEndpointField extends StatelessWidget {
+  const _FadeEndpointField({
+    required this.fieldKey,
+    required this.label,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final Key fieldKey;
+  final String label;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: fieldKey,
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9\.,]'))],
+      style: const TextStyle(
+        color: Color(0xFF14213A),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: onChanged,
+    );
+  }
+}
+
 class _HeaderLiquidSoftnessMenuEntry
     extends PopupMenuEntry<_HeaderDesignMenuAction> {
   const _HeaderLiquidSoftnessMenuEntry({
@@ -584,6 +801,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   final _avatarBodyHighlightEnabled = true;
   final _avatarBodyHighlightStrength = 1.0;
   var _avatarProgressThickness = .5;
+  var _avatarProgressFadeInner = 1.0;
+  var _avatarProgressFadeOuter = .1;
+  var _avatarProgressFadeCurve = .5;
   var _avatarLayoutConfig = const _AvatarLayoutConfig();
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
@@ -1477,6 +1697,27 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           value: _avatarProgressThickness,
           onChanged: _setAvatarProgressThickness,
         ),
+        _AvatarProgressFadeMenuEntry(
+          key: const ValueKey('spendee-test-avatar-progress-fade-entry'),
+          innerFieldKey: const ValueKey(
+            'spendee-test-avatar-progress-fade-inner-field',
+          ),
+          outerFieldKey: const ValueKey(
+            'spendee-test-avatar-progress-fade-outer-field',
+          ),
+          curveSliderKey: const ValueKey(
+            'spendee-test-avatar-progress-fade-curve-slider',
+          ),
+          curveValueKey: const ValueKey(
+            'spendee-test-avatar-progress-fade-curve-value',
+          ),
+          innerValue: _avatarProgressFadeInner,
+          outerValue: _avatarProgressFadeOuter,
+          curveValue: _avatarProgressFadeCurve,
+          onInnerChanged: _setAvatarProgressFadeInner,
+          onOuterChanged: _setAvatarProgressFadeOuter,
+          onCurveChanged: _setAvatarProgressFadeCurve,
+        ),
         const PopupMenuDivider(),
         const PopupMenuItem<_HeaderDesignMenuAction>(
           enabled: false,
@@ -1811,6 +2052,24 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final next = _clampUnit(value);
     if ((_avatarProgressThickness - next).abs() < .001) return;
     setState(() => _avatarProgressThickness = next);
+  }
+
+  void _setAvatarProgressFadeInner(double value) {
+    final next = _clampProgressFadeEndpoint(value);
+    if ((_avatarProgressFadeInner - next).abs() < .001) return;
+    setState(() => _avatarProgressFadeInner = next);
+  }
+
+  void _setAvatarProgressFadeOuter(double value) {
+    final next = _clampProgressFadeEndpoint(value);
+    if ((_avatarProgressFadeOuter - next).abs() < .001) return;
+    setState(() => _avatarProgressFadeOuter = next);
+  }
+
+  void _setAvatarProgressFadeCurve(double value) {
+    final next = _clampUnit(value);
+    if ((_avatarProgressFadeCurve - next).abs() < .001) return;
+    setState(() => _avatarProgressFadeCurve = next);
   }
 
   void _setChartSurfaceSoftness(double value) {
@@ -2207,6 +2466,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   avatarBodyHighlightEnabled: _avatarBodyHighlightEnabled,
                   avatarBodyHighlightStrength: _avatarBodyHighlightStrength,
                   avatarProgressThickness: _avatarProgressThickness,
+                  avatarProgressFadeInner: _avatarProgressFadeInner,
+                  avatarProgressFadeOuter: _avatarProgressFadeOuter,
+                  avatarProgressFadeCurve: _avatarProgressFadeCurve,
                   avatarLayoutConfig: _avatarLayoutConfig,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
@@ -2296,6 +2558,9 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
     required this.avatarProgressThickness,
+    required this.avatarProgressFadeInner,
+    required this.avatarProgressFadeOuter,
+    required this.avatarProgressFadeCurve,
     required this.avatarLayoutConfig,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
@@ -2345,6 +2610,9 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
   final double avatarProgressThickness;
+  final double avatarProgressFadeInner;
+  final double avatarProgressFadeOuter;
+  final double avatarProgressFadeCurve;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
@@ -2452,6 +2720,9 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
               avatarBodyHighlightStrength: avatarBodyHighlightStrength,
               avatarProgressThickness: avatarProgressThickness,
+              avatarProgressFadeInner: avatarProgressFadeInner,
+              avatarProgressFadeOuter: avatarProgressFadeOuter,
+              avatarProgressFadeCurve: avatarProgressFadeCurve,
               avatarLayoutConfig: avatarLayoutConfig,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
@@ -3728,6 +3999,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
     required this.avatarProgressThickness,
+    required this.avatarProgressFadeInner,
+    required this.avatarProgressFadeOuter,
+    required this.avatarProgressFadeCurve,
     required this.avatarLayoutConfig,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -3751,6 +4025,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
   final double avatarProgressThickness;
+  final double avatarProgressFadeInner;
+  final double avatarProgressFadeOuter;
+  final double avatarProgressFadeCurve;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -3801,6 +4078,9 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
                 avatarBodyHighlightStrength: avatarBodyHighlightStrength,
                 avatarProgressThickness: avatarProgressThickness,
+                avatarProgressFadeInner: avatarProgressFadeInner,
+                avatarProgressFadeOuter: avatarProgressFadeOuter,
+                avatarProgressFadeCurve: avatarProgressFadeCurve,
                 avatarLayoutConfig: avatarLayoutConfig,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
@@ -4148,6 +4428,9 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
     required this.avatarProgressThickness,
+    required this.avatarProgressFadeInner,
+    required this.avatarProgressFadeOuter,
+    required this.avatarProgressFadeCurve,
     required this.avatarLayoutConfig,
     required this.onItemTap,
     required this.onItemLongPressStart,
@@ -4164,6 +4447,9 @@ class _ContextAvatarBelt extends StatelessWidget {
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
   final double avatarProgressThickness;
+  final double avatarProgressFadeInner;
+  final double avatarProgressFadeOuter;
+  final double avatarProgressFadeCurve;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
@@ -4211,6 +4497,9 @@ class _ContextAvatarBelt extends StatelessWidget {
                 avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
                 avatarBodyHighlightStrength: avatarBodyHighlightStrength,
                 avatarProgressThickness: avatarProgressThickness,
+                avatarProgressFadeInner: avatarProgressFadeInner,
+                avatarProgressFadeOuter: avatarProgressFadeOuter,
+                avatarProgressFadeCurve: avatarProgressFadeCurve,
                 avatarLayoutConfig: avatarLayoutConfig,
               ),
           ],
@@ -4290,6 +4579,9 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
     required this.avatarProgressThickness,
+    required this.avatarProgressFadeInner,
+    required this.avatarProgressFadeOuter,
+    required this.avatarProgressFadeCurve,
     required this.avatarLayoutConfig,
   });
 
@@ -4306,6 +4598,9 @@ class _PositionedContextAvatar extends StatelessWidget {
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
   final double avatarProgressThickness;
+  final double avatarProgressFadeInner;
+  final double avatarProgressFadeOuter;
+  final double avatarProgressFadeCurve;
   final _AvatarLayoutConfig avatarLayoutConfig;
 
   @override
@@ -4332,6 +4627,9 @@ class _PositionedContextAvatar extends StatelessWidget {
         avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
         avatarBodyHighlightStrength: avatarBodyHighlightStrength,
         avatarProgressThickness: avatarProgressThickness,
+        avatarProgressFadeInner: avatarProgressFadeInner,
+        avatarProgressFadeOuter: avatarProgressFadeOuter,
+        avatarProgressFadeCurve: avatarProgressFadeCurve,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
         onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -4365,6 +4663,22 @@ double _clampUnit(double value) {
   return value;
 }
 
+double _clampProgressFadeEndpoint(double value) {
+  if (value <= .1) return .1;
+  if (value >= 1) return 1;
+  return value;
+}
+
+double? _parseFadeEndpoint(String text) {
+  final normalized = text.trim().replaceAll(',', '.');
+  if (normalized.isEmpty) return null;
+  return double.tryParse(normalized);
+}
+
+String _formatFadeEndpoint(double value) {
+  return _clampProgressFadeEndpoint(value).toStringAsFixed(2);
+}
+
 double _lerpDouble(double begin, double end, double amount) {
   return begin + (end - begin) * _clampUnit(amount);
 }
@@ -4381,6 +4695,9 @@ class _ContextAvatar extends StatefulWidget {
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
     required this.avatarProgressThickness,
+    required this.avatarProgressFadeInner,
+    required this.avatarProgressFadeOuter,
+    required this.avatarProgressFadeCurve,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressMoveUpdate,
@@ -4398,6 +4715,9 @@ class _ContextAvatar extends StatefulWidget {
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
   final double avatarProgressThickness;
+  final double avatarProgressFadeInner;
+  final double avatarProgressFadeOuter;
+  final double avatarProgressFadeCurve;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
   final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
@@ -4471,6 +4791,9 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                             widget.avatarProgressThickness,
                             selected: selected,
                           ),
+                          fadeInnerEndpoint: widget.avatarProgressFadeInner,
+                          fadeOuterEndpoint: widget.avatarProgressFadeOuter,
+                          fadeCurveBalance: widget.avatarProgressFadeCurve,
                         ),
                       ),
                     ),
@@ -4610,11 +4933,19 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
     required this.progress,
     required this.selected,
     required this.thickness,
-  });
+    required double fadeInnerEndpoint,
+    required double fadeOuterEndpoint,
+    required double fadeCurveBalance,
+  }) : _fadeInnerEndpoint = fadeInnerEndpoint,
+       _fadeOuterEndpoint = fadeOuterEndpoint,
+       _fadeCurveBalance = fadeCurveBalance;
 
   final double progress;
   final bool selected;
   final double thickness;
+  final double _fadeInnerEndpoint;
+  final double _fadeOuterEndpoint;
+  final double _fadeCurveBalance;
   Color get progressColor {
     if (progress >= .90) return const Color(0xFFEF4444);
     if (progress >= .75) return const Color(0xFFFBBF24);
@@ -4626,6 +4957,7 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   bool get usesRadialFadeStroke => false;
   bool get usesRadialBandFade => true;
   bool get usesAngularFadeStroke => false;
+  bool get usesLinearRadialFade => (fadeCurveBalance - .5).abs() < .001;
   int get progressDrawPassCount => progress > 0 ? 1 : 0;
   int get progressPathDrawPassCount => progress > 0 ? 1 : 0;
   int get progressStrokeDrawPassCount => 0;
@@ -4639,20 +4971,21 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   double get strokeWidth => thickness;
   double get avatarOutset => strokeWidth;
   double get clampedProgress => progress.clamp(0.0, 1.0).toDouble();
-  double get innerEdgeAlpha {
-    return _lerpDouble(
-      selected ? .48 : .34,
-      selected ? .78 : .58,
-      clampedProgress,
-    );
+  double get fadeInnerEndpoint =>
+      _clampProgressFadeEndpoint(_fadeInnerEndpoint);
+  double get fadeOuterEndpoint =>
+      _clampProgressFadeEndpoint(_fadeOuterEndpoint);
+  double get fadeCurveBalance => _clampUnit(_fadeCurveBalance);
+  double get innerEdgeAlpha => fadeInnerEndpoint;
+  double get outerEdgeAlpha => fadeOuterEndpoint;
+  double get outerTransitionStartUnit {
+    if (fadeCurveBalance <= .5) return 0;
+    return _lerpDouble(0, .94, (fadeCurveBalance - .5) / .5);
   }
 
-  double get outerEdgeAlpha {
-    return _lerpDouble(
-      selected ? .16 : .10,
-      selected ? .32 : .22,
-      clampedProgress,
-    );
+  double get innerTransitionEndUnit {
+    if (fadeCurveBalance >= .5) return 1;
+    return _lerpDouble(.06, 1, fadeCurveBalance / .5);
   }
 
   @override
@@ -4671,16 +5004,48 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.fill
       ..isAntiAlias = true
-      ..shader = ui.Gradient.radial(
-        center,
-        outerRadius,
-        <Color>[
-          progressColor.withValues(alpha: innerEdgeAlpha),
-          progressColor.withValues(alpha: outerEdgeAlpha),
-        ],
-        <double>[innerRadius / outerRadius, 1],
+      ..shader = _radialFadeGradient(
+        center: center,
+        innerRadius: innerRadius,
+        outerRadius: outerRadius,
       );
     canvas.drawPath(ringPath, paint);
+  }
+
+  Shader _radialFadeGradient({
+    required Offset center,
+    required double innerRadius,
+    required double outerRadius,
+  }) {
+    final innerColor = progressColor.withValues(alpha: innerEdgeAlpha);
+    final outerColor = progressColor.withValues(alpha: outerEdgeAlpha);
+    final innerStop = innerRadius / outerRadius;
+    double stopForUnit(double unit) {
+      return innerStop + (1 - innerStop) * _clampUnit(unit);
+    }
+
+    if (usesLinearRadialFade) {
+      return ui.Gradient.radial(
+        center,
+        outerRadius,
+        <Color>[innerColor, outerColor],
+        <double>[innerStop, 1],
+      );
+    }
+    if (fadeCurveBalance > .5) {
+      return ui.Gradient.radial(
+        center,
+        outerRadius,
+        <Color>[innerColor, innerColor, outerColor],
+        <double>[innerStop, stopForUnit(outerTransitionStartUnit), 1],
+      );
+    }
+    return ui.Gradient.radial(
+      center,
+      outerRadius,
+      <Color>[innerColor, outerColor, outerColor],
+      <double>[innerStop, stopForUnit(innerTransitionEndUnit), 1],
+    );
   }
 
   Path _progressRingPath({
@@ -4719,7 +5084,10 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   ) {
     return oldDelegate.progress != progress ||
         oldDelegate.selected != selected ||
-        oldDelegate.thickness != thickness;
+        oldDelegate.thickness != thickness ||
+        oldDelegate.fadeInnerEndpoint != fadeInnerEndpoint ||
+        oldDelegate.fadeOuterEndpoint != fadeOuterEndpoint ||
+        oldDelegate.fadeCurveBalance != fadeCurveBalance;
   }
 }
 

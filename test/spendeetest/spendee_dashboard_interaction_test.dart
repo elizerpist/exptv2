@@ -2720,6 +2720,83 @@ void main() {
   });
 
   testWidgets(
+    'header menu customizes selected avatar progress fade endpoints and curve',
+    (tester) async {
+      final store = TransactionStore(
+        _DashboardTestRepository(),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      await store.start();
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await _pumpDashboardWithStore(tester, store);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final selectedAvatar = find.byKey(
+        const ValueKey('spendee-test-category-avatar-1-selected'),
+      );
+      final beforeAvatarRect = tester.getRect(selectedAvatar);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-header-menu-button')),
+      );
+      await tester.pumpAndSettle();
+
+      final innerField = find.byKey(
+        const ValueKey('spendee-test-avatar-progress-fade-inner-field'),
+      );
+      final outerField = find.byKey(
+        const ValueKey('spendee-test-avatar-progress-fade-outer-field'),
+      );
+      final curveSlider = find.byKey(
+        const ValueKey('spendee-test-avatar-progress-fade-curve-slider'),
+      );
+      expect(innerField, findsOneWidget);
+      expect(outerField, findsOneWidget);
+      expect(curveSlider, findsOneWidget);
+
+      await tester.enterText(innerField, '0.25');
+      await tester.pump();
+      await tester.enterText(outerField, '0.90');
+      await tester.pump();
+      await tester.ensureVisible(curveSlider);
+      await tester.pumpAndSettle();
+      await tester.drag(curveSlider, const Offset(300, 0));
+      await tester.pump();
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      final progressPaint = tester.widget<CustomPaint>(
+        find.byKey(
+          const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+        ),
+      );
+      final painter = progressPaint.painter as dynamic;
+      expect(painter.fadeInnerEndpoint, closeTo(.25, .001));
+      expect(painter.fadeOuterEndpoint, closeTo(.90, .001));
+      expect(painter.innerEdgeAlpha, closeTo(.25, .001));
+      expect(painter.outerEdgeAlpha, closeTo(.90, .001));
+      expect(painter.fadeCurveBalance, greaterThan(.95));
+      expect(
+        painter.outerTransitionStartUnit,
+        greaterThan(.85),
+        reason:
+            'At the right edge the outer endpoint should appear abruptly near '
+            'the outside of the ring.',
+      );
+      expect(painter.progressPathDrawPassCount, 1);
+      expect(painter.progressStrokeDrawPassCount, 0);
+      _expectRectsClose(tester.getRect(selectedAvatar), beforeAvatarRect);
+    },
+  );
+
+  testWidgets(
     'selected avatar progress is a single glass ring without inner body border',
     (tester) async {
       await _pumpDashboard(tester);
