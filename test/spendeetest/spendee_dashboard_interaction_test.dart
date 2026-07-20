@@ -1529,6 +1529,50 @@ void main() {
     expect(store.summaryWindow, SummaryWindow.yearly);
   });
 
+  testWidgets(
+    'summary pill mirrors old vertical drag feedback and logs a tick',
+    (tester) async {
+      final store = await _pumpDashboard(tester);
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await tester.pump();
+      DebugConsole.clear();
+
+      final pill = find.byKey(const ValueKey('spendee-test-summary-pill'));
+      final gesture = await tester.startGesture(tester.getCenter(pill));
+      await gesture.moveBy(const Offset(0, -18));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(0, -46));
+      await tester.pump();
+
+      final draggedPill = tester.widget<AnimatedContainer>(pill);
+      expect(draggedPill.transform?.storage[13] ?? 0, lessThan(-24));
+
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(store.summaryWindow, SummaryWindow.yearly);
+      final settledPill = tester.widget<AnimatedContainer>(pill);
+      expect(settledPill.transform?.storage[12] ?? 0, 0);
+      expect(settledPill.transform?.storage[13] ?? 0, 0);
+      expect(
+        DebugConsole.entries,
+        contains(
+          predicate<String>(
+            (line) =>
+                line.contains('[Perf] SpendeeTest summary_tick') &&
+                line.contains('axis=vertical'),
+          ),
+        ),
+      );
+    },
+  );
+
   testWidgets('budget and mind container softness sliders are scoped', (
     tester,
   ) async {
@@ -1987,8 +2031,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsOneWidget,
+      reason: 'Stage 2 chart paging loops vendor -> category on forward swipe.',
     );
   });
 
@@ -2361,6 +2406,35 @@ void main() {
     );
   });
 
+  testWidgets('chart taps use the faster diagram recenter step timing', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    DebugConsole.clear();
+    final donutRect = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-donut')),
+    );
+    await tester.tapAt(donutRect.center + const Offset(-28, 34));
+    await tester.pumpAndSettle();
+
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (line) =>
+              line.contains('[Perf] SpendeeTest carousel_motion_start') &&
+              line.contains('source=diagram') &&
+              line.contains('stepMs=72'),
+        ),
+      ),
+    );
+  });
+
   testWidgets('budget carousel includes overview budget avatar', (
     tester,
   ) async {
@@ -2512,6 +2586,9 @@ void main() {
     );
     expect(painter.usesOuterGlassHalo, isTrue);
     expect(painter.drawsInsideAvatarBody, isFalse);
+    expect(painter.usesRadialFadeStroke, isTrue);
+    expect(painter.progressDrawPassCount, 1);
+    expect(painter.drawsSeparateInnerProgressRing, isFalse);
     expect(painter.startRadians, closeTo(-math.pi / 2, .001));
     expect(painter.clockwise, isTrue);
     expect(painter.strokeWidth, greaterThanOrEqualTo(8));
@@ -2547,7 +2624,7 @@ void main() {
     );
   });
 
-  testWidgets('long press avatar shrinks while limit edit is active', (
+  testWidgets('avatar taps and long press use shrink feedback only', (
     tester,
   ) async {
     final repository = _SavingDashboardTestRepository();
@@ -2576,16 +2653,12 @@ void main() {
       const ValueKey('spendee-test-category-avatar-1-selected'),
     );
 
-    final previewGesture = await tester.startGesture(tester.getCenter(avatar));
-    await tester.pump(const Duration(milliseconds: 180));
+    final tapGesture = await tester.startGesture(tester.getCenter(avatar));
+    await tester.pump(const Duration(milliseconds: 1));
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, closeTo(.8, .001));
 
-    await previewGesture.up();
+    await tapGesture.up();
     await tester.pumpAndSettle();
-    expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
-
-    await tester.tap(avatar);
-    await tester.pump(const Duration(milliseconds: 180));
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
 
     final gesture = await tester.startGesture(tester.getCenter(avatar));
@@ -2596,6 +2669,40 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
+  });
+
+  testWidgets('stage 2 downward second tick springs directly to stage 0', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+      findsOneWidget,
+    );
+
+    DebugConsole.clear();
+    await _dragHeaderBy(tester, 42);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+      findsOneWidget,
+    );
+    expect(
+      DebugConsole.entries,
+      contains(
+        predicate<String>(
+          (line) =>
+              line.contains('[Perf] SpendeeTest header_drag') &&
+              line.contains('targetStage=stage0') &&
+              line.contains('springBack=true'),
+        ),
+      ),
+    );
   });
 
   testWidgets(
@@ -2994,6 +3101,142 @@ void main() {
       find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
       findsNothing,
     );
+
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
+      const Offset(140, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsOneWidget,
+      reason: 'Swiping backward from categories should loop to vendors.',
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
+      const Offset(-140, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
+      findsOneWidget,
+      reason: 'Swiping forward from vendors should loop to categories.',
+    );
+  });
+
+  testWidgets('header background opens avatar layout customization menu', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final selectedAvatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final beforeWidth = tester.getRect(selectedAvatar).width;
+    final innerBefore = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-2')),
+    );
+    final centerBefore = tester.getRect(selectedAvatar).center.dx;
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
+    );
+    await tester.pumpAndSettle();
+
+    const centerSliderKey = ValueKey(
+      'spendee-test-avatar-layout-center-size-slider',
+    );
+    const innerSizeSliderKey = ValueKey(
+      'spendee-test-avatar-layout-inner-size-slider',
+    );
+    const outerSizeSliderKey = ValueKey(
+      'spendee-test-avatar-layout-outer-size-slider',
+    );
+    const innerOffsetSliderKey = ValueKey(
+      'spendee-test-avatar-layout-inner-offset-slider',
+    );
+    const outerOffsetSliderKey = ValueKey(
+      'spendee-test-avatar-layout-outer-offset-slider',
+    );
+    expect(find.byKey(centerSliderKey), findsOneWidget);
+    expect(find.byKey(innerSizeSliderKey), findsOneWidget);
+    expect(find.byKey(outerSizeSliderKey), findsOneWidget);
+    expect(find.byKey(innerOffsetSliderKey), findsOneWidget);
+    expect(find.byKey(outerOffsetSliderKey), findsOneWidget);
+
+    await tester.drag(find.byKey(centerSliderKey), const Offset(80, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(selectedAvatar).width, greaterThan(beforeWidth));
+
+    await tester.drag(find.byKey(innerOffsetSliderKey), const Offset(-80, 0));
+    await tester.pumpAndSettle();
+    final innerAfter = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-2')),
+    );
+    expect(
+      (innerAfter.center.dx - centerBefore).abs(),
+      lessThan((innerBefore.center.dx - centerBefore).abs()),
+      reason:
+          'Dragging the inner offset slider left moves inner avatars inward.',
+    );
+  });
+
+  testWidgets(
+    'header value omits slash zero when selected avatar has no limit',
+    (tester) async {
+      await _pumpDashboard(
+        tester,
+        repository: _NoLimitDashboardTestRepository(),
+      );
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final value = tester
+          .widget<Text>(find.byKey(const ValueKey('spendee-test-header-value')))
+          .data;
+      expect(value, '75 240 Ft');
+      expect(value, isNot(contains('/ 0 Ft')));
+    },
+  );
+
+  testWidgets('fast filters render closable capsules in the search pill', (
+    tester,
+  ) async {
+    final store = await _pumpDashboard(tester);
+    store.setCategoryFilter(store.categoriesById[1]!);
+    await tester.pumpAndSettle();
+    store.setMerchantFilter('Élelmiszer bolt');
+    await tester.pumpAndSettle();
+
+    final categoryCapsule = find.byKey(
+      const ValueKey('search-pill-capsule-category-1'),
+    );
+    final merchantCapsule = find.byKey(
+      const ValueKey('search-pill-capsule-merchant-Élelmiszer bolt'),
+    );
+    expect(categoryCapsule, findsOneWidget);
+    expect(merchantCapsule, findsOneWidget);
+    expect(
+      find.descendant(of: categoryCapsule, matching: find.text('Élelmiszer')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: merchantCapsule,
+        matching: find.text('Élelmiszer bolt'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.descendant(of: categoryCapsule, matching: find.byType(IconButton)),
+    );
+    await tester.pumpAndSettle();
+    expect(store.activeCategoryIds, isEmpty);
+    expect(merchantCapsule, findsOneWidget);
   });
 
   testWidgets('stage 2 hides chart shell when selected data is empty', (
@@ -3650,6 +3893,7 @@ class _DashboardTestRepository implements TransactionRepositoryContract {
   _DashboardTestRepository({
     List<TransactionCategory>? categories,
     List<TransactionRecord>? transactions,
+    List<CategoryLimit>? limitRows,
   }) : categories =
            categories ??
            [
@@ -3668,19 +3912,21 @@ class _DashboardTestRepository implements TransactionRepositoryContract {
              _record(4, 4, -28400, 'Burger'),
              _record(5, 5, -22600, 'Villany'),
              _record(6, 1, -12000, 'Piac'),
+           ],
+       limits =
+           limitRows ??
+           [
+             _limit(1, LimitTargetType.overview, 0, 200000),
+             _limit(2, LimitTargetType.category, 1, 80000),
+             _limit(3, LimitTargetType.category, 2, 40000),
+             _limit(4, LimitTargetType.category, 3, 30000),
+             _limit(5, LimitTargetType.category, 4, 10000),
+             _limit(6, LimitTargetType.category, 5, 10000),
            ];
 
   final List<TransactionCategory> categories;
   final List<TransactionRecord> transactions;
-
-  late final limits = <CategoryLimit>[
-    _limit(1, LimitTargetType.overview, 0, 200000),
-    _limit(2, LimitTargetType.category, 1, 80000),
-    _limit(3, LimitTargetType.category, 2, 40000),
-    _limit(4, LimitTargetType.category, 3, 30000),
-    _limit(5, LimitTargetType.category, 4, 10000),
-    _limit(6, LimitTargetType.category, 5, 10000),
-  ];
+  final List<CategoryLimit> limits;
 
   @override
   Future<TransactionBootstrap> loadBootstrap() async {
@@ -3812,6 +4058,10 @@ class _DashboardTestRepository implements TransactionRepositoryContract {
   Future<CategoryLimit> upsertCategoryLimit(Map<String, Object?> payload) {
     throw UnimplementedError();
   }
+}
+
+class _NoLimitDashboardTestRepository extends _DashboardTestRepository {
+  _NoLimitDashboardTestRepository() : super(limitRows: const <CategoryLimit>[]);
 }
 
 CategoryLimit _limit(

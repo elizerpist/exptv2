@@ -107,7 +107,7 @@ class SpendeeHeaderVisualSpec {
     stage1Height: 130,
     avatarSizes: <double>[36, 46, 66],
     avatarIconSizes: <double>[17, 22, 30],
-    stage2Top: 226,
+    stage2Top: 214,
     stage2Bottom: 18,
     donutVisualSize: 112,
     donutCoordinateSize: 120,

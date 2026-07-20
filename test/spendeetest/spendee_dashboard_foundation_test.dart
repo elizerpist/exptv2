@@ -164,6 +164,37 @@ void main() {
     expect(controller.release().targetStage, SpendeeHeaderStage.stage2);
   });
 
+  test('Stage 2 downward drag has a second tick that arms Stage 0', () {
+    final controller = SpendeeHeaderStageController(
+      geometry: SpendeeHeaderStageGeometry.html(screenHeight: 892),
+    );
+    controller.beginDrag();
+    controller.dragBy(134);
+    controller.release();
+    controller.beginDrag();
+    controller.dragBy(272);
+    controller.release();
+    expect(controller.stage, SpendeeHeaderStage.stage2);
+
+    controller.beginDrag();
+    final firstTick = controller.dragBy(18);
+    expect(firstTick.tickCount, 1);
+    var release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage1);
+    expect(release.springBack, isTrue);
+
+    controller.beginDrag();
+    controller.dragBy(272);
+    controller.release();
+
+    controller.beginDrag();
+    final secondTick = controller.dragBy(42);
+    expect(secondTick.tickCount, 2);
+    release = controller.release();
+    expect(release.targetStage, SpendeeHeaderStage.stage0);
+    expect(release.springBack, isTrue);
+  });
+
   test(
     'header controller disarms Stage 1 after reversing below its trigger',
     () {

@@ -25,6 +25,7 @@ import '../../models/transaction_log_entry.dart';
 import '../../models/transaction_record.dart';
 import '../../state/transaction_store.dart';
 import '../glossy_category_avatar.dart';
+import '../search_pill.dart';
 import '../transaction_log_box.dart';
 import 'fluvi_logo.dart';
 import 'spendee_center_carousel_controller.dart';
@@ -284,6 +285,234 @@ class _HeaderLiquidSoftnessMenuEntryState
   }
 }
 
+class _AvatarLayoutConfig {
+  const _AvatarLayoutConfig({
+    this.centerSize = 0,
+    this.innerSize = 0,
+    this.outerSize = 0,
+    this.innerOffset = 0,
+    this.outerOffset = 0,
+  });
+
+  final double centerSize;
+  final double innerSize;
+  final double outerSize;
+  final double innerOffset;
+  final double outerOffset;
+
+  _AvatarLayoutConfig copyWith({
+    double? centerSize,
+    double? innerSize,
+    double? outerSize,
+    double? innerOffset,
+    double? outerOffset,
+  }) {
+    return _AvatarLayoutConfig(
+      centerSize: _sliderValue(centerSize ?? this.centerSize),
+      innerSize: _sliderValue(innerSize ?? this.innerSize),
+      outerSize: _sliderValue(outerSize ?? this.outerSize),
+      innerOffset: _sliderValue(innerOffset ?? this.innerOffset),
+      outerOffset: _sliderValue(outerOffset ?? this.outerOffset),
+    );
+  }
+
+  double xForLogicalOffset(double logicalOffset) {
+    final sign = logicalOffset.sign;
+    final distance = logicalOffset.abs();
+    if (distance < .001) return 0;
+    final innerDistance = _ContextAvatarBelt._slotDistance + innerOffset * 18.0;
+    final outerDistance =
+        _ContextAvatarBelt._slotDistance * 2 + outerOffset * 28.0;
+    if (distance <= 1) return sign * _lerpDouble(0, innerDistance, distance);
+    return sign *
+        _lerpDouble(
+          innerDistance,
+          outerDistance,
+          (distance - 1).clamp(0.0, 1.0).toDouble(),
+        );
+  }
+
+  double sizeForLogicalOffset(double logicalOffset) {
+    final base = _budgetHeaderVisualSpec.budget.avatarSizes;
+    final center = (base[2] + centerSize * 16.0).clamp(52.0, 84.0).toDouble();
+    final inner = (base[1] + innerSize * 14.0).clamp(34.0, 64.0).toDouble();
+    final outer = (base[0] + outerSize * 12.0).clamp(26.0, 52.0).toDouble();
+    final distance = logicalOffset.abs();
+    if (distance <= 1) return _lerpDouble(center, inner, distance);
+    return _lerpDouble(inner, outer, (distance - 1).clamp(0.0, 1.0).toDouble());
+  }
+
+  double iconSizeForLogicalOffset(double logicalOffset) {
+    final baseSizes = _budgetHeaderVisualSpec.budget.avatarSizes;
+    final baseIcons = _budgetHeaderVisualSpec.budget.avatarIconSizes;
+    final size = sizeForLogicalOffset(logicalOffset);
+    final distance = logicalOffset.abs();
+    final baseSize = distance <= 1
+        ? _lerpDouble(baseSizes[2], baseSizes[1], distance)
+        : _lerpDouble(
+            baseSizes[1],
+            baseSizes[0],
+            (distance - 1).clamp(0.0, 1.0).toDouble(),
+          );
+    final baseIcon = distance <= 1
+        ? _lerpDouble(baseIcons[2], baseIcons[1], distance)
+        : _lerpDouble(
+            baseIcons[1],
+            baseIcons[0],
+            (distance - 1).clamp(0.0, 1.0).toDouble(),
+          );
+    return size * (baseIcon / baseSize);
+  }
+
+  static double _sliderValue(double value) => value.clamp(-1.0, 1.0).toDouble();
+}
+
+class _AvatarLayoutMenuSheet extends StatelessWidget {
+  const _AvatarLayoutMenuSheet({required this.config, required this.onChanged});
+
+  final _AvatarLayoutConfig config;
+  final ValueChanged<_AvatarLayoutConfig> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        key: const ValueKey('spendee-test-avatar-layout-menu'),
+        margin: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .96),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .18),
+              offset: const Offset(0, 16),
+              blurRadius: 34,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Avatar layout',
+              style: TextStyle(
+                color: Color(0xFF14213A),
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _AvatarLayoutSlider(
+              sliderKey: const ValueKey(
+                'spendee-test-avatar-layout-center-size-slider',
+              ),
+              label: 'Középső méret',
+              value: config.centerSize,
+              onChanged: (value) =>
+                  onChanged(config.copyWith(centerSize: value)),
+            ),
+            _AvatarLayoutSlider(
+              sliderKey: const ValueKey(
+                'spendee-test-avatar-layout-inner-size-slider',
+              ),
+              label: 'Belső méret',
+              value: config.innerSize,
+              onChanged: (value) =>
+                  onChanged(config.copyWith(innerSize: value)),
+            ),
+            _AvatarLayoutSlider(
+              sliderKey: const ValueKey(
+                'spendee-test-avatar-layout-outer-size-slider',
+              ),
+              label: 'Külső méret',
+              value: config.outerSize,
+              onChanged: (value) =>
+                  onChanged(config.copyWith(outerSize: value)),
+            ),
+            _AvatarLayoutSlider(
+              sliderKey: const ValueKey(
+                'spendee-test-avatar-layout-inner-offset-slider',
+              ),
+              label: 'Belső X offset',
+              value: config.innerOffset,
+              onChanged: (value) =>
+                  onChanged(config.copyWith(innerOffset: value)),
+            ),
+            _AvatarLayoutSlider(
+              sliderKey: const ValueKey(
+                'spendee-test-avatar-layout-outer-offset-slider',
+              ),
+              label: 'Külső X offset',
+              value: config.outerOffset,
+              onChanged: (value) =>
+                  onChanged(config.copyWith(outerOffset: value)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarLayoutSlider extends StatelessWidget {
+  const _AvatarLayoutSlider({
+    required this.sliderKey,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Key sliderKey;
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 104,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF334155),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                activeTrackColor: const Color(0xFF06B6D4),
+                inactiveTrackColor: const Color(0xFFCBD5E1),
+                thumbColor: Colors.white,
+                overlayColor: const Color(0xFF06B6D4).withValues(alpha: .13),
+                valueIndicatorColor: const Color(0xFF14213A),
+              ),
+              child: Slider(
+                key: sliderKey,
+                value: value,
+                min: -1,
+                max: 1,
+                divisions: 40,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SpendeeTestDashboard extends StatefulWidget {
   const SpendeeTestDashboard({
     super.key,
@@ -331,6 +560,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _chartListSurface = _ChartListSurface.original;
   var _avatarBodyHighlightEnabled = true;
   var _avatarBodyHighlightStrength = 1.0;
+  var _avatarLayoutConfig = const _AvatarLayoutConfig();
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
   var _chartSurfaceSoftness = 0.0;
@@ -606,6 +836,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     TransactionCategory category, {
     bool haptic = true,
     bool animateCarousel = false,
+    String carouselMotionSource = 'avatar',
+    Duration carouselStepDuration = const Duration(milliseconds: 150),
   }) {
     final item = _budgetItemForCategory(category);
     if (item == null) {
@@ -613,7 +845,13 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       widget.store.setCategoryFilter(category);
       return;
     }
-    _selectBudgetItem(item, haptic: haptic, animateCarousel: animateCarousel);
+    _selectBudgetItem(
+      item,
+      haptic: haptic,
+      animateCarousel: animateCarousel,
+      carouselMotionSource: carouselMotionSource,
+      carouselStepDuration: carouselStepDuration,
+    );
   }
 
   BackheaderBudgetItem? _budgetItemForCategory(TransactionCategory category) {
@@ -639,10 +877,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     return _budgetItems.isEmpty ? null : _budgetItems.first;
   }
 
-  void _selectOverviewBudgetItem({bool haptic = true}) {
+  void _selectOverviewBudgetItem({
+    bool haptic = true,
+    String carouselMotionSource = 'avatar',
+    Duration carouselStepDuration = const Duration(milliseconds: 150),
+  }) {
     final item = _overviewBudgetItemForActiveType();
     if (item == null) return;
-    _selectBudgetItem(item, haptic: haptic, animateCarousel: true);
+    _selectBudgetItem(
+      item,
+      haptic: haptic,
+      animateCarousel: true,
+      carouselMotionSource: carouselMotionSource,
+      carouselStepDuration: carouselStepDuration,
+    );
   }
 
   void _showStage2Page(_Stage2BudgetPage page) {
@@ -652,11 +900,19 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   void _showPreviousStage2Page() {
-    _showStage2Page(_Stage2BudgetPage.categories);
+    _showStage2Page(
+      _stage2Page == _Stage2BudgetPage.categories
+          ? _Stage2BudgetPage.vendors
+          : _Stage2BudgetPage.categories,
+    );
   }
 
   void _showNextStage2Page() {
-    _showStage2Page(_Stage2BudgetPage.vendors);
+    _showStage2Page(
+      _stage2Page == _Stage2BudgetPage.vendors
+          ? _Stage2BudgetPage.categories
+          : _Stage2BudgetPage.vendors,
+    );
   }
 
   void _selectBudgetItem(
@@ -664,6 +920,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     bool haptic = true,
     bool animateCarousel = false,
     bool publishFilter = true,
+    String carouselMotionSource = 'avatar',
+    Duration carouselStepDuration = const Duration(milliseconds: 150),
   }) {
     if (animateCarousel) {
       unawaited(
@@ -671,6 +929,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           item,
           haptic: haptic,
           publishFilter: publishFilter,
+          source: carouselMotionSource,
+          stepDuration: carouselStepDuration,
         ),
       );
       return;
@@ -719,6 +979,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     BackheaderBudgetItem item, {
     bool haptic = true,
     bool publishFilter = true,
+    String source = 'avatar',
+    Duration stepDuration = const Duration(milliseconds: 150),
   }) async {
     final items = _budgetItems;
     final targetIndex = items.indexWhere(
@@ -737,6 +999,11 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _carouselMotionSerial += 1;
     final serial = _carouselMotionSerial;
     _carouselReleaseController.stop();
+    DebugConsole.log(
+      '[Perf] SpendeeTest carousel_motion_start source=$source '
+      'stepMs=${stepDuration.inMilliseconds} '
+      'from=${items[initialIndex].key} to=${item.key}',
+    );
     final controller = SpendeeCenterCarouselController(
       itemCount: items.length,
       initialIndex: initialIndex,
@@ -758,7 +1025,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         await _animateCarouselTravel(
           controller: controller,
           travel: stepTravel,
-          duration: const Duration(milliseconds: 150),
+          duration: stepDuration,
           curve: Curves.easeOutCubic,
         );
       }
@@ -1443,6 +1710,32 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     });
   }
 
+  Future<void> _openAvatarLayoutMenu() async {
+    HapticFeedback.selectionClick();
+    var sheetConfig = _avatarLayoutConfig;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void update(_AvatarLayoutConfig next) {
+              setSheetState(() => sheetConfig = next);
+              if (!mounted) return;
+              setState(() => _avatarLayoutConfig = next);
+            }
+
+            return _AvatarLayoutMenuSheet(
+              config: sheetConfig,
+              onChanged: update,
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _setHeaderLiquidSoftness(double value) {
     final next = _clampUnit(value);
     if ((_headerLiquidSoftness - next).abs() < .001) return;
@@ -1837,9 +2130,16 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   onHandleDragEnd: _endHeaderDrag,
                   onBudgetItemTap: (item) =>
                       _selectBudgetItem(item, animateCarousel: true),
-                  onPieCategoryTap: (category) =>
-                      _selectCategory(category, animateCarousel: true),
-                  onPieCenterTap: _selectOverviewBudgetItem,
+                  onPieCategoryTap: (category) => _selectCategory(
+                    category,
+                    animateCarousel: true,
+                    carouselMotionSource: 'diagram',
+                    carouselStepDuration: const Duration(milliseconds: 72),
+                  ),
+                  onPieCenterTap: () => _selectOverviewBudgetItem(
+                    carouselMotionSource: 'diagram',
+                    carouselStepDuration: const Duration(milliseconds: 72),
+                  ),
                   onStage2PreviousPage: _showPreviousStage2Page,
                   onStage2NextPage: _showNextStage2Page,
                   pulsingBudgetItemKey: _pulsingBudgetItemKey,
@@ -1847,6 +2147,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   pressedBudgetItemKey: _budgetLimitEditItem?.key,
                   avatarBodyHighlightEnabled: _avatarBodyHighlightEnabled,
                   avatarBodyHighlightStrength: _avatarBodyHighlightStrength,
+                  avatarLayoutConfig: _avatarLayoutConfig,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
                       _handleBudgetItemLongPressMoveUpdate,
@@ -1865,6 +2166,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   mindStage1Softness: _mindStage1Softness,
                   mindStage2Softness: _mindStage2Softness,
                   onHeaderDesignMenuPressed: _openHeaderDesignMenu,
+                  onHeaderBackgroundTap: _openAvatarLayoutMenu,
                   onCarouselDragStart: _handleCarouselDragStart,
                   onCarouselDragUpdate: _handleCarouselDragUpdate,
                   onCarouselDragEnd: _handleCarouselDragEnd,
@@ -1933,6 +2235,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.pressedBudgetItemKey,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarLayoutConfig,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
     required this.onBudgetItemLongPressEnd,
@@ -1950,6 +2253,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.mindStage1Softness,
     required this.mindStage2Softness,
     required this.onHeaderDesignMenuPressed,
+    required this.onHeaderBackgroundTap,
     required this.onCarouselDragStart,
     required this.onCarouselDragUpdate,
     required this.onCarouselDragEnd,
@@ -1979,6 +2283,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final String? pressedBudgetItemKey;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
   final GestureLongPressMoveUpdateCallback onBudgetItemLongPressMoveUpdate;
@@ -1997,6 +2302,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final double mindStage1Softness;
   final double mindStage2Softness;
   final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
+  final VoidCallback onHeaderBackgroundTap;
   final GestureDragStartCallback onCarouselDragStart;
   final GestureDragUpdateCallback onCarouselDragUpdate;
   final GestureDragEndCallback onCarouselDragEnd;
@@ -2020,6 +2326,18 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
           right: 78,
           top: 48,
           child: _HeaderValueText(headerValue),
+        ),
+        Positioned(
+          key: const ValueKey('spendee-test-header-background-tap-target'),
+          left: 112,
+          right: 86,
+          top: 18,
+          height: 58,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: onHeaderBackgroundTap,
+            child: const SizedBox.expand(),
+          ),
         ),
         Positioned(
           key: const ValueKey('spendee-test-header-core-partition'),
@@ -2071,6 +2389,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               pressedItemKey: pressedBudgetItemKey,
               avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
               avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+              avatarLayoutConfig: avatarLayoutConfig,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
               onItemLongPressEnd: onBudgetItemLongPressEnd,
@@ -3345,6 +3664,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.pressedItemKey,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarLayoutConfig,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
     required this.onItemLongPressEnd,
@@ -3366,6 +3686,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final String? pressedItemKey;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
   final GestureLongPressMoveUpdateCallback onItemLongPressMoveUpdate;
@@ -3414,6 +3735,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 pressedItemKey: pressedItemKey,
                 avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
                 avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+                avatarLayoutConfig: avatarLayoutConfig,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
                 onItemLongPressMoveUpdate: onItemLongPressMoveUpdate,
@@ -3759,6 +4081,7 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.pressedItemKey,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarLayoutConfig,
     required this.onItemTap,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -3773,6 +4096,7 @@ class _ContextAvatarBelt extends StatelessWidget {
   final String? pressedItemKey;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final _AvatarLayoutConfig avatarLayoutConfig;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -3818,6 +4142,7 @@ class _ContextAvatarBelt extends StatelessWidget {
                 pressed: slot.item.key == pressedItemKey,
                 avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
                 avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+                avatarLayoutConfig: avatarLayoutConfig,
               ),
           ],
         );
@@ -3884,6 +4209,7 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.pressed,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarLayoutConfig,
   });
 
   final _ContextAvatarSlot slot;
@@ -3898,6 +4224,7 @@ class _PositionedContextAvatar extends StatelessWidget {
   final bool pressed;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final _AvatarLayoutConfig avatarLayoutConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -3905,9 +4232,10 @@ class _PositionedContextAvatar extends StatelessWidget {
     final size = _visualSize(position);
     final iconSize = _visualIconSize(position);
     final opacity = _visualOpacity(position);
+    final x = avatarLayoutConfig.xForLogicalOffset(position);
     return Positioned(
       key: ValueKey('spendee-test-context-avatar-slot-${slot.slotOffset}'),
-      left: center.dx + position * _ContextAvatarBelt._slotDistance - size / 2,
+      left: center.dx + x - size / 2,
       top: center.dy - size / 2,
       width: size,
       height: size,
@@ -3933,11 +4261,11 @@ class _PositionedContextAvatar extends StatelessWidget {
   double _visualPosition() => logicalOffset;
 
   double _visualSize(double position) {
-    return _sizeForDistance(position.abs());
+    return avatarLayoutConfig.sizeForLogicalOffset(position);
   }
 
   double _visualIconSize(double position) {
-    return _iconSizeForDistance(position.abs());
+    return avatarLayoutConfig.iconSizeForLogicalOffset(position);
   }
 
   double _visualOpacity(double position) {
@@ -3945,26 +4273,6 @@ class _PositionedContextAvatar extends StatelessWidget {
     final distance = position.abs();
     if (distance <= 1) return _lerpDouble(1, .9, distance);
     return _lerpDouble(.9, .72, (distance - 1).clamp(0.0, 1.0).toDouble());
-  }
-
-  double _sizeForDistance(double distance) {
-    final sizes = _budgetHeaderVisualSpec.budget.avatarSizes;
-    if (distance <= 1) return _lerpDouble(sizes[2], sizes[1], distance);
-    return _lerpDouble(
-      sizes[1],
-      sizes[0],
-      (distance - 1).clamp(0.0, 1.0).toDouble(),
-    );
-  }
-
-  double _iconSizeForDistance(double distance) {
-    final sizes = _budgetHeaderVisualSpec.budget.avatarIconSizes;
-    if (distance <= 1) return _lerpDouble(sizes[2], sizes[1], distance);
-    return _lerpDouble(
-      sizes[1],
-      sizes[0],
-      (distance - 1).clamp(0.0, 1.0).toDouble(),
-    );
   }
 }
 
@@ -4016,45 +4324,24 @@ class _ContextAvatar extends StatefulWidget {
 }
 
 class _ContextAvatarState extends State<_ContextAvatar> {
-  static const _holdPreviewDelay = Duration(milliseconds: 140);
+  var _pointerPressed = false;
 
-  Timer? _holdPreviewTimer;
-  var _holdPreviewPressed = false;
-
-  @override
-  void dispose() {
-    _holdPreviewTimer?.cancel();
-    super.dispose();
-  }
-
-  void _scheduleHoldPreview() {
-    _holdPreviewTimer?.cancel();
-    _holdPreviewTimer = Timer(_holdPreviewDelay, () {
-      if (!mounted || _holdPreviewPressed) return;
-      setState(() => _holdPreviewPressed = true);
-    });
-  }
-
-  void _clearHoldPreview() {
-    _holdPreviewTimer?.cancel();
-    _holdPreviewTimer = null;
-    if (!_holdPreviewPressed || !mounted) return;
-    setState(() => _holdPreviewPressed = false);
+  void _setPointerPressed(bool pressed) {
+    if (_pointerPressed == pressed || !mounted) return;
+    setState(() => _pointerPressed = pressed);
   }
 
   void _handleLongPressStart(LongPressStartDetails details) {
-    _holdPreviewTimer?.cancel();
-    _holdPreviewTimer = null;
     widget.onLongPressStart(details);
   }
 
   void _handleLongPressEnd(LongPressEndDetails details) {
-    _clearHoldPreview();
+    _setPointerPressed(false);
     widget.onLongPressEnd(details);
   }
 
   void _handleLongPressCancel() {
-    _clearHoldPreview();
+    _setPointerPressed(false);
     widget.onLongPressCancel();
   }
 
@@ -4064,11 +4351,11 @@ class _ContextAvatarState extends State<_ContextAvatar> {
     final progress = _budgetItemProgress(widget.item);
     final keyBase = _budgetAvatarKeyBase(widget.item);
     final selected = widget.selected;
-    final pressed = widget.pressed || _holdPreviewPressed;
+    final pressed = widget.pressed || _pointerPressed;
     return Listener(
-      onPointerDown: (_) => _scheduleHoldPreview(),
-      onPointerUp: (_) => _clearHoldPreview(),
-      onPointerCancel: (_) => _clearHoldPreview(),
+      onPointerDown: (_) => _setPointerPressed(true),
+      onPointerUp: (_) => _setPointerPressed(false),
+      onPointerCancel: (_) => _setPointerPressed(false),
       child: GestureDetector(
         key: _budgetAvatarKey(widget.item, selected: selected),
         onTap: widget.onTap,
@@ -4188,12 +4475,13 @@ String _budgetHeaderValue(BackheaderBudgetItem? item) {
   if (overview != null) {
     return overview.hasLimit
         ? '${_formatFt(overview.amount)} / ${_formatFt(overview.limitAmount)}'
-        : '${_formatFt(overview.amount)} / 0 Ft';
+        : _formatFt(overview.amount);
   }
   final category = item.category;
   if (category == null) return 'Nincs limit';
-  return '${_formatFt(category.spent)} / '
-      '${category.hasLimit ? _formatFt(category.limitAmount) : '0 Ft'}';
+  return category.hasLimit
+      ? '${_formatFt(category.spent)} / ${_formatFt(category.limitAmount)}'
+      : _formatFt(category.spent);
 }
 
 class _OverviewBudgetAvatar extends StatelessWidget {
@@ -4322,6 +4610,9 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
 
   bool get usesOuterGlassHalo => true;
   bool get drawsInsideAvatarBody => false;
+  bool get usesRadialFadeStroke => true;
+  int get progressDrawPassCount => 1;
+  bool get drawsSeparateInnerProgressRing => false;
   bool get clockwise => true;
   double get startRadians => -math.pi / 2;
   double get strokeWidth => selected ? 10.0 : 8.0;
@@ -4342,7 +4633,9 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..color = progressColor.withValues(alpha: selected ? .12 : .06),
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .9)
+        ..color = Colors.white.withValues(alpha: selected ? .14 : .07),
     );
     if (progress <= 0) return;
     canvas.drawArc(
@@ -4354,10 +4647,11 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
         ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .55)
         ..color = progressColor.withValues(
           alpha: _lerpDouble(
-            selected ? .22 : .12,
-            selected ? .58 : .38,
+            selected ? .38 : .24,
+            selected ? .66 : .46,
             progress,
           ),
         ),
@@ -5363,7 +5657,10 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
   static const _summaryWindowCycleDistance = 34.0;
 
   var _summaryDragDx = 0.0;
+  var _summaryDragDy = 0.0;
   var _summaryDragging = false;
+  var _summaryTicked = false;
+  Axis? _summaryDragAxis;
   Offset? _summaryDragStart;
   _SpendeeHomeLogSnapshot? _logSnapshot;
 
@@ -5407,12 +5704,49 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
     return snapshot;
   }
 
+  List<SearchPillFilter> _categorySearchFilters() {
+    final filters = <SearchPillFilter>[];
+    final ids = widget.store.activeCategoryIds.toList()..sort();
+    for (final id in ids) {
+      final category = widget.store.categoriesById[id];
+      if (category == null) continue;
+      filters.add(
+        SearchPillFilter(
+          id: id.toString(),
+          label: category.name,
+          color: category.slotColor,
+          onClear: () => widget.store.clearCategoryFilterId(id),
+        ),
+      );
+    }
+    if (filters.isEmpty) return const <SearchPillFilter>[];
+    return filters;
+  }
+
+  List<SearchPillFilter> _merchantSearchFilters() {
+    final merchants = widget.store.activeMerchantFilters.toList()..sort();
+    return [
+      for (final merchant in merchants)
+        SearchPillFilter(
+          id: merchant,
+          label: merchant,
+          color: widget.expenseTheme.accent,
+          onClear: () => widget.store.clearMerchantFilter(merchant),
+        ),
+    ];
+  }
+
   void _handleSummaryPointerDown(PointerDownEvent event) {
     _summaryDragStart = event.position;
-    if (_summaryDragDx == 0 && !_summaryDragging) return;
+    if (_summaryDragDx == 0 && _summaryDragDy == 0 && !_summaryDragging) {
+      return;
+    }
     setState(() {
       _summaryDragging = false;
       _summaryDragDx = 0;
+      _summaryDragDy = 0;
+      _summaryTicked = false;
+      _summaryDragAxis = null;
     });
   }
 
@@ -5421,14 +5755,40 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
     if (start == null) return;
     final delta = event.position - start;
     if (!_summaryDragging) {
-      if (delta.dx.abs() < 8) return;
-      if (delta.dx.abs() < delta.dy.abs()) return;
+      if (delta.distance < 8) return;
+      _summaryDragAxis = delta.dx.abs() >= delta.dy.abs()
+          ? Axis.horizontal
+          : Axis.vertical;
     }
-    final next = delta.dx.clamp(-_summaryDragLimit, _summaryDragLimit);
-    if ((next - _summaryDragDx).abs() < .1) return;
+    final axis = _summaryDragAxis ?? Axis.horizontal;
+    final nextDx = axis == Axis.horizontal
+        ? delta.dx.clamp(-_summaryDragLimit, _summaryDragLimit).toDouble()
+        : 0.0;
+    final nextDy = axis == Axis.vertical
+        ? delta.dy.clamp(-_summaryDragLimit, _summaryDragLimit).toDouble()
+        : 0.0;
+    final threshold = axis == Axis.vertical
+        ? _summaryWindowCycleDistance
+        : _summaryShiftDistance;
+    if (!_summaryTicked) {
+      final travelled = axis == Axis.vertical ? nextDy.abs() : nextDx.abs();
+      if (travelled >= threshold) {
+        _summaryTicked = true;
+        HapticFeedback.selectionClick();
+        DebugConsole.log(
+          '[Perf] SpendeeTest summary_tick axis=${axis.name} '
+          'direction=${axis == Axis.vertical ? nextDy.sign : nextDx.sign}',
+        );
+      }
+    }
+    if ((nextDx - _summaryDragDx).abs() < .1 &&
+        (nextDy - _summaryDragDy).abs() < .1) {
+      return;
+    }
     setState(() {
       _summaryDragging = true;
-      _summaryDragDx = next.toDouble();
+      _summaryDragDx = nextDx;
+      _summaryDragDy = nextDy;
     });
   }
 
@@ -5456,10 +5816,15 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
 
   void _resetSummaryDrag() {
     _summaryDragStart = null;
-    if (!_summaryDragging && _summaryDragDx == 0) return;
+    if (!_summaryDragging && _summaryDragDx == 0 && _summaryDragDy == 0) {
+      return;
+    }
     setState(() {
       _summaryDragging = false;
       _summaryDragDx = 0;
+      _summaryDragDy = 0;
+      _summaryTicked = false;
+      _summaryDragAxis = null;
     });
   }
 
@@ -5588,7 +5953,7 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
                         curve: Curves.easeOutCubic,
                         transform: Matrix4.translationValues(
                           _summaryDragDx,
-                          0,
+                          _summaryDragDy,
                           0,
                         ),
                         height: 59,
@@ -5628,53 +5993,27 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: Container(
-                    key: const ValueKey('spendee-test-search-pill'),
+                  child: SizedBox(
                     height: 45,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: _softWhiteDecoration(20),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          key: const ValueKey(
-                            'spendee-test-search-vendor-button',
-                          ),
-                          onPressed: onVendorSheetRequested,
-                          icon: const Icon(
-                            Icons.search,
-                            size: 18,
-                            color: AppColors.gray400,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 32,
-                            height: 32,
-                          ),
-                        ),
-                        Expanded(
-                          child: TextFormField(
-                            key: ValueKey(
-                              'spendee-test-search-input-${store.searchQuery}',
-                            ),
-                            initialValue: store.searchQuery,
-                            onChanged: store.setSearchQuery,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              hintText: 'Keresés tranzakciók között...',
-                              hintStyle: TextStyle(
-                                color: AppColors.gray500,
-                                fontSize: 14,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              color: AppColors.gray800,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: SearchPill(
+                      key: const ValueKey('spendee-test-search-pill'),
+                      query: store.searchQuery,
+                      onQueryChanged: store.setSearchQuery,
+                      surfaceColor: widget.expenseTheme.logBox,
+                      surfaceStyle: widget.expenseTheme.contentSurfaceStyle,
+                      merchantFilters: _merchantSearchFilters(),
+                      categoryFilters: _categorySearchFilters(),
+                      accentColor: widget.expenseTheme.accent,
+                      shadowEnabled: true,
+                      surfaceMargin: EdgeInsets.zero,
+                      surfaceConstraints: const BoxConstraints.tightFor(
+                        height: 45,
+                      ),
+                      surfacePadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      onVendorListPressed: onVendorSheetRequested,
                     ),
                   ),
                 ),

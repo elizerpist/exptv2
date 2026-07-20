@@ -24,6 +24,12 @@ class SearchPill extends StatefulWidget {
     this.onVendorListPressed,
     this.accentColor = AppColors.primary,
     this.shadowEnabled = true,
+    this.surfaceMargin = const EdgeInsets.fromLTRB(20, 10, 20, 10),
+    this.surfaceConstraints = const BoxConstraints(minHeight: 46),
+    this.surfacePadding = const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 4,
+    ),
   });
 
   final String query;
@@ -41,6 +47,9 @@ class SearchPill extends StatefulWidget {
   final VoidCallback? onVendorListPressed;
   final Color accentColor;
   final bool shadowEnabled;
+  final EdgeInsetsGeometry surfaceMargin;
+  final BoxConstraints surfaceConstraints;
+  final EdgeInsetsGeometry surfacePadding;
 
   @override
   State<SearchPill> createState() => _SearchPillState();
@@ -169,17 +178,17 @@ class _SearchPillState extends State<SearchPill> {
         ? Colors.transparent
         : widget.surfaceColor;
     final capsules = <Widget>[
-      for (final filter in merchantFilters)
+      for (final filter in categoryFilters)
         _FilterCapsule(
-          capsuleKey: ValueKey('search-pill-capsule-merchant-${filter.id}'),
+          capsuleKey: ValueKey('search-pill-capsule-category-${filter.id}'),
           value: filter.label,
           color: filter.color,
           surfaceStyle: widget.surfaceStyle,
           onClear: filter.onClear,
         ),
-      for (final filter in categoryFilters)
+      for (final filter in merchantFilters)
         _FilterCapsule(
-          capsuleKey: ValueKey('search-pill-capsule-category-${filter.id}'),
+          capsuleKey: ValueKey('search-pill-capsule-merchant-${filter.id}'),
           value: filter.label,
           color: filter.color,
           surfaceStyle: widget.surfaceStyle,
@@ -270,12 +279,9 @@ class _SearchPillState extends State<SearchPill> {
                   color: widget.surfaceColor,
                   borderRadius: BorderRadius.circular(25),
                   pressed: pressed,
-                  margin: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                  constraints: const BoxConstraints(minHeight: 46),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
+                  margin: widget.surfaceMargin,
+                  constraints: widget.surfaceConstraints,
+                  padding: widget.surfacePadding,
                   neutralBorder: Border.all(
                     color: focused ? widget.accentColor : AppColors.gray200,
                     width: focused ? 1.5 : 1,
@@ -350,7 +356,7 @@ class _FilterCapsule extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 126),
+          constraints: const BoxConstraints(maxWidth: 104),
           child: Text(
             value,
             style: const TextStyle(
