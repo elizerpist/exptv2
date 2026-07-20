@@ -179,10 +179,8 @@ enum _HeaderDesignMenuAction {
   mindStage2Acrylic,
 }
 
-class _AvatarProgressFadeMenuEntry
-    extends PopupMenuEntry<_HeaderDesignMenuAction> {
-  const _AvatarProgressFadeMenuEntry({
-    super.key,
+class _AvatarProgressFadeControls extends StatefulWidget {
+  const _AvatarProgressFadeControls({
     required this.innerFieldKey,
     required this.outerFieldKey,
     required this.curveSliderKey,
@@ -207,18 +205,12 @@ class _AvatarProgressFadeMenuEntry
   final ValueChanged<double> onCurveChanged;
 
   @override
-  double get height => 132;
-
-  @override
-  bool represents(_HeaderDesignMenuAction? value) => false;
-
-  @override
-  State<_AvatarProgressFadeMenuEntry> createState() =>
-      _AvatarProgressFadeMenuEntryState();
+  State<_AvatarProgressFadeControls> createState() =>
+      _AvatarProgressFadeControlsState();
 }
 
-class _AvatarProgressFadeMenuEntryState
-    extends State<_AvatarProgressFadeMenuEntry> {
+class _AvatarProgressFadeControlsState
+    extends State<_AvatarProgressFadeControls> {
   late final TextEditingController _innerController;
   late final TextEditingController _outerController;
   late double _curveValue;
@@ -236,7 +228,7 @@ class _AvatarProgressFadeMenuEntryState
   }
 
   @override
-  void didUpdateWidget(_AvatarProgressFadeMenuEntry oldWidget) {
+  void didUpdateWidget(_AvatarProgressFadeControls oldWidget) {
     super.didUpdateWidget(oldWidget);
     if ((oldWidget.innerValue - widget.innerValue).abs() > .001) {
       _setControllerText(
@@ -294,9 +286,9 @@ class _AvatarProgressFadeMenuEntryState
       fontWeight: FontWeight.w800,
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: SizedBox(
-        width: 244,
+        width: double.infinity,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,12 +580,24 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
     required this.onChanged,
     required this.progressThickness,
     required this.onProgressThicknessChanged,
+    required this.progressFadeInner,
+    required this.progressFadeOuter,
+    required this.progressFadeCurve,
+    required this.onProgressFadeInnerChanged,
+    required this.onProgressFadeOuterChanged,
+    required this.onProgressFadeCurveChanged,
   });
 
   final _AvatarLayoutConfig config;
   final ValueChanged<_AvatarLayoutConfig> onChanged;
   final double progressThickness;
   final ValueChanged<double> onProgressThicknessChanged;
+  final double progressFadeInner;
+  final double progressFadeOuter;
+  final double progressFadeCurve;
+  final ValueChanged<double> onProgressFadeInnerChanged;
+  final ValueChanged<double> onProgressFadeOuterChanged;
+  final ValueChanged<double> onProgressFadeCurveChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -603,6 +607,7 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
         key: const ValueKey('spendee-test-avatar-layout-menu'),
         margin: const EdgeInsets.all(14),
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        constraints: const BoxConstraints(maxHeight: 332),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: .96),
           borderRadius: BorderRadius.circular(22),
@@ -627,60 +632,90 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            _AvatarLayoutSlider(
-              sliderKey: const ValueKey(
-                'spendee-test-avatar-layout-center-size-slider',
+            Flexible(
+              child: SingleChildScrollView(
+                key: const ValueKey('spendee-test-avatar-layout-menu-scroll'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _AvatarLayoutSlider(
+                      sliderKey: const ValueKey(
+                        'spendee-test-avatar-layout-progress-thickness-slider',
+                      ),
+                      label: 'Kör vastagság',
+                      value: progressThickness,
+                      min: 0,
+                      max: 1,
+                      onChanged: onProgressThicknessChanged,
+                    ),
+                    _AvatarProgressFadeControls(
+                      innerFieldKey: const ValueKey(
+                        'spendee-test-avatar-progress-fade-inner-field',
+                      ),
+                      outerFieldKey: const ValueKey(
+                        'spendee-test-avatar-progress-fade-outer-field',
+                      ),
+                      curveSliderKey: const ValueKey(
+                        'spendee-test-avatar-progress-fade-curve-slider',
+                      ),
+                      curveValueKey: const ValueKey(
+                        'spendee-test-avatar-progress-fade-curve-value',
+                      ),
+                      innerValue: progressFadeInner,
+                      outerValue: progressFadeOuter,
+                      curveValue: progressFadeCurve,
+                      onInnerChanged: onProgressFadeInnerChanged,
+                      onOuterChanged: onProgressFadeOuterChanged,
+                      onCurveChanged: onProgressFadeCurveChanged,
+                    ),
+                    _AvatarLayoutSlider(
+                      sliderKey: const ValueKey(
+                        'spendee-test-avatar-layout-center-size-slider',
+                      ),
+                      label: 'Középső méret',
+                      value: config.centerSize,
+                      onChanged: (value) =>
+                          onChanged(config.copyWith(centerSize: value)),
+                    ),
+                    _AvatarLayoutSlider(
+                      sliderKey: const ValueKey(
+                        'spendee-test-avatar-layout-inner-size-slider',
+                      ),
+                      label: 'Belső méret',
+                      value: config.innerSize,
+                      onChanged: (value) =>
+                          onChanged(config.copyWith(innerSize: value)),
+                    ),
+                    _AvatarLayoutSlider(
+                      sliderKey: const ValueKey(
+                        'spendee-test-avatar-layout-outer-size-slider',
+                      ),
+                      label: 'Külső méret',
+                      value: config.outerSize,
+                      onChanged: (value) =>
+                          onChanged(config.copyWith(outerSize: value)),
+                    ),
+                    _AvatarLayoutSlider(
+                      sliderKey: const ValueKey(
+                        'spendee-test-avatar-layout-inner-offset-slider',
+                      ),
+                      label: 'Belső X offset',
+                      value: config.innerOffset,
+                      onChanged: (value) =>
+                          onChanged(config.copyWith(innerOffset: value)),
+                    ),
+                    _AvatarLayoutSlider(
+                      sliderKey: const ValueKey(
+                        'spendee-test-avatar-layout-outer-offset-slider',
+                      ),
+                      label: 'Külső X offset',
+                      value: config.outerOffset,
+                      onChanged: (value) =>
+                          onChanged(config.copyWith(outerOffset: value)),
+                    ),
+                  ],
+                ),
               ),
-              label: 'Középső méret',
-              value: config.centerSize,
-              onChanged: (value) =>
-                  onChanged(config.copyWith(centerSize: value)),
-            ),
-            _AvatarLayoutSlider(
-              sliderKey: const ValueKey(
-                'spendee-test-avatar-layout-inner-size-slider',
-              ),
-              label: 'Belső méret',
-              value: config.innerSize,
-              onChanged: (value) =>
-                  onChanged(config.copyWith(innerSize: value)),
-            ),
-            _AvatarLayoutSlider(
-              sliderKey: const ValueKey(
-                'spendee-test-avatar-layout-outer-size-slider',
-              ),
-              label: 'Külső méret',
-              value: config.outerSize,
-              onChanged: (value) =>
-                  onChanged(config.copyWith(outerSize: value)),
-            ),
-            _AvatarLayoutSlider(
-              sliderKey: const ValueKey(
-                'spendee-test-avatar-layout-progress-thickness-slider',
-              ),
-              label: 'Kör vastagság',
-              value: progressThickness,
-              min: 0,
-              max: 1,
-              onChanged: onProgressThicknessChanged,
-            ),
-            _AvatarLayoutSlider(
-              sliderKey: const ValueKey(
-                'spendee-test-avatar-layout-inner-offset-slider',
-              ),
-              label: 'Belső X offset',
-              value: config.innerOffset,
-              onChanged: (value) =>
-                  onChanged(config.copyWith(innerOffset: value)),
-            ),
-            _AvatarLayoutSlider(
-              sliderKey: const ValueKey(
-                'spendee-test-avatar-layout-outer-offset-slider',
-              ),
-              label: 'Külső X offset',
-              value: config.outerOffset,
-              onChanged: (value) =>
-                  onChanged(config.copyWith(outerOffset: value)),
             ),
           ],
         ),
@@ -1685,39 +1720,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           height: 38,
           child: const Text('Avatarok: Acrylic'),
         ),
-        _HeaderLiquidSoftnessMenuEntry(
-          key: const ValueKey('spendee-test-avatar-progress-thickness-entry'),
-          label: 'Circle progress vastagság',
-          sliderKey: const ValueKey(
-            'spendee-test-avatar-progress-thickness-slider',
-          ),
-          valueKey: const ValueKey(
-            'spendee-test-avatar-progress-thickness-value',
-          ),
-          value: _avatarProgressThickness,
-          onChanged: _setAvatarProgressThickness,
-        ),
-        _AvatarProgressFadeMenuEntry(
-          key: const ValueKey('spendee-test-avatar-progress-fade-entry'),
-          innerFieldKey: const ValueKey(
-            'spendee-test-avatar-progress-fade-inner-field',
-          ),
-          outerFieldKey: const ValueKey(
-            'spendee-test-avatar-progress-fade-outer-field',
-          ),
-          curveSliderKey: const ValueKey(
-            'spendee-test-avatar-progress-fade-curve-slider',
-          ),
-          curveValueKey: const ValueKey(
-            'spendee-test-avatar-progress-fade-curve-value',
-          ),
-          innerValue: _avatarProgressFadeInner,
-          outerValue: _avatarProgressFadeOuter,
-          curveValue: _avatarProgressFadeCurve,
-          onInnerChanged: _setAvatarProgressFadeInner,
-          onOuterChanged: _setAvatarProgressFadeOuter,
-          onCurveChanged: _setAvatarProgressFadeCurve,
-        ),
         const PopupMenuDivider(),
         const PopupMenuItem<_HeaderDesignMenuAction>(
           enabled: false,
@@ -2004,10 +2006,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     HapticFeedback.selectionClick();
     var sheetConfig = _avatarLayoutConfig;
     var sheetProgressThickness = _avatarProgressThickness;
+    var sheetProgressFadeInner = _avatarProgressFadeInner;
+    var sheetProgressFadeOuter = _avatarProgressFadeOuter;
+    var sheetProgressFadeCurve = _avatarProgressFadeCurve;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: false,
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -2024,11 +2030,38 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               setState(() => _avatarProgressThickness = clamped);
             }
 
+            void updateProgressFadeInner(double next) {
+              final clamped = _clampProgressFadeEndpoint(next);
+              setSheetState(() => sheetProgressFadeInner = clamped);
+              if (!mounted) return;
+              setState(() => _avatarProgressFadeInner = clamped);
+            }
+
+            void updateProgressFadeOuter(double next) {
+              final clamped = _clampProgressFadeEndpoint(next);
+              setSheetState(() => sheetProgressFadeOuter = clamped);
+              if (!mounted) return;
+              setState(() => _avatarProgressFadeOuter = clamped);
+            }
+
+            void updateProgressFadeCurve(double next) {
+              final clamped = _clampUnit(next);
+              setSheetState(() => sheetProgressFadeCurve = clamped);
+              if (!mounted) return;
+              setState(() => _avatarProgressFadeCurve = clamped);
+            }
+
             return _AvatarLayoutMenuSheet(
               config: sheetConfig,
               onChanged: update,
               progressThickness: sheetProgressThickness,
               onProgressThicknessChanged: updateProgressThickness,
+              progressFadeInner: sheetProgressFadeInner,
+              progressFadeOuter: sheetProgressFadeOuter,
+              progressFadeCurve: sheetProgressFadeCurve,
+              onProgressFadeInnerChanged: updateProgressFadeInner,
+              onProgressFadeOuterChanged: updateProgressFadeOuter,
+              onProgressFadeCurveChanged: updateProgressFadeCurve,
             );
           },
         );
@@ -2046,30 +2079,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final next = _clampUnit(value);
     if ((_avatarSurfaceSoftness - next).abs() < .001) return;
     setState(() => _avatarSurfaceSoftness = next);
-  }
-
-  void _setAvatarProgressThickness(double value) {
-    final next = _clampUnit(value);
-    if ((_avatarProgressThickness - next).abs() < .001) return;
-    setState(() => _avatarProgressThickness = next);
-  }
-
-  void _setAvatarProgressFadeInner(double value) {
-    final next = _clampProgressFadeEndpoint(value);
-    if ((_avatarProgressFadeInner - next).abs() < .001) return;
-    setState(() => _avatarProgressFadeInner = next);
-  }
-
-  void _setAvatarProgressFadeOuter(double value) {
-    final next = _clampProgressFadeEndpoint(value);
-    if ((_avatarProgressFadeOuter - next).abs() < .001) return;
-    setState(() => _avatarProgressFadeOuter = next);
-  }
-
-  void _setAvatarProgressFadeCurve(double value) {
-    final next = _clampUnit(value);
-    if ((_avatarProgressFadeCurve - next).abs() < .001) return;
-    setState(() => _avatarProgressFadeCurve = next);
   }
 
   void _setChartSurfaceSoftness(double value) {

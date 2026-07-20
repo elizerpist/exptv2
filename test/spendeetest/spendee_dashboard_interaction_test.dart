@@ -2648,7 +2648,8 @@ void main() {
       find.byKey(
         const ValueKey('spendee-test-avatar-progress-thickness-slider'),
       ),
-      findsOneWidget,
+      findsNothing,
+      reason: 'Circle progress sizing moved to the avatar layout customizer.',
     );
     expect(
       find.byKey(
@@ -2667,7 +2668,7 @@ void main() {
     );
   });
 
-  testWidgets('header menu adjusts selected avatar progress thickness', (
+  testWidgets('avatar progress controls live in no-veil avatar customizer', (
     tester,
   ) async {
     await _pumpDashboard(tester);
@@ -2678,49 +2679,78 @@ void main() {
       const ValueKey('spendee-test-category-avatar-1-selected'),
     );
     final beforeAvatarRect = tester.getRect(selectedAvatar);
-    final beforeProgressPaint = tester.widget<CustomPaint>(
-      find.byKey(
-        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
-      ),
-    );
-    final beforeStroke =
-        (beforeProgressPaint.painter as dynamic).strokeWidth as double;
 
     await tester.tap(
       find.byKey(const ValueKey('spendee-test-header-menu-button')),
     );
     await tester.pumpAndSettle();
-    final slider = find.byKey(
-      const ValueKey('spendee-test-avatar-progress-thickness-slider'),
-    );
-    expect(slider, findsOneWidget);
     expect(
       find.byKey(
-        const ValueKey('spendee-test-avatar-progress-thickness-value'),
+        const ValueKey('spendee-test-avatar-progress-thickness-slider'),
       ),
-      findsOneWidget,
+      findsNothing,
+      reason:
+          'Circle size belongs in the live avatar customizer, not the header dropdown.',
     );
-    await tester.ensureVisible(slider);
-    await tester.pumpAndSettle();
-    await tester.drag(slider, const Offset(88, 0));
-    await tester.pump();
     await tester.tapAt(Offset.zero);
     await tester.pumpAndSettle();
 
-    final afterProgressPaint = tester.widget<CustomPaint>(
-      find.byKey(
-        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
-      ),
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
+    );
+    await tester.pumpAndSettle();
+
+    final visibleBarriers = tester
+        .widgetList<ModalBarrier>(find.byType(ModalBarrier))
+        .where((barrier) => (barrier.color?.a ?? 0) > 0)
+        .toList();
+    expect(
+      visibleBarriers,
+      isEmpty,
+      reason:
+          'The avatar customizer must not dim the app with a veil while tuning.',
+    );
+    final menu = find.byKey(const ValueKey('spendee-test-avatar-layout-menu'));
+    expect(menu, findsOneWidget);
+    expect(
+      tester.getSize(menu).height,
+      lessThanOrEqualTo(360),
+      reason:
+          'Adding circle controls must not make the avatar customizer taller.',
     );
     expect(
-      (afterProgressPaint.painter as dynamic).strokeWidth as double,
-      greaterThan(beforeStroke),
+      find.byKey(const ValueKey('spendee-test-avatar-layout-menu-scroll')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-layout-progress-thickness-slider'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-progress-fade-inner-field'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-progress-fade-outer-field'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-progress-fade-curve-slider'),
+      ),
+      findsOneWidget,
     );
     _expectRectsClose(tester.getRect(selectedAvatar), beforeAvatarRect);
   });
 
   testWidgets(
-    'header menu customizes selected avatar progress fade endpoints and curve',
+    'avatar customizer changes selected avatar progress fade endpoints and curve',
     (tester) async {
       final store = TransactionStore(
         _DashboardTestRepository(),
@@ -2744,7 +2774,7 @@ void main() {
       final beforeAvatarRect = tester.getRect(selectedAvatar);
 
       await tester.tap(
-        find.byKey(const ValueKey('spendee-test-header-menu-button')),
+        find.byKey(const ValueKey('spendee-test-header-background-tap-target')),
       );
       await tester.pumpAndSettle();
 
@@ -3814,6 +3844,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getRect(selectedAvatar).width, greaterThan(beforeWidth));
 
+    await tester.ensureVisible(find.byKey(innerOffsetSliderKey));
+    await tester.pumpAndSettle();
     await tester.drag(find.byKey(innerOffsetSliderKey), const Offset(-80, 0));
     await tester.pumpAndSettle();
     final innerAfter = tester.getRect(
