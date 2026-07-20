@@ -101,5 +101,19 @@ void main() {
       expect(settled.index, 0);
       expect(settled.residualDx, 0);
     });
+
+    test('a resumed drag keeps live residual but resets gesture distance', () {
+      final controller = SpendeeCenterCarouselController(itemCount: 6);
+      controller.applyDragDelta(-30);
+      controller.applyDragDelta(21);
+
+      expect(controller.residualDx, -9);
+      expect(controller.totalDx, -9);
+
+      controller.beginDragFromCurrentMotion();
+
+      expect(controller.residualDx, -9);
+      expect(controller.totalDx, 0);
+    });
   });
 }

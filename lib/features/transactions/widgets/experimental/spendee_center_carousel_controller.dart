@@ -67,6 +67,10 @@ class SpendeeCenterCarouselController {
   double get residualDx => _residualDx;
   double get totalDx => _totalDx;
 
+  void beginDragFromCurrentMotion() {
+    _totalDx = 0;
+  }
+
   void reset({int? index}) {
     _index = (index ?? _index).clamp(0, math.max(0, itemCount - 1)).toInt();
     _residualDx = 0;

@@ -2435,6 +2435,39 @@ void main() {
     );
   });
 
+  testWidgets('budget carousel continues an interrupted release drag', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final carousel = find.byKey(
+      const ValueKey('spendee-test-context-carousel-gesture'),
+    );
+    final firstGesture = await tester.startGesture(tester.getCenter(carousel));
+    await firstGesture.moveBy(const Offset(-30, 0));
+    await tester.pump(const Duration(milliseconds: 220));
+    await firstGesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+
+    final secondGesture = await tester.startGesture(tester.getCenter(carousel));
+    await secondGesture.moveBy(const Offset(-58, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-2-selected')),
+      findsOneWidget,
+      reason:
+          'A new drag should keep the in-flight release residual offset; '
+          'resetting it to zero makes the belt jump and misses this tick.',
+    );
+
+    await secondGesture.cancel();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('side avatar tap recenters through tick steps', (tester) async {
     await _pumpDashboard(tester);
     await _dragHeaderBy(tester, 134);
@@ -4095,7 +4128,7 @@ void main() {
     expect(merchantCapsule, findsOneWidget);
   });
 
-  testWidgets('stage 2 hides chart shell when selected data is empty', (
+  testWidgets('stage 2 keeps blank vendor chart when selected data is empty', (
     tester,
   ) async {
     final store = TransactionStore(
@@ -4126,17 +4159,35 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('spendee-test-budget-pie-empty-hidden')),
-      findsOneWidget,
-      reason:
-          'The vendor page must not render an empty chart shell when the '
-          'selected category has no scoped vendor data.',
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsNothing,
+      reason:
+          'The vendor page should keep an empty chart placeholder instead of '
+          'collapsing when the selected category has no scoped vendor data.',
     );
     expect(
       find.byKey(const ValueKey('spendee-test-stage2-page-vendors')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-donut')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey('spendee-test-budget-vendor-focus-title'),
+            ),
+          )
+          .data,
+      'Nincs adat',
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-vendor-row-0')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-stage2-page-categories')),
       findsNothing,
     );
   });

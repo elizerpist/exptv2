@@ -1585,6 +1585,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           travel: stepTravel,
           duration: stepDuration,
           curve: Curves.easeOutCubic,
+          serial: serial,
         );
       }
     } on TickerCanceled {
@@ -1609,20 +1610,40 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     return index < 0 ? 0 : index;
   }
 
+  BackheaderBudgetItem? _budgetItemAtCarouselIndex(
+    List<BackheaderBudgetItem> items,
+    int index,
+  ) {
+    if (items.isEmpty) return null;
+    final wrapped = index % items.length;
+    return items[wrapped < 0 ? wrapped + items.length : wrapped];
+  }
+
   void _handleCarouselDragStart(DragStartDetails details) {
     _finishBudgetLimitEdit(saveFinal: false);
+    final items = _budgetItems;
+    final activeController = _carouselController;
     _carouselMotionSerial += 1;
     _carouselReleaseController.stop();
     _cancelPendingBudgetFilterPublish();
     _startInteractionPerf('carousel_drag');
-    final items = _budgetItems;
+    final selectedKey = _selectedBudgetItemFor(items)?.key;
+    final canResumeController =
+        activeController != null &&
+        activeController.itemCount == items.length &&
+        _budgetItemAtCarouselIndex(items, activeController.index)?.key ==
+            selectedKey;
+    final controller = canResumeController
+        ? activeController
+        : SpendeeCenterCarouselController(
+            itemCount: items.length,
+            initialIndex: _selectedBudgetItemIndex(items),
+          );
+    controller.beginDragFromCurrentMotion();
     setState(() {
       _carouselLiveTicked = false;
-      _carouselVisualDx = 0;
-      _carouselController = SpendeeCenterCarouselController(
-        itemCount: items.length,
-        initialIndex: _selectedBudgetItemIndex(items),
-      );
+      _carouselVisualDx = controller.residualDx;
+      _carouselController = controller;
     });
   }
 
@@ -1692,6 +1713,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           travel: travel,
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
+          serial: serial,
         );
       }
     } on TickerCanceled {
@@ -1722,6 +1744,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           travel: motion.initialTravel,
           duration: motion.initialDuration,
           curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
+          serial: serial,
         );
       }
       if (!mounted || serial != _carouselMotionSerial) return;
@@ -1735,18 +1758,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           travel: settleTravel,
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
+          serial: serial,
         );
       }
     } on TickerCanceled {
       return;
     } finally {
       if (mounted && serial == _carouselMotionSerial) {
-        _carouselController = null;
-        final item = _selectedBudgetItemFor(_budgetItems);
-        if (item != null) _scheduleBudgetItemFilterPublish(item);
+        final item = _budgetItemAtCarouselIndex(_budgetItems, controller.index);
         setState(() {
+          _carouselController = null;
+          if (item != null) _selectedBudgetItemKey = item.key;
           _carouselVisualDx = 0;
         });
+        if (item != null) _scheduleBudgetItemFilterPublish(item);
       }
     }
   }
@@ -1756,6 +1781,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     required double travel,
     required Duration duration,
     required Curve curve,
+    required int serial,
   }) async {
     _carouselReleaseController.stop();
     _carouselReleaseController.duration = duration;
@@ -1766,7 +1792,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     void applyFrame() {
       final delta = animation.value - lastValue;
       lastValue = animation.value;
-      if (delta == 0 || !mounted) return;
+      if (delta == 0 || !mounted || serial != _carouselMotionSerial) return;
       _applyCarouselMotionDelta(controller, delta);
     }
 
@@ -5820,7 +5846,7 @@ class _BudgetPiePanel extends StatelessWidget {
       (sum, entry) => sum + entry.amount,
     );
     final entries = _withoutRoundedZeroShares(rawEntries, rawTotal);
-    if (entries.isEmpty) {
+    if (entries.isEmpty && page == _Stage2BudgetPage.categories) {
       return const SizedBox.shrink(
         key: ValueKey('spendee-test-budget-pie-empty-hidden'),
       );
@@ -6482,7 +6508,27 @@ class _BudgetPiePainter extends CustomPainter {
       ..strokeWidth = baseStrokeWidth
       ..color = Colors.white.withValues(alpha: .40);
     canvas.drawCircle(center, radius, basePaint);
-    if (total <= 0) return;
+    void drawCenter() {
+      canvas.drawCircle(
+        center,
+        centerRadius,
+        Paint()..color = Colors.white.withValues(alpha: .40),
+      );
+      canvas.drawCircle(
+        center,
+        centerRadius,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Colors.white.withValues(alpha: .48),
+      );
+    }
+
+    if (total <= 0) {
+      drawCenter();
+      return;
+    }
+
     var start = -math.pi / 2;
     for (final entry in entries) {
       final sweep = (entry.amount / total) * math.pi * 2;
@@ -6521,19 +6567,7 @@ class _BudgetPiePainter extends CustomPainter {
       );
       start += sweep;
     }
-    canvas.drawCircle(
-      center,
-      centerRadius,
-      Paint()..color = Colors.white.withValues(alpha: .40),
-    );
-    canvas.drawCircle(
-      center,
-      centerRadius,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = Colors.white.withValues(alpha: .48),
-    );
+    drawCenter();
   }
 
   @override
