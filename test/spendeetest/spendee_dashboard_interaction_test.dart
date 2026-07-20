@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:exptv2/core/theme/category_color_manager.dart' as core_colors;
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/settings/models/app_theme_settings.dart';
 import 'package:exptv2/features/settings/theme/expense_theme.dart';
@@ -2483,7 +2484,63 @@ void main() {
     }
   });
 
-  testWidgets('header menu removes avatar arcs and controls body gloss', (
+  testWidgets(
+    'budget carousel drag moves outer slot and reveals incoming offscreen avatar',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      final gestureTarget = find.byKey(
+        const ValueKey('spendee-test-context-carousel-gesture'),
+      );
+      final outerSlot = find.byKey(
+        const ValueKey('spendee-test-context-avatar-slot-2'),
+      );
+      final innerSlot = find.byKey(
+        const ValueKey('spendee-test-context-avatar-slot-1'),
+      );
+      expect(outerSlot, findsOneWidget);
+      expect(innerSlot, findsOneWidget);
+
+      final outerBefore = tester.getRect(outerSlot);
+      final gesture = await tester.startGesture(
+        tester.getCenter(gestureTarget),
+      );
+      await gesture.moveBy(const Offset(48, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final outerDuring = tester.getRect(outerSlot);
+      final innerDuring = tester.getRect(innerSlot);
+      expect(
+        outerDuring.center.dx,
+        greaterThan(outerBefore.center.dx + 12),
+        reason:
+            'Dragging right must keep pushing the outside avatar instead of '
+            'clamping it in place.',
+      );
+      expect(
+        innerDuring.right,
+        lessThanOrEqualTo(outerDuring.left),
+        reason:
+            'The inner avatar must not slide over the fixed outside avatar.',
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-context-avatar-slot--3')),
+        findsOneWidget,
+        reason: 'A right drag must reveal the incoming offscreen left avatar.',
+      );
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-context-avatar-slot--3')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('header menu removes avatar arcs and keeps max body gloss', (
     tester,
   ) async {
     await _pumpDashboard(tester);
@@ -2523,34 +2580,217 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('spendee-test-avatar-body-highlight-toggle')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(
         const ValueKey('spendee-test-avatar-body-highlight-strength-slider'),
       ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-progress-thickness-slider'),
+      ),
       findsOneWidget,
     );
-
-    await tester.tap(
-      find.byKey(const ValueKey('spendee-test-avatar-body-highlight-toggle')),
-    );
-    await tester.pumpAndSettle();
     expect(
       find.byKey(
         const ValueKey(
           'spendee-test-avatar-body-highlight-overview-expense_budget-all_time-all',
         ),
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.byKey(
         const ValueKey('spendee-test-avatar-body-highlight-category-1'),
       ),
-      findsNothing,
+      findsOneWidget,
+      reason: 'Avatar body gloss is no longer user-disableable.',
     );
   });
+
+  testWidgets('header menu adjusts selected avatar progress thickness', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final selectedAvatar = find.byKey(
+      const ValueKey('spendee-test-category-avatar-1-selected'),
+    );
+    final beforeAvatarRect = tester.getRect(selectedAvatar);
+    final beforeProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
+    );
+    final beforeStroke =
+        (beforeProgressPaint.painter as dynamic).strokeWidth as double;
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+    );
+    await tester.pumpAndSettle();
+    final slider = find.byKey(
+      const ValueKey('spendee-test-avatar-progress-thickness-slider'),
+    );
+    expect(slider, findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-progress-thickness-value'),
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    await tester.drag(slider, const Offset(88, 0));
+    await tester.pump();
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    final afterProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
+    );
+    expect(
+      (afterProgressPaint.painter as dynamic).strokeWidth as double,
+      greaterThan(beforeStroke),
+    );
+    _expectRectsClose(tester.getRect(selectedAvatar), beforeAvatarRect);
+  });
+
+  testWidgets('budget overview avatar uses the same glossy body and halo ring', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+
+    final categoryProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey('spendee-test-avatar-outer-halo-progress-category-1'),
+      ),
+    );
+    final categoryPainter = categoryProgressPaint.painter as dynamic;
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-budget-avatar-overview-expense_budget-all_time-all',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final overviewAvatar = find.byKey(
+      const ValueKey(
+        'spendee-test-budget-avatar-overview-expense_budget-all_time-all-selected',
+      ),
+    );
+    expect(overviewAvatar, findsOneWidget);
+    expect(
+      find.descendant(
+        of: overviewAvatar,
+        matching: find.byType(GlossyCategoryAvatar),
+      ),
+      findsOneWidget,
+      reason: 'Budget overview must use the same avatar body as categories.',
+    );
+    final overviewProgressPaint = tester.widget<CustomPaint>(
+      find.byKey(
+        const ValueKey(
+          'spendee-test-avatar-outer-halo-progress-overview-expense_budget-all_time-all',
+        ),
+      ),
+    );
+    final overviewPainter = overviewProgressPaint.painter as dynamic;
+    expect(overviewPainter.progressDrawPassCount, 1);
+    expect(overviewPainter.drawsSeparateInnerProgressRing, isFalse);
+    expect(overviewPainter.strokeWidth, categoryPainter.strokeWidth);
+  });
+
+  testWidgets(
+    'stage 2 vendor rows use current period data and category colors',
+    (tester) async {
+      final store = TransactionStore(
+        _DashboardTestRepository(
+          categories: [
+            _category(1, 'Élelmiszer', 7, 0),
+            _category(2, 'Közlekedés', 3, 1),
+          ],
+          transactions: [
+            _record(1, 1, -100000, 'Aktuális bolt'),
+            _record(2, 1, -50000, 'Régi bolt', date: '2026.06.17'),
+            _record(3, 2, -1, 'Kerekítési apró'),
+          ],
+          limitRows: [
+            _limit(1, LimitTargetType.overview, 0, 200000),
+            _limit(2, LimitTargetType.category, 1, 120000),
+            _limit(3, LimitTargetType.category, 2, 40000),
+          ],
+        ),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      await store.start();
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.monthly,
+          year: 2026,
+          month: 7,
+        ),
+      );
+      await _pumpDashboardWithStore(tester, store);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+      await _dragHeaderBy(tester, 272);
+      await tester.pumpAndSettle();
+
+      final panel = tester.widget<Container>(
+        find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+      );
+      expect(
+        panel.child,
+        isA<ClipRRect>(),
+        reason:
+            'The glass panel must clip content directly instead of painting a '
+            'square-cornered radial remnant over the rounded panel.',
+      );
+      expect(
+        find.text('0% · 1 Ft'),
+        findsNothing,
+        reason: 'Rounded zero-percent entries are hidden from category rows.',
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('spendee-test-budget-pie-stage2-layer')),
+        const Offset(-140, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('spendee-test-budget-vendor-row-0')),
+          matching: find.text('Aktuális bolt'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Régi bolt'), findsNothing);
+
+      final dot = tester.widget<Container>(
+        find.byKey(const ValueKey('spendee-test-budget-vendor-row-0-dot')),
+      );
+      final decoration = dot.decoration as BoxDecoration;
+      final gradient = decoration.gradient as LinearGradient;
+      expect(
+        gradient.colors,
+        core_colors.CategoryColorManager.gradient(7).colors,
+      );
+    },
+  );
 
   testWidgets('avatar outer glass halo is white limit progress', (
     tester,
@@ -2648,6 +2888,11 @@ void main() {
       const ValueKey('spendee-test-avatar-press-scale-category-1'),
     );
     expect(tester.widget<AnimatedScale>(scaleFinder).scale, 1.0);
+    expect(
+      tester.widget<AnimatedScale>(scaleFinder).duration,
+      greaterThanOrEqualTo(const Duration(milliseconds: 100)),
+      reason: 'Press shrink/grow should be smooth enough to avoid choppy taps.',
+    );
 
     final avatar = find.byKey(
       const ValueKey('spendee-test-category-avatar-1-selected'),

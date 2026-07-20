@@ -157,7 +157,6 @@ enum _HeaderDesignMenuAction {
   avatarsHtmlC2Glass,
   avatarsLiquidGlass,
   avatarsAcrylic,
-  avatarBodyHighlightToggle,
   chartGlass,
   chartBackground,
   chartHtmlC2Glass,
@@ -324,12 +323,11 @@ class _AvatarLayoutConfig {
     final outerDistance =
         _ContextAvatarBelt._slotDistance * 2 + outerOffset * 28.0;
     if (distance <= 1) return sign * _lerpDouble(0, innerDistance, distance);
+    if (distance <= 2) {
+      return sign * _lerpDouble(innerDistance, outerDistance, distance - 1);
+    }
     return sign *
-        _lerpDouble(
-          innerDistance,
-          outerDistance,
-          (distance - 1).clamp(0.0, 1.0).toDouble(),
-        );
+        (outerDistance + (distance - 2) * _ContextAvatarBelt._slotDistance);
   }
 
   double sizeForLogicalOffset(double logicalOffset) {
@@ -558,8 +556,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarSurface = _PanelSurface.glass;
   var _chartSurface = _PanelSurface.glass;
   var _chartListSurface = _ChartListSurface.original;
-  var _avatarBodyHighlightEnabled = true;
-  var _avatarBodyHighlightStrength = 1.0;
+  final _avatarBodyHighlightEnabled = true;
+  final _avatarBodyHighlightStrength = 1.0;
+  var _avatarProgressThickness = .5;
   var _avatarLayoutConfig = const _AvatarLayoutConfig();
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
   var _avatarSurfaceSoftness = 0.0;
@@ -1405,26 +1404,17 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           height: 38,
           child: const Text('Avatarok: Acrylic'),
         ),
-        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
-          key: const ValueKey('spendee-test-avatar-body-highlight-toggle'),
-          value: _HeaderDesignMenuAction.avatarBodyHighlightToggle,
-          checked: _avatarBodyHighlightEnabled,
-          height: 38,
-          child: const Text('Avatar fény'),
-        ),
         _HeaderLiquidSoftnessMenuEntry(
-          key: const ValueKey(
-            'spendee-test-avatar-body-highlight-strength-entry',
-          ),
-          label: 'Avatar fény erősség',
+          key: const ValueKey('spendee-test-avatar-progress-thickness-entry'),
+          label: 'Circle progress vastagság',
           sliderKey: const ValueKey(
-            'spendee-test-avatar-body-highlight-strength-slider',
+            'spendee-test-avatar-progress-thickness-slider',
           ),
           valueKey: const ValueKey(
-            'spendee-test-avatar-body-highlight-strength-value',
+            'spendee-test-avatar-progress-thickness-value',
           ),
-          value: _avatarBodyHighlightStrength,
-          onChanged: _setAvatarBodyHighlightStrength,
+          value: _avatarProgressThickness,
+          onChanged: _setAvatarProgressThickness,
         ),
         const PopupMenuDivider(),
         const PopupMenuItem<_HeaderDesignMenuAction>(
@@ -1664,8 +1654,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           _avatarSurface = _PanelSurface.liquidGlass;
         case _HeaderDesignMenuAction.avatarsAcrylic:
           _avatarSurface = _PanelSurface.acrylic;
-        case _HeaderDesignMenuAction.avatarBodyHighlightToggle:
-          _avatarBodyHighlightEnabled = !_avatarBodyHighlightEnabled;
         case _HeaderDesignMenuAction.chartGlass:
           _chartSurface = _PanelSurface.glass;
         case _HeaderDesignMenuAction.chartBackground:
@@ -1748,10 +1736,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     setState(() => _avatarSurfaceSoftness = next);
   }
 
-  void _setAvatarBodyHighlightStrength(double value) {
+  void _setAvatarProgressThickness(double value) {
     final next = _clampUnit(value);
-    if ((_avatarBodyHighlightStrength - next).abs() < .001) return;
-    setState(() => _avatarBodyHighlightStrength = next);
+    if ((_avatarProgressThickness - next).abs() < .001) return;
+    setState(() => _avatarProgressThickness = next);
   }
 
   void _setChartSurfaceSoftness(double value) {
@@ -2147,6 +2135,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   pressedBudgetItemKey: _budgetLimitEditItem?.key,
                   avatarBodyHighlightEnabled: _avatarBodyHighlightEnabled,
                   avatarBodyHighlightStrength: _avatarBodyHighlightStrength,
+                  avatarProgressThickness: _avatarProgressThickness,
                   avatarLayoutConfig: _avatarLayoutConfig,
                   onBudgetItemLongPressStart: _handleBudgetItemLongPressStart,
                   onBudgetItemLongPressMoveUpdate:
@@ -2235,6 +2224,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.pressedBudgetItemKey,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarProgressThickness,
     required this.avatarLayoutConfig,
     required this.onBudgetItemLongPressStart,
     required this.onBudgetItemLongPressMoveUpdate,
@@ -2283,6 +2273,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final String? pressedBudgetItemKey;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final double avatarProgressThickness;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onBudgetItemLongPressStart;
@@ -2389,6 +2380,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
               pressedItemKey: pressedBudgetItemKey,
               avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
               avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+              avatarProgressThickness: avatarProgressThickness,
               avatarLayoutConfig: avatarLayoutConfig,
               onItemLongPressStart: onBudgetItemLongPressStart,
               onItemLongPressMoveUpdate: onBudgetItemLongPressMoveUpdate,
@@ -3664,6 +3656,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
     required this.pressedItemKey,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarProgressThickness,
     required this.avatarLayoutConfig,
     required this.onItemLongPressStart,
     required this.onItemLongPressMoveUpdate,
@@ -3686,6 +3679,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
   final String? pressedItemKey;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final double avatarProgressThickness;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
   onItemLongPressStart;
@@ -3735,6 +3729,7 @@ class _BudgetExtendedInfo extends StatelessWidget {
                 pressedItemKey: pressedItemKey,
                 avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
                 avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+                avatarProgressThickness: avatarProgressThickness,
                 avatarLayoutConfig: avatarLayoutConfig,
                 onItemTap: onItemTap,
                 onItemLongPressStart: onItemLongPressStart,
@@ -4081,6 +4076,7 @@ class _ContextAvatarBelt extends StatelessWidget {
     required this.pressedItemKey,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarProgressThickness,
     required this.avatarLayoutConfig,
     required this.onItemTap,
     required this.onItemLongPressStart,
@@ -4096,6 +4092,7 @@ class _ContextAvatarBelt extends StatelessWidget {
   final String? pressedItemKey;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final double avatarProgressThickness;
   final _AvatarLayoutConfig avatarLayoutConfig;
   final ValueChanged<BackheaderBudgetItem> onItemTap;
   final void Function(BackheaderBudgetItem, LongPressStartDetails)
@@ -4142,6 +4139,7 @@ class _ContextAvatarBelt extends StatelessWidget {
                 pressed: slot.item.key == pressedItemKey,
                 avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
                 avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+                avatarProgressThickness: avatarProgressThickness,
                 avatarLayoutConfig: avatarLayoutConfig,
               ),
           ],
@@ -4158,10 +4156,21 @@ class _ContextAvatarBelt extends StatelessWidget {
       (item) => item.key == selectedItem?.key,
     );
     final centerIndex = selectedIndex < 0 ? 0 : selectedIndex;
-    final visibleCount = math.min(items.length, _slotOffsets.length);
+    final movingRight = carouselOffset > .001;
+    final movingLeft = carouselOffset < -.001;
+    final moving = movingRight || movingLeft;
+    final visibleCount = math.min(
+      items.length,
+      _slotOffsets.length + (moving ? 1 : 0),
+    );
+    final buildOrder = <int>[
+      ..._slotBuildOrder,
+      if (movingRight) -3,
+      if (movingLeft) 3,
+    ];
     final slots = <_ContextAvatarSlot>[];
     final usedIndexes = <int>{};
-    for (final offset in _slotBuildOrder) {
+    for (final offset in buildOrder) {
       if (slots.length == visibleCount) break;
       final index = _wrappedIndex(centerIndex + offset);
       if (!usedIndexes.add(index)) continue;
@@ -4209,6 +4218,7 @@ class _PositionedContextAvatar extends StatelessWidget {
     required this.pressed,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarProgressThickness,
     required this.avatarLayoutConfig,
   });
 
@@ -4224,6 +4234,7 @@ class _PositionedContextAvatar extends StatelessWidget {
   final bool pressed;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final double avatarProgressThickness;
   final _AvatarLayoutConfig avatarLayoutConfig;
 
   @override
@@ -4249,6 +4260,7 @@ class _PositionedContextAvatar extends StatelessWidget {
         pressed: pressed,
         avatarBodyHighlightEnabled: avatarBodyHighlightEnabled,
         avatarBodyHighlightStrength: avatarBodyHighlightStrength,
+        avatarProgressThickness: avatarProgressThickness,
         onTap: onTap,
         onLongPressStart: onLongPressStart,
         onLongPressMoveUpdate: onLongPressMoveUpdate,
@@ -4297,6 +4309,7 @@ class _ContextAvatar extends StatefulWidget {
     required this.pressed,
     required this.avatarBodyHighlightEnabled,
     required this.avatarBodyHighlightStrength,
+    required this.avatarProgressThickness,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressMoveUpdate,
@@ -4313,6 +4326,7 @@ class _ContextAvatar extends StatefulWidget {
   final bool pressed;
   final bool avatarBodyHighlightEnabled;
   final double avatarBodyHighlightStrength;
+  final double avatarProgressThickness;
   final VoidCallback onTap;
   final GestureLongPressStartCallback onLongPressStart;
   final GestureLongPressMoveUpdateCallback onLongPressMoveUpdate;
@@ -4366,8 +4380,8 @@ class _ContextAvatarState extends State<_ContextAvatar> {
         child: AnimatedScale(
           key: ValueKey('spendee-test-avatar-press-scale-$keyBase'),
           scale: pressed ? .8 : 1.0,
-          duration: const Duration(milliseconds: 55),
-          curve: Curves.easeOutCubic,
+          duration: const Duration(milliseconds: 115),
+          curve: Curves.easeOutQuad,
           child: RepaintBoundary(
             child: Stack(
               clipBehavior: Clip.none,
@@ -4382,6 +4396,10 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                         painter: _BudgetAvatarOuterHaloProgressPainter(
                           progress: progress,
                           selected: selected,
+                          thickness: _avatarProgressStrokeWidth(
+                            widget.avatarProgressThickness,
+                            selected: selected,
+                          ),
                         ),
                       ),
                     ),
@@ -4404,17 +4422,29 @@ class _ContextAvatarState extends State<_ContextAvatar> {
                     debugSource: 'spendee-test-context-avatar',
                   )
                 else
-                  _OverviewBudgetAvatar(
-                    item: widget.item,
+                  GlossyCategoryAvatar(
+                    category: null,
                     size: widget.size,
                     iconSize: widget.iconSize,
-                    opacity: widget.opacity,
                     selected: selected,
                     pulsing: widget.pulsing,
-                    bodyHighlightEnabled: widget.avatarBodyHighlightEnabled,
+                    opacity: widget.opacity,
+                    avatarGradient: _budgetItemAvatarGradient(widget.item),
+                    centerChild: Icon(
+                      widget.item.overview?.kind == BudgetGoalKind.incomeGoal
+                          ? Icons.trending_up_rounded
+                          : Icons.account_balance_wallet_rounded,
+                      size: widget.iconSize,
+                      color: Colors.white.withValues(alpha: .94),
+                    ),
+                    showTopHighlight: false,
+                    showBodyHighlight: widget.avatarBodyHighlightEnabled,
                     bodyHighlightStrength: widget.avatarBodyHighlightStrength,
-                    keyBase: keyBase,
+                    bodyHighlightKey: ValueKey(
+                      'spendee-test-avatar-body-highlight-$keyBase',
+                    ),
                     scaleSelection: false,
+                    debugSource: 'spendee-test-context-avatar-overview',
                   ),
               ],
             ),
@@ -4469,6 +4499,20 @@ Color _budgetItemAccent(BackheaderBudgetItem item) {
   return const Color(0xFF06B6D4);
 }
 
+Gradient _budgetItemAvatarGradient(BackheaderBudgetItem item) {
+  final accent = _budgetItemAccent(item);
+  return LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      accent.withValues(alpha: .96),
+      accent.withValues(alpha: .84),
+      const Color(0xFF0F172A).withValues(alpha: .76),
+    ],
+    stops: const [0, .56, 1],
+  );
+}
+
 String _budgetHeaderValue(BackheaderBudgetItem? item) {
   if (item == null) return 'Nincs limit';
   final overview = item.overview;
@@ -4484,124 +4528,16 @@ String _budgetHeaderValue(BackheaderBudgetItem? item) {
       : _formatFt(category.spent);
 }
 
-class _OverviewBudgetAvatar extends StatelessWidget {
-  const _OverviewBudgetAvatar({
-    required this.item,
-    required this.size,
-    required this.iconSize,
-    required this.opacity,
-    required this.selected,
-    required this.pulsing,
-    required this.bodyHighlightEnabled,
-    required this.bodyHighlightStrength,
-    required this.keyBase,
-    required this.scaleSelection,
-  });
-
-  final BackheaderBudgetItem item;
-  final double size;
-  final double iconSize;
-  final double opacity;
-  final bool selected;
-  final bool pulsing;
-  final bool bodyHighlightEnabled;
-  final double bodyHighlightStrength;
-  final String keyBase;
-  final bool scaleSelection;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = _budgetItemAccent(item);
-    final highlightStrength = bodyHighlightStrength.clamp(0.0, 1.0).toDouble();
-    final effectiveScale = scaleSelection && selected
-        ? (pulsing ? 1.18 : 1.1)
-        : 1.0;
-    return Opacity(
-      opacity: opacity,
-      child: AnimatedScale(
-        scale: effectiveScale,
-        duration: const Duration(milliseconds: 170),
-        curve: Curves.easeOutBack,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              center: const Alignment(-.34, -.58),
-              radius: 1.2,
-              colors: [
-                accent.withValues(alpha: .94),
-                accent.withValues(alpha: .86),
-                const Color(0xFF0F172A).withValues(alpha: .82),
-              ],
-              stops: const [0, .54, 1],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: selected ? .58 : .46),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(
-                  0xFF0F172A,
-                ).withValues(alpha: selected ? .20 : .15),
-                offset: Offset(0, selected ? 18 : 13),
-                blurRadius: selected ? 32 : 24,
-              ),
-              if (selected)
-                BoxShadow(
-                  color: accent.withValues(alpha: .22),
-                  spreadRadius: 4,
-                  blurRadius: 18,
-                ),
-            ],
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (bodyHighlightEnabled && highlightStrength > 0)
-                DecoratedBox(
-                  key: ValueKey('spendee-test-avatar-body-highlight-$keyBase'),
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(-.34, -.58),
-                      radius: 1.05,
-                      colors: [
-                        Colors.white.withValues(alpha: .34 * highlightStrength),
-                        Colors.white.withValues(alpha: .10 * highlightStrength),
-                        Colors.transparent,
-                      ],
-                      stops: const [0, .34, .62],
-                    ),
-                  ),
-                ),
-              Center(
-                child: Icon(
-                  item.overview?.kind == BudgetGoalKind.incomeGoal
-                      ? Icons.trending_up_rounded
-                      : Icons.account_balance_wallet_rounded,
-                  size: iconSize,
-                  color: Colors.white.withValues(alpha: .94),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   const _BudgetAvatarOuterHaloProgressPainter({
     required this.progress,
     required this.selected,
+    required this.thickness,
   });
 
   final double progress;
   final bool selected;
+  final double thickness;
   Color get progressColor {
     if (progress >= .90) return const Color(0xFFEF4444);
     if (progress >= .75) return const Color(0xFFFBBF24);
@@ -4615,7 +4551,7 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   bool get drawsSeparateInnerProgressRing => false;
   bool get clockwise => true;
   double get startRadians => -math.pi / 2;
-  double get strokeWidth => selected ? 10.0 : 8.0;
+  double get strokeWidth => thickness;
   double get avatarOutset => strokeWidth / 2;
 
   @override
@@ -4662,8 +4598,17 @@ class _BudgetAvatarOuterHaloProgressPainter extends CustomPainter {
   bool shouldRepaint(
     covariant _BudgetAvatarOuterHaloProgressPainter oldDelegate,
   ) {
-    return oldDelegate.progress != progress || oldDelegate.selected != selected;
+    return oldDelegate.progress != progress ||
+        oldDelegate.selected != selected ||
+        oldDelegate.thickness != thickness;
   }
+}
+
+double _avatarProgressStrokeWidth(double value, {required bool selected}) {
+  final clamped = _clampUnit(value);
+  final min = selected ? 6.0 : 5.0;
+  final max = selected ? 14.0 : 12.0;
+  return _lerpDouble(min, max, clamped);
 }
 
 class _PartitionBar extends StatelessWidget {
@@ -4875,18 +4820,41 @@ class _VendorShareAccumulator {
     required this.name,
     required this.amount,
     required this.count,
+    required this.categoryAmounts,
   });
 
   final String name;
   final double amount;
   final int count;
+  final Map<int, double> categoryAmounts;
 
-  _VendorShareAccumulator add(double nextAmount) {
+  _VendorShareAccumulator add(double nextAmount, int? categoryId) {
+    final nextCategoryAmounts = Map<int, double>.of(categoryAmounts);
+    if (categoryId != null) {
+      nextCategoryAmounts.update(
+        categoryId,
+        (amount) => amount + nextAmount,
+        ifAbsent: () => nextAmount,
+      );
+    }
     return _VendorShareAccumulator(
       name: name,
       amount: amount + nextAmount,
       count: count + 1,
+      categoryAmounts: nextCategoryAmounts,
     );
+  }
+
+  TransactionCategory? dominantCategory(
+    Map<int, TransactionCategory> categoriesById,
+  ) {
+    if (categoryAmounts.isEmpty) return null;
+    final dominant = categoryAmounts.entries.reduce((left, right) {
+      final amountOrder = left.value.compareTo(right.value);
+      if (amountOrder != 0) return amountOrder >= 0 ? left : right;
+      return left.key <= right.key ? left : right;
+    });
+    return categoriesById[dominant.key];
   }
 }
 
@@ -4917,10 +4885,15 @@ class _BudgetPiePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = switch (page) {
+    final rawEntries = switch (page) {
       _Stage2BudgetPage.categories => _categoryEntries(),
       _Stage2BudgetPage.vendors => _vendorEntries(),
     };
+    final rawTotal = rawEntries.fold<double>(
+      0,
+      (sum, entry) => sum + entry.amount,
+    );
+    final entries = _withoutRoundedZeroShares(rawEntries, rawTotal);
     if (entries.isEmpty) {
       return const SizedBox.shrink(
         key: ValueKey('spendee-test-budget-pie-empty-hidden'),
@@ -5015,18 +4988,7 @@ class _BudgetPiePanel extends StatelessWidget {
     return Container(
       key: const ValueKey('spendee-test-budget-pie-panel'),
       decoration: _budgetPieGlassDecoration(),
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(17)),
-          gradient: RadialGradient(
-            center: Alignment(-.72, -.92),
-            radius: .82,
-            colors: [Color(0x99FFFFFF), Color(0x00FFFFFF)],
-            stops: [0, .62],
-          ),
-        ),
-        child: content,
-      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(17), child: content),
     );
   }
 
@@ -5049,6 +5011,11 @@ class _BudgetPiePanel extends StatelessWidget {
 
   List<_BudgetShareEntry> _vendorEntries() {
     final categoryId = selectedCategory?.transactionCategoryID;
+    final categoriesById = {
+      for (final bar in bars)
+        if (bar.category != null)
+          bar.category!.transactionCategoryID: bar.category!,
+    };
     final totals = <String, _VendorShareAccumulator>{};
     for (final record in transactions) {
       if (categoryId != null && record.transactionCategoryID != categoryId) {
@@ -5063,11 +5030,18 @@ class _BudgetPiePanel extends StatelessWidget {
           : fallbackName.isNotEmpty
           ? fallbackName
           : 'Ismeretlen vendor';
+      final recordCategoryId = record.transactionCategoryID;
       totals.update(
         name,
-        (rollup) => rollup.add(amount),
-        ifAbsent: () =>
-            _VendorShareAccumulator(name: name, amount: amount, count: 1),
+        (rollup) => rollup.add(amount, recordCategoryId),
+        ifAbsent: () => _VendorShareAccumulator(
+          name: name,
+          amount: amount,
+          count: 1,
+          categoryAmounts: recordCategoryId == null
+              ? const <int, double>{}
+              : <int, double>{recordCategoryId: amount},
+        ),
       );
     }
     final vendors = totals.values.toList()
@@ -5078,26 +5052,56 @@ class _BudgetPiePanel extends StatelessWidget {
       });
     return [
       for (var index = 0; index < vendors.length; index++)
-        _BudgetShareEntry(
-          key: vendors[index].name,
-          rowKey: ValueKey('spendee-test-budget-vendor-row-$index'),
-          rowSurfaceKeyBase: 'spendee-test-budget-vendor-row-$index',
-          title: vendors[index].name,
-          amount: vendors[index].amount,
-          count: vendors[index].count,
-          color: _stage2VendorPalette[index % _stage2VendorPalette.length],
-          dotGradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _stage2VendorPalette[index % _stage2VendorPalette.length]
-                  .withValues(alpha: .78),
-              _stage2VendorPalette[(index + 2) % _stage2VendorPalette.length],
-            ],
-          ),
+        _vendorShareEntry(
+          vendors[index],
+          index,
+          vendors[index].dominantCategory(categoriesById),
         ),
     ];
   }
+
+  _BudgetShareEntry _vendorShareEntry(
+    _VendorShareAccumulator vendor,
+    int index,
+    TransactionCategory? category,
+  ) {
+    final fallbackColor =
+        _stage2VendorPalette[index % _stage2VendorPalette.length];
+    final fallbackGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        fallbackColor.withValues(alpha: .78),
+        _stage2VendorPalette[(index + 2) % _stage2VendorPalette.length],
+      ],
+    );
+    return _BudgetShareEntry(
+      key: vendor.name,
+      rowKey: ValueKey('spendee-test-budget-vendor-row-$index'),
+      rowSurfaceKeyBase: 'spendee-test-budget-vendor-row-$index',
+      title: vendor.name,
+      amount: vendor.amount,
+      count: vendor.count,
+      color: category?.slotColor ?? fallbackColor,
+      dotGradient: category == null
+          ? fallbackGradient
+          : CategoryColorManager.gradient(category.colorSlot),
+      category: category,
+    );
+  }
+}
+
+List<_BudgetShareEntry> _withoutRoundedZeroShares(
+  List<_BudgetShareEntry> entries,
+  double total,
+) {
+  if (total <= 0) return entries;
+  final visible = [
+    for (final entry in entries)
+      if ((entry.amount / total * 100).round() > 0) entry,
+  ];
+  if (visible.isNotEmpty) return visible;
+  return entries.isEmpty ? entries : <_BudgetShareEntry>[entries.first];
 }
 
 BoxDecoration _budgetPieGlassDecoration() {
@@ -5412,6 +5416,7 @@ class _BudgetPieRowBody extends StatelessWidget {
     return Row(
       children: [
         Container(
+          key: ValueKey('${entry.rowSurfaceKeyBase}-dot'),
           width: 10,
           height: 10,
           decoration: BoxDecoration(
@@ -5506,7 +5511,7 @@ class _BudgetPieFocus extends StatelessWidget {
         const SizedBox(height: 5),
         Text(
           entry == null
-              ? '0 Ft · 0% $suffix'
+              ? '0 Ft $suffix'
               : '${_formatFt(entry!.amount)} · $percent% $suffix',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,

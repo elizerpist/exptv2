@@ -15,6 +15,9 @@ class GlossyCategoryAvatar extends StatelessWidget {
     required this.size,
     required this.iconSize,
     required this.debugSource,
+    this.colorSlot,
+    this.avatarGradient,
+    this.centerChild,
     this.iconStrokeWidth = 1.4,
     this.selected = false,
     this.opacity = 1,
@@ -31,6 +34,9 @@ class GlossyCategoryAvatar extends StatelessWidget {
   final double size;
   final double iconSize;
   final String debugSource;
+  final int? colorSlot;
+  final Gradient? avatarGradient;
+  final Widget? centerChild;
   final double iconStrokeWidth;
   final bool selected;
   final double opacity;
@@ -46,11 +52,13 @@ class GlossyCategoryAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorSlot = category?.colorSlot;
+    final resolvedColorSlot = colorSlot ?? category?.colorSlot;
     final fallbackColor = category?.slotColor ?? AppColors.gray500;
-    final gradient = colorSlot == null
-        ? LinearGradient(colors: [fallbackColor, fallbackColor])
-        : CategoryColorManager.gradient(colorSlot);
+    final gradient =
+        avatarGradient ??
+        (resolvedColorSlot == null
+            ? LinearGradient(colors: [fallbackColor, fallbackColor])
+            : CategoryColorManager.gradient(resolvedColorSlot));
     final highlightStrength = bodyHighlightStrength.clamp(0.0, 1.0).toDouble();
     final effectiveScale = scaleSelection && selected
         ? (pulsing ? 1.18 : 1.1)
@@ -157,17 +165,19 @@ class GlossyCategoryAvatar extends StatelessWidget {
                       ),
                     ),
                   Center(
-                    child: CategoryIconBadge(
-                      key: iconKey,
-                      category: category,
-                      backgroundColor: Colors.transparent,
-                      size: size,
-                      iconSize: iconSize,
-                      iconStrokeWidth: iconStrokeWidth,
-                      showShadow: false,
-                      showQuestionMark: showQuestionMark,
-                      debugSource: debugSource,
-                    ),
+                    child:
+                        centerChild ??
+                        CategoryIconBadge(
+                          key: iconKey,
+                          category: category,
+                          backgroundColor: Colors.transparent,
+                          size: size,
+                          iconSize: iconSize,
+                          iconStrokeWidth: iconStrokeWidth,
+                          showShadow: false,
+                          showQuestionMark: showQuestionMark,
+                          debugSource: debugSource,
+                        ),
                   ),
                 ],
               ),
