@@ -677,7 +677,41 @@ void main() {
   });
 
   testWidgets(
-    'mind SUM container choices wrap the year rail and heatmap independently',
+    'header background opacity is adjustable without fading Mind content',
+    (tester) async {
+      await _pumpDashboard(tester);
+      await _switchToMindBackground(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-header-menu-button')),
+      );
+      await tester.pumpAndSettle();
+      final sliderFinder = find.byKey(
+        const ValueKey('spendee-test-header-background-opacity-slider'),
+      );
+      await tester.ensureVisible(sliderFinder);
+      await tester.pumpAndSettle();
+      final slider = tester.widget<Slider>(sliderFinder);
+      expect(slider.min, .1);
+      expect(slider.max, 1);
+
+      await tester.drag(sliderFinder, const Offset(-90, 0));
+      await tester.pumpAndSettle();
+      final backgroundOpacity = tester.widget<Opacity>(
+        find.byKey(
+          const ValueKey('spendee-test-header-background-opacity-layer'),
+        ),
+      );
+      expect(backgroundOpacity.opacity, inInclusiveRange(.1, .99));
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-header-score-value')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'mind SUM container choices wrap the Activity Field and heatmap independently',
     (tester) async {
       await _pumpDashboard(tester);
       await _switchToMindBackground(tester);
@@ -697,7 +731,9 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-sum-stage1-liquid-glass')),
+        find.byKey(
+          const ValueKey('spendee-test-mind-activity-field-liquid-glass'),
+        ),
         findsOneWidget,
       );
       expect(
@@ -715,7 +751,9 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-sum-stage1-background')),
+        find.byKey(
+          const ValueKey('spendee-test-mind-activity-field-background'),
+        ),
         findsOneWidget,
       );
       expect(
@@ -753,7 +791,7 @@ void main() {
       );
 
       final stage1 = find.byKey(
-        const ValueKey('spendee-test-mind-stage1-boxed-graphs'),
+        const ValueKey('spendee-test-mind-activity-field'),
       );
       final stage2 = find.byKey(
         const ValueKey('spendee-test-mind-yearly-heatmap'),
@@ -777,7 +815,7 @@ void main() {
     },
   );
 
-  testWidgets('mind stage1 volume and pattern charts follow active type', (
+  testWidgets('mind Activity Field follows the active type with live volume', (
     tester,
   ) async {
     final store = await _pumpDashboard(
@@ -801,15 +839,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final expenseFrame = SpendeeMindStatsFrame.fromStore(store);
-    final expenseVolumePaint = _mindCustomPaint(
-      tester,
-      const ValueKey('spendee-test-mind-volume-chart-expense'),
-      const ValueKey('spendee-test-mind-volume-paint'),
-    );
-    final expensePatternPaint = _mindCustomPaint(
-      tester,
-      const ValueKey('spendee-test-mind-pattern-chart-expense'),
-      const ValueKey('spendee-test-mind-pattern-paint'),
+    final expenseVolumePaint = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('spendee-test-mind-activity-field-paint')),
     );
     expect(
       (expenseVolumePaint.painter as dynamic).activeType,
@@ -823,24 +854,6 @@ void main() {
         expenseFrame.expenseFrame.categoryScopeSeries.valueIndex,
       ),
     );
-    expect(
-      (expensePatternPaint.painter as dynamic).activeType,
-      TransactionType.expense,
-    );
-    expect(
-      _helperBarSignature((expensePatternPaint.painter as dynamic).patternBars),
-      _helperBarSignature(
-        expenseFrame.expenseFrame.categoryScopeSeries.helperBars,
-      ),
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-mind-volume-chart-income')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-mind-pattern-chart-income')),
-      findsNothing,
-    );
 
     await tester.tap(
       find.byKey(const ValueKey('spendee-test-income-type-pill')),
@@ -848,15 +861,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final incomeFrame = SpendeeMindStatsFrame.fromStore(store);
-    final incomeVolumePaint = _mindCustomPaint(
-      tester,
-      const ValueKey('spendee-test-mind-volume-chart-income'),
-      const ValueKey('spendee-test-mind-volume-paint'),
-    );
-    final incomePatternPaint = _mindCustomPaint(
-      tester,
-      const ValueKey('spendee-test-mind-pattern-chart-income'),
-      const ValueKey('spendee-test-mind-pattern-paint'),
+    final incomeVolumePaint = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('spendee-test-mind-activity-field-paint')),
     );
     expect(
       (incomeVolumePaint.painter as dynamic).activeType,
@@ -869,24 +875,6 @@ void main() {
       _seriesPointSignature(
         incomeFrame.incomeFrame.categoryScopeSeries.valueIndex,
       ),
-    );
-    expect(
-      (incomePatternPaint.painter as dynamic).activeType,
-      TransactionType.income,
-    );
-    expect(
-      _helperBarSignature((incomePatternPaint.painter as dynamic).patternBars),
-      _helperBarSignature(
-        incomeFrame.incomeFrame.categoryScopeSeries.helperBars,
-      ),
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-mind-volume-chart-expense')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('spendee-test-mind-pattern-chart-expense')),
-      findsNothing,
     );
   });
 
@@ -1158,7 +1146,7 @@ void main() {
     );
   });
 
-  testWidgets('mind score chart keeps the stage0 rect across stages', (
+  testWidgets('mind score chart preserves Stage0 and fills later stages', (
     tester,
   ) async {
     await _pumpDashboard(tester, repository: _MindDashboardStatsRepository());
@@ -1176,26 +1164,31 @@ void main() {
     final stage0Rect = tester.getRect(
       find.byKey(const ValueKey('spendee-test-mind-score-chart')),
     );
+    final stage0HeaderRect = tester.getRect(header);
+    expect(stage0Rect.top - stage0HeaderRect.top, closeTo(43, .1));
+    expect(stage0Rect.height, closeTo(47, .1));
 
     await _dragHeaderBy(tester, 134);
     await tester.pump(const Duration(milliseconds: 500));
 
-    _expectRectsClose(
-      tester.getRect(
-        find.byKey(const ValueKey('spendee-test-mind-score-chart')),
-      ),
-      stage0Rect,
+    final stage1HeaderRect = tester.getRect(header);
+    final stage1Rect = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-mind-score-chart')),
     );
+    expect(stage1Rect.top - stage1HeaderRect.top, closeTo(14, .1));
+    expect(stage1HeaderRect.bottom - stage1Rect.bottom, closeTo(14, .1));
+    expect(stage1Rect.height, greaterThan(stage0Rect.height));
 
     await _dragHeaderBy(tester, 272);
     await tester.pump(const Duration(milliseconds: 500));
 
-    _expectRectsClose(
-      tester.getRect(
-        find.byKey(const ValueKey('spendee-test-mind-score-chart')),
-      ),
-      stage0Rect,
+    final stage2HeaderRect = tester.getRect(header);
+    final stage2Rect = tester.getRect(
+      find.byKey(const ValueKey('spendee-test-mind-score-chart')),
     );
+    expect(stage2Rect.top - stage2HeaderRect.top, closeTo(14, .1));
+    expect(stage2HeaderRect.bottom - stage2Rect.bottom, closeTo(14, .1));
+    expect(stage2Rect.height, greaterThan(stage1Rect.height));
   });
 
   testWidgets('budget interactions do not build mind stats frames', (
@@ -1432,11 +1425,11 @@ void main() {
     await _dragHeaderBy(tester, 134);
     await tester.pump(const Duration(milliseconds: 500));
     expect(
-      find.byKey(const ValueKey('spendee-test-mind-stage1-boxed-graphs')),
+      find.byKey(const ValueKey('spendee-test-mind-activity-field')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('spendee-test-mind-stage1-sum')),
+      find.byKey(const ValueKey('spendee-test-mind-time-rail-carousel')),
       findsOneWidget,
     );
 
@@ -1486,6 +1479,86 @@ void main() {
   });
 
   testWidgets(
+    'Mind SUM places a compact live time rail below Search and keeps Stage1 to Activity Field',
+    (tester) async {
+      await _pumpDashboard(
+        tester,
+        repository: _MindSumDashboardStatsRepository(),
+      );
+      await _switchToMindBackground(tester);
+
+      final search = find.byKey(const ValueKey('spendee-test-search-pill'));
+      final refinement = find.byKey(
+        const ValueKey('spendee-test-mind-time-rail-control'),
+      );
+      final rail = find.byKey(
+        const ValueKey('spendee-test-mind-time-rail-carousel'),
+      );
+      expect(refinement, findsOneWidget);
+      expect(rail, findsOneWidget);
+      expect(
+        tester.getRect(refinement).top,
+        greaterThan(tester.getRect(search).bottom),
+      );
+
+      final selected = find.byKey(
+        const ValueKey('spendee-test-mind-sum-year-card-2026-selected'),
+      );
+      final outer = find.byKey(
+        const ValueKey('spendee-test-mind-sum-year-card-2024'),
+      );
+      expect(selected, findsOneWidget);
+      expect(outer, findsOneWidget);
+      expect(
+        tester.getRect(selected).width,
+        greaterThan(tester.getRect(outer).width),
+      );
+      expect(tester.getRect(selected).width, closeTo(53, .1));
+      expect(tester.getRect(outer).width, closeTo(38, .1));
+
+      final liveBars = tester.widget<CustomPaint>(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-volume-2026')),
+      );
+      final monthlyTotals =
+          (liveBars.painter as dynamic).monthlyTotals as Map<int, double>;
+      expect(monthlyTotals, isNotEmpty);
+      expect(monthlyTotals.length, lessThanOrEqualTo(12));
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-test-mind-time-rail-collapse-toggle'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(rail, findsNothing);
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-time-rail-expand-toggle')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-mind-time-rail-expand-toggle')),
+      );
+      await tester.pumpAndSettle();
+      expect(rail, findsOneWidget);
+
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-activity-field')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-stage1-boxed-graphs')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-activity-field-paint')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'mind SUM renders a query-scoped year rail and selected-year month heatmap',
     (tester) async {
       final store = await _pumpDashboard(
@@ -1511,7 +1584,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2024')),
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2022')),
         findsOneWidget,
       );
       final initialRailRect = tester.getRect(
@@ -1523,7 +1596,7 @@ void main() {
         ),
       );
       final leftYearRect = tester.getRect(
-        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2024')),
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2022')),
       );
       final rightYearRect = tester.getRect(
         find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
@@ -1573,6 +1646,10 @@ void main() {
         find.byKey(const ValueKey('spendee-test-mind-sum-day-2025-12-31')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-total-2025-1')),
+        findsOneWidget,
+      );
       final januaryRect = tester.getRect(
         find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-1')),
       );
@@ -1585,11 +1662,16 @@ void main() {
       final aprilRect = tester.getRect(
         find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-4')),
       );
+      final mayRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-5')),
+      );
       expect(februaryRect.left, greaterThan(januaryRect.left));
       expect(marchRect.left, greaterThan(februaryRect.left));
+      expect(aprilRect.left, greaterThan(marchRect.left));
       expect(februaryRect.width, closeTo(januaryRect.width, .1));
       expect(marchRect.width, closeTo(januaryRect.width, .1));
-      expect(aprilRect.top, greaterThan(januaryRect.top));
+      expect(aprilRect.top, closeTo(januaryRect.top, .1));
+      expect(mayRect.top, greaterThan(januaryRect.top));
 
       await tester.tap(
         find.byKey(
@@ -1603,6 +1685,14 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-test-mind-sum-center-size-slider')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-inner-size-slider')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-inner-offset-slider')),
         findsOneWidget,
       );
       expect(
@@ -1705,7 +1795,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final railSurfacePicker = find.byKey(
-        const ValueKey('spendee-test-mind-sum-stage1-surface-picker'),
+        const ValueKey('spendee-test-mind-sum-rail-surface-picker'),
       );
       await tester.ensureVisible(railSurfacePicker);
       await tester.tap(railSurfacePicker);
@@ -1714,7 +1804,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final railOpacitySlider = find.byKey(
-        const ValueKey('spendee-test-mind-sum-stage1-opacity-slider'),
+        const ValueKey('spendee-test-mind-sum-rail-opacity-slider'),
       );
       await tester.ensureVisible(railOpacitySlider);
       await tester.drag(railOpacitySlider, const Offset(-90, 0));
@@ -1744,7 +1834,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-volume-card-glossy')),
+        find.byKey(const ValueKey('spendee-test-mind-activity-field-glossy')),
         findsOneWidget,
       );
       expect(
@@ -1775,6 +1865,8 @@ void main() {
       final rail = find.byKey(
         const ValueKey('spendee-test-mind-sum-year-carousel-gesture'),
       );
+      await tester.ensureVisible(rail);
+      await tester.pumpAndSettle();
       final gesture = await tester.startGesture(tester.getCenter(rail));
       await gesture.moveBy(const Offset(-24, 0));
       await tester.pump();
@@ -2072,7 +2164,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final mindStage1 = find.byKey(
-      const ValueKey('spendee-test-mind-volume-card-liquid-glass'),
+      const ValueKey('spendee-test-mind-activity-field-liquid-glass'),
     );
     final firstMindMonth = SpendeeMindStatsFrame.fromStore(
       store,
@@ -5343,14 +5435,6 @@ List<String> _seriesPointSignature(Iterable<dynamic> points) {
   ];
 }
 
-List<String> _helperBarSignature(Iterable<dynamic> bars) {
-  return [
-    for (final bar in bars)
-      '${bar.index}|${bar.rawValue.toStringAsFixed(2)}|'
-          '${bar.value.toStringAsFixed(4)}|${bar.position}|${bar.colorHex}',
-  ];
-}
-
 class _MindDashboardStatsRepository extends _DashboardTestRepository {
   _MindDashboardStatsRepository()
     : super(
@@ -5380,6 +5464,8 @@ class _MindSumDashboardStatsRepository extends _DashboardTestRepository {
           _category(101, 'Fizetés', 12, 2, type: 'bevétel'),
         ],
         transactions: [
+          _record(1, 1, -8400, 'Piac', date: '2022.01.08'),
+          _record(2, 2, -5600, 'Busz', date: '2023.02.12'),
           _record(101, 1, -12000, 'Piac', date: '2024.01.04'),
           _record(201, 1, -21000, 'Piac', date: '2025.01.03'),
           _record(202, 2, -9200, 'Busz', date: '2025.02.12'),

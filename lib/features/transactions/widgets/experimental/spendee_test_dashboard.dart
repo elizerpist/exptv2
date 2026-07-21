@@ -514,6 +514,8 @@ class _HeaderLiquidSoftnessMenuEntry
     required this.valueKey,
     required this.value,
     required this.onChanged,
+    this.min = 0,
+    this.max = 1,
   });
 
   final String label;
@@ -521,6 +523,8 @@ class _HeaderLiquidSoftnessMenuEntry
   final Key valueKey;
   final double value;
   final ValueChanged<double> onChanged;
+  final double min;
+  final double max;
 
   @override
   double get height => 86;
@@ -540,19 +544,19 @@ class _HeaderLiquidSoftnessMenuEntryState
   @override
   void initState() {
     super.initState();
-    _value = _clampUnit(widget.value);
+    _value = _clampRange(widget.value);
   }
 
   @override
   void didUpdateWidget(_HeaderLiquidSoftnessMenuEntry oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
-      _value = _clampUnit(widget.value);
+      _value = _clampRange(widget.value);
     }
   }
 
   void _handleChanged(double value) {
-    final next = _clampUnit(value);
+    final next = _clampRange(value);
     setState(() => _value = next);
     widget.onChanged(next);
   }
@@ -598,8 +602,8 @@ class _HeaderLiquidSoftnessMenuEntryState
               child: Slider(
                 key: widget.sliderKey,
                 value: _value,
-                min: 0,
-                max: 1,
+                min: widget.min,
+                max: widget.max,
                 onChanged: _handleChanged,
               ),
             ),
@@ -608,6 +612,9 @@ class _HeaderLiquidSoftnessMenuEntryState
       ),
     );
   }
+
+  double _clampRange(double value) =>
+      value.clamp(widget.min, widget.max).toDouble();
 }
 
 class _AvatarLayoutConfig {
@@ -694,22 +701,30 @@ class _AvatarLayoutConfig {
 class _MindSumYearRailConfig {
   const _MindSumYearRailConfig({
     this.centerSize = 0,
+    this.innerSize = 0,
     this.outerSize = 0,
+    this.innerOffset = 0,
     this.outerOffset = 0,
   });
 
   final double centerSize;
+  final double innerSize;
   final double outerSize;
+  final double innerOffset;
   final double outerOffset;
 
   _MindSumYearRailConfig copyWith({
     double? centerSize,
+    double? innerSize,
     double? outerSize,
+    double? innerOffset,
     double? outerOffset,
   }) {
     return _MindSumYearRailConfig(
       centerSize: _sliderValue(centerSize ?? this.centerSize),
+      innerSize: _sliderValue(innerSize ?? this.innerSize),
       outerSize: _sliderValue(outerSize ?? this.outerSize),
+      innerOffset: _sliderValue(innerOffset ?? this.innerOffset),
       outerOffset: _sliderValue(outerOffset ?? this.outerOffset),
     );
   }
@@ -718,21 +733,49 @@ class _MindSumYearRailConfig {
     final distance = logicalOffset.abs();
     if (distance < .001) return 0;
     final sign = logicalOffset.sign;
-    final outerDistance = (108 + outerOffset * 24).clamp(82.0, 138.0);
-    return sign * outerDistance * distance;
+    final innerDistance = (70 + innerOffset * 12).clamp(54.0, 88.0);
+    final outerDistance = (142 + outerOffset * 22).clamp(110.0, 170.0);
+    if (distance <= 1) return sign * innerDistance * distance;
+    if (distance <= 2) {
+      return sign * _lerpDouble(innerDistance, outerDistance, distance - 1);
+    }
+    return sign * (outerDistance + (distance - 2) * innerDistance);
   }
 
   double sizeForLogicalOffset(double logicalOffset) {
-    final center = (102 + centerSize * 18).clamp(76.0, 126.0).toDouble();
-    final outer = (74 + outerSize * 14).clamp(50.0, 96.0).toDouble();
-    return _lerpDouble(
-      center,
-      outer,
-      logicalOffset.abs().clamp(0.0, 1.0).toDouble(),
-    );
+    final center = (53 + centerSize * 8).clamp(42.0, 65.0).toDouble();
+    final inner = (44 + innerSize * 7).clamp(34.0, 54.0).toDouble();
+    final outer = (38 + outerSize * 6).clamp(30.0, 48.0).toDouble();
+    final distance = logicalOffset.abs();
+    if (distance <= 1) return _lerpDouble(center, inner, distance);
+    return _lerpDouble(inner, outer, (distance - 1).clamp(0.0, 1.0).toDouble());
   }
 
   static double _sliderValue(double value) => value.clamp(-1.0, 1.0).toDouble();
+}
+
+class _MindGlobalRailPresentation {
+  const _MindGlobalRailPresentation({
+    required this.enabled,
+    required this.railConfig,
+    required this.railSurface,
+    required this.railOpacity,
+    required this.yearCardEnabled,
+    required this.yearCardSurface,
+    required this.yearCardOpacity,
+    required this.showVolumeBars,
+    required this.selectedYear,
+  });
+
+  final bool enabled;
+  final _MindSumYearRailConfig railConfig;
+  final _PanelSurface railSurface;
+  final double railOpacity;
+  final bool yearCardEnabled;
+  final _PanelSurface yearCardSurface;
+  final double yearCardOpacity;
+  final bool showVolumeBars;
+  final int? selectedYear;
 }
 
 class _AvatarLayoutMenuSheet extends StatelessWidget {
@@ -944,6 +987,8 @@ class _AvatarLayoutMenuSheet extends StatelessWidget {
 class _MindSumLayoutMenuSheet extends StatelessWidget {
   const _MindSumLayoutMenuSheet({
     required this.railConfig,
+    required this.railSurface,
+    required this.railOpacity,
     required this.stage1Surface,
     required this.stage1Opacity,
     required this.yearCardEnabled,
@@ -957,6 +1002,8 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
     required this.monthCardSurface,
     required this.monthCardOpacity,
     required this.onRailConfigChanged,
+    required this.onRailSurfaceChanged,
+    required this.onRailOpacityChanged,
     required this.onStage1SurfaceChanged,
     required this.onStage1OpacityChanged,
     required this.onYearCardEnabledChanged,
@@ -972,6 +1019,8 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
   });
 
   final _MindSumYearRailConfig railConfig;
+  final _PanelSurface railSurface;
+  final double railOpacity;
   final _PanelSurface stage1Surface;
   final double stage1Opacity;
   final bool yearCardEnabled;
@@ -985,6 +1034,8 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
   final _PanelSurface monthCardSurface;
   final double monthCardOpacity;
   final ValueChanged<_MindSumYearRailConfig> onRailConfigChanged;
+  final ValueChanged<_PanelSurface> onRailSurfaceChanged;
+  final ValueChanged<double> onRailOpacityChanged;
   final ValueChanged<_PanelSurface> onStage1SurfaceChanged;
   final ValueChanged<double> onStage1OpacityChanged;
   final ValueChanged<bool> onYearCardEnabledChanged;
@@ -1038,14 +1089,14 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _MindSumSettingsSection(
-                      title: 'Stage1 ev-rail',
+                      title: 'Stage1 Activity field',
                       child: Column(
                         children: [
                           _MindSumSurfacePicker(
                             pickerKey: const ValueKey(
                               'spendee-test-mind-sum-stage1-surface-picker',
                             ),
-                            label: 'Rail hatter',
+                            label: 'Field hatter',
                             value: stage1Surface,
                             onChanged: onStage1SurfaceChanged,
                           ),
@@ -1053,9 +1104,32 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
                             sliderKey: const ValueKey(
                               'spendee-test-mind-sum-stage1-opacity-slider',
                             ),
-                            label: 'Rail opacity',
+                            label: 'Field opacity',
                             value: stage1Opacity,
                             onChanged: onStage1OpacityChanged,
+                          ),
+                        ],
+                      ),
+                    ),
+                    _MindSumSettingsSection(
+                      title: 'Ido rail',
+                      child: Column(
+                        children: [
+                          _MindSumSurfacePicker(
+                            pickerKey: const ValueKey(
+                              'spendee-test-mind-sum-rail-surface-picker',
+                            ),
+                            label: 'Rail hatter',
+                            value: railSurface,
+                            onChanged: onRailSurfaceChanged,
+                          ),
+                          _MindSumOpacitySlider(
+                            sliderKey: const ValueKey(
+                              'spendee-test-mind-sum-rail-opacity-slider',
+                            ),
+                            label: 'Rail opacity',
+                            value: railOpacity,
+                            onChanged: onRailOpacityChanged,
                           ),
                           _AvatarLayoutSlider(
                             sliderKey: const ValueKey(
@@ -1069,9 +1143,19 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
                           ),
                           _AvatarLayoutSlider(
                             sliderKey: const ValueKey(
+                              'spendee-test-mind-sum-inner-size-slider',
+                            ),
+                            label: 'Belso meret',
+                            value: railConfig.innerSize,
+                            onChanged: (value) => onRailConfigChanged(
+                              railConfig.copyWith(innerSize: value),
+                            ),
+                          ),
+                          _AvatarLayoutSlider(
+                            sliderKey: const ValueKey(
                               'spendee-test-mind-sum-outer-size-slider',
                             ),
-                            label: 'Szelso meret',
+                            label: 'Kulso meret',
                             value: railConfig.outerSize,
                             onChanged: (value) => onRailConfigChanged(
                               railConfig.copyWith(outerSize: value),
@@ -1079,9 +1163,19 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
                           ),
                           _AvatarLayoutSlider(
                             sliderKey: const ValueKey(
+                              'spendee-test-mind-sum-inner-offset-slider',
+                            ),
+                            label: 'Belso X offset',
+                            value: railConfig.innerOffset,
+                            onChanged: (value) => onRailConfigChanged(
+                              railConfig.copyWith(innerOffset: value),
+                            ),
+                          ),
+                          _AvatarLayoutSlider(
+                            sliderKey: const ValueKey(
                               'spendee-test-mind-sum-outer-offset-slider',
                             ),
-                            label: 'Szelso X offset',
+                            label: 'Kulso X offset',
                             value: railConfig.outerOffset,
                             onChanged: (value) => onRailConfigChanged(
                               railConfig.copyWith(outerOffset: value),
@@ -1763,6 +1857,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _avatarBorderEnabled = true;
   var _avatarLayoutConfig = const _AvatarLayoutConfig();
   var _headerLiquidSoftness = _defaultHeaderLiquidSoftness;
+  var _headerBackgroundOpacity = 1.0;
   var _avatarSurfaceSoftness = 0.0;
   var _chartSurfaceSoftness = 0.0;
   var _chartListSurfaceSoftness = 0.0;
@@ -1774,6 +1869,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _mindStage1Softness = 0.0;
   var _mindStage2Softness = 0.0;
   var _mindSumStage1Opacity = 1.0;
+  var _mindGlobalRailSurface = _PanelSurface.background;
+  var _mindGlobalRailOpacity = 1.0;
   var _mindSumYearCardEnabled = true;
   var _mindSumYearCardSurface = _PanelSurface.glass;
   var _mindSumYearCardOpacity = .88;
@@ -1804,6 +1901,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   Stopwatch? _carouselDragStopwatch;
   var _carouselDragUpdateCount = 0;
   late final ValueNotifier<SpendeeHeaderStage> _stageNotifier;
+  late final ValueNotifier<_MindGlobalRailPresentation>
+  _mindGlobalRailPresentation;
   late Widget _homeContent;
   Timer? _budgetLimitVeryLongTimer;
   Timer? _budgetLimitAutoTickTimer;
@@ -1820,6 +1919,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void initState() {
     super.initState();
     _stageNotifier = ValueNotifier<SpendeeHeaderStage>(_stage);
+    _mindGlobalRailPresentation = ValueNotifier(
+      _currentMindGlobalRailPresentation(),
+    );
     _homeContent = _buildHomeContent();
     _carouselReleaseController = AnimationController(vsync: this);
     _mindSumYearCarouselReleaseController = AnimationController(vsync: this);
@@ -1846,6 +1948,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     _budgetLimitVeryLongTimer?.cancel();
     _budgetLimitAutoTickTimer?.cancel();
     _stageNotifier.dispose();
+    _mindGlobalRailPresentation.dispose();
     _carouselReleaseController.dispose();
     _mindSumYearCarouselReleaseController.dispose();
     super.dispose();
@@ -1857,12 +1960,32 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       store: widget.store,
       expenseTheme: widget.expenseTheme,
       stageListenable: _stageNotifier,
+      mindGlobalRailPresentationListenable: _mindGlobalRailPresentation,
+      onMindSumYearSelected: _setSelectedMindSumYear,
       onPickSummaryMonth: widget.onPickSummaryMonth,
       onEditTransaction: widget.onEditTransaction,
       onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
       onVendorSheetRequested: widget.onVendorSheetRequested,
       logBottomPadding: widget.logBottomPadding,
     );
+  }
+
+  _MindGlobalRailPresentation _currentMindGlobalRailPresentation() {
+    return _MindGlobalRailPresentation(
+      enabled: _headerBackgroundMode == _HeaderBackgroundMode.mind,
+      railConfig: _mindSumYearRailConfig,
+      railSurface: _mindGlobalRailSurface,
+      railOpacity: _mindGlobalRailOpacity,
+      yearCardEnabled: _mindSumYearCardEnabled,
+      yearCardSurface: _mindSumYearCardSurface,
+      yearCardOpacity: _mindSumYearCardOpacity,
+      showVolumeBars: _mindSumYearVolumeBarsEnabled,
+      selectedYear: _selectedMindSumYear,
+    );
+  }
+
+  void _syncMindGlobalRailPresentation() {
+    _mindGlobalRailPresentation.value = _currentMindGlobalRailPresentation();
   }
 
   void _setStage(SpendeeHeaderStage stage) {
@@ -2103,6 +2226,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       if (_stage == SpendeeHeaderStage.stage2) {
         _publishMindSumYearForStage2(year, source: 'tap');
       }
+      _syncMindGlobalRailPresentation();
     });
   }
 
@@ -3089,6 +3213,20 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           height: 38,
           child: const Text('Background: Mind'),
         ),
+        _HeaderLiquidSoftnessMenuEntry(
+          key: const ValueKey('spendee-test-header-background-opacity-entry'),
+          label: 'Header bg opacity',
+          sliderKey: const ValueKey(
+            'spendee-test-header-background-opacity-slider',
+          ),
+          valueKey: const ValueKey(
+            'spendee-test-header-background-opacity-value',
+          ),
+          value: _headerBackgroundOpacity,
+          min: .1,
+          max: 1,
+          onChanged: _setHeaderBackgroundOpacity,
+        ),
         const PopupMenuDivider(),
         const PopupMenuItem<_HeaderDesignMenuAction>(
           enabled: false,
@@ -3404,6 +3542,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     );
     if (action == null || !mounted) return;
     HapticFeedback.selectionClick();
+    final updatesMindRail =
+        action == _HeaderDesignMenuAction.headerBackgroundBudget ||
+        action == _HeaderDesignMenuAction.headerBackgroundMind;
     setState(() {
       switch (action) {
         case _HeaderDesignMenuAction.headerBackgroundBudget:
@@ -3469,6 +3610,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         case _HeaderDesignMenuAction.mindStage2Acrylic:
           _setMindStage2SurfaceForActiveScope(_PanelSurface.acrylic);
       }
+      if (updatesMindRail) _syncMindGlobalRailPresentation();
     });
   }
 
@@ -3593,6 +3735,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   Future<void> _openMindSumLayoutMenu() async {
     HapticFeedback.selectionClick();
     var railConfig = _mindSumYearRailConfig;
+    var railSurface = _mindGlobalRailSurface;
+    var railOpacity = _mindGlobalRailOpacity;
     var stage1Surface = _mindSumStage1Surface;
     var stage1Opacity = _mindSumStage1Opacity;
     var yearCardEnabled = _mindSumYearCardEnabled;
@@ -3616,7 +3760,33 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           builder: (context, setSheetState) {
             void updateRailConfig(_MindSumYearRailConfig next) {
               setSheetState(() => railConfig = next);
-              if (mounted) setState(() => _mindSumYearRailConfig = next);
+              if (mounted) {
+                setState(() {
+                  _mindSumYearRailConfig = next;
+                  _syncMindGlobalRailPresentation();
+                });
+              }
+            }
+
+            void updateRailSurface(_PanelSurface next) {
+              setSheetState(() => railSurface = next);
+              if (mounted) {
+                setState(() {
+                  _mindGlobalRailSurface = next;
+                  _syncMindGlobalRailPresentation();
+                });
+              }
+            }
+
+            void updateRailOpacity(double next) {
+              final value = _clampUnit(next);
+              setSheetState(() => railOpacity = value);
+              if (mounted) {
+                setState(() {
+                  _mindGlobalRailOpacity = value;
+                  _syncMindGlobalRailPresentation();
+                });
+              }
             }
 
             void updateStage1Surface(_PanelSurface next) {
@@ -3632,24 +3802,42 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
 
             void updateYearCardEnabled(bool next) {
               setSheetState(() => yearCardEnabled = next);
-              if (mounted) setState(() => _mindSumYearCardEnabled = next);
+              if (mounted) {
+                setState(() {
+                  _mindSumYearCardEnabled = next;
+                  _syncMindGlobalRailPresentation();
+                });
+              }
             }
 
             void updateYearCardSurface(_PanelSurface next) {
               setSheetState(() => yearCardSurface = next);
-              if (mounted) setState(() => _mindSumYearCardSurface = next);
+              if (mounted) {
+                setState(() {
+                  _mindSumYearCardSurface = next;
+                  _syncMindGlobalRailPresentation();
+                });
+              }
             }
 
             void updateYearCardOpacity(double next) {
               final value = _clampUnit(next);
               setSheetState(() => yearCardOpacity = value);
-              if (mounted) setState(() => _mindSumYearCardOpacity = value);
+              if (mounted) {
+                setState(() {
+                  _mindSumYearCardOpacity = value;
+                  _syncMindGlobalRailPresentation();
+                });
+              }
             }
 
             void updateVolumeBarsEnabled(bool next) {
               setSheetState(() => volumeBarsEnabled = next);
               if (mounted) {
-                setState(() => _mindSumYearVolumeBarsEnabled = next);
+                setState(() {
+                  _mindSumYearVolumeBarsEnabled = next;
+                  _syncMindGlobalRailPresentation();
+                });
               }
             }
 
@@ -3689,6 +3877,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
 
             return _MindSumLayoutMenuSheet(
               railConfig: railConfig,
+              railSurface: railSurface,
+              railOpacity: railOpacity,
               stage1Surface: stage1Surface,
               stage1Opacity: stage1Opacity,
               yearCardEnabled: yearCardEnabled,
@@ -3702,6 +3892,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
               monthCardSurface: monthCardSurface,
               monthCardOpacity: monthCardOpacity,
               onRailConfigChanged: updateRailConfig,
+              onRailSurfaceChanged: updateRailSurface,
+              onRailOpacityChanged: updateRailOpacity,
               onStage1SurfaceChanged: updateStage1Surface,
               onStage1OpacityChanged: updateStage1Opacity,
               onYearCardEnabledChanged: updateYearCardEnabled,
@@ -3725,6 +3917,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final next = _clampUnit(value);
     if ((_headerLiquidSoftness - next).abs() < .001) return;
     setState(() => _headerLiquidSoftness = next);
+  }
+
+  void _setHeaderBackgroundOpacity(double value) {
+    final next = value.clamp(.1, 1.0).toDouble();
+    if ((_headerBackgroundOpacity - next).abs() < .001) return;
+    setState(() => _headerBackgroundOpacity = next);
   }
 
   void _setAvatarSurfaceSoftness(double value) {
@@ -4134,6 +4332,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   budgetItems: budgetItems,
                   stage2Page: _stage2Page,
                   headerBackgroundMode: _headerBackgroundMode,
+                  headerBackgroundOpacity: _headerBackgroundOpacity,
                   mindStatsFrame: mindStatsFrame,
                   onHandleDragStart: _beginHeaderDrag,
                   onHandleDragUpdate: _updateHeaderDrag,
@@ -4268,6 +4467,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.budgetItems,
     required this.stage2Page,
     required this.headerBackgroundMode,
+    required this.headerBackgroundOpacity,
     required this.mindStatsFrame,
     required this.onHandleDragStart,
     required this.onHandleDragUpdate,
@@ -4342,6 +4542,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final List<BackheaderBudgetItem> budgetItems;
   final _Stage2BudgetPage stage2Page;
   final _HeaderBackgroundMode headerBackgroundMode;
+  final double headerBackgroundOpacity;
   final SpendeeMindStatsFrame? mindStatsFrame;
   final GestureDragStartCallback onHandleDragStart;
   final GestureDragUpdateCallback onHandleDragUpdate;
@@ -4583,6 +4784,7 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     return _HeaderSurfaceFrame(
       surface: headerSurface,
       liquidSoftness: headerLiquidSoftness,
+      backgroundOpacity: headerBackgroundOpacity,
       background: isMindBackground
           ? const _MindHeaderGradientBackground(
               key: ValueKey('spendee-test-mind-page-mind'),
@@ -4663,9 +4865,27 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
     const scoreChartTop = 43.0;
     const scoreChartHeight = 47.0;
     const scorePlotLeftInset = 0.0;
+    Widget buildScoreChart({required bool expanded}) {
+      return Positioned(
+        key: const ValueKey('spendee-test-mind-score-chart'),
+        left: scoreChartLeft,
+        right: scoreChartRightInset,
+        top: expanded ? 14 : scoreChartTop,
+        bottom: expanded ? 14 : null,
+        height: expanded ? null : scoreChartHeight,
+        child: _MindFastInfoScoreChart(
+          activeType: statsFrame.activeFrame.yearData.activeType,
+          series: statsFrame.activeFrame.categoryScopeSeries,
+          bareLine: false,
+          plotLeftInset: scorePlotLeftInset,
+        ),
+      );
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
+        if (stage != SpendeeHeaderStage.stage0) buildScoreChart(expanded: true),
         Positioned(
           left: 20,
           top: 28,
@@ -4680,19 +4900,8 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
             valueKey: const ValueKey('spendee-test-mind-header-score-value'),
           ),
         ),
-        Positioned(
-          key: const ValueKey('spendee-test-mind-score-chart'),
-          left: scoreChartLeft,
-          right: scoreChartRightInset,
-          top: scoreChartTop,
-          height: scoreChartHeight,
-          child: _MindFastInfoScoreChart(
-            activeType: statsFrame.activeFrame.yearData.activeType,
-            series: statsFrame.activeFrame.categoryScopeSeries,
-            bareLine: false,
-            plotLeftInset: scorePlotLeftInset,
-          ),
-        ),
+        if (stage == SpendeeHeaderStage.stage0)
+          buildScoreChart(expanded: false),
         Positioned(
           key: const ValueKey('spendee-test-mind-header-background-tap-target'),
           left: 112,
@@ -4711,39 +4920,12 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
             right: _budgetHeaderVisualSpec.budget.stage1HorizontalInset,
             top: _budgetHeaderVisualSpec.budget.stage1Top,
             height: _budgetHeaderVisualSpec.budget.stage1Height,
-            child: modeKey == 'sum'
-                ? KeyedSubtree(
-                    key: const ValueKey(
-                      'spendee-test-mind-stage1-boxed-graphs',
-                    ),
-                    child: _MindSumYearCarousel(
-                      key: const ValueKey('spendee-test-mind-stage1-sum'),
-                      years: mindSumYears,
-                      selectedYear: mindSumSelectedYear,
-                      yearSummaries: mindSumYearSummaries,
-                      activeType: mindSumActiveType,
-                      carouselOffset: mindSumYearCarouselOffset,
-                      railConfig: mindSumYearRailConfig,
-                      railSurface: stage1Surface,
-                      railSoftness: stage1Softness,
-                      railOpacity: mindSumStage1Opacity,
-                      yearCardEnabled: mindSumYearCardEnabled,
-                      yearCardSurface: mindSumYearCardSurface,
-                      yearCardOpacity: mindSumYearCardOpacity,
-                      showVolumeBars: mindSumYearVolumeBarsEnabled,
-                      onYearTap: onMindSumYearTap,
-                      onDragStart: onMindSumYearCarouselDragStart,
-                      onDragUpdate: onMindSumYearCarouselDragUpdate,
-                      onDragEnd: onMindSumYearCarouselDragEnd,
-                      onDragCancel: onMindSumYearCarouselDragCancel,
-                    ),
-                  )
-                : _MindStage1BoxedGraphs(
-                    key: ValueKey('spendee-test-mind-stage1-$modeKey'),
-                    statsFrame: statsFrame,
-                    surface: stage1Surface,
-                    softness: stage1Softness,
-                  ),
+            child: _MindActivityField(
+              statsFrame: statsFrame,
+              surface: stage1Surface,
+              softness: stage1Softness,
+              opacity: modeKey == 'sum' ? mindSumStage1Opacity : 1,
+            ),
           ),
         if (stage == SpendeeHeaderStage.stage2)
           Positioned(
@@ -5252,119 +5434,112 @@ Widget _wrapPanelSurface({
   );
 }
 
-class _MindStage1BoxedGraphs extends StatelessWidget {
-  const _MindStage1BoxedGraphs({
-    super.key,
+class _MindActivityField extends StatelessWidget {
+  const _MindActivityField({
     required this.statsFrame,
     required this.surface,
     required this.softness,
+    required this.opacity,
   });
 
   final SpendeeMindStatsFrame statsFrame;
   final _PanelSurface surface;
   final double softness;
+  final double opacity;
 
   @override
   Widget build(BuildContext context) {
     final activeType = statsFrame.activeFrame.yearData.activeType;
-    final keySuffix = _mindTypeSuffix(activeType);
-    final typeLabel = activeType == TransactionType.income
-        ? 'Bevételi'
-        : 'Kiadási';
-    final accent = activeType == TransactionType.income
-        ? const Color(0xFF22C55E)
-        : const Color(0xFFEF4444);
+    final isIncome = activeType == TransactionType.income;
+    final accent = isIncome ? const Color(0xFF22C55E) : const Color(0xFFF5368D);
     final content = Padding(
-      key: const ValueKey('spendee-test-mind-stage1-boxed-graphs'),
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
-      child: Padding(
-        padding: EdgeInsets.zero,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'előző időszakhoz képest',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _smallCapsStyle,
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'ACTIVITY FIELD',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFF334155),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0,
                   ),
                 ),
-                Text(
-                  '${statsFrame.activeFrame.categoryScopeSeries.kontrollScore.round()}/100',
-                  key: const ValueKey('spendee-test-mind-score-value'),
-                  style: _pieValueStyle.copyWith(
-                    color: _mindScoreColor(
-                      statsFrame.activeFrame.categoryScopeSeries.kontrollScore,
-                    ),
-                  ),
+              ),
+              Text(
+                isIncome ? 'BEVÉTEL' : 'KIADÁS',
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
-            const SizedBox(height: 7),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _MindGraphCard(
-                      key: ValueKey(
-                        'spendee-test-mind-volume-chart-$keySuffix',
-                      ),
-                      surface: surface,
-                      softness: softness,
-                      surfaceKeyBase: 'spendee-test-mind-volume-card',
-                      paintKey: const ValueKey(
-                        'spendee-test-mind-volume-paint',
-                      ),
-                      label: '$typeLabel volumen',
-                      value: _formatFt(
-                        statsFrame.activeFrame.yearData.summaryTotal,
-                      ),
-                      color: accent,
-                      painter: _MindVolumeMiniPainter(
-                        activeType: activeType,
-                        volumePoints: statsFrame.activeVolumePoints,
-                        color: accent,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _MindGraphCard(
-                      key: ValueKey(
-                        'spendee-test-mind-pattern-chart-$keySuffix',
-                      ),
-                      surface: surface,
-                      softness: softness,
-                      surfaceKeyBase: 'spendee-test-mind-pattern-card',
-                      paintKey: const ValueKey(
-                        'spendee-test-mind-pattern-paint',
-                      ),
-                      label: '$typeLabel minták',
-                      value: '${statsFrame.activePatternBars.length} minta',
-                      color: accent,
-                      painter: _MindPatternMiniPainter(
-                        activeType: activeType,
-                        patternBars: statsFrame.activePatternBars,
-                        color: accent,
-                      ),
-                    ),
-                  ),
-                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: RepaintBoundary(
+              child: CustomPaint(
+                key: const ValueKey('spendee-test-mind-activity-field-paint'),
+                painter: _MindVolumeMiniPainter(
+                  activeType: activeType,
+                  volumePoints: statsFrame.activeVolumePoints,
+                  color: accent,
+                ),
+                child: const SizedBox.expand(),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _formatFt(statsFrame.activeFrame.yearData.summaryTotal),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF14213A),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                '${statsFrame.activeVolumePoints.length} pont',
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
-    return content;
+    return KeyedSubtree(
+      key: const ValueKey('spendee-test-mind-activity-field'),
+      child: _wrapPanelSurface(
+        surface: surface,
+        softness: softness,
+        opacity: opacity,
+        keyBase: 'spendee-test-mind-activity-field',
+        borderRadius: 17,
+        child: content,
+      ),
+    );
   }
 }
 
 class _MindSumYearCarousel extends StatelessWidget {
   const _MindSumYearCarousel({
-    super.key,
     required this.years,
     required this.selectedYear,
     required this.yearSummaries,
@@ -5386,7 +5561,7 @@ class _MindSumYearCarousel extends StatelessWidget {
   });
 
   static const _slotDistance = 64.0;
-  static const _slotBuildOrder = <int>[0, -1, 1];
+  static const _slotBuildOrder = <int>[0, -1, 1, -2, 2];
 
   final List<int> years;
   final int? selectedYear;
@@ -5478,8 +5653,8 @@ class _MindSumYearCarousel extends StatelessWidget {
     final movingLeft = carouselOffset < -.001;
     final offsets = <int>[
       ..._slotBuildOrder,
-      if (movingRight) -2,
-      if (movingLeft) 2,
+      if (movingRight) -3,
+      if (movingLeft) 3,
     ];
     final slots = <_MindSumYearRailSlot>[];
     final usedYears = <int>{};
@@ -5494,6 +5669,462 @@ class _MindSumYearCarousel extends StatelessWidget {
   int _wrappedIndex(int index) {
     final wrapped = index % years.length;
     return wrapped < 0 ? wrapped + years.length : wrapped;
+  }
+}
+
+class _MindGlobalTimeRail extends StatefulWidget {
+  const _MindGlobalTimeRail({
+    super.key,
+    required this.years,
+    required this.yearSummaries,
+    required this.activeType,
+    required this.selectedYear,
+    required this.railConfig,
+    required this.railSurface,
+    required this.railOpacity,
+    required this.yearCardEnabled,
+    required this.yearCardSurface,
+    required this.yearCardOpacity,
+    required this.showVolumeBars,
+    required this.expanded,
+    required this.onExpandedChanged,
+    required this.onYearPublished,
+  });
+
+  final List<int> years;
+  final List<StatsSumYearSummary> yearSummaries;
+  final TransactionType activeType;
+  final int? selectedYear;
+  final _MindSumYearRailConfig railConfig;
+  final _PanelSurface railSurface;
+  final double railOpacity;
+  final bool yearCardEnabled;
+  final _PanelSurface yearCardSurface;
+  final double yearCardOpacity;
+  final bool showVolumeBars;
+  final bool expanded;
+  final ValueChanged<bool> onExpandedChanged;
+  final ValueChanged<int> onYearPublished;
+
+  @override
+  State<_MindGlobalTimeRail> createState() => _MindGlobalTimeRailState();
+}
+
+class _MindGlobalTimeRailState extends State<_MindGlobalTimeRail>
+    with SingleTickerProviderStateMixin {
+  SpendeeCenterCarouselController? _carouselController;
+  late final AnimationController _releaseController;
+  var _visualDx = 0.0;
+  var _liveTicked = false;
+  var _motionSerial = 0;
+  int? _selectedYear;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = _selectedYearFor(widget.years);
+    _releaseController = AnimationController(vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MindGlobalTimeRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selected = _selectedYearFor(widget.years);
+    if (_carouselController == null && selected != _selectedYear) {
+      _selectedYear = selected;
+      _visualDx = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _releaseController.dispose();
+    super.dispose();
+  }
+
+  int? _selectedYearFor(List<int> years) {
+    if (years.isEmpty) return null;
+    final local = _selectedYear;
+    if (_carouselController != null && local != null && years.contains(local)) {
+      return local;
+    }
+    final requested = widget.selectedYear;
+    if (requested != null && years.contains(requested)) return requested;
+    if (local != null && years.contains(local)) return local;
+    return years.first;
+  }
+
+  int _selectedIndex(List<int> years) {
+    final selected = _selectedYearFor(years);
+    final index = selected == null ? -1 : years.indexOf(selected);
+    return index < 0 ? 0 : index;
+  }
+
+  void _toggleExpanded() {
+    HapticFeedback.selectionClick();
+    widget.onExpandedChanged(!widget.expanded);
+  }
+
+  void _handleDragStart(DragStartDetails details) {
+    final years = widget.years;
+    if (years.length < 2) return;
+    _motionSerial += 1;
+    _releaseController.stop();
+    final active = _carouselController;
+    final selected = _selectedYearFor(years);
+    final canResume =
+        active != null &&
+        active.itemCount == years.length &&
+        years[active.index] == selected;
+    final controller = canResume
+        ? active
+        : SpendeeCenterCarouselController(
+            itemCount: years.length,
+            initialIndex: _selectedIndex(years),
+            slotDistance: _MindSumYearCarousel._slotDistance,
+          );
+    controller.beginDragFromCurrentMotion();
+    setState(() {
+      _liveTicked = false;
+      _visualDx = controller.residualDx;
+      _carouselController = controller;
+    });
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    final years = widget.years;
+    if (years.length < 2) return;
+    final controller = _carouselController ??= SpendeeCenterCarouselController(
+      itemCount: years.length,
+      initialIndex: _selectedIndex(years),
+      slotDistance: _MindSumYearCarousel._slotDistance,
+    );
+    _applyDelta(controller, details.delta.dx, source: 'drag');
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    final controller = _carouselController;
+    if (controller == null) return;
+    unawaited(
+      _release(
+        controller: controller,
+        velocityDx: details.velocity.pixelsPerSecond.dx,
+        serial: _motionSerial,
+      ),
+    );
+  }
+
+  void _handleDragCancel() {
+    final controller = _carouselController;
+    if (controller == null) return;
+    unawaited(_cancel(controller: controller, serial: _motionSerial));
+  }
+
+  void _applyDelta(
+    SpendeeCenterCarouselController controller,
+    double deltaDx, {
+    required String source,
+  }) {
+    final years = widget.years;
+    if (years.length < 2) return;
+    final update = controller.applyDragDelta(deltaDx);
+    int? latestYear;
+    for (final index in update.tickedIndexes) {
+      latestYear = years[index % years.length];
+      _liveTicked = true;
+      HapticFeedback.selectionClick();
+      DebugConsole.log(
+        '[Perf] SpendeeTest mind_global_year_tick '
+        'source=$source selected=$latestYear',
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      if (latestYear != null) _selectedYear = latestYear;
+      _visualDx = update.residualDx;
+    });
+  }
+
+  Future<void> _cancel({
+    required SpendeeCenterCarouselController controller,
+    required int serial,
+  }) async {
+    _liveTicked = false;
+    try {
+      final travel = controller.cancelTravel();
+      if (travel.abs() >= .5) {
+        await _animateTravel(
+          controller: controller,
+          travel: travel,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          serial: serial,
+        );
+      }
+    } on TickerCanceled {
+      return;
+    } finally {
+      _finishMotion(controller, serial: serial, source: 'cancel');
+    }
+  }
+
+  Future<void> _release({
+    required SpendeeCenterCarouselController controller,
+    required double velocityDx,
+    required int serial,
+  }) async {
+    final motion = controller.releaseMotion(
+      velocityDx: velocityDx,
+      liveTicked: _liveTicked,
+    );
+    _liveTicked = false;
+    try {
+      if (motion.initialTravel.abs() >= .5) {
+        await _animateTravel(
+          controller: controller,
+          travel: motion.initialTravel,
+          duration: motion.initialDuration,
+          curve: motion.inertial ? Curves.easeOutQuad : Curves.easeOutCubic,
+          serial: serial,
+        );
+      }
+      if (!mounted || serial != _motionSerial) return;
+      final settleTravel = controller.settleTravel(
+        preferredDxDirection: motion.preferredDxDirection,
+        allowDirectionalSnap: motion.directionalSnapAllowed,
+      );
+      if (settleTravel.abs() >= .5) {
+        await _animateTravel(
+          controller: controller,
+          travel: settleTravel,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          serial: serial,
+        );
+      }
+    } on TickerCanceled {
+      return;
+    } finally {
+      _finishMotion(controller, serial: serial, source: 'release');
+    }
+  }
+
+  Future<void> _animateTravel({
+    required SpendeeCenterCarouselController controller,
+    required double travel,
+    required Duration duration,
+    required Curve curve,
+    required int serial,
+  }) async {
+    _releaseController.stop();
+    _releaseController.duration = duration;
+    var lastValue = 0.0;
+    final animation = Tween<double>(
+      begin: 0,
+      end: travel,
+    ).animate(CurvedAnimation(parent: _releaseController, curve: curve));
+    void applyFrame() {
+      final delta = animation.value - lastValue;
+      lastValue = animation.value;
+      if (delta == 0 || !mounted || serial != _motionSerial) return;
+      _applyDelta(controller, delta, source: 'motion');
+    }
+
+    animation.addListener(applyFrame);
+    var completed = false;
+    try {
+      await _releaseController.forward(from: 0).orCancel;
+      completed = true;
+    } finally {
+      animation.removeListener(applyFrame);
+    }
+    if (!completed || !mounted || serial != _motionSerial) return;
+    final remaining = travel - lastValue;
+    if (remaining.abs() > .001) {
+      _applyDelta(controller, remaining, source: 'motion');
+    }
+  }
+
+  Future<void> _animateToYear(int year) async {
+    final years = widget.years;
+    final targetIndex = years.indexOf(year);
+    if (targetIndex < 0) return;
+    if (targetIndex == _selectedIndex(years)) {
+      setState(() => _selectedYear = year);
+      widget.onYearPublished(year);
+      return;
+    }
+    _motionSerial += 1;
+    final serial = _motionSerial;
+    _releaseController.stop();
+    final controller = SpendeeCenterCarouselController(
+      itemCount: years.length,
+      initialIndex: _selectedIndex(years),
+      slotDistance: _MindSumYearCarousel._slotDistance,
+    );
+    setState(() {
+      _liveTicked = false;
+      _visualDx = 0;
+      _carouselController = controller;
+    });
+    try {
+      var guard = 0;
+      while (controller.index != targetIndex && guard < years.length) {
+        guard += 1;
+        final travel = controller.travelToIndex(targetIndex);
+        if (travel.abs() < .5) break;
+        await _animateTravel(
+          controller: controller,
+          travel: travel
+              .clamp(-controller.slotDistance, controller.slotDistance)
+              .toDouble(),
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          serial: serial,
+        );
+      }
+    } on TickerCanceled {
+      return;
+    } finally {
+      _finishMotion(controller, serial: serial, source: 'tap');
+    }
+  }
+
+  void _finishMotion(
+    SpendeeCenterCarouselController controller, {
+    required int serial,
+    required String source,
+  }) {
+    if (!mounted || serial != _motionSerial || widget.years.isEmpty) return;
+    final year = widget.years[controller.index % widget.years.length];
+    _carouselController = null;
+    setState(() {
+      _selectedYear = year;
+      _visualDx = 0;
+    });
+    DebugConsole.log(
+      '[Perf] SpendeeTest mind_global_year_publish '
+      'source=$source selected=$year',
+    );
+    widget.onYearPublished(year);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selectedYearFor(widget.years);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            key: const ValueKey('spendee-test-mind-time-rail-control'),
+            height: 30,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .84),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: .86)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF475569).withValues(alpha: .08),
+                    offset: const Offset(0, 4),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 11),
+                  const Text(
+                    'IDŐ FINOMÍTÁS',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      selected == null ? 'Nincs év' : '$selected',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF14213A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: ValueKey(
+                      widget.expanded
+                          ? 'spendee-test-mind-time-rail-collapse-toggle'
+                          : 'spendee-test-mind-time-rail-expand-toggle',
+                    ),
+                    tooltip: widget.expanded
+                        ? 'Időrail összecsukása'
+                        : 'Időrail kibontása',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    iconSize: 18,
+                    onPressed: _toggleExpanded,
+                    icon: Icon(
+                      widget.expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      color: const Color(0xFF14213A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: widget.expanded
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: SizedBox(
+                      height: 66,
+                      child: RepaintBoundary(
+                        child: KeyedSubtree(
+                          key: const ValueKey(
+                            'spendee-test-mind-time-rail-carousel',
+                          ),
+                          child: _MindSumYearCarousel(
+                            years: widget.years,
+                            selectedYear: selected,
+                            yearSummaries: widget.yearSummaries,
+                            activeType: widget.activeType,
+                            carouselOffset: _visualDx,
+                            railConfig: widget.railConfig,
+                            railSurface: widget.railSurface,
+                            railSoftness: 0,
+                            railOpacity: widget.railOpacity,
+                            yearCardEnabled: widget.yearCardEnabled,
+                            yearCardSurface: widget.yearCardSurface,
+                            yearCardOpacity: widget.yearCardOpacity,
+                            showVolumeBars: widget.showVolumeBars,
+                            onYearTap: (year) =>
+                                unawaited(_animateToYear(year)),
+                            onDragStart: _handleDragStart,
+                            onDragUpdate: _handleDragUpdate,
+                            onDragEnd: _handleDragEnd,
+                            onDragCancel: _handleDragCancel,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -5548,7 +6179,7 @@ class _PositionedMindSumYearCard extends StatelessWidget {
       child: _MindSumYearCard(
         year: slot.year,
         size: size,
-        selected: logicalOffset.abs() < .01,
+        selected: slot.offset == 0,
         activeType: activeType,
         monthlyTotals: monthlyTotals,
         cardEnabled: yearCardEnabled,
@@ -5718,7 +6349,6 @@ class _MindSumSelectedYearHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final heatColor = _mindYearHeatColor(frame.yearData);
     final content = Padding(
       padding: const EdgeInsets.all(8),
       child: SingleChildScrollView(
@@ -5728,7 +6358,7 @@ class _MindSumSelectedYearHeatmap extends StatelessWidget {
           builder: (context, constraints) {
             const gap = 6.0;
             final width = constraints.maxWidth;
-            final cardWidth = math.max(70.0, (width - gap * 2) / 3);
+            final cardWidth = math.max(64.0, (width - gap * 3) / 4);
             return Wrap(
               spacing: gap,
               runSpacing: gap,
@@ -5736,11 +6366,10 @@ class _MindSumSelectedYearHeatmap extends StatelessWidget {
                 for (final month in frame.yearData.months)
                   SizedBox(
                     width: cardWidth,
-                    height: 138,
+                    height: math.max(118.0, cardWidth * 1.55),
                     child: _MindSumMonthHeatmapCard(
                       month: month,
                       year: selectedYear,
-                      heatColor: heatColor,
                       cardEnabled: monthCardEnabled,
                       surface: monthCardSurface,
                       opacity: monthCardOpacity,
@@ -5779,7 +6408,6 @@ class _MindSumMonthHeatmapCard extends StatelessWidget {
   const _MindSumMonthHeatmapCard({
     required this.month,
     required this.year,
-    required this.heatColor,
     required this.cardEnabled,
     required this.surface,
     required this.opacity,
@@ -5787,7 +6415,6 @@ class _MindSumMonthHeatmapCard extends StatelessWidget {
 
   final StatsMonthData month;
   final int year;
-  final Color heatColor;
   final bool cardEnabled;
   final _PanelSurface surface;
   final double opacity;
@@ -5864,11 +6491,28 @@ class _MindSumMonthHeatmapCard extends StatelessWidget {
                                 'spendee-test-mind-sum-day-$year-${month.month}-${day.day}',
                               ),
                               day: day,
-                              heatColor: heatColor,
                             ),
                   ],
                 );
               },
+            ),
+          ),
+          const SizedBox(height: 3),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              _formatFt(month.scopeTotal),
+              key: ValueKey(
+                'spendee-test-mind-sum-month-total-$year-${month.month}',
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF334155),
+                fontSize: 6.5,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
             ),
           ),
         ],
@@ -5891,29 +6535,26 @@ class _MindSumMonthHeatmapCard extends StatelessWidget {
 }
 
 class _MindSumDayHeatCell extends StatelessWidget {
-  const _MindSumDayHeatCell({
-    super.key,
-    required this.day,
-    required this.heatColor,
-  });
+  const _MindSumDayHeatCell({super.key, required this.day});
 
   final StatsDayData day;
-  final Color heatColor;
 
   @override
   Widget build(BuildContext context) {
     final heated = day.meetsThreshold;
-    final alpha = (0.10 + day.heatmapIntensity * .90).clamp(.10, 1.0);
+    final color = _mindHeatmapCellColor(day.heatmapIntensity);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: heated ? heatColor.withValues(alpha: alpha) : Colors.transparent,
+        color: heated ? color : Colors.transparent,
         borderRadius: BorderRadius.circular(2.5),
       ),
       child: Center(
         child: Text(
           '${day.day}',
           style: TextStyle(
-            color: heated ? const Color(0xFF14213A) : const Color(0xFF64748B),
+            color: heated && day.heatmapIntensity >= .54
+                ? Colors.white
+                : const Color(0xFF64748B),
             fontSize: 6.1,
             fontWeight: heated ? FontWeight.w900 : FontWeight.w700,
             height: 1,
@@ -5924,80 +6565,15 @@ class _MindSumDayHeatCell extends StatelessWidget {
   }
 }
 
-Color _mindYearHeatColor(StatsYearData data) {
-  if (data.selectedCategoryIds.length != 1) return AppColors.primary;
-  final selectedCategoryId = data.selectedCategoryIds.single;
-  for (final month in data.months) {
-    for (final day in month.days) {
-      if (day.dominantCategoryId == selectedCategoryId) {
-        return day.dominantCategoryColor;
-      }
-    }
-  }
-  return AppColors.primary;
-}
-
-class _MindGraphCard extends StatelessWidget {
-  const _MindGraphCard({
-    super.key,
-    required this.surface,
-    required this.softness,
-    required this.surfaceKeyBase,
-    required this.paintKey,
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.painter,
-  });
-
-  final _PanelSurface surface;
-  final double softness;
-  final String surfaceKeyBase;
-  final Key paintKey;
-  final String label;
-  final String value;
-  final Color color;
-  final CustomPainter painter;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Padding(
-      padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _pieFocusLabelStyle,
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _pieFocusMetaStyle.copyWith(color: color),
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: CustomPaint(
-              key: paintKey,
-              painter: painter,
-              child: const SizedBox.expand(),
-            ),
-          ),
-        ],
-      ),
-    );
-    return _wrapPanelSurface(
-      surface: surface,
-      softness: softness,
-      keyBase: surfaceKeyBase,
-      borderRadius: 13,
-      child: content,
-    );
-  }
+Color _mindHeatmapCellColor(double intensity) {
+  final alpha = (.42 + intensity.clamp(0.0, 1.0) * .50).clamp(.42, .92);
+  final base = switch (intensity) {
+    >= .78 => const Color(0xFF7C2AC6),
+    >= .58 => const Color(0xFFF5368D),
+    >= .36 => const Color(0xFFFF6B6B),
+    _ => const Color(0xFFFFB15C),
+  };
+  return base.withValues(alpha: alpha.toDouble());
 }
 
 class _MindStage2Panel extends StatelessWidget {
@@ -6384,59 +6960,6 @@ class _MindVolumeMiniPainter extends CustomPainter {
   }
 }
 
-class _MindPatternMiniPainter extends CustomPainter {
-  const _MindPatternMiniPainter({
-    required this.activeType,
-    required this.patternBars,
-    required this.color,
-  });
-
-  final TransactionType activeType;
-  final List<StatsHelperBar> patternBars;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    _drawMiniGrid(canvas, size);
-    final baselineY = size.height - 1;
-    canvas.drawLine(
-      Offset(0, baselineY),
-      Offset(size.width, baselineY),
-      Paint()
-        ..color = const Color(0xFF14213A).withValues(alpha: .35)
-        ..strokeWidth = 1,
-    );
-    final barWidth = patternBars.isEmpty
-        ? 0.0
-        : patternBars.length <= 12
-        ? (size.width / math.max(patternBars.length * 7, 18)).clamp(4.0, 8.0)
-        : (size.width / (patternBars.length * 1.35)).clamp(1.2, 7.0);
-    for (final bar in patternBars) {
-      final normalized = (bar.value / 100).clamp(0.0, 1.0).toDouble();
-      final height = math.max(1.0, normalized * size.height * .82);
-      final x = bar.position.clamp(0.0, 1.0) * size.width;
-      final barColor = _mindHexColor(bar.colorHex, fallback: color);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(x - barWidth / 2, baselineY - height, barWidth, height),
-          Radius.circular(math.min(2.4, barWidth / 2)),
-        ),
-        Paint()
-          ..color = barColor.withValues(
-            alpha: (0.34 + normalized * 0.5).clamp(0.34, 0.84),
-          ),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MindPatternMiniPainter oldDelegate) {
-    return oldDelegate.activeType != activeType ||
-        oldDelegate.patternBars != patternBars ||
-        oldDelegate.color != color;
-  }
-}
-
 void _drawMiniGrid(Canvas canvas, Size size) {
   final paint = Paint()
     ..color = const Color(0xFF14213A).withValues(alpha: .10)
@@ -6450,17 +6973,6 @@ void _drawMiniGrid(Canvas canvas, Size size) {
 double _normalizedMiniPosition(int index, int count) {
   if (count <= 1) return .5;
   return index / (count - 1);
-}
-
-String _mindTypeSuffix(TransactionType type) {
-  return type == TransactionType.income ? 'income' : 'expense';
-}
-
-Color _mindHexColor(String hex, {required Color fallback}) {
-  final normalized = hex.replaceFirst('#', '');
-  if (normalized.length != 6) return fallback;
-  final value = int.tryParse('FF$normalized', radix: 16);
-  return value == null ? fallback : Color(value);
 }
 
 Color _mindScoreColor(double score) {
@@ -6659,12 +7171,14 @@ class _HeaderSurfaceFrame extends StatelessWidget {
     required this.liquidSoftness,
     required this.child,
     this.background,
+    this.backgroundOpacity = 1,
   });
 
   final _HeaderSurface surface;
   final double liquidSoftness;
   final Widget child;
   final Widget? background;
+  final double backgroundOpacity;
 
   @override
   Widget build(BuildContext context) {
@@ -6720,13 +7234,29 @@ class _HeaderSurfaceFrame extends StatelessWidget {
   Widget _buildForegroundWithBackground(Widget foreground) {
     final background = this.background;
     if (background == null) return foreground;
-    return Stack(fit: StackFit.expand, children: [background, foreground]);
+    return Stack(
+      fit: StackFit.expand,
+      children: [_backgroundLayer(background), foreground],
+    );
   }
 
   Widget _buildColoredSurfaceContent(Widget foreground) {
     return Stack(
       fit: StackFit.expand,
-      children: [background ?? const _HeaderColoredBase(), foreground],
+      children: [
+        background == null
+            ? const _HeaderColoredBase()
+            : _backgroundLayer(background!),
+        foreground,
+      ],
+    );
+  }
+
+  Widget _backgroundLayer(Widget background) {
+    return Opacity(
+      key: const ValueKey('spendee-test-header-background-opacity-layer'),
+      opacity: backgroundOpacity.clamp(.1, 1.0).toDouble(),
+      child: background,
     );
   }
 }
@@ -8880,6 +9410,8 @@ class _SpendeeHomeContent extends StatefulWidget {
     required this.store,
     required this.expenseTheme,
     required this.stageListenable,
+    required this.mindGlobalRailPresentationListenable,
+    required this.onMindSumYearSelected,
     required this.onPickSummaryMonth,
     required this.onEditTransaction,
     required this.onDeleteTransactionRequested,
@@ -8890,6 +9422,9 @@ class _SpendeeHomeContent extends StatefulWidget {
   final TransactionStore store;
   final ExpenseTheme expenseTheme;
   final ValueListenable<SpendeeHeaderStage> stageListenable;
+  final ValueListenable<_MindGlobalRailPresentation>
+  mindGlobalRailPresentationListenable;
+  final ValueChanged<int> onMindSumYearSelected;
   final VoidCallback onPickSummaryMonth;
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final TransactionDeleteRequest? onDeleteTransactionRequested;
@@ -8924,6 +9459,8 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
   Axis? _summaryDragAxis;
   Offset? _summaryDragStart;
   _SpendeeHomeLogSnapshot? _logSnapshot;
+  StatsRenderFrame? _mindTimeRailFrame;
+  var _mindTimeRailExpanded = true;
 
   @override
   void initState() {
@@ -8938,6 +9475,7 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
       oldWidget.store.removeListener(_handleStoreChanged);
       widget.store.addListener(_handleStoreChanged);
       _logSnapshot = null;
+      _mindTimeRailFrame = null;
     }
   }
 
@@ -8949,6 +9487,7 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
 
   void _handleStoreChanged() {
     _logSnapshot = null;
+    _mindTimeRailFrame = null;
     if (!mounted) return;
     setState(() {});
   }
@@ -8963,6 +9502,25 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
     );
     _logSnapshot = snapshot;
     return snapshot;
+  }
+
+  StatsRenderFrame _mindTimeRailFrameFor(TransactionStore store) {
+    final cached = _mindTimeRailFrame;
+    if (cached != null) return cached;
+    return _mindTimeRailFrame =
+        SpendeeMindStatsFrame.sumYearVolumeFrameFromStore(
+          store,
+          activeType: store.activeType,
+        );
+  }
+
+  List<int> _mindTimeRailYears(StatsRenderFrame frame) {
+    final years = <int>{
+      for (final summary in frame.yearData.sumYearSummaries)
+        if (summary.monthTotals.isNotEmpty) summary.year,
+    }.toList()..sort((left, right) => right.compareTo(left));
+    if (years.isNotEmpty) return years;
+    return [frame.yearData.year];
   }
 
   List<SearchPillFilter> _categorySearchFilters() {
@@ -9089,6 +9647,11 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
     });
   }
 
+  void _handleMindTimeRailExpandedChanged(bool expanded) {
+    if (_mindTimeRailExpanded == expanded) return;
+    setState(() => _mindTimeRailExpanded = expanded);
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
@@ -9114,199 +9677,273 @@ class _SpendeeHomeContentState extends State<_SpendeeHomeContent> {
             'jank=true',
           );
         });
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            const fixedDashboardControlsHeight = 66.0 + 59.0 + 12.0 + 45.0;
-            const transactionHeaderHeight = 24.0;
-            final canShowTransactionLog =
-                stage != SpendeeHeaderStage.stage2 &&
-                constraints.maxHeight >=
-                    fixedDashboardControlsHeight + transactionHeaderHeight;
-            final logSnapshot = canShowTransactionLog
-                ? _snapshotLogInputs()
+        return ValueListenableBuilder<_MindGlobalRailPresentation>(
+          valueListenable: widget.mindGlobalRailPresentationListenable,
+          builder: (context, railPresentation, _) {
+            final showMindTimeRail =
+                railPresentation.enabled &&
+                store.summaryWindow == SummaryWindow.allTime;
+            final mindTimeRailFrame = showMindTimeRail
+                ? _mindTimeRailFrameFor(store)
                 : null;
-            return Column(
-              children: [
-                SizedBox(
-                  key: const ValueKey('spendee-test-type-row'),
-                  height: 66,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _SpendeeTypePill(
-                            key: const ValueKey(
-                              'spendee-test-income-type-pill',
-                            ),
-                            label: 'Bevétel',
-                            active: store.activeType == TransactionType.income,
-                            activeGradient: const LinearGradient(
-                              colors: [Colors.white, Colors.white],
-                            ),
-                            boxShadows: const <BoxShadow>[
-                              BoxShadow(
-                                color: Color.fromRGBO(15, 23, 42, .08),
-                                offset: Offset(0, 10),
-                                blurRadius: 23,
-                              ),
-                            ],
-                            textColor:
-                                store.activeType == TransactionType.income
-                                ? const Color(0xFF14213A)
-                                : AppColors.gray500,
-                            onTap: () =>
-                                store.setActiveType(TransactionType.income),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _SpendeeTypePill(
-                            key: const ValueKey(
-                              'spendee-test-expense-type-pill',
-                            ),
-                            label: 'Kiadás',
-                            active: store.activeType == TransactionType.expense,
-                            activeGradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFFFFB15C),
-                                Color(0xFFFF6B6B),
-                                Color(0xFFF5368D),
-                              ],
-                            ),
-                            boxShadows: const <BoxShadow>[
-                              BoxShadow(
-                                color: Color.fromRGBO(15, 23, 42, .08),
-                                offset: Offset(0, 12),
-                                blurRadius: 24,
-                              ),
-                            ],
-                            textColor:
-                                store.activeType == TransactionType.expense
-                                ? Colors.white
-                                : AppColors.gray500,
-                            onTap: () =>
-                                store.setActiveType(TransactionType.expense),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Listener(
-                  onPointerDown: _handleSummaryPointerDown,
-                  onPointerMove: _handleSummaryPointerMove,
-                  onPointerUp: _handleSummaryPointerUp,
-                  onPointerCancel: _handleSummaryPointerCancel,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onPickSummaryMonth,
-                    onDoubleTap: store.resetSummaryToCurrentMonth,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28),
-                      child: AnimatedContainer(
-                        key: const ValueKey('spendee-test-summary-pill'),
-                        duration: _summaryDragging
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
-                        transform: Matrix4.translationValues(
-                          _summaryDragDx,
-                          _summaryDragDy,
-                          0,
-                        ),
-                        height: 59,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: _softWhiteDecoration(20),
+            final mindTimeRailHeight = showMindTimeRail
+                ? (_mindTimeRailExpanded ? 102.0 : 30.0)
+                : 0.0;
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final fixedDashboardControlsHeight =
+                    66.0 + 59.0 + 12.0 + 45.0 + mindTimeRailHeight;
+                const transactionHeaderHeight = 24.0;
+                final canShowTransactionLog =
+                    stage != SpendeeHeaderStage.stage2 &&
+                    constraints.maxHeight >=
+                        fixedDashboardControlsHeight + transactionHeaderHeight;
+                final logSnapshot = canShowTransactionLog
+                    ? _snapshotLogInputs()
+                    : null;
+                final mindTimeRail = showMindTimeRail
+                    ? _MindGlobalTimeRail(
+                        key: const ValueKey('spendee-test-mind-time-rail'),
+                        years: _mindTimeRailYears(mindTimeRailFrame!),
+                        yearSummaries:
+                            mindTimeRailFrame.yearData.sumYearSummaries,
+                        activeType: store.activeType,
+                        selectedYear: railPresentation.selectedYear,
+                        railConfig: railPresentation.railConfig,
+                        railSurface: railPresentation.railSurface,
+                        railOpacity: railPresentation.railOpacity,
+                        yearCardEnabled: railPresentation.yearCardEnabled,
+                        yearCardSurface: railPresentation.yearCardSurface,
+                        yearCardOpacity: railPresentation.yearCardOpacity,
+                        showVolumeBars: railPresentation.showVolumeBars,
+                        expanded: _mindTimeRailExpanded,
+                        onExpandedChanged: _handleMindTimeRailExpandedChanged,
+                        onYearPublished: widget.onMindSumYearSelected,
+                      )
+                    : null;
+                final dashboardControls = Column(
+                  children: [
+                    SizedBox(
+                      key: const ValueKey('spendee-test-type-row'),
+                      height: 66,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Flexible(
-                              child: Text(
-                                store.activeSummaryTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.gray500,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: _SpendeeTypePill(
+                                key: const ValueKey(
+                                  'spendee-test-income-type-pill',
                                 ),
+                                label: 'Bevétel',
+                                active:
+                                    store.activeType == TransactionType.income,
+                                activeGradient: const LinearGradient(
+                                  colors: [Colors.white, Colors.white],
+                                ),
+                                boxShadows: const <BoxShadow>[
+                                  BoxShadow(
+                                    color: Color.fromRGBO(15, 23, 42, .08),
+                                    offset: Offset(0, 10),
+                                    blurRadius: 23,
+                                  ),
+                                ],
+                                textColor:
+                                    store.activeType == TransactionType.income
+                                    ? const Color(0xFF14213A)
+                                    : AppColors.gray500,
+                                onTap: () =>
+                                    store.setActiveType(TransactionType.income),
                               ),
                             ),
-                            Text(
-                              store.activeSummary.formattedFor(
-                                store.activeType,
-                              ),
-                              style: const TextStyle(
-                                color: AppColors.gray800,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _SpendeeTypePill(
+                                key: const ValueKey(
+                                  'spendee-test-expense-type-pill',
+                                ),
+                                label: 'Kiadás',
+                                active:
+                                    store.activeType == TransactionType.expense,
+                                activeGradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFFFFB15C),
+                                    Color(0xFFFF6B6B),
+                                    Color(0xFFF5368D),
+                                  ],
+                                ),
+                                boxShadows: const <BoxShadow>[
+                                  BoxShadow(
+                                    color: Color.fromRGBO(15, 23, 42, .08),
+                                    offset: Offset(0, 12),
+                                    blurRadius: 24,
+                                  ),
+                                ],
+                                textColor:
+                                    store.activeType == TransactionType.expense
+                                    ? Colors.white
+                                    : AppColors.gray500,
+                                onTap: () => store.setActiveType(
+                                  TransactionType.expense,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: SizedBox(
-                    height: 45,
-                    child: SearchPill(
-                      key: const ValueKey('spendee-test-search-pill'),
-                      query: store.searchQuery,
-                      onQueryChanged: store.setSearchQuery,
-                      surfaceColor: widget.expenseTheme.logBox,
-                      surfaceStyle: widget.expenseTheme.contentSurfaceStyle,
-                      merchantFilters: _merchantSearchFilters(),
-                      categoryFilters: _categorySearchFilters(),
-                      accentColor: widget.expenseTheme.accent,
-                      shadowEnabled: true,
-                      surfaceMargin: EdgeInsets.zero,
-                      surfaceConstraints: const BoxConstraints.tightFor(
-                        height: 45,
-                      ),
-                      surfacePadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      onVendorListPressed: onVendorSheetRequested,
-                    ),
-                  ),
-                ),
-                if (canShowTransactionLog) ...[
-                  SizedBox(
-                    height: 24,
-                    child: Center(
-                      child: Text(
-                        '${logSnapshot!.transactionCount} tranzakció',
-                        key: const ValueKey('spendee-test-transaction-count'),
-                        style: const TextStyle(
-                          color: AppColors.gray500,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                    Listener(
+                      onPointerDown: _handleSummaryPointerDown,
+                      onPointerMove: _handleSummaryPointerMove,
+                      onPointerUp: _handleSummaryPointerUp,
+                      onPointerCancel: _handleSummaryPointerCancel,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onPickSummaryMonth,
+                        onDoubleTap: store.resetSummaryToCurrentMonth,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
+                          child: AnimatedContainer(
+                            key: const ValueKey('spendee-test-summary-pill'),
+                            duration: _summaryDragging
+                                ? Duration.zero
+                                : const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            transform: Matrix4.translationValues(
+                              _summaryDragDx,
+                              _summaryDragDy,
+                              0,
+                            ),
+                            height: 59,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: _softWhiteDecoration(20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    store.activeSummaryTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.gray500,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  store.activeSummary.formattedFor(
+                                    store.activeType,
+                                  ),
+                                  style: const TextStyle(
+                                    color: AppColors.gray800,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: _SpendeeLogList(
-                      entries: logSnapshot.entries,
-                      categoriesById: logSnapshot.categoriesById,
-                      bottomPadding: logBottomPadding,
-                      onFastFilter: (record, _) =>
-                          store.setMerchantFilter(record.displayMerchant),
-                      onRecordTap: onEditTransaction,
-                      onDeleteRequested: onDeleteTransactionRequested,
-                      onCategoryFilter: store.setCategoryFilter,
+                    SizedBox(
+                      height: !canShowTransactionLog && showMindTimeRail
+                          ? 2
+                          : 12,
                     ),
-                  ),
-                ],
-              ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: SizedBox(
+                        height: 45,
+                        child: SearchPill(
+                          key: const ValueKey('spendee-test-search-pill'),
+                          query: store.searchQuery,
+                          onQueryChanged: store.setSearchQuery,
+                          surfaceColor: widget.expenseTheme.logBox,
+                          surfaceStyle: widget.expenseTheme.contentSurfaceStyle,
+                          merchantFilters: _merchantSearchFilters(),
+                          categoryFilters: _categorySearchFilters(),
+                          accentColor: widget.expenseTheme.accent,
+                          shadowEnabled: true,
+                          surfaceMargin: EdgeInsets.zero,
+                          surfaceConstraints: const BoxConstraints.tightFor(
+                            height: 45,
+                          ),
+                          surfacePadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          onVendorListPressed: onVendorSheetRequested,
+                        ),
+                      ),
+                    ),
+                    if (showMindTimeRail && canShowTransactionLog) ...[
+                      const SizedBox(height: 6),
+                      mindTimeRail!,
+                    ],
+                    if (canShowTransactionLog) ...[
+                      SizedBox(
+                        height: 24,
+                        child: Center(
+                          child: Text(
+                            '${logSnapshot!.transactionCount} tranzakció',
+                            key: const ValueKey(
+                              'spendee-test-transaction-count',
+                            ),
+                            style: const TextStyle(
+                              color: AppColors.gray500,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: _SpendeeLogList(
+                          entries: logSnapshot.entries,
+                          categoriesById: logSnapshot.categoriesById,
+                          bottomPadding: logBottomPadding,
+                          onFastFilter: (record, _) =>
+                              store.setMerchantFilter(record.displayMerchant),
+                          onRecordTap: onEditTransaction,
+                          onDeleteRequested: onDeleteTransactionRequested,
+                          onCategoryFilter: store.setCategoryFilter,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+                if (canShowTransactionLog) return dashboardControls;
+                if (mindTimeRail == null) {
+                  return SingleChildScrollView(
+                    key: const ValueKey(
+                      'spendee-test-dashboard-controls-scroll',
+                    ),
+                    child: dashboardControls,
+                  );
+                }
+                return Stack(
+                  children: [
+                    SingleChildScrollView(
+                      key: const ValueKey(
+                        'spendee-test-dashboard-controls-scroll',
+                      ),
+                      padding: EdgeInsets.only(
+                        bottom: _mindTimeRailExpanded ? 102 : 30,
+                      ),
+                      child: dashboardControls,
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: mindTimeRail,
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
@@ -10365,14 +11002,6 @@ const _stage2VendorPalette = <Color>[
   Color(0xFFEAB308),
   Color(0xFFEC4899),
 ];
-
-const _smallCapsStyle = TextStyle(
-  color: Color(0xA814213A),
-  fontSize: 10,
-  height: 1,
-  fontWeight: FontWeight.w900,
-  letterSpacing: .5,
-);
 
 const _pieFocusLabelStyle = TextStyle(
   color: Color(0x8514213A),
