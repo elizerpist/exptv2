@@ -186,6 +186,57 @@ class _MindSumVolumeFrameCacheKey {
   int get hashCode => Object.hash(statsKey, activeType);
 }
 
+class _MindSumStage2WidgetCacheKey {
+  const _MindSumStage2WidgetCacheKey({
+    required this.frame,
+    required this.year,
+    required this.outerEnabled,
+    required this.outerSurface,
+    required this.outerSoftness,
+    required this.outerOpacity,
+    required this.monthCardEnabled,
+    required this.monthCardSurface,
+    required this.monthCardOpacity,
+  });
+
+  final StatsRenderFrame frame;
+  final int year;
+  final bool outerEnabled;
+  final _PanelSurface outerSurface;
+  final double outerSoftness;
+  final double outerOpacity;
+  final bool monthCardEnabled;
+  final _PanelSurface monthCardSurface;
+  final double monthCardOpacity;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _MindSumStage2WidgetCacheKey &&
+        identical(other.frame, frame) &&
+        other.year == year &&
+        other.outerEnabled == outerEnabled &&
+        other.outerSurface == outerSurface &&
+        other.outerSoftness == outerSoftness &&
+        other.outerOpacity == outerOpacity &&
+        other.monthCardEnabled == monthCardEnabled &&
+        other.monthCardSurface == monthCardSurface &&
+        other.monthCardOpacity == monthCardOpacity;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    identityHashCode(frame),
+    year,
+    outerEnabled,
+    outerSurface,
+    outerSoftness,
+    outerOpacity,
+    monthCardEnabled,
+    monthCardSurface,
+    monthCardOpacity,
+  );
+}
+
 bool _listEquals<T>(List<T> left, List<T> right) {
   if (identical(left, right)) return true;
   if (left.length != right.length) return false;
@@ -949,13 +1000,12 @@ class _MindSumLayoutMenuSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.sizeOf(context).height * .86;
     return SafeArea(
       top: false,
       child: Container(
         key: const ValueKey('spendee-test-mind-sum-layout-menu'),
         margin: const EdgeInsets.all(14),
-        constraints: BoxConstraints(maxHeight: maxHeight),
+        constraints: const BoxConstraints(maxHeight: 332),
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: .97),
@@ -1740,12 +1790,15 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   late final AnimationController _mindSumYearCarouselReleaseController;
   var _mindSumYearCarouselMotionSerial = 0;
   int? _selectedMindSumYear;
+  int? _publishedMindSumYear;
   _MindStatsFrameCacheKey? _mindStatsFrameCacheKey;
   SpendeeMindStatsFrame? _mindStatsFrameCache;
   _MindSumVolumeFrameCacheKey? _mindSumVolumeFrameCacheKey;
   StatsRenderFrame? _mindSumVolumeFrameCache;
-  _MindSumYearFrameCacheKey? _mindSumYearFrameCacheKey;
-  StatsRenderFrame? _mindSumYearFrameCache;
+  final _mindSumYearFrameCache =
+      <_MindSumYearFrameCacheKey, StatsRenderFrame>{};
+  _MindSumStage2WidgetCacheKey? _mindSumStage2WidgetCacheKey;
+  Widget? _mindSumStage2WidgetCache;
   Stopwatch? _headerDragStopwatch;
   var _headerDragUpdateCount = 0;
   Stopwatch? _carouselDragStopwatch;
@@ -1940,6 +1993,12 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     return years.first;
   }
 
+  int _publishedMindSumYearFor(List<int> years) {
+    final published = _publishedMindSumYear;
+    if (published != null && years.contains(published)) return published;
+    return _selectedMindSumYearFor(years);
+  }
+
   int _mindSumYearIndex(List<int> years) {
     final selectedYear = _selectedMindSumYearFor(years);
     final index = years.indexOf(selectedYear);
@@ -1973,25 +2032,78 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       year: year,
       activeType: store.activeType,
     );
-    final cachedKey = _mindSumYearFrameCacheKey;
-    final cachedFrame = _mindSumYearFrameCache;
-    if (cachedKey == key && cachedFrame != null) return cachedFrame;
+    final cachedFrame = _mindSumYearFrameCache[key];
+    if (cachedFrame != null) return cachedFrame;
 
     final frame = SpendeeMindStatsFrame.sumYearFrameFromStore(
       store,
       year: year,
       activeType: store.activeType,
     );
-    _mindSumYearFrameCacheKey = key;
-    _mindSumYearFrameCache = frame;
+    if (_mindSumYearFrameCache.length >= 12) {
+      _mindSumYearFrameCache.remove(_mindSumYearFrameCache.keys.first);
+    }
+    _mindSumYearFrameCache[key] = frame;
     return frame;
+  }
+
+  Widget _mindSumStage2WidgetFor({
+    required StatsRenderFrame frame,
+    required int year,
+  }) {
+    final key = _MindSumStage2WidgetCacheKey(
+      frame: frame,
+      year: year,
+      outerEnabled: _mindSumStage2OuterEnabled,
+      outerSurface: _mindSumStage2Surface,
+      outerSoftness: _mindStage2Softness,
+      outerOpacity: _mindSumStage2Opacity,
+      monthCardEnabled: _mindSumMonthCardEnabled,
+      monthCardSurface: _mindSumMonthCardSurface,
+      monthCardOpacity: _mindSumMonthCardOpacity,
+    );
+    final cachedKey = _mindSumStage2WidgetCacheKey;
+    final cachedWidget = _mindSumStage2WidgetCache;
+    if (cachedKey == key && cachedWidget != null) return cachedWidget;
+
+    final widget = RepaintBoundary(
+      key: const ValueKey('spendee-test-mind-sum-stage2-repaint-boundary'),
+      child: _MindSumSelectedYearHeatmap(
+        frame: frame,
+        selectedYear: year,
+        outerEnabled: _mindSumStage2OuterEnabled,
+        outerSurface: _mindSumStage2Surface,
+        outerSoftness: _mindStage2Softness,
+        outerOpacity: _mindSumStage2Opacity,
+        monthCardEnabled: _mindSumMonthCardEnabled,
+        monthCardSurface: _mindSumMonthCardSurface,
+        monthCardOpacity: _mindSumMonthCardOpacity,
+      ),
+    );
+    _mindSumStage2WidgetCacheKey = key;
+    _mindSumStage2WidgetCache = widget;
+    return widget;
+  }
+
+  void _publishMindSumYearForStage2(int? year, {required String source}) {
+    if (year == null || _publishedMindSumYear == year) return;
+    _publishedMindSumYear = year;
+    DebugConsole.log(
+      '[Perf] SpendeeTest mind_sum_stage2_publish '
+      'source=$source selected=$year',
+    );
   }
 
   void _setSelectedMindSumYear(int year, {bool haptic = true}) {
     if (_selectedMindSumYear == year) return;
     if (haptic) HapticFeedback.selectionClick();
     if (!mounted) return;
-    setState(() => _selectedMindSumYear = year);
+    setState(() {
+      _selectedMindSumYear = year;
+      if (_stage == SpendeeHeaderStage.stage2) {
+        _publishMindSumYearForStage2(year, source: 'tap');
+      }
+    });
   }
 
   void _handleMindSumYearCarouselDragStart(DragStartDetails details) {
@@ -2087,8 +2199,17 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       return;
     } finally {
       if (mounted && serial == _mindSumYearCarouselMotionSerial) {
+        final frame = _mindSumVolumeFrameFor(widget.store);
+        final years = _mindSumYearsFor(frame);
+        final year = years[controller.index % years.length];
         _mindSumYearCarouselController = null;
-        setState(() => _mindSumYearCarouselVisualDx = 0);
+        setState(() {
+          _selectedMindSumYear = year;
+          if (_stage == SpendeeHeaderStage.stage2) {
+            _publishMindSumYearForStage2(year, source: 'drag_cancel');
+          }
+          _mindSumYearCarouselVisualDx = 0;
+        });
       }
     }
   }
@@ -2137,6 +2258,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         _mindSumYearCarouselController = null;
         setState(() {
           _selectedMindSumYear = year;
+          if (_stage == SpendeeHeaderStage.stage2) {
+            _publishMindSumYearForStage2(year, source: 'drag_settle');
+          }
           _mindSumYearCarouselVisualDx = 0;
         });
       }
@@ -2255,6 +2379,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         _mindSumYearCarouselController = null;
         setState(() {
           _selectedMindSumYear = year;
+          if (_stage == SpendeeHeaderStage.stage2) {
+            _publishMindSumYearForStage2(year, source: 'tap_settle');
+          }
           _mindSumYearCarouselVisualDx = 0;
         });
       }
@@ -2332,6 +2459,14 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   void _endHeaderDrag(DragEndDetails details) {
     final controller = _controllerFor(context);
     final release = controller.release();
+    final stage2MindSumYear =
+        release.targetStage == SpendeeHeaderStage.stage2 &&
+            _headerBackgroundMode == _HeaderBackgroundMode.mind &&
+            widget.store.summaryWindow == SummaryWindow.allTime
+        ? _selectedMindSumYearFor(
+            _mindSumYearsFor(_mindSumVolumeFrameFor(widget.store)),
+          )
+        : null;
     _logHeaderDragPerf(
       targetStage: release.targetStage,
       targetHeight: release.targetHeight,
@@ -2341,6 +2476,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       _dragging = false;
       _springBack = release.springBack;
       _setStage(release.targetStage);
+      if (release.targetStage == SpendeeHeaderStage.stage2) {
+        _publishMindSumYearForStage2(stage2MindSumYear, source: 'stage_enter');
+      }
       _headerHeight = release.targetHeight;
     });
   }
@@ -3936,9 +4074,22 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     final mindSumSelectedYear = mindSumYears.isEmpty
         ? null
         : _selectedMindSumYearFor(mindSumYears);
-    final mindSumSelectedYearFrame = mindSumSelectedYear == null
+    final mindSumPublishedYear = mindSumYears.isEmpty
         ? null
-        : _mindSumYearFrameFor(widget.store, year: mindSumSelectedYear);
+        : _publishedMindSumYearFor(mindSumYears);
+    final mindSumStage2Frame =
+        _stage == SpendeeHeaderStage.stage2 && mindSumPublishedYear != null
+        ? _mindSumYearFrameFor(widget.store, year: mindSumPublishedYear)
+        : null;
+    final mindSumStage2Content = mindSumStage2Frame == null
+        ? null
+        : _mindSumStage2WidgetFor(
+            frame: mindSumStage2Frame,
+            year: mindSumPublishedYear!,
+          );
+    final mindSumActiveType =
+        mindStatsFrame?.activeFrame.yearData.activeType ??
+        widget.store.activeType;
 
     return ColoredBox(
       color: const Color(0xFFF1F5F9),
@@ -4042,7 +4193,8 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                       mindSumVolumeFrame?.yearData.sumYearSummaries ??
                       const <StatsSumYearSummary>[],
                   mindSumSelectedYear: mindSumSelectedYear,
-                  mindSumSelectedYearFrame: mindSumSelectedYearFrame,
+                  mindSumActiveType: mindSumActiveType,
+                  mindSumStage2Content: mindSumStage2Content,
                   mindSumYearCarouselOffset: _mindSumYearCarouselVisualDx,
                   mindSumYearRailConfig: _mindSumYearRailConfig,
                   mindSumStage1Opacity: _mindSumStage1Opacity,
@@ -4050,11 +4202,6 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
                   mindSumYearCardSurface: _mindSumYearCardSurface,
                   mindSumYearCardOpacity: _mindSumYearCardOpacity,
                   mindSumYearVolumeBarsEnabled: _mindSumYearVolumeBarsEnabled,
-                  mindSumStage2OuterEnabled: _mindSumStage2OuterEnabled,
-                  mindSumStage2Opacity: _mindSumStage2Opacity,
-                  mindSumMonthCardEnabled: _mindSumMonthCardEnabled,
-                  mindSumMonthCardSurface: _mindSumMonthCardSurface,
-                  mindSumMonthCardOpacity: _mindSumMonthCardOpacity,
                   onHeaderDesignMenuPressed: _openHeaderDesignMenu,
                   onHeaderBackgroundTap: _openAvatarLayoutMenu,
                   onCarouselDragStart: _handleCarouselDragStart,
@@ -4164,7 +4311,8 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.mindSumYears,
     required this.mindSumYearSummaries,
     required this.mindSumSelectedYear,
-    required this.mindSumSelectedYearFrame,
+    required this.mindSumActiveType,
+    required this.mindSumStage2Content,
     required this.mindSumYearCarouselOffset,
     required this.mindSumYearRailConfig,
     required this.mindSumStage1Opacity,
@@ -4172,11 +4320,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
     required this.mindSumYearCardSurface,
     required this.mindSumYearCardOpacity,
     required this.mindSumYearVolumeBarsEnabled,
-    required this.mindSumStage2OuterEnabled,
-    required this.mindSumStage2Opacity,
-    required this.mindSumMonthCardEnabled,
-    required this.mindSumMonthCardSurface,
-    required this.mindSumMonthCardOpacity,
     required this.onHeaderDesignMenuPressed,
     required this.onHeaderBackgroundTap,
     required this.onCarouselDragStart,
@@ -4243,7 +4386,8 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final List<int> mindSumYears;
   final List<StatsSumYearSummary> mindSumYearSummaries;
   final int? mindSumSelectedYear;
-  final StatsRenderFrame? mindSumSelectedYearFrame;
+  final TransactionType mindSumActiveType;
+  final Widget? mindSumStage2Content;
   final double mindSumYearCarouselOffset;
   final _MindSumYearRailConfig mindSumYearRailConfig;
   final double mindSumStage1Opacity;
@@ -4251,11 +4395,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
   final _PanelSurface mindSumYearCardSurface;
   final double mindSumYearCardOpacity;
   final bool mindSumYearVolumeBarsEnabled;
-  final bool mindSumStage2OuterEnabled;
-  final double mindSumStage2Opacity;
-  final bool mindSumMonthCardEnabled;
-  final _PanelSurface mindSumMonthCardSurface;
-  final double mindSumMonthCardOpacity;
   final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
   final VoidCallback onHeaderBackgroundTap;
   final GestureDragStartCallback onCarouselDragStart;
@@ -4419,7 +4558,8 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
             mindSumYears: mindSumYears,
             mindSumYearSummaries: mindSumYearSummaries,
             mindSumSelectedYear: mindSumSelectedYear,
-            mindSumSelectedYearFrame: mindSumSelectedYearFrame,
+            mindSumActiveType: mindSumActiveType,
+            mindSumStage2Content: mindSumStage2Content,
             mindSumYearCarouselOffset: mindSumYearCarouselOffset,
             mindSumYearRailConfig: mindSumYearRailConfig,
             mindSumStage1Opacity: mindSumStage1Opacity,
@@ -4427,11 +4567,6 @@ class _SpendeeBudgetHeaderCard extends StatelessWidget {
             mindSumYearCardSurface: mindSumYearCardSurface,
             mindSumYearCardOpacity: mindSumYearCardOpacity,
             mindSumYearVolumeBarsEnabled: mindSumYearVolumeBarsEnabled,
-            mindSumStage2OuterEnabled: mindSumStage2OuterEnabled,
-            mindSumStage2Opacity: mindSumStage2Opacity,
-            mindSumMonthCardEnabled: mindSumMonthCardEnabled,
-            mindSumMonthCardSurface: mindSumMonthCardSurface,
-            mindSumMonthCardOpacity: mindSumMonthCardOpacity,
             onHeaderDesignMenuPressed: onHeaderDesignMenuPressed,
             onHeaderBackgroundTap: onHeaderBackgroundTap,
             onHandleDragStart: onHandleDragStart,
@@ -4469,7 +4604,8 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
     required this.mindSumYears,
     required this.mindSumYearSummaries,
     required this.mindSumSelectedYear,
-    required this.mindSumSelectedYearFrame,
+    required this.mindSumActiveType,
+    required this.mindSumStage2Content,
     required this.mindSumYearCarouselOffset,
     required this.mindSumYearRailConfig,
     required this.mindSumStage1Opacity,
@@ -4477,11 +4613,6 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
     required this.mindSumYearCardSurface,
     required this.mindSumYearCardOpacity,
     required this.mindSumYearVolumeBarsEnabled,
-    required this.mindSumStage2OuterEnabled,
-    required this.mindSumStage2Opacity,
-    required this.mindSumMonthCardEnabled,
-    required this.mindSumMonthCardSurface,
-    required this.mindSumMonthCardOpacity,
     required this.onHeaderDesignMenuPressed,
     required this.onHeaderBackgroundTap,
     required this.onHandleDragStart,
@@ -4503,7 +4634,8 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
   final List<int> mindSumYears;
   final List<StatsSumYearSummary> mindSumYearSummaries;
   final int? mindSumSelectedYear;
-  final StatsRenderFrame? mindSumSelectedYearFrame;
+  final TransactionType mindSumActiveType;
+  final Widget? mindSumStage2Content;
   final double mindSumYearCarouselOffset;
   final _MindSumYearRailConfig mindSumYearRailConfig;
   final double mindSumStage1Opacity;
@@ -4511,11 +4643,6 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
   final _PanelSurface mindSumYearCardSurface;
   final double mindSumYearCardOpacity;
   final bool mindSumYearVolumeBarsEnabled;
-  final bool mindSumStage2OuterEnabled;
-  final double mindSumStage2Opacity;
-  final bool mindSumMonthCardEnabled;
-  final _PanelSurface mindSumMonthCardSurface;
-  final double mindSumMonthCardOpacity;
   final ValueChanged<BuildContext> onHeaderDesignMenuPressed;
   final VoidCallback onHeaderBackgroundTap;
   final GestureDragStartCallback onHandleDragStart;
@@ -4594,7 +4721,7 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
                       years: mindSumYears,
                       selectedYear: mindSumSelectedYear,
                       yearSummaries: mindSumYearSummaries,
-                      yearFrame: mindSumSelectedYearFrame,
+                      activeType: mindSumActiveType,
                       carouselOffset: mindSumYearCarouselOffset,
                       railConfig: mindSumYearRailConfig,
                       railSurface: stage1Surface,
@@ -4624,20 +4751,10 @@ class _SpendeeMindHeaderContent extends StatelessWidget {
             right: _budgetHeaderVisualSpec.budget.stage1HorizontalInset,
             top: _budgetHeaderVisualSpec.budget.stage2Top,
             bottom: _budgetHeaderVisualSpec.budget.stage2Bottom,
-            child: modeKey == 'sum' && mindSumSelectedYearFrame != null
+            child: modeKey == 'sum' && mindSumStage2Content != null
                 ? KeyedSubtree(
                     key: const ValueKey('spendee-test-mind-stage2-sum'),
-                    child: _MindSumSelectedYearHeatmap(
-                      frame: mindSumSelectedYearFrame!,
-                      selectedYear: mindSumSelectedYear!,
-                      outerEnabled: mindSumStage2OuterEnabled,
-                      outerSurface: stage2Surface,
-                      outerSoftness: stage2Softness,
-                      outerOpacity: mindSumStage2Opacity,
-                      monthCardEnabled: mindSumMonthCardEnabled,
-                      monthCardSurface: mindSumMonthCardSurface,
-                      monthCardOpacity: mindSumMonthCardOpacity,
-                    ),
+                    child: mindSumStage2Content!,
                   )
                 : _MindStage2Panel(
                     statsFrame: statsFrame,
@@ -5251,7 +5368,7 @@ class _MindSumYearCarousel extends StatelessWidget {
     required this.years,
     required this.selectedYear,
     required this.yearSummaries,
-    required this.yearFrame,
+    required this.activeType,
     required this.carouselOffset,
     required this.railConfig,
     required this.railSurface,
@@ -5274,7 +5391,7 @@ class _MindSumYearCarousel extends StatelessWidget {
   final List<int> years;
   final int? selectedYear;
   final List<StatsSumYearSummary> yearSummaries;
-  final StatsRenderFrame? yearFrame;
+  final TransactionType activeType;
   final double carouselOffset;
   final _MindSumYearRailConfig railConfig;
   final _PanelSurface railSurface;
@@ -5297,8 +5414,6 @@ class _MindSumYearCarousel extends StatelessWidget {
       for (final summary in yearSummaries) summary.year: summary,
     };
     final selected = selectedYear ?? years.first;
-    final activeType =
-        yearFrame?.yearData.activeType ?? TransactionType.expense;
     final content = SizedBox.expand(
       key: const ValueKey('spendee-test-mind-sum-year-carousel'),
       child: GestureDetector(
@@ -5330,7 +5445,6 @@ class _MindSumYearCarousel extends StatelessWidget {
                     logicalOffset: _logicalOffsetFor(slot.offset),
                     config: railConfig,
                     summary: summariesByYear[slot.year],
-                    selectedYearFrame: slot.year == selected ? yearFrame : null,
                     activeType: activeType,
                     yearCardEnabled: yearCardEnabled,
                     yearCardSurface: yearCardSurface,
@@ -5397,7 +5511,6 @@ class _PositionedMindSumYearCard extends StatelessWidget {
     required this.logicalOffset,
     required this.config,
     required this.summary,
-    required this.selectedYearFrame,
     required this.activeType,
     required this.yearCardEnabled,
     required this.yearCardSurface,
@@ -5411,7 +5524,6 @@ class _PositionedMindSumYearCard extends StatelessWidget {
   final double logicalOffset;
   final _MindSumYearRailConfig config;
   final StatsSumYearSummary? summary;
-  final StatsRenderFrame? selectedYearFrame;
   final TransactionType activeType;
   final bool yearCardEnabled;
   final _PanelSurface yearCardSurface;
@@ -5426,17 +5538,7 @@ class _PositionedMindSumYearCard extends StatelessWidget {
     final visualOpacity = logicalOffset.abs() < .01
         ? 1.0
         : _lerpDouble(.88, .62, (logicalOffset.abs() - 1).clamp(0.0, 1.0));
-    final frameTotals = selectedYearFrame == null
-        ? null
-        : {
-            for (final month in selectedYearFrame!.yearData.months)
-              if (month.days.any((day) => day.hasActiveTypeActivity))
-                month.month: month.days.fold<double>(
-                  0,
-                  (total, day) => total + day.scoreScopeAmount,
-                ),
-          };
-    final monthlyTotals = summary?.monthTotals ?? frameTotals ?? const {};
+    final monthlyTotals = summary?.monthTotals ?? const <int, double>{};
     return Positioned(
       key: ValueKey('spendee-test-mind-sum-year-slot-${slot.offset}'),
       left: center.dx + x - size / 2,
@@ -5739,16 +5841,20 @@ class _MindSumMonthHeatmapCard extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final aspect =
-                    constraints.maxWidth /
-                    math.max(1, constraints.maxHeight / 6);
+                const spacing = 1.5;
+                final cellWidth = ((constraints.maxWidth - spacing * 6) / 7)
+                    .clamp(1.0, double.infinity)
+                    .toDouble();
+                final cellHeight = ((constraints.maxHeight - spacing * 5) / 6)
+                    .clamp(1.0, double.infinity)
+                    .toDouble();
                 return GridView.count(
                   padding: EdgeInsets.zero,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: 7,
-                  mainAxisSpacing: 1.5,
-                  crossAxisSpacing: 1.5,
-                  childAspectRatio: aspect,
+                  mainAxisSpacing: spacing,
+                  crossAxisSpacing: spacing,
+                  childAspectRatio: cellWidth / cellHeight,
                   children: [
                     for (final day in cells)
                       day == null

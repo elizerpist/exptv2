@@ -1754,6 +1754,111 @@ void main() {
     },
   );
 
+  testWidgets(
+    'mind SUM keeps the open Stage2 heatmap on its published year during rail drag',
+    (tester) async {
+      final store = await _pumpDashboard(
+        tester,
+        repository: _MindSumDashboardStatsRepository(),
+      );
+      await _switchToMindBackground(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+      await _dragHeaderBy(tester, 272);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2026-1')),
+        findsOneWidget,
+      );
+
+      final rail = find.byKey(
+        const ValueKey('spendee-test-mind-sum-year-carousel-gesture'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(rail));
+      await gesture.moveBy(const Offset(-24, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-64, 0));
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2025-selected'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2026-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-1')),
+        findsNothing,
+      );
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-1')),
+        findsOneWidget,
+      );
+      expect(store.summaryWindow, SummaryWindow.allTime);
+    },
+  );
+
+  testWidgets('mind SUM month grids use a cell-sized aspect ratio', (
+    tester,
+  ) async {
+    await _pumpDashboard(
+      tester,
+      repository: _MindSumDashboardStatsRepository(),
+    );
+    await _switchToMindBackground(tester);
+    await _dragHeaderBy(tester, 134);
+    await tester.pumpAndSettle();
+    await _dragHeaderBy(tester, 272);
+    await tester.pumpAndSettle();
+
+    final january = find.byKey(
+      const ValueKey('spendee-test-mind-sum-month-2026-1'),
+    );
+    final grid = tester.widget<GridView>(
+      find.descendant(of: january, matching: find.byType(GridView)),
+    );
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.childAspectRatio, lessThan(1));
+  });
+
+  testWidgets(
+    'mind SUM layout menu matches the avatar menu height and scrolls',
+    (tester) async {
+      await _pumpDashboard(
+        tester,
+        repository: _MindSumDashboardStatsRepository(),
+      );
+      await _switchToMindBackground(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-test-mind-header-background-tap-target'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final menu = tester.widget<Container>(
+        find.byKey(const ValueKey('spendee-test-mind-sum-layout-menu')),
+      );
+      expect(menu.constraints?.maxHeight, 332);
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-layout-menu-scroll')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('summary pill drags with feedback and shifts the period', (
     tester,
   ) async {
