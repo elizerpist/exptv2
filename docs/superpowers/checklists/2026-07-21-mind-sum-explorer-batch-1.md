@@ -11,7 +11,7 @@
 | MIND-SUM-007 | User: "egy sorba 3 honapnak kell kifernie"; "scrollable lesz" | Mind SUM Stage2 grid | Stage2 uses a vertically scrollable 3-column monthly grid. All day numbers fit within every month card, including 31-day months. | Widget test for scroll/grid/day labels; visual inspection. | DONE |
 | MIND-SUM-008 | User: "legyen-e stage2 nagycontainer"; "minden honapnak seperate hattercardja"; "mindenhol opacity" | Mind SUM Stage2 configuration sheet/surface wrappers | Stage2 outer surface and each month-card surface independently support enabled/disabled, all known glass styles plus white, and opacity controls. | Widget keys and control tests; source review. | DONE |
 | MIND-SUM-009 | User asked to code; global Flutter workflow | Tests and repository state | Targeted test suite and `flutter analyze` run inside Ubuntu proot. No local APK build is attempted. | Command output captured before completion. | DONE |
-| MIND-SUM-010 | User workflow: commit/push after complete | Git branch / GitHub remote | Only after MIND-SUM-001 through MIND-SUM-009 are DONE, commit the scoped changes on `spendeetest` and push to `origin`. | `git status`, `git log -1`, `git push` output. | NOT DONE |
+| MIND-SUM-010 | User workflow: commit/push after complete | Git branch / GitHub remote | Only after MIND-SUM-001 through MIND-SUM-009 are DONE, commit the scoped changes on `spendeetest` and push to `origin`. | `git status`, `git log -1`, `git push` output. | DONE |
 
 Scope notes:
 
