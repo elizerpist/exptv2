@@ -13,7 +13,7 @@
 | MGR-009 | User: "header dropdown menube ... header bg opacity. 0.1-1" | Header design popup and `_HeaderSurfaceFrame` | Header design menu has a live `Header bg opacity` slider with min 0.1 and max 1.0; it affects the header background layer without fading foreground controls. | Widget test for slider bounds and opacity widget. | DONE |
 | MGR-010 | User: "header bg tap menube ... category avatarokra vonatkozo ... railre" | Mind layout sheet and rail config | The Mind background tap sheet provides center, inner, outer sizes plus inner and outer X-offset settings for the five rail cards, alongside year-card surface/opacity and live-volume toggle. | Widget control/key test. | DONE |
 | MGR-011 | User: "a html-t mentsd el a projectbe, es ezt is commitold" | `docs/prototypes/` | The approved Color Lab reference is copied to a dedicated tracked Mind rail reference HTML path without modifying the user's existing Color Lab file. | `git diff --check`, tracked-file inspection. | DONE |
-| MGR-012 | User: "push build download"; global Flutter workflow | GitHub remote / Actions artifact | Only scoped files are committed and pushed. A GitHub Actions APK build is triggered or awaited, then its APK artifact is downloaded locally and its path is reported. | `git status`, `git show`, `git push`, `gh run` / artifact output. | NOT DONE |
+| MGR-012 | User: "push build download"; global Flutter workflow | GitHub remote / Actions artifact | Only scoped files are committed and pushed. A GitHub Actions APK build is triggered or awaited, then its APK artifact is downloaded locally and its path is reported. | `git status`, `git show`, `git push`, `gh run` / artifact output. | DONE |
 
 ## Scope boundary
 
