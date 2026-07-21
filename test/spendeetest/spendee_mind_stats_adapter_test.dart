@@ -153,6 +153,100 @@ void main() {
       );
     },
   );
+
+  test(
+    'mind SUM selected-year frame keeps active query, type, and monthly volume data',
+    () async {
+      final store = TransactionStore(
+        _MindStatsRepository(),
+        clock: () => DateTime(2026, 7, 18),
+      );
+      await store.start();
+
+      final allTime = SpendeeMindStatsFrame.fromStore(store);
+      final expenseYearSummary = allTime.activeFrame.yearData.sumYearSummaries
+          .firstWhere((summary) => summary.year == 2026);
+      expect(expenseYearSummary.monthTotals.keys.toList()..sort(), [1, 2, 3]);
+
+      final rawVolume = SpendeeMindStatsFrame.sumYearVolumeFrameFromStore(
+        store,
+        activeType: TransactionType.expense,
+      );
+      final rawVolumeSummary = rawVolume.yearData.sumYearSummaries.firstWhere(
+        (summary) => summary.year == 2026,
+      );
+      expect(rawVolumeSummary.monthTotals.keys.toList()..sort(), [1, 2, 3, 4]);
+      expect(rawVolumeSummary.monthTotals[4], 1000);
+
+      final expense = SpendeeMindStatsFrame.sumYearFrameFromStore(
+        store,
+        year: 2026,
+        activeType: TransactionType.expense,
+      );
+      expect(expense.yearData.summaryScope, StatsSummaryScope.yearly);
+      expect(
+        [
+          for (final month in expense.yearData.months)
+            if (month.transactionCount > 0) month.month,
+        ],
+        [1, 2, 3],
+      );
+      expect(expense.yearData.summaryTotal, 58800);
+
+      store.setCategoryFilter(_MindStatsRepository().categories.first);
+      final food = SpendeeMindStatsFrame.sumYearFrameFromStore(
+        store,
+        year: 2026,
+        activeType: TransactionType.expense,
+      );
+      expect(food.yearData.selectedCategoryIds, {1});
+      final foodAllTime = SpendeeMindStatsFrame.fromStore(store);
+      final foodYearSummary = foodAllTime.activeFrame.yearData.sumYearSummaries
+          .firstWhere((summary) => summary.year == 2026);
+      expect(foodYearSummary.monthTotals.keys.toList()..sort(), [1, 2]);
+      expect(
+        [
+          for (final month in food.yearData.months)
+            if (month.transactionCount > 0) month.month,
+        ],
+        [1, 2],
+      );
+      expect(food.yearData.summaryTotal, 42000);
+
+      store.clearCategoryFilter();
+      store.setMerchantFilter('Piac');
+      final vendor = SpendeeMindStatsFrame.sumYearFrameFromStore(
+        store,
+        year: 2026,
+        activeType: TransactionType.expense,
+      );
+      expect(vendor.yearData.summaryTotal, 42000);
+      expect(
+        [
+          for (final month in vendor.yearData.months)
+            if (month.transactionCount > 0) month.month,
+        ],
+        [1, 2],
+      );
+
+      store.setActiveType(TransactionType.income);
+      store.clearCategoryFilter();
+      store.setMerchantFilters(const <String>{});
+      final income = SpendeeMindStatsFrame.sumYearFrameFromStore(
+        store,
+        year: 2026,
+        activeType: TransactionType.income,
+      );
+      expect(income.yearData.summaryTotal, 1090000);
+      expect(
+        [
+          for (final month in income.yearData.months)
+            if (month.transactionCount > 0) month.month,
+        ],
+        [1, 2, 3],
+      );
+    },
+  );
 }
 
 class _MindStatsRepository implements TransactionRepositoryContract {
@@ -167,6 +261,7 @@ class _MindStatsRepository implements TransactionRepositoryContract {
     _record(2, '2026.01.11', 2, -7200, 'Busz'),
     _record(3, '2026.02.04', 1, -31000, 'Piac'),
     _record(4, '2026.03.12', 2, -9600, 'Metro'),
+    _record(8, '2026.04.05', 1, -1000, 'Piac'),
     _record(5, '2026.01.01', 101, 280000, 'Munkahely'),
     _record(6, '2026.02.01', 101, 310000, 'Munkahely'),
     _record(7, '2026.03.01', 101, 500000, 'Munkahely'),

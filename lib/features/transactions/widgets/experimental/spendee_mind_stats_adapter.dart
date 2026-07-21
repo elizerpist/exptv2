@@ -106,17 +106,57 @@ class SpendeeMindStatsFrame {
     return frame;
   }
 
+  /// Builds the child frame selected by the all-time Mind year rail.
+  ///
+  /// The Summary Pill remains all-time; only the Mind explorer narrows to the
+  /// requested child year. Reusing [_buildFrame] keeps the live type, query,
+  /// category, and vendor scope semantics identical to the stats screen.
+  static StatsRenderFrame sumYearFrameFromStore(
+    TransactionStore store, {
+    required int year,
+    required TransactionType activeType,
+  }) {
+    final reference = store.summaryReferenceDate;
+    return _buildFrame(
+      store: store,
+      activeType: activeType,
+      scope: StatsSummaryScope.yearly,
+      year: year,
+      month: reference.month,
+    );
+  }
+
+  /// Builds unthresholded monthly volumes for every SUM child year.
+  ///
+  /// The heatmap keeps the stats threshold, but the year rail must represent
+  /// every matching transaction month, including low-value or net-zero months.
+  static StatsRenderFrame sumYearVolumeFrameFromStore(
+    TransactionStore store, {
+    required TransactionType activeType,
+  }) {
+    final reference = store.summaryReferenceDate;
+    return _buildFrame(
+      store: store,
+      activeType: activeType,
+      scope: StatsSummaryScope.allTime,
+      year: reference.year,
+      month: reference.month,
+      thresholdValue: 0,
+    );
+  }
+
   static StatsRenderFrame _buildFrame({
     required TransactionStore store,
     required TransactionType activeType,
     required StatsSummaryScope scope,
     required int year,
     required int month,
+    double thresholdValue = defaultStatsThreshold,
   }) {
     return StatsRenderFrame.build(
       year: year,
       activeType: activeType,
-      thresholdValue: defaultStatsThreshold,
+      thresholdValue: thresholdValue,
       transactions: store.transactions,
       categories: store.categories,
       selectedCategoryIds: store.activeType == activeType

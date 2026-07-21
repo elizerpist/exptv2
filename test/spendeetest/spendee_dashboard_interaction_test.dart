@@ -677,7 +677,7 @@ void main() {
   });
 
   testWidgets(
-    'mind background container choices use separated component surfaces',
+    'mind SUM container choices wrap the year rail and heatmap independently',
     (tester) async {
       await _pumpDashboard(tester);
       await _switchToMindBackground(tester);
@@ -697,29 +697,11 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-stage1-liquid-glass')),
-        findsNothing,
-        reason: 'Mind stage1 must not create a shared liquid wrapper.',
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-mind-stage2-acrylic')),
-        findsNothing,
-        reason: 'Mind stage2 must not create a shared acrylic wrapper.',
-      );
-      expect(
-        find.byKey(
-          const ValueKey('spendee-test-mind-volume-card-liquid-glass'),
-        ),
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage1-liquid-glass')),
         findsOneWidget,
       );
       expect(
-        find.byKey(
-          const ValueKey('spendee-test-mind-pattern-card-liquid-glass'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-test-mind-year-2026-acrylic')),
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage2-acrylic')),
         findsOneWidget,
       );
 
@@ -732,16 +714,13 @@ void main() {
         const ValueKey('spendee-test-mind-stage2-surface-background'),
       );
 
-      _expectOnlyBackgroundSurface('spendee-test-mind-volume-card');
-      _expectOnlyBackgroundSurface('spendee-test-mind-pattern-card');
-      _expectOnlyBackgroundSurface('spendee-test-mind-year-2026');
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-stage1-background')),
-        findsNothing,
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage1-background')),
+        findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('spendee-test-mind-stage2-background')),
-        findsNothing,
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage2-background')),
+        findsOneWidget,
       );
     },
   );
@@ -749,7 +728,14 @@ void main() {
   testWidgets(
     'mind background surface removes all inner component containers',
     (tester) async {
-      await _pumpDashboard(tester);
+      final store = await _pumpDashboard(tester);
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.yearly,
+          year: 2026,
+        ),
+      );
+      await tester.pump();
       await _switchToMindBackground(tester);
 
       await _dragHeaderBy(tester, 134);
@@ -770,7 +756,7 @@ void main() {
         const ValueKey('spendee-test-mind-stage1-boxed-graphs'),
       );
       final stage2 = find.byKey(
-        const ValueKey('spendee-test-mind-sum-heatmap'),
+        const ValueKey('spendee-test-mind-yearly-heatmap'),
       );
       expect(stage1, findsOneWidget);
       expect(stage2, findsOneWidget);
@@ -798,6 +784,13 @@ void main() {
       tester,
       repository: _MindDashboardStatsRepository(),
     );
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.yearly,
+        year: 2026,
+      ),
+    );
+    await tester.pump();
     await _switchToMindBackground(tester);
     await _dragHeaderBy(tester, 134);
     await tester.pump(const Duration(milliseconds: 500));
@@ -1492,6 +1485,275 @@ void main() {
     );
   });
 
+  testWidgets(
+    'mind SUM renders a query-scoped year rail and selected-year month heatmap',
+    (tester) async {
+      final store = await _pumpDashboard(
+        tester,
+        repository: _MindSumDashboardStatsRepository(),
+      );
+      await _switchToMindBackground(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-carousel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2026-selected'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2024')),
+        findsOneWidget,
+      );
+      final initialRailRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-carousel')),
+      );
+      final selectedYearRect = tester.getRect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2026-selected'),
+        ),
+      );
+      final leftYearRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2024')),
+      );
+      final rightYearRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-card-2025')),
+      );
+      expect(selectedYearRect.width, greaterThan(leftYearRect.width));
+      expect(selectedYearRect.width, greaterThan(rightYearRect.width));
+      expect(leftYearRect.center.dx, lessThan(selectedYearRect.center.dx));
+      expect(rightYearRect.center.dx, greaterThan(selectedYearRect.center.dx));
+      expect(leftYearRect.left, greaterThanOrEqualTo(initialRailRect.left));
+      expect(rightYearRect.right, lessThanOrEqualTo(initialRailRect.right));
+
+      final yearRail = find.byKey(
+        const ValueKey('spendee-test-mind-sum-year-carousel-gesture'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(yearRail));
+      await gesture.moveBy(const Offset(-24, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-64, 0));
+      await tester.pump(const Duration(milliseconds: 300));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2025-selected'),
+        ),
+        findsOneWidget,
+      );
+      expect(store.summaryWindow, SummaryWindow.allTime);
+
+      await _dragHeaderBy(tester, 272);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-selected-year-heatmap'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage2-scroll')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-day-2025-12-31')),
+        findsOneWidget,
+      );
+      final januaryRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-1')),
+      );
+      final februaryRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-2')),
+      );
+      final marchRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-3')),
+      );
+      final aprilRect = tester.getRect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-4')),
+      );
+      expect(februaryRect.left, greaterThan(januaryRect.left));
+      expect(marchRect.left, greaterThan(februaryRect.left));
+      expect(februaryRect.width, closeTo(januaryRect.width, .1));
+      expect(marchRect.width, closeTo(januaryRect.width, .1));
+      expect(aprilRect.top, greaterThan(januaryRect.top));
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-test-mind-header-background-tap-target'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-layout-menu')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-center-size-slider')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-volume-bars-toggle')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-month-card-opacity-slider'),
+        ),
+        findsOneWidget,
+      );
+
+      final yearCardSurfacePicker = find.byKey(
+        const ValueKey('spendee-test-mind-sum-year-card-surface-picker'),
+      );
+      await tester.ensureVisible(yearCardSurfacePicker);
+      await tester.pumpAndSettle();
+      await tester.tap(yearCardSurfacePicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Feher').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-year-card-2025-white'),
+        ),
+        findsOneWidget,
+      );
+
+      final monthOpacitySlider = find.byKey(
+        const ValueKey('spendee-test-mind-sum-month-card-opacity-slider'),
+      );
+      await tester.ensureVisible(monthOpacitySlider);
+      await tester.pumpAndSettle();
+      await tester.drag(monthOpacitySlider, const Offset(-72, 0));
+      await tester.pump();
+      final monthOpacity = tester.widget<Opacity>(
+        find.byKey(
+          const ValueKey('spendee-test-mind-sum-month-2025-1-opacity'),
+        ),
+      );
+      expect(monthOpacity.opacity, lessThan(.86));
+
+      final volumeToggle = find.byKey(
+        const ValueKey('spendee-test-mind-sum-volume-bars-toggle'),
+      );
+      await tester.ensureVisible(volumeToggle);
+      await tester.pumpAndSettle();
+      await tester.tap(volumeToggle);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-year-volume-2025')),
+        findsNothing,
+      );
+
+      final monthCardToggle = find.byKey(
+        const ValueKey('spendee-test-mind-sum-month-card-toggle'),
+      );
+      await tester.ensureVisible(monthCardToggle);
+      await tester.pumpAndSettle();
+      await tester.tap(monthCardToggle);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-month-2025-1-glossy')),
+        findsNothing,
+      );
+
+      final stage2OuterToggle = find.byKey(
+        const ValueKey('spendee-test-mind-sum-stage2-outer-toggle'),
+      );
+      await tester.ensureVisible(stage2OuterToggle);
+      await tester.pumpAndSettle();
+      await tester.tap(stage2OuterToggle);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage2-background')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'mind SUM background opacity and surfaces stay isolated from YEAR mode',
+    (tester) async {
+      final store = await _pumpDashboard(
+        tester,
+        repository: _MindSumDashboardStatsRepository(),
+      );
+      await _switchToMindBackground(tester);
+      await _dragHeaderBy(tester, 134);
+      await tester.pumpAndSettle();
+      await _dragHeaderBy(tester, 272);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('spendee-test-mind-header-background-tap-target'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final railSurfacePicker = find.byKey(
+        const ValueKey('spendee-test-mind-sum-stage1-surface-picker'),
+      );
+      await tester.ensureVisible(railSurfacePicker);
+      await tester.tap(railSurfacePicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nincs hatter').last);
+      await tester.pumpAndSettle();
+
+      final railOpacitySlider = find.byKey(
+        const ValueKey('spendee-test-mind-sum-stage1-opacity-slider'),
+      );
+      await tester.ensureVisible(railOpacitySlider);
+      await tester.drag(railOpacitySlider, const Offset(-90, 0));
+      await tester.pumpAndSettle();
+      final railOpacity = tester.widget<Opacity>(
+        find.byKey(const ValueKey('spendee-test-mind-sum-stage1-opacity')),
+      );
+      expect(railOpacity.opacity, lessThan(.9));
+
+      final stage2SurfacePicker = find.byKey(
+        const ValueKey('spendee-test-mind-sum-stage2-surface-picker'),
+      );
+      await tester.ensureVisible(stage2SurfacePicker);
+      await tester.tap(stage2SurfacePicker);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Feher').last);
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      store.commitStatsViewMutation(
+        await store.prepareStatsViewMutation(
+          summaryWindow: SummaryWindow.yearly,
+          year: 2026,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-volume-card-glossy')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-mind-month-1-glossy')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('summary pill drags with feedback and shifts the period', (
     tester,
   ) async {
@@ -1577,7 +1839,7 @@ void main() {
   testWidgets('budget and mind container softness sliders are scoped', (
     tester,
   ) async {
-    await _pumpDashboard(tester);
+    final store = await _pumpDashboard(tester);
 
     await tester.tap(
       find.byKey(const ValueKey('spendee-test-header-menu-button')),
@@ -1655,6 +1917,14 @@ void main() {
     await tester.tapAt(Offset.zero);
     await tester.pumpAndSettle();
 
+    store.commitStatsViewMutation(
+      await store.prepareStatsViewMutation(
+        summaryWindow: SummaryWindow.yearly,
+        year: 2026,
+      ),
+    );
+    await tester.pump();
+
     await tester.tap(
       find.byKey(const ValueKey('spendee-test-header-menu-button')),
     );
@@ -1699,8 +1969,11 @@ void main() {
     final mindStage1 = find.byKey(
       const ValueKey('spendee-test-mind-volume-card-liquid-glass'),
     );
+    final firstMindMonth = SpendeeMindStatsFrame.fromStore(
+      store,
+    ).activeFrame.yearData.graphMonths.first.month;
     final mindStage2 = find.byKey(
-      const ValueKey('spendee-test-mind-year-2026-liquid-glass'),
+      ValueKey('spendee-test-mind-month-$firstMindMonth-liquid-glass'),
     );
     expect(mindStage1, findsOneWidget);
     expect(mindStage2, findsOneWidget);
@@ -4781,14 +5054,6 @@ Future<void> _tapHeaderMenuItem(WidgetTester tester, Key key) async {
   await tester.pumpAndSettle();
 }
 
-void _expectOnlyBackgroundSurface(String keyBase) {
-  expect(find.byKey(ValueKey('$keyBase-background')), findsOneWidget);
-  expect(find.byKey(ValueKey('$keyBase-glossy')), findsNothing);
-  expect(find.byKey(ValueKey('$keyBase-html-c2-glass')), findsNothing);
-  expect(find.byKey(ValueKey('$keyBase-liquid-glass')), findsNothing);
-  expect(find.byKey(ValueKey('$keyBase-acrylic')), findsNothing);
-}
-
 bool _isWhiteGlassContainerDecoration(Widget widget) {
   if (widget is! DecoratedBox) return false;
   final decoration = widget.decoration;
@@ -4997,6 +5262,30 @@ class _MindDashboardStatsRepository extends _DashboardTestRepository {
           _record(5, 101, 280000, 'Munkahely', date: '2026.01.01'),
           _record(6, 101, 310000, 'Munkahely', date: '2026.02.01'),
           _record(7, 101, 500000, 'Munkahely', date: '2026.03.01'),
+        ],
+      );
+}
+
+class _MindSumDashboardStatsRepository extends _DashboardTestRepository {
+  _MindSumDashboardStatsRepository()
+    : super(
+        categories: [
+          _category(1, 'Élelmiszer', 7, 0),
+          _category(2, 'Közlekedés', 3, 1),
+          _category(101, 'Fizetés', 12, 2, type: 'bevétel'),
+        ],
+        transactions: [
+          _record(101, 1, -12000, 'Piac', date: '2024.01.04'),
+          _record(201, 1, -21000, 'Piac', date: '2025.01.03'),
+          _record(202, 2, -9200, 'Busz', date: '2025.02.12'),
+          _record(203, 101, 300000, 'Munkahely', date: '2025.02.01'),
+          _record(301, 1, -11000, 'Piac', date: '2026.01.03'),
+          _record(302, 2, -7200, 'Busz', date: '2026.01.11'),
+          _record(303, 1, -31000, 'Piac', date: '2026.02.04'),
+          _record(304, 2, -9600, 'Metro', date: '2026.03.12'),
+          _record(305, 101, 280000, 'Munkahely', date: '2026.01.01'),
+          _record(306, 101, 310000, 'Munkahely', date: '2026.02.01'),
+          _record(307, 101, 500000, 'Munkahely', date: '2026.03.01'),
         ],
       );
 }
