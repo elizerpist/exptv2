@@ -7,7 +7,7 @@
 | MIND-SUM-LAYOUT-001 | Latest screenshot `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260721-131934.png` | `_MindSumMonthHeatmapCard` grid calculation | The 7x6 calendar grid fills the month card using separately calculated cell width and cell height; day cells are no longer compressed into a thin band at the top. | Widget test passed with cell-sized aspect ratio below `1`; a post-fix device screenshot is still required. | PARTIAL |
 | MIND-SUM-LAYOUT-002 | User: Mind background tap menu should match avatar custom menu height and scroll internally | `_MindSumLayoutMenuSheet` | The Mind SUM customizer has the same maximum height as the avatar customizer (`332` logical pixels); all controls remain inside its scroll view. | Widget test passed: `maxHeight == 332` and internal scroll key exists; a post-fix device screenshot is still required. | PARTIAL |
 | MIND-SUM-VERIFY-001 | User workflow | Relevant Flutter tests and analysis | Targeted tests and scoped analyzer run inside Ubuntu proot; no local Termux APK build. | Relevant suite passed with 113 tests; scoped `flutter analyze` reported no issues. | DONE |
-| MIND-SUM-DELIVERY-001 | User workflow | Git branch / remote | Only task-owned files are committed and pushed to `origin/spendeetest`; pre-existing worktree changes are left untouched. | `git diff --check`, `git status`, commit and push output. | NOT DONE |
+| MIND-SUM-DELIVERY-001 | User workflow | Git branch / remote | Only task-owned files are committed and pushed to `origin/spendeetest`; pre-existing worktree changes are left untouched. | `git diff --check` passed; task commit `478aa54` pushed to `origin/spendeetest`. | DONE |
 
 ## Root-cause finding
 
