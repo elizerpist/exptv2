@@ -76,7 +76,7 @@ superseded, retrigger
 **Produces:** A focused failing contract that describes the exact information
 the new top flowchart must expose.
 
-- [ ] **Step 1: Write the failing static contract**
+- [x] **Step 1: Write the failing static contract**
 
 Create `docs/prototypes/pulse_semantic_flowchart_test.js` with:
 
@@ -124,7 +124,7 @@ assert.equal((html.match(/data-group-rail=/g) || []).length, 3, "no fourth prima
 console.log("pulse_semantic_flowchart_test: PASS");
 ```
 
-- [ ] **Step 2: Confirm the contract is red**
+- [x] **Step 2: Confirm the contract is red**
 
 Run:
 
@@ -148,7 +148,7 @@ the published Pulse policy.
 **Produces:** An accessible, detailed decision flow with every decision and
 outcome route visible in the top-level mockup.
 
-- [ ] **Step 1: Add responsive, scoped CSS**
+- [x] **Step 1: Add responsive, scoped CSS**
 
 Add styles for `.pulse-semantic-flowchart`, `.semantic-flow-grid`,
 `.semantic-flow-step`, `.semantic-flow-node`, `.semantic-flow-branches`,
@@ -177,7 +177,7 @@ Use neutral cards for processing, red/warn lanes for stopped or waiting paths,
 violet for composition, and green for delivery/retrigger. Text must state the
 outcome without relying on color.
 
-- [ ] **Step 2: Add the semantic chart before the hero grid**
+- [x] **Step 2: Add the semantic chart before the hero grid**
 
 Insert a `section.card.pulse-semantic-flowchart` after the top-bar header. It
 contains a section heading, a legend, and a nine-item `ol.semantic-flow-grid`.
@@ -200,7 +200,7 @@ Use `data-flow-stage` and `data-flow-branch` exactly as defined in Shared
 anchors. Keep the wording visible in the DOM; do not hide the explanatory
 branches in tooltips or JavaScript.
 
-- [ ] **Step 3: Run the new contract and existing regressions**
+- [x] **Step 3: Run the new contract and existing regressions**
 
 Run:
 
@@ -212,7 +212,7 @@ node docs/prototypes/pulse_engine_panel_group_rail_test.js
 
 Expected: every command reports `PASS`.
 
-- [ ] **Step 4: Commit the top flowchart**
+- [x] **Step 4: Commit the top flowchart**
 
 ```sh
 git add docs/prototypes/pulse_semantic_flowchart_test.js docs/prototypes/pulse_engine_panel_mockup.html
@@ -231,7 +231,7 @@ git commit -m "feat: add Pulse semantic decision flow"
 **Produces:** Honest requirement statuses and a record of every verification
 command used for handoff.
 
-- [ ] **Step 1: Run the final complete verification**
+- [x] **Step 1: Run the final complete verification**
 
 Run:
 
@@ -247,7 +247,7 @@ test "$(git hash-object balance_latest_layout.html)" = "a4b940489c11582f7252d6d2
 
 Expected: every command exits `0`.
 
-- [ ] **Step 2: Update evidence statuses**
+- [x] **Step 2: Update evidence statuses**
 
 Set PSF-001 through PSF-008 to `DONE` only when their direct static contracts
 pass. Set PSF-009 to `PARTIAL` because the user asked not to request or capture
@@ -255,7 +255,7 @@ screenshots; record the CSS/static evidence without claiming visual review.
 Set PSF-010 to `DONE` only after the baseline hash command passes. Add the
 actual passing command names and outputs below the checklist.
 
-- [ ] **Step 3: Mark plan execution and commit evidence**
+- [x] **Step 3: Mark plan execution and commit evidence**
 
 Mark every completed checkbox in this plan and append a dated execution record.
 Then run:
@@ -274,3 +274,15 @@ git commit -m "docs: verify Pulse semantic decision flow"
   renderer, so it cannot produce an alternate score or header decision.
 - The plan names every stage and branch before implementation; the test and
   markup use the same exact anchor values.
+
+## Execution Record — 2026-07-22
+
+- TDD red/green: the focused contract first failed because the flowchart root
+  did not exist, then passed after the semantic HTML/CSS was added.
+- A formula assertion was corrected after direct diagnosis: the intended
+  `clamp(0..100, …)` syntax includes a comma after the upper bound.
+- Fresh verification passed for the flowchart contract, Decision Trace contract,
+  group-rail contract, embedded-script parsing, live HTTP serving, whitespace,
+  and protected Balance hash.
+- The user explicitly declined screenshot/manual review, so the responsive
+  visual acceptance item remains `PARTIAL` despite the responsive CSS contract.
