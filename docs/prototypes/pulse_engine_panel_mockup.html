@@ -645,6 +645,191 @@
       line-height: 1.4;
     }
 
+    .pulse-semantic-flowchart {
+      margin: 18px 0;
+      border-color: rgba(79, 55, 168, .24);
+      background:
+        linear-gradient(135deg, rgba(242, 239, 255, .72), rgba(255, 255, 255, .96) 42%),
+        var(--surface);
+    }
+
+    .pulse-semantic-flowchart .section-head p {
+      max-width: 900px;
+    }
+
+    .semantic-flow-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .8);
+    }
+
+    .semantic-flow-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .semantic-flow-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #7b8798;
+    }
+
+    .semantic-flow-dot.wait { background: var(--amber); }
+    .semantic-flow-dot.stop { background: var(--red); }
+    .semantic-flow-dot.go { background: var(--green); }
+    .semantic-flow-dot.compose { background: #7453d7; }
+
+    .semantic-flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      counter-reset: pulse-flow;
+    }
+
+    .semantic-flow-step {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 7px 18px rgba(22, 35, 55, .05);
+    }
+
+    .semantic-flow-step-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+    }
+
+    .semantic-flow-index {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .semantic-flow-step h3 {
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .semantic-flow-step-head p,
+    .semantic-flow-node p,
+    .semantic-flow-branch p,
+    .semantic-flow-note {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .semantic-flow-node {
+      padding: 10px;
+      border: 1px solid #dbe3ec;
+      border-radius: 8px;
+      background: var(--surface-2);
+    }
+
+    .semantic-flow-node strong,
+    .semantic-flow-branch strong {
+      display: block;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .semantic-flow-branches {
+      display: grid;
+      gap: 8px;
+    }
+
+    .semantic-flow-branch {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-left: 4px solid #8793a5;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .semantic-flow-branch.wait {
+      border-left-color: var(--amber);
+      background: #fffaf0;
+    }
+
+    .semantic-flow-branch.stop {
+      border-left-color: var(--red);
+      background: #fff5f5;
+    }
+
+    .semantic-flow-branch.go {
+      border-left-color: var(--green);
+      background: #f2fbf6;
+    }
+
+    .semantic-flow-branch.compose {
+      border-left-color: #7453d7;
+      background: #f7f4ff;
+    }
+
+    .semantic-flow-branch .tagrow {
+      margin-top: 7px;
+    }
+
+    .semantic-flow-arrow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #4f37a8;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .semantic-flow-arrow::before {
+      content: "↓";
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .semantic-flow-formula {
+      padding: 10px;
+      border: 1px dashed #baaef0;
+      border-radius: 8px;
+      background: #fbfaff;
+      color: #443285;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .semantic-flow-formula code {
+      color: inherit;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
     .tagrow {
       display: flex;
       flex-wrap: wrap;
@@ -1088,6 +1273,10 @@
       .flow {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
+      .semantic-flow-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     @media (max-width: 640px) {
@@ -1133,6 +1322,10 @@
       }
 
       .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .semantic-flow-grid {
         grid-template-columns: 1fr;
       }
 
@@ -1191,6 +1384,225 @@
       </div>
       <div class="status-pill"><span class="dot"></span> Local deterministic · no AI</div>
     </header>
+
+    <section class="card pulse-semantic-flowchart" data-pulse-semantic-flowchart aria-labelledby="semantic-flow-title">
+      <div class="section-head">
+        <div>
+          <h2 id="semantic-flow-title">Pulse decision flow · hogyan lesz egy triggerből header üzenet?</h2>
+          <p>
+            Ez nem egy triggerlista. A flow azt mutatja, hogy melyik jel mikor csak megfigyelés,
+            mikor kap storyt és score-t, mikor marad várakozó, és mikor jut el ténylegesen a headerig.
+          </p>
+        </div>
+        <span class="tag violet">score ≠ message</span>
+      </div>
+
+      <aside class="semantic-flow-legend" aria-label="Pulse decision flow legend">
+        <span><i class="semantic-flow-dot"></i>számítás / feldolgozás</span>
+        <span><i class="semantic-flow-dot wait"></i>várakozik, még nem kap score-t</span>
+        <span><i class="semantic-flow-dot stop"></i>elvetett / nincs header copy</span>
+        <span><i class="semantic-flow-dot compose"></i>story- és mondatépítés</span>
+        <span><i class="semantic-flow-dot go"></i>kiválasztott vagy megjelenített</span>
+      </aside>
+
+      <ol class="semantic-flow-grid">
+        <li class="semantic-flow-step" data-flow-stage="entry">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">01</span>
+            <div>
+              <h3>Belépési esemény</h3>
+              <p>A user-interakció és a motor trigger két külön dolog.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch wait" data-flow-branch="inspect-only">
+              <strong>User score kiválasztása / megnyitása</strong>
+              <p>Csak inspect: fókusz, filter vagy user-defined tuning. Nem indít raw signalt és nem jelenít meg Pulse-t.</p>
+              <div class="tagrow"><span class="tag warn">inspect-only</span><span class="tag">no header</span></div>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="trigger-input">
+              <strong>Metrika vagy app-state változik</strong>
+              <p>Forecast, limit, due date, data-quality threshold, scheduled calculation, app open/resume vagy date change indít calculation frame-et.</p>
+              <div class="tagrow"><span class="tag good">trigger-input</span><span class="tag info">recalculate</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">current state készül</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="recalculation">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">02</span>
+            <div>
+              <h3>Lokális recalculation</h3>
+              <p>Az engine a jelenlegi állapotot számolja, nem régi szöveget játszik vissza.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Raw signal record</strong>
+            <p>source ID · domain/target · zone · direction · severity · confidence · transition · fingerprint.</p>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mi változott?</strong>
+            <p>Csak a materially changed fingerprint tud később új deliveryt indítani; a state itt még nem header-jelölt.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">előbb gate, utána score</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="source-gate">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">03</span>
+            <div>
+              <h3>Source eligibility gate</h3>
+              <p>Előbb dől el, hogy egy jel egyáltalán versenyezhet-e.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch stop" data-flow-branch="no-copy">
+              <strong>Nem lehet belőle header mondat</strong>
+              <p>deferred (HF-008) és engine-only (HF-015–HF-019) nem készít header copyt; ezek policy/diagnostic ágak.</p>
+              <div class="tagrow"><span class="tag bad">no-copy</span><span class="tag">no score</span></div>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="wait-no-score">
+              <strong>Várakozik, score nélkül</strong>
+              <p>stale · muted · unchanged shown/dismissed fingerprint · insufficient confidence · data delay vagy group threshold még nem teljesült.</p>
+              <div class="tagrow"><span class="tag warn">wait-no-score</span><span class="tag">recalculate later</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">eligible source-ok mehetnek tovább</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="evidence">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">04</span>
+            <div>
+              <h3>Evidence + story formation</h3>
+              <p>Nem minden signal adódik össze: csak azonos domainhez vagy targethez tartozó evidence kapcsolható össze.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Published evidence rule</strong>
+            <p>1 critical · 1 material high-confidence high · 2 related medium · 3 related low · meaningful recovery · delayed/grouped data-quality.</p>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch wait" data-flow-branch="forming">
+              <strong>Forming candidate</strong>
+              <p>Hiányzik az evidence vagy a related threshold. A story megfigyelhető, de még nem ready és nem kap score-t.</p>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="ready">
+              <strong>Ready candidate</strong>
+              <p>Egy domináns source vezet; a rokon source-ok bizonyítékot, időzítést vagy caveatot adnak, nem új base weightet.</p>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">csak ready candidate pontozható</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="priority">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">05</span>
+            <div>
+              <h3>Priority score · nem küszöbkapu</h3>
+              <p>A score rangsorol; nem jogosít fel egy kizárt vagy forming signal feltámasztására.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-formula" data-flow-formula>
+            <code>clamp(0..100, domináns eligible source base + material-money +15 + due-within-3-days +10 + related evidence +10 - low confidence -20 - recent dismiss -30)</code>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Score önmagában nem elég</strong>
+            <p>Csak eligible + ready + current fingerprint + delivery opportunity esetén hasonlítható össze. Nincs univerzális megjelenítési küszöb: egy ready Data-quality story 35-tel is nyerhet, ha nincs erősebb ready story.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">ready candidate-ek rangsorolása</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="selection">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">06</span>
+            <div>
+              <h3>Selection · egy current story</h3>
+              <p>A motor nem küld ki tíz üzenetet, és a veszteseket nem teszi rejtett queue-ba.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch go" data-flow-branch="selected">
+              <strong>Legerősebb ready candidate → selected</strong>
+              <p>Azonos priority esetén: urgent due state → newer materially changed fingerprint → stable source-ID order.</p>
+              <div class="tagrow"><span class="tag good">selected</span><span class="tag violet">deterministic</span></div>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="suppressed-not-queued">
+              <strong>Alacsonyabb ready candidate → suppressed</strong>
+              <p>Nem queue. A következő current recalculationnál újra versenyezhet, ha az állapot még friss.</p>
+              <div class="tagrow"><span class="tag warn">suppressed-not-queued</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a winnerből áll össze a mondat</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="composition">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">07</span>
+            <div>
+              <h3>Story composition</h3>
+              <p>Egy header story több valós mondatrészből állhat, de minden résznek megnevezett source-a van.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branch compose">
+            <strong>Engedélyezett slotok</strong>
+            <p>headline claim · evidence phrase · time/cause clause · confidence caveat · recovery clause.</p>
+            <div class="tagrow"><span class="tag violet">HF headline</span><span class="tag violet">support</span><span class="tag violet">caveat</span></div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mi nem kerül bele?</strong>
+            <p>Redundáns, waiting, superseded vagy suppressed source; deferred és engine-only source sem írhat user-facing header copyt.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">selected story deliveryre vár</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="delivery">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">08</span>
+            <div>
+              <h3>Delivery opportunity</h3>
+              <p>A döntés és a tényleges header-megjelenés külön állapot lehet.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch go" data-flow-branch="shown">
+              <strong>Foreground → delivered → shown</strong>
+              <p>Az aktuális selected story egyetlen header Pulse-ként jelenik meg.</p>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="pending-resume">
+              <strong>background → pending</strong>
+              <p>A background recalculation eltárolja az aktuális selected state-et; delivery csak open/resume után történik.</p>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a fingerprint dönti el a következő kört</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="lifecycle">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">09</span>
+            <div>
+              <h3>Lifecycle + visszacsatolás</h3>
+              <p>A Pulse nem végtelen ismétlődés: a state és a fingerprint viszi tovább a döntést.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch stop" data-flow-branch="no-header">
+              <strong>Nincs ready candidate → no header</strong>
+              <p>A trace és a source-card megmarad, de nincs üzenet és nincs score-alapú kényszerítés.</p>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="superseded">
+              <strong>Erősebb friss state → superseded</strong>
+              <p>A pending vagy selected story lecserélhető, mielőtt elavult üzenet jutna a headerbe.</p>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="retrigger">
+              <strong>Új fingerprint / resolved state → retrigger</strong>
+              <p>A shown/dismissed fingerprint nem ismétel. Valódi változás, feloldás vagy új due-state újra a recalculation lépéshez vezet.</p>
+            </article>
+          </div>
+        </li>
+      </ol>
+    </section>
 
     <section class="hero-grid">
       <aside class="phone" aria-label="Header pulse preview">
