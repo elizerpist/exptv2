@@ -1106,15 +1106,15 @@ const queryRowScreenOrder = [
   queryMenuBlock.indexOf('data-screen="alt-query-menu-category-vendor-hierarchy"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-transaction-duplicate"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-income-transaction"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-type"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-time-frequency"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-time-timepoint"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-time-duration"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-time-review"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-push-message"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-push-elements"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-push-selection"'),
-  queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-push-review"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-basics"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-amount"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-schedule"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-source"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-notification"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-fields"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-matching"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-behavior"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-push-summary"'),
   queryMenuBlock.indexOf('data-screen="alt-category-wizard-color-popup"'),
   queryMenuBlock.indexOf('data-screen="alt-category-wizard-icon-popup"'),
   queryMenuBlock.indexOf('data-screen="alt-category-wizard-name-popup"'),
@@ -1305,7 +1305,7 @@ assert(
   'Query Menu row must keep the A5 duplicate as the inline category picker sheet and remove the old Q3/Q4 A6/A7 recurring duplicates',
 );
 const queryIncomeStart = queryMenuBlock.indexOf('Q3 · Bevételi tranzakció sheet');
-const recurringWizardStart = queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-type"');
+const recurringWizardStart = queryMenuBlock.indexOf('data-screen="alt-recurring-push-basics"');
 const queryIncomeBlock =
   queryIncomeStart >= 0 && recurringWizardStart > queryIncomeStart
     ? queryMenuBlock.slice(queryIncomeStart, recurringWizardStart)
@@ -1369,107 +1369,97 @@ assert.strictEqual(
 assert.strictEqual(
   (queryMenuBlock.match(/data-recurring-wizard-screen=/g) || []).length,
   9,
-  'The common recurring wizard must render exactly nine side-by-side screens: one shared chooser plus two four-step branches',
+  'The recurring Push-trigger wizard must render exactly nine side-by-side reference steps',
 );
 assert.strictEqual(
-  (queryMenuBlock.match(/data-recurring-wizard-size="q2-sheet"/g) || []).length,
+  (queryMenuBlock.match(/data-recurring-push-step="[1-9]"/g) || []).length,
   9,
-  'Every recurring chooser/branch state must explicitly use the shared Q2 sheet geometry',
+  'Q4-Q12 must render exactly one Push-trigger sheet for every approved reference step',
+);
+assert.strictEqual(
+  (queryMenuBlock.match(/data-recurring-wizard-size="q2-inline-sheet"/g) || []).length,
+  9,
+  'Every Push-trigger state must explicitly use the current Q2 inline-sheet geometry',
+);
+assert.strictEqual(
+  (queryMenuBlock.match(/data-recurring-wizard-reference="\/storage\/emulated\/0\/spendee\/recurring_new\.png"/g) || []).length,
+  9,
+  'Every Push-trigger screen must point directly at the approved recurring_new reference',
+);
+const recurringPushWizardScreens = [
+  ['Q4 · Push trigger · Alapadatok', 'alt-recurring-push-basics', '1', ['Várható tranzakció', 'Név', 'Kategória', 'Partner / Kedvezményezett', 'Megjegyzés (opcionális)']],
+  ['Q5 · Push trigger · Összeg beállítása', 'alt-recurring-push-amount', '2', ['Várható összeg', 'Fix összeg', 'Tartomány', 'Bármilyen', 'Tolerancia (opcionális)']],
+  ['Q6 · Push trigger · Gyakoriság és időzítés', 'alt-recurring-push-schedule', '3', ['Gyakoriság', 'Ismétlődés', 'Minden hónap', 'Első esedékesség', 'Időablak a teljesítéshez']],
+  ['Q7 · Push trigger · Trigger forrása', 'alt-recurring-push-source', '4', ['Hogyan ismerjük fel?', 'Válassz egy elkapott értesítést', 'Várj a következő értesítésre', 'Illessz be egy példát']],
+  ['Q8 · Push trigger · Értesítés kiválasztása', 'alt-recurring-push-notification', '5', ['Elkapott értesítések', 'Revolut', 'Több megjelenítése']],
+  ['Q9 · Push trigger · Mezők kijelölése', 'alt-recurring-push-fields', '6', ['Jelöld ki a megfelelő mezőket', 'Összeg', 'Partner', 'Dátum', 'Megjegyzés (opcionális)']],
+  ['Q10 · Push trigger · Egyezési szabályok', 'alt-recurring-push-matching', '7', ['Egyezési beállítások', 'Összeg egyezése', 'Partner egyezése', 'Dátumablak', 'Kötelező szavak (opcionális)']],
+  ['Q11 · Push trigger · Trigger viselkedése', 'alt-recurring-push-behavior', '8', ['Teljesítéskor történjen', 'Automatikus teljesítés', 'Megerősítést kérek', 'Csak jelölje lehetséges egyezésként', 'Tényleges összeg']],
+  ['Q12 · Push trigger · Összegzés', 'alt-recurring-push-summary', '9', ['Ellenőrizd az adatokat', 'Trigger összefoglaló', 'Létrehozás']],
+];
+const recurringPushScreenStarts = recurringPushWizardScreens.map(([title]) =>
+  queryMenuBlock.indexOf(`<div class="screen-title">${title}</div>`),
 );
 assert(
-  queryMenuBlock.includes('data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png"') &&
-    queryMenuBlock.includes('data-recurring-wizard-screen="type-choice"') &&
-    queryMenuBlock.includes('data-recurring-wizard-branch="shared"') &&
-    queryMenuBlock.includes('Milyen ismétlődést szeretnél létrehozni?') &&
-    queryMenuBlock.includes('data-recurring-wizard-choice="time"') &&
-    queryMenuBlock.includes('data-recurring-wizard-choice="push"'),
-  'Q4 must be a shared recurring wizard type-choice screen based on the latest screenshot concept',
+  recurringPushScreenStarts.every((start) => start >= 0) &&
+    recurringPushScreenStarts.every((start, index) =>
+      index === 0 || recurringPushScreenStarts[index - 1] < start,
+    ),
+  'Q4-Q12 Push-trigger screens must be present once and in reference-step order',
 );
-const recurringWizardScreens = [
-  ['Q4 · Recurring wizard · típus választás', 'data-recurring-wizard-screen="type-choice"', 'data-recurring-wizard-branch="shared"', '1. lépés'],
-  ['Q5 · Idő wizard · gyakoriság', 'data-recurring-wizard-screen="time-frequency"', 'data-recurring-wizard-branch="time"', 'Gyakoriság'],
-  ['Q6 · Idő wizard · időpont', 'data-recurring-wizard-screen="time-timepoint"', 'data-recurring-wizard-branch="time"', 'Időpont'],
-  ['Q7 · Idő wizard · időtartam', 'data-recurring-wizard-screen="time-duration"', 'data-recurring-wizard-branch="time"', 'Időtartam'],
-  ['Q8 · Idő wizard · áttekintés', 'data-recurring-wizard-screen="time-review"', 'data-recurring-wizard-branch="time"', 'Áttekintés'],
-  ['Q9 · Push wizard · üzenet', 'data-recurring-wizard-screen="push-message"', 'data-recurring-wizard-branch="push"', 'Üzenet'],
-  ['Q10 · Push wizard · felismert elemek', 'data-recurring-wizard-screen="push-elements"', 'data-recurring-wizard-branch="push"', 'Felismert elemek'],
-  ['Q11 · Push wizard · kiválasztás', 'data-recurring-wizard-screen="push-selection"', 'data-recurring-wizard-branch="push"', 'Kiválasztás'],
-  ['Q12 · Push wizard · áttekintés', 'data-recurring-wizard-screen="push-review"', 'data-recurring-wizard-branch="push"', 'Áttekintés'],
-];
-for (const [title, screenToken, branchToken, label] of recurringWizardScreens) {
+for (const [index, [title, screenName, step, anchors]] of recurringPushWizardScreens.entries()) {
+  const start = recurringPushScreenStarts[index];
+  const end =
+    recurringPushScreenStarts[index + 1] ??
+    queryMenuBlock.indexOf('data-screen="alt-category-wizard-color-popup"');
+  const screenBlock = start >= 0 && end > start ? queryMenuBlock.slice(start, end) : '';
+  const progressMarkup =
+    screenBlock.match(/<div class="recurring-wizard-progress"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
   assert(
-    queryMenuBlock.includes(title) &&
-      queryMenuBlock.includes(screenToken) &&
-      queryMenuBlock.includes(branchToken) &&
-      queryMenuBlock.includes(label),
-    `Missing recurring wizard screen contract: ${title}`,
+    screenBlock.includes(`data-screen="${screenName}"`) &&
+      screenBlock.includes(`data-recurring-push-step="${step}"`) &&
+      screenBlock.includes('data-recurring-wizard-size="q2-inline-sheet"') &&
+      screenBlock.includes('data-recurring-push-progress') &&
+      (screenBlock.match(/class="recurring-wizard-sheet"/g) || []).length === 1 &&
+      (progressMarkup.match(/<span(?: class="(?:complete|active)")?><\/span>/g) || []).length === 9 &&
+      (progressMarkup.match(/<span class="complete"><\/span>/g) || []).length === Number(step) - 1 &&
+      (progressMarkup.match(/<span class="active"><\/span>/g) || []).length === 1 &&
+      anchors.every((anchor) => screenBlock.includes(anchor)),
+    `Missing scoped Push-trigger wizard contract for ${title}`,
   );
 }
 assert(
-  (queryMenuBlock.match(/data-recurring-wizard-stepper/g) || []).length === 8 &&
-    queryMenuBlock.includes('data-recurring-wizard-step="1"') &&
-    queryMenuBlock.includes('data-recurring-wizard-step="2"') &&
-    queryMenuBlock.includes('data-recurring-wizard-step="3"') &&
-    queryMenuBlock.includes('data-recurring-wizard-step="4"') &&
-    queryMenuBlock.includes('data-recurring-wizard-selectable') &&
-    queryMenuBlock.includes('data-recurring-wizard-token'),
-  'Only the eight branch screens expose the connected four-step progress; the chooser remains a direct two-card menu',
-);
-const recurringTypeStart = queryMenuBlock.indexOf('data-recurring-wizard-screen="type-choice"');
-const recurringTimeStart = queryMenuBlock.indexOf('data-recurring-wizard-screen="time-frequency"');
-const recurringTypeBlock =
-  recurringTypeStart >= 0 && recurringTimeStart > recurringTypeStart
-    ? queryMenuBlock.slice(recurringTypeStart, recurringTimeStart)
-    : '';
-assert(
-  recurringTypeBlock.includes('data-recurring-type-nav="close-only"') &&
-    recurringTypeBlock.includes('data-recurring-wizard-choice="time"') &&
-    recurringTypeBlock.includes('data-recurring-wizard-choice="push"') &&
-    !recurringTypeBlock.includes('data-recurring-wizard-stepper') &&
-    !recurringTypeBlock.includes('class="recurring-wizard-footer"') &&
-    !recurringTypeBlock.includes('aria-label="vissza"'),
-  'The screenshot-accurate type chooser must be close-only, without a progress strip, back action, or bottom CTA',
+  !html.includes('alt-recurring-wizard-type') &&
+    !html.includes('alt-recurring-wizard-time-frequency') &&
+    !html.includes('alt-recurring-wizard-time-timepoint') &&
+    !html.includes('alt-recurring-wizard-time-duration') &&
+    !html.includes('alt-recurring-wizard-time-review') &&
+    !html.includes('alt-recurring-wizard-push-message') &&
+    !html.includes('alt-recurring-wizard-push-elements') &&
+    !html.includes('alt-recurring-wizard-push-selection') &&
+    !html.includes('alt-recurring-wizard-push-review') &&
+    !html.includes('data-recurring-wizard-branch=') &&
+    !html.includes('data-recurring-type-nav') &&
+    !html.includes('data-recurring-wizard-choice='),
+  'The former chooser/time/push branch implementation must not remain in the prototype',
 );
 assert(
-  queryMenuBlock.includes('Következő futás') &&
-    queryMenuBlock.includes('2026. augusztus 13.') &&
-    queryMenuBlock.includes('Hónap napja') &&
-    queryMenuBlock.includes('Lejárat nélkül') &&
-    queryMenuBlock.includes('Havi szabály kész'),
-  'The time branch must include frequency, timepoint, duration, and review content',
-);
-assert(
-  queryMenuBlock.includes('George: Lidl vásárlás 18 230 Ft') &&
-    queryMenuBlock.includes('data-push-token-kind="amount"') &&
-    queryMenuBlock.includes('data-push-token-kind="vendor"') &&
-    queryMenuBlock.includes('Parser próba') &&
-    queryMenuBlock.includes('Push szabály kész'),
-  'The push branch must include message, recognized element, selection/training, and review content',
-);
-assert(
-  /function initRecurringWizardPrototype\(\) \{[\s\S]*?data-recurring-wizard-selectable[\s\S]*?aria-pressed[\s\S]*?selected[\s\S]*?\}/.test(
+  /function initRecurringWizardPrototype\(\) \{[\s\S]*?data-recurring-wizard-selectable[\s\S]*?data-recurring-wizard-choice-group[\s\S]*?data-recurring-wizard-multiselect[\s\S]*?aria-pressed[\s\S]*?selected[\s\S]*?\}/.test(
     html,
   ) &&
     /initRecurringWizardPrototype\(\);/.test(html),
-  'Recurring wizard selectable controls must have an isolated initializer that toggles selected state and aria-pressed',
+  'Recurring wizard selections must use isolated attribute-scoped single and multi-select behavior',
 );
 assert(
   /\.recurring-wizard-screen\s*\{[\s\S]*?background:\s*var\(--category-selector-bg\);[\s\S]*?\}/.test(html) &&
-    /--query-sheet-h:\s*430px;/.test(html) &&
-    /\.add-transaction-card-redesign\s*\{[\s\S]*?height:\s*var\(--query-sheet-h\);[\s\S]*?border-radius:\s*26px 26px 0 0;[\s\S]*?\}/.test(html) &&
-    /\.recurring-wizard-sheet\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*0;[\s\S]*?right:\s*0;[\s\S]*?bottom:\s*0;[\s\S]*?height:\s*var\(--query-sheet-h\);[\s\S]*?border-radius:\s*26px 26px 0 0;[\s\S]*?\}/.test(html) &&
+    /--query-inline-category-sheet-h:\s*570px;/.test(html) &&
+    /\.recurring-wizard-sheet\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*0;[\s\S]*?right:\s*0;[\s\S]*?bottom:\s*0;[\s\S]*?height:\s*var\(--query-inline-category-sheet-h\);[\s\S]*?border-radius:\s*26px 26px 0 0;[\s\S]*?\}/.test(html) &&
+    !/\.recurring-wizard-sheet\s*\{[^}]*height:\s*var\(--query-sheet-h\);/s.test(html) &&
     !/\.recurring-wizard-sheet\s*\{[^}]*inset:\s*42px 18px 0;/s.test(html) &&
     /\.recurring-wizard-screen::after\s*\{[\s\S]*?inset:\s*0;[\s\S]*?background:\s*rgba\(0,0,0,\.28\);[\s\S]*?z-index:\s*7;[\s\S]*?\}/.test(html) &&
-    /\.recurring-wizard-stepper\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*1fr\);[\s\S]*?\}/.test(html) &&
-    /\.recurring-wizard-stepper::before\s*\{[\s\S]*?height:\s*1px;[\s\S]*?\}/.test(html) &&
+    /\.recurring-wizard-progress\s*\{[\s\S]*?grid-template-columns:\s*repeat\(9,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
     /\.recurring-wizard-primary\s*\{[\s\S]*?height:\s*48px;[\s\S]*?border-radius:\s*24px;[\s\S]*?\}/.test(html),
-  'Q2 and recurring screens must share the same 430px edge-to-edge sheet geometry; branch screens keep the connected four-step progress and primary CTA',
-);
-assert(
-  /\.recurring-wizard-nav\[data-recurring-type-nav="close-only"\]\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?\}/.test(html) &&
-    /\.recurring-wizard-option\[data-recurring-wizard-choice="time"\]\s*\{[\s\S]*?linear-gradient[\s\S]*?rgba\(236,254,255,\.98\)[\s\S]*?\}/.test(html) &&
-    /\.recurring-wizard-option\[data-recurring-wizard-choice="push"\]\s*\{[\s\S]*?linear-gradient[\s\S]*?rgba\(245,243,255,\.98\)[\s\S]*?\}/.test(html),
-  'The chooser must reproduce the reference close-only header and cyan/purple branch cards',
+  'Q4-Q12 must use the current 570px Q2 inline-sheet geometry, one sheet per screen, nine-step progress, and a primary CTA',
 );
 assert(
   /\.add-income-transaction-card\s+\.transaction-amount-hero\s*\{[\s\S]*?background:\s*var\(--income-transaction-amount-hero-bg\);[\s\S]*?\}/.test(html) &&

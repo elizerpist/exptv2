@@ -9508,7 +9508,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: var(--query-sheet-h);
+      height: var(--query-inline-category-sheet-h);
       border-radius: 26px 26px 0 0;
       background: rgba(255,255,255,.97);
       border: 1px solid rgba(226,232,240,.86);
@@ -9561,11 +9561,6 @@
       font-weight: 950;
     }
 
-    .recurring-wizard-nav[data-recurring-type-nav="close-only"] {
-      display: flex;
-      justify-content: flex-end;
-    }
-
     .recurring-wizard-scroll {
       position: absolute;
       left: 0;
@@ -9576,11 +9571,6 @@
       -webkit-overflow-scrolling: touch;
       padding: 0 20px 12px;
       overscroll-behavior: contain;
-    }
-
-    .recurring-wizard-screen[data-recurring-wizard-screen="type-choice"] .recurring-wizard-scroll {
-      top: 54px;
-      bottom: 14px;
     }
 
     .recurring-wizard-kicker {
@@ -9610,69 +9600,34 @@
       font-weight: 780;
     }
 
-    .recurring-wizard-stepper {
+    .recurring-wizard-progress {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 4px;
       margin: 3px 0 16px;
-      position: relative;
     }
 
-    .recurring-wizard-stepper::before {
-      content: "";
-      position: absolute;
-      left: 12.5%;
-      right: 12.5%;
-      top: 13px;
-      height: 1px;
-      background: rgba(203,213,225,.72);
-      z-index: 0;
-    }
-
-    .recurring-wizard-step {
-      min-width: 0;
-      text-align: center;
-      color: rgba(20,33,58,.45);
-      font-size: 8px;
-      line-height: 1.1;
-      font-weight: 850;
-    }
-
-    .recurring-wizard-step b {
-      width: 26px;
-      height: 26px;
-      margin: 0 auto 6px;
+    .recurring-wizard-progress span {
+      height: 4px;
       border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(241,245,249,.92);
-      border: 1px solid rgba(226,232,240,.82);
-      color: #64748b;
-      font-size: 11px;
-      font-weight: 950;
-      position: relative;
-      z-index: 1;
+      background: rgba(203,213,225,.72);
     }
 
-    .recurring-wizard-step.active {
-      color: rgba(20,33,58,.72);
+    .recurring-wizard-progress .complete {
+      background: rgba(6,182,212,.64);
     }
 
-    .recurring-wizard-step.active b {
+    .recurring-wizard-progress .active {
       background: #06b6d4;
-      border-color: rgba(6,182,212,.72);
-      color: #fff;
-      box-shadow: 0 8px 18px rgba(6,182,212,.22);
+      box-shadow: 0 2px 7px rgba(6,182,212,.42);
     }
 
-    .recurring-wizard-option-list,
     .recurring-wizard-card-list {
       display: grid;
       gap: 10px;
       margin-top: 14px;
     }
 
-    .recurring-wizard-option,
     .recurring-wizard-card,
     .recurring-wizard-token,
     .recurring-wizard-summary-card {
@@ -9682,7 +9637,6 @@
       box-shadow: 0 10px 22px rgba(15,23,42,.055);
     }
 
-    .recurring-wizard-option,
     .recurring-wizard-card {
       appearance: none;
       min-height: 70px;
@@ -9696,21 +9650,6 @@
       text-align: left;
     }
 
-    .recurring-wizard-screen[data-recurring-wizard-screen="type-choice"] .recurring-wizard-option {
-      min-height: 82px;
-    }
-
-    .recurring-wizard-option[data-recurring-wizard-choice="time"] {
-      background: linear-gradient(105deg, rgba(236,254,255,.98), rgba(207,250,254,.72));
-      border-color: rgba(103,232,249,.25);
-    }
-
-    .recurring-wizard-option[data-recurring-wizard-choice="push"] {
-      background: linear-gradient(105deg, rgba(245,243,255,.98), rgba(250,232,255,.76));
-      border-color: rgba(216,180,254,.28);
-    }
-
-    .recurring-wizard-option.selected,
     .recurring-wizard-card.selected,
     .recurring-wizard-token.selected {
       border-color: rgba(6,182,212,.42);
@@ -9732,13 +9671,6 @@
       font-weight: 950;
     }
 
-    .recurring-wizard-option[data-recurring-wizard-choice="push"] .recurring-wizard-icon,
-    .recurring-wizard-screen[data-recurring-wizard-branch="push"] .recurring-wizard-icon {
-      background: rgba(168,85,247,.12);
-      color: #a855f7;
-    }
-
-    .recurring-wizard-option strong,
     .recurring-wizard-card strong,
     .recurring-wizard-summary-card strong {
       display: block;
@@ -9748,7 +9680,6 @@
       font-weight: 950;
     }
 
-    .recurring-wizard-option span,
     .recurring-wizard-card span,
     .recurring-wizard-summary-card span {
       display: block;
@@ -9872,11 +9803,6 @@
       font-weight: 950;
     }
 
-    .recurring-wizard-token[data-push-token-kind="amount"].selected {
-      background: rgba(254,226,226,.86);
-      border-color: rgba(248,113,113,.34);
-    }
-
     .recurring-wizard-summary-card {
       border-radius: 22px;
       padding: 14px;
@@ -9921,6 +9847,135 @@
       color: #fff;
       box-shadow: 0 12px 24px rgba(6,182,212,.24);
       font-size: 13px;
+    }
+
+    .recurring-wizard-section-label {
+      display: block;
+      margin: 15px 0 7px;
+      color: rgba(20,33,58,.55);
+      font-size: 9px;
+      font-weight: 950;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .recurring-wizard-field-stack {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .recurring-wizard-field {
+      min-height: 48px;
+      border: 1px solid rgba(226,232,240,.86);
+      border-radius: 16px;
+      padding: 9px 11px;
+      background: rgba(248,250,252,.82);
+    }
+
+    .recurring-wizard-field span {
+      display: block;
+      color: rgba(20,33,58,.52);
+      font-size: 9px;
+      font-weight: 830;
+    }
+
+    .recurring-wizard-field strong {
+      display: block;
+      margin-top: 5px;
+      color: #14213a;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .recurring-wizard-choice-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 13px;
+    }
+
+    .recurring-wizard-choice {
+      min-height: 40px;
+      border: 1px solid rgba(226,232,240,.86);
+      border-radius: 14px;
+      padding: 7px;
+      background: rgba(248,250,252,.82);
+      color: rgba(20,33,58,.62);
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .recurring-wizard-choice.selected {
+      border-color: rgba(6,182,212,.44);
+      background: rgba(236,254,255,.90);
+      color: #0e7490;
+    }
+
+    .recurring-wizard-notification {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) 20px;
+      align-items: center;
+      gap: 10px;
+      min-height: 62px;
+    }
+
+    .recurring-wizard-notification .recurring-wizard-icon {
+      width: 38px;
+      height: 38px;
+      font-size: 15px;
+      background: rgba(99,102,241,.11);
+      color: #6366f1;
+    }
+
+    .recurring-wizard-preview {
+      margin-top: 13px;
+      border-radius: 18px;
+      padding: 12px;
+      background: rgba(15,23,42,.94);
+      color: rgba(255,255,255,.82);
+      font-size: 11px;
+      line-height: 1.35;
+      font-weight: 800;
+    }
+
+    .recurring-wizard-preview strong {
+      color: #fff;
+    }
+
+    .recurring-wizard-rule-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 46px;
+      border-bottom: 1px solid rgba(226,232,240,.72);
+      padding: 8px 0;
+    }
+
+    .recurring-wizard-rule-row:last-child {
+      border-bottom: 0;
+    }
+
+    .recurring-wizard-rule-row span {
+      display: block;
+      color: rgba(20,33,58,.56);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .recurring-wizard-rule-row strong {
+      color: #14213a;
+      font-size: 11px;
+      font-weight: 950;
+      text-align: right;
+    }
+
+    .recurring-wizard-summary-card {
+      background:
+        radial-gradient(circle at 16% 18%, rgba(103,232,249,.28), transparent 48%),
+        rgba(236,254,255,.82);
     }
 
     .category-wizard-screen {
@@ -14165,257 +14220,237 @@
             </div>
 
             <div class="screen-column">
-              <div class="screen-title">Q4 · Recurring wizard · típus választás</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-type" data-recurring-wizard-screen="type-choice" data-recurring-wizard-branch="shared" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Recurring wizard shared type choice">
+              <div class="screen-title">Q4 · Push trigger · Alapadatok</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-basics" data-recurring-wizard-screen="push-basics" data-recurring-push-step="1" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Alapadatok">
                 <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Recurring wizard type choice">
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger alapadatok">
                   <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav" data-recurring-type-nav="close-only"><button type="button" aria-label="bezárás">×</button></header>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
                   <div class="recurring-wizard-scroll">
-                    <span class="recurring-wizard-kicker">1. lépés</span>
-                    <h3 class="recurring-wizard-title">Milyen ismétlődést szeretnél létrehozni?</h3>
-                    <p class="recurring-wizard-subtitle">Válaszd ki a számodra megfelelő típust.</p>
-                    <div class="recurring-wizard-option-list">
-                      <button class="recurring-wizard-option selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-choice="time" aria-pressed="true"><span class="recurring-wizard-icon">▣</span><span><strong>Idő alapú</strong><span>Rendszeres ismétlődés időpont vagy időtartam szerint.</span></span><span class="recurring-wizard-chev">›</span></button>
-                      <button class="recurring-wizard-option" type="button" data-recurring-wizard-selectable data-recurring-wizard-choice="push" aria-pressed="false"><span class="recurring-wizard-icon">ϟ</span><span><strong>Push alapú</strong><span>Banki push üzenetek alapján, automatikus felismeréssel.</span></span><span class="recurring-wizard-chev">›</span></button>
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="active"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">1. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Alapadatok</h3>
+                    <p class="recurring-wizard-subtitle">Add meg, milyen tranzakciót keressen a push értesítések között.</p>
+                    <span class="recurring-wizard-section-label">Várható tranzakció</span>
+                    <div class="recurring-wizard-field-stack">
+                      <div class="recurring-wizard-field"><span>Név</span><strong>Lakbér</strong></div>
+                      <div class="recurring-wizard-field"><span>Kategória</span><strong>⌂ Lakhatás</strong></div>
+                      <div class="recurring-wizard-field"><span>Partner / Kedvezményezett</span><strong>Kovács Péter</strong></div>
+                      <div class="recurring-wizard-field"><span>Megjegyzés (opcionális)</span><strong>Albérlet díja</strong></div>
                     </div>
-                    <div class="recurring-wizard-info-box"><span>♧ Később bármikor módosíthatod.</span></div>
                   </div>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
                 </section>
               </section>
             </div>
 
             <div class="screen-column">
-              <div class="screen-title">Q5 · Idő wizard · gyakoriság</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-time-frequency" data-recurring-wizard-screen="time-frequency" data-recurring-wizard-branch="time" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Time recurring wizard frequency step">
+              <div class="screen-title">Q5 · Push trigger · Összeg beállítása</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-amount" data-recurring-wizard-screen="push-amount" data-recurring-push-step="2" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Összeg beállítása">
                 <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Idő alapú ismétlődés gyakoriság">
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger összeg beállítása">
                   <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Idő alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
                   <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Gyakoriság</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="2"><b>2</b>Időpont</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="3"><b>3</b>Időtartam</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="active"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">2. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Összeg beállítása</h3>
+                    <p class="recurring-wizard-subtitle">Az összeg a trigger egyik legerősebb egyezési jele.</p>
+                    <span class="recurring-wizard-section-label">Várható összeg</span>
+                    <div class="recurring-wizard-choice-row" data-recurring-wizard-choice-group>
+                      <button class="recurring-wizard-choice selected" type="button" data-recurring-wizard-selectable aria-pressed="true">Fix összeg</button>
+                      <button class="recurring-wizard-choice" type="button" data-recurring-wizard-selectable aria-pressed="false">Tartomány</button>
+                      <button class="recurring-wizard-choice" type="button" data-recurring-wizard-selectable aria-pressed="false">Bármilyen</button>
                     </div>
-                    <span class="recurring-wizard-kicker">2.A ág</span>
-                    <h3 class="recurring-wizard-title">Gyakoriság</h3>
-                    <p class="recurring-wizard-subtitle">Milyen gyakran ismétlődjön?</p>
-                    <div class="recurring-wizard-card-list">
-                      <button class="recurring-wizard-card selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">▣</span><span><strong>Havonta</strong><span>Minden hónapban</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">□</span><span><strong>Hetente</strong><span>Minden héten</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">↻</span><span><strong>Naponta</strong><span>Minden nap</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">…</span><span><strong>Egyedi</strong><span>Egyéni szabály szerint</span></span><span class="recurring-wizard-chev">○</span></button>
+                    <div class="recurring-wizard-field-stack">
+                      <div class="recurring-wizard-field"><span>Összeg</span><strong>180 000 Ft</strong></div>
+                      <div class="recurring-wizard-field"><span>Tolerancia (opcionális)</span><strong>±5 000 Ft</strong></div>
                     </div>
-                    <div class="recurring-wizard-info-box"><span>Következő futás</span><strong>2026. augusztus 13.</strong></div>
+                    <div class="recurring-wizard-info-box"><span>Egyezés akkor jön létre, ha az értesítés összege a megadott tartományba esik.</span></div>
                   </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
                 </section>
               </section>
             </div>
 
             <div class="screen-column">
-              <div class="screen-title">Q6 · Idő wizard · időpont</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-time-timepoint" data-recurring-wizard-screen="time-timepoint" data-recurring-wizard-branch="time" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Time recurring wizard timepoint step">
+              <div class="screen-title">Q6 · Push trigger · Gyakoriság és időzítés</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-schedule" data-recurring-wizard-screen="push-schedule" data-recurring-push-step="3" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Gyakoriság és időzítés">
                 <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Idő alapú ismétlődés időpont">
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger gyakoriság és időzítés">
                   <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Idő alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
                   <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Gyakoriság</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="2"><b>2</b>Időpont</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="3"><b>3</b>Időtartam</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="active"></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">3. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Gyakoriság és időzítés</h3>
+                    <p class="recurring-wizard-subtitle">Szűkítsd le, mikor várható ez a tranzakció.</p>
+                    <span class="recurring-wizard-section-label">Gyakoriság</span>
+                    <div class="recurring-wizard-field-stack">
+                      <div class="recurring-wizard-field"><span>Ismétlődés</span><strong>Havonta</strong></div>
+                      <div class="recurring-wizard-field"><span>Minden hónap</span><strong>5. napján</strong></div>
+                      <div class="recurring-wizard-field"><span>Első esedékesség</span><strong>2025.08.05</strong></div>
+                      <div class="recurring-wizard-field"><span>Időablak a teljesítéshez</span><strong>−3 nap és +5 nap</strong></div>
                     </div>
-                    <span class="recurring-wizard-kicker">2.A ág</span>
-                    <h3 class="recurring-wizard-title">Időpont</h3>
-                    <p class="recurring-wizard-subtitle">Melyik napon és milyen időpontban fusson?</p>
-                    <div class="recurring-wizard-field-grid">
-                      <div class="recurring-wizard-mini-field"><span>Hónap napja</span><strong>13</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Futási idő</span><strong>08:30</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Hétvége</span><strong>Következő munkanap</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Időzóna</span><strong>Europe/Budapest</strong></div>
-                    </div>
-                    <div class="recurring-wizard-info-box"><span>Preview</span><strong>Minden hónap 13. napján 08:30-kor.</strong></div>
                   </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
                 </section>
               </section>
             </div>
 
             <div class="screen-column">
-              <div class="screen-title">Q7 · Idő wizard · időtartam</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-time-duration" data-recurring-wizard-screen="time-duration" data-recurring-wizard-branch="time" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Time recurring wizard duration step">
+              <div class="screen-title">Q7 · Push trigger · Trigger forrása</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-source" data-recurring-wizard-screen="push-source" data-recurring-push-step="4" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Trigger forrása">
                 <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Idő alapú ismétlődés időtartam">
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger forrása">
                   <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Idő alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
                   <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Gyakoriság</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="2"><b>2</b>Időpont</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="3"><b>3</b>Időtartam</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
-                    </div>
-                    <span class="recurring-wizard-kicker">2.A ág</span>
-                    <h3 class="recurring-wizard-title">Időtartam</h3>
-                    <p class="recurring-wizard-subtitle">Meddig legyen aktív a szabály?</p>
-                    <div class="recurring-wizard-card-list">
-                      <button class="recurring-wizard-card selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">∞</span><span><strong>Lejárat nélkül</strong><span>Aktív marad, amíg kikapcsolod.</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">12</span><span><strong>12 ismétlés</strong><span>Egy év után automatikusan megáll.</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">↧</span><span><strong>Záró dátum</strong><span>Választott dátumig érvényes.</span></span><span class="recurring-wizard-chev">○</span></button>
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="active"></span><span></span><span></span><span></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">4. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Trigger forrása</h3>
+                    <p class="recurring-wizard-subtitle">Válaszd ki, honnan kapjuk az első mintát a szabályhoz.</p>
+                    <span class="recurring-wizard-section-label">Hogyan ismerjük fel?</span>
+                    <div class="recurring-wizard-card-list" data-recurring-wizard-choice-group>
+                      <button class="recurring-wizard-card selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">▣</span><span><strong>Válassz egy elkapott értesítést</strong><span>Már beérkezett banki pushból.</span></span><span class="recurring-wizard-chev">●</span></button>
+                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">⌛</span><span><strong>Várj a következő értesítésre</strong><span>Figyelünk, amíg megérkezik.</span></span><span class="recurring-wizard-chev">○</span></button>
+                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">⌘</span><span><strong>Illessz be egy példát</strong><span>Másold be a push szövegét.</span></span><span class="recurring-wizard-chev">○</span></button>
                     </div>
                   </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
                 </section>
               </section>
             </div>
 
             <div class="screen-column">
-              <div class="screen-title">Q8 · Idő wizard · áttekintés</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-time-review" data-recurring-wizard-screen="time-review" data-recurring-wizard-branch="time" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Time recurring wizard review step">
+              <div class="screen-title">Q8 · Push trigger · Értesítés kiválasztása</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-notification" data-recurring-wizard-screen="push-notification" data-recurring-push-step="5" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Értesítés kiválasztása">
                 <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Idő alapú ismétlődés áttekintés">
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger értesítés kiválasztása">
                   <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Idő alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
                   <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Gyakoriság</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="2"><b>2</b>Időpont</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="3"><b>3</b>Időtartam</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="active"></span><span></span><span></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">5. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Értesítés kiválasztása</h3>
+                    <p class="recurring-wizard-subtitle">Válassz egy mintát, amiből a rendszer felismeri a lakbért.</p>
+                    <span class="recurring-wizard-section-label">Elkapott értesítések</span>
+                    <div class="recurring-wizard-card-list" data-recurring-wizard-choice-group>
+                      <button class="recurring-wizard-card recurring-wizard-notification selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">R</span><span><strong>Revolut</strong><span>Ma 13:42 · 180 000 Ft összeget küldtél neki: Kovács Péter</span></span><span class="recurring-wizard-chev">●</span></button>
+                      <button class="recurring-wizard-card recurring-wizard-notification" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">R</span><span><strong>Revolut</strong><span>Júl. 05. · 180 000 Ft küldés sikeres</span></span><span class="recurring-wizard-chev">○</span></button>
+                      <button class="recurring-wizard-card recurring-wizard-notification" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">R</span><span><strong>Revolut</strong><span>Tegnap 08:02 · 8 900 Ft fizettél itt: IKEA</span></span><span class="recurring-wizard-chev">○</span></button>
                     </div>
-                    <span class="recurring-wizard-kicker">2.A ág</span>
-                    <h3 class="recurring-wizard-title">Áttekintés</h3>
-                    <section class="recurring-wizard-summary-card"><strong>Havi szabály kész</strong><span>Lidl · Élelmiszer · -18 520 Ft</span></section>
+                    <button class="recurring-wizard-choice" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="false" style="width:100%; margin-top:12px">Több megjelenítése</button>
+                  </div>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                </section>
+              </section>
+            </div>
+
+            <div class="screen-column">
+              <div class="screen-title">Q9 · Push trigger · Mezők kijelölése</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-fields" data-recurring-wizard-screen="push-fields" data-recurring-push-step="6" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Mezők kijelölése">
+                <div class="recurring-wizard-bg" aria-hidden="true"></div>
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger mezők kijelölése">
+                  <div class="recurring-wizard-grabber"></div>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <div class="recurring-wizard-scroll">
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="active"></span><span></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">6. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Mezők kijelölése</h3>
+                    <p class="recurring-wizard-subtitle">Az értesítésből ezek az adatok kerüljenek a szabályba.</p>
+                    <span class="recurring-wizard-section-label">Jelöld ki a megfelelő mezőket</span>
+                    <div class="recurring-wizard-preview">Revolut · Ma 13:42<br><strong>180 000 Ft összeget küldtél neki: Kovács Péter</strong></div>
+                    <div class="recurring-wizard-token-row" data-recurring-wizard-choice-group>
+                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="true"><i>Ft</i>Összeg</button>
+                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="true"><i>♙</i>Partner</button>
+                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="true"><i>◷</i>Dátum</button>
+                      <button class="recurring-wizard-token" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="false"><i>✎</i>Megjegyzés (opcionális)</button>
+                    </div>
+                    <div class="recurring-wizard-info-box"><span>A kijelölt mezők segítenek egyértelműen párosítani a jövőbeli értesítéseket.</span></div>
+                  </div>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                </section>
+              </section>
+            </div>
+
+            <div class="screen-column">
+              <div class="screen-title">Q10 · Push trigger · Egyezési szabályok</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-matching" data-recurring-wizard-screen="push-matching" data-recurring-push-step="7" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Egyezési szabályok">
+                <div class="recurring-wizard-bg" aria-hidden="true"></div>
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger egyezési szabályok">
+                  <div class="recurring-wizard-grabber"></div>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <div class="recurring-wizard-scroll">
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="active"></span><span></span><span></span></div>
+                    <span class="recurring-wizard-kicker">7. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Egyezési szabályok</h3>
+                    <p class="recurring-wizard-subtitle">Ezekkel a feltételekkel lesz az értesítésből teljesítés.</p>
+                    <span class="recurring-wizard-section-label">Egyezési beállítások</span>
+                    <section class="recurring-wizard-summary-card">
+                      <div class="recurring-wizard-rule-row"><span>Összeg egyezése</span><strong>180 000 Ft ±5 000</strong></div>
+                      <div class="recurring-wizard-rule-row"><span>Partner egyezése</span><strong>Tartalmazza: Kovács Péter</strong></div>
+                      <div class="recurring-wizard-rule-row"><span>Dátumablak</span><strong>−3 / +5 nap</strong></div>
+                      <div class="recurring-wizard-rule-row"><span>Kötelező szavak (opcionális)</span><strong>2 kulcsszó</strong></div>
+                    </section>
+                    <div class="recurring-wizard-token-row" data-recurring-wizard-choice-group>
+                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="true"><i>✓</i>küldtél</button>
+                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="true"><i>✓</i>neki</button>
+                      <button class="recurring-wizard-token" type="button" data-recurring-wizard-selectable data-recurring-wizard-multiselect aria-pressed="false"><i>+</i>Új kulcsszó</button>
+                    </div>
+                  </div>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                </section>
+              </section>
+            </div>
+
+            <div class="screen-column">
+              <div class="screen-title">Q11 · Push trigger · Trigger viselkedése</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-behavior" data-recurring-wizard-screen="push-behavior" data-recurring-push-step="8" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Trigger viselkedése">
+                <div class="recurring-wizard-bg" aria-hidden="true"></div>
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger viselkedése">
+                  <div class="recurring-wizard-grabber"></div>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <div class="recurring-wizard-scroll">
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="active"></span><span></span></div>
+                    <span class="recurring-wizard-kicker">8. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Trigger viselkedése</h3>
+                    <p class="recurring-wizard-subtitle">Döntsd el, mit csináljon az app, ha a push megfelel a szabálynak.</p>
+                    <span class="recurring-wizard-section-label">Teljesítéskor történjen</span>
+                    <div class="recurring-wizard-card-list" data-recurring-wizard-choice-group>
+                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">ϟ</span><span><strong>Automatikus teljesítés</strong><span>Azonnal könyveljük a tranzakciót.</span></span><span class="recurring-wizard-chev">○</span></button>
+                      <button class="recurring-wizard-card selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">✓</span><span><strong>Megerősítést kérek</strong><span>Egy érintéssel hagyhatod jóvá.</span></span><span class="recurring-wizard-chev">●</span></button>
+                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">◌</span><span><strong>Csak jelölje lehetséges egyezésként</strong><span>Ne hozzon létre tranzakciót.</span></span><span class="recurring-wizard-chev">○</span></button>
+                    </div>
+                    <div class="recurring-wizard-field-stack"><div class="recurring-wizard-field"><span>Tényleges összeg</span><strong>Az értesítésből</strong></div></div>
+                  </div>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
+                </section>
+              </section>
+            </div>
+
+            <div class="screen-column">
+              <div class="screen-title">Q12 · Push trigger · Összegzés</div>
+              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-push-summary" data-recurring-wizard-screen="push-summary" data-recurring-push-step="9" data-recurring-wizard-size="q2-inline-sheet" data-recurring-wizard-reference="/storage/emulated/0/spendee/recurring_new.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push trigger wizard: Összegzés">
+                <div class="recurring-wizard-bg" aria-hidden="true"></div>
+                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push trigger összegzés">
+                  <div class="recurring-wizard-grabber"></div>
+                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push trigger</h3><button type="button" aria-label="bezárás">×</button></header>
+                  <div class="recurring-wizard-scroll">
+                    <div class="recurring-wizard-progress" data-recurring-push-progress><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="complete"></span><span class="active"></span></div>
+                    <span class="recurring-wizard-kicker">9. lépés a 9-ből</span>
+                    <h3 class="recurring-wizard-title">Összegzés</h3>
+                    <p class="recurring-wizard-subtitle">A létrehozás után az app a kiválasztott viselkedéssel figyeli a pushokat.</p>
+                    <span class="recurring-wizard-section-label">Ellenőrizd az adatokat</span>
+                    <section class="recurring-wizard-summary-card"><strong>Trigger összefoglaló</strong><span>Lakbér · Lakhatás · Kovács Péter</span></section>
                     <div class="recurring-wizard-review-grid">
-                      <div class="recurring-wizard-mini-field"><span>Gyakoriság</span><strong>Havonta</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Következő futás</span><strong>2026. augusztus 13.</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Időpont</span><strong>08:30</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Időtartam</span><strong>Lejárat nélkül</strong></div>
+                      <div class="recurring-wizard-mini-field"><span>Összeg</span><strong>180 000 Ft ±5 000</strong></div>
+                      <div class="recurring-wizard-mini-field"><span>Gyakoriság</span><strong>Havonta, 5.</strong></div>
+                      <div class="recurring-wizard-mini-field"><span>Forrás</span><strong>Revolut push</strong></div>
+                      <div class="recurring-wizard-mini-field"><span>Viselkedés</span><strong>Megerősítés</strong></div>
                     </div>
                   </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Ismétlődés mentése</button></footer>
-                </section>
-              </section>
-            </div>
-
-            <div class="screen-column">
-              <div class="screen-title">Q9 · Push wizard · üzenet</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-push-message" data-recurring-wizard-screen="push-message" data-recurring-wizard-branch="push" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push recurring wizard message step">
-                <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push alapú ismétlődés üzenet">
-                  <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
-                  <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Üzenet</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="2"><b>2</b>Felismert elemek</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="3"><b>3</b>Kiválasztás</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
-                    </div>
-                    <span class="recurring-wizard-kicker">2.B ág</span>
-                    <h3 class="recurring-wizard-title">Üzenet</h3>
-                    <p class="recurring-wizard-subtitle">Illeszd be a push üzenet szövegét.</p>
-                    <div class="recurring-wizard-textarea">George: Lidl vásárlás 18 230 Ft · kártyás fizetés jóváhagyva.</div>
-                    <div class="recurring-wizard-token-row">
-                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="vendor" aria-pressed="true"><i>🏪</i>Lidl</button>
-                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="amount" aria-pressed="true"><i>Ft</i>18 230 Ft</button>
-                      <button class="recurring-wizard-token" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="status" aria-pressed="false"><i>✓</i>jóváhagyva</button>
-                    </div>
-                  </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
-                </section>
-              </section>
-            </div>
-
-            <div class="screen-column">
-              <div class="screen-title">Q10 · Push wizard · felismert elemek</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-push-elements" data-recurring-wizard-screen="push-elements" data-recurring-wizard-branch="push" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push recurring wizard recognized elements step">
-                <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push alapú ismétlődés felismert elemek">
-                  <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
-                  <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Üzenet</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="2"><b>2</b>Felismert elemek</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="3"><b>3</b>Kiválasztás</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
-                    </div>
-                    <span class="recurring-wizard-kicker">2.B ág</span>
-                    <h3 class="recurring-wizard-title">Felismert elemek</h3>
-                    <p class="recurring-wizard-subtitle">Az app automatikusan felismerte az alábbi elemeket.</p>
-                    <div class="recurring-wizard-token-row">
-                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="source" aria-pressed="true"><i>🏦</i>George · Forrás</button>
-                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="vendor" aria-pressed="true"><i>🛍</i>Lidl · Bolt</button>
-                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="category" aria-pressed="true"><i>◇</i>vásárlás · Kategória</button>
-                      <button class="recurring-wizard-token selected" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="amount" aria-pressed="true"><i>Ft</i>18 230 Ft · Összeg</button>
-                      <button class="recurring-wizard-token" type="button" data-recurring-wizard-selectable data-recurring-wizard-token data-push-token-kind="payment" aria-pressed="false"><i>▭</i>kártyás fizetés</button>
-                    </div>
-                    <div class="recurring-wizard-info-box"><span>Tipp</span><strong>Koppints egy elemre a típus módosításához.</strong></div>
-                  </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
-                </section>
-              </section>
-            </div>
-
-            <div class="screen-column">
-              <div class="screen-title">Q11 · Push wizard · kiválasztás</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-push-selection" data-recurring-wizard-screen="push-selection" data-recurring-wizard-branch="push" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push recurring wizard selection step">
-                <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push alapú ismétlődés kiválasztás">
-                  <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
-                  <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Üzenet</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="2"><b>2</b>Felismert elemek</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="3"><b>3</b>Kiválasztás</span>
-                      <span class="recurring-wizard-step" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
-                    </div>
-                    <span class="recurring-wizard-kicker">2.B ág</span>
-                    <h3 class="recurring-wizard-title">Kiválasztás</h3>
-                    <p class="recurring-wizard-subtitle">Válaszd ki, mely elemekből épüljön a szabály.</p>
-                    <div class="recurring-wizard-card-list">
-                      <button class="recurring-wizard-card selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">Ft</span><span><strong>Összeg minta</strong><span>±20% eltérés engedélyezett.</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card selected" type="button" data-recurring-wizard-selectable aria-pressed="true"><span class="recurring-wizard-icon">L</span><span><strong>Vendor minta</strong><span>Lidl token kötelező.</span></span><span class="recurring-wizard-chev">○</span></button>
-                      <button class="recurring-wizard-card" type="button" data-recurring-wizard-selectable aria-pressed="false"><span class="recurring-wizard-icon">✓</span><span><strong>Állapot minta</strong><span>jóváhagyva opcionális.</span></span><span class="recurring-wizard-chev">○</span></button>
-                    </div>
-                    <div class="recurring-wizard-info-box"><span>Parser próba</span><strong>Lidl + összeg token → ismétlődés jelölt.</strong></div>
-                  </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Tovább</button></footer>
-                </section>
-              </section>
-            </div>
-
-            <div class="screen-column">
-              <div class="screen-title">Q12 · Push wizard · áttekintés</div>
-              <section class="phone-screen spendee-dashboard-screen recurring-wizard-screen" data-screen="alt-recurring-wizard-push-review" data-recurring-wizard-screen="push-review" data-recurring-wizard-branch="push" data-recurring-wizard-size="q2-sheet" data-recurring-wizard-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-220027.png" data-color-target="app-background" data-color-var="--app-bg" aria-label="Push recurring wizard review step">
-                <div class="recurring-wizard-bg" aria-hidden="true"></div>
-                <section class="recurring-wizard-sheet" role="dialog" aria-label="Push alapú ismétlődés áttekintés">
-                  <div class="recurring-wizard-grabber"></div>
-                  <header class="recurring-wizard-nav"><button type="button" aria-label="vissza">‹</button><h3>Push alapú ismétlődés</h3><button type="button" aria-label="bezárás">×</button></header>
-                  <div class="recurring-wizard-scroll">
-                    <div class="recurring-wizard-stepper" data-recurring-wizard-stepper>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="1"><b>1</b>Üzenet</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="2"><b>2</b>Felismert elemek</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="3"><b>3</b>Kiválasztás</span>
-                      <span class="recurring-wizard-step active" data-recurring-wizard-step="4"><b>4</b>Áttekintés</span>
-                    </div>
-                    <span class="recurring-wizard-kicker">2.B ág</span>
-                    <h3 class="recurring-wizard-title">Áttekintés</h3>
-                    <section class="recurring-wizard-summary-card"><strong>Push szabály kész</strong><span>George · Lidl · 18 230 Ft körüli vásárlások</span></section>
-                    <div class="recurring-wizard-review-grid">
-                      <div class="recurring-wizard-mini-field"><span>Forrás</span><strong>George</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Vendor</span><strong>Lidl</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Összeg</span><strong>±20%</strong></div>
-                      <div class="recurring-wizard-mini-field"><span>Nap szórás</span><strong>5 nap</strong></div>
-                    </div>
-                  </div>
-                  <footer class="recurring-wizard-footer"><button class="recurring-wizard-back" type="button">‹</button><button class="recurring-wizard-primary" type="button">Szabály mentése</button></footer>
+                  <footer class="recurring-wizard-footer has-back"><button class="recurring-wizard-back" type="button" aria-label="vissza">‹</button><button class="recurring-wizard-primary" type="button">Létrehozás</button></footer>
                 </section>
               </section>
             </div>
@@ -21268,15 +21303,15 @@
         if (control.dataset.recurringWizardBound === 'true') return;
         control.dataset.recurringWizardBound = 'true';
         control.addEventListener('click', () => {
-          const container = control.closest('.recurring-wizard-card-list, .recurring-wizard-option-list, .recurring-wizard-token-row');
-          const isToken = control.matches('[data-recurring-wizard-token]');
-          if (!isToken && container) {
-            container.querySelectorAll('[data-recurring-wizard-selectable]').forEach((peer) => {
+          const group = control.closest('[data-recurring-wizard-choice-group]');
+          const allowMultiple = control.hasAttribute('data-recurring-wizard-multiselect');
+          if (group && !allowMultiple) {
+            group.querySelectorAll('[data-recurring-wizard-selectable]').forEach((peer) => {
               peer.classList.remove('selected');
               peer.setAttribute('aria-pressed', 'false');
             });
           }
-          const nextState = isToken ? !control.classList.contains('selected') : true;
+          const nextState = allowMultiple ? !control.classList.contains('selected') : true;
           control.classList.toggle('selected', nextState);
           control.setAttribute('aria-pressed', nextState ? 'true' : 'false');
         });
