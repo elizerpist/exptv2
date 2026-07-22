@@ -1,78 +1,73 @@
-# B3M Merchant Card Alternatives Design
+# B3M Top 5 Merchants Dimension Switch Design
 
 ## Goal
 
-Show several visual alternatives for the existing `Leggyakoribb kereskedő`
-FastInfo metric directly below the B3M gallery. The alternatives are a design
-comparison surface only. After the user chooses one, that single design may be
-added as a page to B3M-A's existing lower detail carousel.
+Keep one `Top kereskedők` page in the existing B3M-A lower detail carousel,
+but turn its header into a testable dimension selector. The visible title is
+`Top 5 kereskedő`; the header provides `Éves`, `Havi`, and `Összesen`
+buttons, with `Havi` selected on first render.
 
-## Approved layout decision
+## Approved interaction
 
-- Add one new row below the primary B3M carousel in
-  `balance_latest_layout.html`.
-- Render four card-sized alternatives side by side on the existing Color Lab
-  zoom canvas. Each is approximately the width and height of an in-screen
-  lower-detail card, not a complete phone screen.
-- Do not create a second carousel, horizontal scroll container, or swipe
-  handler for this row. The existing zoom canvas remains responsible for
-  viewing the side-by-side gallery.
-- Do not add any merchant card to B3M-A's current lower detail carousel in
-  this pass. That happens only after one alternative is selected.
+The approved solution is an in-place segmented control, not a cosmetic state
+change and not three separate carousel pages.
 
-## Data contract
+- The three native `<button type="button">` controls share one header rail.
+- `Havi` is selected initially and exposes `aria-pressed="true"`.
+- A click on `Éves`, `Havi`, or `Összesen` updates the selected button,
+  the card's dimension state, the accessible card label, and all five visible
+  merchant rows without reloading the screen.
+- The card remains one child of the existing
+  `.stage2-redesign-detail-carousel`; the selector adds no carousel, swipe
+  listener, or new detail page.
 
-Every alternative presents the existing merchant metric only:
+## Data model
 
-- merchant: `Lidl`;
-- frequency: `8` transactions in the last `14` days;
-- active days: `5`;
-- variable-expense total: `31 640 Ft`;
-- category: `Élelmiszer`.
+`allTransactionMerchantFixture` becomes a flat, date-stamped transaction
+input. Every raw record has a merchant, absolute or signed amount, icon,
+avatar color, and ISO calendar date.
 
-The Flutter resolver already exposes the production 14-day activity sequence
-as `metric.visual.points`. The prototype may use a clearly labelled,
-sum-consistent visual fixture while it is still a test screen. It must contain
-14 points, sum to 8 transactions, and have exactly 5 active days. It must not
-claim an unmodelled latest purchase, transaction value, or merchant ranking
-evidence.
+The dimension resolver is anchored to the prototype's current month and year:
 
-## Four comparison cards
+| Dimension | Included records |
+| --- | --- |
+| `Havi` | Records in July 2026 |
+| `Éves` | Records in calendar year 2026 |
+| `Összesen` | Every fixture record, including earlier years |
 
-1. **Aktivitási sáv** — a calm 14-day strip with per-day frequency height,
-   plus the `5 aktív nap` and total-spend facts.
-2. **Visszatérési térkép** — a five-day activity map that makes repeat visits
-   immediately scannable, with the category avatar as the identity anchor.
-3. **Gyakoriság fókusz** — `Lidl · 8×` is the large value; compact inner boxes
-   carry active-day count, total spend, and derived average per visit.
-4. **Költési ritmus** — a denser, receipt-like day ledger whose marks still
-   derive only from the activity points, not invented purchase facts.
+For every active dimension, the renderer groups raw transactions by merchant,
+orders groups by descending transaction count, then descending absolute summed
+amount, then merchant name, and takes exactly five. Thus a button press
+changes real count, amount, and potentially ranking data, rather than only its
+visual pressed state.
 
-All four outer surfaces are cards. Some use inner information boxes so the
-comparison covers both requested visual treatments without adding non-card
-top-level elements.
+## Card anatomy and visual behavior
 
-## Future selection path
+- Header left: `Top 5 kereskedő`.
+- Header right: a compact three-button segmented control in the existing
+  white-card visual family. It fits in the current 210px detail-card height.
+- The selected segment is visibly filled and has `aria-pressed="true"`; the
+  other two are quiet, tappable buttons with `aria-pressed="false"`.
+- The existing divider and five compact Top-categories-style rows stay in
+  place. Every row contains only avatar, merchant name, `N tranzakció`, and
+  aggregate HUF amount.
+- The card's ARIA label names the active dimension so a screen-reader user can
+  verify the state after a click.
 
-The chosen design will become one full-width
-`.stage2-redesign-top-merchant-detail` sibling of the existing
-`.stage2-redesign-detail-carousel` pages. It will inherit that carousel's
-native horizontal swipe, scroll-snap, collapse state, and touch containment.
-The other three comparison cards will remain gallery-only references and will
-not be shipped into the B3M-A screen.
+## Implementation boundaries
 
-## Scope boundaries
-
-- Keep the supplied B3M-A screenshot and its current carousel pages intact.
-- Do not change Flutter FastInfo resolver, catalog, or pulse-engine work.
-- Do not create a complete phone shell for any merchant alternative.
-- Do not add a new independent interactive surface.
+- Modify only `balance_latest_layout.html`,
+  `docs/prototypes/balance_stage2_mother_child_gallery_static_test.js`, and
+  this task's plan/checklist/spec documentation.
+- Keep Flutter resolver/catalog and all Pulse-engine files untouched.
+- Reuse the existing B3M-A detail-carousel and its swipe behavior.
+- Do not alter the other three lower carousel pages.
 
 ## Verification
 
-- Extend the Node static contract with row topology, four-card count,
-  non-carousel interaction, and fixture consistency checks.
-- Run the static test and JavaScript syntax check.
-- Confirm the linked page returns HTTP 200.
-- Review a current browser/Android screenshot of the B3M canvas before marking
-  visual requirements done.
+The static Node contract must evaluate the three dimension summaries, verify
+the `Havi` default, verify title/button/ARIA markup, and verify a click handler
+updates both button state and row rendering. It must also retain the existing
+no-extra-carousel and removed-sample guarantees. Inline script parsing and
+HTTP 200 remain required. A visual screenshot is required for full visual
+acceptance when a non-disruptive browser capture route is available.
