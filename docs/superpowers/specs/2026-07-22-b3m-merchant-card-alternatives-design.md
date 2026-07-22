@@ -54,6 +54,28 @@ visual pressed state.
 - The card's ARIA label names the active dimension so a screen-reader user can
   verify the state after a click.
 
+## No-spend compact selector
+
+The same approved selector also appears in the compact upper-rail `No-spend
+napok` card. It has its own state and update closure, so changing it never
+changes the Top 5 merchants card or the carousel position.
+
+- It uses the same native labels: `Éves`, `Havi`, and `Összesen`.
+- `Havi` is initially selected and shows `9 / 21 nap` from the existing
+  visible monthly fixture.
+- `Éves` shows `88 / 203 nap`; `Összesen` shows `325 / 731 nap`.
+- The compact control sits beneath the No-spend title in its header, preserving
+  the icon, main value, supportive copy, and violet wave inside the existing
+  small card footprint.
+- Clicking a control updates that card's own `data-no-spend-dimension`,
+  `aria-pressed` states, accessible label, and visible numerator/denominator
+  in place. It adds no carousel or swipe behavior.
+
+The data is a single `noSpendDimensionFixture` keyed by `month`, `year`, and
+`all`, resolved through a pure `summarizeNoSpendDimensionFixture` helper. The
+three entries deliberately have different counts and observed-day totals, so
+manual testing proves a real content change.
+
 ## Implementation boundaries
 
 - Modify only `balance_latest_layout.html`,
@@ -65,9 +87,10 @@ visual pressed state.
 
 ## Verification
 
-The static Node contract must evaluate the three dimension summaries, verify
-the `Havi` default, verify title/button/ARIA markup, and verify a click handler
-updates both button state and row rendering. It must also retain the existing
-no-extra-carousel and removed-sample guarantees. Inline script parsing and
-HTTP 200 remain required. A visual screenshot is required for full visual
-acceptance when a non-disruptive browser capture route is available.
+The static Node contract must evaluate the three merchant summaries and the
+three No-spend summaries, verify both `Havi` defaults, verify title/button/ARIA
+markup, and verify each local click handler updates its own content. It must
+also retain the existing no-extra-carousel and removed-sample guarantees.
+Inline script parsing and HTTP 200 remain required. A visual screenshot is
+required for full visual acceptance when a non-disruptive browser capture route
+is available.
