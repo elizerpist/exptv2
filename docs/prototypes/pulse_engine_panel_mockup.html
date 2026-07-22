@@ -443,6 +443,89 @@
       font-weight: 750;
     }
 
+    .engine-decision-trace {
+      margin-top: 18px;
+    }
+
+    .engine-scenario-tabs {
+      max-width: 560px;
+    }
+
+    .engine-trace-output {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .trace-stage {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .trace-stage h3 {
+      color: var(--ink);
+      font-size: 14px;
+      text-transform: none;
+    }
+
+    .trace-stage > p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .trace-stage-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .trace-source-list,
+    .trace-candidate-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .trace-copy-fragment,
+    .trace-source-button,
+    .trace-candidate {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .trace-source-button {
+      width: 100%;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .trace-copy-fragment strong,
+    .trace-candidate strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .trace-copy-fragment p,
+    .trace-source-button span,
+    .trace-candidate p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .trace-source-button:focus-visible {
+      outline: 3px solid rgba(8, 167, 199, .45);
+      outline-offset: 2px;
+    }
+
     .group-summary-link {
       margin-top: 8px;
       color: var(--cyan);
@@ -1032,7 +1115,8 @@
       }
 
       .group-flow,
-      .shared-engine-trace {
+      .shared-engine-trace,
+      .trace-stage-grid {
         grid-template-columns: 1fr;
       }
 
@@ -1216,6 +1300,47 @@
               <div class="weight">35</div>
             </div>
           </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="card engine-decision-trace" data-engine-decision-trace aria-labelledby="engine-trace-title">
+      <div class="section-head">
+        <div>
+          <h2 id="engine-trace-title">Engine decision trace</h2>
+          <p>Ugyanaz a lokális állapot végigkövethető a raw signaloktól az egyetlen kiválasztott header-storyig.</p>
+        </div>
+        <span class="tag violet">why this pulse?</span>
+      </div>
+      <div class="scenario-buttons engine-scenario-tabs" role="tablist" aria-label="Engine trace scenario" data-engine-scenario-tabs>
+        <button class="active" type="button" role="tab" aria-selected="true" aria-controls="engine-trace-output" data-engine-scenario="risk">Risk</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-engine-scenario="recovery">Recovery</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-engine-scenario="data">Data quality</button>
+      </div>
+      <div class="engine-trace-output" id="engine-trace-output" role="tabpanel">
+        <section class="trace-stage" data-trace-stage="recalculation">
+          <h3>1. Recalculation</h3>
+          <p>Az adatváltozás vagy app resume friss calculation frame-et indít.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="eligibility">
+          <h3>2. Eligibility gate</h3>
+          <p>Csak current, nem muted, nem same-fingerprint és kellően megbízható source versenyezhet.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="formation">
+          <h3>3. Story formation</h3>
+          <p>Csak rokon domain- vagy target-evidence alkothat közös storyt.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="priority">
+          <h3>4. Priority ledger</h3>
+          <p>Domináns base weight és látható módosítók döntik el, melyik ready story erősebb.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="delivery">
+          <h3>5. Header delivery + lifecycle</h3>
+          <p>A selected story egyszer jut a headerhez; azonos fingerprint nem ismétel.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="copy-map">
+          <h3>6. Story copy map</h3>
+          <p>A headline, evidence, time/cause és caveat minden része konkrét HF source-hoz kötődik.</p>
         </section>
       </div>
     </section>
