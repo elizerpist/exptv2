@@ -42,4 +42,34 @@ assert.match(html, /Math\.max\(0, Math\.min\(100,/, "priority must clamp to 0..1
 assert.match(html, /function renderDecisionTrace\(scenarioKey\)/, "trace renderer is required");
 assert.match(html, /function applyScenario\(scenarioKey\)/, "scenario synchronizer is required");
 
+const allSources = [
+  "HF-001", "HF-002", "HF-003", "HF-004", "HF-005", "HF-006", "HF-007",
+  "HF-008", "HF-009", "HF-010", "HF-011", "HF-012", "HF-013", "HF-014",
+  "HF-015", "HF-016", "HF-017", "HF-018", "HF-019", "HF-020", "HF-021",
+];
+assert.match(html, /const sourceCopyRoles = \{/, "source role registry is required");
+for (const id of allSources) {
+  assert.match(html, new RegExp('"' + id + '": \\{'), id + " needs a source role");
+}
+assert.match(html, /"HF-008":[\s\S]*?mode: "deferred-no-copy"/, "HF-008 remains no-copy");
+for (const id of ["HF-015", "HF-016", "HF-017", "HF-018", "HF-019"]) {
+  assert.match(
+    html,
+    new RegExp('"' + id + '":[\\s\\S]*?mode: "engine-only"'),
+    id + " must remain engine-only",
+  );
+}
+assert.match(html, /function selectTraceSource\(sourceId\)/, "trace source navigation is required");
+assert.match(html, /copyRoleBadge\(id\)/, "owner cards need copy-role badges");
+assert.match(html, /data-trace-source/, "trace source controls are required");
+const traceNavigation = html.slice(html.indexOf("function selectTraceSource"));
+assert.match(
+  traceNavigation,
+  /\["engine-only", "deferred-no-copy"\]\.includes\(role\.mode\)/,
+  "engine-only and deferred sources must be blocked from source navigation",
+);
+assert.match(html, /data-all-source-roles/, "full source-role map is required");
+assert.match(html, /function renderAllSourceRoles\(\)/, "full source-role renderer is required");
+assert.match(html, /function renderSharedEngineRoleBadges\(\)/, "shared engine sources need no-copy badges");
+
 console.log("pulse_engine_decision_trace_test: PASS");

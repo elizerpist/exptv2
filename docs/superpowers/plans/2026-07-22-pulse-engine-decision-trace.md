@@ -70,7 +70,7 @@ function selectTraceSource(sourceId) {}
 
 **Produces:** Six stable trace stage anchors and an accessible three-scenario selector without changing the group rail.
 
-- [ ] **Step 1: Write the failing contract test**
+- [x] **Step 1: Write the failing contract test**
 
 Create docs/prototypes/pulse_engine_decision_trace_test.js:
 
@@ -107,7 +107,7 @@ assert.equal((html.match(/data-group-rail=/g) || []).length, 3, "no fourth prima
 console.log("pulse_engine_decision_trace_test: PASS");
 ~~~
 
-- [ ] **Step 2: Confirm the test is red**
+- [x] **Step 2: Confirm the test is red**
 
 Run:
 
@@ -117,7 +117,7 @@ node docs/prototypes/pulse_engine_decision_trace_test.js
 
 Expected: fails with Decision Trace root is required.
 
-- [ ] **Step 3: Add the trace markup and responsive styles**
+- [x] **Step 3: Add the trace markup and responsive styles**
 
 Insert this directly before the existing workspace section:
 
@@ -152,7 +152,7 @@ and .trace-source-button. The desktop trace uses two columns where appropriate;
 the existing narrow-screen media rule collapses all trace grids to one column.
 Only source-list overflow may scroll horizontally.
 
-- [ ] **Step 4: Confirm the shell and regression tests are green**
+- [x] **Step 4: Confirm the shell and regression tests are green**
 
 Run:
 
@@ -163,7 +163,7 @@ node docs/prototypes/pulse_engine_panel_group_rail_test.js
 
 Expected: both report PASS.
 
-- [ ] **Step 5: Commit the shell**
+- [x] **Step 5: Commit the shell**
 
 ~~~sh
 git add docs/prototypes/pulse_engine_decision_trace_test.js docs/prototypes/pulse_engine_panel_mockup.html
@@ -181,7 +181,7 @@ git commit -m "feat: add Pulse decision trace shell"
 
 **Produces:** One source of truth for Risk, Recovery, and Data quality; every scenario updates phone and all stages together.
 
-- [ ] **Step 1: Extend the test for data and renderer interfaces**
+- [x] **Step 1: Extend the test for data and renderer interfaces**
 
 Append before the test PASS line:
 
@@ -197,7 +197,7 @@ assert.match(html, /function renderDecisionTrace\(scenarioKey\)/, "trace rendere
 assert.match(html, /function applyScenario\(scenarioKey\)/, "scenario synchronizer is required");
 ~~~
 
-- [ ] **Step 2: Confirm the expanded contract is red**
+- [x] **Step 2: Confirm the expanded contract is red**
 
 Run:
 
@@ -207,7 +207,7 @@ node docs/prototypes/pulse_engine_decision_trace_test.js
 
 Expected: fails with scenario data is required.
 
-- [ ] **Step 3: Define all three deterministic scenario fixtures**
+- [x] **Step 3: Define all three deterministic scenario fixtures**
 
 Replace the existing scenarios object with decisionTraceScenarios. Each scenario must have:
 
@@ -229,7 +229,7 @@ Use these required facts:
 - Recovery: a resolved HF-001 plus arrived-income HF-007 and existing score movement HF-014 form a meaningful recovery. The selected recovery has base 70 and no invented modifiers.
 - Data: HF-021 becomes eligible only after the 12h delay/group threshold. Its base is 35; unrelated HF-014 remains waiting and cannot strengthen it.
 
-- [ ] **Step 4: Implement the priority and synchronized renderer**
+- [x] **Step 4: Implement the priority and synchronized renderer**
 
 Add:
 
@@ -254,7 +254,7 @@ scorebar, both visible scenario button sets, and then call renderDecisionTrace.
 Keyboard behavior for both selector sets supports ArrowLeft, ArrowRight, Home,
 and End. Initialize with applyScenario("risk").
 
-- [ ] **Step 5: Run renderer and regression verification**
+- [x] **Step 5: Run renderer and regression verification**
 
 Run:
 
@@ -266,7 +266,7 @@ node -e 'const fs=require("fs"); const html=fs.readFileSync("docs/prototypes/pul
 
 Expected: all commands report PASS.
 
-- [ ] **Step 6: Commit the renderer**
+- [x] **Step 6: Commit the renderer**
 
 ~~~sh
 git add docs/prototypes/pulse_engine_decision_trace_test.js docs/prototypes/pulse_engine_panel_mockup.html
@@ -286,7 +286,7 @@ git commit -m "feat: render Pulse engine decision trace"
 
 **Produces:** Full HF copy-role visibility, clickable owner-card trace references, and fresh evidence.
 
-- [ ] **Step 1: Extend the contract for every source role**
+- [x] **Step 1: Extend the contract for every source role**
 
 Append before PASS:
 
@@ -308,7 +308,7 @@ assert.match(html, /function selectTraceSource\(sourceId\)/, "source navigation 
 assert.match(html, /copyRoleBadge\(id\)/, "owner cards need role badges");
 ~~~
 
-- [ ] **Step 2: Confirm the source-role test is red**
+- [x] **Step 2: Confirm the source-role test is red**
 
 Run:
 
@@ -318,7 +318,7 @@ node docs/prototypes/pulse_engine_decision_trace_test.js
 
 Expected: fails with source role registry is required.
 
-- [ ] **Step 3: Add sourceCopyRoles and badge rendering**
+- [x] **Step 3: Add sourceCopyRoles and badge rendering**
 
 Define all 21 source roles using these stable modes:
 
@@ -338,7 +338,7 @@ HF-021: confidence caveat/can-lead
 Implement copyRoleBadge(id), call it from renderTriggerCard, and display mode plus
 role without creating another card.
 
-- [ ] **Step 4: Add trace-source navigation**
+- [x] **Step 4: Add trace-source navigation**
 
 Render trace references as buttons containing data-trace-source="HF-xxx".
 Implement:
@@ -361,7 +361,7 @@ function selectTraceSource(sourceId) {
 Click, Enter, and Space invoke selectTraceSource. Engine-only/deferred sources
 show their no-copy reason rather than a fake header-copy link.
 
-- [ ] **Step 5: Run final fresh verification**
+- [x] **Step 5: Run final fresh verification**
 
 Run:
 
@@ -376,7 +376,7 @@ test "$(git hash-object balance_latest_layout.html)" = "a4b940489c11582f7252d6d2
 
 Expected: every command exits 0.
 
-- [ ] **Step 6: Record evidence and commit**
+- [x] **Step 6: Record evidence and commit**
 
 Mark PEDT-001 through PEDT-009 only when the corresponding automated/direct
 browser evidence exists. Mark PEDT-010 PARTIAL if Android-width direct
@@ -398,3 +398,14 @@ git commit -m "feat: explain Pulse engine decisions"
 - The plan uses the same interface names in every task: decisionTraceScenarios,
   sourceCopyRoles, calculatePriority, renderDecisionTrace, applyScenario, and
   selectTraceSource.
+
+## Execution Record — 2026-07-22
+
+- TDD cycles were run red then green for the trace shell, deterministic scenario
+  model, source-role register, full source-role map, and no-navigation guard
+  for deferred/engine-only sources.
+- Fresh verification passed: both static contracts, embedded-script parsing,
+  fixture-ledger assertions, live HTTP `200`, whitespace check, and the
+  protected Balance-layout hash.
+- Visual/manual review remains deliberately unclaimed because the user asked
+  not to capture or request screenshots.

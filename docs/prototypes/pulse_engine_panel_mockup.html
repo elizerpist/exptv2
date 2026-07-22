@@ -533,6 +533,25 @@
       line-height: 1.45;
     }
 
+    .trace-all-role-map {
+      margin-top: 14px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .trace-all-role-map summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .trace-all-role-map[open] summary {
+      margin-bottom: 10px;
+    }
+
     .trace-source-button {
       width: 100%;
       color: inherit;
@@ -2393,6 +2412,39 @@
       }
     };
 
+    const sourceCopyRoles = {
+      "HF-001": { group: "budget", role: "headline", mode: "can-lead", reason: "Month-end forecast claim." },
+      "HF-002": { group: "budget", role: "evidence", mode: "support", reason: "Monthly category limit proof." },
+      "HF-003": { group: "budget", role: "coach detail", mode: "support", reason: "Only meaningful zone change or parent-story detail." },
+      "HF-004": { group: "budget", role: "evidence", mode: "support", reason: "Weekly pace comparison." },
+      "HF-005": { group: "cashflow", role: "time/cause", mode: "support", reason: "Material fixed-load amount." },
+      "HF-006": { group: "cashflow", role: "time/cause", mode: "support", reason: "Due-window timing." },
+      "HF-007": { group: "cashflow", role: "headline or recovery", mode: "can-lead", reason: "Missing or arrived expected income." },
+      "HF-008": { group: "cashflow", role: "none", mode: "deferred-no-copy", reason: "Deferred V1 overlap with HF-007 and HF-010." },
+      "HF-009": { group: "cashflow", role: "headline", mode: "can-lead", reason: "Cashflow ratio risk." },
+      "HF-010": { group: "cashflow", role: "headline", mode: "can-lead", reason: "Savings-goal risk." },
+      "HF-011": { group: "cashflow", role: "headline", mode: "can-lead", reason: "Balance-buffer risk." },
+      "HF-012": { group: "budget", role: "evidence", mode: "support", reason: "Category behavior shift." },
+      "HF-013": { group: "budget", role: "evidence", mode: "support", reason: "Rolling total spend trend." },
+      "HF-014": { group: "budget", role: "context", mode: "support", reason: "Reports existing score movement only." },
+      "HF-015": { group: "budget", role: "none", mode: "engine-only", reason: "Supersede rule, not a copy source." },
+      "HF-016": { group: "engine", role: "none", mode: "engine-only", reason: "Priority and selection diagnostics." },
+      "HF-017": { group: "engine", role: "none", mode: "engine-only", reason: "Fingerprint lifecycle diagnostics." },
+      "HF-018": { group: "engine", role: "none", mode: "engine-only", reason: "Header delivery diagnostics." },
+      "HF-019": { group: "engine", role: "none", mode: "engine-only", reason: "Panel diagnostics." },
+      "HF-020": { group: "budget", role: "evidence", mode: "support", reason: "Yearly-limit context." },
+      "HF-021": { group: "data-quality", role: "confidence caveat", mode: "can-lead", reason: "Own data story or financial-confidence caveat." }
+    };
+
+    function copyRoleBadge(id) {
+      const role = sourceCopyRoles[id];
+      if (!role) return "";
+      const tone = role.mode === "can-lead" ? "bad"
+        : role.mode === "support" ? "violet"
+          : role.mode === "deferred-no-copy" ? "warn" : "info";
+      return '<span class="tag ' + tone + ' copy-role" title="' + role.reason + '">' + role.role + ' · ' + role.mode + '</span>';
+    }
+
     function calculatePriority(candidate) {
       const delta = candidate.modifiers.reduce((sum, modifier) => sum + modifier.value, 0);
       return Math.max(0, Math.min(100, candidate.base + delta));
@@ -2405,8 +2457,30 @@
       return "info";
     }
 
+    function traceSourceControl(id, content) {
+      const role = sourceCopyRoles[id];
+      const canNavigate = role && !["engine-only", "deferred-no-copy"].includes(role.mode);
+      if (!canNavigate) {
+        return '<div class="trace-source-button"><div class="trigger-top"><span class="trigger-id">' + id + '</span>' + copyRoleBadge(id) + '</div>' + content + '<span>' + (role ? role.reason : "No source role") + '</span></div>';
+      }
+      return '<div class="trace-source-button" role="button" tabindex="0" data-trace-source="' + id + '"><div class="trigger-top"><span class="trigger-id">' + id + '</span>' + copyRoleBadge(id) + '</div>' + content + '</div>';
+    }
+
+    function renderAllSourceRoles() {
+      return Object.entries(sourceCopyRoles).map(([id, role]) => '<article class="trace-candidate">' + traceSourceControl(id, '<strong>' + role.role + '</strong><p>' + role.reason + '</p>') + '</article>').join("");
+    }
+
+    function renderSharedEngineRoleBadges() {
+      document.querySelectorAll("[data-shared-hf-id]").forEach((step) => {
+        const id = step.dataset.sharedHfId;
+        if (!step.querySelector(".copy-role")) {
+          step.insertAdjacentHTML("beforeend", '<div class="tagrow">' + copyRoleBadge(id) + '</div>');
+        }
+      });
+    }
+
     function traceSignal(signal) {
-      return '<article class="trace-candidate"><div class="trigger-top"><span class="trigger-id">' + signal.id + '</span><span class="tag ' + traceTone(signal.state) + '">' + signal.state + '</span></div><strong>' + signal.group + '</strong><p>' + signal.reason + '</p></article>';
+      return '<article class="trace-candidate">' + traceSourceControl(signal.id, '<div class="trigger-top"><span class="tag ' + traceTone(signal.state) + '">' + signal.state + '</span></div><strong>' + signal.group + '</strong><p>' + signal.reason + '</p>') + '</article>';
     }
 
     function traceCandidate(candidate) {
@@ -2414,7 +2488,7 @@
       const modifiers = candidate.modifiers.length
         ? candidate.modifiers.map((modifier) => '<span>' + (modifier.value >= 0 ? "+" : "") + modifier.value + ' · ' + modifier.label + '</span>').join("")
         : '<span>0 · no extra modifier</span>';
-      return '<article class="trace-candidate ' + candidate.status + '"><div class="trigger-top"><span class="trigger-id">' + candidate.dominant + '</span><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p><div class="trace-ledger"><span>Base ' + candidate.base + ' · ' + candidate.baseLabel + '</span>' + modifiers + '<b>Priority ' + score + ' / 100</b></div><p>' + candidate.outcome + '</p></article>';
+      return '<article class="trace-candidate ' + candidate.status + '">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p><div class="trace-ledger"><span>Base ' + candidate.base + ' · ' + candidate.baseLabel + '</span>' + modifiers + '<b>Priority ' + score + ' / 100</b></div><p>' + candidate.outcome + '</p>') + '</article>';
     }
 
     function renderDecisionTrace(scenarioKey) {
@@ -2424,10 +2498,10 @@
 
       stage("recalculation").innerHTML = '<h3>1. Recalculation</h3><div class="trace-stage-grid"><article class="trace-candidate"><strong>Event</strong><p>' + scenario.recalculation.event + '</p></article><article class="trace-candidate"><strong>Foreground / background</strong><p>' + scenario.recalculation.background + '</p></article></div>';
       stage("eligibility").innerHTML = '<h3>2. Eligibility gate</h3><p>Eligibility előbb dönt: a waiting, stale, muted vagy same-fingerprint source score-t sem kap.</p><div class="trace-source-list">' + scenario.signals.map(traceSignal).join("") + '</div>';
-      stage("formation").innerHTML = '<h3>3. Story formation</h3><p>Csak ugyanahhoz a domainhez vagy targethez tartozó evidence épül közös storyvá; unrelated jel nem adódik hozzá.</p><div class="trace-candidate-list">' + scenario.candidates.map((candidate) => '<article class="trace-candidate"><div class="trigger-top"><span class="trigger-id">' + candidate.id + '</span><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p></article>').join("") + '</div>';
+      stage("formation").innerHTML = '<h3>3. Story formation</h3><p>Csak ugyanahhoz a domainhez vagy targethez tartozó evidence épül közös storyvá; unrelated jel nem adódik hozzá.</p><div class="trace-candidate-list">' + scenario.candidates.map((candidate) => '<article class="trace-candidate">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p>') + '</article>').join("") + '</div>';
       stage("priority").innerHTML = '<h3>4. Priority ledger</h3><p>A domináns eligible source base weightjére csak a megnevezett story modifier kerül. A rokon source-ok base weightje nem adódik össze vakon.</p><div class="trace-candidate-list">' + scenario.candidates.map(traceCandidate).join("") + '</div>';
-      stage("delivery").innerHTML = '<h3>5. Header delivery + lifecycle</h3><p><b>' + selected.title + '</b> selected, mert priority ' + calculatePriority(selected) + ' / 100. A suppressed story nem queue-ba kerül, hanem a következő current recalculationkor újra versenyez.</p><div class="trace-lifecycle">' + scenario.lifecycle.map((entry) => '<span class="tag ' + traceTone(entry.state) + '" title="' + entry.reason + '">' + entry.state + '</span>').join("") + '</div>';
-      stage("copy-map").innerHTML = '<h3>6. Story copy map</h3><p>A header mondat nem triggerlista: minden kimondott mondatrésznek van source-a.</p><div class="trace-source-list">' + scenario.copy.map((entry) => '<article class="trace-copy-fragment"><strong>' + entry.slot + ' · ' + entry.source + '</strong><p>' + entry.text + '</p></article>').join("") + '</div>' + (scenario.omitted.length ? '<p class="trace-omitted">Omitted: ' + scenario.omitted.map((entry) => entry.id + ' · ' + entry.reason).join(" | ") + '</p>' : '');
+      stage("delivery").innerHTML = '<h3>5. Header delivery + lifecycle</h3><p><b>' + selected.title + '</b> selected, mert priority ' + calculatePriority(selected) + ' / 100. A suppressed story nem queue-ba kerül, hanem a következő current recalculationkor újra versenyez.</p><div class="trace-source-list">' + traceSourceControl(selected.dominant, '<strong>Selected header source</strong><p>' + selected.outcome + '</p>') + '</div><div class="trace-lifecycle">' + scenario.lifecycle.map((entry) => '<span class="tag ' + traceTone(entry.state) + '" title="' + entry.reason + '">' + entry.state + '</span>').join("") + '</div>';
+      stage("copy-map").innerHTML = '<h3>6. Story copy map</h3><p>A header mondat nem triggerlista: minden kimondott mondatrésznek van source-a.</p><div class="trace-source-list">' + scenario.copy.map((entry) => '<article class="trace-copy-fragment">' + traceSourceControl(entry.source, '<strong>' + entry.slot + '</strong><p>' + entry.text + '</p>') + '</article>').join("") + '</div>' + (scenario.omitted.length ? '<div class="trace-source-list"><p class="trace-omitted">Omitted source-ok:</p>' + scenario.omitted.map((entry) => traceSourceControl(entry.id, '<strong>Omitted</strong><p>' + entry.reason + '</p>')).join("") + '</div>' : '') + '<details class="trace-all-role-map" data-all-source-roles><summary>Teljes HF source → copy role térkép</summary><div class="trace-candidate-list">' + renderAllSourceRoles() + '</div></details>';
     }
 
     const scenarioControlGroups = [
@@ -2600,7 +2674,7 @@
       const domain = trigger[1];
       const deferred = trigger[4] === "deferred";
       const tagTone = deferred ? "" : domain === "data_quality" ? "info" : domain === "behavior_shift" || domain === "fixed_load" ? "violet" : "bad";
-      return '<div class="trigger-top"><span class="trigger-id">' + id + '</span><span class="tag ' + tagTone + '">' + (deferred ? "deferred" : domain) + '</span></div><strong>' + title + '</strong><p class="trigger-copy">' + trigger[2] + '</p>' + chartSvg(trigger[6], tagTone || "info") + '<div class="trigger-meta"><span>Calculation: ' + trigger[3] + '</span><span>State: ' + trigger[4] + '</span><span>Transition: ' + trigger[5] + '</span></div><p class="source-domain">source domain · ' + domain + (deferred ? ' · not active' : '') + '</p>' + rangeControl(group, trigger[7], trigger[8], trigger[9], trigger[10], trigger[11], trigger[12]);
+      return '<div class="trigger-top"><span class="trigger-id">' + id + '</span><span class="tag ' + tagTone + '">' + (deferred ? "deferred" : domain) + '</span>' + copyRoleBadge(id) + '</div><strong>' + title + '</strong><p class="trigger-copy">' + trigger[2] + '</p>' + chartSvg(trigger[6], tagTone || "info") + '<div class="trigger-meta"><span>Calculation: ' + trigger[3] + '</span><span>State: ' + trigger[4] + '</span><span>Transition: ' + trigger[5] + '</span></div><p class="source-domain">source domain · ' + domain + (deferred ? ' · not active' : '') + '</p>' + rangeControl(group, trigger[7], trigger[8], trigger[9], trigger[10], trigger[11], trigger[12]);
     }
 
     function renderStory(dossier) {
@@ -2626,6 +2700,8 @@
       });
     });
 
+    renderSharedEngineRoleBadges();
+
     const groupRailButtons = Array.from(document.querySelectorAll('[data-group-rail]'));
     const groupPanels = Array.from(document.querySelectorAll('[data-group-panel]'));
     const groupSummaries = Array.from(document.querySelectorAll('[data-group-summary]'));
@@ -2646,6 +2722,34 @@
       if (shouldScroll && groupRail) {
         groupRail.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
+    }
+
+    function selectTraceSource(sourceId) {
+      const role = sourceCopyRoles[sourceId];
+      if (!role || role.group === "engine" || ["engine-only", "deferred-no-copy"].includes(role.mode)) return;
+      selectGroup(role.group, false);
+      requestAnimationFrame(() => {
+        const card = document.querySelector('[data-hf-id="' + sourceId + '"]');
+        if (!card) return;
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.tabIndex = -1;
+        card.focus({ preventScroll: true });
+      });
+    }
+
+    const traceRoot = document.querySelector("[data-engine-decision-trace]");
+    if (traceRoot) {
+      traceRoot.addEventListener("click", (event) => {
+        const source = event.target.closest("[data-trace-source]");
+        if (source) selectTraceSource(source.dataset.traceSource);
+      });
+      traceRoot.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const source = event.target.closest("[data-trace-source]");
+        if (!source) return;
+        event.preventDefault();
+        selectTraceSource(source.dataset.traceSource);
+      });
     }
 
     groupRailButtons.forEach((button, index) => {
