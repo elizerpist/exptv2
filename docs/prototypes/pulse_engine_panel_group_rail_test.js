@@ -61,5 +61,9 @@ assert.match(html, /ArrowLeft/, 'group rail needs ArrowLeft keyboard navigation'
 assert.match(html, /data-group-summary="budget"/, 'budget summary must select its group');
 assert.match(html, /data-group-summary="cashflow"/, 'cashflow summary must select its group');
 assert.match(html, /data-group-summary="data-quality"/, 'data summary must select its group');
+assert.ok(html.includes('function safeOutputId(scope, title, label)'), 'dynamic controls must scope output IDs by group');
+assert.ok(html.includes('safeOutputId(scope, title, label)'), 'range controls must use the scoped output ID helper');
+assert.ok(html.includes('rangeControl(group, trigger[7], trigger[8]'), 'trigger controls must pass their owning group');
+assert.ok(html.includes('rangeControl(group, tuning[2], tuning[3]'), 'group tuning controls must pass their owning group');
 
 console.log('pulse_engine_panel_group_rail_test: PASS');

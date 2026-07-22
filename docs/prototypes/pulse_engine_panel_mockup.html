@@ -2223,12 +2223,12 @@
       return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 62 L68 56 L118 43 L170 29 L222 16" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/><path d="M18 43 H222" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/></svg>';
     }
 
-    function safeOutputId(id) {
-      return "group-" + id.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-control";
+    function safeOutputId(scope, title, label) {
+      return "group-" + scope + "-" + (title + "-" + label).toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-control";
     }
 
-    function rangeControl(title, label, min, max, value, unit) {
-      const outputId = safeOutputId(title + "-" + label);
+    function rangeControl(scope, title, label, min, max, value, unit) {
+      const outputId = safeOutputId(scope, title, label);
       return '<div class="user-defined"><strong><span>' + title + '</span><span>user-defined</span></strong><div class="control-line"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" value="' + value + '" data-out="' + outputId + '"><b><span id="' + outputId + '">' + value + '</span>' + unit + '</b></div></div>';
     }
 
@@ -2240,21 +2240,21 @@
       return '<div class="group-panel-head"><div><h2>Forecastok és számítások</h2><p>A nagy grafikonok összefoglalók; a hozzájuk tartozó minden konkrét trigger az alábbi auditkártyákban látható.</p></div><span class="tag violet">calculation view</span></div><div class="grid-3">' + dossier.forecasts.map((entry) => '<article class="card chart-card"><div class="chart-title"><div><strong>' + entry[0] + '</strong><span>' + entry[1] + '</span></div><span class="tag ' + entry[3] + '">' + entry[2] + '</span></div>' + chartSvg(entry[4], entry[3]) + '<p class="source-domain">' + entry[5] + '</p></article>').join('') + '</div>';
     }
 
-    function renderTriggerCard(id, trigger) {
+    function renderTriggerCard(group, id, trigger) {
       const title = trigger[0];
       const domain = trigger[1];
       const deferred = trigger[4] === "deferred";
       const tagTone = deferred ? "" : domain === "data_quality" ? "info" : domain === "behavior_shift" || domain === "fixed_load" ? "violet" : "bad";
-      return '<div class="trigger-top"><span class="trigger-id">' + id + '</span><span class="tag ' + tagTone + '">' + (deferred ? "deferred" : domain) + '</span></div><strong>' + title + '</strong><p class="trigger-copy">' + trigger[2] + '</p>' + chartSvg(trigger[6], tagTone || "info") + '<div class="trigger-meta"><span>Calculation: ' + trigger[3] + '</span><span>State: ' + trigger[4] + '</span><span>Transition: ' + trigger[5] + '</span></div><p class="source-domain">source domain · ' + domain + (deferred ? ' · not active' : '') + '</p>' + rangeControl(trigger[7], trigger[8], trigger[9], trigger[10], trigger[11], trigger[12]);
+      return '<div class="trigger-top"><span class="trigger-id">' + id + '</span><span class="tag ' + tagTone + '">' + (deferred ? "deferred" : domain) + '</span></div><strong>' + title + '</strong><p class="trigger-copy">' + trigger[2] + '</p>' + chartSvg(trigger[6], tagTone || "info") + '<div class="trigger-meta"><span>Calculation: ' + trigger[3] + '</span><span>State: ' + trigger[4] + '</span><span>Transition: ' + trigger[5] + '</span></div><p class="source-domain">source domain · ' + domain + (deferred ? ' · not active' : '') + '</p>' + rangeControl(group, trigger[7], trigger[8], trigger[9], trigger[10], trigger[11], trigger[12]);
     }
 
     function renderStory(dossier) {
       return '<div class="group-panel-head"><div><h2>' + dossier.story[0] + '</h2><p>' + dossier.story[1] + '</p></div><span class="tag warn">story → header</span></div><div class="status-grid"><div class="status-box"><b>' + dossier.story[2] + '</b><span>' + dossier.story[3] + '</span></div><div class="status-box"><b>' + dossier.story[4] + '</b><span>' + dossier.story[5] + '</span></div></div>';
     }
 
-    function renderTuning(dossier) {
+    function renderTuning(group, dossier) {
       const tuning = dossier.tuning;
-      return '<div class="group-panel-head"><div><h2>' + tuning[0] + '</h2><p>' + tuning[1] + '</p></div><span class="tag good">transparent tuning</span></div>' + rangeControl(tuning[2], tuning[3], tuning[4], tuning[5], tuning[6], tuning[7]);
+      return '<div class="group-panel-head"><div><h2>' + tuning[0] + '</h2><p>' + tuning[1] + '</p></div><span class="tag good">transparent tuning</span></div>' + rangeControl(group, tuning[2], tuning[3], tuning[4], tuning[5], tuning[6], tuning[7]);
     }
 
     Object.entries(groupDossiers).forEach(([group, dossier]) => {
@@ -2262,12 +2262,12 @@
       panel.querySelector('[data-group-manual-content]').innerHTML = renderManual(dossier);
       panel.querySelector('[data-group-forecast-content]').innerHTML = renderForecasts(dossier);
       panel.querySelector('[data-group-story-content]').innerHTML = renderStory(dossier);
-      panel.querySelector('[data-group-tuning-content]').innerHTML = renderTuning(dossier);
+      panel.querySelector('[data-group-tuning-content]').innerHTML = renderTuning(group, dossier);
       panel.querySelectorAll('[data-card-slot]').forEach((slot) => {
         const trigger = dossier.triggers[slot.dataset.cardSlot];
         if (!trigger) throw new Error('Missing group trigger data for ' + slot.dataset.cardSlot);
         slot.classList.toggle('deferred', trigger[4] === 'deferred');
-        slot.innerHTML = renderTriggerCard(slot.dataset.cardSlot, trigger);
+        slot.innerHTML = renderTriggerCard(group, slot.dataset.cardSlot, trigger);
       });
     });
 
