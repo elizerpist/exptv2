@@ -99,7 +99,6 @@ class _FastInfoMetricScope {
       'legnagyobb_novekedo_kategoria' => _largestCategoryChange(),
       'kovetkezo_ismetlo_kiadas' => _nextRecurringExpense(),
       'havi_fix_koltseg_osszesen' => _monthlyFixedCosts(),
-      'bevetel_ebben_a_honapban' => _monthlyIncome(),
       'kiadas_bevetel_arany' => _expenseIncomeRatio(),
       _ => const FastInfoMetricResult(
         pillValue: 'Nincs adat',
@@ -792,46 +791,6 @@ class _FastInfoMetricScope {
     );
   }
 
-  FastInfoMetricResult _monthlyIncome() {
-    final expectedIncome = data.currentMonthExpectedIncome;
-    final pendingIncome = data.currentMonthPendingIncomeGhost;
-    final receivedIncome = data.currentMonthIncome;
-    final variableIncome = data.currentMonthVariableIncome;
-    final previousVariableIncome = data.previousMonthSameDayVariableIncome;
-    final coverage = rollingDailyAverage > 0
-        ? receivedIncome / rollingDailyAverage
-        : null;
-    final trend = incomeTrend(variableIncome, previousVariableIncome);
-    return FastInfoMetricResult(
-      pillValue: trend == null
-          ? _compactAmount(receivedIncome)
-          : '${trend.text} előzőhöz',
-      primaryValue: formatHuf(receivedIncome),
-      secondaryValues: <String>[
-        'eddig beérkezett',
-        if (pendingIncome > 0)
-          'várt ${_compactAmount(expectedIncome)} · ghost ${_compactAmount(pendingIncome)}',
-        if (coverage != null) 'Fedezet: ${coverage.floor()} nap',
-        if (previousVariableIncome <= 0) 'Nincs összehasonlítás',
-      ],
-      semantic: coverage == null
-          ? FastInfoSemantic.neutral
-          : coverage >= 30
-          ? FastInfoSemantic.good
-          : FastInfoSemantic.warning,
-      trend: trend,
-      visual: FastInfoVisualDescriptor(
-        kind: FastInfoVisualKind.incomeComparisonBars,
-        value: variableIncome,
-        compareValue: previousVariableIncome,
-        marker: expectedIncome,
-        semantic: variableIncome >= previousVariableIncome
-            ? FastInfoSemantic.good
-            : FastInfoSemantic.bad,
-      ),
-    );
-  }
-
   FastInfoMetricResult _expenseIncomeRatio() {
     final cashflow = data.currentMonthIncome - data.currentMonthExpense;
     if (data.currentMonthIncome <= 0) {
@@ -1016,9 +975,6 @@ FastInfoSemantic expenseSemantic(double ratio) {
 
 FastInfoTrend? expenseTrend(double current, double previous) =>
     _trend(current, previous, income: false);
-
-FastInfoTrend? incomeTrend(double current, double previous) =>
-    _trend(current, previous, income: true);
 
 FastInfoTrend? _trend(double current, double previous, {required bool income}) {
   if (previous <= 0) return null;

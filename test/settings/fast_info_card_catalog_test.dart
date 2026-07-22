@@ -19,13 +19,12 @@ void main() {
     'legnagyobb_novekedo_kategoria',
     'kovetkezo_ismetlo_kiadas',
     'havi_fix_koltseg_osszesen',
-    'bevetel_ebben_a_honapban',
     'kiadas_bevetel_arany',
   };
 
   test('catalog exposes exactly the approved canonical cards', () {
     expect(fastInfoCardCatalog.map((card) => card.id).toSet(), expectedIds);
-    expect(fastInfoCardCatalog, hasLength(17));
+    expect(fastInfoCardCatalog, hasLength(16));
     expect(fastInfoCardById('debug_riasztasok'), isNull);
   });
 
@@ -97,6 +96,17 @@ void main() {
       ]);
     },
   );
+
+  test('config drops the retired monthly income card id', () {
+    final config = FastInfoConfig.fromMap({
+      'pills': [
+        {'id': 'bevetel_ebben_a_honapban', 'type': 'pill'},
+      ],
+      'boxes': const <Object?>[],
+    });
+
+    expect(config.pills.map((slot) => slot?.id).toList(), [null, null, null]);
+  });
 
   test('defaults use six unique canonical cards in fixed slots', () {
     final config = FastInfoConfig.defaults();

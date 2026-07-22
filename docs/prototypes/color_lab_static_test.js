@@ -196,7 +196,7 @@ const required = [
   'function spawnCommonHeaderMindPortalTrailPoint',
   'function initCommonHeaderMindPortalTouch',
   'function moveQueryMenuRowToTop',
-  'function focusQueryMenuQ1OnLoad',
+  'function focusQueryMenuQ1AOnLoad',
   'function buildCommonMindHeatmapContent',
   'function buildMindHeatmapYearGrid',
   'function buildMindHeatmapMonthGrid',
@@ -655,8 +655,8 @@ for (const token of cleanupForbiddenTokens) {
 const screenCount = (html.match(/class="phone-screen/g) || []).length;
 assert.strictEqual(
   screenCount,
-  34,
-  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B/C/D rows, Query Menu Q1, Q1A category-vendor hierarchy, Query-row expense and income transaction sheets, nine recurring wizard screens, and three category wizard popup screens after removing legacy 1-4 and S1',
+  35,
+  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B3M mother-child preview, B/C/D rows, remaining Query Menu Q1A category-vendor hierarchy, Query-row expense/income transaction sheets, the Q2A internal category route sheet, nine recurring wizard screens, and three category wizard popup screens',
 );
 
 const alternativeSection = html.match(
@@ -673,11 +673,11 @@ assert(
     html.includes("const queryRow = screens?.querySelector('[data-query-menu-row]');") &&
     html.includes('screens.firstElementChild !== queryRow') &&
     html.includes('screens.insertBefore(queryRow, screens.firstElementChild);') &&
-    /function focusQueryMenuQ1OnLoad\(\) \{[\s\S]*?\[data-query-menu-row\] \[data-screen="alt-query-menu-fullscreen"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start' \}\)[\s\S]*?queryQ1\.focus/.test(html) &&
-    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?initQueryMenuPrototype\(\);[\s\S]*?focusQueryMenuQ1OnLoad\(\);/.test(html) &&
+    /function focusQueryMenuQ1AOnLoad\(\) \{[\s\S]*?\[data-query-menu-row\] \[data-screen="alt-query-menu-category-vendor-hierarchy"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start' \}\)[\s\S]*?queryQ1A\.focus/.test(html) &&
+    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?initQueryMenuPrototype\(\);[\s\S]*?focusQueryMenuQ1AOnLoad\(\);/.test(html) &&
     !html.includes('function focusCommonHeaderMindD1OnLoad') &&
     !html.includes('focusCommonHeaderMindD1OnLoad();'),
-  'Q row must be the first alternative-design row at refresh and Q1 must receive the post-refresh focus instead of Mind D1',
+  'Q row must be the first alternative-design row at refresh and the remaining Q1A screen must receive the post-refresh focus instead of Mind D1',
 );
 assert(
   alternativeSection.indexOf('id="balanceHeaderScaleLab"') > alternativeSection.indexOf('aria-label="Alternatív design app menük"') &&
@@ -1068,24 +1068,19 @@ const queryMenuBlock =
     ? commonHeaderModeArea.slice(queryMenuStart, queryMenuEnd)
     : '';
 assert(queryMenuBlock, 'Missing standalone Query Menu row');
-const queryMenuScreenStart = queryMenuBlock.indexOf('data-screen="alt-query-menu-fullscreen"');
 const queryQ1ATitleStart = queryMenuBlock.indexOf('<div class="screen-title">Q1A · Kategória-vendor hierarchia</div>');
 const queryQ1AScreenStart = queryMenuBlock.indexOf(
   'data-screen="alt-query-menu-category-vendor-hierarchy"',
-  queryMenuScreenStart,
 );
 const queryQ1AScreenEnd = queryMenuBlock.indexOf(
   'data-screen="alt-query-add-transaction-duplicate"',
   queryQ1AScreenStart,
 );
-const queryMenuScreenBlock =
-  queryMenuScreenStart >= 0 && queryQ1AScreenStart > queryMenuScreenStart
-    ? queryMenuBlock.slice(queryMenuScreenStart, queryQ1AScreenStart)
-    : '';
 const queryQ1AScreenBlock =
   queryQ1AScreenStart >= 0 && queryQ1AScreenEnd > queryQ1AScreenStart
     ? queryMenuBlock.slice(queryQ1AScreenStart, queryQ1AScreenEnd)
     : '';
+const queryMenuScreenBlock = queryQ1AScreenBlock;
 const queryMenuHeaderStart = queryMenuScreenBlock.indexOf('class="query-menu-head"');
 const queryMenuHeaderEnd = queryMenuScreenBlock.indexOf('<div class="query-menu-scroll"', queryMenuHeaderStart);
 const queryMenuHeaderBlock =
@@ -1093,23 +1088,24 @@ const queryMenuHeaderBlock =
     ? queryMenuScreenBlock.slice(queryMenuHeaderStart, queryMenuHeaderEnd)
     : '';
 assert(
-  queryMenuBlock.includes('data-screen="alt-query-menu-fullscreen"') &&
-    queryMenuBlock.includes('data-query-menu-mode="top-snapshot-tabs"') &&
+  !queryMenuBlock.includes('data-screen="alt-query-menu-fullscreen"') &&
+    queryMenuBlock.includes('data-screen="alt-query-menu-category-vendor-hierarchy"') &&
+    queryMenuBlock.includes('data-query-menu-mode="category-vendor-hierarchy"') &&
     queryMenuBlock.includes('data-reference="/storage/emulated/0/Pictures/Screenshots/Screenshot_20260716-084152.png"') &&
     queryMenuBlock.includes('class="query-menu-route"') &&
     queryMenuBlock.includes('class="query-menu-scroll"') &&
     !queryMenuBlock.includes('data-common-header-mode='),
-  'Query Menu must be a standalone fullscreen phone screen row with Q1 using top snapshot tabs, not another common-header mode clone',
+  'Query Menu must be a standalone fullscreen phone screen row with Q1 deleted and Q1A category-vendor hierarchy retained, not another common-header mode clone',
 );
 assert.strictEqual(
   (queryMenuBlock.match(/<div class="screen-column"/g) || []).length,
   16,
-  'Query Menu row must render exactly sixteen screen columns: Q1, Q1A category-vendor hierarchy, Q2 expense, Q3 income, nine common recurring wizard screens, and the three category wizard popup steps',
+  'Query Menu row must render exactly sixteen screen columns: Q1A category-vendor hierarchy, Q2 expense, Q2A internal category route, Q3 income, nine common recurring wizard screens, and the three category wizard popup steps',
 );
 const queryRowScreenOrder = [
-  queryMenuBlock.indexOf('data-screen="alt-query-menu-fullscreen"'),
   queryMenuBlock.indexOf('data-screen="alt-query-menu-category-vendor-hierarchy"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-transaction-duplicate"'),
+  queryMenuBlock.indexOf('data-screen="alt-query-category-route-sheet"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-income-transaction"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-type"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-time-frequency"'),
@@ -1127,21 +1123,145 @@ const queryRowScreenOrder = [
 assert(
   queryRowScreenOrder.every((index) => index >= 0) &&
     queryRowScreenOrder.every((index, idx, arr) => idx === 0 || arr[idx - 1] < index),
-  'Query Menu row screen order must be Q1 menu, Q1A category-vendor hierarchy, Q2 expense, Q3 income, Q4 shared type choice, Q5-Q8 time wizard, Q9-Q12 push wizard, then Q13-Q15 category wizard',
+  'Query Menu row screen order must start with Q1A category-vendor hierarchy, then Q2 expense, Q2A internal category route, Q3 income, Q4 shared type choice, Q5-Q8 time wizard, Q9-Q12 push wizard, then Q13-Q15 category wizard',
+);
+const queryQ2ScreenStart = queryMenuBlock.indexOf(
+  'data-screen="alt-query-add-transaction-duplicate"',
+);
+const queryQ2AScreenStart = queryMenuBlock.indexOf(
+  'data-screen="alt-query-category-route-sheet"',
+);
+const queryQ2ATitleStart = queryMenuBlock.indexOf(
+  '<div class="screen-title">Q2A · Kategória sheet route</div>',
+);
+const queryQ3ScreenStart = queryMenuBlock.indexOf(
+  'data-screen="alt-query-add-income-transaction"',
+);
+const queryQ2ScreenBlock =
+  queryQ2ScreenStart >= 0 && queryQ2AScreenStart > queryQ2ScreenStart
+    ? queryMenuBlock.slice(queryQ2ScreenStart, queryQ2AScreenStart)
+    : '';
+const queryQ2AScreenBlock =
+  queryQ2AScreenStart >= 0 && queryQ3ScreenStart > queryQ2AScreenStart
+    ? queryMenuBlock.slice(queryQ2AScreenStart, queryQ3ScreenStart)
+    : '';
+const queryQ2InlineCategoryOptionCount =
+  (queryQ2ScreenBlock.match(/data-category-inline-option="/g) || []).length;
+const queryQ2InlineQ1ACategoryRowCount =
+  (
+    queryQ2ScreenBlock.match(
+      /class="transaction-inline-category-row query-tree-parent query-category-vendor-parent(?: selected)?"/g,
+    ) || []
+  ).length;
+assert(
+  queryQ2ScreenBlock.includes('data-transaction-inline-category-picker') &&
+    queryQ2ScreenBlock.includes('data-transaction-inline-category-window') &&
+    queryQ2ScreenBlock.includes('data-category-inline-list') &&
+    queryQ2ScreenBlock.includes('data-category-inline-visible-rows="4"') &&
+    queryQ2ScreenBlock.includes('data-category-inline-total="8"') &&
+    queryQ2InlineCategoryOptionCount === 8 &&
+    queryQ2ScreenBlock.indexOf('data-transaction-inline-category-window') <
+      queryQ2ScreenBlock.indexOf('data-category-inline-new-category') &&
+    queryQ2ScreenBlock.includes('data-category-inline-new-category') &&
+    queryQ2ScreenBlock.includes('data-popup-trigger="category-create-wizard"') &&
+    queryQ2ScreenBlock.includes('Új kategória') &&
+    !queryQ2ScreenBlock.includes('class="pill-field transaction-category-pill"') &&
+    !queryQ2ScreenBlock.includes('transaction-category-chevron'),
+  'Q2 expense sheet must replace the category dropdown pill with a scrollable inline category window showing eight test categories and a permanent new-category popup trigger below it',
+);
+assert(
+  queryQ2InlineQ1ACategoryRowCount === 8 &&
+    queryQ2ScreenBlock.includes('class="query-category-color-dot"') &&
+    queryQ2ScreenBlock.includes('class="query-check selected"') &&
+    !queryQ2ScreenBlock.includes('transaction-inline-category-icon') &&
+    !queryQ2ScreenBlock.includes('transaction-inline-category-copy') &&
+    /\.transaction-inline-category-picker\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*var\(--transaction-inline-category-gap\);[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-window\s*\{[\s\S]*?--transaction-inline-category-row-h:\s*38px;[\s\S]*?height:\s*calc\(var\(--transaction-inline-category-row-h\) \* 4\);[\s\S]*?overflow-y:\s*auto;[\s\S]*?-webkit-overflow-scrolling:\s*touch;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-row\s*\{[\s\S]*?min-height:\s*var\(--transaction-inline-category-row-h\);[\s\S]*?border-bottom:\s*1px solid rgba\(226,232,240,\.64\);[\s\S]*?background:\s*rgba\(248,250,252,\.76\);[\s\S]*?grid-template-columns:\s*18px minmax\(0,\s*1fr\) auto 22px;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-row\.selected\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.78\);[\s\S]*?color:\s*#0f766e;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-row \.query-category-color-dot\s*\{[\s\S]*?margin:\s*0;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-new-category\s*\{[\s\S]*?min-height:\s*38px;[\s\S]*?position:\s*relative;[\s\S]*?\}/.test(html),
+  'Q2 inline category picker rows must match the compact Q1A category list row size and design',
+);
+assert(
+  queryQ2ScreenBlock.includes('data-transaction-editor-layout="inline-category-picker-v2"') &&
+    queryQ2ScreenBlock.includes('class="transaction-amount-hero"') &&
+    queryQ2ScreenBlock.includes('class="transaction-amount-prefix">−</span>') &&
+    queryQ2ScreenBlock.includes('class="transaction-amount-value">-18 520 Ft</strong>') &&
+    queryQ2ScreenBlock.includes('class="transaction-amount-helper">Tranzakció összege</span>') &&
+    queryQ2ScreenBlock.includes('data-transaction-date-pill') &&
+    queryQ2ScreenBlock.includes('2026.07.13') &&
+    queryQ2ScreenBlock.includes('data-transaction-time-pill') &&
+    queryQ2ScreenBlock.includes('19:42') &&
+    !queryQ2ScreenBlock.includes('transaction-inline-summary') &&
+    /\.transaction-inline-category-card\s*\{[\s\S]*?height:\s*var\(--query-inline-category-sheet-h\);[\s\S]*?\}/.test(html) &&
+    /--query-inline-category-sheet-h:\s*570px;/.test(html) &&
+    /\.transaction-inline-category-card \.transaction-form-redesign\s*\{[\s\S]*?--transaction-inline-category-gap:\s*10px;[\s\S]*?padding:\s*14px 20px 18px;[\s\S]*?gap:\s*var\(--transaction-inline-category-gap\);[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-picker\s*\{[\s\S]*?gap:\s*var\(--transaction-inline-category-gap\);[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-card \.transaction-sheet-footer\s*\{[\s\S]*?margin-top:\s*0;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-date-time-row\s*\{[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html),
+  'Q2 inline category picker sheet must restore the original amount hero and date/time pills, use a taller Q2-only sheet, and keep the new-category-to-save gap equal to the dropdown-to-new-category gap',
+);
+assert(
+  queryQ2ScreenBlock.includes('class="form-fields transaction-field-stack transaction-inline-field-stack"') &&
+    queryQ2ScreenBlock.indexOf('class="form-fields transaction-field-stack transaction-inline-field-stack"') <
+      queryQ2ScreenBlock.indexOf('data-transaction-inline-category-picker') &&
+    queryQ2ScreenBlock.includes('class="pill-field transaction-name-pill"') &&
+    queryQ2ScreenBlock.includes('class="field-row transaction-date-time-row transaction-inline-date-time-row"') &&
+    /\.transaction-field-stack \.pill-field\s*\{[\s\S]*?box-shadow:\s*var\(--spendee-soft-card-shadow\);[\s\S]*?border-color:\s*rgba\(226,232,240,\.76\);[\s\S]*?background:\s*rgba\(255,255,255,\.88\);[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-card \.transaction-form-redesign\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?padding:\s*14px 20px 18px;[\s\S]*?gap:\s*var\(--transaction-inline-category-gap\);[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-field-stack\s*\{[\s\S]*?margin-top:\s*0;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-category-picker\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?\}/.test(html) &&
+    /\.transaction-inline-date-time-row\s*\{[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    !/\.transaction-inline-name-pill,\s*\n\s*\.transaction-inline-date-time-row \.pill-field\s*\{[\s\S]*?height:\s*42px;[\s\S]*?\}/.test(html),
+  'Q2 inline picker must match Q3 sheet padding and pill field-stack colors',
+);
+assert(
+  queryQ2ScreenStart >= 0 &&
+    queryQ2ATitleStart > queryQ2ScreenStart &&
+    queryQ2ATitleStart < queryQ2AScreenStart &&
+    queryQ2AScreenStart > queryQ2ScreenStart &&
+    queryQ3ScreenStart > queryQ2AScreenStart &&
+    queryQ2AScreenBlock.includes('data-screen="alt-query-category-route-sheet"') &&
+    queryQ2AScreenBlock.includes('data-transaction-category-route') &&
+    queryQ2AScreenBlock.includes('data-sheet-route-stack="category-picker-create"') &&
+    queryQ2AScreenBlock.includes('data-no-nested-popup="true"') &&
+    queryQ2AScreenBlock.includes('data-category-picker-state="list"') &&
+    queryQ2AScreenBlock.includes('data-category-picker-state="create-category"') &&
+    queryQ2AScreenBlock.includes('Új kategória') &&
+    queryQ2AScreenBlock.includes('Kategória választás') &&
+    !queryQ2AScreenBlock.includes('role="dialog"') &&
+    !queryQ2AScreenBlock.includes('data-popup-dialog'),
+  'Q2A must demonstrate category selection and new-category creation as internal sheet routes beside Q2, without popup/dialog nesting',
 );
 assert(
   !queryMenuBlock.includes('data-screen="alt-query-menu-tabbed-groups"') &&
     !queryMenuBlock.includes('data-screen="alt-query-menu-top-snapshot-tabs"') &&
     !queryMenuBlock.includes('Q1B ·') &&
-    !queryMenuBlock.includes('Q1C ·') &&
-    !queryMenuBlock.includes('Q1D ·') &&
+    !queryMenuBlock.includes('Q1C · Query mátrix') &&
+    !queryMenuBlock.includes('Q1D · Query mondat builder') &&
+    !queryMenuBlock.includes('data-screen="alt-query-menu-hajnal-layout"') &&
+    !queryMenuBlock.includes('data-query-menu-mode="hajnal-final-layout"') &&
+    !html.includes('hajnal-query-') &&
     !queryMenuBlock.includes('data-query-alternative=') &&
     !html.includes('initQueryAlternativePrototype'),
-  'Old Q1 left variants, Q1B-Q1D alternative query-model screens, and their query-alt runtime must be removed',
+  'Old Q1 left variants, the accidental Q1B Hajnal screen, Q1C-Q1D alternative query-model screens, and their query-alt runtime must be removed',
 );
 assert(
-  queryMenuScreenBlock.includes('data-screen="alt-query-menu-fullscreen"') &&
-    queryMenuScreenBlock.includes('data-query-menu-mode="top-snapshot-tabs"') &&
+  /\.query-menu-route\s*\{[\s\S]*?--query-menu-header-top:\s*var\(--spendee-header-top\);[\s\S]*?--query-menu-card-gap:\s*10px;[\s\S]*?--query-top-snapshot-h:\s*62px;[\s\S]*?--query-first-section-margin:\s*12px;[\s\S]*?--query-selector-section-gap:\s*var\(--query-menu-card-gap\);[\s\S]*?padding:\s*var\(--query-menu-header-top\) 20px 0;[\s\S]*?\}/.test(html) &&
+    /\.common-header-stage0\s*\{[\s\S]*?height:\s*var\(--spendee-header-h\);[\s\S]*?\}/.test(html) &&
+    /\.query-menu-head\s*\{[\s\S]*?height:\s*var\(--spendee-header-h\);[\s\S]*?\}/.test(html) &&
+    queryMenuScreenBlock.includes('class="spendee-brand-lockup query-menu-brand-lockup"') &&
+    queryMenuScreenBlock.includes('data-logo-source="/storage/emulated/0/spendee/Fluvi_vector.svg"') &&
+    queryMenuScreenBlock.includes('class="spendee-logo spendee-logo-live-preview"') &&
+    queryMenuScreenBlock.indexOf('class="spendee-brand-lockup query-menu-brand-lockup"') < queryMenuScreenBlock.indexOf('class="query-menu-head"') &&
+    /<button class="query-top-snapshot-add" type="button" data-query-top-snapshot-add aria-label="Új snapshot fül hozzáadása">Új snapshot<\/button>/.test(queryMenuScreenBlock),
+  'Q1A header must use the C1/common-header stage0 top and height, render the Fluvi logo above the header, and label the snapshot add button with visible copy',
+);
+assert(
+  !queryMenuBlock.includes('data-screen="alt-query-menu-fullscreen"') &&
+    queryQ1AScreenBlock.includes('data-screen="alt-query-menu-category-vendor-hierarchy"') &&
+    queryQ1AScreenBlock.includes('data-query-menu-mode="category-vendor-hierarchy"') &&
     queryMenuScreenBlock.includes('data-query-top-snapshot-container') &&
     queryMenuScreenBlock.includes('data-query-top-snapshot-tabs') &&
     queryMenuScreenBlock.includes('data-query-top-snapshot-tab="snapshot-2025-01-food"') &&
@@ -1161,7 +1281,19 @@ assert(
     !queryMenuScreenBlock.includes('data-query-section-head-row="filter-groups"') &&
     queryMenuScreenBlock.includes('2025 Jan') &&
     queryMenuScreenBlock.includes('2026 Feb'),
-  'Q1 must be the promoted top snapshot-tabs screen with saved snapshot tabs directly under the header, not inside a filter-group section',
+  'Q1 must be deleted while Q1A keeps saved snapshot tabs directly under the header, not inside a filter-group section',
+);
+assert(
+  /\.query-menu-route\s*\{[\s\S]*?--query-menu-header-top:\s*var\(--spendee-header-top\);[\s\S]*?--query-menu-card-gap:\s*10px;[\s\S]*?--query-top-snapshot-h:\s*62px;[\s\S]*?--query-first-section-margin:\s*12px;[\s\S]*?--query-selector-section-gap:\s*var\(--query-menu-card-gap\);[\s\S]*?padding:\s*var\(--query-menu-header-top\) 20px 0;[\s\S]*?\}/.test(
+    html,
+  ) &&
+    /\.query-top-snapshot-container\s*\{[\s\S]*?top:\s*calc\(var\(--query-menu-header-top\) \+ var\(--spendee-header-h\) \+ var\(--query-menu-card-gap\)\);[\s\S]*?\}/.test(
+      html,
+    ) &&
+    /\.query-menu-route\[data-query-top-snapshot-route\] \.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(var\(--query-menu-header-top\) \+ var\(--spendee-header-h\) \+ var\(--query-menu-card-gap\) \+ var\(--query-top-snapshot-h\) \+ var\(--query-selector-section-gap\) - var\(--query-first-section-margin\)\);[\s\S]*?\}/.test(
+      html,
+    ),
+  'Q1A top snapshot spacing must move the header/selector pair lower while making selector-to-Időszak padding equal the header-to-selector gap',
 );
 assert(
   queryQ1AScreenBlock.includes('data-screen="alt-query-menu-category-vendor-hierarchy"') &&
@@ -1182,18 +1314,18 @@ assert(
     /<button class="query-tree-parent query-category-vendor-parent[^"]*"[^>]*data-query-category-vendor-category="food"[^>]*data-query-category-vendor-category-toggle="food"[\s\S]*?<span class="query-category-color-dot"[\s\S]*?<strong>Élelmiszer<\/strong><em>1\/3<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
       queryQ1AScreenBlock,
     ),
-  'Q1A must duplicate Q1 as a top-tab screen and replace separate category/vendor sections with a category-parent/vendor-child hierarchy',
+  'Q1A must remain as a top-tab screen with a category-parent/vendor-child hierarchy and no separate category/vendor sections',
 );
 assert(
   queryMenuBlock.includes('data-query-adjacent-duplicate="a5-add-transaction"') &&
     queryMenuBlock.includes('data-source-screen="alt-add-transaction-sheet"') &&
-    queryMenuBlock.includes('data-transaction-editor-layout="amount-hero-v1"') &&
+    queryMenuBlock.includes('data-transaction-editor-layout="inline-category-picker-v2"') &&
     queryMenuBlock.includes('Tranzakció hozzáadása') &&
     !queryMenuBlock.includes('data-query-adjacent-duplicate="a6-add-recurring"') &&
     !queryMenuBlock.includes('data-query-adjacent-duplicate="a7-add-recurring-push"') &&
     !queryMenuBlock.includes('data-screen="alt-query-add-recurring-duplicate"') &&
     !queryMenuBlock.includes('data-screen="alt-query-add-recurring-push-duplicate"'),
-  'Query Menu row must keep the A5 duplicate but remove the old Q3/Q4 A6/A7 recurring duplicates',
+  'Query Menu row must keep the A5 duplicate as the inline category picker sheet and remove the old Q3/Q4 A6/A7 recurring duplicates',
 );
 const queryIncomeStart = queryMenuBlock.indexOf('Q3 · Bevételi tranzakció sheet');
 const recurringWizardStart = queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-type"');
@@ -1201,17 +1333,46 @@ const queryIncomeBlock =
   queryIncomeStart >= 0 && recurringWizardStart > queryIncomeStart
     ? queryMenuBlock.slice(queryIncomeStart, recurringWizardStart)
     : '';
+const queryIncomeInlineCategoryOptionCount =
+  (queryIncomeBlock.match(/data-income-category-inline-option="/g) || []).length;
+const queryIncomeInlineQ1ACategoryRowCount =
+  (
+    queryIncomeBlock.match(
+      /class="transaction-inline-category-row query-tree-parent query-category-vendor-parent(?: selected)?"/g,
+    ) || []
+  ).length;
 assert(
   queryIncomeBlock.includes('Q3 · Bevételi tranzakció sheet') &&
     queryIncomeBlock.includes('data-transaction-kind="income"') &&
     queryIncomeBlock.includes('data-query-adjacent-sheet="q2-income-mirror"') &&
-    queryIncomeBlock.includes('class="add-transaction-card add-transaction-card-redesign add-income-transaction-card"') &&
+    queryIncomeBlock.includes('class="add-transaction-card add-transaction-card-redesign add-income-transaction-card transaction-inline-category-card"') &&
+    queryIncomeBlock.includes('data-transaction-editor-layout="inline-category-picker-v2"') &&
     queryIncomeBlock.includes('Új bevétel') &&
     queryIncomeBlock.includes('+320 000 Ft') &&
     queryIncomeBlock.includes('Fizetés / tranzakció neve') &&
     queryIncomeBlock.includes('Munkabér') &&
-    queryIncomeBlock.includes('Bevétel hozzáadása'),
-  'Q3 must mirror the Q2 transaction-sheet hierarchy with positive income copy and content',
+    queryIncomeBlock.includes('data-transaction-date-pill') &&
+    queryIncomeBlock.includes('2026.07.13') &&
+    queryIncomeBlock.includes('data-transaction-time-pill') &&
+    queryIncomeBlock.includes('08:15') &&
+    queryIncomeBlock.includes('Bevétel hozzáadása') &&
+    queryIncomeBlock.includes('data-transaction-inline-category-picker') &&
+    queryIncomeBlock.includes('data-transaction-inline-category-window') &&
+    queryIncomeBlock.includes('data-category-inline-list') &&
+    queryIncomeBlock.includes('data-category-inline-visible-rows="4"') &&
+    queryIncomeBlock.includes('data-category-inline-total="8"') &&
+    queryIncomeInlineCategoryOptionCount === 8 &&
+    queryIncomeInlineQ1ACategoryRowCount === 8 &&
+    queryIncomeBlock.indexOf('data-transaction-inline-category-window') <
+      queryIncomeBlock.indexOf('data-category-inline-new-category') &&
+    queryIncomeBlock.includes('data-category-inline-new-category') &&
+    queryIncomeBlock.includes('data-popup-trigger="category-create-wizard"') &&
+    queryIncomeBlock.includes('Új kategória') &&
+    queryIncomeBlock.includes('Bónusz') &&
+    queryIncomeBlock.includes('Visszatérítés') &&
+    !queryIncomeBlock.includes('class="pill-field transaction-category-pill"') &&
+    !queryIncomeBlock.includes('transaction-category-chevron'),
+  'Q3 must mirror Q2 inline category picker layout while retaining positive income copy, categories, and CTA styling',
 );
 assert.strictEqual(
   (html.match(/data-screen="alt-add-transaction-sheet"/g) || []).length,
@@ -1426,7 +1587,7 @@ assert(
     /\.query-preview-scope-list span\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?\}/.test(
       html,
     ) &&
-    /\.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(38px \+ var\(--spendee-header-h\) \+ 14px\);[\s\S]*?\}/.test(
+    /\.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(var\(--query-menu-header-top\) \+ var\(--spendee-header-h\) \+ var\(--query-menu-card-gap\)\);[\s\S]*?\}/.test(
       html,
     ) &&
     queryMenuHeaderBlock.includes('data-query-header-size="stage0"') &&
@@ -1435,7 +1596,7 @@ assert(
     queryMenuHeaderBlock.includes('-486 320 Ft') &&
     queryMenuHeaderBlock.includes('data-query-scope-list') &&
     queryMenuHeaderBlock.includes('data-query-scope-overflow="horizontal-scroll"') &&
-    ['2024 Március', '2026 Április', 'Élelmiszer', 'McDonald’s'].every((scope) =>
+    ['2025 Január', '2026 Február', 'Élelmiszer', 'Lakás'].every((scope) =>
       queryMenuHeaderBlock.includes(scope),
     ) &&
     !queryMenuScreenBlock.includes('query-preview-card') &&
@@ -1454,7 +1615,7 @@ assert(
     !queryMenuBlock.includes('data-query-view-selector') &&
     !queryMenuBlock.includes('data-query-view=') &&
     queryMenuBlock.includes('data-query-period-picker') &&
-    queryMenuBlock.includes('data-query-selected-periods="2024-03,2026-04"') &&
+    queryMenuBlock.includes('data-query-selected-periods="2025-01,2026-02"') &&
     queryMenuBlock.includes('data-query-period-sum-toggle') &&
     queryMenuBlock.includes('data-query-tree-dropdown="time"') &&
     !queryMenuBlock.includes('data-query-tree-trigger') &&
@@ -1469,33 +1630,36 @@ assert(
     !queryMenuBlock.includes('data-query-period-preset-current') &&
     !queryMenuBlock.includes('data-query-period-year-stack') &&
     !queryMenuBlock.includes('query-period-year-block') &&
-    (queryMenuScreenBlock.match(/data-query-period-item="/g) || []).length >= 36 &&
+    (queryMenuScreenBlock.match(/data-query-period-item="/g) || []).length >= 8 &&
     queryMenuBlock.includes('data-query-period-year-toggle="2026"') &&
     queryMenuBlock.includes('data-query-period-year-toggle="2025"') &&
-    queryMenuBlock.includes('data-query-period-year-toggle="2024"') &&
     queryMenuBlock.includes('data-query-tree-level="child"') &&
-    queryMenuBlock.includes('data-query-period-item="2024-03"') &&
-    queryMenuBlock.includes('data-query-period-item="2026-04"') &&
+    queryMenuBlock.includes('data-query-period-item="2025-01"') &&
+    queryMenuBlock.includes('data-query-period-item="2026-02"') &&
     !queryMenuBlock.includes('data-query-period-selection-list') &&
     !queryMenuScreenBlock.includes('data-query-period-remove=') &&
     queryMenuBlock.includes('data-query-selected-period') &&
     !queryMenuBlock.includes('data-query-period-summary') &&
     !queryMenuBlock.includes('query-period-summary') &&
-    ['2024 Március', '2026 Április'].every((period) => queryMenuBlock.includes(period)),
+    ['2025 Január', '2026 Február'].every((period) => queryMenuBlock.includes(period)),
   'Query Menu must use one top floating stage0-sized query-colored amount/scope header without a second preview header, icon, or slogan',
 );
-for (const section of ['view-components', 'categories', 'vendors', 'refinements']) {
+for (const [section, key] of [
+  ['view-components', 'tabbed-view-components'],
+  ['category-vendors', 'category-vendors'],
+  ['refinements', 'tabbed-refinements'],
+]) {
   assert(
     queryMenuBlock.includes(`data-query-section="${section}"`) &&
-      queryMenuBlock.includes(`data-query-section-head-row="${section}"`) &&
-      queryMenuBlock.includes(`data-query-section-head="${section}"`) &&
-      queryMenuBlock.includes(`data-query-section-body="${section}"`) &&
-      queryMenuBlock.includes(`data-query-collapsible="${section}"`),
+      queryMenuBlock.includes(`data-query-section-head-row="${key}"`) &&
+      queryMenuBlock.includes(`data-query-section-head="${key}"`) &&
+      queryMenuBlock.includes(`data-query-section-body="${key}"`) &&
+      queryMenuBlock.includes(`data-query-collapsible="${key}"`),
     `Query Menu section ${section} must expose a one-row collapsible header and expandable body`,
   );
 }
 assert(
-  queryMenuScreenBlock.indexOf('data-query-section="vendors"') <
+  queryMenuScreenBlock.indexOf('data-query-section="category-vendors"') <
     queryMenuScreenBlock.indexOf('data-query-section="refinements"') &&
     queryMenuScreenBlock.includes('data-query-top-snapshot-container') &&
     queryMenuScreenBlock.includes('data-query-top-snapshot-tabs') &&
@@ -1507,95 +1671,98 @@ assert(
     queryMenuScreenBlock.includes('data-query-snapshot-periods="2025-01"') &&
     queryMenuScreenBlock.includes('data-query-snapshot-categories="Élelmiszer"') &&
     queryMenuScreenBlock.includes('data-query-snapshot-threshold="5000"') &&
-    queryMenuScreenBlock.includes('data-query-snapshot-refinements="amount"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-amount-min="5000"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-amount-max="50000"') &&
     !queryMenuScreenBlock.includes('data-query-section="filter-groups"') &&
     !queryMenuScreenBlock.includes('data-query-saved-group-list') &&
     !queryMenuScreenBlock.includes('data-query-snapshot-detail-title') &&
-    queryMenuScreenBlock.includes('2025 Jan · Élelmiszer') &&
-    queryMenuScreenBlock.includes('2026 Feb · Lakás'),
-  'Q1 must render saved snapshot state as top tabs under the header and must not keep the old detailed filter-group snapshot section',
+    queryMenuScreenBlock.includes('2025 Jan · Élelmiszer · McDonald’s') &&
+    queryMenuScreenBlock.includes('2026 Feb · Lakás · Digi'),
+  'Q1A must render saved snapshot state as top tabs under the header and must not keep the old detailed filter-group snapshot section',
 );
 assert(
   queryMenuBlock.includes('data-query-period-picker') &&
-  queryMenuBlock.includes('data-query-tree-dropdown="time"') &&
+    queryMenuBlock.includes('data-query-tree-dropdown="time"') &&
     !queryMenuBlock.includes('data-query-period-selection-list') &&
     !queryMenuBlock.includes('query-period-selected-list') &&
-    queryMenuBlock.includes('data-query-tree-dropdown="categories"') &&
-    queryMenuBlock.includes('data-query-tree-dropdown="vendors"') &&
-    queryMenuBlock.includes('data-query-category-list') &&
-    queryMenuBlock.includes('data-query-list-search="category"') &&
-    queryMenuBlock.includes('data-query-list-search="vendor"') &&
-    queryMenuBlock.indexOf('data-query-list-search="category"') < queryMenuBlock.indexOf('data-query-category-all-sticky') &&
-    queryMenuBlock.indexOf('data-query-list-search="vendor"') < queryMenuBlock.indexOf('data-query-tree-menu="vendors"') &&
-    queryMenuBlock.includes('data-query-filter-all="category"') &&
+    queryMenuBlock.includes('data-query-tree-dropdown="category-vendors"') &&
+    queryMenuBlock.includes('data-query-category-vendor-tree') &&
+    queryMenuBlock.includes('data-query-list-search="category-vendor"') &&
+    queryMenuBlock.indexOf('data-query-list-search="category-vendor"') < queryMenuBlock.indexOf('data-query-category-vendor-tree') &&
     queryMenuBlock.includes('data-query-category-dot') &&
+    queryMenuBlock.includes('data-query-category-vendor-category-toggle="food"') &&
+    queryMenuBlock.includes('data-query-category-vendor-vendor="mcdonalds"') &&
+    !queryMenuBlock.includes('data-query-tree-dropdown="categories"') &&
+    !queryMenuBlock.includes('data-query-tree-dropdown="vendors"') &&
+    !queryMenuBlock.includes('data-query-category-list') &&
+    !queryMenuBlock.includes('data-query-list-search="category"') &&
+    !queryMenuBlock.includes('data-query-list-search="vendor"') &&
+    !queryMenuBlock.includes('data-query-filter-all="category"') &&
     !queryMenuBlock.includes('data-query-filter-parent="category"') &&
     !queryMenuBlock.includes('cat-expense') &&
     !queryMenuBlock.includes('cat-income') &&
     !queryMenuBlock.includes('>Kiadások<') &&
     !queryMenuBlock.includes('>Bevételek<') &&
-    queryMenuBlock.includes('data-query-filter-parent="vendor"') &&
-    queryMenuBlock.includes('data-query-threshold="amount"') &&
-    queryMenuBlock.includes('data-query-refinement="weekend"') &&
-    queryMenuBlock.includes('data-query-refinement="recurring"') &&
-    queryMenuBlock.includes('data-query-refinement="fixed"') &&
-    queryMenuBlock.includes('data-query-refinement="outliers"'),
-  'Query Menu must combine view, category, vendor, filter-group, threshold, and refinement filters in one scrollable surface with search pills above category/vendor lists',
+    !queryMenuBlock.includes('data-query-filter-parent="vendor"') &&
+    (queryMenuBlock.includes('data-query-refinement="amount-threshold"') ||
+      queryMenuBlock.includes('data-query-refinement="amount-range"')) &&
+    queryMenuBlock.includes('data-query-refinement="outliers"') &&
+    queryMenuBlock.includes('data-query-refinement="day-weekend"') &&
+    queryMenuBlock.includes('data-query-refinement="recurring-on"') &&
+    queryMenuBlock.includes('data-query-refinement="recurring-off"') &&
+    !queryMenuBlock.includes('data-query-refinement="fixed"'),
+  'Remaining Q1A Query Menu must combine view, category-vendor hierarchy, and the approved refinement panel in one scrollable surface with one category-vendor search pill',
 );
 assert(
   queryMenuBlock.includes('data-query-section-icon="time"') &&
     queryMenuBlock.includes("url('/assets/icons/lucide/chart-candlestick.svg')") &&
-    queryMenuBlock.includes('data-query-section-icon="categories"') &&
-    queryMenuBlock.includes("url('/assets/icons/lucide/handbag.svg')") &&
     queryMenuBlock.includes('data-query-section-icon="vendors"') &&
     queryMenuBlock.includes("url('/assets/icons/lucide/store.svg')") &&
+    queryMenuBlock.includes('data-query-section-icon="refinements"') &&
+    queryMenuBlock.includes("url('/assets/icons/lucide/wrench.svg')") &&
     !queryMenuBlock.includes('<span class="query-section-icon">▦</span>') &&
     !queryMenuBlock.includes('<span class="query-section-icon">◌</span>') &&
     !queryMenuBlock.includes('<span class="query-section-icon">⌘</span>'),
-  'Query section title markers for time, categories, and vendors must use real lucide icons instead of offset glyphs',
+  'Query section title markers for time, category-vendor hierarchy, and refinements must use real lucide icons instead of offset glyphs',
 );
 assert(
-  queryMenuBlock.includes('data-query-section-head-row="view-components"') &&
-    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="view-components" aria-expanded="true">') &&
+  queryMenuBlock.includes('data-query-section-head-row="tabbed-view-components"') &&
+    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="tabbed-view-components" aria-expanded="true">') &&
     queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-period-clear aria-label="Időszak kijelölések törlése">×</button>') &&
-    queryMenuBlock.includes('data-query-section-head-row="categories"') &&
-    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="categories" aria-expanded="true">') &&
-    queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-filter-clear="category" aria-label="Kategória kijelölések törlése">×</button>') &&
-    queryMenuBlock.includes('data-query-section-head-row="vendors"') &&
-    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="vendors" aria-expanded="true">') &&
-    queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-filter-clear="vendor" aria-label="Vendor kijelölések törlése">×</button>'),
-  'Time, category, and vendor section headers must own the clear controls beside the expand/collapse control',
+    queryMenuBlock.includes('data-query-section-head-row="category-vendors"') &&
+    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="category-vendors" aria-expanded="true">') &&
+    queryMenuBlock.includes('<button class="query-section-clear" type="button" data-query-filter-clear="vendor" aria-label="Kategória-vendor kijelölések törlése">×</button>') &&
+    queryMenuBlock.includes('data-query-section-head-row="tabbed-refinements"') &&
+    queryMenuBlock.includes('<button class="query-section-main" type="button" data-query-section-head="tabbed-refinements" aria-expanded="true">'),
+  'Time and category-vendor section headers must own clear controls beside the expand/collapse control while refinements keep the no-clear header',
 );
 assert(
-  /data-query-section-head-row="view-components"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="view-components" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-period-clear aria-label="Időszak kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="view-components" aria-expanded="true"><em data-query-selected-period>2 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
+  /data-query-section-head-row="tabbed-view-components"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="tabbed-view-components" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-period-clear aria-label="Időszak kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="tabbed-view-components" aria-expanded="true"><em data-query-selected-period>2 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
     queryMenuBlock,
   ) &&
-    /data-query-section-head-row="categories"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="categories" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-filter-clear="category" aria-label="Kategória kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="categories" aria-expanded="true"><em data-query-section-count="categories">3 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
-      queryMenuBlock,
-    ) &&
-    /data-query-section-head-row="vendors"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="vendors" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-filter-clear="vendor" aria-label="Vendor kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="vendors" aria-expanded="true"><em data-query-section-count="vendors">1 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
+    /data-query-section-head-row="category-vendors"[\s\S]*?<button class="query-section-main" type="button" data-query-section-head="category-vendors" aria-expanded="true">[\s\S]*?<\/button>\s*<button class="query-section-clear" type="button" data-query-filter-clear="vendor" aria-label="Kategória-vendor kijelölések törlése">×<\/button>\s*<button class="query-section-status" type="button" data-query-section-head="category-vendors" aria-expanded="true"><em data-query-section-count="category-vendors">1 aktív<\/em><span class="query-section-caret">⌃<\/span><\/button>/.test(
       queryMenuBlock,
     ),
-  'Time, category, and vendor section headers must render the X clear control directly before the active-count status',
+  'Time and category-vendor section headers must render the X clear control directly before the active-count status',
 );
 assert(
   queryMenuBlock.includes('data-query-period-sum-sticky') &&
-    /<button class="query-tree-parent query-period-sum-row mixed"[^>]*data-query-period-sum-toggle[\s\S]*?<strong>SUM \/ Összes időszak<\/strong><em>2\/36<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+    /<button class="query-tree-parent query-period-sum-row mixed"[^>]*data-query-period-sum-toggle[\s\S]*?<strong>SUM \/ Összes időszak<\/strong><em>2\/8<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
       queryMenuBlock,
     ) &&
-    /<button class="query-tree-parent mixed"[^>]*data-query-period-year-toggle="2026"[^>]*aria-pressed="mixed"><strong>2026<\/strong><em>1\/12<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+    /<button class="query-tree-parent mixed"[^>]*data-query-period-year-toggle="2026"[^>]*aria-pressed="mixed"><strong>2026<\/strong><em>1\/4<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
       queryMenuBlock,
     ) &&
-    /<button class="query-tree-parent mixed"[^>]*data-query-period-year-toggle="2024"[^>]*aria-pressed="mixed"><strong>2024<\/strong><em>1\/12<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+    /<button class="query-tree-parent mixed"[^>]*data-query-period-year-toggle="2025"[^>]*aria-pressed="mixed"><strong>2025<\/strong><em>1\/4<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
       queryMenuBlock,
     ) &&
-    /data-query-period-item="2024-03"[^>]*aria-pressed="true"><span>Március<\/span><span class="query-check selected">✓<\/span><\/button>/.test(
+    /data-query-period-item="2025-01"[^>]*aria-pressed="true"><span>Január<\/span><span class="query-check selected">✓<\/span><\/button>/.test(
       queryMenuBlock,
     ) &&
-    /data-query-period-item="2026-04"[^>]*aria-pressed="true"><span>Április<\/span><span class="query-check selected">✓<\/span><\/button>/.test(
+    /data-query-period-item="2026-02"[^>]*aria-pressed="true"><span>Február<\/span><span class="query-check selected">✓<\/span><\/button>/.test(
       queryMenuBlock,
     ) &&
-    /data-query-period-item="2026-05"[^>]*aria-pressed="false"><span>Május<\/span><span class="query-check"><\/span><\/button>/.test(
+    /data-query-period-item="2026-03"[^>]*aria-pressed="false"><span>Március<\/span><span class="query-check"><\/span><\/button>/.test(
       queryMenuBlock,
     ) &&
     queryMenuBlock.includes('<em data-query-selected-period>2 aktív</em>') &&
@@ -1610,32 +1777,80 @@ assert(
   'Query time picker must use category-style right-side checkboxes for month/year rows, keep SUM sticky as the first list row, and show active-count copy',
 );
 assert(
-  queryMenuBlock.includes('data-query-filter-clear="category"') &&
+  !queryMenuBlock.includes('data-query-filter-clear="category"') &&
     queryMenuBlock.includes('data-query-filter-clear="vendor"') &&
+    queryMenuBlock.includes('data-query-section-head-row="category-vendors"') &&
     !queryMenuBlock.includes('data-query-trigger-shell="categories"') &&
     !queryMenuBlock.includes('data-query-tree-trigger="categories"') &&
     !queryMenuBlock.includes('data-query-tree-trigger="vendors"'),
-  'Category and vendor clear-all controls must live in section headers without inner dropdown trigger pills',
+  'Q1A category-vendor clear control must live in the section header without inner dropdown trigger pills or the deleted Q1 category clear control',
 );
 assert(
-  queryMenuBlock.includes('data-query-category-all-sticky') &&
-    /<button class="query-tree-parent query-category-all-row mixed"[^>]*data-query-filter-all="category"[^>]*aria-pressed="mixed"><strong>Mind \/ Összes kategória<\/strong><em>3\/7<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
+  queryMenuBlock.includes('data-query-category-vendor-tree') &&
+    !queryMenuBlock.includes('data-query-category-all-sticky') &&
+    /<button class="query-tree-parent query-category-vendor-parent[^"]*"[^>]*data-query-category-vendor-category="food"[^>]*data-query-category-vendor-category-toggle="food"[^>]*aria-pressed="mixed">[\s\S]*?<strong>Élelmiszer<\/strong><em>1\/3<\/em><span class="query-check mixed">−<\/span><\/button>/.test(
       queryMenuBlock,
     ),
-  'Category dropdown must start with a sticky select-all row that mirrors the time SUM row',
+  'Q1A category-vendor hierarchy must keep category parent rows as vendor-group toggles instead of the deleted Q1 category select-all row',
 );
 assert(
-  queryMenuScreenBlock.includes('data-query-threshold-editor') &&
-    queryMenuScreenBlock.includes('data-query-threshold-value') &&
-    queryMenuScreenBlock.includes('data-query-threshold-value-input') &&
-    queryMenuScreenBlock.includes('data-query-threshold-slider') &&
-    !queryMenuScreenBlock.includes('class="query-threshold-value-input"') &&
-    !/<button class="query-threshold-value"[\s\S]*?data-query-threshold-value/.test(queryMenuScreenBlock) &&
-    /<input class="query-threshold-value"[^>]*data-query-threshold-value[^>]*data-query-threshold-value-input[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(
+  queryMenuScreenBlock.includes('data-query-refinement-panel') &&
+    queryMenuScreenBlock.includes('data-query-amount-range-editor') &&
+    queryMenuScreenBlock.includes('data-query-amount-mode="threshold"') &&
+    queryMenuScreenBlock.includes('data-query-refinement="amount-threshold"') &&
+    queryMenuScreenBlock.includes('data-query-amount-mode-selector') &&
+    queryMenuScreenBlock.includes('data-query-amount-mode-option="threshold"') &&
+    queryMenuScreenBlock.includes('data-query-amount-mode-option="range"') &&
+    queryMenuScreenBlock.includes('>Threshold</button>') &&
+    queryMenuScreenBlock.includes('>Tól-ig</button>') &&
+    queryMenuScreenBlock.includes('data-query-amount-mode-pane="threshold"') &&
+    queryMenuScreenBlock.includes('data-query-amount-mode-pane="range"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-amount-mode="threshold"') &&
+    queryMenuScreenBlock.includes('data-query-snapshot-refinements="amount-threshold,outliers,day-weekend,recurring-on"') &&
+    queryMenuScreenBlock.includes('data-query-amount-threshold') &&
+    queryMenuScreenBlock.includes('data-query-amount-threshold-slider') &&
+    /<input class="query-amount-input"[^>]*data-query-amount-threshold[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(
       queryMenuScreenBlock,
     ) &&
-    /data-query-threshold-slider[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(queryMenuScreenBlock),
-  'Q1 refinement amount threshold must render one tappable/editable numeric value directly above the slider, without a duplicate text input pill',
+    /data-query-amount-threshold-slider[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(queryMenuScreenBlock) &&
+    queryMenuScreenBlock.includes('Ft felett') &&
+    queryMenuScreenBlock.includes('data-query-amount-min') &&
+    queryMenuScreenBlock.includes('data-query-amount-max') &&
+    /<input class="query-amount-input"[^>]*data-query-amount-min[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="5000"/.test(
+      queryMenuScreenBlock,
+    ) &&
+    /<input class="query-amount-input"[^>]*data-query-amount-max[^>]*min="0"[^>]*max="50000"[^>]*step="500"[^>]*value="50000"/.test(
+      queryMenuScreenBlock,
+    ) &&
+    queryMenuScreenBlock.includes('data-query-amount-range-track') &&
+    queryMenuScreenBlock.includes('data-query-amount-min-slider') &&
+    queryMenuScreenBlock.includes('data-query-amount-max-slider') &&
+    queryMenuScreenBlock.includes('data-query-refinement="outliers"') &&
+    queryMenuScreenBlock.includes('Kiugró tételek') &&
+    queryMenuScreenBlock.includes('data-query-refinement-segmented="day-type"') &&
+    queryMenuScreenBlock.includes('data-query-refinement-option="day-any"') &&
+    queryMenuScreenBlock.includes('data-query-refinement-option="day-weekday"') &&
+    queryMenuScreenBlock.includes('data-query-refinement-option="day-weekend"') &&
+    ['Mind', 'Hétköznap', 'Hétvége'].every((label) => queryMenuScreenBlock.includes(`>${label}</button>`)) &&
+    queryMenuScreenBlock.includes('data-query-refinement-segmented="recurring"') &&
+    queryMenuScreenBlock.includes('data-query-refinement-option="recurring-any"') &&
+    queryMenuScreenBlock.includes('data-query-refinement-option="recurring-on"') &&
+    queryMenuScreenBlock.includes('data-query-refinement-option="recurring-off"') &&
+    ['Ismétlődő', 'Nem ismétlődő'].every((label) => queryMenuScreenBlock.includes(`>${label}</button>`)) &&
+    !queryMenuScreenBlock.includes('data-query-threshold-editor') &&
+    !queryMenuScreenBlock.includes('data-query-threshold-slider'),
+  'Q1A refinements must render both threshold and min/max range amount modes, plus outliers, day type, and recurring controls',
+);
+assert(
+  queryMenuScreenBlock.includes('data-query-refinement-condition-container') &&
+    queryMenuScreenBlock.indexOf('data-query-amount-range-editor') < queryMenuScreenBlock.indexOf('data-query-refinement-condition-container') &&
+    queryMenuScreenBlock.indexOf('data-query-refinement-condition-container') < queryMenuScreenBlock.indexOf('data-query-refinement="outliers"') &&
+    queryMenuScreenBlock.indexOf('data-query-refinement="outliers"') < queryMenuScreenBlock.indexOf('data-query-refinement-segmented="day-type"') &&
+    queryMenuScreenBlock.indexOf('data-query-refinement-segmented="day-type"') < queryMenuScreenBlock.indexOf('data-query-refinement-segmented="recurring"') &&
+    /<div class="query-refinement-condition-container" data-query-refinement-condition-container>[\s\S]*?Kiugró tételek[\s\S]*?Nap típusa[\s\S]*?Ismétlődő[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/.test(
+      queryMenuScreenBlock,
+    ),
+  'Q1A must group Kiugró tételek, Nap típusa, and Ismétlődő inside one refinement condition container',
 );
 assert(
   !queryMenuBlock.includes('class="query-apply-bar"') &&
@@ -1666,7 +1881,7 @@ assert(
     /\.query-saved-group-active\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
     /\.query-saved-group-detail\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
     /\.query-top-snapshot-container\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?border-radius:\s*22px;[\s\S]*?\}/.test(html) &&
-    /\.query-menu-route\[data-query-top-snapshot-route\] \.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(38px \+ var\(--spendee-header-h\) \+ 92px\);[\s\S]*?\}/.test(html) &&
+    /\.query-menu-route\[data-query-top-snapshot-route\] \.query-menu-scroll\s*\{[\s\S]*?top:\s*calc\(var\(--query-menu-header-top\) \+ var\(--spendee-header-h\) \+ var\(--query-menu-card-gap\) \+ var\(--query-top-snapshot-h\) \+ var\(--query-selector-section-gap\) - var\(--query-first-section-margin\)\);[\s\S]*?\}/.test(html) &&
     /\.query-top-snapshot-tabs\s*\{[\s\S]*?display:\s*flex;[\s\S]*?overflow-x:\s*auto;[\s\S]*?\}/.test(html) &&
     /\.query-top-snapshot-tab\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
     /\.query-top-snapshot-active\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
@@ -1676,9 +1891,21 @@ assert(
     /\.query-filter-tab-remove\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?\}/.test(html) &&
     /\.query-filter-tab-add\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
     /\.query-filter-tab-panel\s*\{[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
-    /\.query-threshold-editor\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
-    /\.query-threshold-value\s*\{[\s\S]*?border-radius:\s*16px;[\s\S]*?\}/.test(html) &&
-    /\.query-threshold-slider\s*\{[\s\S]*?accent-color:\s*#06b6d4;[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    /\.query-amount-range-editor\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-condition-container\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*8px;[\s\S]*?border-radius:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-condition-container :where\(\.query-refinement-toggle,\s*\.query-refinement-segment-block\)\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-condition-container \.query-refinement-segment-block\s*\{[\s\S]*?border-top:\s*1px solid rgba\(226,232,240,\.70\);[\s\S]*?\}/.test(html) &&
+    /\.query-amount-mode-selector\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    /\.query-amount-mode-option\.selected\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.86\);[\s\S]*?\}/.test(html) &&
+    /\.query-amount-mode-pane\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
+    /\.query-amount-mode-pane:not\(\.selected\)\s*\{[\s\S]*?display:\s*none;[\s\S]*?\}/.test(html) &&
+    /\.query-amount-threshold-slider\s*\{[\s\S]*?width:\s*100%;[\s\S]*?accent-color:\s*#06b6d4;[\s\S]*?\}/.test(html) &&
+    /\.query-amount-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    /\.query-amount-range-track\s*\{[\s\S]*?position:\s*relative;[\s\S]*?height:\s*30px;[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-toggle\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) 22px;[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-segmented\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    /\.query-refinement-option\.selected\s*\{[\s\S]*?background:\s*rgba\(236,254,255,\.86\);[\s\S]*?\}/.test(html) &&
     /\.query-period-picker\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
     /\.query-tree-dropdown\s*\{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*8px;[\s\S]*?\}/.test(html) &&
     !html.includes('.query-tree-trigger') &&
@@ -1724,16 +1951,18 @@ assert(
   'Query Menu section headers must toggle their expanded/collapsed state in the prototype',
 );
 assert(
-  (queryMenuBlock.match(/data-query-selectable=/g) || []).length >= 12 &&
+  (queryMenuBlock.match(/data-query-selectable=/g) || []).length >= 7 &&
     (queryMenuBlock.match(/aria-pressed="/g) || []).length >= 12 &&
     queryMenuBlock.includes('data-query-active-count') &&
-    queryMenuBlock.includes('data-query-section-count="categories"') &&
-    queryMenuBlock.includes('data-query-section-count="vendors"') &&
+    !queryMenuBlock.includes('data-query-section-count="categories"') &&
+    !queryMenuBlock.includes('data-query-section-count="vendors"') &&
+    queryMenuBlock.includes('data-query-section-count="category-vendors"') &&
     queryMenuBlock.includes('data-query-section-count="refinements"') &&
-    queryMenuBlock.includes('data-query-filter="category"') &&
+    !queryMenuBlock.includes('data-query-filter="category"') &&
+    queryMenuBlock.includes('data-query-category-vendor-category=') &&
     queryMenuBlock.includes('data-query-filter="vendor"') &&
     queryMenuBlock.includes('data-query-filter="refinement"'),
-  'Query Menu selectable controls must expose tappable aria-pressed state, section counters, and filter categories',
+  'Remaining Q1A selectable controls must expose tappable aria-pressed state, category-vendor section counters, vendor child filters, and refinement filters',
 );
 assert(
   html.includes("querySelectorAll('[data-query-filter].selected')") &&
@@ -1794,15 +2023,19 @@ assert(
     /function toggleQueryCategoryVendorCategory\(button\) \{[\s\S]*?data-query-category-vendor-category-toggle[\s\S]*?data-query-category-vendor-vendor[\s\S]*?setQuerySelectableState[\s\S]*?syncQueryCategoryVendorTree/.test(
       html,
     ) &&
-    /function syncQueryThresholdEditor\(editor\) \{[\s\S]*?data-query-threshold-slider[\s\S]*?data-query-threshold-value-input[\s\S]*?\}/.test(html) &&
-    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-threshold-editor\]'\)[\s\S]*?syncQueryThresholdEditor/.test(html) &&
+    /function syncQueryAmountRangeEditor\(editor\) \{[\s\S]*?data-query-amount-mode[\s\S]*?data-query-amount-threshold[\s\S]*?data-query-amount-threshold-slider[\s\S]*?data-query-amount-min[\s\S]*?data-query-amount-max[\s\S]*?data-query-amount-min-slider[\s\S]*?data-query-amount-max-slider[\s\S]*?syncQueryMenuSelectionSummary/.test(html) &&
+    /function setQueryAmountMode\(button\) \{[\s\S]*?data-query-amount-mode-option[\s\S]*?dataset\.queryAmountMode[\s\S]*?syncQueryAmountRangeEditor/.test(html) &&
+    /function setQueryRefinementSegmentedState\(group,\s*selectedOption\) \{[\s\S]*?data-query-refinement-option[\s\S]*?aria-pressed[\s\S]*?syncQueryMenuSelectionSummary/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-amount-range-editor\]'\)[\s\S]*?syncQueryAmountRangeEditor/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-amount-mode-option\]'\)[\s\S]*?setQueryAmountMode/.test(html) &&
+    /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-refinement-option\]'\)[\s\S]*?setQueryRefinementSegmentedState/.test(html) &&
     /function selectQueryFilterGroupTab\(button\) \{[\s\S]*?data-query-filter-tab-select[\s\S]*?data-query-filter-tab-panel/.test(html) &&
     /function removeQueryFilterGroupTab\(button\) \{[\s\S]*?data-query-filter-tab-remove[\s\S]*?remove\(\)/.test(html) &&
     /function addQueryFilterGroupTab\(button\) \{[\s\S]*?data-query-filter-tab-add[\s\S]*?insertBefore/.test(html) &&
     /function initQueryMenuPrototype\(\) \{[\s\S]*?querySelectorAll\('\[data-query-filter-tab-select\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-tab-remove\]'\)[\s\S]*?querySelectorAll\('\[data-query-filter-tab-add\]'\)/.test(
       html,
     ) &&
-    /function applyQuerySavedGroupSnapshot\(card\) \{[\s\S]*?data-query-last-loaded-group[\s\S]*?data-query-snapshot-threshold[\s\S]*?syncQueryThresholdEditor/.test(
+    /function applyQuerySavedGroupSnapshot\(card\) \{[\s\S]*?data-query-last-loaded-group[\s\S]*?data-query-snapshot-amount-min[\s\S]*?data-query-snapshot-amount-max[\s\S]*?syncQueryAmountRangeEditor/.test(
       html,
     ) &&
     /function loadQuerySavedGroupSnapshot\(button\) \{[\s\S]*?data-query-saved-group-load[\s\S]*?applyQuerySavedGroupSnapshot/.test(html) &&
@@ -2066,11 +2299,11 @@ assert(
 );
 assert(
   !html.includes('autofocus') &&
-    html.includes('function focusQueryMenuQ1OnLoad') &&
-    /function focusQueryMenuQ1OnLoad\(\) \{[\s\S]*?\[data-query-menu-row\] \[data-screen="alt-query-menu-fullscreen"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start'/.test(html) &&
-    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initQueryMenuPrototype\(\);[\s\S]*?focusQueryMenuQ1OnLoad\(\);[\s\S]*?initBalanceHeaderScaleLab\(\);/.test(html) &&
+    html.includes('function focusQueryMenuQ1AOnLoad') &&
+    /function focusQueryMenuQ1AOnLoad\(\) \{[\s\S]*?\[data-query-menu-row\] \[data-screen="alt-query-menu-category-vendor-hierarchy"\][\s\S]*?scrollIntoView\(\{ block: 'start', inline: 'start'/.test(html) &&
+    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initQueryMenuPrototype\(\);[\s\S]*?focusQueryMenuQ1AOnLoad\(\);[\s\S]*?initBalanceHeaderScaleLab\(\);/.test(html) &&
     !html.includes('initMindHeatmapScreens();'),
-  'Refreshing the HTML must not autofocus the keyboard mockup and must scroll/focus Q1 after rows are generated without the deleted D-full preview init',
+  'Refreshing the HTML must not autofocus the keyboard mockup and must scroll/focus the remaining Q1A screen after rows are generated without the deleted D-full preview init',
 );
 assert(
   /function buildCommonMindDoubleGraphContent\(kind = 'expense', placement = 'stage1'\) \{[\s\S]*?buildCommonMindMergedBarGraphContent\('income', placement\)[\s\S]*?buildCommonMindMergedBarGraphContent\('expense', placement\)/.test(html) &&
@@ -2324,7 +2557,7 @@ assert(
     'stats-category-donut',
     'data-category-highlight="current"',
     'common-budget-pie-donut',
-    'buildBudgetCategoryPieSlices()',
+    'buildBudgetCategoryPieSlices(',
     'common-budget-pie-list',
   ].every((token) => budgetPieFunction.includes(token)) &&
     html.includes('common-budget-pie-slice'),
@@ -2335,6 +2568,171 @@ assert(
     /\.common-budget-pie-slice\.selected\s*\{[\s\S]*?stroke-width:\s*17;[\s\S]*?\}/.test(html) &&
     /\.common-budget-pie-row\[data-category-highlight="current"\]\s*\{[\s\S]*?\}/.test(html),
   'C3 budget pie area must be internally scrollable and visually highlight the selected category both on the donut and list row',
+);
+const budgetPieSlicesFunction = html.slice(
+  html.indexOf('function buildBudgetCategoryPieSlices'),
+  html.indexOf('function buildCommonBudgetCategoryPieContent'),
+);
+const budget3dDonutFunction = html.slice(
+  html.indexOf('function ensureCommonBudget3dDonutScreen'),
+  html.indexOf('function ensureCommonHeaderHandle'),
+);
+const budgetAlt3dDonutFunctionStart = html.indexOf('function ensureCommonBudgetAlt3dDonutScreen');
+const budgetAlt3dDonutFunction = budgetAlt3dDonutFunctionStart >= 0
+  ? html.slice(budgetAlt3dDonutFunctionStart, html.indexOf('function ensureCommonHeaderHandle'))
+  : '';
+const budgetInteractive3dDonutFunctionStart = html.indexOf('function ensureCommonBudgetInteractive3dDonutScreen');
+const budgetInteractive3dDonutFunction = budgetInteractive3dDonutFunctionStart >= 0
+  ? html.slice(budgetInteractive3dDonutFunctionStart, html.indexOf('function ensureCommonHeaderHandle'))
+  : '';
+const budgetWhitePieFunctionStart = html.indexOf('function ensureCommonBudgetWhitePieScreen');
+const budgetWhitePieFunction = budgetWhitePieFunctionStart >= 0
+  ? html.slice(budgetWhitePieFunctionStart, html.indexOf('function ensureCommonHeaderHandle'))
+  : '';
+assert(
+  budgetPieSlicesFunction.includes("layer = 'top'") &&
+    budgetPieSlicesFunction.includes("layer === 'side'") &&
+    budgetPieFunction.includes("donutStyle = 'flat'") &&
+    budgetPieFunction.includes('data-donut-style="${donutStyle}"') &&
+    budgetPieFunction.includes("donutStyle === '3d'") &&
+    budgetPieFunction.includes('common-budget-pie-donut-3d') &&
+    budgetPieFunction.includes('common-budget-pie-3d-shadow') &&
+    budgetPieFunction.includes('common-budget-pie-3d-side') &&
+    budgetPieFunction.includes('common-budget-pie-3d-top') &&
+    budgetPieFunction.includes("buildBudgetCategoryPieSlices('side')") &&
+    budgetPieFunction.includes('common-budget-pie-center-highlight'),
+  'Budget pie builder must support a scoped 3D donut variant with side/top SVG layers while keeping flat as the default',
+);
+assert(
+  budgetPieSlicesFunction.includes("layer === 'alt-depth'") &&
+    budgetPieSlicesFunction.includes("layer === 'alt-pop'") &&
+    budgetPieFunction.includes("donutStyle === '3d-alt'") &&
+    budgetPieFunction.includes('common-budget-pie-donut-3d-alt') &&
+    budgetPieFunction.includes('common-budget-pie-3d-alt-depth') &&
+    budgetPieFunction.includes('common-budget-pie-3d-alt-top') &&
+    budgetPieFunction.includes('common-budget-pie-3d-alt-pop') &&
+    budgetPieFunction.includes('common-budget-pie-3d-alt-highlight') &&
+    budgetPieFunction.includes("buildBudgetCategoryPieSlices('alt-depth')") &&
+    budgetPieFunction.includes("buildBudgetCategoryPieSlices('alt-pop')"),
+  'Budget pie builder must support a distinct C4C 3D-alt donut variant with depth, raised slice, and highlight layers',
+);
+assert(
+  budget3dDonutFunction.includes('[data-budget-3d-donut-screen="true"]') &&
+    budget3dDonutFunction.includes("definition.mode !== 'budget'") &&
+    budget3dDonutFunction.includes("data-screen', 'alt-common-header-budget-stage2-3d-donut'") &&
+    budget3dDonutFunction.includes("dataset.budget3dDonutScreen = 'true'") &&
+    budget3dDonutFunction.includes("dataset.budgetPie3dScrollable = 'true'") &&
+    budget3dDonutFunction.includes('C4B ·') &&
+    budget3dDonutFunction.includes("buildCommonBudgetCategoryPieContent({ donutStyle: '3d' })") &&
+    budget3dDonutFunction.includes("stage2Column.insertAdjacentElement('afterend', donut3dColumn)") &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?syncCommonHeaderBudgetPieLayer\(row, definition\);[\s\S]*?ensureCommonBudget3dDonutScreen\(row, definition\);/.test(html),
+  'Budget mode must duplicate C4 into an adjacent C4B 3D donut screen without replacing the original C4',
+);
+assert(
+  budgetAlt3dDonutFunction.includes('[data-budget-alt-3d-donut-screen="true"]') &&
+    budgetAlt3dDonutFunction.includes("definition.mode !== 'budget'") &&
+    budgetAlt3dDonutFunction.includes("data-screen', 'alt-common-header-budget-stage2-alt-3d-donut'") &&
+    budgetAlt3dDonutFunction.includes("dataset.budgetAlt3dDonutScreen = 'true'") &&
+    budgetAlt3dDonutFunction.includes("dataset.budgetPieAlt3dScrollable = 'true'") &&
+    budgetAlt3dDonutFunction.includes('C4C ·') &&
+    budgetAlt3dDonutFunction.includes("buildCommonBudgetCategoryPieContent({ donutStyle: '3d-alt' })") &&
+    budgetAlt3dDonutFunction.includes("donut3dColumn.insertAdjacentElement('afterend', alt3dColumn)") &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?ensureCommonBudget3dDonutScreen\(row, definition\);[\s\S]*?ensureCommonBudgetAlt3dDonutScreen\(row, definition\);/.test(html),
+  'Budget mode must add a second adjacent C4C alternative 3D donut screen after C4B without replacing C4 or C4B',
+);
+assert(
+  budgetInteractive3dDonutFunction.includes('[data-budget-interactive-3d-donut-screen="true"]') &&
+    budgetInteractive3dDonutFunction.includes("definition.mode !== 'budget'") &&
+    budgetInteractive3dDonutFunction.includes("data-screen', 'alt-common-header-budget-stage2-interactive-3d-donut'") &&
+    budgetInteractive3dDonutFunction.includes("dataset.budgetInteractive3dDonutScreen = 'true'") &&
+    budgetInteractive3dDonutFunction.includes('C4D ·') &&
+    budgetInteractive3dDonutFunction.includes("buildCommonBudgetCategoryPieContent({ donutStyle: '3d-interactive', interactive: true })") &&
+    budgetInteractive3dDonutFunction.includes("alt3dColumn.insertAdjacentElement('afterend', interactive3dColumn)") &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?ensureCommonBudgetAlt3dDonutScreen\(row, definition\);[\s\S]*?ensureCommonBudgetInteractive3dDonutScreen\(row, definition\);/.test(html),
+  'Budget mode must add an adjacent C4D interactive 3D donut after C4C without replacing the earlier variants',
+);
+assert(
+  budgetPieSlicesFunction.includes("layer === 'interactive-depth'") &&
+    budgetPieSlicesFunction.includes("layer === 'interactive-top'") &&
+    budgetPieFunction.includes("donutStyle === '3d-interactive'") &&
+    budgetPieFunction.includes('data-budget-pie-slice-target') &&
+    budgetPieFunction.includes('data-budget-pie-center-action="all-categories"') &&
+    budgetPieFunction.includes('common-budget-pie-donut-3d-interactive') &&
+    budgetPieFunction.includes('common-budget-pie-interactive-depth') &&
+    budgetPieFunction.includes('common-budget-pie-interactive-top') &&
+    budgetPieFunction.includes('common-budget-pie-center-action-label') &&
+    budgetPieFunction.includes('role="button"') &&
+    budgetPieFunction.includes('tabindex="0"'),
+  'C4D must expose separate, keyboard-accessible slice and all-categories centre targets on a distinct stepped 3D donut',
+);
+assert(
+  budgetWhitePieFunction.includes('[data-budget-white-pie-screen="true"]') &&
+    budgetWhitePieFunction.includes("definition.mode !== 'budget'") &&
+    budgetWhitePieFunction.includes("data-screen', 'alt-common-header-budget-stage2-white-pie'") &&
+    budgetWhitePieFunction.includes("dataset.budgetWhitePieScreen = 'true'") &&
+    budgetWhitePieFunction.includes("dataset.budgetPieWhiteScrollable = 'true'") &&
+    budgetWhitePieFunction.includes('C4W ·') &&
+    budgetWhitePieFunction.includes("buildCommonBudgetCategoryPieContent({ panelSurface: 'white-translucent' })") &&
+    budgetWhitePieFunction.includes("stage2Column.insertAdjacentElement('afterend', whitePieColumn)") &&
+    /function updateCommonHeaderModeRow\(modeSection, definition\) \{[\s\S]*?ensureCommonBudgetInteractive3dDonutScreen\(row, definition\);[\s\S]*?ensureCommonBudgetWhitePieScreen\(row, definition\);/.test(html),
+  'Budget mode must add C4W directly after C4, preserving the same category pie data in a distinct translucent-white chart surface',
+);
+assert(
+  budgetPieFunction.includes("panelSurface = 'glass'") &&
+    budgetPieFunction.includes('data-panel-surface="${panelSurface}"') &&
+    budgetPieFunction.includes('data-donut-style="${donutStyle}"'),
+  'Budget pie content must expose a scoped panel-surface option while keeping flat glass as the default C4 rendering',
+);
+const whitePieSurfaceRuleStart = html.indexOf('    .common-budget-pie-panel[data-panel-surface="white-translucent"]');
+const whitePieSurfaceRuleEnd = html.indexOf('\n    }', whitePieSurfaceRuleStart);
+const whitePieSurfaceRule = whitePieSurfaceRuleStart >= 0 && whitePieSurfaceRuleEnd >= 0
+  ? html.slice(whitePieSurfaceRuleStart, whitePieSurfaceRuleEnd + 6)
+  : '';
+assert(
+  whitePieSurfaceRule.includes('background: rgba(255,255,255,.72);') &&
+    whitePieSurfaceRule.includes('border: 1px solid rgba(255,255,255,.66);') &&
+    whitePieSurfaceRule.includes('box-shadow: 0 7px 18px rgba(15,23,42,.08);') &&
+    whitePieSurfaceRule.includes('-webkit-backdrop-filter: none;') &&
+    whitePieSurfaceRule.includes('backdrop-filter: none;') &&
+    !whitePieSurfaceRule.includes('gradient') &&
+    !whitePieSurfaceRule.includes('blur('),
+  'C4W chart surface must be an unblurred, semi-transparent white panel instead of a glass gradient container',
+);
+assert(
+  html.includes('function setCommonBudgetPieInteractiveSelection') &&
+    html.includes('function initCommonBudgetPieInteractions') &&
+    html.includes("closest('[data-budget-pie-slice-target]')") &&
+    html.includes("closest('[data-budget-pie-center-action=\"all-categories\"]')") &&
+    html.includes("initCommonBudgetPieInteractions();"),
+  'C4D must route slice and centre taps through one local selection state updater',
+);
+assert(
+  /\.common-budget-pie-panel\[data-donut-style="3d"\]\s+\.common-budget-pie-visual\s*\{[\s\S]*?perspective:\s*460px;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-donut-3d\s*\{[\s\S]*?transform:\s*rotateX\(58deg\);[\s\S]*?filter:\s*drop-shadow\(0 18px 18px rgba\(15,23,42,\.20\)\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-3d-side\s*\{[\s\S]*?transform:\s*translateY\(9px\) rotate\(-90deg\);[\s\S]*?opacity:\s*\.52;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-slice\.side\s*\{[\s\S]*?stroke:\s*color-mix\(in srgb,\s*var\(--slice-color\) 62%,\s*#0f172a\);[\s\S]*?stroke-width:\s*17;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-3d-shadow\s*\{[\s\S]*?fill:\s*rgba\(15,23,42,\.18\);[\s\S]*?filter:\s*blur\(4px\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-center-highlight\s*\{[\s\S]*?fill:\s*rgba\(255,255,255,\.38\);[\s\S]*?\}/.test(html),
+  'Budget C4B 3D donut CSS must add perspective, side thickness, shadow, and center highlight without changing the flat C4 donut',
+);
+assert(
+  /\.common-budget-pie-panel\[data-donut-style="3d-alt"\]\s+\.common-budget-pie-visual\s*\{[\s\S]*?perspective:\s*520px;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-donut-3d-alt\s*\{[\s\S]*?transform:\s*rotateX\(48deg\) rotateZ\(-8deg\);[\s\S]*?filter:\s*drop-shadow\(0 22px 18px rgba\(15,23,42,\.22\)\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-3d-alt-depth\s*\{[\s\S]*?transform:\s*translate\(5px,\s*11px\) rotate\(-90deg\);[\s\S]*?opacity:\s*\.60;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-slice\.alt-depth\s*\{[\s\S]*?stroke:\s*color-mix\(in srgb,\s*var\(--slice-color\) 54%,\s*#0f172a\);[\s\S]*?stroke-width:\s*19;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-3d-alt-pop\s*\{[\s\S]*?transform:\s*translate\(-6px,\s*-7px\) rotate\(-90deg\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-slice\.alt-pop\s*\{[\s\S]*?stroke-width:\s*20;[\s\S]*?filter:\s*drop-shadow\(0 0 10px var\(--slice-color\)\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-3d-alt-highlight\s*\{[\s\S]*?stroke:\s*rgba\(255,255,255,\.62\);[\s\S]*?opacity:\s*\.74;[\s\S]*?\}/.test(html),
+  'Budget C4C alternative 3D donut CSS must use a distinct tilted floating raised-slice treatment',
+);
+assert(
+  /.common-budget-pie-panel\[data-donut-style="3d-interactive"\]\s+\.common-budget-pie-visual\s*\{[\s\S]*?perspective:\s*660px;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-donut-3d-interactive\s*\{[\s\S]*?transform:\s*rotateX\(63deg\) rotateZ\(10deg\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-interactive-depth\s*\{[\s\S]*?transform:\s*translate\(-3px,\s*13px\) rotate\(-90deg\);[\s\S]*?opacity:\s*\.74;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-interactive-pop\s*\{[\s\S]*?transform:\s*translate\(-4px,\s*-8px\) rotate\(-90deg\);[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-panel\[data-donut-style="3d-interactive"\]\s+\[data-budget-pie-slice-target\]\s*\{[\s\S]*?cursor:\s*pointer;[\s\S]*?pointer-events:\s*stroke;[\s\S]*?\}/.test(html) &&
+    /\.common-budget-pie-panel\[data-donut-style="3d-interactive"\]\s+\[data-budget-pie-center-action\]\s*\{[\s\S]*?cursor:\s*pointer;[\s\S]*?\}/.test(html),
+  'C4D CSS must use a separate stepped 3D geometry and explicit touch targets for slices and centre',
 );
 assert(
   /function syncCommonHeaderBudgetPieLayer\(row,\s*definition\) \{[\s\S]*?definition\.mode !== 'budget'[\s\S]*?dataset\.stage2Scrollable = 'true'[\s\S]*?dataset\.budgetPieScrollable = 'true'[\s\S]*?buildCommonBudgetCategoryPieContent\(\)[\s\S]*?insertAdjacentHTML/.test(html) &&
@@ -2397,8 +2795,18 @@ const commonHeaderStage1 = commonHeaderRow.slice(
   commonHeaderRow.indexOf('data-screen="alt-common-header-stage1"'),
   commonHeaderRow.indexOf('data-screen="alt-common-header-stage2"'),
 );
-const commonHeaderStage2 = commonHeaderRow.slice(commonHeaderRow.indexOf('data-screen="alt-common-header-stage2"'));
-assert(commonHeaderStage0 && commonHeaderStage1 && commonHeaderStage2, 'B row must contain three common-header stage screen blocks');
+const commonHeaderStage2MotherChildStart = commonHeaderRow.indexOf(
+  'data-screen="alt-common-header-stage2-mother-child"',
+);
+const commonHeaderStage2 = commonHeaderRow.slice(
+  commonHeaderRow.indexOf('data-screen="alt-common-header-stage2"'),
+  commonHeaderStage2MotherChildStart,
+);
+const commonHeaderStage2MotherChild = commonHeaderRow.slice(commonHeaderStage2MotherChildStart);
+assert(
+  commonHeaderStage0 && commonHeaderStage1 && commonHeaderStage2 && commonHeaderStage2MotherChild,
+  'B row must contain its three common-header stage blocks and the adjacent B3M mother-child preview',
+);
 assert(
   commonHeaderStage0.includes('data-common-header-state="collapsed"') &&
     commonHeaderStage0.includes('data-common-header-snap="0"') &&
@@ -2562,7 +2970,10 @@ assert.strictEqual(
   'The common-header source states must not render a separate eye button; the single menu button is the only header control',
 );
 assert.strictEqual(
-  (commonHeaderRow.match(/class="common-header-expand-handle"/g) || []).length,
+  [commonHeaderStage0, commonHeaderStage1, commonHeaderStage2].reduce(
+    (count, screenBlock) => count + (screenBlock.match(/class="common-header-expand-handle"/g) || []).length,
+    0,
+  ),
   3,
   'Every source common-header state must render the small white pull handle at the card bottom',
 );
@@ -2672,7 +3083,7 @@ assert(
     !/\.common-mind-portal-layer\s*\{[\s\S]*?rgba\(67,21,146/.test(html) &&
     !/\.common-mind-portal-layer::before\s*\{[\s\S]*?rgba\(255,57,194/.test(html) &&
     /function initCommonHeaderMindPortalTouch\(\) \{[\s\S]*?querySelectorAll\('\[data-common-header-mode="mind"\] \.common-header-card'\)[\s\S]*?data-mind-portal-touch[\s\S]*?data-mind-portal-layer[\s\S]*?--mind-portal-touch-x[\s\S]*?--mind-portal-touch-y[\s\S]*?--mind-portal-touch-opacity[\s\S]*?setPointerCapture[\s\S]*?pointermove[\s\S]*?pointerup[\s\S]*?pointercancel/.test(html) &&
-    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?focusQueryMenuQ1OnLoad\(\);/.test(html) &&
+    /initCommonHeaderModeRows\(\);[\s\S]*?moveQueryMenuRowToTop\(\);[\s\S]*?initCommonHeaderMindPortalTouch\(\);[\s\S]*?focusQueryMenuQ1AOnLoad\(\);/.test(html) &&
     !/document\.querySelectorAll\('\.common-header-card'\)[\s\S]*?data-mind-portal-touch/.test(html),
   'D/Mind common-header cards must get a separate touch-sensitive portal layer with idle vortex motion and pointer-following pink/purple bloom without attaching it to B/C rows or changing the value-locked base gradient',
 );
@@ -2802,6 +3213,439 @@ assert(
     html.includes("logoSize: '45.144px'") &&
     /\.common-header-mode\[data-common-header-mode="mind"\]\s+\[data-d1-font-variant="sf-pro"\]\s*\{[\s\S]*?--d1-logo-size:\s*45\.144px;[\s\S]*?--d1-tagline-ratio:\s*\.43;[\s\S]*?\}/.test(html),
   'Mind D1 font variant row must render logo and labels another 5% smaller without changing motto-to-header padding',
+);
+const commonMindLayoutRuntime = [
+  extractFunctionSource('findCommonMindLayoutSourceColumn'),
+  extractFunctionSource('resolveCommonMindD1AStage0Core'),
+  extractFunctionSource('syncCommonMindLayoutStage0CoreFromD1A'),
+  extractFunctionSource('syncCommonMindLayoutPrototypeRow'),
+  extractFunctionSource('configureCommonMindLayoutColumn'),
+  extractFunctionSource('buildCommonMindYearTickerLayer'),
+  extractFunctionSource('buildCommonMindYearMonthTickerLayer'),
+  extractFunctionSource('buildCommonMindMonthDayTickerLayer'),
+  extractFunctionSource('buildCommonMindSumHeatmapLayer'),
+  extractFunctionSource('buildCommonMindSumGraphsLayer'),
+  extractFunctionSource('buildCommonMindSumReferenceHeatmapLayer'),
+  extractFunctionSource('buildCommonMindYearMonthPulseLayer'),
+  extractFunctionSource('buildCommonMindYearGraphsLayer'),
+  extractFunctionSource('buildCommonMindYearMonthFingerprintLayer'),
+  extractFunctionSource('buildCommonMindYearMonthReferenceAnalyticsLayer'),
+  extractFunctionSource('buildCommonMindMonthInsightLayer'),
+  extractFunctionSource('buildCommonMindMonthGraphsLayer'),
+  extractFunctionSource('buildCommonMindMonthDayFingerprintLayer'),
+  extractFunctionSource('buildCommonMindMonthDayReferenceAnalyticsLayer'),
+  extractFunctionSource('buildCommonMindMonthDaySimpleReferenceAnalyticsLayer'),
+  extractFunctionSource('buildCommonMindMonthDayBareTickerLayer'),
+  extractFunctionSource('buildCommonMindMonthDayBareReferenceAnalyticsLayer'),
+  extractFunctionSource('updateCommonHeaderModeRow'),
+].join('\n');
+assert(
+  commonMindLayoutRuntime.includes("layoutRow.dataset.commonMindLayoutRow = 'true'") &&
+    commonMindLayoutRuntime.includes("layoutRow.id = 'mind-layout'") &&
+    commonMindLayoutRuntime.includes("layoutRow.dataset.prototypePurpose = 'mind-stage1-stage2-layout-before-flutter-code'") &&
+    commonMindLayoutRuntime.includes("findCommonMindLayoutSourceColumn(sourceRow, 'stage1')") &&
+    commonMindLayoutRuntime.includes("findCommonMindLayoutSourceColumn(sourceRow, 'stage2')") &&
+    commonMindLayoutRuntime.includes("const headerSelector = stage === 'stage1' ? '.common-header-stage1' : '.common-header-stage2';") &&
+    commonMindLayoutRuntime.includes('candidate.querySelector(headerSelector)') &&
+    commonMindLayoutRuntime.includes('sourceRow.querySelector(headerSelector)?.closest') &&
+    commonMindLayoutRuntime.includes("const d1aStage0Core = resolveCommonMindD1AStage0Core(modeSection, sourceRow);") &&
+    commonMindLayoutRuntime.includes('configureCommonMindLayoutColumn(column, config, d1aStage0Core);') &&
+    commonMindLayoutRuntime.includes("const anchor = modeSection.querySelector('[data-common-mind-d1-font-row]') || sourceRow;") &&
+    commonMindLayoutRuntime.includes("anchor.insertAdjacentElement('afterend', layoutRow);") &&
+    commonMindLayoutRuntime.includes('syncCommonMindLayoutPrototypeRow(modeSection, definition);'),
+  'Mind layout prototype row must be generated directly after the D1 font/D1A row and use stage-header source columns so it cannot disappear when generated screen ids differ',
+);
+assert(
+  commonMindLayoutRuntime.includes('[data-d1-font-variant="inter"] .common-header-core') &&
+    commonMindLayoutRuntime.includes("d1aStage0Core.querySelector('[data-score-ribbon-stage0]')") &&
+    commonMindLayoutRuntime.includes("d1aStage0Core.querySelector('.common-score-ribbon-svg')") &&
+    commonMindLayoutRuntime.includes('const clonedCore = d1aStage0Core.cloneNode(true);') &&
+    commonMindLayoutRuntime.includes("clonedCore.dataset.stage0CoreSource = 'd1a'") &&
+    commonMindLayoutRuntime.includes("clonedCore.dataset.stage0ScoreGraphSource = 'd1a'") &&
+    commonMindLayoutRuntime.includes('targetCore.replaceWith(clonedCore);') &&
+    commonMindLayoutRuntime.includes("screen.dataset.stage0CoreSource = 'd1a'") &&
+    commonMindLayoutRuntime.includes("header.dataset.stage0ScoreGraphSource = 'd1a'"),
+  'Generated Mind layout screens must replace their Stage0 core with the D1A score/ribbon graph core',
+);
+const mindLayoutFocusRuntime = [
+  extractFunctionSource('focusMindLayoutPrototypeOnLoad'),
+  html.slice(html.indexOf('initQueryMenuPrototype();'), html.indexOf('initColorLabScrollRenderSuspension();')),
+].join('\n');
+assert(
+  mindLayoutFocusRuntime.includes("window.location.hash === '#mind-layout'") &&
+    mindLayoutFocusRuntime.includes("params.get('focus') === 'mind-layout'") &&
+    !mindLayoutFocusRuntime.includes("document.body.dataset.focusView = 'mind-layout'") &&
+    mindLayoutFocusRuntime.includes("document.querySelector('#mind-layout')") &&
+    mindLayoutFocusRuntime.includes('[data-screen="alt-common-header-mind-sum-stage1-layout"]') &&
+    mindLayoutFocusRuntime.includes('requestAnimationFrame(() =>') &&
+    mindLayoutFocusRuntime.includes('updateZoomHostSize();') &&
+    mindLayoutFocusRuntime.includes("document.getElementById('zoomViewport')") &&
+    mindLayoutFocusRuntime.includes('viewport.scrollLeft += targetRect.left - viewportRect.left - 24;') &&
+    mindLayoutFocusRuntime.includes('viewport.scrollTop += targetRect.top - viewportRect.top - 24;') &&
+    mindLayoutFocusRuntime.includes('if (!focusMindLayoutPrototypeOnLoad())') &&
+    mindLayoutFocusRuntime.includes('focusQueryMenuQ1AOnLoad();'),
+  'Mind layout prototype direct #mind-layout URL may scroll to the new row but must not hide the rest of Color Lab',
+);
+for (const screenId of [
+  'alt-common-header-mind-sum-stage1-layout',
+  'alt-common-header-mind-sum-heatmap-layout',
+  'alt-common-header-mind-sum-graphs-layout',
+  'alt-common-header-mind-sum-reference-heatmap-layout',
+  'alt-common-header-mind-year-months-layout',
+  'alt-common-header-mind-year-month-pulse-layout',
+  'alt-common-header-mind-year-month-drivers-layout',
+  'alt-common-header-mind-year-month-fingerprint-layout',
+  'alt-common-header-mind-year-month-reference-analytics-layout',
+  'alt-common-header-mind-month-stage1-layout',
+  'alt-common-header-mind-month-insight-layout',
+  'alt-common-header-mind-month-graphs-layout',
+  'alt-common-header-mind-month-day-fingerprint-layout',
+  'alt-common-header-mind-month-day-reference-analytics-layout',
+  'alt-common-header-mind-month-day-simple-reference-layout',
+]) {
+  assert(commonMindLayoutRuntime.includes(screenId), `Missing Mind layout prototype screen ${screenId}`);
+}
+assert(
+  !extractFunctionSource('buildCommonMindYearTickerLayer').includes('common-mind-layout-foot') &&
+  commonMindLayoutRuntime.includes('data-focus-mode-stage1="mind-year-ticker"') &&
+    commonMindLayoutRuntime.includes('data-ticking-axis="years"') &&
+    commonMindLayoutRuntime.includes('data-stage1-parent-selector="year"') &&
+    commonMindLayoutRuntime.includes("title: 'DS1 · SUM Mind · stage1 years'") &&
+    commonMindLayoutRuntime.includes("title: 'DS2A · SUM Mind · heatmap'") &&
+    commonMindLayoutRuntime.includes("title: 'DS2B · SUM Mind · graphs'") &&
+    commonMindLayoutRuntime.includes("title: 'DS2C · SUM Mind · reference heatmap'") &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-sum-heatmap"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="year-heatmap"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-sum-graphs"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="sum-graphs"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-sum-reference-heatmap"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="year-reference-heatmap"') &&
+    commonMindLayoutRuntime.includes('data-stage2-with-ticker="true"') &&
+    !commonMindLayoutRuntime.includes('data-mind-stage2-pages="year-heatmap year-stats"') &&
+    !commonMindLayoutRuntime.includes('data-stage2-other-page="year-stats"'),
+  'SUM Mind layout row must split into DS1 pure year ticker, DS2A ticker plus heatmap, and DS2B ticker plus graph cards',
+);
+const sumReferenceHeatmapRuntime = extractFunctionSource('buildCommonMindSumReferenceHeatmapLayer');
+assert(
+  sumReferenceHeatmapRuntime.includes('/storage/emulated/0/spendee/mindstage2.png') &&
+    sumReferenceHeatmapRuntime.includes('2026 – Hónapok heatmapja') &&
+    sumReferenceHeatmapRuntime.includes('Élelmiszer · &gt; 2 000 Ft') &&
+    sumReferenceHeatmapRuntime.includes('data-stage2-extra="mind-layout-sum-reference-heatmap"') &&
+    sumReferenceHeatmapRuntime.includes('data-mind-stage2-pages="year-reference-heatmap"') &&
+    sumReferenceHeatmapRuntime.includes('data-mind-reference-metric="year-month-amounts"') &&
+    sumReferenceHeatmapRuntime.includes('Alacsony') &&
+    sumReferenceHeatmapRuntime.includes('Magas') &&
+    sumReferenceHeatmapRuntime.includes('Összesen') &&
+    sumReferenceHeatmapRuntime.includes('2 207 100 Ft') &&
+    sumReferenceHeatmapRuntime.includes('Tranzakciók') &&
+    sumReferenceHeatmapRuntime.includes('458') &&
+    sumReferenceHeatmapRuntime.includes('Átlag/hó') &&
+    sumReferenceHeatmapRuntime.includes('Legmagasabb') &&
+    sumReferenceHeatmapRuntime.includes('Július') &&
+    sumReferenceHeatmapRuntime.includes('data-query-scoped="true"'),
+  'DS2C reference heatmap must reproduce the screenshot year heatmap metrics and query-scoped labels',
+);
+const sumGraphsRuntime = extractFunctionSource('buildCommonMindSumGraphsLayer');
+assert(
+  sumGraphsRuntime.includes('common-mind-sum-graph-stack') &&
+    sumGraphsRuntime.includes('data-mind-sum-bar-graph="money-flow-out"') &&
+    sumGraphsRuntime.includes('data-mind-sum-bar-graph="pattern-volume"') &&
+    sumGraphsRuntime.includes('Adott év kiadásai') &&
+    sumGraphsRuntime.includes('Adott évben mért kiadási minták') &&
+    sumGraphsRuntime.includes('money flow out') &&
+    sumGraphsRuntime.includes('mintavolumen') &&
+    sumGraphsRuntime.includes('common-mind-sum-bar-svg') &&
+    !sumGraphsRuntime.includes('common-mind-stat-grid') &&
+    !sumGraphsRuntime.includes('common-mind-stat-card'),
+  'DS2B SUM graphs must be two stacked bar charts: selected-year money flow out above selected-year expense pattern volume',
+);
+const sumGraphs3dRuntime = extractFunctionSource('buildCommonMindSum3dGraphsLayer');
+assert(
+  sumGraphs3dRuntime.includes('data-stage2-extra="mind-layout-sum-graphs-3d"') &&
+    sumGraphs3dRuntime.includes('data-mind-stage2-pages="sum-graphs-3d"') &&
+    sumGraphs3dRuntime.includes('data-mind-sum-graphs-style="3d"') &&
+    sumGraphs3dRuntime.includes('data-mind-sum-bar-graph="money-flow-out"') &&
+    sumGraphs3dRuntime.includes('data-mind-sum-bar-graph="pattern-volume"') &&
+    sumGraphs3dRuntime.includes('data-mind-sum-bar-depth="3d"') &&
+    sumGraphs3dRuntime.includes('buildCommonMindSum3dCuboidMarkup') &&
+    sumGraphs3dRuntime.includes('Adott év kiadásai') &&
+    sumGraphs3dRuntime.includes('Adott évben mért kiadási minták') &&
+    commonMindLayoutRuntime.includes("title: 'DS2B3D · SUM Mind · 3D graphs'") &&
+    commonMindLayoutRuntime.indexOf("id: 'sum-graphs'") < commonMindLayoutRuntime.indexOf("id: 'sum-graphs-3d'") &&
+    commonMindLayoutRuntime.indexOf("id: 'sum-graphs-3d'") < commonMindLayoutRuntime.indexOf("id: 'sum-reference-heatmap'"),
+  'DS2B must gain an adjacent DS2B3D duplicate before DS2C without replacing the original two selected-year graph panels',
+);
+assert(
+  /function buildCommonMindSum3dCuboidMarkup\(values\) \{[\s\S]*?common-mind-sum-3d-bar-back[\s\S]*?common-mind-sum-3d-bar-side[\s\S]*?common-mind-sum-3d-bar-front[\s\S]*?common-mind-sum-3d-bar-top/.test(html) &&
+    /\.common-mind-sum-bar-panel\[data-mind-sum-bar-depth="3d"\]\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-sum-3d-bar-back\s*\{[\s\S]*?fill:\s*color-mix\(in srgb, var\(--mind-sum-bar-color\) 42%, #0f172a\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-sum-3d-bar-side\s*\{[\s\S]*?fill:\s*color-mix\(in srgb, var\(--mind-sum-bar-color\) 58%, #0f172a\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-sum-3d-bar-front\s*\{[\s\S]*?fill:\s*var\(--mind-sum-bar-color, #ef4444\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-sum-3d-bar-top\s*\{[\s\S]*?fill:\s*color-mix\(in srgb, var\(--mind-sum-bar-color\) 72%, #ffffff\);[\s\S]*?\}/.test(html) &&
+    !html.includes('common-mind-sum-cylinder-top') &&
+    !html.includes('common-mind-sum-cylinder-bottom'),
+  'DS2B3D must render every value as a square cuboid with flat front, back/depth, right-side and top planes, not cylinder caps',
+);
+assert(
+  /\.common-mind-sum-graph-stack\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?gap:\s*8px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-sum-bar-panel\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*auto minmax\(42px,\s*1fr\);[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-sum-bar-svg\s*\{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*100%;[\s\S]*?\}/.test(html),
+  'DS2B SUM graph CSS must fit two stacked bar chart panels under the year rail',
+);
+assert(
+  !extractFunctionSource('buildCommonMindYearMonthTickerLayer').includes('common-mind-layout-foot') &&
+    commonMindLayoutRuntime.includes('data-focus-mode-stage1="mind-year-month-ticker"') &&
+    commonMindLayoutRuntime.includes('data-ticking-axis="months"') &&
+    commonMindLayoutRuntime.includes('data-stage1-parent-selector="month"') &&
+    commonMindLayoutRuntime.includes("screen.dataset.stage1Sizing = 'shared-common-header'") &&
+    commonMindLayoutRuntime.includes("header.dataset.stage1Sizing = 'shared-common-header'") &&
+    !commonMindLayoutRuntime.includes('--common-header-stage1-h') &&
+    commonMindLayoutRuntime.includes("title: 'DY1 · Éves Mind · stage1 months'") &&
+    commonMindLayoutRuntime.includes("title: 'DY2A · Éves Mind · month pulse'") &&
+    commonMindLayoutRuntime.includes("title: 'DY2B · Éves Mind · month drivers'") &&
+    commonMindLayoutRuntime.includes("title: 'DY2C · Éves Mind · month fingerprint'") &&
+    commonMindLayoutRuntime.includes("title: 'DY2D · Éves Mind · reference month analytics'") &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-year-month-pulse"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="month-pulse"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-year-month-drivers"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="month-drivers"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-year-month-fingerprint"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="month-fingerprint"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-year-month-reference-analytics"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="month-reference-analytics"'),
+  'YEAR Mind layout row must split into DY1 month ticker, DY2A selected month pulse, and DY2B selected month drivers/graphs',
+);
+const yearMonthFingerprintRuntime = extractFunctionSource('buildCommonMindYearMonthFingerprintLayer');
+assert(
+  yearMonthFingerprintRuntime.includes('Month Fingerprint') &&
+    yearMonthFingerprintRuntime.includes('data-stage2-extra="mind-layout-year-month-fingerprint"') &&
+    yearMonthFingerprintRuntime.includes('data-mind-stage2-pages="month-fingerprint"') &&
+    yearMonthFingerprintRuntime.includes('data-mind-fingerprint="month"') &&
+    yearMonthFingerprintRuntime.includes('data-query-scoped="true"') &&
+    yearMonthFingerprintRuntime.includes('Havi ritmus') &&
+    yearMonthFingerprintRuntime.includes('Heti eloszlás') &&
+    yearMonthFingerprintRuntime.includes('Top kategória') &&
+    yearMonthFingerprintRuntime.includes('Top vendor') &&
+    yearMonthFingerprintRuntime.includes('No spend') &&
+    yearMonthFingerprintRuntime.includes('Peak day') &&
+    yearMonthFingerprintRuntime.includes('Fastfood &gt; 5k') &&
+    !yearMonthFingerprintRuntime.includes('common-mind-risk-copy'),
+  'DY2C Month Fingerprint must summarize the selected month as a query-scoped visual explorer panel',
+);
+const yearMonthReferenceRuntime = extractFunctionSource('buildCommonMindYearMonthReferenceAnalyticsLayer');
+assert(
+  yearMonthReferenceRuntime.includes('/storage/emulated/0/spendee/mindstage2.png') &&
+    yearMonthReferenceRuntime.includes('2026. Március') &&
+    yearMonthReferenceRuntime.includes('Élelmiszer · &gt; 2 000 Ft') &&
+    yearMonthReferenceRuntime.includes('data-stage2-extra="mind-layout-year-month-reference-analytics"') &&
+    yearMonthReferenceRuntime.includes('data-mind-stage2-pages="month-reference-analytics"') &&
+    yearMonthReferenceRuntime.includes('Heti ritmus') &&
+    yearMonthReferenceRuntime.includes('Hétköznap eloszlás') &&
+    yearMonthReferenceRuntime.includes('Hétköznap') &&
+    yearMonthReferenceRuntime.includes('Hétvége') &&
+    yearMonthReferenceRuntime.includes('Napszak szerinti aktivitás') &&
+    yearMonthReferenceRuntime.includes('Összeg') &&
+    yearMonthReferenceRuntime.includes('189 600 Ft') &&
+    yearMonthReferenceRuntime.includes('Tranzakciók') &&
+    yearMonthReferenceRuntime.includes('47') &&
+    yearMonthReferenceRuntime.includes('Átlag / nap') &&
+    yearMonthReferenceRuntime.includes('Mind Score') &&
+    yearMonthReferenceRuntime.includes('Top kategória') &&
+    yearMonthReferenceRuntime.includes('Top vendor') &&
+    yearMonthReferenceRuntime.includes('data-query-scoped="true"'),
+  'DY2D reference month analytics must reproduce the screenshot month rhythm, distribution, activity, metrics, and top cards',
+);
+assert(
+  /\.common-mind-month-wheel\s*\{[\s\S]*?grid-template-columns:\s*repeat\(12,\s*minmax\(44px,\s*1fr\)\);[\s\S]*?grid-template-rows:\s*none;[\s\S]*?overflow:\s*hidden;/.test(html) &&
+    !/\.common-mind-month-wheel\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\);[\s\S]*?grid-template-rows:\s*repeat\(2/.test(html),
+  'DY1 month ticker rail must stay one horizontal row and must not resize Stage1 into a two-row month grid',
+);
+const yearModeGraphsRuntime = extractFunctionSource('buildCommonMindYearGraphsLayer');
+assert(
+  yearModeGraphsRuntime.includes('common-mind-year-d2-graph-stack') &&
+    yearModeGraphsRuntime.includes('data-source="d2-stage1-boxed-graphs"') &&
+    yearModeGraphsRuntime.includes('data-mind-box-layout="stacked-stage2"') &&
+    yearModeGraphsRuntime.includes('commonMindStage1BoxGraphConfig.cards.map') &&
+    yearModeGraphsRuntime.includes('fastinfo-chart-card common-mind-box-graph-card') &&
+    yearModeGraphsRuntime.includes('buildCommonMindBoxGraphMiniSvg(card)') &&
+    !yearModeGraphsRuntime.includes('common-mind-stat-grid') &&
+    !yearModeGraphsRuntime.includes('common-mind-stat-card'),
+  'YEAR drivers screen must reuse the D2 boxed graph card visual language in a compact stacked layout, not generic stat cards',
+);
+assert(
+  !extractFunctionSource('buildCommonMindMonthDayTickerLayer').includes('common-mind-layout-foot') &&
+  commonMindLayoutRuntime.includes('data-focus-mode-stage1="mind-month-day-ticker"') &&
+    commonMindLayoutRuntime.includes('data-ticking-axis="days"') &&
+    commonMindLayoutRuntime.includes('data-stage1-parent-selector="day"') &&
+    commonMindLayoutRuntime.includes("title: 'DM1 · Havi Mind · stage1 days'") &&
+    commonMindLayoutRuntime.includes("title: 'DM2A · Havi Mind · day insight'") &&
+    commonMindLayoutRuntime.includes("title: 'DM2B · Havi Mind · day flow'") &&
+    commonMindLayoutRuntime.includes("title: 'DM2C · Havi Mind · day fingerprint'") &&
+    commonMindLayoutRuntime.includes("title: 'DM2D · Havi Mind · reference day analytics'") &&
+    commonMindLayoutRuntime.includes("title: 'DM2E · Havi Mind · simple day cards'") &&
+    commonMindLayoutRuntime.includes("title: 'DM2F · Havi Mind · bare day data'") &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-month-insight"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-insight"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-month-graphs"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-flow"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-month-day-fingerprint"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-fingerprint"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-month-day-reference-analytics"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-reference-analytics"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-month-day-simple-reference"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-simple-reference"') &&
+    commonMindLayoutRuntime.includes('data-stage2-extra="mind-layout-month-day-bare-reference"') &&
+    commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-bare-reference"') &&
+    commonMindLayoutRuntime.includes('data-stage2-with-ticker="true"') &&
+    !commonMindLayoutRuntime.includes('data-mind-stage2-pages="day-insight day-flow"') &&
+    !commonMindLayoutRuntime.includes('data-stage2-other-page="day-flow"'),
+  'Monthly Mind layout row must split into DM1 pure day ticker, DM2A ticker plus insight card, and DM2B graph/flow cards',
+);
+const monthDayFingerprintRuntime = extractFunctionSource('buildCommonMindMonthDayFingerprintLayer');
+assert(
+  monthDayFingerprintRuntime.includes('Day Fingerprint') &&
+    monthDayFingerprintRuntime.includes('data-stage2-extra="mind-layout-month-day-fingerprint"') &&
+    monthDayFingerprintRuntime.includes('data-mind-stage2-pages="day-fingerprint"') &&
+    monthDayFingerprintRuntime.includes('data-mind-fingerprint="day"') &&
+    monthDayFingerprintRuntime.includes('data-query-scoped="true"') &&
+    monthDayFingerprintRuntime.includes('24h Activity') &&
+    monthDayFingerprintRuntime.includes('Transactions') &&
+    monthDayFingerprintRuntime.includes('Category mix') &&
+    monthDayFingerprintRuntime.includes('Largest purchase') &&
+    monthDayFingerprintRuntime.includes('Pulse') &&
+    monthDayFingerprintRuntime.includes('Fastfood &gt; 5k') &&
+    !monthDayFingerprintRuntime.includes('common-mind-risk-copy'),
+  'DM2C Day Fingerprint must summarize the selected day as a query-scoped micro visual explorer panel',
+);
+const monthDayReferenceRuntime = extractFunctionSource('buildCommonMindMonthDayReferenceAnalyticsLayer');
+assert(
+    monthDayReferenceRuntime.includes('/storage/emulated/0/spendee/mindstage2.png') &&
+    monthDayReferenceRuntime.includes('data-container-depth="double"') &&
+    monthDayReferenceRuntime.includes('data-layer-order="bg-stats-common-glass"') &&
+    monthDayReferenceRuntime.includes('data-stage2-panel-frame="none"') &&
+    monthDayReferenceRuntime.includes('data-scrollable-stage2="true"') &&
+    monthDayReferenceRuntime.includes('common-mind-reference-stat-block') &&
+    !monthDayReferenceRuntime.includes('common-mind-reference-mini-card') &&
+    monthDayReferenceRuntime.includes('2026. Március 14. (Péntek)') &&
+    monthDayReferenceRuntime.includes('Élelmiszer · &gt; 2 000 Ft') &&
+    monthDayReferenceRuntime.includes('data-stage2-extra="mind-layout-month-day-reference-analytics"') &&
+    monthDayReferenceRuntime.includes('data-mind-stage2-pages="day-reference-analytics"') &&
+    monthDayReferenceRuntime.includes('Napi aktivitás (24h)') &&
+    monthDayReferenceRuntime.includes('Összeg') &&
+    monthDayReferenceRuntime.includes('8 650 Ft') &&
+    monthDayReferenceRuntime.includes('Tranzakciók') &&
+    monthDayReferenceRuntime.includes('3') &&
+    monthDayReferenceRuntime.includes('Átlag / txn') &&
+    monthDayReferenceRuntime.includes('Mind Score') &&
+    monthDayReferenceRuntime.includes('88/100') &&
+    monthDayReferenceRuntime.includes('Kategória mix') &&
+    monthDayReferenceRuntime.includes('Legnagyobb tétel') &&
+    monthDayReferenceRuntime.includes('Tranzakciós timeline') &&
+    monthDayReferenceRuntime.includes('Napi pulse') &&
+    monthDayReferenceRuntime.includes('Ma tudatos napod volt!') &&
+    monthDayReferenceRuntime.includes('data-query-scoped="true"'),
+  'DM2D reference day analytics must use double containerization, scroll vertically, and preserve the screenshot day metrics',
+);
+const monthDaySimpleReferenceRuntime = extractFunctionSource('buildCommonMindMonthDaySimpleReferenceAnalyticsLayer');
+assert(
+  monthDaySimpleReferenceRuntime.includes('/storage/emulated/0/spendee/mindstage2.png') &&
+    monthDaySimpleReferenceRuntime.includes('data-container-depth="simple"') &&
+    monthDaySimpleReferenceRuntime.includes('data-stage2-panel-frame="none"') &&
+    monthDaySimpleReferenceRuntime.includes('data-stage2-extra="mind-layout-month-day-simple-reference"') &&
+    monthDaySimpleReferenceRuntime.includes('data-mind-stage2-pages="day-simple-reference"') &&
+    monthDaySimpleReferenceRuntime.includes('Napi aktivitás (24h)') &&
+    monthDaySimpleReferenceRuntime.includes('Összeg') &&
+    monthDaySimpleReferenceRuntime.includes('Tranzakciók') &&
+    monthDaySimpleReferenceRuntime.includes('Kategória mix') &&
+    monthDaySimpleReferenceRuntime.includes('Legnagyobb tétel') &&
+    monthDaySimpleReferenceRuntime.includes('Tranzakciós timeline') &&
+    monthDaySimpleReferenceRuntime.includes('Napi pulse') &&
+    monthDaySimpleReferenceRuntime.includes('data-query-scoped="true"') &&
+    !monthDaySimpleReferenceRuntime.includes('common-mind-reference-stage2-card'),
+  'DM2E simple day cards must place the same glass content cards directly on the stage2 background without a large parent card',
+);
+const monthDayBareReferenceRuntime = extractFunctionSource('buildCommonMindMonthDayBareReferenceAnalyticsLayer');
+const monthDayBareTickerRuntime = extractFunctionSource('buildCommonMindMonthDayBareTickerLayer');
+assert(
+  monthDayBareReferenceRuntime.includes('/storage/emulated/0/spendee/mindstage2.png') &&
+    monthDayBareReferenceRuntime.includes('data-container-depth="none"') &&
+    monthDayBareReferenceRuntime.includes('data-layer-order="bg-data"') &&
+    monthDayBareReferenceRuntime.includes('data-stage2-panel-frame="none"') &&
+    monthDayBareReferenceRuntime.includes('data-scrollable-stage2="true"') &&
+    monthDayBareReferenceRuntime.includes('data-stage2-extra="mind-layout-month-day-bare-reference"') &&
+    monthDayBareReferenceRuntime.includes('data-mind-stage2-pages="day-bare-reference"') &&
+    monthDayBareReferenceRuntime.includes('Napi aktivitás (24h)') &&
+    monthDayBareReferenceRuntime.includes('Összeg') &&
+    monthDayBareReferenceRuntime.includes('Tranzakciók') &&
+    monthDayBareReferenceRuntime.includes('Kategória mix') &&
+    monthDayBareReferenceRuntime.includes('Legnagyobb tétel') &&
+    monthDayBareReferenceRuntime.includes('Tranzakciós timeline') &&
+    monthDayBareReferenceRuntime.includes('Napi pulse') &&
+    monthDayBareReferenceRuntime.includes('data-query-scoped="true"') &&
+    !monthDayBareReferenceRuntime.includes('common-mind-reference-mini-card') &&
+    !monthDayBareReferenceRuntime.includes('common-mind-reference-stage2-card') &&
+    !monthDayBareReferenceRuntime.includes('common-mind-reference-head'),
+  'DM2F bare day data must render the same selected-day data directly on the Stage2 background without light glass cards or a parent analytics card',
+);
+assert(
+  monthDayBareTickerRuntime.includes('data-bare-stage2-ticker="true"') &&
+    monthDayBareTickerRuntime.includes('common-mind-bare-day-ticker') &&
+    monthDayBareTickerRuntime.includes('common-mind-day-wheel') &&
+    monthDayBareTickerRuntime.includes('data-ticking-axis="days"') &&
+    !monthDayBareTickerRuntime.includes('common-mind-layout-panel') &&
+    /\.common-mind-bare-day-ticker\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*0;[\s\S]*?box-shadow:\s*none;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-bare-day-ticker\s+\.common-mind-day-tick\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-bare-grid\s*\{[\s\S]*?display:\s*grid;[\s\S]*?overflow-y:\s*auto;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-bare-grid\s+\.common-mind-reference-stat-block\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*0;[\s\S]*?box-shadow:\s*none;[\s\S]*?\}/.test(html),
+  'DM2F must keep the daily ticker and every metric block out of glass containers while preserving a scrollable data-only layout',
+);
+assert(
+  (commonMindLayoutRuntime.match(/data-query-scoped="true"/g) || []).length >= 4 &&
+    (commonMindLayoutRuntime.match(/data-summary-pill-mode="/g) || []).length >= 9 &&
+    (commonMindLayoutRuntime.match(/data-mind-refines-summary="/g) || []).length >= 9 &&
+    commonMindLayoutRuntime.includes('screen.dataset.summaryPillMode = config.summaryMode') &&
+    commonMindLayoutRuntime.includes('screen.dataset.mindRefinesSummary = config.refinesSummary') &&
+    commonMindLayoutRuntime.includes('Summary pill: SUM') &&
+    commonMindLayoutRuntime.includes('Summary pill: ÉV') &&
+    commonMindLayoutRuntime.includes('Summary pill: HÓ') &&
+    commonMindLayoutRuntime.includes('Fastfood &gt; 5k') &&
+    commonMindLayoutRuntime.includes('Rosszabb, mint a havi mintád') &&
+    commonMindLayoutRuntime.includes('data-filter-reactive="current-filter"'),
+  'Mind layout prototype must make query-scoped scoring explicit and mark Summary pill as parent scope for all nine screens',
+);
+assert(
+  /\.common-header-mode\[data-common-header-mode="mind"\]\s+\.common-mind-layout-row\s*\{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*28px;[\s\S]*?width:\s*max-content;[\s\S]*?\}/.test(html) &&
+    !/body\[data-focus-view="mind-layout"\]/.test(html) &&
+    /\.common-mind-layout-panel\[data-ticker-only="true"\]\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-layout-layer\[data-stage2-ticker="true"\]\s*\{[\s\S]*?bottom:\s*auto;[\s\S]*?height:\s*calc\(var\(--common-header-stage1-h\) - 114px\);[\s\S]*?\}/.test(html) &&
+    !/\.common-mind-layout-layer\[data-stage2-ticker="true"\]\s*\{(?:(?!\}).)*\bheight:\s*104px;/s.test(html) &&
+    !/\.common-mind-layout-layer\[data-stage2-ticker="true"\]\s+\.common-mind-layout-panel\s*\{(?:(?!\}).)*gap:\s*6px;/s.test(html) &&
+    /\.common-mind-stage2-detail-layer\[data-stage2-with-ticker="true"\]\s*\{[\s\S]*?top:\s*calc\(96px \+ \(var\(--common-header-stage1-h\) - 114px\) \+ 12px\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-detail-layer\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?top:\s*112px;[\s\S]*?bottom:\s*18px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-detail-panel\[data-mind-stage2-page="year-heatmap"\]\s+\.mind-heatmap-grid\s*\{[\s\S]*?gap:\s*11px;[\s\S]*?grid-auto-rows:\s*minmax\(70px,\s*1fr\);[\s\S]*?align-content:\s*start;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-detail-panel\[data-mind-stage2-page="year-heatmap"\]\s+\.mind-heatmap-month-card\s*\{[\s\S]*?min-height:\s*70px;[\s\S]*?padding:\s*5px 6px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-detail-panel\[data-mind-stage2-page="year-heatmap"\]\s+\.mind-heatmap-days\s*\{[\s\S]*?gap:\s*2px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-detail-panel\[data-mind-stage2-page="year-heatmap"\]\s+\.mind-heatmap-day\s*\{[\s\S]*?font-size:\s*3\.9px;[\s\S]*?min-height:\s*0;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-year-d2-graph-stack\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*auto repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?gap:\s*7px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-year-d2-graph-stack\s+\.common-mind-box-graph-card\.fastinfo-chart-card\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?padding:\s*7px 8px 6px;[\s\S]*?grid-template-rows:\s*auto auto minmax\(26px,\s*1fr\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-risk-meter\s*\{[\s\S]*?conic-gradient\(from -90deg[\s\S]*?var\(--risk-score,\s*76%\)[\s\S]*?\}/.test(html) &&
+    /\.common-mind-day-wheel\s*\{[\s\S]*?grid-template-columns:\s*repeat\(7,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-fingerprint-grid\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?gap:\s*8px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-fingerprint-card\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\);[\s\S]*?overflow:\s*hidden;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-fingerprint-bars\s*\{[\s\S]*?display:\s*grid;[\s\S]*?align-items:\s*end;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-stage2-card\s*\{[\s\S]*?border:\s*1px solid rgba\(148,163,184,\.24\);[\s\S]*?box-shadow:[\s\S]*?0 18px 38px rgba\(15,23,42,\.08\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-detail-panel\[data-stage2-panel-frame="none"\]\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*0;[\s\S]*?box-shadow:\s*none;[\s\S]*?padding:\s*0;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-stage2-card\[data-scrollable-stage2="true"\]\s*\{[\s\S]*?overflow-y:\s*auto;[\s\S]*?scrollbar-width:\s*thin;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-day-body\[data-scrollable-stage2="true"\]\s*\{[\s\S]*?overflow:\s*visible;[\s\S]*?padding-bottom:\s*8px;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-stage2-card\[data-layer-order="bg-stats-common-glass"\]\s+\.common-mind-reference-day-body\s*\{[\s\S]*?grid-template-rows:\s*auto auto auto auto;[\s\S]*?align-content:\s*start;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-stat-block\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*0;[\s\S]*?box-shadow:\s*none;[\s\S]*?overflow:\s*visible;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-stage2-card\[data-layer-order="bg-stats-common-glass"\]\s+\.common-mind-reference-metric-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?grid-auto-rows:\s*minmax\(48px,\s*auto\);[\s\S]*?min-height:\s*0;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-simple-grid\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*auto 48px minmax\(86px,\s*1fr\) minmax\(82px,\s*1fr\);[\s\S]*?overflow-y:\s*auto;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-mini-card\s*\{[\s\S]*?background:\s*rgba\(255,255,255,\.72\);[\s\S]*?backdrop-filter:\s*blur\(14px\);[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-bars\s*\{[\s\S]*?display:\s*grid;[\s\S]*?align-items:\s*end;[\s\S]*?\}/.test(html) &&
+    /\.common-mind-reference-donut\s*\{[\s\S]*?border-radius:\s*999px;[\s\S]*?conic-gradient[\s\S]*?\}/.test(html) &&
+    /\.common-mind-stage2-combo-body\s*\{[\s\S]*?grid-template-columns:\s*1\.08fr \.92fr;[\s\S]*?\}/.test(html),
+  'Mind layout prototype CSS must define the D1A-under layout row without focus-mode hiding, plus stage2 detail area, risk meter, day ticker grid, and combined stage2 body',
 );
 assert(
   c2ConvexBadgeRule.includes('overflow: hidden;') &&
@@ -4760,30 +5604,32 @@ const altHeaderTargetCount =
   (alternativeSection.match(/data-color-target="header-card"/g) || []).length;
 assert.strictEqual(
   altHeaderTargetCount,
-  12,
-  'Alternative design must include header-card recolor targets for the dashboard-like lower screens, the three B-row common-header stages, and both Query-row transaction sheets; recurring wizard states use their own common sheet frame',
+  14,
+  'Alternative design must include header-card recolor targets for the dashboard-like lower screens, the three B-row common-header stages plus B3M, both Query-row transaction sheets, and the Q2A category route sheet; recurring wizard states use their own common sheet frame',
 );
 const spendeeHeaderCount = (alternativeSection.match(/class="app-header spendee-header\b/g) || [])
   .length;
 assert.strictEqual(
   spendeeHeaderCount,
-  9,
-  'All lower dashboard-like Fluvi screens including both Query-row transaction sheets, except the fullscreen category/vendor selectors and the common recurring wizard sheets, must use the new Fluvi glass header card',
+  10,
+  'All lower dashboard-like Fluvi screens including both Query-row transaction sheets and Q2A, except the fullscreen category/vendor selectors and the common recurring wizard sheets, must use the new Fluvi glass header card',
 );
-const spendeeBrandCount = (alternativeSection.match(/class="spendee-brand-lockup"/g) || [])
+const spendeeBrandCount = (
+  alternativeSection.match(/class="spendee-brand-lockup(?: query-menu-brand-lockup)?"/g) || []
+)
   .length;
 assert.strictEqual(
   spendeeBrandCount,
-  12,
-  'All lower dashboard-like Fluvi screens including both Query-row transaction sheets must show the Fluvi logo; the A2/A3 fullscreen selectors and common recurring wizard sheets have their own route headers',
+  14,
+  'All lower dashboard-like Fluvi screens including Q1A, Q2A, and both Query-row transaction sheets must show the Fluvi logo; the A2/A3 fullscreen selectors and common recurring wizard sheets have their own route headers',
 );
 const spendeeLogoLivePreviewCount =
   (alternativeSection.match(/class="spendee-logo spendee-logo-live-preview"[^>]*data-logo-live-preview/g) || [])
     .length;
 assert.strictEqual(
   spendeeLogoLivePreviewCount,
-  12,
-  'All lower Fluvi mock logos, including both Query-row transaction sheets, must be inline live SVG previews that can follow logo-editor path recolors',
+  14,
+  'All lower Fluvi mock logos, including Q1A, Q2A, and both Query-row transaction sheets, must be inline live SVG previews that can follow logo-editor path recolors',
 );
 assert.strictEqual(
   (alternativeSection.match(/<img class="spendee-logo"/g) || []).length,
@@ -4799,12 +5645,12 @@ assert(
 );
 assert.strictEqual(
   (alternativeSection.match(/class="spendee-title">fluvi<\/div>/g) || []).length,
-  15,
+  18,
   'Every lower brand lockup must display the Fluvi brand name',
 );
 assert.strictEqual(
   (alternativeSection.match(/aria-label="Fluvi live logo preview"/g) || []).length,
-  15,
+  18,
   'Every lower live logo preview must expose Fluvi in its accessible label',
 );
 assert(
@@ -4834,8 +5680,8 @@ assert(
 );
 assert.strictEqual(
   (alternativeSection.match(/class="spendee-balance-label">Balance<\/div>/g) || []).length,
-  9,
-  'All dashboard-like lower Fluvi headers, including both Query-row transaction sheets, must show a small Balance label above the balance amount',
+  10,
+  'All dashboard-like lower Fluvi headers, including both Query-row transaction sheets and Q2A, must show a small Balance label above the balance amount',
 );
 assert.strictEqual(
   (alternativeSection.match(/class="spendee-balance-label">Score<\/div>/g) || []).length,
@@ -4847,8 +5693,8 @@ const spendeeCategoryMenuVarCount =
     .length;
 assert.strictEqual(
   spendeeCategoryMenuVarCount,
-  9,
-  'Only non-common-header lower Fluvi category buttons, including both Query-row transaction sheets, must keep the dedicated glass-button color variable',
+  10,
+  'Only non-common-header lower Fluvi category buttons, including both Query-row transaction sheets and Q2A, must keep the dedicated glass-button color variable',
 );
 assert(
   !html.includes('data-section="legacy-design"') &&
@@ -5687,8 +6533,8 @@ const logboxBlocks = [...html.matchAll(/<article class="logbox"[\s\S]*?<\/articl
 );
 assert.strictEqual(
   logboxBlocks.length,
-  49,
-  'Expected five lower Fluvi home, fifteen fastinfo home-shell, ten duplicated lower backheader home-shell, and nineteen B-row common-header A1-stack logbox rows after B1/B2 bottom-fill rows',
+  54,
+  'Expected five lower Fluvi home, fifteen fastinfo home-shell, ten duplicated lower backheader home-shell, and twenty-four B-row common-header A1-stack logbox rows after B1/B2/B3M bottom-fill rows',
 );
 for (const [index, block] of logboxBlocks.entries()) {
   assert(
@@ -5708,7 +6554,7 @@ assert(lowerSpendeeSection.includes('Fluvi'), 'Lower alternative section must be
 
 const logboxAvatarTargetCount = (lowerSpendeeSection.match(/data-color-target="logbox-avatar-circle"/g) || [])
   .length;
-assert.strictEqual(logboxAvatarTargetCount, 49, 'Expected 49 separate lower Spendee logbox avatar circle targets across the home, all fastinfo variants, both duplicated backheader home-shell screens, and all B-row common-header rows including B1/B2 bottom-fill rows');
+assert.strictEqual(logboxAvatarTargetCount, 54, 'Expected 54 separate lower Spendee logbox avatar circle targets across the home, all fastinfo variants, both duplicated backheader home-shell screens, and all B-row common-header rows including B1/B2/B3M bottom-fill rows');
 
 const categoryAvatarTargetCount =
   (lowerSpendeeSection.match(/data-color-target="category-avatar-circle"/g) || []).length;
@@ -5794,6 +6640,11 @@ const commonHeaderNavScaleStart = html.indexOf(
 );
 assert(commonHeaderNavRowStart >= 0 && commonHeaderNavScaleStart > commonHeaderNavRowStart, 'Missing B-row common-header source markup before the balance scale lab');
 const commonHeaderNavSourceRow = html.slice(commonHeaderNavRowStart, commonHeaderNavScaleStart);
+const commonHeaderNavSourceScreens = [
+  commonHeaderStage0,
+  commonHeaderStage1,
+  commonHeaderStage2,
+].join('');
 
 assert(
   html.includes('--common-header-stage-shortening: var(--search-pill-h);'),
@@ -5818,22 +6669,22 @@ assert(
   'Common-header runtime cloning must ensure the restored bottom nav exists on all generated B/C/D screens',
 );
 assert.strictEqual(
-  (commonHeaderNavSourceRow.match(/data-common-header-bottom-nav/g) || []).length,
+  (commonHeaderNavSourceScreens.match(/data-common-header-bottom-nav/g) || []).length,
   3,
   'The B-row source screens must each include the restored common-header bottom nav so C/D clones inherit it',
 );
 assert.strictEqual(
-  (commonHeaderNavSourceRow.match(/data-common-header-fab/g) || []).length,
+  (commonHeaderNavSourceScreens.match(/data-common-header-fab/g) || []).length,
   3,
   'The B-row source screens must each include the centered inline common-header FAB',
 );
 assert.strictEqual(
-  (commonHeaderNavSourceRow.match(/data-nav-destination="dashboard"/g) || []).length,
+  (commonHeaderNavSourceScreens.match(/data-nav-destination="dashboard"/g) || []).length,
   3,
   'Every B-row common-header source screen must expose the left Dashboard nav action',
 );
 assert.strictEqual(
-  (commonHeaderNavSourceRow.match(/data-nav-destination="settings"/g) || []).length,
+  (commonHeaderNavSourceScreens.match(/data-nav-destination="settings"/g) || []).length,
   3,
   'Every B-row common-header source screen must expose the right Settings nav action',
 );
@@ -5862,7 +6713,7 @@ assert(
   'The common-header FAB must be a circular inline center slot inside the nav',
 );
 assert.strictEqual(
-  (commonHeaderNavSourceRow.match(/data-common-header-inline-fab/g) || []).length,
+  (commonHeaderNavSourceScreens.match(/data-common-header-inline-fab/g) || []).length,
   3,
   'Each common-header source nav must render the center FAB inline inside the bottom nav',
 );
@@ -6062,15 +6913,16 @@ assert(
   'Changing any testheader color source must invalidate the testheader canvas, interior overlay, message field, and visible background endpoint',
 );
 assert(
-  wakeMindPortalEnergyFrameRuntime.includes('state.visible = true') &&
+  wakeMindPortalEnergyFrameRuntime.includes('if (!canRenderMindPortalEnergyFrame(header, state)) return;') &&
     wakeMindPortalEnergyFrameRuntime.includes('state.lastFrameTime = 0') &&
     wakeMindPortalEnergyFrameRuntime.includes('state.lastNow = performance.now()') &&
     wakeMindPortalEnergyFrameRuntime.includes('scheduleMindPortalEnergyFrame(header, state)') &&
+    scheduleMindPortalEnergyFrameRuntime.includes('if (!canRenderMindPortalEnergyFrame(header, state)) return;') &&
     scheduleMindPortalEnergyFrameRuntime.includes('if (state.frame') &&
     scheduleMindPortalEnergyFrameRuntime.includes('state.frame = 0') &&
-    scheduleMindPortalEnergyFrameRuntime.includes('drawMindPortalEnergyFrame(header, canvas, ctx, state, now)') &&
-    scheduleMindPortalEnergyFrameRuntime.includes('scheduleMindPortalEnergyFrame(header, state)'),
-  'Slider changes and mode changes must be able to wake a stopped shared energy RAF loop, not only update static CSS',
+    scheduleMindPortalEnergyFrameRuntime.includes('const keepRunning = drawMindPortalEnergyFrame(header, canvas, ctx, state, now);') &&
+    scheduleMindPortalEnergyFrameRuntime.includes('if (keepRunning) scheduleMindPortalEnergyFrame(header, state);'),
+  'Slider changes and mode changes must wake a stopped shared energy RAF loop only when the header is renderable',
 );
 assert(
   updatePortalMessageFieldPaletteRuntime.includes('getMindPortalActivePalette(header)') &&
@@ -6450,6 +7302,41 @@ assert(
   'Portal panel collapse runtime must bind chevron buttons and keep aria-expanded synchronized',
 );
 
+const colorLabPerfScheduleRuntime = extractFunctionSource('scheduleMindPortalEnergyFrame');
+const colorLabPerfWakeRuntime = extractFunctionSource('wakeMindPortalEnergyFrame');
+const colorLabPerfMessageCanRenderRuntime = extractFunctionSource('portalMessageFieldCanRender');
+const colorLabPerfInitCanvasRuntime = extractFunctionSource('initMindPortalEnergyCanvas');
+assert(
+  /\.screen-column\s*\{[\s\S]*?content-visibility:\s*auto;[\s\S]*?contain:\s*layout paint style;[\s\S]*?contain-intrinsic-size:\s*var\(--screen-w\) calc\(var\(--screen-h\) \+ 28px\);[\s\S]*?\}/.test(html) &&
+    /\.phone-screen\s*\{[\s\S]*?contain:\s*layout paint style;[\s\S]*?\}/.test(html) &&
+    /\.palette-area,\s*[\s\S]*?\.common-mode-scale-lab,\s*[\s\S]*?\.logo-editor-section\s*\{[\s\S]*?content-visibility:\s*auto;[\s\S]*?contain:\s*layout paint style;[\s\S]*?\}/.test(html),
+  'Color Lab must use browser-level lazy layout/paint containment for offscreen screen columns, phone surfaces, palettes, and scale/logo labs',
+);
+assert(
+  html.includes('const colorLabScrollRenderState = {') &&
+    html.includes('function isColorLabHeavyRenderSuspended()') &&
+    html.includes('function initColorLabScrollRenderSuspension()') &&
+    html.includes("zoomViewport.addEventListener('scroll'") &&
+    html.includes('setColorLabHeavyRenderSuspended(true)') &&
+    html.includes('colorLabScrollRenderState.resumeDelayMs') &&
+    html.includes('resumeColorLabHeavyRenderFrames();') &&
+    html.includes('initColorLabScrollRenderSuspension();'),
+  'Color Lab must suspend heavy render loops while the main scroll viewport is moving, then resume after a short idle delay',
+);
+assert(
+  colorLabPerfScheduleRuntime.includes('if (!canRenderMindPortalEnergyFrame(header, state)) return;') &&
+    colorLabPerfScheduleRuntime.includes('const keepRunning = drawMindPortalEnergyFrame(header, canvas, ctx, state, now);') &&
+    colorLabPerfScheduleRuntime.includes('if (keepRunning) scheduleMindPortalEnergyFrame(header, state);') &&
+    !/drawMindPortalEnergyFrame\(header, canvas, ctx, state, now\);\s*scheduleMindPortalEnergyFrame\(header, state\);/.test(
+      colorLabPerfScheduleRuntime,
+    ) &&
+    colorLabPerfWakeRuntime.includes('if (!canRenderMindPortalEnergyFrame(header, state)) return;') &&
+    colorLabPerfMessageCanRenderRuntime.includes('isColorLabHeavyRenderSuspended()') &&
+    colorLabPerfInitCanvasRuntime.includes('colorLabRenderObserverOptions()') &&
+    colorLabPerfInitCanvasRuntime.includes('if (state.visible) wakeMindPortalEnergyFrame(header, state);'),
+  'Portal canvas loops must be lazy: no unconditional RAF rescheduling while offscreen, hidden, or scroll-suspended',
+);
+
 function extractFunctionSource(name) {
   const start = html.indexOf(`function ${name}(`);
   assert(start >= 0, `Missing function source for touch contract: ${name}`);
@@ -6527,6 +7414,45 @@ assert.strictEqual(
   sha256(html.slice(touchCssStart, touchCssEnd)),
   'fb8a52694faf59a608b629b8982de81a53f8495b5ca9c49e40b796485ef66913',
   'Portal touch/trail CSS changed despite the accepted touch contract',
+);
+
+const strictMotherChildPanel =
+  commonHeaderStage2MotherChild.match(
+    /<section class="common-balance-mother-child-panel"[\s\S]*?<\/section>/,
+  )?.[0] || '';
+const strictMotherChildStyles =
+  /\.common-balance-mother-child-parent-card\s*\{[\s\S]*?border:\s*1px solid rgba\(239,63,95,\.78\);[\s\S]*?box-shadow:[\s\S]*?rgba\(239,63,95,\.18\);/.test(
+    html,
+  ) &&
+  /\.common-balance-mother-child-layer\s*\{[\s\S]*?top:\s*calc\(96px \+ \(var\(--common-header-stage1-h\) - 114px\) \+ 12px\);[\s\S]*?overflow-y:\s*auto;[\s\S]*?pointer-events:\s*auto;/.test(
+    html,
+  ) &&
+  /\.common-balance-mother-child-panel\s*\{[\s\S]*?border-radius:\s*17px;[\s\S]*?background:\s*rgba\(255,255,255,\.48\);[\s\S]*?backdrop-filter:\s*blur\(14px\) saturate\(1\.08\);/.test(
+    html,
+  ) &&
+  /\.common-balance-mother-child-progress b\s*\{[\s\S]*?width:\s*var\(--balance-child-share, 43%\);/.test(
+    html,
+  );
+const strictMotherChildScreen =
+  commonHeaderStage2MotherChild.includes('data-screen="alt-common-header-stage2-mother-child"') &&
+  /class="fastinfo-chart-card expense common-balance-mother-child-parent-card"[^>]*data-balance-mother-child-parent="largest-expense"[^>]*aria-current="true"/.test(
+    commonHeaderStage2MotherChild,
+  ) &&
+  commonHeaderStage2MotherChild.includes('data-balance-mother-child-child="largest-expense"') &&
+  commonHeaderStage2MotherChild.includes('class="common-balance-mother-child-layer"') &&
+  strictMotherChildPanel.includes('Albérlet') &&
+  strictMotherChildPanel.includes('-176 370 Ft') &&
+  strictMotherChildPanel.includes('A havi kiadás 43%-a') &&
+  strictMotherChildPanel.includes('Előző hónaphoz: +16%') &&
+  strictMotherChildPanel.includes('Következő ismétlődő: 2026.08.01.') &&
+  strictMotherChildPanel.includes('12 havi alakulás') &&
+  strictMotherChildPanel.includes('class="common-balance-mother-child-trend"') &&
+  !strictMotherChildPanel.includes('<article') &&
+  strictMotherChildStyles &&
+  !commonHeaderStage2.includes('data-balance-mother-child-child');
+assert(
+  strictMotherChildScreen,
+  'B3M must render the strict largest-expense mother-child drilldown',
 );
 
 console.log('Color lab static checks passed');

@@ -730,50 +730,6 @@ const fastInfoCardHelpById = <String, FastInfoCardHelp>{
       ),
     ],
   ),
-  'bevetel_ebben_a_honapban': FastInfoCardHelp(
-    purpose:
-        'Megmutatja, mennyi bevétel érkezett be ebben a hónapban, és mennyi várható még ghost bevételből.',
-    details:
-        'A box nagy száma csak a ténylegesen beérkezett bevétel. A várt érték külön jelenik meg, mert abban a még nem aktivált ghost bevételek is benne vannak. A három oszlop: előző hónap azonos napjáig, most beérkezett, és várt hó végi bevétel. A pill főértéke az előző hónaphoz mért eltérés.',
-    calculation: <String>[
-      'Beérkezett bevétel = ebben a hónapban ténylegesen rögzített bevétel.',
-      'Várt bevétel = beérkezett bevétel + még függő ghost bevételek.',
-      'Fedezeti napok = beérkezett bevétel / elmúlt 30 nap változó napi átlaga.',
-    ],
-    comparison:
-        'Az aktuális hónap eddigi bevételét az előző hónap azonos napjáig beérkezett bevételhez hasonlítja.',
-    missingData:
-        'Nulla átlagos kiadásnál a fedezeti napok kimaradnak; nulla előző havi bevételnél a százalékos trend rejtve marad.',
-    pillCallouts: <FastInfoHelpCallout>[
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.pillValue,
-        'Előző hónap azonos napjához mért bevételi trend',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.secondaryValues,
-        'Ténylegesen beérkezett bevétel',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.visual,
-        'Előző / most összehasonlító oszlopok',
-      ),
-    ],
-    boxCallouts: <FastInfoHelpCallout>[
-      _title,
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.primaryValue,
-        'Havi bevétel eddig',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.secondaryValues,
-        'Beérkezett, várt ghost bevétel és fedezeti napok',
-      ),
-      FastInfoHelpCallout(
-        FastInfoHelpAnchor.visual,
-        'Három oszlop: előző, most, várt bevétel',
-      ),
-    ],
-  ),
   'kiadas_bevetel_arany': FastInfoCardHelp(
     purpose:
         'Megmutatja, a ténylegesen beérkezett havi bevételből mennyi ment már el.',

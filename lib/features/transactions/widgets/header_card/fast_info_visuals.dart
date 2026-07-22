@@ -140,8 +140,7 @@ class _TypedVisual extends StatelessWidget {
         _DeviationMeter(key: key, value: visual.value ?? 0),
       FastInfoVisualKind.activityStrip ||
       FastInfoVisualKind.sevenDayStrip ||
-      FastInfoVisualKind.fixedLoad ||
-      FastInfoVisualKind.incomeComparisonBars => _MiniBars(
+      FastInfoVisualKind.fixedLoad => _MiniBars(
         key: key,
         values: visual.points.isNotEmpty
             ? [for (final point in visual.points) point.value]
@@ -404,7 +403,6 @@ String _visualKey(FastInfoVisualKind kind) {
     FastInfoVisualKind.analogMeter => 'analog-meter',
     FastInfoVisualKind.fixedLoad => 'fixed-load',
     FastInfoVisualKind.paidRemainingSplit => 'paid-remaining',
-    FastInfoVisualKind.incomeComparisonBars => 'income-comparison',
     FastInfoVisualKind.remainingSpentSplit => 'remaining-spent',
   };
 }

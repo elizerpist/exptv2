@@ -77,7 +77,6 @@ const fastInfoCardCatalog = <FastInfoCardDefinition>[
     id: 'havi_fix_koltseg_osszesen',
     title: 'Havi fix költségek',
   ),
-  FastInfoCardDefinition(id: 'bevetel_ebben_a_honapban', title: 'Havi bevétel'),
   FastInfoCardDefinition(
     id: 'kiadas_bevetel_arany',
     title: 'Kiadás/bevétel arány',

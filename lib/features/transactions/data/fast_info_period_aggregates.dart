@@ -20,6 +20,34 @@ class FastInfoDatedRecurringGhost {
   final DateTime date;
 }
 
+/// Card-independent monthly income inputs for savings and future Pulse rules.
+class MonthlyIncomeSummary {
+  const MonthlyIncomeSummary({
+    required this.receivedIncome,
+    required this.pendingIncomeGhost,
+    required this.expectedIncome,
+    required this.variableIncome,
+    required this.previousMonthSameDayVariableIncome,
+    required this.rolling30VariableExpense,
+  });
+
+  final double receivedIncome;
+  final double pendingIncomeGhost;
+  final double expectedIncome;
+  final double variableIncome;
+  final double previousMonthSameDayVariableIncome;
+  final double rolling30VariableExpense;
+
+  double? get coverageDays => rolling30VariableExpense <= 0
+      ? null
+      : receivedIncome / (rolling30VariableExpense / 30);
+
+  double? get variableIncomeChangeRatio =>
+      previousMonthSameDayVariableIncome <= 0
+      ? null
+      : variableIncome / previousMonthSameDayVariableIncome - 1;
+}
+
 class FastInfoPeriodAggregates {
   FastInfoPeriodAggregates({required this.snapshot})
     : today = _dateOnly(snapshot.now) {
@@ -139,6 +167,14 @@ class FastInfoPeriodAggregates {
   double get previousMonthSameDayVariableIncome => variableIncomeBetween(
     previousMonthStart,
     _sameDayCutoff(previousMonthStart),
+  );
+  MonthlyIncomeSummary get monthlyIncomeSummary => MonthlyIncomeSummary(
+    receivedIncome: currentMonthIncome,
+    pendingIncomeGhost: currentMonthPendingIncomeGhost,
+    expectedIncome: currentMonthExpectedIncome,
+    variableIncome: currentMonthVariableIncome,
+    previousMonthSameDayVariableIncome: previousMonthSameDayVariableIncome,
+    rolling30VariableExpense: rolling30VariableExpense,
   );
   double get rolling30Income => incomeBetween(rolling30Start, tomorrow);
   double get rolling30VariableIncome =>
