@@ -52,14 +52,14 @@ The screens are intentionally visible side by side in the prototype. Controls re
 
 | ID | Source instruction / reference | Intended code area | Acceptance condition | Verification method | Status |
 | --- | --- | --- | --- | --- | --- |
-| RPW-001 | User: `a legfrissebbet fogod szerkeszteni` | `spendeetest-worktree/docs/prototypes/color_lab.html` | Only the active `spendeetest-worktree` Color Lab prototype is changed for this package. | `git diff --name-only` and direct source inspection. | NOT DONE |
-| RPW-002 | User: `q2a törlöd` | Query-row markup and `color_lab_static_test.js` | The Q2A title, `alt-query-category-route-sheet` block, its route-only contracts, and its static-test expectations are absent; Query row has 15 screen columns. | Targeted no-match `rg` plus static test. | NOT DONE |
-| RPW-003 | User: `q4-q12 fogod teljesen újratervezni. töröld is` | Q4–Q12 recurring markup, CSS, initializer, and static test | The old shared chooser plus time/push branch contracts are removed rather than cosmetically retained. | Targeted no-match `rg`, DOM count/order assertions, and source review. | NOT DONE |
-| RPW-004 | User: `a wizard minden lépésének új screent fogsz csinálni` + approved mapping | Q4–Q12 markup | Exactly nine new ordered screens exist, one for each approved Push-trigger step from `Alapadatok` through `Összegzés`. | Static screen-count/order assertions and direct source inspection. | NOT DONE |
-| RPW-005 | User: `a screenben egy sheet legyen, ami olyan magas, mint q2` | Recurring-sheet CSS and nine screen blocks | Every Q4–Q12 screen has exactly one edge-to-edge bottom sheet using Q2's current 570px `--query-inline-category-sheet-h` geometry; no nested dialog, popup, or extra sheet exists. | CSS/DOM assertions and HTTP-served visual inspection. | NOT DONE |
-| RPW-006 | `/storage/emulated/0/spendee/recurring_new.png` | Q4–Q12 sheet content and styling | Each step's hierarchy, fields, option cards, progress treatment, and CTA match the named reference step rather than the former time/push design. | Re-inspect reference; side-by-side manual screenshot comparison; static content assertions. | NOT DONE |
-| RPW-007 | Existing prototype interaction contract | Recurring-wizard initializer and controls | Choices remain tappable and update local `selected`/`aria-pressed` state without affecting Q1A or category-wizard behavior. | Focused DOM interaction smoke, inline JavaScript parse, and static test. | NOT DONE |
-| RPW-008 | User: `annyi screen lesz ahány lépés` | Query-row order and Q12 final CTA | Q12 is the ninth and final numbered wizard screen. The reference completion card is not added as Q13 or another Query-row screen. | Screen-order/count assertion and source inspection. | NOT DONE |
+| RPW-001 | User: `a legfrissebbet fogod szerkeszteni` | `spendeetest-worktree/docs/prototypes/color_lab.html` | Only the active `spendeetest-worktree` Color Lab prototype is changed for this package. | `git diff --name-only` and direct source inspection. | DONE |
+| RPW-002 | User: `q2a törlöd` | Query-row markup and `color_lab_static_test.js` | The Q2A title, `alt-query-category-route-sheet` block, its route-only contracts, and its static-test expectations are absent; Query row has 15 screen columns. | Targeted no-match `rg` plus static test. | DONE |
+| RPW-003 | User: `q4-q12 fogod teljesen újratervezni. töröld is` | Q4–Q12 recurring markup, CSS, initializer, and static test | The old shared chooser plus time/push branch contracts are removed rather than cosmetically retained. | Targeted no-match `rg`, DOM count/order assertions, and source review. | DONE |
+| RPW-004 | User: `a wizard minden lépésének új screent fogsz csinálni` + approved mapping | Q4–Q12 markup | Exactly nine new ordered screens exist, one for each approved Push-trigger step from `Alapadatok` through `Összegzés`. | Static screen-count/order assertions and direct source inspection. | DONE |
+| RPW-005 | User: `a screenben egy sheet legyen, ami olyan magas, mint q2` | Recurring-sheet CSS and nine screen blocks | Every Q4–Q12 screen has exactly one edge-to-edge bottom sheet using Q2's current 570px `--query-inline-category-sheet-h` geometry; no nested dialog, popup, or extra sheet exists. | CSS/DOM assertions and HTTP-served visual inspection. | DONE |
+| RPW-006 | `/storage/emulated/0/spendee/recurring_new.png` | Q4–Q12 sheet content and styling | Each step's hierarchy, fields, option cards, progress treatment, and CTA match the named reference step rather than the former time/push design. | Re-inspect reference; side-by-side manual screenshot comparison; static content assertions. | PARTIAL |
+| RPW-007 | Existing prototype interaction contract | Recurring-wizard initializer and controls | Choices remain tappable and update local `selected`/`aria-pressed` state without affecting Q1A or category-wizard behavior. | Focused DOM interaction smoke, inline JavaScript parse, and static test. | DONE |
+| RPW-008 | User: `annyi screen lesz ahány lépés` | Query-row order and Q12 final CTA | Q12 is the ninth and final numbered wizard screen. The reference completion card is not added as Q13 or another Query-row screen. | Screen-order/count assertion and source inspection. | DONE |
 
 ## Non-goals
 
@@ -70,3 +70,12 @@ The screens are intentionally visible side by side in the prototype. Controls re
 ## Verification plan
 
 After implementation, re-inspect the mandatory PNG and compare the rendered Q4–Q12 row against it. Run the focused Color Lab static test, parse the inline JavaScript, run `git diff --check`, and perform an HTTP source/asset smoke. The acceptance table above must be updated honestly; no feature-complete claim is valid while an item remains `PARTIAL`, `BLOCKED`, or `NOT DONE`.
+
+## Observed verification evidence — 2026-07-22
+
+- `5a6694e` changes only `docs/prototypes/color_lab.html` and `docs/prototypes/color_lab_static_test.js` for the nine-screen rewrite; `02fd82a` independently removed Q2A.
+- `node docs/prototypes/color_lab_static_test.js` passed. Its contracts prove the 15-column Query row, all nine ordered Push-trigger IDs, exactly one sheet and nine progress spans per state, Q2's 570px sheet token, and the absence of the old chooser/time/push branches.
+- The inline script parsed with `new Function(...)`; an isolated click smoke confirmed single-select sibling clearing and multi-select local toggling with synchronized `aria-pressed` values.
+- The mandatory `recurring_new.png` was re-opened. Every screenshot step's named content hierarchy was compared against the source: basics, amount, schedule, source, notifications, fields, matching rules, behavior, and summary. Q12 owns `Létrehozás`; no tenth Query-row completion screen exists.
+- The prototype passed an HTTP source smoke at `http://127.0.0.1:4173/color_lab.html` for the ninth step and the mandatory image reference.
+- RPW-006 remains `PARTIAL`: this Termux environment has no installed local Chromium, Playwright, Puppeteer, or other browser renderer, so a rendered side-by-side screenshot capture of the edited row could not be produced here.

@@ -44,9 +44,19 @@ The implementation tasks are sequential because both alter the same large HTML f
 - Consumes: Query row identifiers `alt-query-add-transaction-duplicate`, `alt-query-add-income-transaction`, and the unchanged old Q4–Q12 identifiers.
 - Produces: a 15-column Query row ordered `Q1A → Q2 → Q3 → Q4–Q12 → Q13–Q15`; no `alt-query-category-route-sheet`, `data-transaction-category-route`, or `category-route-*` implementation remains.
 
-- [ ] **Step 1: Write the failing Q2A-removal assertions in the static test**
+- [x] **Step 1: Write the failing Q2A-removal assertions in the static test**
 
   Replace the 16-column/Q2A portion of the Query-row test with the following exact expectations. Keep the old recurring identifiers in this task; Task 2 changes them.
+
+  Also reduce the global phone-screen expectation from `35` to `34` and remove the Q2A reference from its message:
+
+  ```js
+  assert.strictEqual(
+    screenCount,
+    34,
+    'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B3M mother-child preview, B/C/D rows, Q1A, Q2/Q3, nine recurring wizard screens, and three category wizard popup screens',
+  );
+  ```
 
   ```js
   assert.strictEqual(
@@ -92,7 +102,7 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Delete `queryQ2AScreenStart`, `queryQ2ATitleStart`, `queryQ2AScreenBlock`, and the old positive Q2A assertion. Change the six header/logo counter expectations that include Q2A: `14 → 13`, `10 → 9`, `14 → 13`, `14 → 13`, `10 → 9`, and `10 → 9`; change the two lower-lockup counts `18 → 17`.
 
-- [ ] **Step 2: Run the focused static test and confirm it is red**
+- [x] **Step 2: Run the focused static test and confirm it is red**
 
   Run:
 
@@ -103,7 +113,7 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Expected: failure at the 15-column assertion or a Q2A absence assertion, because the current source still contains Q2A.
 
-- [ ] **Step 3: Remove the Q2A markup and its route-only CSS**
+- [x] **Step 3: Remove the Q2A markup and its route-only CSS**
 
   In `color_lab.html`, delete the entire `<div class="screen-column">` headed `Q2A · Kategória sheet route`, from its opening wrapper through its matching closing wrapper. Do not alter Q2 or Q3 markup.
 
@@ -141,19 +151,21 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Preserve category-wizard popup classes used by Q13–Q15; delete only selectors whose names and source search are limited to the removed Q2A route.
 
-- [ ] **Step 4: Run the static test and the no-orphan search**
+- [x] **Step 4: Run the static test and the no-orphan search**
 
   Run:
 
   ```sh
   node docs/prototypes/color_lab_static_test.js
-  rg -n 'Q2A|alt-query-category-route-sheet|data-transaction-category-route|data-sheet-route-stack|category-route-' \
-    docs/prototypes/color_lab.html docs/prototypes/color_lab_static_test.js
+  if rg -n 'Q2A|alt-query-category-route-sheet|data-transaction-category-route|data-sheet-route-stack|category-route-' \
+    docs/prototypes/color_lab.html; then exit 1; fi
+  if rg -n 'queryQ2AScreenStart|queryQ2ATitleStart|queryQ2AScreenBlock' \
+    docs/prototypes/color_lab_static_test.js; then exit 1; fi
   ```
 
-  Expected: the static test prints `Color lab static checks passed`; the `rg` command prints no matches.
+  Expected: the static test prints `Color lab static checks passed`; both no-match guards exit zero. The test is allowed to retain Q2A strings only in explicit negative assertions.
 
-- [ ] **Step 5: Commit the independently passing Q2A removal**
+- [x] **Step 5: Commit the independently passing Q2A removal**
 
   Run:
 
@@ -175,7 +187,7 @@ The implementation tasks are sequential because both alter the same large HTML f
 - Consumes: the one-sheet frame `recurring-wizard-screen`, `recurring-wizard-sheet`, `recurring-wizard-scroll`, `recurring-wizard-footer`, and Q2's `--query-inline-category-sheet-h` token.
 - Produces: nine blocks with `data-recurring-push-step="1"` through `data-recurring-push-step="9"`, nine unique `data-screen` values, and scoped selectable controls bound by `initRecurringWizardPrototype()`.
 
-- [ ] **Step 1: Replace the old chooser/time/push test contract with the new red contract**
+- [x] **Step 1: Replace the old chooser/time/push test contract with the new red contract**
 
   Replace the recurring assertion block with this screen interface. Each anchors array is an explicit content requirement, not optional copy.
 
@@ -241,7 +253,7 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Require Q2's `--query-inline-category-sheet-h: 570px` token and require `.recurring-wizard-sheet` to use `height: var(--query-inline-category-sheet-h)`. The assertion must reject `height: var(--query-sheet-h)` for this wizard. Remove the old four-step chooser-only assertions.
 
-- [ ] **Step 2: Run the focused static test and confirm it is red**
+- [x] **Step 2: Run the focused static test and confirm it is red**
 
   Run:
 
@@ -251,7 +263,7 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Expected: failure naming Q4 `alt-recurring-push-basics`, because no new Push-trigger screen exists yet.
 
-- [ ] **Step 3: Implement the shared nine-step sheet shell, markup, and scoped interaction**
+- [x] **Step 3: Implement the shared nine-step sheet shell, markup, and scoped interaction**
 
   Replace the legacy Q4–Q12 blocks with nine explicit `<div class="screen-column">` blocks. Every block must include this outer contract; only the content inside `recurring-wizard-scroll` varies:
 
@@ -348,19 +360,19 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Wrap each exclusive radio-like set in `data-recurring-wizard-choice-group`; put `data-recurring-wizard-multiselect` on field and keyword tokens that may be selected together.
 
-- [ ] **Step 4: Run structural, syntax, and removal checks until green**
+- [x] **Step 4: Run structural, syntax, and removal checks until green**
 
   Run:
 
   ```sh
   node docs/prototypes/color_lab_static_test.js
   node -e "const fs=require('fs');const h=fs.readFileSync('docs/prototypes/color_lab.html','utf8');for(const [,s] of h.matchAll(/<script>([\\s\\S]*?)<\\/script>/g))new Function(s);console.log('inline scripts parsed');"
-  rg -n 'alt-recurring-wizard-type|alt-recurring-wizard-time-|alt-recurring-wizard-push-|data-recurring-wizard-branch|data-recurring-type-nav|data-recurring-wizard-choice=' docs/prototypes/color_lab.html docs/prototypes/color_lab_static_test.js
+  rg -n 'alt-recurring-wizard-type|alt-recurring-wizard-time-|alt-recurring-wizard-push-|data-recurring-wizard-branch|data-recurring-type-nav|data-recurring-wizard-choice=' docs/prototypes/color_lab.html
   ```
 
   Expected: static test prints `Color lab static checks passed`; inline parser prints `inline scripts parsed`; the last search prints no matches.
 
-- [ ] **Step 5: Commit the independently passing nine-screen rewrite**
+- [x] **Step 5: Commit the independently passing nine-screen rewrite**
 
   Run:
 
@@ -383,11 +395,11 @@ The implementation tasks are sequential because both alter the same large HTML f
 - Consumes: the Q2A-free Query row and the nine Push-trigger screen contracts from Tasks 1–2.
 - Produces: evidence-backed `DONE` statuses for `RPW-001`–`RPW-008`, or explicit `PARTIAL` statuses for any unverified visual condition.
 
-- [ ] **Step 1: Re-open the mandatory image and compare each screen intentionally**
+- [ ] **Step 1: Re-open the mandatory image and compare each screen intentionally** *(PARTIAL — the reference was re-opened and compared to source, but no local browser renderer was available for a rendered side-by-side capture.)*
 
   Inspect `/storage/emulated/0/spendee/recurring_new.png` beside the rendered/served prototype. Confirm the following visible mapping: Q4 basics, Q5 amount selection, Q6 schedule, Q7 source choice, Q8 notifications, Q9 highlighted fields, Q10 rules, Q11 behavior, Q12 summary. Confirm Q12 has `Létrehozás` and no Q13 completion screen was created.
 
-- [ ] **Step 2: Perform a local HTTP source smoke**
+- [x] **Step 2: Perform a local HTTP source smoke**
 
   Run:
 
@@ -402,7 +414,7 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Expected: both `curl` checks exit zero. Stop the server when the shell exits.
 
-- [ ] **Step 3: Run final automated verification**
+- [x] **Step 3: Run final automated verification**
 
   Run:
 
@@ -416,11 +428,11 @@ The implementation tasks are sequential because both alter the same large HTML f
 
   Expected: the static test and inline parser both pass; `git diff --check HEAD` prints nothing; the changed-file list contains only the prototype, static test, design-spec status update, and this plan where applicable.
 
-- [ ] **Step 4: Update the acceptance checklist honestly**
+- [x] **Step 4: Update the acceptance checklist honestly**
 
   In `2026-07-22-recurring-push-wizard-redesign-design.md`, set `RPW-001`–`RPW-008` to `DONE` only after the corresponding source, interaction, and visual checks above have been observed. If the rendered visual comparison cannot be performed, keep `RPW-006` as `PARTIAL` and state the missing visual evidence in the verification-plan paragraph.
 
-- [ ] **Step 5: Commit the verification evidence without unrelated files**
+- [x] **Step 5: Commit the verification evidence without unrelated files**
 
   Run:
 
