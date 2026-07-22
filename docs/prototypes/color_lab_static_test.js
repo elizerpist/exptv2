@@ -655,8 +655,8 @@ for (const token of cleanupForbiddenTokens) {
 const screenCount = (html.match(/class="phone-screen/g) || []).length;
 assert.strictEqual(
   screenCount,
-  35,
-  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B3M mother-child preview, B/C/D rows, remaining Query Menu Q1A category-vendor hierarchy, Query-row expense/income transaction sheets, the Q2A internal category route sheet, nine recurring wizard screens, and three category wizard popup screens',
+  34,
+  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B3M mother-child preview, B/C/D rows, Query Menu Q1A category-vendor hierarchy, Query-row expense/income transaction sheets, nine recurring wizard screens, and three category wizard popup screens',
 );
 
 const alternativeSection = html.match(
@@ -1099,13 +1099,12 @@ assert(
 );
 assert.strictEqual(
   (queryMenuBlock.match(/<div class="screen-column"/g) || []).length,
-  16,
-  'Query Menu row must render exactly sixteen screen columns: Q1A category-vendor hierarchy, Q2 expense, Q2A internal category route, Q3 income, nine common recurring wizard screens, and the three category wizard popup steps',
+  15,
+  'Query Menu row must render Q1A, Q2, Q3, nine recurring screens, and Q13-Q15 after Q2A deletion',
 );
 const queryRowScreenOrder = [
   queryMenuBlock.indexOf('data-screen="alt-query-menu-category-vendor-hierarchy"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-transaction-duplicate"'),
-  queryMenuBlock.indexOf('data-screen="alt-query-category-route-sheet"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-income-transaction"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-type"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-wizard-time-frequency"'),
@@ -1122,28 +1121,24 @@ const queryRowScreenOrder = [
 ];
 assert(
   queryRowScreenOrder.every((index) => index >= 0) &&
-    queryRowScreenOrder.every((index, idx, arr) => idx === 0 || arr[idx - 1] < index),
-  'Query Menu row screen order must start with Q1A category-vendor hierarchy, then Q2 expense, Q2A internal category route, Q3 income, Q4 shared type choice, Q5-Q8 time wizard, Q9-Q12 push wizard, then Q13-Q15 category wizard',
+    queryRowScreenOrder.every((index, indexInOrder, entries) =>
+      indexInOrder === 0 || entries[indexInOrder - 1] < index,
+    ) &&
+    !queryMenuBlock.includes('Q2A ·') &&
+    !queryMenuBlock.includes('data-screen="alt-query-category-route-sheet"') &&
+    !queryMenuBlock.includes('data-transaction-category-route') &&
+    !queryMenuBlock.includes('data-sheet-route-stack="category-picker-create"'),
+  'Q2A category-route markup must be fully removed while the remaining Query row stays ordered',
 );
 const queryQ2ScreenStart = queryMenuBlock.indexOf(
   'data-screen="alt-query-add-transaction-duplicate"',
-);
-const queryQ2AScreenStart = queryMenuBlock.indexOf(
-  'data-screen="alt-query-category-route-sheet"',
-);
-const queryQ2ATitleStart = queryMenuBlock.indexOf(
-  '<div class="screen-title">Q2A · Kategória sheet route</div>',
 );
 const queryQ3ScreenStart = queryMenuBlock.indexOf(
   'data-screen="alt-query-add-income-transaction"',
 );
 const queryQ2ScreenBlock =
-  queryQ2ScreenStart >= 0 && queryQ2AScreenStart > queryQ2ScreenStart
-    ? queryMenuBlock.slice(queryQ2ScreenStart, queryQ2AScreenStart)
-    : '';
-const queryQ2AScreenBlock =
-  queryQ2AScreenStart >= 0 && queryQ3ScreenStart > queryQ2AScreenStart
-    ? queryMenuBlock.slice(queryQ2AScreenStart, queryQ3ScreenStart)
+  queryQ2ScreenStart >= 0 && queryQ3ScreenStart > queryQ2ScreenStart
+    ? queryMenuBlock.slice(queryQ2ScreenStart, queryQ3ScreenStart)
     : '';
 const queryQ2InlineCategoryOptionCount =
   (queryQ2ScreenBlock.match(/data-category-inline-option="/g) || []).length;
@@ -1215,24 +1210,6 @@ assert(
     /\.transaction-inline-date-time-row\s*\{[\s\S]*?gap:\s*10px;[\s\S]*?\}/.test(html) &&
     !/\.transaction-inline-name-pill,\s*\n\s*\.transaction-inline-date-time-row \.pill-field\s*\{[\s\S]*?height:\s*42px;[\s\S]*?\}/.test(html),
   'Q2 inline picker must match Q3 sheet padding and pill field-stack colors',
-);
-assert(
-  queryQ2ScreenStart >= 0 &&
-    queryQ2ATitleStart > queryQ2ScreenStart &&
-    queryQ2ATitleStart < queryQ2AScreenStart &&
-    queryQ2AScreenStart > queryQ2ScreenStart &&
-    queryQ3ScreenStart > queryQ2AScreenStart &&
-    queryQ2AScreenBlock.includes('data-screen="alt-query-category-route-sheet"') &&
-    queryQ2AScreenBlock.includes('data-transaction-category-route') &&
-    queryQ2AScreenBlock.includes('data-sheet-route-stack="category-picker-create"') &&
-    queryQ2AScreenBlock.includes('data-no-nested-popup="true"') &&
-    queryQ2AScreenBlock.includes('data-category-picker-state="list"') &&
-    queryQ2AScreenBlock.includes('data-category-picker-state="create-category"') &&
-    queryQ2AScreenBlock.includes('Új kategória') &&
-    queryQ2AScreenBlock.includes('Kategória választás') &&
-    !queryQ2AScreenBlock.includes('role="dialog"') &&
-    !queryQ2AScreenBlock.includes('data-popup-dialog'),
-  'Q2A must demonstrate category selection and new-category creation as internal sheet routes beside Q2, without popup/dialog nesting',
 );
 assert(
   !queryMenuBlock.includes('data-screen="alt-query-menu-tabbed-groups"') &&
@@ -5604,15 +5581,15 @@ const altHeaderTargetCount =
   (alternativeSection.match(/data-color-target="header-card"/g) || []).length;
 assert.strictEqual(
   altHeaderTargetCount,
-  14,
-  'Alternative design must include header-card recolor targets for the dashboard-like lower screens, the three B-row common-header stages plus B3M, both Query-row transaction sheets, and the Q2A category route sheet; recurring wizard states use their own common sheet frame',
+  13,
+  'Alternative design must include header-card recolor targets for the dashboard-like lower screens, the three B-row common-header stages plus B3M, and both Query-row transaction sheets; recurring wizard states use their own common sheet frame',
 );
 const spendeeHeaderCount = (alternativeSection.match(/class="app-header spendee-header\b/g) || [])
   .length;
 assert.strictEqual(
   spendeeHeaderCount,
-  10,
-  'All lower dashboard-like Fluvi screens including both Query-row transaction sheets and Q2A, except the fullscreen category/vendor selectors and the common recurring wizard sheets, must use the new Fluvi glass header card',
+  9,
+  'All lower dashboard-like Fluvi screens including both Query-row transaction sheets, except the fullscreen category/vendor selectors and the common recurring wizard sheets, must use the new Fluvi glass header card',
 );
 const spendeeBrandCount = (
   alternativeSection.match(/class="spendee-brand-lockup(?: query-menu-brand-lockup)?"/g) || []
@@ -5620,16 +5597,16 @@ const spendeeBrandCount = (
   .length;
 assert.strictEqual(
   spendeeBrandCount,
-  14,
-  'All lower dashboard-like Fluvi screens including Q1A, Q2A, and both Query-row transaction sheets must show the Fluvi logo; the A2/A3 fullscreen selectors and common recurring wizard sheets have their own route headers',
+  13,
+  'All lower dashboard-like Fluvi screens including Q1A and both Query-row transaction sheets must show the Fluvi logo; the A2/A3 fullscreen selectors and common recurring wizard sheets have their own route headers',
 );
 const spendeeLogoLivePreviewCount =
   (alternativeSection.match(/class="spendee-logo spendee-logo-live-preview"[^>]*data-logo-live-preview/g) || [])
     .length;
 assert.strictEqual(
   spendeeLogoLivePreviewCount,
-  14,
-  'All lower Fluvi mock logos, including Q1A, Q2A, and both Query-row transaction sheets, must be inline live SVG previews that can follow logo-editor path recolors',
+  13,
+  'All lower Fluvi mock logos, including Q1A and both Query-row transaction sheets, must be inline live SVG previews that can follow logo-editor path recolors',
 );
 assert.strictEqual(
   (alternativeSection.match(/<img class="spendee-logo"/g) || []).length,
@@ -5645,12 +5622,12 @@ assert(
 );
 assert.strictEqual(
   (alternativeSection.match(/class="spendee-title">fluvi<\/div>/g) || []).length,
-  18,
+  17,
   'Every lower brand lockup must display the Fluvi brand name',
 );
 assert.strictEqual(
   (alternativeSection.match(/aria-label="Fluvi live logo preview"/g) || []).length,
-  18,
+  17,
   'Every lower live logo preview must expose Fluvi in its accessible label',
 );
 assert(
@@ -5680,8 +5657,8 @@ assert(
 );
 assert.strictEqual(
   (alternativeSection.match(/class="spendee-balance-label">Balance<\/div>/g) || []).length,
-  10,
-  'All dashboard-like lower Fluvi headers, including both Query-row transaction sheets and Q2A, must show a small Balance label above the balance amount',
+  9,
+  'All dashboard-like lower Fluvi headers, including both Query-row transaction sheets, must show a small Balance label above the balance amount',
 );
 assert.strictEqual(
   (alternativeSection.match(/class="spendee-balance-label">Score<\/div>/g) || []).length,
@@ -5693,8 +5670,8 @@ const spendeeCategoryMenuVarCount =
     .length;
 assert.strictEqual(
   spendeeCategoryMenuVarCount,
-  10,
-  'Only non-common-header lower Fluvi category buttons, including both Query-row transaction sheets and Q2A, must keep the dedicated glass-button color variable',
+  9,
+  'Only non-common-header lower Fluvi category buttons, including both Query-row transaction sheets, must keep the dedicated glass-button color variable',
 );
 assert(
   !html.includes('data-section="legacy-design"') &&
