@@ -500,6 +500,39 @@
       padding: 10px;
     }
 
+    .trace-candidate.selected {
+      border-color: rgba(227, 74, 74, .42);
+      background: #fff7f7;
+    }
+
+    .trace-candidate.suppressed {
+      background: #f6f8fb;
+      opacity: .82;
+    }
+
+    .trace-ledger {
+      display: grid;
+      gap: 5px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .trace-lifecycle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .trace-omitted {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .trace-source-button {
       width: 100%;
       color: inherit;
@@ -1174,10 +1207,10 @@
               <span class="tag warn">bad_to_worse</span>
               <span class="tag info">fingerprint changed</span>
             </div>
-            <div class="scenario-buttons">
-              <button class="active" data-scenario="risk">Risk</button>
-              <button data-scenario="recovery">Recovery</button>
-              <button data-scenario="data">Data</button>
+            <div class="scenario-buttons" role="tablist" aria-label="Header preview scenario">
+              <button class="active" type="button" role="tab" aria-selected="true" aria-controls="engine-trace-output" data-scenario="risk">Risk</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-scenario="recovery">Recovery</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-scenario="data">Data</button>
             </div>
           </div>
 
@@ -2208,42 +2241,239 @@
   </main>
 
   <script>
-    const scenarios = {
+    const decisionTraceScenarios = {
       risk: {
-        pulse: "A hónap vége szoros lesz.",
-        detail: "3 keret túlfutás felé tart, és még 42 000 Ft fix kiadás várható.",
-        title: "Budget + fixed load story",
-        score: 86,
-        width: "86%"
+        phone: {
+          pulse: "A hónap vége szoros lesz.",
+          detail: "3 keret túlfutás felé tart, és még 42 000 Ft fix kiadás várható.",
+          title: "Budget + fixed load story"
+        },
+        recalculation: {
+          event: "Foreground transaction change",
+          background: "Backgroundban a state frissül, de a header delivery app open/resume-ig vár."
+        },
+        signals: [
+          { id: "HF-001", state: "eligible", group: "budget", reason: "Over-limit forecast, changed fingerprint." },
+          { id: "HF-002", state: "eligible", group: "budget", reason: "Food category critical; same month-end target." },
+          { id: "HF-005", state: "eligible", group: "cashflow", reason: "42 000 Ft fixed load material a hónap végéhez." },
+          { id: "HF-006", state: "eligible", group: "cashflow", reason: "Recurring cost inside the due window." },
+          { id: "HF-003", state: "waiting", group: "budget", reason: "Coach detail; nincs önálló napi pulse." },
+          { id: "HF-021", state: "waiting", group: "data-quality", reason: "A delay/group threshold még nem épített külön data storyt." }
+        ],
+        candidates: [
+          {
+            id: "month-end-tight",
+            title: "Budget + fixed load story",
+            status: "selected",
+            dominant: "HF-001",
+            base: 85,
+            baseLabel: "Month-end forecast over limit",
+            modifiers: [
+              { label: "Material money impact", value: 15 },
+              { label: "Related evidence in the same story", value: 10 }
+            ],
+            evidence: "1 high signal + related Budget/Cashflow evidence",
+            outcome: "Selected for the one current header pulse."
+          },
+          {
+            id: "cashflow-due",
+            title: "Upcoming fixed-cost story",
+            status: "suppressed",
+            dominant: "HF-006",
+            base: 70,
+            baseLabel: "Fixed cost due in 7 days",
+            modifiers: [{ label: "Due within 3 days", value: 10 }],
+            evidence: "1 high material due signal",
+            outcome: "Ready, but 80 loses to the selected 100 priority story."
+          }
+        ],
+        lifecycle: [
+          { state: "observing", reason: "Forecast inputs updated." },
+          { state: "eligible", reason: "Fingerprint changed and evidence is current." },
+          { state: "ready", reason: "High signal plus related material evidence." },
+          { state: "selected", reason: "Highest current priority." },
+          { state: "delivered", reason: "Foreground header can morph now." },
+          { state: "shown", reason: "Same fingerprint cannot replay." }
+        ],
+        copy: [
+          { slot: "Headline", source: "HF-001", text: "A hónap vége szoros lesz." },
+          { slot: "Evidence", source: "HF-002", text: "3 keret túlfutás felé tart," },
+          { slot: "Time/cause", source: "HF-005", text: "és még 42 000 Ft fix kiadás várható." }
+        ],
+        omitted: [
+          { id: "HF-003", reason: "Coach detail only; no daily standalone pulse." },
+          { id: "HF-021", reason: "Waiting for its own delay and grouping rule." }
+        ]
       },
       recovery: {
-        pulse: "Visszajött a kereten belüli pálya.",
-        detail: "A limit emelése és a ghost income érkezése után a forecast már tartható.",
-        title: "Recovery story",
-        score: 68,
-        width: "68%"
+        phone: {
+          pulse: "Visszajött a kereten belüli pálya.",
+          detail: "A ghost income érkezése után a forecast már tartható.",
+          title: "Recovery story"
+        },
+        recalculation: {
+          event: "App open after income activation",
+          background: "A resolved important risk csak új, meaningful transitionként lehet egyszer recovery."
+        },
+        signals: [
+          { id: "HF-001", state: "resolved", group: "budget", reason: "A forecast visszajött a limit alá." },
+          { id: "HF-007", state: "eligible", group: "cashflow", reason: "Expected income arrived; fingerprint changed." },
+          { id: "HF-014", state: "eligible", group: "budget", reason: "A meglévő score direction javult; okot nem talál ki." }
+        ],
+        candidates: [
+          {
+            id: "recovery",
+            title: "Recovery story",
+            status: "selected",
+            dominant: "HF-007",
+            base: 70,
+            baseLabel: "Meaningful recovery direction",
+            modifiers: [],
+            evidence: "Previously important risk resolved with current recovery evidence",
+            outcome: "Selected once; it is not routine praise."
+          }
+        ],
+        lifecycle: [
+          { state: "shown risk", reason: "A korábbi month-end risk már látszott." },
+          { state: "resolved", reason: "A limit és forecast ismét tartható." },
+          { state: "new fingerprint", reason: "Income activation új truth state." },
+          { state: "ready", reason: "Meaningful recovery after important risk." },
+          { state: "selected", reason: "Nincs erősebb current risk." },
+          { state: "shown recovery", reason: "A recovery nem ismétel ugyanazzal a fingerprinttel." }
+        ],
+        copy: [
+          { slot: "Headline", source: "HF-001", text: "Visszajött a kereten belüli pálya." },
+          { slot: "Recovery", source: "HF-007", text: "A ghost income érkezése után" },
+          { slot: "Evidence", source: "HF-014", text: "a forecast már tartható." }
+        ],
+        omitted: []
       },
       data: {
-        pulse: "Találtam 3 kategorizálatlan tételt.",
-        detail: "A kategória forecast emiatt kevésbé pontos, de nem sürgős pénzügyi warning.",
-        title: "Data quality story",
-        score: 35,
-        width: "35%"
+        phone: {
+          pulse: "Találtam 3 kategorizálatlan tételt.",
+          detail: "A kategória forecast emiatt kevésbé pontos, de nem sürgős pénzügyi warning.",
+          title: "Data quality story"
+        },
+        recalculation: {
+          event: "Delayed app-state reevaluation",
+          background: "A háttérben a grouped state frissül; a header csak foregroundban presentál."
+        },
+        signals: [
+          { id: "HF-021", state: "eligible", group: "data-quality", reason: "12h delay és grouped count threshold teljesült." },
+          { id: "HF-014", state: "waiting", group: "budget", reason: "Unrelated score movement nem erősítheti automatikusan ezt a storyt." }
+        ],
+        candidates: [
+          {
+            id: "data-quality",
+            title: "Data quality story",
+            status: "selected",
+            dominant: "HF-021",
+            base: 35,
+            baseLabel: "Uncategorized transaction status",
+            modifiers: [],
+            evidence: "Delayed grouped app-state evidence",
+            outcome: "Selected only because no stronger ready financial story exists."
+          }
+        ],
+        lifecycle: [
+          { state: "observing", reason: "Uncategorized items are tracked." },
+          { state: "waiting", reason: "Delay and grouping prevent immediate noise." },
+          { state: "eligible", reason: "12h and count threshold passed." },
+          { state: "ready", reason: "Data-quality evidence is grouped." },
+          { state: "selected", reason: "No stronger ready story exists." },
+          { state: "shown", reason: "It remains an app-state explanation, not a financial emergency." }
+        ],
+        copy: [
+          { slot: "Headline", source: "HF-021", text: "Találtam 3 kategorizálatlan tételt." },
+          { slot: "Confidence caveat", source: "HF-021", text: "A kategória forecast emiatt kevésbé pontos." }
+        ],
+        omitted: [
+          { id: "HF-014", reason: "Unrelated source; it cannot strengthen the data-quality story." }
+        ]
       }
     };
 
-    document.querySelectorAll("[data-scenario]").forEach((button) => {
-      button.addEventListener("click", () => {
-        document.querySelectorAll("[data-scenario]").forEach((item) => item.classList.remove("active"));
-        button.classList.add("active");
-        const next = scenarios[button.dataset.scenario];
-        document.getElementById("phonePulse").textContent = next.pulse;
-        document.getElementById("phoneDetail").textContent = next.detail;
-        document.getElementById("selectedTitle").textContent = next.title;
-        document.getElementById("selectedScore").textContent = next.score;
-        document.getElementById("scorebar").style.width = next.width;
+    function calculatePriority(candidate) {
+      const delta = candidate.modifiers.reduce((sum, modifier) => sum + modifier.value, 0);
+      return Math.max(0, Math.min(100, candidate.base + delta));
+    }
+
+    function traceTone(state) {
+      if (["eligible", "resolved", "ready", "shown", "shown recovery"].includes(state)) return "good";
+      if (["selected"].includes(state)) return "bad";
+      if (["suppressed", "waiting", "new fingerprint"].includes(state)) return "warn";
+      return "info";
+    }
+
+    function traceSignal(signal) {
+      return '<article class="trace-candidate"><div class="trigger-top"><span class="trigger-id">' + signal.id + '</span><span class="tag ' + traceTone(signal.state) + '">' + signal.state + '</span></div><strong>' + signal.group + '</strong><p>' + signal.reason + '</p></article>';
+    }
+
+    function traceCandidate(candidate) {
+      const score = calculatePriority(candidate);
+      const modifiers = candidate.modifiers.length
+        ? candidate.modifiers.map((modifier) => '<span>' + (modifier.value >= 0 ? "+" : "") + modifier.value + ' · ' + modifier.label + '</span>').join("")
+        : '<span>0 · no extra modifier</span>';
+      return '<article class="trace-candidate ' + candidate.status + '"><div class="trigger-top"><span class="trigger-id">' + candidate.dominant + '</span><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p><div class="trace-ledger"><span>Base ' + candidate.base + ' · ' + candidate.baseLabel + '</span>' + modifiers + '<b>Priority ' + score + ' / 100</b></div><p>' + candidate.outcome + '</p></article>';
+    }
+
+    function renderDecisionTrace(scenarioKey) {
+      const scenario = decisionTraceScenarios[scenarioKey];
+      const selected = scenario.candidates.find((candidate) => candidate.status === "selected");
+      const stage = (name) => document.querySelector('[data-trace-stage="' + name + '"]');
+
+      stage("recalculation").innerHTML = '<h3>1. Recalculation</h3><div class="trace-stage-grid"><article class="trace-candidate"><strong>Event</strong><p>' + scenario.recalculation.event + '</p></article><article class="trace-candidate"><strong>Foreground / background</strong><p>' + scenario.recalculation.background + '</p></article></div>';
+      stage("eligibility").innerHTML = '<h3>2. Eligibility gate</h3><p>Eligibility előbb dönt: a waiting, stale, muted vagy same-fingerprint source score-t sem kap.</p><div class="trace-source-list">' + scenario.signals.map(traceSignal).join("") + '</div>';
+      stage("formation").innerHTML = '<h3>3. Story formation</h3><p>Csak ugyanahhoz a domainhez vagy targethez tartozó evidence épül közös storyvá; unrelated jel nem adódik hozzá.</p><div class="trace-candidate-list">' + scenario.candidates.map((candidate) => '<article class="trace-candidate"><div class="trigger-top"><span class="trigger-id">' + candidate.id + '</span><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p></article>').join("") + '</div>';
+      stage("priority").innerHTML = '<h3>4. Priority ledger</h3><p>A domináns eligible source base weightjére csak a megnevezett story modifier kerül. A rokon source-ok base weightje nem adódik össze vakon.</p><div class="trace-candidate-list">' + scenario.candidates.map(traceCandidate).join("") + '</div>';
+      stage("delivery").innerHTML = '<h3>5. Header delivery + lifecycle</h3><p><b>' + selected.title + '</b> selected, mert priority ' + calculatePriority(selected) + ' / 100. A suppressed story nem queue-ba kerül, hanem a következő current recalculationkor újra versenyez.</p><div class="trace-lifecycle">' + scenario.lifecycle.map((entry) => '<span class="tag ' + traceTone(entry.state) + '" title="' + entry.reason + '">' + entry.state + '</span>').join("") + '</div>';
+      stage("copy-map").innerHTML = '<h3>6. Story copy map</h3><p>A header mondat nem triggerlista: minden kimondott mondatrésznek van source-a.</p><div class="trace-source-list">' + scenario.copy.map((entry) => '<article class="trace-copy-fragment"><strong>' + entry.slot + ' · ' + entry.source + '</strong><p>' + entry.text + '</p></article>').join("") + '</div>' + (scenario.omitted.length ? '<p class="trace-omitted">Omitted: ' + scenario.omitted.map((entry) => entry.id + ' · ' + entry.reason).join(" | ") + '</p>' : '');
+    }
+
+    const scenarioControlGroups = [
+      Array.from(document.querySelectorAll("[data-scenario]")),
+      Array.from(document.querySelectorAll("[data-engine-scenario]"))
+    ];
+
+    function scenarioKeyFor(button) {
+      return button.dataset.scenario || button.dataset.engineScenario;
+    }
+
+    function applyScenario(scenarioKey) {
+      const scenario = decisionTraceScenarios[scenarioKey];
+      scenarioControlGroups.flat().forEach((button) => {
+        const active = scenarioKeyFor(button) === scenarioKey;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      const selected = scenario.candidates.find((candidate) => candidate.status === "selected");
+      const score = calculatePriority(selected);
+      document.getElementById("phonePulse").textContent = scenario.phone.pulse;
+      document.getElementById("phoneDetail").textContent = scenario.phone.detail;
+      document.getElementById("selectedTitle").textContent = scenario.phone.title;
+      document.getElementById("selectedScore").textContent = score;
+      document.getElementById("scorebar").style.width = score + "%";
+      renderDecisionTrace(scenarioKey);
+    }
+
+    scenarioControlGroups.forEach((buttons) => {
+      buttons.forEach((button, index) => {
+        button.addEventListener("click", () => applyScenario(scenarioKeyFor(button)));
+        button.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const nextIndex = event.key === "Home" ? 0
+            : event.key === "End" ? buttons.length - 1
+            : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+          const next = buttons[nextIndex];
+          next.focus();
+          applyScenario(scenarioKeyFor(next));
+        });
       });
     });
+
+    applyScenario("risk");
 
     const groupDossiers = {
       budget: {
