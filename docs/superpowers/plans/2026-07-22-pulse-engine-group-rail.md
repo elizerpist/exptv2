@@ -373,7 +373,7 @@ Open http://127.0.0.1:8790/docs/prototypes/pulse_engine_panel_mockup.html and in
 
 Mark PEP-RAIL-001 through PEP-RAIL-008 DONE only after their static and visual evidence exists. Keep a row PARTIAL when browser evidence remains absent. Mark PEP-RAIL-009 DONE only after the targeted Balance check confirms this feature did not edit it.
 
-- [ ] **Step 4: Commit verification evidence**
+- [x] **Step 4: Commit verification evidence**
 
 ~~~sh
 git add docs/superpowers/checklists/2026-07-22-pulse-engine-group-rail.md
