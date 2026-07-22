@@ -36,7 +36,7 @@ The monthly transaction count is an explicit prototype fixture because the
 current monthly FastInfo catalog has no raw monthly transaction-count source.
 The fixture must preserve the visible legacy monetary values. The resolver
 validates positive budget/count values, non-negative spend/remaining values,
-and returns a calculated numeric progress plus a presentation label. The
+and returns a calculated numeric progress rounded to two decimals plus a presentation label. The
 monthly bar uses the exact 151 200 / 250 000 ratio while the displayed label
 stays `61%` to preserve the legacy monthly-card wording.
 
