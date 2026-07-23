@@ -1247,6 +1247,35 @@
       text-align: center;
     }
 
+    .plain-language-flowchart-image {
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+    }
+
+    .plain-language-flowchart-image img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }
+
+    .plain-language-flowchart-image figcaption,
+    .plain-language-flowchart-rule {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .plain-language-flowchart-rule {
+      color: var(--ink);
+      font-weight: 850;
+    }
+
     @media (max-width: 1100px) {
       .hero-grid,
       .grid-2,
@@ -2664,6 +2693,13 @@
     </section>
       </div>
     </section>
+
+    <figure class="plain-language-flowchart-image" data-plain-language-flowchart>
+      <img src="assets/pulse-egyszeru-mukodes.png" loading="lazy" decoding="async"
+        alt="Egyszerű folyamatábra: a pontszám megtekintése csak információ; egy adatváltozást a rendszer ellenőriz, majd vagy vár, vagy kiválaszt egy üzenetet, amely az app megnyitásakor jelenik meg. A pontszám önmagában nem elég.">
+      <figcaption>Egyszerű magyarázat: mikor lesz egy adatváltozásból üzenet, és mikor nem.</figcaption>
+      <p class="plain-language-flowchart-rule">A pontszám önmagában nem elég.</p>
+    </figure>
 
     <p class="footer-note">
       Prototype artifact: docs/prototypes/pulse_engine_panel_mockup.html ·
