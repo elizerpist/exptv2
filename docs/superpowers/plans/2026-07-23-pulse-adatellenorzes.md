@@ -31,7 +31,7 @@
 - Consumes: `pulse_engine_panel_mockup.html` UTF-8 tartalma.
 - Produces: hibázó teszt, amely a régi súlylevonást és a hiányzó konkrét adatellenőrzést jelzi.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 assert.doesNotMatch(html, /bizonytalan adat/i);
@@ -44,13 +44,13 @@ assert.match(html, /inputChecks:/);
 assert.match(html, /function traceInputCheck\(check\)/);
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node docs/prototypes/pulse_data_input_rules_test.js`
 
 Expected: `AssertionError`, mert a régi `bizonytalan adat −20` még létezik és nincs `inputChecks` kirajzoló.
 
-- [ ] **Step 3: Update the existing semantic-flow expectation**
+- [x] **Step 3: Update the existing semantic-flow expectation**
 
 ```js
 assert.doesNotMatch(html, /bizonytalan adat −20/);
@@ -58,7 +58,7 @@ assert.match(html, /Adatellenőrzés a pontszám előtt/);
 assert.match(html, /Hiányzó kategória csak a kategóriaalapú jeleket állítja meg/);
 ```
 
-- [ ] **Step 4: Run the two tests to verify the intended red state**
+- [x] **Step 4: Run the two tests to verify the intended red state**
 
 Run: `node docs/prototypes/pulse_data_input_rules_test.js && node docs/prototypes/pulse_semantic_flowchart_test.js`
 
@@ -78,7 +78,7 @@ Expected: az új teszt a hiányzó szabályokra hibázik; a folyamatábra-teszt 
 - Consumes: `inputChecks: Array<{ status: string, scope: string, reason: string }>` minden `decisionTraceScenarios`-elemben.
 - Produces: `traceInputCheck(check)` HTML-kártyát ad, `renderDecisionTrace` pedig a második szakasz elején kirajzolja őket.
 
-- [ ] **Step 1: Write minimal implementation in the flowchart**
+- [x] **Step 1: Write minimal implementation in the flowchart**
 
 Add `data-flow-branch="input-check"` to the source gate and show exactly these consequences:
 
@@ -95,7 +95,7 @@ Replace the formula with:
 pontszám = fő jel alapértéke + pénzben nagy eltérés +15 + 3 napon belüli esedékesség +10 + kapcsolódó jel +10 − nemrég elutasított −30
 ```
 
-- [ ] **Step 2: Add scenario input-check records**
+- [x] **Step 2: Add scenario input-check records**
 
 Give `risk` and `recovery` a `számolható` record explaining that all inputs used by the selected situation exist. Give `data` these two records:
 
@@ -106,7 +106,7 @@ Give `risk` and `recovery` a `számolható` record explaining that all inputs us
 
 Replace the data example's non-related waiting HF-014 with the affected HF-002 and state that it is not scored. Keep HF-021 as a selected 35-point explanatory candidate with no modifiers, and explicitly state that it does not subtract from financial candidates.
 
-- [ ] **Step 3: Render input checks before eligibility signals**
+- [x] **Step 3: Render input checks before eligibility signals**
 
 ```js
 function traceInputCheck(check) {
@@ -120,17 +120,17 @@ stage("eligibility").innerHTML =
   scenario.signals.map(traceSignal).join("");
 ```
 
-- [ ] **Step 4: Make group explanations use the same scope**
+- [x] **Step 4: Make group explanations use the same scope**
 
 Update the Keretnyomás, Pénzáramlási nyomás and Adatpontosság manuals, HF-021 card and story so they distinguish missing category from missing amount/date and state that HF-021 is not a financial score penalty.
 
-- [ ] **Step 5: Run the focused tests**
+- [x] **Step 5: Run the focused tests**
 
 Run: `node docs/prototypes/pulse_data_input_rules_test.js && node docs/prototypes/pulse_semantic_flowchart_test.js && node docs/prototypes/pulse_engine_decision_trace_test.js && node docs/prototypes/pulse_engine_panel_group_rail_test.js`
 
 Expected: every command prints `PASS`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/prototypes/pulse_engine_panel_mockup.html docs/prototypes/pulse_data_input_rules_test.js docs/prototypes/pulse_semantic_flowchart_test.js
@@ -150,7 +150,7 @@ git commit -m "feat: gate Pulse scores on input data"
 - Consumes: Task 2 működő prototípusa.
 - Produces: minden PAE-ellenőrzési pont `DONE` állapotú bizonyíték és célzott dokumentációs commit.
 
-- [ ] **Step 1: Run the full test set and syntax check**
+- [x] **Step 1: Run the full test set and syntax check**
 
 Run:
 
@@ -165,11 +165,11 @@ node docs/prototypes/pulse_engine_panel_group_rail_test.js
 
 Then parse every embedded script with `new Function(script)` and request the HTML and PNG from the live `127.0.0.1:8790` server. Expected: every check `PASS`, both HTTP requests `200`.
 
-- [ ] **Step 2: Mark acceptance items honestly**
+- [x] **Step 2: Mark acceptance items honestly**
 
 Set PAE-001 through PAE-006 to `DONE` only after the preceding checks succeed. Add the exact test names and a concise statement that the generic `−20` was removed rather than merely renamed.
 
-- [ ] **Step 3: Commit the evidence**
+- [x] **Step 3: Commit the evidence**
 
 ```bash
 git add docs/superpowers/checklists/2026-07-23-pulse-adatellenorzes.md docs/superpowers/plans/2026-07-23-pulse-adatellenorzes.md
@@ -181,3 +181,10 @@ git commit -m "docs: verify Pulse input data rules"
 - PAE-001 through PAE-006 are covered respectively by Tasks 1–3.
 - No task uses a general data-quality multiplier; all prescribed labels and code interface names are explicit.
 - The plan keeps the existing three-rail structure and does not alter the approved PNG.
+
+## Végrehajtási eredmény
+
+- A régi általános `−20` levonást a teszt a változtatás előtt hibaként jelezte; a fontossági képletből teljesen kikerült.
+- Az új `inputChecks` minden döntési példában a pontozás előtt jelenik meg, és külön mutatja a számolható, illetve várakozó jelölteket.
+- A kategóriahiány csak HF-002, HF-012 és HF-020 esetén állítja meg a számítást; a HF-021 önálló, 35 pontos magyarázó jel maradt, nem levonás.
+- A felület, a csoportválasztó, az alsó PNG, az összes célzott Node-teszt, a JavaScript elemzése és a helyi HTTP-kiszolgálás ellenőrizve lett.
