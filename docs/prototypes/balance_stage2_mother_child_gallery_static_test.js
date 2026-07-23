@@ -77,7 +77,8 @@ assert.match(todayRenderer, /upcomingRecurring\.body\.insertBefore\(recurringMin
 assert.doesNotMatch(todayRenderer, /upcomingRecurring\.valueElement\.replaceChildren\(recurringMiniAvatar/, 'the mini avatar must not be inline with the Netflix label');
 assert.match(todayRenderer, /insightGrid\.append\(noSpend, categoryChange, latestTransaction, trend, upcomingRecurring\.card\);/, 'the upper rail must add the recurring card without surfacing the buffer-days engine metric');
 assert.doesNotMatch(todayRenderer, /Puffer napok|data-buffer-days-insight|createBalanceBufferDaysGauge/, 'the upper screen must not render a buffer-days box');
-assert.match(todayRenderer, /detailCarousel\.append\(detail, topCategoriesDetail, topMerchantsDetail, averageDailyDetail\);/, 'the lower carousel must retain only the four approved cards');
+assert.match(todayRenderer, /const detailPages = \[detail, topCategoriesDetail, topMerchantsDetail, averageDailyDetail\];/, 'the lower carousel must retain only the four approved cards');
+assert.match(todayRenderer, /detailCarousel\.append\(\.\.\.detailPages\);/, 'the approved cards must remain direct children of the swipe surface');
 assert.doesNotMatch(
   todayRenderer.match(/const detailCarousel = createTodayRedesignElement\([\s\S]*?scrollContent\.append/)?.[0] || '',
   /spendingRhythmDetail/,
@@ -197,7 +198,7 @@ assert.match(html, /\.stage2-redesign-upcoming-recurring-mini-avatar\s+\.slot-ic
 
 assert.match(html, /const upcomingRecurringCard = catalog\.find\(\(card\) => card\.id === upcomingRecurringCardId\);/, 'the B3M renderer must resolve the recurring card from the catalog');
 assert.match(html, /card\.id !== upcomingRecurringCardId/, 'the recurring compact card must not become its own B3M screen');
-assert.match(html, /populateTodayRedesignScreen\(todayB3mAColumn, card, topCategoriesCard, categoryChangeCard, latestTransactionCard, averageDailyCard, trendCard, upcomingRecurringCard\);/, 'the resolved recurring card must be passed only into the B3M-A screen');
+assert.match(html, /populateTodayRedesignScreen\(permanentTimeRailColumn, card, topCategoriesCard, categoryChangeCard, latestTransactionCard, averageDailyCard, trendCard, upcomingRecurringCard\);/, 'the resolved recurring card must be passed only into the retained B3M-A3 permanent-rail screen');
 
 const pulseFixtureMatch = html.match(/const pulseForecastGalleryFixture = (\[[\s\S]*?\n\s*\]);/);
 assert.ok(pulseFixtureMatch, 'the eight Pulse chart cards need an explicit fixture');
@@ -240,9 +241,10 @@ assert.match(pulseGalleryRenderer, /data-pulse-forecast-card', forecast\.id/, 'e
 assert.match(pulseGalleryRenderer, /header,\s*createPulseForecastChart\([\s\S]*?description/, 'each card must contain only header, SVG chart, and description');
 assert.doesNotMatch(pulseGalleryRenderer, /metric-strip|user-defined|<input|<select|document\.createElement\('input'\)|document\.createElement\('select'\)/, 'the B3M gallery must omit metrics and tuning controls');
 
-assert.match(html, /installPulseForecastGalleryStyles\(doc\);/, 'the B3M canvas must install the dedicated gallery styling');
-assert.match(html, /const pulseForecastGallery = createPulseForecastGallery\(doc\);\s*mode\.append\(carouselRow, pulseForecastGallery\);/, 'the gallery must be below the B3M screen row, outside the phone scroll surface');
-assert.match(html, /surface\.style\.minHeight = 'calc\(var\(--screen-h\) \+ 338px\)'/, 'the canvas must reserve vertical room below the phone screens');
+const exactRenderer = html.match(/function renderExactB3M\(doc\) \{[\s\S]*?(?=\n\s*frame\.addEventListener)/)?.[0] || '';
+assert.doesNotMatch(exactRenderer, /installPulseForecastGalleryStyles\(doc\)|createPulseForecastGallery\(doc\)/, 'the retired Pulse chart row must not be installed or rendered');
+assert.match(exactRenderer, /mode\.append\(carouselRow, budgetComparisonRow, mindPrototypeRow\);/, 'the final canvas must contain only the retained Balance, Budget, and Mind screen rows');
+assert.match(exactRenderer, /surface\.style\.minHeight = 'calc\(\(var\(--screen-h\) \* 3\) \+ 184px\)'/, 'the canvas height must be sized to the retained three phone rows');
 assert.match(html, /\.pulse-forecast-gallery-row \{[\s\S]*?display: flex;/, 'the eight cards must render on one horizontal row');
 assert.match(html, /\.pulse-forecast-card \{[\s\S]*?width: 252px;/, 'the Pulse cards must use a stable compact card width');
 assert.match(html, /\.pulse-forecast-description \{/, 'each chart card must have its short explanation style');
@@ -258,8 +260,7 @@ const sourceForecasts = [
   'Data quality status',
 ];
 for (const title of sourceForecasts) {
-  assert.match(pulseSource, new RegExp(title.replace(/[+?]/g, '\\$&')), 'the Pulse source must contain ' + title);
-  assert.ok(pulseForecastGalleryFixture.some((entry) => entry.title === title), 'the B3M gallery must copy ' + title);
+  assert.ok(pulseForecastGalleryFixture.some((entry) => entry.title === title), 'the retained dormant Pulse fixture must preserve ' + title);
 }
 
-console.log('balance B3M compact rhythm + Pulse forecast gallery static contract passed');
+console.log('balance B3M compact rhythm, final screen rows, and dormant Pulse fixture static contract passed');

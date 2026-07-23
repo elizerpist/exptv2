@@ -95,10 +95,13 @@ assert.match(topMerchantsRenderer, /topMerchantsDetail\.append\(\s*topMerchantsT
 assert.doesNotMatch(topMerchantsRenderer, /stage2-redesign-detail-divider/, 'Top 5 kereskedő must not put a separator under the dimension pills');
 assert.match(html, /\.stage2-redesign-top-merchants-detail\s*\{[\s\S]*?grid-template-rows:\s*18px minmax\(0,\s*1fr\);[\s\S]*?\}/, 'the merchant card grid must drop the removed separator row');
 
-assert.doesNotMatch(todayRenderer, /detailCarouselIndicators|detailCarouselIndicatorButtons|data-detail-carousel-indicator|syncDetailCarouselIndicator|setActiveDetailCarouselIndex/, 'the lower carousel must not retain an indicator row or its paging state');
-assert.match(todayRenderer, /detailCarousel\.append\(detail, topCategoriesDetail, topMerchantsDetail, averageDailyDetail\);/, 'the lower carousel must remain the direct four-card swipe surface');
-assert.match(todayRenderer, /scrollContent\.append\(insightGrid, detailCarousel, postBudgetContent\);/, 'the post-budget content must follow the carousel directly in both modes');
-assert.doesNotMatch(html, /stage2-redesign-detail-carousel-indicator/, 'the removed dots must leave no indicator CSS behind');
+assert.doesNotMatch(todayRenderer, /detailCarouselIndicators|detailCarouselIndicatorButtons|data-detail-carousel-indicator|syncDetailCarouselIndicator|setActiveDetailCarouselIndex/, 'the retired interactive indicator controls must not return');
+assert.match(todayRenderer, /const detailPages = \[detail, topCategoriesDetail, topMerchantsDetail, averageDailyDetail\];/, 'the lower carousel must retain exactly the four approved swipe pages');
+assert.match(todayRenderer, /detailCarousel\.append\(\.\.\.detailPages\);/, 'the four pages must remain direct children of the native swipe surface');
+assert.match(todayRenderer, /if \(screen\.dataset\.todayTimeScopeMode === 'permanent'\) \{[\s\S]*?data-today-detail-pagination[\s\S]*?detailCarousel\.addEventListener\('scroll', updateDetailPagination, \{ passive: true \}\);/, 'the permanent B3M-A3 rail must expose passive swipe-position dots');
+assert.match(todayRenderer, /scrollContent\.append\(insightGrid, detailSurface, postBudgetContent\);/, 'the fixed-height carousel stage must occupy the original detail slot without adding a screen row');
+assert.match(html, /\.stage2-redesign-detail-stage\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\) 6px;[\s\S]*?height:\s*186px;/, 'the dot row must be carved out of the existing detail height');
+assert.match(html, /\.stage2-redesign-detail-page-dot\.is-active\s*\{[\s\S]*?width:\s*6px;[\s\S]*?height:\s*6px;/, 'the passive dots must visibly mark the active card');
 assert.match(html, /\.stage2-redesign-detail-ghost-toggle\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?right:\s*11px;[\s\S]*?bottom:\s*10px;[\s\S]*?\}/, 'each lower ghost control must sit in its card bottom-right corner');
 
 console.log('balance lower detail carousel ghost controls static contract passed');
