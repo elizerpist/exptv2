@@ -655,8 +655,8 @@ for (const token of cleanupForbiddenTokens) {
 const screenCount = (html.match(/class="phone-screen/g) || []).length;
 assert.strictEqual(
   screenCount,
-  34,
-  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B3M mother-child preview, B/C/D rows, Query Menu Q1A category-vendor hierarchy, Query-row expense/income transaction sheets, nine recurring wizard screens, and three category wizard popup screens',
+  35,
+  'Expected cleaned lower Fluvi/dashboard/edit screens, common-header B3M mother-child preview, B/C/D rows, Query Menu Q1A category-vendor hierarchy, Query-row expense/income transaction sheets, Q3A trigger-type step, nine recurring wizard screens, and three category wizard popup screens',
 );
 
 const alternativeSection = html.match(
@@ -1099,13 +1099,14 @@ assert(
 );
 assert.strictEqual(
   (queryMenuBlock.match(/<div class="screen-column"/g) || []).length,
-  15,
-  'Query Menu row must render Q1A, Q2, Q3, nine recurring screens, and Q13-Q15 after Q2A deletion',
+  16,
+  'Query Menu row must render Q1A, Q2, Q3, Q3A, nine Push screens, and Q13-Q15 after Q2A deletion',
 );
 const queryRowScreenOrder = [
   queryMenuBlock.indexOf('data-screen="alt-query-menu-category-vendor-hierarchy"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-transaction-duplicate"'),
   queryMenuBlock.indexOf('data-screen="alt-query-add-income-transaction"'),
+  queryMenuBlock.indexOf('data-screen="alt-recurring-trigger-type"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-push-basics"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-push-amount"'),
   queryMenuBlock.indexOf('data-screen="alt-recurring-push-schedule"'),
@@ -1305,7 +1306,7 @@ assert(
   'Query Menu row must keep the A5 duplicate as the inline category picker sheet and remove the old Q3/Q4 A6/A7 recurring duplicates',
 );
 const queryIncomeStart = queryMenuBlock.indexOf('Q3 · Bevételi tranzakció sheet');
-const recurringWizardStart = queryMenuBlock.indexOf('data-screen="alt-recurring-push-basics"');
+const recurringWizardStart = queryMenuBlock.indexOf('data-screen="alt-recurring-trigger-type"');
 const queryIncomeBlock =
   queryIncomeStart >= 0 && recurringWizardStart > queryIncomeStart
     ? queryMenuBlock.slice(queryIncomeStart, recurringWizardStart)
@@ -1351,6 +1352,39 @@ assert(
     !queryIncomeBlock.includes('transaction-category-chevron'),
   'Q3 must mirror Q2 inline category picker layout while retaining positive income copy, categories, and CTA styling',
 );
+const triggerTypeScreenStart = queryMenuBlock.indexOf(
+  '<div class="screen-title">Q3A · Recurring wizard · Trigger típusa</div>',
+);
+const triggerTypeScreenEnd = queryMenuBlock.indexOf(
+  'data-screen="alt-recurring-push-basics"',
+  triggerTypeScreenStart,
+);
+const triggerTypeScreenBlock =
+  triggerTypeScreenStart >= 0 && triggerTypeScreenEnd > triggerTypeScreenStart
+    ? queryMenuBlock.slice(triggerTypeScreenStart, triggerTypeScreenEnd)
+    : '';
+const triggerTypeProgressMarkup =
+  triggerTypeScreenBlock.match(/<div class="recurring-wizard-progress"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
+assert(
+  triggerTypeScreenBlock.includes('data-screen="alt-recurring-trigger-type"') &&
+    triggerTypeScreenBlock.includes('data-recurring-wizard-screen="trigger-type"') &&
+    triggerTypeScreenBlock.includes('data-recurring-trigger-step="0"') &&
+    triggerTypeScreenBlock.includes('data-recurring-wizard-size="q2-inline-sheet"') &&
+    (triggerTypeScreenBlock.match(/class="recurring-wizard-sheet"/g) || []).length === 1 &&
+    triggerTypeScreenBlock.includes('0. lépés a 9-ből') &&
+    (triggerTypeProgressMarkup.match(/<span><\/span>/g) || []).length === 9 &&
+    !triggerTypeProgressMarkup.includes('class="active"') &&
+    !triggerTypeProgressMarkup.includes('class="complete"') &&
+    triggerTypeScreenBlock.includes('data-recurring-wizard-choice-group') &&
+    /<button class="recurring-wizard-card selected"[^>]*data-recurring-wizard-selectable[^>]*aria-pressed="true">[\s\S]*?<strong>Push alapú<\/strong>/.test(
+      triggerTypeScreenBlock,
+    ) &&
+    /<button class="recurring-wizard-card"[^>]*data-recurring-wizard-selectable[^>]*aria-pressed="false">[\s\S]*?<strong>Idő alapú<\/strong>/.test(
+      triggerTypeScreenBlock,
+    ) &&
+    triggerTypeScreenBlock.includes('Tovább'),
+  'Q3A must be a 0. lépés trigger-type chooser with one Q2-sized sheet and Push selected by default',
+);
 assert.strictEqual(
   (html.match(/data-screen="alt-add-transaction-sheet"/g) || []).length,
   1,
@@ -1368,8 +1402,8 @@ assert.strictEqual(
 );
 assert.strictEqual(
   (queryMenuBlock.match(/data-recurring-wizard-screen=/g) || []).length,
-  9,
-  'The recurring Push-trigger wizard must render exactly nine side-by-side reference steps',
+  10,
+  'Q3A plus the recurring Push-trigger wizard must render ten side-by-side wizard sheets',
 );
 assert.strictEqual(
   (queryMenuBlock.match(/data-recurring-push-step="[1-9]"/g) || []).length,
@@ -1378,13 +1412,17 @@ assert.strictEqual(
 );
 assert.strictEqual(
   (queryMenuBlock.match(/data-recurring-wizard-size="q2-inline-sheet"/g) || []).length,
-  9,
-  'Every Push-trigger state must explicitly use the current Q2 inline-sheet geometry',
+  10,
+  'Q3A and every Push-trigger state must explicitly use the current Q2 inline-sheet geometry',
 );
 assert.strictEqual(
   (queryMenuBlock.match(/data-recurring-wizard-reference="\/storage\/emulated\/0\/spendee\/recurring_new\.png"/g) || []).length,
   9,
   'Every Push-trigger screen must point directly at the approved recurring_new reference',
+);
+assert(
+  !queryMenuBlock.includes('data-recurring-push-step="0"'),
+  'The trigger chooser must be a distinct pre-step, not a tenth Push-trigger step',
 );
 const recurringPushWizardScreens = [
   ['Q4 · Push trigger · Alapadatok', 'alt-recurring-push-basics', '1', ['Várható tranzakció', 'Név', 'Kategória', 'Partner / Kedvezményezett', 'Megjegyzés (opcionális)']],
