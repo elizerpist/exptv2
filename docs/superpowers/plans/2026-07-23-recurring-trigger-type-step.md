@@ -30,7 +30,7 @@
 - Consumes: the existing Q3 `alt-query-add-income-transaction` and Q4 `alt-recurring-push-basics` screen IDs.
 - Produces: a static contract for `alt-recurring-trigger-type`, `data-recurring-trigger-step="0"`, 16 Query-row columns, ten recurring wizard shells, and unchanged nine Push steps.
 
-- [ ] **Step 1: Write the failing screen-count and Query-row order assertions**
+- [x] **Step 1: Write the failing screen-count and Query-row order assertions**
 
   Change the global count from `34` to `35` and the Query row from `15` to `16`. Insert the Q3A ID between Q3 and Q4 in `queryRowScreenOrder`:
 
@@ -67,7 +67,7 @@
   ];
   ```
 
-- [ ] **Step 2: Add a failing scoped Q3A sheet and choice assertion**
+- [x] **Step 2: Add a failing scoped Q3A sheet and choice assertion**
 
   Add a block between the Q3 and Push-wizard assertions. It must isolate Q3A between the Q3 start and Q4 start and prove one sheet, one 0-step marker, two mutually exclusive controls, the default Push state, and the Q2-inline geometry contract:
 
@@ -98,7 +98,7 @@
   );
   ```
 
-- [ ] **Step 3: Preserve the existing Push-flow contract explicitly**
+- [x] **Step 3: Preserve the existing Push-flow contract explicitly**
 
   Change only the total recurring-shell count from `9` to `10`; retain the existing `data-recurring-push-step="[1-9]"` count of `9` and add a direct no-zero-push guard:
 
@@ -119,7 +119,7 @@
   );
   ```
 
-- [ ] **Step 4: Run the focused test and confirm the expected RED failure**
+- [x] **Step 4: Run the focused test and confirm the expected RED failure**
 
   Run:
 
@@ -141,7 +141,7 @@
 - Consumes: `.recurring-wizard-screen`, `.recurring-wizard-sheet`, `.recurring-wizard-progress`, `.recurring-wizard-card`, `.recurring-wizard-footer`, and `initRecurringWizardPrototype()`.
 - Produces: one type-chooser screen with local single-select behavior and no new JavaScript routing code.
 
-- [ ] **Step 1: Insert the Q3A phone-screen block immediately before Q4**
+- [x] **Step 1: Insert the Q3A phone-screen block immediately before Q4**
 
   Use the established shell and these required attributes/content:
 
@@ -176,11 +176,11 @@
   </div>
   ```
 
-- [ ] **Step 2: Keep JavaScript unchanged and verify actual selection scope**
+- [x] **Step 2: Keep JavaScript unchanged and verify actual selection scope**
 
   Do not modify `initRecurringWizardPrototype()`: it already finds `data-recurring-wizard-choice-group`, clears only sibling `data-recurring-wizard-selectable` controls for exclusive groups, and synchronizes `aria-pressed`. Run an isolated Node smoke against the extracted function with two exclusive Q3A-like controls; clicking `Idő alapú` must clear the initially selected `Push alapú` control.
 
-- [ ] **Step 3: Run the focused test and confirm GREEN**
+- [x] **Step 3: Run the focused test and confirm GREEN**
 
   Run:
 
@@ -202,7 +202,7 @@
 - Consumes: Q3A green static contract and the existing Q4–Q12 Push-flow contracts.
 - Produces: evidence-backed RTS checklist states and commits that contain only this package's files.
 
-- [ ] **Step 1: Run final static, parse, structural, and whitespace verification**
+- [x] **Step 1: Run final static, parse, structural, and whitespace verification**
 
   Run:
 
@@ -215,11 +215,11 @@
 
   Expected: static test and parser pass, no zero-valued Push-step match, and no diff whitespace output.
 
-- [ ] **Step 2: Mark the acceptance checklist with observed evidence**
+- [x] **Step 2: Mark the acceptance checklist with observed evidence**
 
   Update RTS-001 through RTS-005 to `DONE` only after the commands above show the specified Q3A order, geometry, selection behavior, zero-step marker, and unchanged Q4–Q12 Push sequence. If a rendered screenshot cannot be captured locally, document the visual-capture gap as `PARTIAL` rather than claiming it was checked.
 
-- [ ] **Step 3: Commit only the source/test implementation and acceptance evidence**
+- [x] **Step 3: Commit only the source/test implementation and acceptance evidence**
 
   First commit the implementation:
 

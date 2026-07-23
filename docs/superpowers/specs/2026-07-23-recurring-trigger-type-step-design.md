@@ -26,12 +26,20 @@ A Query-row Q3 bevételi tranzakciós sheetje és a Q4 Push-trigger `Alapadatok`
 
 | ID | Forrás | Kódterület | Elfogadási feltétel | Ellenőrzés | Státusz |
 | --- | --- | --- | --- | --- | --- |
-| RTS-001 | User: `q4 és q3 közé kell egy screen` | `docs/prototypes/color_lab.html` Query-row markup | A Q3A egyszer, közvetlenül Q3 és Q4 között szerepel; a Query row 16 képernyőoszlopos. | Statikus sorrend-/darabszám-assertion és forrásvizsgálat. | NOT DONE |
-| RTS-002 | User: `egy ugyanilyen sheetet tartalmazó screen` | Recurring wizard markup/CSS | A Q3A pontosan egy Q2-geometriájú, 570px magas `recurring-wizard-sheet`-et tartalmaz, beágyazott sheet nélkül. | DOM/CSS assertion. | NOT DONE |
-| RTS-003 | User: `user választ, hogy push vagy időtrigger legyen` | Q3A markup + meglévő initializer | Két, egymást kizáró, hozzáférhető `Push alapú` / `Idő alapú` vezérlő van; Push az alapállapot; kattintás `selected` és `aria-pressed` állapotot szinkronizál. | Red–green statikus szerződés és izolált click smoke. | NOT DONE |
-| RTS-004 | User: `ez a 0. lépés` | Q3A markup és teszt | A Q3A `0. lépés a 9-ből` kijelzést és `data-recurring-trigger-step="0"` attribútumot kap; Q4–Q12 megőrzi `data-recurring-push-step="1"…"9"` értékeit. | Sorrend-/tartalom-assertion. | NOT DONE |
-| RTS-005 | Korábbi jóváhagyott Push wizard szerződés | Q4–Q12 markup és static test | A Q4–Q12 kilenc Push-lépése, egyedi sheetjei és a Q12 `Létrehozás` CTA változatlanul megmaradnak; az időtrigger-ágnak nincs rejtett fallback markupja. | Meglévő statikus teszt és célzott no-match keresés. | NOT DONE |
+| RTS-001 | User: `q4 és q3 közé kell egy screen` | `docs/prototypes/color_lab.html` Query-row markup | A Q3A egyszer, közvetlenül Q3 és Q4 között szerepel; a Query row 16 képernyőoszlopos. | Statikus sorrend-/darabszám-assertion és forrásvizsgálat. | DONE |
+| RTS-002 | User: `egy ugyanilyen sheetet tartalmazó screen` | Recurring wizard markup/CSS | A Q3A pontosan egy Q2-geometriájú, 570px magas `recurring-wizard-sheet`-et tartalmaz, beágyazott sheet nélkül. | DOM/CSS assertion. | DONE |
+| RTS-003 | User: `user választ, hogy push vagy időtrigger legyen` | Q3A markup + meglévő initializer | Két, egymást kizáró, hozzáférhető `Push alapú` / `Idő alapú` vezérlő van; Push az alapállapot; kattintás `selected` és `aria-pressed` állapotot szinkronizál. | Red–green statikus szerződés és izolált click smoke. | DONE |
+| RTS-004 | User: `ez a 0. lépés` | Q3A markup és teszt | A Q3A `0. lépés a 9-ből` kijelzést és `data-recurring-trigger-step="0"` attribútumot kap; Q4–Q12 megőrzi `data-recurring-push-step="1"…"9"` értékeit. | Sorrend-/tartalom-assertion. | DONE |
+| RTS-005 | Korábbi jóváhagyott Push wizard szerződés | Q4–Q12 markup és static test | A Q4–Q12 kilenc Push-lépése, egyedi sheetjei és a Q12 `Létrehozás` CTA változatlanul megmaradnak; az időtrigger-ágnak nincs rejtett fallback markupja. | Meglévő statikus teszt és célzott no-match keresés. | DONE |
 
 ## Ellenőrzési terv
 
 Írjunk előbb hibázó statikus szerződést a Q3A-ra és a 16 oszlopos sorrendre. A forrásmódosítás után fusson a teljes Color Lab statikus teszt, az inline JavaScript-parse, egy izolált click smoke és `git diff --check`. A végső renderelt screenshot-összevetés külön, helyi böngészős rendererrel szükséges, ha elérhető.
+
+## Megfigyelt ellenőrzési bizonyíték — 2026-07-23
+
+- A hibázó static-test szerződés a hiányzó Q3A miatt `34 !== 35` eredménnyel bukott; a sheet beszúrása után `node docs/prototypes/color_lab_static_test.js` zöld lett.
+- A statikus szerződés igazolja a 16 Query-row oszlopot, a Q3 → Q3A → Q4 sorrendet, a Q3A egyetlen Q2-inline sheetjét, a két triggeropciót és a 0. lépés progressz-sávját.
+- Az inline script `new Function(...)` parse-on átment. Az izolált click smoke-ban az `Idő alapú` kiválasztása törölte a kezdetben kijelölt `Push alapú` vezérlő `selected` és `aria-pressed` állapotát.
+- A végső szerkezeti ellenőrzés tíz recurring wizard shellt, pontosan egy `data-recurring-trigger-step="0"` markert, kilenc `data-recurring-push-step="1"`…`"9"` markert és nulla `data-recurring-push-step="0"` találatot igazolt.
+- A futó Color Lab szerver HTTP smoke-ja a `http://127.0.0.1:4174/color_lab.html` útvonalon a Q3A markupot is elérte.
