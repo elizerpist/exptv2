@@ -11437,6 +11437,27 @@
       text-transform: uppercase;
     }
 
+    .recurring-wizard-q4-category-window {
+      --transaction-inline-category-row-h: 50px;
+      height: 50px;
+      border-radius: 25px;
+    }
+
+    .recurring-wizard-q4-category-window .transaction-inline-category-list {
+      padding: 0;
+    }
+
+    .recurring-wizard-q4-category-window .transaction-inline-category-row:first-child,
+    .recurring-wizard-q4-category-window .transaction-inline-category-row:last-child {
+      border-radius: 24px;
+    }
+
+    .recurring-wizard-q4-new-category {
+      min-height: 50px;
+      height: 50px;
+      border-radius: 25px;
+    }
+
     .transaction-date-time-row {
       gap: 10px;
     }
@@ -14256,19 +14277,19 @@
                       <div class="pill-field transaction-name-pill" data-color-target="text-pill" data-color-var="--field-bg">Lakbér / tranzakció neve</div>
                     </div>
                     <section class="transaction-inline-category-picker" data-transaction-inline-category-picker aria-label="Inline kategóriaválasztó">
-                      <div class="transaction-inline-category-window" data-transaction-inline-category-window data-category-inline-visible-rows="4" data-category-inline-total="8">
+                      <div class="transaction-inline-category-window recurring-wizard-q4-category-window" data-transaction-inline-category-window data-category-inline-visible-rows="1" data-category-inline-total="8">
                         <div class="transaction-inline-category-list" data-category-inline-list>
-                          <button class="transaction-inline-category-row query-tree-parent query-category-vendor-parent" type="button" data-category-inline-option="food" aria-pressed="false">
-                            <span class="query-category-color-dot" style="--category-dot-bg:var(--slot-gradient-7)"></span>
-                            <strong>Élelmiszer</strong>
-                            <em>124 tranz.</em>
-                            <span class="query-check"></span>
-                          </button>
                           <button class="transaction-inline-category-row query-tree-parent query-category-vendor-parent selected" type="button" data-category-inline-option="home" aria-pressed="true">
                             <span class="query-category-color-dot" style="--category-dot-bg:var(--slot-gradient-19)"></span>
                             <strong>Lakás</strong>
                             <em>42 tranz.</em>
                             <span class="query-check selected">✓</span>
+                          </button>
+                          <button class="transaction-inline-category-row query-tree-parent query-category-vendor-parent" type="button" data-category-inline-option="food" aria-pressed="false">
+                            <span class="query-category-color-dot" style="--category-dot-bg:var(--slot-gradient-7)"></span>
+                            <strong>Élelmiszer</strong>
+                            <em>124 tranz.</em>
+                            <span class="query-check"></span>
                           </button>
                           <button class="transaction-inline-category-row query-tree-parent query-category-vendor-parent" type="button" data-category-inline-option="transport" aria-pressed="false">
                             <span class="query-category-color-dot" style="--category-dot-bg:var(--slot-gradient-3)"></span>
@@ -14308,7 +14329,7 @@
                           </button>
                         </div>
                       </div>
-                      <button class="transaction-inline-new-category" type="button" data-category-inline-new-category data-popup-trigger="category-create-wizard" aria-haspopup="dialog">
+                      <button class="transaction-inline-new-category recurring-wizard-q4-new-category" type="button" data-category-inline-new-category data-popup-trigger="category-create-wizard" aria-haspopup="dialog">
                         <span class="transaction-inline-new-icon">+</span>
                         <strong>Új kategória</strong>
                         <em>popup wizard</em>

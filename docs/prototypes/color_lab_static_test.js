@@ -1399,19 +1399,31 @@ assert(
     q4PushBasicsBlock.includes('Lakbér / tranzakció neve') &&
     (q4PushBasicsBlock.match(/data-transaction-inline-category-picker/g) || []).length === 1 &&
     (q4PushBasicsBlock.match(/data-transaction-inline-category-window/g) || []).length === 1 &&
+    q4PushBasicsBlock.includes('class="transaction-inline-category-window recurring-wizard-q4-category-window"') &&
+    q4PushBasicsBlock.includes('data-category-inline-visible-rows="1"') &&
     (q4PushBasicsBlock.match(/data-category-inline-option=/g) || []).length === 8 &&
     /<button class="transaction-inline-category-row[^\"]* selected"[^>]*data-category-inline-option="home"[^>]*aria-pressed="true">/.test(
       q4PushBasicsBlock,
     ) &&
+    q4PushBasicsBlock.indexOf('data-category-inline-option="home"') <
+      q4PushBasicsBlock.indexOf('data-category-inline-option="food"') &&
     q4PushBasicsBlock.indexOf('data-transaction-inline-category-window') <
       q4PushBasicsBlock.indexOf('data-category-inline-new-category') &&
+    q4PushBasicsBlock.includes('class="transaction-inline-new-category recurring-wizard-q4-new-category"') &&
     q4PushBasicsBlock.includes('data-category-inline-new-category') &&
     q4PushBasicsBlock.includes('Új kategória') &&
     !q4PushBasicsBlock.includes('class="recurring-wizard-field"') &&
     !q4PushBasicsBlock.includes('Partner / Kedvezményezett') &&
     !q4PushBasicsBlock.includes('Megjegyzés (opcionális)') &&
+    /\.pill-field\s*\{[^}]*height:\s*50px;[^}]*border-radius:\s*25px;[^}]*\}/s.test(html) &&
+    /\.recurring-wizard-q4-category-window\s*\{[^}]*--transaction-inline-category-row-h:\s*50px;[^}]*height:\s*50px;[^}]*border-radius:\s*25px;[^}]*\}/s.test(
+      html,
+    ) &&
+    /\.recurring-wizard-q4-new-category\s*\{[^}]*min-height:\s*50px;[^}]*height:\s*50px;[^}]*border-radius:\s*25px;[^}]*\}/s.test(
+      html,
+    ) &&
     /<button class="recurring-wizard-primary"[^>]*>Tovább<\/button>/.test(q4PushBasicsBlock),
-  'Q4 must contain only the Q2-style name pill, inline category window, Új kategória, and Tovább',
+  'Q4 name, category window, and Új kategória controls must share the same 50px pill height',
 );
 assert.strictEqual(
   (html.match(/data-screen="alt-add-transaction-sheet"/g) || []).length,
