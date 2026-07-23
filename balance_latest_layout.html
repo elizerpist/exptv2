@@ -1425,7 +1425,7 @@
         style.textContent = `
           [data-today-redesign-screen="true"] {
             --stage2-redesign-reference-asset: url('docs/prototypes/reference_assets/stage2redesign.png');
-            background: #f8f8fc !important;
+            background: var(--gray-50) !important;
           }
 
           [data-today-redesign-screen="true"]::before,
@@ -1448,8 +1448,7 @@
             gap: 11px;
             overflow: hidden;
             padding: 13px 16px 14px;
-            background:
-              linear-gradient(180deg, #fcfcff 0%, #f8f8fd 57%, #fbfbff 100%);
+            background: var(--gray-50);
             color: #17254a;
             font-family: inherit;
             letter-spacing: 0;
@@ -1467,15 +1466,15 @@
             display: flex;
             min-width: 0;
             align-items: center;
-            gap: 7px;
-            height: 49px;
+            gap: 10px;
+            height: 42px;
             pointer-events: none;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-brand .spendee-logo {
-            width: 37px;
-            height: 37px;
-            flex: 0 0 37px;
+            width: var(--spendee-logo-icon-size);
+            height: var(--spendee-logo-icon-size);
+            flex: 0 0 auto;
             filter: drop-shadow(0 3px 6px rgba(70, 83, 171, .14));
           }
 
@@ -1485,19 +1484,19 @@
 
           [data-today-redesign-screen="true"] .stage2-redesign-brand .spendee-title {
             color: #101d57;
-            font-size: 22px;
-            line-height: .86;
-            font-weight: 950;
-            letter-spacing: 0;
+            font-size: 23px;
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: -.04em;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-brand .spendee-tagline {
             margin-top: 4px;
             color: #657092;
-            font-size: 7.6px;
-            line-height: 1;
-            font-weight: 800;
-            letter-spacing: 0;
+            font-size: 11px;
+            line-height: 1.05;
+            font-weight: 600;
+            letter-spacing: -.01em;
             white-space: nowrap;
           }
 
@@ -2081,6 +2080,35 @@
             scroll-snap-stop: always;
           }
 
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-ghost-toggle {
+            position: absolute;
+            z-index: 2;
+            right: 11px;
+            bottom: 10px;
+            display: grid;
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            place-items: center;
+            border: 1px solid rgba(128, 137, 170, .2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, .78);
+            color: #9ca6bc;
+            cursor: pointer;
+            box-shadow: 0 3px 7px rgba(76, 85, 128, .08);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-ghost-toggle[aria-pressed="true"] {
+            border-color: rgba(113, 101, 239, .22);
+            background: #f0efff;
+            color: #7165ef;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-ghost-toggle .slot-icon {
+            width: 11px;
+            height: 11px;
+          }
+
           [data-today-redesign-screen="true"] .stage2-redesign-today-detail {
             position: relative;
             display: grid;
@@ -2108,7 +2136,7 @@
           [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-detail {
             position: relative;
             display: grid;
-            grid-template-rows: 18px 1px minmax(0, 1fr);
+            grid-template-rows: 18px minmax(0, 1fr);
             overflow: hidden;
             padding: 13px 19px 10px;
             border: 1px solid rgba(102, 111, 171, .11);
@@ -2131,14 +2159,6 @@
 
           [data-today-redesign-screen="true"] .stage2-redesign-average-daily-detail .fastinfo-sparkline {
             background: linear-gradient(180deg, rgba(139, 125, 250, .15), rgba(139, 125, 250, .03));
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-scope {
-            color: #0ba4c2;
-            font-size: 7px;
-            line-height: 1;
-            font-weight: 900;
-            white-space: nowrap;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-average-daily-main {
@@ -2202,7 +2222,7 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             align-items: center;
-            padding-top: 5px;
+            padding: 5px 27px 0 0;
             border-top: 1px solid #edf0f6;
           }
 
@@ -2255,14 +2275,6 @@
             height: 22px;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-scope {
-            color: #fb3e76;
-            font-size: 7px;
-            line-height: 1;
-            font-weight: 900;
-            white-space: nowrap;
-          }
-
           [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-scope {
             color: #fb3e76;
             font-size: 7px;
@@ -2307,14 +2319,14 @@
             display: grid;
             grid-template-rows: repeat(3, minmax(0, 1fr));
             gap: 3px;
-            padding-top: 5px;
+            padding: 5px 27px 0 0;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-list {
             display: grid;
             min-height: 0;
             grid-template-rows: repeat(5, minmax(0, 1fr));
-            padding-top: 5px;
+            padding: 5px 27px 0 0;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period {
@@ -2586,6 +2598,7 @@
             display: grid;
             grid-template-rows: 18px 16px 1fr;
             align-items: center;
+            padding-right: 27px;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-threshold-copy {
@@ -2879,126 +2892,8 @@
             background: #7f8aa5;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-bottom-nav {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            align-items: center;
-            padding: 0 8px;
-            border: 1px solid rgba(102, 111, 171, .10);
-            border-radius: 23px;
-            background: rgba(255, 255, 255, .94);
-            box-shadow: 0 9px 20px rgba(82, 75, 147, .10), inset 0 1px 0 rgba(255, 255, 255, .94);
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-item,
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-fab {
-            display: grid;
-            min-width: 0;
-            place-items: center;
-            padding: 0;
-            border: 0;
-            background: transparent;
-            color: #8b96b0;
-            font: inherit;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-item {
-            grid-template-rows: 20px auto;
-            gap: 4px;
-            font-size: 7px;
-            line-height: 1;
-            font-weight: 800;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-item.active { color: #6357ef; }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-item .slot-icon {
-            width: 18px;
-            height: 18px;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-glyph {
-            position: relative;
-            width: 19px;
-            height: 19px;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-list::before {
-            content: "";
-            position: absolute;
-            top: 3px;
-            left: 4px;
-            width: 12px;
-            height: 2px;
-            border-radius: 2px;
-            background: currentColor;
-            box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-list::after {
-            content: "";
-            position: absolute;
-            top: 3px;
-            left: 0;
-            width: 2px;
-            height: 2px;
-            border-radius: 50%;
-            background: currentColor;
-            box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-analysis {
-            border: 1.6px solid currentColor;
-            border-radius: 50%;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-analysis::before {
-            content: "";
-            position: absolute;
-            top: -2px;
-            left: 8px;
-            width: 1.6px;
-            height: 10px;
-            background: currentColor;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-analysis::after {
-            content: "";
-            position: absolute;
-            right: -2px;
-            top: 8px;
-            width: 10px;
-            height: 1.6px;
-            background: currentColor;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-settings {
-            border: 1.6px dashed currentColor;
-            border-radius: 50%;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-settings::after {
-            content: "";
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            width: 7px;
-            height: 7px;
-            border: 1.5px solid currentColor;
-            border-radius: 50%;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-nav-fab {
-            width: 45px;
-            height: 45px;
-            justify-self: center;
-            border-radius: 50%;
+          [data-exact-b3m-gallery="true"] [data-common-header-static-preview="strict-mother-child"] [data-common-header-inline-fab] {
             background: linear-gradient(140deg, #6065f5 0%, #8c5cef 52%, #f25cbf 100%);
-            color: #ffffff;
-            font-size: 34px;
-            line-height: 1;
-            font-weight: 300;
-            box-shadow: 0 10px 18px rgba(108, 79, 226, .30), inset 0 1px 0 rgba(255, 255, 255, .30);
           }
         `;
         doc.head.append(style);
@@ -3561,16 +3456,6 @@
             border-right: 1.3px solid #b1bad0;
             border-bottom: 1.3px solid #b1bad0;
             background: #ffffff;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-bottom-nav {
-            position: absolute;
-            z-index: 9;
-            right: 16px;
-            bottom: 14px;
-            left: 16px;
-            height: 55px;
-            min-height: 55px;
           }
 
           @media (prefers-reduced-motion: reduce) {
@@ -5586,6 +5471,7 @@
 
         const budgetPillBehavior = column.dataset.todayBudgetPillBehavior || 'sticky';
         const sourceBrand = screen.querySelector('.spendee-brand-lockup')?.cloneNode(true) || null;
+        const sourceBottomNav = screen.querySelector('[data-common-header-bottom-nav]')?.cloneNode(true) || null;
         column.setAttribute('data-test-design-screen', 'today-spend-stage2-redesign');
         screen.setAttribute('data-today-redesign-screen', 'true');
         screen.setAttribute('data-today-budget-pill-behavior', budgetPillBehavior);
@@ -5595,7 +5481,7 @@
           : `Balance ${card.title} screenshot redesign`);
         if (budgetPillBehavior === 'exit') setText(column, '.screen-title', `B3M-A · ${card.title}`);
         screen.style.setProperty('--stage2-redesign-reference-asset', `url("${todayRedesignReference}")`);
-        return { doc, screen, sourceBrand };
+        return { doc, screen, sourceBrand, sourceBottomNav };
       }
 
       function createTodayTimeScopeDrawer(doc) {
@@ -5773,8 +5659,34 @@
         return { card, body, valueElement, secondaryElement, ghostToggle, setGhostTransactionsIncluded };
       }
 
+      function createTodayRedesignDetailGhostToggle(doc, card, id) {
+        const ghostToggle = createTodayRedesignElement(doc, 'button', 'stage2-redesign-detail-ghost-toggle');
+        ghostToggle.type = 'button';
+        ghostToggle.setAttribute('data-ghost-transaction-toggle', id);
+        const ghostIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
+        ghostIcon.style.setProperty('--icon-url', "url('/assets/icons/lucide/ghost.svg')");
+        ghostIcon.style.setProperty('--icon-color', 'currentColor');
+        ghostToggle.append(ghostIcon);
+
+        let includeGhostTransactions = true;
+        const setGhostTransactionsIncluded = (nextValue) => {
+          includeGhostTransactions = Boolean(nextValue);
+          card.setAttribute('data-include-ghost-transactions', String(includeGhostTransactions));
+          ghostToggle.setAttribute('aria-pressed', String(includeGhostTransactions));
+          ghostToggle.setAttribute(
+            'aria-label',
+            includeGhostTransactions
+              ? 'Ghost tranzakciók beleszámítanak. Kikapcsolás.'
+              : 'Ghost tranzakciók kizárva. Bekapcsolás.',
+          );
+        };
+        ghostToggle.addEventListener('click', () => setGhostTransactionsIncluded(!includeGhostTransactions));
+        setGhostTransactionsIncluded(includeGhostTransactions);
+        return ghostToggle;
+      }
+
       function populateTodayRedesignScreen(column, card, topCategoriesCard, categoryChangeCard, latestTransactionCard, averageDailyCard, trendCard, upcomingRecurringCard) {
-        const { doc, screen, sourceBrand } = prepareTodayRedesignScreen(column, card);
+        const { doc, screen, sourceBrand, sourceBottomNav } = prepareTodayRedesignScreen(column, card);
         const summary = summarizeTodayRedesignFixture();
         if (!topCategoriesCard || !Array.isArray(topCategoriesCard.categoryPeriods) || topCategoriesCard.categoryPeriods.length !== 3) {
           throw new Error('Today redesign requires three structured Top categories period facts');
@@ -5794,6 +5706,8 @@
         if (!upcomingRecurringCard || !upcomingRecurringCard.categoryAvatar || !upcomingRecurringCard.upcomingDate) {
           throw new Error('Today redesign requires the upcoming recurring transaction catalog card');
         }
+        if (!sourceBottomNav) throw new Error('Today redesign requires the B3M bottom navigation');
+        sourceBottomNav.setAttribute('data-b3m-shared-bottom-nav', 'true');
         const topCategoryPeriods = topCategoriesCard.categoryPeriods;
         const averageDailySummary = summarizeAverageDailyFixture();
         const balanceText = `-${formatTodayRedesignForint(summary.balance)}`;
@@ -6026,6 +5940,7 @@
           button.addEventListener('click', () => renderVariableBudgetDimension(button.dataset.variableBudgetDimensionOption));
         }
         renderVariableBudgetDimension(variableBudgetDefaultDimensionId);
+        const detailGhostToggle = createTodayRedesignDetailGhostToggle(doc, detail, 'variable-budget');
         detail.append(
           detailTopline,
           detailMain,
@@ -6033,15 +5948,14 @@
           factGrid,
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
           threshold,
+          detailGhostToggle,
         );
 
         const topCategoriesDetail = createTodayRedesignElement(doc, 'article', 'stage2-redesign-top-categories-detail');
         topCategoriesDetail.setAttribute('aria-label', `${topCategoriesCard.title} részletei`);
+        const topCategoriesGhostToggle = createTodayRedesignDetailGhostToggle(doc, topCategoriesDetail, 'top-categories');
         const topCategoriesTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
-        topCategoriesTopline.append(
-          createTodayRedesignElement(doc, 'strong', '', topCategoriesCard.title),
-          createTodayRedesignElement(doc, 'span', 'stage2-redesign-top-categories-scope', 'Fix tételek kizárva'),
-        );
+        topCategoriesTopline.append(createTodayRedesignElement(doc, 'strong', '', topCategoriesCard.title));
         const topCategoriesMain = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-categories-main');
         const topCategoriesTile = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-categories-tile');
         const topCategoriesSlot = createTodayRedesignElement(doc, 'span', 'slot-icon');
@@ -6080,9 +5994,11 @@
           topCategoriesMain,
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
           topCategoriesPeriods,
+          topCategoriesGhostToggle,
         );
 
         const topMerchantsDetail = createTodayRedesignElement(doc, 'article', 'stage2-redesign-top-merchants-detail');
+        const topMerchantsGhostToggle = createTodayRedesignDetailGhostToggle(doc, topMerchantsDetail, 'top-merchants');
         const topMerchantsTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
         const topMerchantsDimensions = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-merchants-dimensions');
         const topMerchantDimensionButtons = [];
@@ -6136,17 +6052,15 @@
         renderTopMerchantsRows(topMerchantDefaultDimensionId);
         topMerchantsDetail.append(
           topMerchantsTopline,
-          createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
           topMerchantsList,
+          topMerchantsGhostToggle,
         );
 
         const averageDailyDetail = createTodayRedesignElement(doc, 'article', 'stage2-redesign-average-daily-detail');
         averageDailyDetail.setAttribute('aria-label', `${averageDailyCard.title}: ${formatAverageDailyForint(averageDailySummary.average)} naponta, elmúlt 30 nap`);
+        const averageDailyGhostToggle = createTodayRedesignDetailGhostToggle(doc, averageDailyDetail, 'average-daily');
         const averageDailyTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
-        averageDailyTopline.append(
-          createTodayRedesignElement(doc, 'strong', '', averageDailyCard.title),
-          createTodayRedesignElement(doc, 'span', 'stage2-redesign-average-daily-scope', 'Fix tételek kizárva'),
-        );
+        averageDailyTopline.append(createTodayRedesignElement(doc, 'strong', '', averageDailyCard.title));
         const averageDailyMain = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-main');
         const averageDailyTile = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-tile');
         const averageDailyIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
@@ -6186,6 +6100,7 @@
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
           averageDailyChart,
           averageDailyFacts,
+          averageDailyGhostToggle,
         );
 
         const detailCarousel = createTodayRedesignElement(doc, 'section', 'stage2-redesign-detail-carousel');
@@ -6301,32 +6216,6 @@
           createTodayRedesignElement(doc, 'span', 'stage2-redesign-budget-pill-chevron', '⌄'),
         );
 
-        const bottomNav = createTodayRedesignElement(doc, 'nav', 'stage2-redesign-bottom-nav');
-        bottomNav.setAttribute('aria-label', 'Alsó navigáció');
-        const overview = createTodayRedesignElement(doc, 'button', 'stage2-redesign-nav-item active');
-        overview.type = 'button';
-        overview.setAttribute('aria-label', 'Áttekintés');
-        const overviewIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
-        overviewIcon.style.setProperty('--icon-url', "url('/assets/icons/lucide/house.svg')");
-        overviewIcon.style.setProperty('--icon-color', 'currentColor');
-        overview.append(overviewIcon, createTodayRedesignElement(doc, 'span', '', 'Áttekintés'));
-        const transactions = createTodayRedesignElement(doc, 'button', 'stage2-redesign-nav-item');
-        transactions.type = 'button';
-        transactions.setAttribute('aria-label', 'Tranzakciók');
-        transactions.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-nav-glyph stage2-redesign-nav-list'), createTodayRedesignElement(doc, 'span', '', 'Tranzakciók'));
-        const add = createTodayRedesignElement(doc, 'button', 'stage2-redesign-nav-fab', '+');
-        add.type = 'button';
-        add.setAttribute('aria-label', 'Tranzakció hozzáadása');
-        const analysis = createTodayRedesignElement(doc, 'button', 'stage2-redesign-nav-item');
-        analysis.type = 'button';
-        analysis.setAttribute('aria-label', 'Elemzések');
-        analysis.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-nav-glyph stage2-redesign-nav-analysis'), createTodayRedesignElement(doc, 'span', '', 'Elemzések'));
-        const settings = createTodayRedesignElement(doc, 'button', 'stage2-redesign-nav-item');
-        settings.type = 'button';
-        settings.setAttribute('aria-label', 'Beállítások');
-        settings.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-nav-glyph stage2-redesign-nav-settings'), createTodayRedesignElement(doc, 'span', '', 'Beállítások'));
-        bottomNav.append(overview, transactions, add, analysis, settings);
-
         const postBudgetContent = createTodayRedesignElement(doc, 'div', 'stage2-redesign-post-budget-content');
         if (timeScopeDrawer) {
           postBudgetContent.append(actions, monthSummary, searchRow, timeScopeDrawer, transactionSection);
@@ -6337,7 +6226,7 @@
         scrollViewport.append(scrollContent);
         const heroOverlay = createTodayRedesignElement(doc, 'section', 'stage2-redesign-hero-overlay');
         heroOverlay.append(hero);
-        layout.append(scrollViewport, topbar, heroOverlay, budgetPill, bottomNav);
+        layout.append(scrollViewport, topbar, heroOverlay, budgetPill, sourceBottomNav);
         screen.replaceChildren(layout);
         attachTodayRedesignScrollInteraction(screen, scrollViewport, transactionViewport);
         attachTodayTimeScopeDrawer(screen);
