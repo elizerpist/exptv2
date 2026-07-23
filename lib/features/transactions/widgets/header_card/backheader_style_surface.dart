@@ -8,8 +8,10 @@ import '../../models/backheader_budget_item.dart';
 import '../../models/budget_goal_kind.dart';
 import '../../models/budget_progress_segment.dart';
 import '../../models/category_budget_bar_data.dart';
+import '../../models/income_goal_presentation.dart';
 import '../../models/limit_allocation_data.dart';
 import '../../models/overview_budget_data.dart';
+import '../../models/transaction_category.dart';
 import '../category_slot_icon.dart';
 import 'magnet_strip.dart';
 import 'transaction_header_metrics.dart';
@@ -1190,6 +1192,9 @@ class _CenterBadgeWheel extends StatelessWidget {
   double _progressForItem(BackheaderBudgetItem item) {
     final overview = item.overview;
     if (overview != null) {
+      if (overview.kind == BudgetGoalKind.incomeGoal) {
+        return IncomeGoalPresentation.fromOverview(overview).ringProgress;
+      }
       if (!overview.hasLimit || overview.limitAmount <= 0) return 0;
       return (overview.amount / overview.limitAmount)
           .clamp(0.0, 1.0)
@@ -1197,12 +1202,26 @@ class _CenterBadgeWheel extends StatelessWidget {
     }
     final category = item.category;
     if (category == null) return 0;
+    if (category.transactionType == TransactionType.income) {
+      return IncomeGoalPresentation.fromCategory(category).ringProgress;
+    }
     return category.progress;
   }
 
   Color _progressColorForItem(BackheaderBudgetItem item) {
     final base = _colorForItem(item);
     final overview = item.overview;
+    if (overview?.kind == BudgetGoalKind.incomeGoal) {
+      return IncomeGoalPresentation.fromOverview(
+        overview!,
+      ).effectiveProgressColor;
+    }
+    final category = item.category;
+    if (category?.transactionType == TransactionType.income) {
+      return IncomeGoalPresentation.fromCategory(
+        category!,
+      ).effectiveProgressColor;
+    }
     final ratio = overview != null
         ? (!overview.hasLimit || overview.limitAmount <= 0
               ? 0.0

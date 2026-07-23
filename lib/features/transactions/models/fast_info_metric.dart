@@ -23,7 +23,6 @@ enum FastInfoVisualKind {
   analogMeter,
   fixedLoad,
   paidRemainingSplit,
-  incomeComparisonBars,
   remainingSpentSplit,
 }
 

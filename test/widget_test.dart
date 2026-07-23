@@ -1,5 +1,7 @@
 import 'package:exptv2/core/debug/debug_console.dart';
+import 'package:exptv2/core/platform/browser_fullscreen_controller.dart';
 import 'package:exptv2/core/theme/app_colors.dart';
+import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
@@ -9,10 +11,15 @@ import 'package:exptv2/features/transactions/widgets/add_transaction_sheet.dart'
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
 import 'package:exptv2/state/event_store.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'helpers/stats_test_frame_worker.dart';
+import 'helpers/channel_tolerance_golden_comparator.dart';
 
 final savedTransactions = <Map<dynamic, dynamic>>[];
 final updatedTransactions = <Map<dynamic, dynamic>>[];
@@ -20,13 +27,30 @@ final updatedThemeSettings = <Map<dynamic, dynamic>>[];
 final recurringRulesPayload = <Map<String, Object?>>[];
 final deletedTransactionIds = <int>[];
 Map<String, Object?>? themeSettingsOverride;
+Map<String, Object?>? expenseBootstrapOverride;
 var firstLaunchNotificationPromptEnabled = false;
 var firstLaunchNotificationPromptCalls = 0;
+
+Future<void> _dragSpendeeHeaderByExactDelta(
+  WidgetTester tester,
+  double delta,
+) async {
+  final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+  final gesture = await tester.startGesture(tester.getCenter(handle));
+  await gesture.moveBy(const Offset(0, kTouchSlop + 1));
+  await tester.pump();
+  await gesture.moveBy(Offset(0, delta));
+  await tester.pump();
+  await gesture.up();
+  await tester.pumpAndSettle();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    StatsPage.debugRenderFrameWorkerOverride =
+        const TestImmediateStatsFrameWorker();
     DebugConsole.clear();
     savedTransactions.clear();
     updatedTransactions.clear();
@@ -34,12 +58,24 @@ void main() {
     recurringRulesPayload.clear();
     deletedTransactionIds.clear();
     themeSettingsOverride = null;
+    expenseBootstrapOverride = null;
     firstLaunchNotificationPromptEnabled = false;
     firstLaunchNotificationPromptCalls = 0;
+    SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('exptv2/native_ime_sheet'),
           (call) async => false,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('flutter_keyboard_controller/keyboard_events'),
+          (call) async => null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('exptv2/keyboard_insets'),
+          (call) async => null,
         );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('pushparser/methods'), (
@@ -47,7 +83,7 @@ void main() {
         ) async {
           if (call.method == 'loadEvents') return <Map<String, Object?>>[];
           if (call.method == 'expenseLoadBootstrap') {
-            return expenseBootstrapPayload();
+            return expenseBootstrapOverride ?? expenseBootstrapPayload();
           }
           if (call.method == 'expenseLoadSettings') {
             return <String, Object?>{
@@ -87,7 +123,8 @@ void main() {
             return recurringRulesPayload;
           }
           if (call.method == 'expenseListCategories') {
-            return (expenseBootstrapPayload()['categories']
+            return ((expenseBootstrapOverride ??
+                    expenseBootstrapPayload())['categories']
                 as List<Map<String, Object?>>);
           }
           if (call.method == 'expenseAddTransaction') {
@@ -180,6 +217,7 @@ void main() {
   });
 
   tearDown(() {
+    StatsPage.debugRenderFrameWorkerOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('pushparser/methods'),
@@ -190,13 +228,29 @@ void main() {
           const MethodChannel('exptv2/native_ime_sheet'),
           null,
         );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('flutter_keyboard_controller/keyboard_events'),
+          null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('exptv2/keyboard_insets'),
+          null,
+        );
   });
 
-  Widget buildApp({NativeBridge? nativeBridge, EventStore? store}) {
+  Widget buildApp({
+    NativeBridge? nativeBridge,
+    EventStore? store,
+    BrowserFullscreenController? browserFullscreenController,
+  }) {
     final bridge = nativeBridge ?? NativeBridge();
     return Exptv2App(
       store: store ?? EventStore(bridge, realtimeEnabled: false),
       nativeBridge: bridge,
+      statsRenderFrameWorker: const TestImmediateStatsFrameWorker(),
+      browserFullscreenController: browserFullscreenController,
     );
   }
 
@@ -262,6 +316,792 @@ void main() {
     final decoration = fabSurface.decoration as BoxDecoration;
     final borderRadius = decoration.borderRadius! as BorderRadius;
     expect(borderRadius.topLeft.x, 18);
+  });
+
+  testWidgets(
+    'header settings button opens settings overlay without shell nav',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('header-settings-button')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('header-settings-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-root-back')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsNothing);
+      expect(find.byKey(const ValueKey('expt-fab')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('settings-root-back')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+      expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+      expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    },
+  );
+
+  testWidgets('spendee test dashboard uses specialized shell navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-bottom-nav')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Stats'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-settings-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-fullscreen-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-header-settings-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-header-outer-glow')),
+      findsNothing,
+    );
+    expect(find.text('Test Store'), findsOneWidget);
+    expect(find.text('Q'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    expect(find.text('Stats'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-home')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      findsOneWidget,
+    );
+
+    await _dragSpendeeHeaderByExactDelta(tester, 134);
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-category-avatar-6-selected')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-context-carousel')),
+      findsOneWidget,
+    );
+
+    await _dragSpendeeHeaderByExactDelta(tester, 272);
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-budget-pie-focus')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'dashboard design switch replaces navigation while Settings is active',
+    (tester) async {
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-dashboard-design-spendee-test')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('spendee-test-bottom-nav')),
+        findsOneWidget,
+      );
+      expect(find.text('Stats'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-dashboard-design-current')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-bottom-nav')),
+        findsNothing,
+      );
+      expect(find.text('Stats'), findsOneWidget);
+    },
+  );
+
+  testWidgets('spendee test normalizes persisted hidden tabs to Dashboard', (
+    tester,
+  ) async {
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+    for (final hiddenTab in <String>['stats', 'notifications']) {
+      final bridge = NativeBridge();
+      final store = EventStore(bridge, realtimeEnabled: false)
+        ..shellActiveTabKey = hiddenTab;
+
+      await tester.pumpWidget(buildApp(nativeBridge: bridge, store: store));
+      await tester.pumpAndSettle();
+
+      expect(store.shellActiveTabKey, 'home');
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-test-bottom-nav')),
+        findsOneWidget,
+      );
+      expect(find.text('Stats'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('spendee test exposes reactive browser fullscreen control', (
+    tester,
+  ) async {
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+    final driver = _WidgetTestBrowserFullscreenDriver();
+    final controller = BrowserFullscreenController(driver);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(buildApp(browserFullscreenController: controller));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-settings-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-app-fullscreen-button')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-app-fullscreen-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(driver.enterCalls, 1);
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+
+    driver.setFullscreenExternally(false);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+  });
+
+  testWidgets('spendee test accepts a replacement fullscreen controller', (
+    tester,
+  ) async {
+    themeSettingsOverride = _spendeeThemeSettings();
+    final bridge = NativeBridge();
+    final store = EventStore(bridge, realtimeEnabled: false);
+    final firstDriver = _WidgetTestBrowserFullscreenDriver();
+    final firstController = BrowserFullscreenController(firstDriver);
+    final secondDriver = _WidgetTestBrowserFullscreenDriver();
+    final secondController = BrowserFullscreenController(secondDriver);
+    addTearDown(firstController.dispose);
+    addTearDown(secondController.dispose);
+
+    await tester.pumpWidget(
+      buildApp(
+        nativeBridge: bridge,
+        store: store,
+        browserFullscreenController: firstController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    firstDriver.setFullscreenExternally(true);
+    await tester.pump();
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+
+    await tester.pumpWidget(
+      buildApp(
+        nativeBridge: bridge,
+        store: store,
+        browserFullscreenController: secondController,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    secondDriver.setFullscreenExternally(true);
+    await tester.pump();
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+  });
+
+  testWidgets('spendee test center FAB opens the transaction editor', (
+    tester,
+  ) async {
+    themeSettingsOverride = _spendeeThemeSettings();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    final settingsTarget = tester.getCenter(
+      find.byKey(const ValueKey('bottom-nav-settings')),
+    );
+    await tester.tap(find.byKey(const ValueKey('expt-fab')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(settingsTarget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('transaction-editor-card')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('spendee test center FAB works from Settings', (tester) async {
+    themeSettingsOverride = _spendeeThemeSettings();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bottom-nav-settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+    final dashboardTarget = tester.getCenter(
+      find.byKey(const ValueKey('bottom-nav-home')),
+    );
+
+    await tester.longPress(find.byKey(const ValueKey('expt-fab')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('spendee-test-bottom-nav')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(dashboardTarget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recurring-manager-card')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'spendee header keeps its snapped stage when viewport geometry changes',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = <String, Object?>{
+        'magnetType': 'fade',
+        'cardColor': 'lightgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'gray',
+        'boxColor': 'gray',
+        'backheaderStyle': 'classic',
+        'dashboardDesignMode': 'spendeeTest',
+      };
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      await _dragSpendeeHeaderByExactDelta(tester, 134);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      tester.view.physicalSize = const Size(412, 893);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+        reason: 'A MediaQuery geometry update must not reset Stage 1.',
+      );
+
+      await _dragSpendeeHeaderByExactDelta(tester, 272);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+
+      tester.view.physicalSize = const Size(412, 891);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+        reason: 'A MediaQuery geometry update must not reset Stage 2.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'spendee header keeps armed snaps across physical drag frames without overflow',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = <String, Object?>{
+        'magnetType': 'fade',
+        'cardColor': 'lightgray',
+        'theme': 'Türkiz',
+        'backgroundColor': 'gray',
+        'boxColor': 'gray',
+        'backheaderStyle': 'classic',
+        'dashboardDesignMode': 'spendeeTest',
+      };
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      final headerCard = find.byKey(const ValueKey('spendee-test-header-card'));
+      final homeContent = find.byKey(
+        const ValueKey('spendee-test-home-content'),
+      );
+      expect(headerCard, findsOneWidget);
+      expect(homeContent, findsOneWidget);
+      final initialHeaderHeight = tester.getSize(headerCard).height;
+      final initialContentTop = tester.getTopLeft(homeContent).dy;
+
+      var handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      var gesture = await tester.startGesture(tester.getCenter(handle));
+      for (final delta in const [100.0, 34.0, 4.0]) {
+        await gesture.moveBy(Offset(0, delta));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(
+          tester.getTopLeft(homeContent).dy - initialContentTop,
+          closeTo(tester.getSize(headerCard).height - initialHeaderHeight, .01),
+          reason: 'Home content must follow the live header delta exactly.',
+        );
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+        reason: 'A later pointer frame must not disarm the Stage 1 tick.',
+      );
+
+      handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+      gesture = await tester.startGesture(tester.getCenter(handle));
+      for (final delta in const [100.0, 172.0, 80.0]) {
+        await gesture.moveBy(Offset(0, delta));
+        await tester.pump();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'The live Stage 2 pull must not overflow before release.',
+        );
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+        reason: 'A later pointer frame must not disarm the Stage 2 tick.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('spendee Stage 0 matches the computed Color Lab C1 geometry', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const ValueKey('spendee-test-header-card'));
+    final brand = find.byKey(const ValueKey('spendee-test-brand-lockup'));
+    final logo = find.byKey(const ValueKey('spendee-test-brand-logo'));
+    final homeContent = find.byKey(const ValueKey('spendee-test-home-content'));
+    final typeRow = find.byKey(const ValueKey('spendee-test-type-row'));
+    final incomePill = find.byKey(
+      const ValueKey('spendee-test-income-type-pill'),
+    );
+    final expensePill = find.byKey(
+      const ValueKey('spendee-test-expense-type-pill'),
+    );
+    final summary = find.byKey(const ValueKey('spendee-test-summary-pill'));
+    final search = find.byKey(const ValueKey('spendee-test-search-pill'));
+
+    expect(header, findsOneWidget);
+    expect(brand, findsOneWidget);
+    expect(logo, findsOneWidget);
+    expect(homeContent, findsOneWidget);
+    expect(typeRow, findsOneWidget);
+    expect(incomePill, findsOneWidget);
+    expect(expensePill, findsOneWidget);
+    expect(search, findsOneWidget);
+    expect(find.text('BUDGET'), findsOneWidget);
+    expect(find.textContaining('Elköltve'), findsNothing);
+
+    expect(tester.getRect(header), const Rect.fromLTWH(20, 104, 372, 104));
+    expect(tester.getRect(brand), const Rect.fromLTWH(0, 33.3, 412, 118));
+    expect(tester.getRect(logo), const Rect.fromLTWH(30, 39.3, 47.88, 47.88));
+    expect(tester.getTopLeft(homeContent), const Offset(0, 212));
+    expect(tester.getRect(typeRow), const Rect.fromLTWH(0, 212, 412, 66));
+    expect(tester.getRect(incomePill), const Rect.fromLTWH(28, 224, 173, 42));
+    expect(tester.getRect(expensePill), const Rect.fromLTWH(211, 224, 173, 42));
+    final incomeDecoration =
+        tester
+                .widget<Container>(
+                  find.descendant(
+                    of: incomePill,
+                    matching: find.byType(Container),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    final expenseDecoration =
+        tester
+                .widget<Container>(
+                  find.descendant(
+                    of: expensePill,
+                    matching: find.byType(Container),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(incomeDecoration.boxShadow, const <BoxShadow>[
+      BoxShadow(
+        color: Color.fromRGBO(15, 23, 42, .08),
+        offset: Offset(0, 10),
+        blurRadius: 23,
+      ),
+    ]);
+    expect(expenseDecoration.boxShadow, const <BoxShadow>[
+      BoxShadow(
+        color: Color.fromRGBO(15, 23, 42, .08),
+        offset: Offset(0, 12),
+        blurRadius: 24,
+      ),
+    ]);
+    expect(tester.getRect(summary), const Rect.fromLTWH(28, 278, 356, 59));
+    expect(tester.getRect(search), const Rect.fromLTWH(28, 349, 356, 45));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'spendee physical popout return cycle and carousel stay exception free',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = _spendeeThemeSettings();
+
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      Future<void> dragHandle(List<double> deltas) async {
+        final handle = find.byKey(const ValueKey('spendee-test-header-handle'));
+        final gesture = await tester.startGesture(tester.getCenter(handle));
+        for (final delta in deltas) {
+          await gesture.moveBy(Offset(0, delta));
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+
+      await dragHandle(const [100, 34, 4]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      final carousel = find.byKey(
+        const ValueKey('spendee-test-context-carousel'),
+      );
+      final horizontal = await tester.startGesture(tester.getCenter(carousel));
+      await horizontal.moveBy(const Offset(-72, 0));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await horizontal.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [8]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [134]);
+      await dragHandle(const [12, -12]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [100, 172, 4]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [8]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+        findsOneWidget,
+      );
+
+      await dragHandle(const [272]);
+      await dragHandle(const [8, -8]);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'spendee Stage 1 and 2 support zero one and many real-shaped categories',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      themeSettingsOverride = _spendeeThemeSettings();
+
+      for (final scenario in const <(int, int)>[(0, 0), (1, 1), (7, 400)]) {
+        final (categoryCount, transactionCount) = scenario;
+        expenseBootstrapOverride = _spendeeBootstrapPayload(
+          expenseCategoryCount: categoryCount,
+          transactionCount: transactionCount,
+        );
+        await tester.pumpWidget(buildApp());
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        await _dragSpendeeHeaderByExactDelta(tester, 134);
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        final avatars = find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'spendee-test-category-avatar-',
+              ),
+        );
+        final expectedCategoryAvatars = categoryCount <= 1
+            ? categoryCount
+            : categoryCount.clamp(0, 4);
+        expect(avatars, findsNWidgets(expectedCategoryAvatars));
+
+        await _dragSpendeeHeaderByExactDelta(tester, 272);
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage2')),
+          findsOneWidget,
+        );
+        if (categoryCount == 0 || transactionCount == 0) {
+          expect(
+            find.byKey(const ValueKey('spendee-test-stage2-empty-panel')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+            findsNothing,
+          );
+        } else {
+          expect(
+            find.byKey(const ValueKey('spendee-test-budget-pie-panel')),
+            findsOneWidget,
+          );
+        }
+        expect(tester.takeException(), isNull);
+
+        await _dragSpendeeHeaderByExactDelta(tester, 8);
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage1')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        await _dragSpendeeHeaderByExactDelta(tester, 8);
+        expect(
+          find.byKey(const ValueKey('spendee-test-dashboard-stage-stage0')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('spendee C1 C2 C3 and menu match reviewed golden renders', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = _spendeeThemeSettings();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+
+    final previousGoldenComparator = goldenFileComparator;
+    goldenFileComparator = ChannelToleranceGoldenComparator(
+      Uri.parse('test/widget_test.dart'),
+      maxChannelDelta: 2,
+    );
+    addTearDown(() => goldenFileComparator = previousGoldenComparator);
+
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-header-golden-boundary')),
+      matchesGoldenFile('goldens/spendeetest/c1_header.png'),
+    );
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-header-menu-golden-boundary')),
+      matchesGoldenFile('goldens/spendeetest/menu_button.png'),
+    );
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      matchesGoldenFile('goldens/spendeetest/c1_dashboard.png'),
+    );
+
+    await _dragSpendeeHeaderByExactDelta(tester, 134);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      matchesGoldenFile('goldens/spendeetest/c2_dashboard.png'),
+    );
+
+    await _dragSpendeeHeaderByExactDelta(tester, 272);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('spendee-test-dashboard')),
+      matchesGoldenFile('goldens/spendeetest/c3_dashboard.png'),
+    );
   });
 
   testWidgets('shell keeps the body stable while the keyboard opens', (
@@ -391,13 +1231,19 @@ void main() {
     await tester.tap(find.text('Stats'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-sum-year-cards')), findsOneWidget);
     expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
     expect(find.byKey(const ValueKey('expt-fab')), findsOneWidget);
+    var fab = tester.widget<ExptFab>(find.byType(ExptFab));
+    expect(fab.onHorizontalDragStep, isNotNull);
+    expect(fab.onVerticalDragStep, isNull);
 
     await tester.tap(find.text('Főoldal'));
     await tester.pumpAndSettle();
     expect(find.text('Kiadás'), findsOneWidget);
+    fab = tester.widget<ExptFab>(find.byType(ExptFab));
+    expect(fab.onHorizontalDragStep, isNull);
+    expect(fab.onVerticalDragStep, isNull);
 
     await tester.tap(find.byKey(const ValueKey('header-notification-button')));
     await tester.pumpAndSettle();
@@ -474,7 +1320,7 @@ void main() {
     expect(logs, contains('[Perf] BottomNav pointer dispatch tab=stats'));
     expect(logs, contains('[Perf] BottomNav page jump deferred tab=stats'));
     expect(logs, isNot(contains('[Perf] CalendarRender build source=overlay')));
-    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-sum-year-cards')), findsOneWidget);
 
     await tester.tap(find.text('Beállítások'));
     await tester.pumpAndSettle();
@@ -500,7 +1346,7 @@ void main() {
     expect(firstLaunchNotificationPromptCalls, 1);
   });
 
-  testWidgets('FAB opens add transaction sheet from any bottom tab', (
+  testWidgets('FAB does not open the inactive stats threshold sheet', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
@@ -511,19 +1357,10 @@ void main() {
 
     await _tapFab(tester);
 
-    expect(find.text('Új kiadási tranzakció'), findsOneWidget);
-    expect(find.text('Tranzakció neve'), findsOneWidget);
-    expect(find.text('Összeg'), findsOneWidget);
-    expect(find.text('Kategória'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('transaction-date-picker-button')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('transaction-time-picker-button')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('slide-up-menu-veil')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stats-threshold-sheet')), findsNothing);
+    expect(find.byKey(const ValueKey('stats-snapshot-row')), findsNothing);
+    expect(find.text('Új kiadási tranzakció'), findsNothing);
+    expect(find.text('Tranzakció neve'), findsNothing);
   });
 
   testWidgets('FAB opens Flutter add transaction sheet directly', (
@@ -2136,6 +2973,59 @@ Map<String, Object?> expenseBootstrapPayload() {
   };
 }
 
+Map<String, Object?> _spendeeThemeSettings() {
+  return <String, Object?>{
+    'magnetType': 'fade',
+    'cardColor': 'lightgray',
+    'theme': 'Türkiz',
+    'backgroundColor': 'gray',
+    'boxColor': 'gray',
+    'backheaderStyle': 'classic',
+    'dashboardDesignMode': 'spendeeTest',
+  };
+}
+
+Map<String, Object?> _spendeeBootstrapPayload({
+  required int expenseCategoryCount,
+  required int transactionCount,
+}) {
+  final categories = List<Map<String, Object?>>.generate(
+    expenseCategoryCount,
+    (index) => <String, Object?>{
+      'transactionCategoryID': 100 + index,
+      'name': 'Kategória ${index + 1}',
+      'type': 'kiadás',
+      'colorSlot': index % 21,
+      'iconSlot': index % 8,
+      'backgroundColor': '#06b6d4',
+      'hasLimit': index.isEven,
+      'limitAmount': index.isEven ? 100000 + index * 10000 : 0,
+      'alertActive': false,
+      'isCustomIcon': true,
+    },
+  );
+  final transactions = expenseCategoryCount == 0
+      ? <Map<String, Object?>>[]
+      : List<Map<String, Object?>>.generate(
+          transactionCount,
+          (index) => <String, Object?>{
+            'id': 900000 + index,
+            'date': '2026.07.${(index % 28 + 1).toString().padLeft(2, '0')}',
+            'time': '${(index % 24).toString().padLeft(2, '0')}:30:00',
+            'merchant': 'Teszt kereskedő $index',
+            'amount': -(100 + index),
+            'userAssignedName': null,
+            'transactionCategoryID':
+                categories[index %
+                    expenseCategoryCount]['transactionCategoryID'],
+          },
+        );
+  return <String, Object?>{
+    'categories': categories,
+    'transactions': transactions,
+  };
+}
+
 Future<void> _tapFab(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390, 919);
   tester.view.devicePixelRatio = 1;
@@ -2210,4 +3100,46 @@ double _transactionEditorDateTimeSaveGap(WidgetTester tester) {
       .getRect(find.byKey(const ValueKey('transaction-save-button')))
       .top;
   return saveTop - dateTimeBottom;
+}
+
+class _WidgetTestBrowserFullscreenDriver implements BrowserFullscreenDriver {
+  var _isFullscreen = false;
+  var enterCalls = 0;
+  var exitCalls = 0;
+  final List<VoidCallback> _listeners = <VoidCallback>[];
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  bool get isFullscreen => _isFullscreen;
+
+  @override
+  void addStateListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeStateListener(VoidCallback listener) =>
+      _listeners.remove(listener);
+
+  @override
+  Future<void> enter() async {
+    enterCalls += 1;
+    setFullscreenExternally(true);
+  }
+
+  @override
+  Future<void> exit() async {
+    exitCalls += 1;
+    setFullscreenExternally(false);
+  }
+
+  void setFullscreenExternally(bool value) {
+    _isFullscreen = value;
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+
+  @override
+  void dispose() => _listeners.clear();
 }

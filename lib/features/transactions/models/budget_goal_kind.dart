@@ -9,7 +9,7 @@ extension BudgetGoalKindX on BudgetGoalKind {
 
   String get title => switch (this) {
     BudgetGoalKind.expenseBudget => 'Budget',
-    BudgetGoalKind.incomeGoal => 'Beveteli cel',
+    BudgetGoalKind.incomeGoal => 'Összbevételi cél',
     BudgetGoalKind.savingGoal => 'Megtakaritas',
   };
 

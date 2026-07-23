@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart'
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
+import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,20 +60,33 @@ void main() {
     );
   });
 
-  test('active type switch writes a complete performance trace', () async {
-    final store = TransactionStore(FakeTransactionRepository());
-    await store.start();
-    DebugConsole.clear();
+  test(
+    'active type switch defers large view resolution until consumers read it',
+    () async {
+      final store = TransactionStore(HighVolumeTransactionRepository());
+      await store.start();
+      var notifications = 0;
+      store.addListener(() => notifications += 1);
+      DebugConsole.clear();
 
-    store.setActiveType(TransactionType.income);
+      store.setActiveType(TransactionType.income);
 
-    final logs = DebugConsole.allText;
-    expect(logs, contains('[Perf] TypeSwitch request type=income'));
-    expect(logs, contains('[Perf] Store active view reason=type-switch'));
-    expect(logs, contains('[Perf] TypeSwitch notify type=income'));
-    expect(logs, contains('[Perf] TypeSwitch complete type=income'));
-    expect(logs, contains('elapsed='));
-  });
+      final logs = DebugConsole.allText;
+      expect(logs, contains('[Perf] TypeSwitch request type=income'));
+      expect(
+        logs,
+        isNot(contains('[Perf] Store active view reason=type-switch')),
+      );
+      expect(logs, contains('[Perf] TypeSwitch notify type=income'));
+      expect(logs, contains('[Perf] TypeSwitch complete type=income'));
+      expect(logs, contains('elapsed='));
+      expect(notifications, 1);
+      expect(store.activeType, TransactionType.income);
+      expect(store.activeCategoryIds, isEmpty);
+      expect(store.activeMerchantFilters, isEmpty);
+      expect(store.visibleTransactions, hasLength(3000));
+    },
+  );
 
   test(
     'store can defer startup notify and prewarm during native sheet motion',
@@ -471,6 +485,28 @@ void main() {
   );
 
   test(
+    'vendor summaries can be requested for a type outside home state',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      await store.start();
+
+      expect(store.activeType, TransactionType.expense);
+      expect(
+        store
+            .vendorFilterSummariesFor(TransactionType.income)
+            .map((summary) => summary.name),
+        contains('Gguu'),
+      );
+      expect(
+        store
+            .vendorFilterSummariesFor(TransactionType.income)
+            .map((summary) => summary.name),
+        isNot(contains('Rrr')),
+      );
+    },
+  );
+
+  test(
     'vendor summaries expose deterministic dominant category icon data',
     () async {
       final repository = FakeTransactionRepository();
@@ -516,7 +552,7 @@ void main() {
       );
       expect(dominant.count, 2);
       expect(dominant.categoryIconSlot, 4);
-      expect(dominant.colorHex, '#84cc16');
+      expect(dominant.colorHex, CategoryColorManager.hex(3));
 
       final fallback = store.vendorFilterSummaries.firstWhere(
         (summary) => summary.name == 'No Category',
@@ -1030,6 +1066,28 @@ class FakeTransactionRepository extends TransactionRepositoryContract {
       count += 1;
     }
     return count;
+  }
+}
+
+class HighVolumeTransactionRepository extends FakeTransactionRepository {
+  HighVolumeTransactionRepository() {
+    transactions
+      ..clear()
+      ..addAll(
+        List<TransactionRecord>.generate(6000, (index) {
+          final income = index.isEven;
+          final day = (index % 28) + 1;
+          return TransactionRecord.fromMap({
+            'id': 100000 + index,
+            'date': '2025.09.${day.toString().padLeft(2, '0')}',
+            'time': '10:00',
+            'merchant': 'Merchant ${index % 40}',
+            'amount': income ? 1000 + index : -(1000 + index),
+            'userAssignedName': null,
+            'transactionCategoryID': income ? 5 : 6,
+          });
+        }),
+      );
   }
 }
 

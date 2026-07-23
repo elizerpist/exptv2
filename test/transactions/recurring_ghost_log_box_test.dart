@@ -35,28 +35,29 @@ void main() {
     expect(find.byType(Opacity), findsWidgets);
   });
 
-  testWidgets('neumorph ghost surface omits dashed border but keeps fixed visuals', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Center(
-          child: RecurringGhostLogBox(
-            ghost: ghostFixture(),
-            category: categoryFixture(),
-            surfaceStyle: ExpenseSurfaceInteraction.insetInset,
+  testWidgets(
+    'neumorph ghost surface omits dashed border but keeps fixed visuals',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: RecurringGhostLogBox(
+              ghost: ghostFixture(),
+              category: categoryFixture(),
+              surfaceStyle: ExpenseSurfaceInteraction.insetInset,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      find.byKey(const ValueKey('recurring-ghost-dashed-border-1')),
-      findsNothing,
-    );
-    expect(find.byType(GhostBadge), findsOneWidget);
-    expect(find.text('Várható · idő'), findsOneWidget);
-  });
+      expect(
+        find.byKey(const ValueKey('recurring-ghost-dashed-border-1')),
+        findsNothing,
+      );
+      expect(find.byType(GhostBadge), findsOneWidget);
+      expect(find.text('Várható · idő'), findsOneWidget);
+    },
+  );
 
   testWidgets('push ghost logbox renders push trigger marker', (tester) async {
     await tester.pumpWidget(
@@ -75,6 +76,29 @@ void main() {
       find.byKey(const ValueKey('recurring-ghost-trigger-icon-1')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('ghost trigger label fits a 412 pixel mobile viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 915);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RecurringGhostLogBox(
+            ghost: ghostFixture(name: 'Netflix', amount: 3490),
+            category: categoryFixture(),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Várható · idő'), findsOneWidget);
   });
 }
 

@@ -11,7 +11,7 @@ void main() {
   test('resolves the approved finance metrics from one snapshot', () {
     final metrics = FastInfoMetricsResolver.resolve(_snapshot());
 
-    expect(metrics, hasLength(17));
+    expect(metrics, hasLength(16));
     expect(
       metrics.keys.toSet(),
       fastInfoCardCatalog.map((card) => card.id).toSet(),
@@ -38,6 +38,7 @@ void main() {
       metrics['atlagos_napi_koltes']?.secondaryValues,
       contains('Puffer: 170 nap'),
     );
+    expect(metrics, isNot(contains('bevetel_ebben_a_honapban')));
     expect(
       metrics['kiadas_bevetel_arany']?.progress,
       closeTo(23000 / 150000, 0.001),
@@ -177,31 +178,7 @@ void main() {
     expect(metrics['kiadas_bevetel_arany']?.pillValue, contains('maradt'));
   });
 
-  test(
-    'recurring generated income is excluded from income comparison visual',
-    () {
-      final metrics = FastInfoMetricsResolver.resolve(
-        _snapshot(
-          now: DateTime(2026, 6, 10, 12),
-          transactions: <TransactionRecord>[
-            _transaction(1, '2026.06.01', 100000, recurringTransactionId: 55),
-            _transaction(2, '2026.06.02', 25000),
-            _transaction(3, '2026.05.05', 40000),
-            _transaction(4, '2026.05.06', 300000, recurringTransactionId: 55),
-          ],
-        ),
-      );
-
-      final metric = metrics['bevetel_ebben_a_honapban']!;
-
-      expect(metric.primaryValue, '125 000 Ft');
-      expect(metric.visual.kind, FastInfoVisualKind.incomeComparisonBars);
-      expect(metric.visual.value, 25000);
-      expect(metric.visual.compareValue, 40000);
-    },
-  );
-
-  test('pending recurring income ghosts feed expected income metrics', () {
+  test('pending recurring income ghosts still feed savings projection', () {
     final metrics = FastInfoMetricsResolver.resolve(
       _snapshot(
         now: DateTime(2026, 6, 3, 12),
@@ -221,11 +198,7 @@ void main() {
       ),
     );
 
-    expect(metrics['bevetel_ebben_a_honapban']?.primaryValue, '0 Ft');
-    expect(
-      metrics['bevetel_ebben_a_honapban']?.secondaryValues,
-      contains('várt 300k · ghost 300k'),
-    );
+    expect(metrics, isNot(contains('bevetel_ebben_a_honapban')));
     expect(
       metrics['megtakaritas']?.secondaryValues,
       contains('várható cél: 600%'),

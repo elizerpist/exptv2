@@ -1,12 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/keyboard/app_keyboard_provider.dart';
+import 'core/platform/browser_fullscreen_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/security_gate.dart';
 import 'features/shell/expt_shell.dart';
+import 'features/stats/data/stats_render_frame_worker.dart';
 import 'features/transactions/data/transaction_repository.dart';
 import 'features/transactions/sync/google_auth_headers_client.dart';
 import 'features/transactions/sync/google_sheets_api_client.dart';
@@ -35,15 +38,28 @@ Future<void> bootstrapCategoryIconsForStartup({
 Future<void> _loadAndWarmCategoryIcons({SharedPreferences? preferences}) async {
   final prefs = preferences ?? await SharedPreferences.getInstance();
   await CategoryIconManager.load(preferences: prefs);
-  await warmUpCategorySlotIconCache(strokeWidth: 1.35);
+  await Future.wait([
+    warmUpCategorySlotIconCache(strokeWidth: 1.35),
+    warmUpCategorySlotIconCache(strokeWidth: 1.4),
+  ]);
   _categoryIconStartupReady = true;
 }
 
 class Exptv2App extends StatefulWidget {
-  const Exptv2App({super.key, required this.store, required this.nativeBridge});
+  const Exptv2App({
+    super.key,
+    required this.store,
+    required this.nativeBridge,
+    this.statsRenderFrameWorker,
+    this.webPreviewFrameEnabled,
+    this.browserFullscreenController,
+  });
 
   final EventStore store;
   final NativeBridge nativeBridge;
+  final StatsRenderFrameWorker? statsRenderFrameWorker;
+  final bool? webPreviewFrameEnabled;
+  final BrowserFullscreenController? browserFullscreenController;
 
   @override
   State<Exptv2App> createState() => _Exptv2AppState();
@@ -51,12 +67,13 @@ class Exptv2App extends StatefulWidget {
 
 class _Exptv2AppState extends State<Exptv2App> {
   GoogleSheetsSyncController? _googleSheetsSyncController;
+  final _securityGateController = SecurityGateController();
 
   @override
   void initState() {
     super.initState();
     unawaited(bootstrapCategoryIconsForStartup());
-    unawaited(_initGoogleSheetsSync());
+    if (!kIsWeb) unawaited(_initGoogleSheetsSync());
   }
 
   @override
@@ -90,12 +107,17 @@ class _Exptv2AppState extends State<Exptv2App> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardProvider(
+    return AppKeyboardProvider(
       child: MaterialApp(
         title: 'Exptv2',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
+        builder: (context, child) => _WebPreviewFrame(
+          enabled: widget.webPreviewFrameEnabled ?? kIsWeb,
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: SecurityGate(
+          controller: _securityGateController,
           nativeBridge: widget.nativeBridge,
           onUnlocked: _googleSheetsSyncController == null
               ? null
@@ -104,8 +126,48 @@ class _Exptv2AppState extends State<Exptv2App> {
             store: widget.store,
             nativeBridge: widget.nativeBridge,
             googleSheetsSyncController: _googleSheetsSyncController,
+            statsRenderFrameWorker: widget.statsRenderFrameWorker,
+            browserFullscreenController: widget.browserFullscreenController,
+            onSecuritySettingsChanged: _securityGateController.updateSettings,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _WebPreviewFrame extends StatelessWidget {
+  const _WebPreviewFrame({required this.enabled, required this.child});
+
+  static const maxWidth = 480.0;
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    final mediaQuery = MediaQuery.of(context);
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.clamp(0.0, maxWidth).toDouble();
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              key: const ValueKey('web-preview-frame'),
+              width: width,
+              height: constraints.maxHeight,
+              child: MediaQuery(
+                data: mediaQuery.copyWith(
+                  size: Size(width, mediaQuery.size.height),
+                ),
+                child: child,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

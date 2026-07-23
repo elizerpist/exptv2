@@ -166,9 +166,6 @@ class FastInfoPillCard extends StatelessWidget {
     if (slot.id == 'havi_fix_koltseg_osszesen') {
       return _MonthlyFixedPillContent(slot: slot, metric: metric);
     }
-    if (slot.id == 'bevetel_ebben_a_honapban') {
-      return _MonthlyIncomePillContent(slot: slot, metric: metric);
-    }
     if (slot.id == 'kiadas_bevetel_arany') {
       return _IncomeSpentPillContent(slot: slot, metric: metric);
     }
@@ -1219,37 +1216,6 @@ class _MonthlyFixedPillContent extends StatelessWidget {
   }
 }
 
-class _MonthlyIncomePillContent extends StatelessWidget {
-  const _MonthlyIncomePillContent({required this.slot, required this.metric});
-
-  final FastInfoSlot slot;
-  final FastInfoMetricResult? metric;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _PillTitle(slot: slot, label: 'Havi bevétel'),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _PillValues(
-            slotId: slot.id,
-            primary: metric?.pillValue ?? metric?.primaryValue ?? 'Nincs adat',
-            secondary:
-                '${_compactDisplayAmount(metric?.primaryValue)} beérkezett',
-          ),
-        ),
-        const SizedBox(width: 8),
-        _IncomeCompareBars(
-          key: ValueKey('fastinfo-income-compare-${slot.id}'),
-          previous: metric?.visual.compareValue,
-          current: metric?.visual.value,
-        ),
-      ],
-    );
-  }
-}
-
 class _IncomeSpentPillContent extends StatelessWidget {
   const _IncomeSpentPillContent({required this.slot, required this.metric});
 
@@ -1591,9 +1557,6 @@ class FastInfoBoxCard extends StatelessWidget {
     }
     if (slot.id == 'havi_fix_koltseg_osszesen') {
       return _MonthlyFixedBoxContent(slot: slot, metric: metric);
-    }
-    if (slot.id == 'bevetel_ebben_a_honapban') {
-      return _MonthlyIncomeBoxContent(slot: slot, metric: metric);
     }
     if (slot.id == 'kiadas_bevetel_arany') {
       return _IncomeSpentBoxContent(slot: slot, metric: metric);
@@ -2291,47 +2254,6 @@ class _MonthlyFixedBoxContent extends StatelessWidget {
   }
 }
 
-class _MonthlyIncomeBoxContent extends StatelessWidget {
-  const _MonthlyIncomeBoxContent({required this.slot, required this.metric});
-
-  final FastInfoSlot slot;
-  final FastInfoMetricResult? metric;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _BoxTitle('Havi bevétel'),
-        const SizedBox(height: 3),
-        _BoxPrimary(metric?.primaryValue ?? 'Nincs adat'),
-        _BoxSecondary(
-          _secondaryStarting(metric, 'eddig') ?? 'eddig beérkezett',
-        ),
-        const SizedBox(height: 3),
-        const _SmallBadge(text: 'Ghost bevétel kell'),
-        const Spacer(),
-        const _BoxMicroLabel('Bevételi tempó:'),
-        const SizedBox(height: 3),
-        _IncomeBars(
-          key: ValueKey('fastinfo-income-bars-${slot.id}'),
-          previous: metric?.visual.compareValue,
-          current: metric?.visual.value,
-          expected: metric?.visual.marker,
-        ),
-        const SizedBox(height: 2),
-        const Center(
-          child: _BoxSecondary('előző / most / várt', fontSize: 6.3),
-        ),
-        const SizedBox(height: 4),
-        const _BoxMicroLabel('Fedezet:'),
-        const SizedBox(height: 2),
-        _BoxBottomValue(_coverageDays(metric)),
-      ],
-    );
-  }
-}
-
 class _IncomeSpentBoxContent extends StatelessWidget {
   const _IncomeSpentBoxContent({required this.slot, required this.metric});
 
@@ -2820,103 +2742,6 @@ class _SplitLabels extends StatelessWidget {
         _BoxSecondary(left, fontSize: 6),
         _BoxSecondary(right, fontSize: 6),
       ],
-    );
-  }
-}
-
-class _IncomeCompareBars extends StatelessWidget {
-  const _IncomeCompareBars({
-    super.key,
-    required this.previous,
-    required this.current,
-  });
-
-  final double? previous;
-  final double? current;
-
-  @override
-  Widget build(BuildContext context) {
-    return _IncomeBarsBase(
-      width: 78,
-      height: 22,
-      values: <double>[previous ?? 0, current ?? 0],
-      colors: const <Color>[AppColors.gray400, AppColors.income],
-    );
-  }
-}
-
-class _IncomeBars extends StatelessWidget {
-  const _IncomeBars({
-    super.key,
-    required this.previous,
-    required this.current,
-    required this.expected,
-  });
-
-  final double? previous;
-  final double? current;
-  final double? expected;
-
-  @override
-  Widget build(BuildContext context) {
-    return _IncomeBarsBase(
-      width: 98,
-      height: 25,
-      values: <double>[previous ?? 0, current ?? 0, expected ?? current ?? 0],
-      colors: const <Color>[
-        AppColors.gray400,
-        AppColors.income,
-        Color(0xFFF59E0B),
-      ],
-    );
-  }
-}
-
-class _IncomeBarsBase extends StatelessWidget {
-  const _IncomeBarsBase({
-    required this.width,
-    required this.height,
-    required this.values,
-    required this.colors,
-  });
-
-  final double width;
-  final double height;
-  final List<double> values;
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxValue = values.fold<double>(0, math.max);
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var index = 0; index < values.length; index += 1) ...[
-            SizedBox(
-              width: values.length == 2 ? 18 : 16,
-              child: FractionallySizedBox(
-                heightFactor: maxValue <= 0
-                    ? .18
-                    : (values[index] / maxValue).clamp(.18, 1.0).toDouble(),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors[index],
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(3),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (index < values.length - 1)
-              SizedBox(width: values.length == 2 ? 8 : 6),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -4253,12 +4078,6 @@ String _noSpendRatio(FastInfoMetricResult? metric) {
   return value.replaceFirst(RegExp(r'^arány:\s*'), '');
 }
 
-String _coverageDays(FastInfoMetricResult? metric) {
-  final value = _secondaryStarting(metric, 'Fedezet:');
-  if (value == null) return '';
-  return value.replaceFirst(RegExp(r'^Fedezet:\s*'), '');
-}
-
 String _reserveText(FastInfoMetricResult? metric) {
   final value = _secondaryStarting(metric, 'Összes tartalék:');
   if (value == null) return '';
@@ -4300,14 +4119,6 @@ String _categoryPointPeriod(FastInfoVisualPoint point) {
   final label = point.label.trim();
   if (label.isEmpty) return '';
   return label.split('|').first.trim();
-}
-
-String _compactDisplayAmount(String? value) {
-  if (value == null || value.trim().isEmpty) return '';
-  final digits = value.replaceAll(RegExp(r'[^0-9-]'), '');
-  final amount = int.tryParse(digits);
-  if (amount == null) return value;
-  return _compactMetricAmount(amount);
 }
 
 String _compactMetricAmount(num amount) {

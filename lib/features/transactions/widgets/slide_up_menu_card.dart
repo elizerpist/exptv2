@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_keyboard_controller/flutter_keyboard_controller.dart';
 
 import '../../../core/debug/debug_console.dart';
+import '../../../core/keyboard/app_keyboard_height.dart';
 import '../../../core/keyboard/keyboard_inset_follower.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -286,8 +286,8 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
     required Widget child,
   }) {
     if (widget.keyboardMotionSource == SlideUpKeyboardMotionSource.controller) {
-      final keyboard = context.keyboardOrNull;
-      if (!widget.keyboardAvoidance || keyboard == null) {
+      final keyboardHeightNotifier = appKeyboardHeightNotifierOf(context);
+      if (!widget.keyboardAvoidance || keyboardHeightNotifier == null) {
         return _buildTranslatedPanel(
           panelHeight: panelHeight,
           keyboardInset: 0,
@@ -295,7 +295,7 @@ class _SlideUpMenuCardState extends State<SlideUpMenuCard>
         );
       }
       return ValueListenableBuilder<double>(
-        valueListenable: keyboard.heightNotifier,
+        valueListenable: keyboardHeightNotifier,
         child: child,
         builder: (context, keyboardHeight, child) {
           final keyboardInset = keyboardHeight

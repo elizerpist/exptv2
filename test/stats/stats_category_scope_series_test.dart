@@ -9,7 +9,7 @@ void main() {
     final data = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: [
         record(id: 1, date: '2026-01-10', amount: -6000, categoryId: 1),
@@ -32,11 +32,11 @@ void main() {
     expect(series.monthTicks.map((tick) => tick.label), [
       'Jan',
       'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
+      'Már',
+      'Ápr',
+      'Máj',
+      'Jún',
+      'Júl',
     ]);
     expect(series.helperBars.map((bar) => bar.rawValue), [6000, 26030]);
     _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
@@ -52,7 +52,7 @@ void main() {
       final data = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.income,
-        mode: StatsRenderMode.categoryScope,
+        mode: StatsRenderMode.common,
         thresholdValue: 100000,
         transactions: [
           record(id: 1, date: '2026-01-01', amount: 300000, categoryId: 1),
@@ -70,14 +70,18 @@ void main() {
 
       final series = StatsCategoryScopeSeries.fromYearData(data);
 
-      expect(series.monthTicks.map((tick) => tick.label), ['Jan', 'Mar']);
+      expect(series.monthTicks.map((tick) => tick.label), ['Jan', 'Már']);
       expect(series.scoreLine, hasLength(2));
-      expect(series.scoreLine.last.value, closeTo(60.5, 0.0001));
-      expect(series.kontrollScore, closeTo(60.5, 0.0001));
+      expect(series.scoreLine.first.value, closeTo(50, 0.0001));
+      expect(series.scoreLine.last.value, closeTo(60, 0.0001));
+      expect(series.kontrollScore, closeTo(60, 0.0001));
       expect(series.helperBars.map((bar) => bar.rawValue), [300000, 400000]);
-      expect(series.helperBars.map((bar) => bar.value), [-100, 100]);
+      _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
+        66.66666666666666,
+        100,
+      ]);
       expect(series.helperBars.map((bar) => bar.colorHex), [
-        '#EF4444',
+        '#22C55E',
         '#22C55E',
       ]);
     },
@@ -108,7 +112,7 @@ void main() {
       dailyScopeAmounts: const [2000, 0, 3000],
     );
 
-    expect(series.secondaryMetricLabel, 'min baseline');
+    expect(series.secondaryMetricLabel, 'minimum alapú eltérés');
     expect(series.helperBars.map((bar) => bar.rawValue), [2000, 3000]);
     expect(series.helperBars.map((bar) => bar.value), [0, 100]);
   });
@@ -119,7 +123,7 @@ void main() {
       dailyScopeAmounts: const [6000, 2000, 14000],
     );
 
-    expect(series.secondaryMetricLabel, 'threshold excess');
+    expect(series.secondaryMetricLabel, 'küszöb feletti többlet');
     expect(series.helperBars, hasLength(2));
     expect(series.helperBars.map((bar) => bar.rawValue), [6000, 14000]);
     _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
@@ -129,13 +133,13 @@ void main() {
   });
 
   test(
-    'income scope uses endpoint income health and average-deviation helper bars',
+    'income keeps monthly pattern score but helpers use threshold-hit days',
     () {
       final data = StatsYearData.build(
         year: 2026,
         activeType: TransactionType.income,
-        mode: StatsRenderMode.categoryScope,
-        thresholdValue: 50,
+        mode: StatsRenderMode.common,
+        thresholdValue: 50000,
         transactions: [
           record(id: 1, date: '2026-01-01', amount: 300000, categoryId: 1),
           record(id: 2, date: '2026-02-01', amount: 75000, categoryId: 1),
@@ -152,30 +156,40 @@ void main() {
 
       final series = StatsCategoryScopeSeries.fromYearData(data);
 
-      expect(series.monthLabels, ['Jan', 'Feb', 'Mar']);
-      expect(series.secondaryMetricLabel, 'atlag elteres');
-      expect(series.secondaryReferenceAmount, closeTo(333333.33, 0.01));
+      expect(series.monthLabels, ['Jan', 'Feb', 'Már']);
+      expect(series.secondaryMetricLabel, 'küszöb feletti többlet');
+      expect(series.secondaryReferenceAmount, 50000);
       expect(series.scoreLine.map((point) => point.value), [
-        closeTo(41.0, 0.01),
-        closeTo(69.75, 0.01),
-        closeTo(55.65, 0.01),
+        closeTo(50, 0.01),
+        closeTo(50, 0.01),
+        closeTo(61.67, 0.01),
       ]);
       expect(series.controlBars.map((bar) => bar.colorHex), [
-        '#EF4444',
-        '#22C55E',
         '#FBBF24',
+        '#FBBF24',
+        '#22C55E',
+      ]);
+      expect(series.helperBars.map((bar) => bar.rawValue), [
+        300000,
+        75000,
+        75000,
+        75000,
+        75000,
+        400000,
       ]);
       _expectCloseValues(series.helperBars.map((bar) => bar.value), const [
-        -50,
-        -50,
+        71.42857142857143,
+        7.142857142857143,
+        7.142857142857143,
+        7.142857142857143,
+        7.142857142857143,
         100,
       ]);
-      expect(series.helperBars.map((bar) => bar.colorHex), [
-        '#EF4444',
-        '#EF4444',
-        '#22C55E',
-      ]);
-      expect(series.kontrollScore, closeTo(55.65, 0.01));
+      expect(
+        series.helperBars.map((bar) => bar.colorHex),
+        everyElement('#22C55E'),
+      );
+      expect(series.kontrollScore, closeTo(61.67, 0.01));
     },
   );
 
@@ -183,7 +197,7 @@ void main() {
     final data = StatsYearData.build(
       year: 2026,
       activeType: TransactionType.expense,
-      mode: StatsRenderMode.categoryScope,
+      mode: StatsRenderMode.common,
       thresholdValue: 5000,
       transactions: [
         record(id: 1, date: '2026-01-01', amount: -6000, categoryId: 1),
@@ -200,16 +214,257 @@ void main() {
     expect(series.monthLabels, [
       'Jan',
       'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
+      'Már',
+      'Ápr',
+      'Máj',
+      'Jún',
+      'Júl',
       'Aug',
-      'Sep',
-      'Oct',
+      'Szep',
+      'Okt',
       'Nov',
       'Dec',
+    ]);
+  });
+
+  test('month mode axis keeps day samples and thins day labels', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.common,
+      thresholdValue: 0,
+      transactions: [
+        for (var day = 1; day <= 31; day += 1)
+          record(
+            id: day,
+            date: '2026-01-${day.toString().padLeft(2, '0')}',
+            amount: -1000.0 * day,
+            categoryId: 1,
+          ),
+      ],
+      categories: [
+        category(id: 1, name: 'Bolt', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
+      summaryScope: StatsSummaryScope.monthly,
+      month: 1,
+    );
+
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(series.helperBars, hasLength(31));
+    expect(series.monthTicks.map((tick) => tick.label), [
+      '1',
+      '5',
+      '10',
+      '15',
+      '20',
+      '25',
+      '30',
+      '31',
+    ]);
+  });
+
+  test('expense score thresholds the aggregated raw daily scope', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.common,
+      thresholdValue: 5000,
+      transactions: [
+        record(id: 1, date: '2026-01-01', amount: -3000, categoryId: 1),
+        record(id: 2, date: '2026-01-01', amount: -3000, categoryId: 1),
+      ],
+      categories: [
+        category(id: 1, name: 'Bolt', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
+    );
+
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(series.helperBars.map((bar) => bar.rawValue), [6000]);
+    expect(series.scoreLine.single.value, 0);
+  });
+
+  test('sum expense score keeps the canonical daily pipeline across years', () {
+    final start = DateTime(2024, 12, 25);
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.expense,
+      mode: StatsRenderMode.common,
+      thresholdValue: 5000,
+      transactions: [
+        for (var index = 0; index < 13; index += 1)
+          record(
+            id: index + 1,
+            date: dateString(start.add(Duration(days: index))),
+            amount: -6000,
+            categoryId: 1,
+          ),
+      ],
+      categories: [
+        category(id: 1, name: 'Bolt', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {},
+      summaryScope: StatsSummaryScope.allTime,
+    );
+
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(data.periodLabels, ['2024', '2025']);
+    expect(series.scoreLine, hasLength(13));
+    expect(series.dynamicEmaPeriod, 16);
+  });
+
+  test(
+    'expense score has parity for equivalent sum year and month domains',
+    () {
+      final transactions = [
+        record(id: 1, date: '2026-01-01', amount: -3000, categoryId: 1),
+        record(id: 2, date: '2026-01-01', amount: -3000, categoryId: 2),
+        record(id: 3, date: '2026-01-03', amount: -9000, categoryId: 1),
+      ];
+      final categories = [
+        category(id: 1, name: 'Food', type: TransactionType.expense),
+        category(id: 2, name: 'Travel', type: TransactionType.expense),
+      ];
+      final series = <StatsCategoryScopeSeries>[];
+      for (final scope in StatsSummaryScope.values) {
+        final data = StatsYearData.build(
+          year: 2026,
+          activeType: TransactionType.expense,
+          mode: StatsRenderMode.common,
+          thresholdValue: 5000,
+          transactions: transactions,
+          categories: categories,
+          selectedCategoryIds: const {1, 2},
+          summaryScope: scope,
+          month: 1,
+        );
+        series.add(StatsCategoryScopeSeries.fromYearData(data));
+      }
+
+      for (final value in series) {
+        expect(value.helperBars.map((bar) => bar.rawValue), [6000, 9000]);
+        expect(value.scoreLine.map((point) => point.value), [
+          closeTo(100 / 3, 0.0001),
+          0,
+        ]);
+        expect(value.kontrollScore, 0);
+      }
+    },
+  );
+
+  test('income exposes coverage, shortfall and break-even centerline bars', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.income,
+      mode: StatsRenderMode.common,
+      thresholdValue: 0,
+      transactions: [
+        record(id: 1, date: '2026-01-01', amount: 12000, categoryId: 1),
+        record(id: 2, date: '2026-01-02', amount: -8000, categoryId: 2),
+        record(id: 3, date: '2026-02-01', amount: 5000, categoryId: 1),
+        record(id: 4, date: '2026-02-02', amount: -10000, categoryId: 2),
+        record(id: 5, date: '2026-03-01', amount: 7000, categoryId: 1),
+        record(id: 6, date: '2026-03-02', amount: -7000, categoryId: 2),
+      ],
+      categories: [
+        category(id: 1, name: 'Fizetés', type: TransactionType.income),
+        category(id: 2, name: 'Bolt', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {1},
+    );
+
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(series.incomeComparisonBars.map((bar) => bar.signedValue), [
+      4000,
+      -5000,
+      0,
+    ]);
+    expect(series.incomeComparisonBars.map((bar) => bar.colorHex), [
+      '#22C55E',
+      '#EF4444',
+      '#FBBF24',
+    ]);
+    expect(series.kontrollScore, closeTo(43.8235, 0.001));
+  });
+
+  test('income month mode keeps all calendar days as centerline inputs', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.income,
+      mode: StatsRenderMode.common,
+      thresholdValue: 0,
+      transactions: [
+        record(id: 1, date: '2026-01-15', amount: 12000, categoryId: 1),
+        record(id: 2, date: '2026-01-15', amount: -8000, categoryId: 2),
+      ],
+      categories: [
+        category(id: 1, name: 'Fizetés', type: TransactionType.income),
+        category(id: 2, name: 'Bolt', type: TransactionType.expense),
+      ],
+      selectedCategoryIds: const {1},
+      summaryScope: StatsSummaryScope.monthly,
+      month: 1,
+    );
+
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(series.incomeComparisonBars, hasLength(31));
+    expect(
+      series.incomeComparisonBars.first.position,
+      closeTo(0.5 / 31, 0.0001),
+    );
+    expect(
+      series.incomeComparisonBars.last.position,
+      closeTo(30.5 / 31, 0.0001),
+    );
+    expect(series.monthTicks.map((tick) => tick.label), [
+      '1',
+      '5',
+      '10',
+      '15',
+      '20',
+      '25',
+      '30',
+      '31',
+    ]);
+  });
+
+  test('sum mode axis keeps yearly samples and thins year labels', () {
+    final data = StatsYearData.build(
+      year: 2026,
+      activeType: TransactionType.income,
+      mode: StatsRenderMode.common,
+      thresholdValue: 0,
+      transactions: [
+        for (var year = 2006; year <= 2025; year += 1)
+          record(
+            id: year,
+            date: '$year-01-01',
+            amount: 100000.0 + year,
+            categoryId: 1,
+          ),
+      ],
+      categories: [
+        category(id: 1, name: 'Fizetés', type: TransactionType.income),
+      ],
+      selectedCategoryIds: const {},
+      summaryScope: StatsSummaryScope.allTime,
+    );
+
+    final series = StatsCategoryScopeSeries.fromYearData(data);
+
+    expect(series.helperBars, hasLength(20));
+    expect(series.monthTicks.map((tick) => tick.label), [
+      '2006',
+      '2010',
+      '2015',
+      '2020',
+      '2025',
     ]);
   });
 
@@ -312,6 +567,10 @@ void _expectCloseValues(Iterable<double> actual, List<double> expected) {
   for (var i = 0; i < expected.length; i += 1) {
     expect(actualList[i], closeTo(expected[i], 0.0001), reason: 'index $i');
   }
+}
+
+String dateString(DateTime value) {
+  return '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 }
 
 TransactionRecord record({

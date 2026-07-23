@@ -21,15 +21,19 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 class MainActivity : FlutterFragmentActivity() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = LifecycleCoroutineScope(Dispatchers.Main)
     private var nativeImeSheetHost: NativeImeSheetHost? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -44,18 +48,23 @@ class MainActivity : FlutterFragmentActivity() {
         RecurringAlarmMethodChannel(this, scope).attach(
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "exptv2/recurring_alarm"),
         )
-        scope.launch(Dispatchers.IO) { recurringAlarmScheduler.sync() }
+        scope.launchGuarded(
+            context = Dispatchers.IO,
+            reportFailure = { reportRootFailure("recurring alarm sync", it) },
+        ) {
+            recurringAlarmScheduler.sync()
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pushparser/methods")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "loadEvents" -> scope.launch {
+                    "loadEvents" -> launchMethodCall(call.method, result) {
                         val events = withContext(Dispatchers.IO) {
                             repository.allEvents().map { it.toMap() }
                         }
                         result.success(events)
                     }
-                    "loadEventsAfterId" -> scope.launch {
+                    "loadEventsAfterId" -> launchMethodCall(call.method, result) {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val afterId = (args["afterId"] as? Number)?.toLong()
                             ?: args["afterId"]?.toString()?.toLongOrNull()
@@ -65,12 +74,12 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(events)
                     }
-                    "loadNotificationEventPage" -> scope.launch {
+                    "loadNotificationEventPage" -> launchMethodCall(call.method, result) {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val page = withContext(Dispatchers.IO) { repository.listPage(args).toMap() }
                         result.success(page)
                     }
-                    "loadNotificationEvent" -> scope.launch {
+                    "loadNotificationEvent" -> launchMethodCall(call.method, result) {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val id = (args["id"] as? Number)?.toLong()
                             ?: args["id"]?.toString()?.toLongOrNull()
@@ -78,7 +87,7 @@ class MainActivity : FlutterFragmentActivity() {
                         val row = withContext(Dispatchers.IO) { repository.eventById(id)?.toMap() }
                         result.success(row)
                     }
-                    "markNotificationEventSystem" -> scope.launch {
+                    "markNotificationEventSystem" -> launchMethodCall(call.method, result) {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val id = (args["id"] as? Number)?.toLong()
                             ?: args["id"]?.toString()?.toLongOrNull()
@@ -86,11 +95,11 @@ class MainActivity : FlutterFragmentActivity() {
                         val updated = withContext(Dispatchers.IO) { repository.markSystem(id) }
                         result.success(updated)
                     }
-                    "listInstalledApps" -> scope.launch {
+                    "listInstalledApps" -> launchMethodCall(call.method, result) {
                         val apps = withContext(Dispatchers.IO) { installedApps() }
                         result.success(apps)
                     }
-                    "getStatus" -> scope.launch {
+                    "getStatus" -> launchMethodCall(call.method, result) {
                         val status = withContext(Dispatchers.IO) {
                             statusReader.status(repository, modeStore)
                         }
@@ -140,39 +149,39 @@ class MainActivity : FlutterFragmentActivity() {
                         TestNotificationHelper(this).send()
                         result.success(null)
                     }
-                    "clearDatabase" -> scope.launch {
+                    "clearDatabase" -> launchMethodCall(call.method, result) {
                         withContext(Dispatchers.IO) { repository.clear() }
                         result.success(null)
                     }
-                    "loadNotificationParserProfiles" -> scope.launch {
+                    "loadNotificationParserProfiles" -> launchMethodCall(call.method, result) {
                         val profiles = withContext(Dispatchers.IO) {
                             parserRuleStore.loadProfiles()
                         }
                         result.success(profiles)
                     }
-                    "saveNotificationParserProfiles" -> scope.launch {
+                    "saveNotificationParserProfiles" -> launchMethodCall(call.method, result) {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val profiles = withContext(Dispatchers.IO) {
                             parserRuleStore.saveProfiles(args)
                         }
                         result.success(profiles)
                     }
-                    "loadNotificationParserRule" -> scope.launch {
+                    "loadNotificationParserRule" -> launchMethodCall(call.method, result) {
                         val rule = withContext(Dispatchers.IO) { parserRuleStore.load() }
                         result.success(rule)
                     }
-                    "saveNotificationParserRule" -> scope.launch {
+                    "saveNotificationParserRule" -> launchMethodCall(call.method, result) {
                         val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         val rule = withContext(Dispatchers.IO) { parserRuleStore.save(args) }
                         result.success(rule)
                     }
-                    "loadAutomaticPushParserEnabled" -> scope.launch {
+                    "loadAutomaticPushParserEnabled" -> launchMethodCall(call.method, result) {
                         val enabled = withContext(Dispatchers.IO) {
                             parserRuleStore.automaticPushParserEnabled()
                         }
                         result.success(enabled)
                     }
-                    "saveAutomaticPushParserEnabled" -> scope.launch {
+                    "saveAutomaticPushParserEnabled" -> launchMethodCall(call.method, result) {
                         val enabled = call.arguments as? Boolean ?: true
                         val saved = withContext(Dispatchers.IO) {
                             parserRuleStore.setAutomaticPushParserEnabled(enabled)
@@ -223,9 +232,30 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
         nativeImeSheetHost?.dispose()
         nativeImeSheetHost = null
         super.onDestroy()
+    }
+
+    private fun launchMethodCall(
+        operation: String,
+        result: MethodChannel.Result,
+        block: suspend CoroutineScope.() -> Unit,
+    ) {
+        scope.launchGuarded(
+            reportFailure = { error ->
+                reportRootFailure("method $operation", error)
+                result.error(PUSH_PARSER_ERROR, error.message, null)
+            },
+            block = block,
+        )
+    }
+
+    private fun reportRootFailure(operation: String, error: Exception) {
+        val message = "[PushParser] $operation failed error=${error.message}"
+        Log.e(LOG_TAG, message, error)
+        EventBroadcaster.publishDebugLog(message)
     }
 
     private fun requestPostNotificationsOnFirstLaunch(): Boolean {
@@ -326,11 +356,47 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     companion object {
+        private const val LOG_TAG = "ExpenseNotification"
+        private const val PUSH_PARSER_ERROR = "PUSH_PARSER_ERROR"
         private const val REQUEST_POST_NOTIFICATIONS = 42
         private const val APP_ICON_SIZE = 96
         private const val NOTIFICATION_PERMISSION_PREFS =
             "notification_permission_onboarding"
         private const val POST_NOTIFICATIONS_ONBOARDING_REQUESTED =
             "post_notifications_onboarding_requested"
+    }
+}
+
+internal class LifecycleCoroutineScope(context: CoroutineContext) : CoroutineScope {
+    private val lifecycleJob = SupervisorJob()
+
+    override val coroutineContext: CoroutineContext = context + lifecycleJob
+
+    val isActive: Boolean
+        get() = lifecycleJob.isActive
+
+    fun cancel() {
+        lifecycleJob.cancel()
+    }
+}
+
+internal fun CoroutineScope.launchGuarded(
+    context: CoroutineContext = EmptyCoroutineContext,
+    reportFailure: (Exception) -> Unit,
+    onFinally: () -> Unit = {},
+    block: suspend CoroutineScope.() -> Unit,
+): Job = launch(context) {
+    try {
+        block()
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: Exception) {
+        try {
+            reportFailure(error)
+        } catch (_: Exception) {
+            // Failure reporting must not replace the contained repository failure.
+        }
+    } finally {
+        onFinally()
     }
 }

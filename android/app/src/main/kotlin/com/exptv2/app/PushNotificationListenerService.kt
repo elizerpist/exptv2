@@ -4,13 +4,10 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class PushNotificationListenerService : NotificationListenerService() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = LifecycleCoroutineScope(Dispatchers.IO)
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val startedAt = System.currentTimeMillis()
@@ -34,7 +31,14 @@ class PushNotificationListenerService : NotificationListenerService() {
             notificationKey = sbn.key,
         )
 
-        scope.launch {
+        scope.launchGuarded(
+            reportFailure = { error ->
+                val message =
+                    "[PushParser] listener failed package=${draft.packageName} error=${error.message}"
+                Log.e(LOG_TAG, message, error)
+                EventBroadcaster.publishDebugLog(message)
+            },
+        ) {
             val saved = NotificationEventRepository(this@PushNotificationListenerService)
                 .insertDraft(draft)
             if (saved != null) EventBroadcaster.publish(saved)
@@ -45,8 +49,17 @@ class PushNotificationListenerService : NotificationListenerService() {
         }
     }
 
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
+
     private fun publishDebug(message: String) {
-        Log.d("ExpenseNotification", message)
+        Log.d(LOG_TAG, message)
         EventBroadcaster.publishDebugLog(message)
+    }
+
+    companion object {
+        private const val LOG_TAG = "ExpenseNotification"
     }
 }

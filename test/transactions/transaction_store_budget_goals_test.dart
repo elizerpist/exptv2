@@ -33,25 +33,30 @@ void main() {
     },
   );
 
-  test('income backheader starts with income goal and saving goal', () async {
-    final store = TransactionStore(
-      FakeBudgetGoalRepository(),
-      clock: () => DateTime(2026, 5, 17),
-    );
-    await store.start();
-    await store.cycleSummaryWindow();
-    store.setActiveType(TransactionType.income);
+  test(
+    'income backheader starts with income goal then income categories',
+    () async {
+      final store = TransactionStore(
+        FakeBudgetGoalRepository(),
+        clock: () => DateTime(2026, 5, 17),
+      );
+      await store.start();
+      await store.cycleSummaryWindow();
+      store.setActiveType(TransactionType.income);
 
-    expect(
-      store.backheaderBudgetItems[0].overview?.kind,
-      BudgetGoalKind.incomeGoal,
-    );
-    expect(
-      store.backheaderBudgetItems[1].overview?.kind,
-      BudgetGoalKind.savingGoal,
-    );
-    expect(store.backheaderBudgetItems[2].category?.title, 'Salary');
-  });
+      expect(
+        store.backheaderBudgetItems[0].overview?.kind,
+        BudgetGoalKind.incomeGoal,
+      );
+      expect(
+        store.backheaderBudgetItems.where(
+          (item) => item.overview?.kind == BudgetGoalKind.savingGoal,
+        ),
+        isEmpty,
+      );
+      expect(store.backheaderBudgetItems[1].category?.title, 'Salary');
+    },
+  );
 
   test('saving overview target saves as overview target id zero', () async {
     final repository = FakeBudgetGoalRepository();

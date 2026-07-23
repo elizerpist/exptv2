@@ -390,6 +390,7 @@ class NativeKeyboardInsets extends ChangeNotifier {
   }
 
   void ensureStarted() {
+    if (kIsWeb) return;
     if (_started) return;
     _started = true;
     _subscription = _eventChannel.receiveBroadcastStream().listen(

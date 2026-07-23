@@ -2,7 +2,7 @@ import 'package:exptv2/features/transactions/data/calendar_render_builder.dart';
 import 'package:exptv2/features/transactions/models/calendar_menu_mode.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
-import 'package:flutter/material.dart';
+import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -83,7 +83,7 @@ void main() {
     expect(may8.meetsThreshold, isTrue);
     expect(may8.heatmapPercentage, 0.75);
     expect(may8.dominantCategoryId, 7);
-    expect(may8.dominantCategoryColor, const Color(0xFFF97316));
+    expect(may8.dominantCategoryColor, CategoryColorManager.color(1));
   });
 
   test('custom threshold min and max override calculated expense range', () {

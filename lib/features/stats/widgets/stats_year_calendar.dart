@@ -1,12 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../transactions/models/calendar_menu_mode.dart';
 import '../../transactions/models/transaction_category.dart';
 import '../../transactions/models/transaction_record.dart';
-import '../../transactions/widgets/calendar_menu/calendar_canvas_layout.dart';
 import '../data/stats_year_data.dart';
 
 class StatsYearCalendar extends StatelessWidget {
@@ -14,11 +10,13 @@ class StatsYearCalendar extends StatelessWidget {
     super.key,
     required this.data,
     this.monthCardColor = AppColors.gray50,
+    this.heatColor,
     this.onMonthSelected,
   });
 
   final StatsYearData data;
   final Color monthCardColor;
+  final Color? heatColor;
   final ValueChanged<StatsMonthData>? onMonthSelected;
 
   @override
@@ -27,40 +25,34 @@ class StatsYearCalendar extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : MediaQuery.of(context).size.width;
-        final layout = CalendarCanvasLayout.calculate(
-          width: width,
-          mode: CalendarMenuMode.summary,
-        );
+            : MediaQuery.sizeOf(context).width;
+        const columnGap = 14.88;
+        const rowGap = 15.0;
+        final cardWidth = (width - columnGap) / 2;
         return SingleChildScrollView(
           key: const ValueKey('stats-year-calendar-scroll'),
+          padding: const EdgeInsets.only(bottom: 24),
           child: SizedBox(
             key: const ValueKey('stats-year-calendar'),
-            width: layout.size.width,
-            height: layout.size.height,
-            child: Stack(
+            width: width,
+            child: Wrap(
+              key: const ValueKey('stats-year-calendar-paint'),
+              spacing: columnGap,
+              runSpacing: rowGap,
               children: [
-                RepaintBoundary(
-                  child: CustomPaint(
-                    key: const ValueKey('stats-year-calendar-paint'),
-                    size: layout.size,
-                    painter: _StatsYearCalendarPainter(
-                      data: data,
-                      layout: layout,
-                      monthCardColor: monthCardColor,
-                    ),
-                  ),
-                ),
-                for (var i = 0; i < layout.monthRects.length; i += 1)
-                  Positioned.fromRect(
-                    rect: layout.monthRects[i],
-                    child: GestureDetector(
-                      key: ValueKey('stats-month-hit-${i + 1}'),
-                      behavior: HitTestBehavior.opaque,
+                for (final month in data.months)
+                  SizedBox(
+                    width: cardWidth,
+                    height: StatsMonthCard.cardHeight,
+                    child: StatsMonthCard(
+                      key: ValueKey('stats-month-card-${month.month}'),
+                      month: month,
+                      scopeLabel: _scopeLabel,
+                      cardColor: monthCardColor,
+                      heatColor: heatColor ?? _dataHeatColor,
                       onTap: onMonthSelected == null
                           ? null
-                          : () => onMonthSelected!(data.months[i]),
-                      child: const SizedBox.expand(),
+                          : () => onMonthSelected!(month),
                     ),
                   ),
               ],
@@ -70,195 +62,241 @@ class StatsYearCalendar extends StatelessWidget {
       },
     );
   }
-}
 
-class _StatsYearCalendarPainter extends CustomPainter {
-  const _StatsYearCalendarPainter({
-    required this.data,
-    required this.layout,
-    required this.monthCardColor,
-  });
-
-  final StatsYearData data;
-  final CalendarCanvasLayout layout;
-  final Color monthCardColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (var i = 0; i < data.months.length; i += 1) {
-      _drawMonth(canvas, layout.monthRects[i], data.months[i]);
-    }
+  String get _scopeLabel {
+    final type = data.activeType.label.toLowerCase();
+    if (data.selectedCategoryIds.isEmpty) return type;
+    if (data.selectedCategoryIds.length == 1) return '$type ${data.scopeLabel}';
+    return '$type ${data.selectedCategoryIds.length} kategória';
   }
 
-  void _drawMonth(Canvas canvas, Rect rect, StatsMonthData month) {
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(15));
-    canvas.drawShadow(
-      Path()..addRRect(rrect),
-      Colors.black.withValues(alpha: 0.1),
-      3,
-      true,
-    );
-    canvas.drawRRect(rrect, Paint()..color = monthCardColor);
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = AppColors.gray200,
-    );
-    canvas.save();
-    canvas.clipRRect(rrect);
-    if (data.mode == StatsRenderMode.closing && month.hasTransactions) {
-      final overlay = data.activeType == TransactionType.income
-          ? AppColors.income
-          : AppColors.expense;
-      canvas.drawRRect(rrect, Paint()..color = overlay.withValues(alpha: 0.08));
-    }
-    _drawCenteredText(
-      canvas,
-      month.name,
-      Offset(rect.center.dx, rect.top + 14),
-      12,
-      FontWeight.w600,
-      AppColors.gray800,
-    );
-    if (data.mode == StatsRenderMode.closing && month.hasTransactions) {
-      final prefix = data.activeType == TransactionType.income ? '+' : '-';
-      final color = data.activeType == TransactionType.income
-          ? const Color(0xFF059669)
-          : const Color(0xFFDC2626);
-      _drawCenteredText(
-        canvas,
-        '$prefix${formatHuf(month.closingAmount)}',
-        Offset(rect.center.dx, rect.top + 30),
-        10,
-        FontWeight.w700,
-        color,
-      );
-    }
-    _drawWeekdays(canvas, rect, month);
-    _drawDays(canvas, rect, month);
-    canvas.restore();
-  }
-
-  void _drawWeekdays(Canvas canvas, Rect rect, StatsMonthData month) {
-    final top = rect.top + 44;
-    final cellWidth = rect.width / 7;
-    for (var i = 0; i < month.weekdayLabels.length; i += 1) {
-      _drawCenteredText(
-        canvas,
-        month.weekdayLabels[i],
-        Offset(rect.left + cellWidth * i + cellWidth / 2, top),
-        8,
-        FontWeight.w600,
-        AppColors.gray500,
-      );
-    }
-  }
-
-  void _drawDays(Canvas canvas, Rect rect, StatsMonthData month) {
-    final gridTop = rect.top + 54;
-    final cellWidth = rect.width / 7;
-    final cellHeight = (rect.bottom - gridTop - 8) / 6;
-    for (final day in month.days) {
-      final index = month.leadingBlankDays + day.day - 1;
-      final column = index % 7;
-      final row = index ~/ 7;
-      final cell = Rect.fromLTWH(
-        rect.left + column * cellWidth,
-        gridTop + row * cellHeight,
-        cellWidth,
-        cellHeight,
-      );
-      _drawDayCell(canvas, cell, day);
-    }
-  }
-
-  void _drawDayCell(Canvas canvas, Rect cell, StatsDayData day) {
-    final center = cell.center;
-    final shortestSide = math.min(cell.width, cell.height);
-    final radius = (shortestSide * 0.38).clamp(3, 11).toDouble();
-    final dayFontSize = (shortestSide * 0.34).clamp(10, 10).toDouble();
-    var textColor = AppColors.gray500;
-
-    if (data.mode == StatsRenderMode.categoryScope &&
-        day.dominantCategoryId != null &&
-        day.meetsThreshold) {
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()..color = day.dominantCategoryColor,
-      );
-      textColor = AppColors.white;
-    } else if (data.mode == StatsRenderMode.heatmap) {
-      final percentage = day.heatmapIntensity;
-      if (percentage > 0) {
-        final overlay = RRect.fromRectAndRadius(
-          cell.deflate(2),
-          const Radius.circular(3),
-        );
-        final color = data.activeType == TransactionType.income
-            ? AppColors.income
-            : AppColors.primary;
-        canvas.drawRRect(
-          overlay,
-          Paint()..color = color.withValues(alpha: percentage * 0.8),
-        );
-        canvas.drawRRect(
-          overlay,
-          Paint()
-            ..color = AppColors.white.withValues(alpha: (1 - percentage) * 0.4),
-        );
+  Color get _dataHeatColor {
+    if (data.selectedCategoryIds.length != 1) return AppColors.primary;
+    final selectedId = data.selectedCategoryIds.single;
+    for (final month in data.months) {
+      for (final day in month.days) {
+        if (day.dominantCategoryId == selectedId) {
+          return day.dominantCategoryColor;
+        }
       }
     }
-
-    if (data.mode == StatsRenderMode.closing && day.meetsThreshold) {
-      final color = data.activeType == TransactionType.income
-          ? AppColors.income
-          : AppColors.expense;
-      canvas.drawCircle(
-        Offset(cell.center.dx, cell.top + 1),
-        2.5,
-        Paint()..color = color,
-      );
-    }
-
-    _drawCenteredText(
-      canvas,
-      day.day.toString(),
-      center,
-      dayFontSize,
-      FontWeight.w600,
-      textColor,
-    );
+    return AppColors.primary;
   }
+}
 
-  void _drawCenteredText(
-    Canvas canvas,
-    String text,
-    Offset center,
-    double fontSize,
-    FontWeight weight,
-    Color color,
-  ) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(fontSize: fontSize, fontWeight: weight, color: color),
-      ),
-      textAlign: TextAlign.center,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    painter.paint(
-      canvas,
-      center - Offset(painter.width / 2, painter.height / 2),
-    );
-  }
+class StatsMonthCard extends StatelessWidget {
+  const StatsMonthCard({
+    super.key,
+    required this.month,
+    required this.scopeLabel,
+    required this.cardColor,
+    required this.heatColor,
+    this.onTap,
+  });
+
+  static const cardHeight = 200.0;
+  static const cardAspectRatio = 175 / cardHeight;
+
+  final StatsMonthData month;
+  final String scopeLabel;
+  final Color cardColor;
+  final Color heatColor;
+  final VoidCallback? onTap;
 
   @override
-  bool shouldRepaint(_StatsYearCalendarPainter oldDelegate) {
-    return oldDelegate.data != data ||
-        oldDelegate.layout.size != layout.size ||
-        oldDelegate.monthCardColor != monthCardColor;
+  Widget build(BuildContext context) {
+    final cells = <Widget>[
+      for (var index = 0; index < month.leadingBlankDays; index++)
+        const SizedBox.shrink(),
+      for (final day in month.days) _DayCell(day: day, heatColor: heatColor),
+    ];
+    while (cells.length < 42) {
+      cells.add(const SizedBox.shrink());
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('stats-month-hit-${month.month}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: cardColor,
+            border: Border.all(color: AppColors.gray200),
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                offset: const Offset(0, 1),
+                blurRadius: 3,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 26,
+                  child: Center(
+                    child: Text(
+                      month.name,
+                      style: const TextStyle(
+                        color: AppColors.gray800,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 30,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'zárás',
+                        style: TextStyle(
+                          color: AppColors.gray500,
+                          fontSize: 6.8,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          height: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        _formatSignedHuf(month.closingAmount),
+                        style: TextStyle(
+                          color: _closingColor(month.closingAmount),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 18,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: heatColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '$scopeLabel ${formatHuf(month.scopeTotal)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.gray600,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 10,
+                  child: Row(
+                    children: [
+                      for (final label in month.weekdayLabels)
+                        Expanded(
+                          child: Text(
+                            label,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppColors.gray500,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cellWidth = constraints.maxWidth / 7;
+                        final cellHeight = constraints.maxHeight / 6;
+                        return GridView.count(
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          crossAxisCount: 7,
+                          childAspectRatio: cellWidth / cellHeight,
+                          children: cells,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
+}
+
+class _DayCell extends StatelessWidget {
+  const _DayCell({required this.day, required this.heatColor});
+
+  final StatsDayData day;
+  final Color heatColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final heated = day.meetsThreshold;
+    final opacity = (0.10 + day.heatmapIntensity * 0.90)
+        .clamp(0.10, 1.0)
+        .toDouble();
+    return Padding(
+      padding: const EdgeInsets.all(1),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: heated
+              ? heatColor.withValues(alpha: opacity)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Text(
+            day.day.toString(),
+            style: TextStyle(
+              color: heated ? AppColors.gray800 : AppColors.gray500,
+              fontSize: 10,
+              fontWeight: heated ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatSignedHuf(double value) {
+  if (value == 0) return '0 Ft';
+  return '${value > 0 ? '+' : '-'}${formatHuf(value.abs())}';
+}
+
+Color _closingColor(double value) {
+  if (value > 0) return const Color(0xFF15803D);
+  if (value < 0) return const Color(0xFFB91C1C);
+  return AppColors.gray700;
 }

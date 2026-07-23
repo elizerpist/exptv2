@@ -195,14 +195,6 @@ void main() {
     );
     expect(loadedIncomeGhost.categoryName, 'Income');
     expect(
-      store.fastInfoMetrics['bevetel_ebben_a_honapban']?.primaryValue,
-      '0 Ft',
-    );
-    expect(
-      store.fastInfoMetrics['bevetel_ebben_a_honapban']?.secondaryValues,
-      contains('várt 300k · ghost 300k'),
-    );
-    expect(
       store.fastInfoMetrics['havi_fix_koltseg_osszesen']?.primaryValue,
       '500 Ft',
     );

@@ -1,0 +1,3204 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pulse Engine Panel · EXPTV2 mockup</title>
+  <style>
+    :root {
+      --bg: #eef3f7;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --ink: #172033;
+      --muted: #647086;
+      --line: #dbe3ec;
+      --cyan: #08a7c7;
+      --blue: #3366d9;
+      --green: #16a36a;
+      --amber: #d08a00;
+      --red: #e34a4a;
+      --pink: #d54f93;
+      --violet: #7657d9;
+      --shadow: 0 18px 46px rgba(22, 35, 55, .12), 0 2px 8px rgba(22, 35, 55, .06);
+      --r: 8px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(120deg, rgba(8, 167, 199, .14), transparent 28%),
+        linear-gradient(260deg, rgba(213, 79, 147, .10), transparent 32%),
+        var(--bg);
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .page {
+      width: min(1440px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 22px 0 48px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(25px, 4vw, 42px);
+      line-height: 1.02;
+      letter-spacing: 0;
+      max-width: 760px;
+    }
+
+    h2 {
+      font-size: 20px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 13px;
+      line-height: 1.2;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .lede {
+      max-width: 780px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .status-pill {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid rgba(8, 167, 199, .28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .74);
+      box-shadow: 0 4px 16px rgba(22, 35, 55, .07);
+      color: #0b6677;
+      font-weight: 750;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(22, 163, 106, .12);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .phone {
+      min-height: 720px;
+      border-radius: 36px;
+      padding: 16px;
+      background: #121724;
+      box-shadow: var(--shadow);
+      color: white;
+      position: sticky;
+      top: 18px;
+    }
+
+    .phone-screen {
+      min-height: 688px;
+      border-radius: 26px;
+      overflow: hidden;
+      background: #f3f6f8;
+      color: var(--ink);
+      position: relative;
+    }
+
+    .device-status {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      color: rgba(255, 255, 255, .9);
+      background: #111827;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .header-card {
+      height: 186px;
+      margin: 12px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.52), transparent 28%),
+        linear-gradient(132deg, #43d4e6 0%, #2766e8 48%, #864dde 100%);
+      box-shadow: 0 18px 32px rgba(23, 32, 51, .18);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      animation: headerMorph 6s ease-in-out infinite;
+    }
+
+    .header-card:after {
+      content: "";
+      position: absolute;
+      inset: -20%;
+      background: conic-gradient(from 130deg, transparent, rgba(255,255,255,.32), transparent, rgba(255,255,255,.18), transparent);
+      animation: sweep 6s ease-in-out infinite;
+      opacity: .7;
+    }
+
+    .normal-kpi, .pulse-kpi {
+      position: absolute;
+      inset: 20px;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .normal-kpi {
+      animation: normalText 6s ease-in-out infinite;
+    }
+
+    .pulse-kpi {
+      opacity: 0;
+      transform: translateY(8px);
+      animation: pulseText 6s ease-in-out infinite;
+    }
+
+    .kicker {
+      font-size: 12px;
+      color: rgba(255,255,255,.76);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 10px;
+    }
+
+    .money {
+      font-size: 34px;
+      font-weight: 860;
+      letter-spacing: 0;
+      color: white;
+      text-shadow: 0 2px 18px rgba(0,0,0,.18);
+    }
+
+    .pulse-copy {
+      max-width: 280px;
+      color: white;
+      font-size: 23px;
+      line-height: 1.08;
+      font-weight: 850;
+      letter-spacing: 0;
+      text-shadow: 0 2px 18px rgba(0,0,0,.18);
+    }
+
+    .pulse-detail {
+      margin-top: 10px;
+      color: rgba(255,255,255,.84);
+      font-size: 13px;
+      line-height: 1.35;
+      max-width: 280px;
+    }
+
+    @keyframes headerMorph {
+      0%, 30%, 100% {
+        background:
+          radial-gradient(circle at 20% 20%, rgba(255,255,255,.52), transparent 28%),
+          linear-gradient(132deg, #43d4e6 0%, #2766e8 48%, #864dde 100%);
+      }
+      42%, 68% {
+        background:
+          radial-gradient(circle at 20% 20%, rgba(255,255,255,.54), transparent 30%),
+          linear-gradient(132deg, #f0a623 0%, #e15b5b 48%, #b047a8 100%);
+      }
+    }
+
+    @keyframes sweep {
+      0%, 32%, 100% { transform: rotate(0deg) scale(1); opacity: .18; }
+      44%, 66% { transform: rotate(92deg) scale(1.08); opacity: .6; }
+    }
+
+    @keyframes normalText {
+      0%, 30%, 100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+      42%, 68% { opacity: 0; transform: translateY(-10px); filter: blur(7px); }
+    }
+
+    @keyframes pulseText {
+      0%, 32%, 100% { opacity: 0; transform: translateY(8px); filter: blur(7px); }
+      44%, 68% { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    .phone-panel {
+      margin: 12px;
+      padding: 14px;
+      border-radius: var(--r);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(23, 32, 51, .08);
+    }
+
+    .selected-story {
+      display: grid;
+      gap: 10px;
+    }
+
+    .story-score {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .scorebar {
+      height: 8px;
+      border-radius: 99px;
+      background: #e8edf3;
+      overflow: hidden;
+    }
+
+    .scorebar > span {
+      display: block;
+      height: 100%;
+      width: 86%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--amber), var(--red), var(--pink));
+    }
+
+    .scenario-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .scenario-buttons button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      background: #f7fafc;
+      border-radius: var(--r);
+      color: var(--ink);
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .scenario-buttons button.active {
+      color: white;
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+
+    .content {
+      display: grid;
+      gap: 18px;
+    }
+
+    .workspace {
+      margin-top: 18px;
+    }
+
+    .horizontal-tabs {
+      position: sticky;
+      top: 10px;
+      z-index: 5;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      padding: 8px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(219, 227, 236, .9);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 10px 24px rgba(22, 35, 55, .08);
+      backdrop-filter: blur(12px);
+      scrollbar-width: none;
+    }
+
+    .horizontal-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-button {
+      flex: 0 0 auto;
+      min-height: 40px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tab-button.active {
+      border-color: #172033;
+      background: #172033;
+      color: #fff;
+    }
+
+    .tab-panel {
+      display: block;
+    }
+
+    .tab-panel[hidden] {
+      display: none;
+    }
+
+    .tab-panel > .card,
+    .tab-panel > .grid-2 {
+      margin-top: 0 !important;
+    }
+
+    .legacy-workspace[hidden] {
+      display: none;
+    }
+
+    .group-panel {
+      display: block;
+    }
+
+    .group-panel[hidden] {
+      display: none;
+    }
+
+    .group-panel > .dossier-section + .dossier-section {
+      margin-top: 18px;
+    }
+
+    .group-panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .group-panel-head p {
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 5px;
+    }
+
+    .group-flow,
+    .shared-engine-trace {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(136px, 1fr));
+      gap: 10px;
+    }
+
+    .group-flow-step,
+    .shared-engine-step {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .group-flow-step strong,
+    .shared-engine-step strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .group-flow-step p,
+    .shared-engine-step p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .source-domain {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .engine-decision-trace {
+      margin-top: 18px;
+    }
+
+    .engine-scenario-tabs {
+      max-width: 560px;
+    }
+
+    .engine-trace-output {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .trace-stage {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .trace-stage h3 {
+      color: var(--ink);
+      font-size: 14px;
+      text-transform: none;
+    }
+
+    .trace-stage > p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .trace-stage-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .trace-source-list,
+    .trace-candidate-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .trace-copy-fragment,
+    .trace-source-button,
+    .trace-candidate {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .trace-candidate.selected {
+      border-color: rgba(227, 74, 74, .42);
+      background: #fff7f7;
+    }
+
+    .trace-candidate.suppressed {
+      background: #f6f8fb;
+      opacity: .82;
+    }
+
+    .trace-ledger {
+      display: grid;
+      gap: 5px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .trace-lifecycle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .trace-omitted {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .trace-all-role-map {
+      margin-top: 14px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .trace-all-role-map summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .trace-all-role-map[open] summary {
+      margin-bottom: 10px;
+    }
+
+    .trace-source-button {
+      width: 100%;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .trace-copy-fragment strong,
+    .trace-candidate strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .trace-copy-fragment p,
+    .trace-source-button span,
+    .trace-candidate p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .trace-source-button:focus-visible {
+      outline: 3px solid rgba(8, 167, 199, .45);
+      outline-offset: 2px;
+    }
+
+    .group-summary-link {
+      margin-top: 8px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .signal-row[data-group-summary] {
+      cursor: pointer;
+    }
+
+    .signal-row[data-group-summary]:focus-visible {
+      outline: 3px solid rgba(8, 167, 199, .45);
+      outline-offset: 3px;
+    }
+
+    .card {
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(219, 227, 236, .9);
+      border-radius: var(--r);
+      box-shadow: 0 10px 30px rgba(22, 35, 55, .07);
+      padding: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .section-head p {
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-top: 5px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .flow-step {
+      min-height: 124px;
+      padding: 12px;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      position: relative;
+    }
+
+    .flow-step strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .flow-step p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .pulse-semantic-flowchart {
+      margin: 18px 0;
+      border-color: rgba(79, 55, 168, .24);
+      background:
+        linear-gradient(135deg, rgba(242, 239, 255, .72), rgba(255, 255, 255, .96) 42%),
+        var(--surface);
+    }
+
+    .pulse-semantic-flowchart .section-head p {
+      max-width: 900px;
+    }
+
+    .semantic-flow-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .8);
+    }
+
+    .semantic-flow-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .semantic-flow-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #7b8798;
+    }
+
+    .semantic-flow-dot.wait { background: var(--amber); }
+    .semantic-flow-dot.stop { background: var(--red); }
+    .semantic-flow-dot.go { background: var(--green); }
+    .semantic-flow-dot.compose { background: #7453d7; }
+
+    .semantic-flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      counter-reset: pulse-flow;
+    }
+
+    .semantic-flow-step {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 7px 18px rgba(22, 35, 55, .05);
+    }
+
+    .semantic-flow-step-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+    }
+
+    .semantic-flow-index {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .semantic-flow-step h3 {
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .semantic-flow-step-head p,
+    .semantic-flow-node p,
+    .semantic-flow-branch p,
+    .semantic-flow-note {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .semantic-flow-node {
+      padding: 10px;
+      border: 1px solid #dbe3ec;
+      border-radius: 8px;
+      background: var(--surface-2);
+    }
+
+    .semantic-flow-node strong,
+    .semantic-flow-branch strong {
+      display: block;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .semantic-flow-branches {
+      display: grid;
+      gap: 8px;
+    }
+
+    .semantic-flow-branch {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-left: 4px solid #8793a5;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .semantic-flow-branch.wait {
+      border-left-color: var(--amber);
+      background: #fffaf0;
+    }
+
+    .semantic-flow-branch.stop {
+      border-left-color: var(--red);
+      background: #fff5f5;
+    }
+
+    .semantic-flow-branch.go {
+      border-left-color: var(--green);
+      background: #f2fbf6;
+    }
+
+    .semantic-flow-branch.compose {
+      border-left-color: #7453d7;
+      background: #f7f4ff;
+    }
+
+    .semantic-flow-branch .tagrow {
+      margin-top: 7px;
+    }
+
+    .semantic-flow-arrow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #4f37a8;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .semantic-flow-arrow::before {
+      content: "↓";
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .semantic-flow-formula {
+      padding: 10px;
+      border: 1px dashed #baaef0;
+      border-radius: 8px;
+      background: #fbfaff;
+      color: #443285;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .semantic-flow-formula code {
+      color: inherit;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .tagrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .tag.bad { color: #9f2424; background: #fff2f2; border-color: #f3c9c9; }
+    .tag.good { color: #087144; background: #eefaf4; border-color: #bee8d1; }
+    .tag.warn { color: #805400; background: #fff7df; border-color: #efd99a; }
+    .tag.info { color: #075e70; background: #e9f8fb; border-color: #bce6ee; }
+    .tag.violet { color: #4f37a8; background: #f2efff; border-color: #d8d0ff; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .chart-card {
+      min-height: 332px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .chart-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .chart-title strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .chart-title span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      display: block;
+      margin-top: 3px;
+    }
+
+    .chart {
+      width: 100%;
+      height: 142px;
+      border-radius: var(--r);
+      background:
+        linear-gradient(#eff4f9 1px, transparent 1px) 0 33% / 100% 33%,
+        #fbfdff;
+      border: 1px solid #e3ebf3;
+    }
+
+    .trigger-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .trigger-card {
+      min-height: 318px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 13px;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .trigger-card.deferred {
+      background: #f7f9fb;
+      border-style: dashed;
+      opacity: .82;
+    }
+
+    .trigger-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .trigger-id {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: #172033;
+      color: white;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .trigger-card > strong {
+      display: block;
+      font-size: 14px;
+      line-height: 1.22;
+    }
+
+    .trigger-copy {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+      min-height: 50px;
+    }
+
+    .trigger-chart {
+      width: 100%;
+      height: 78px;
+      border-radius: var(--r);
+      border: 1px solid #e3ebf3;
+      background: #fbfdff;
+    }
+
+    .trigger-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .trigger-meta span {
+      min-height: 35px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .metric {
+      min-height: 58px;
+      padding: 9px;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    .metric b {
+      display: block;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .user-defined {
+      margin-top: auto;
+      padding: 10px;
+      border: 1px dashed rgba(8, 167, 199, .45);
+      border-radius: var(--r);
+      background: rgba(233, 248, 251, .54);
+    }
+
+    .user-defined strong {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: #075e70;
+      margin-bottom: 8px;
+    }
+
+    .control-line {
+      display: grid;
+      grid-template-columns: minmax(88px, .8fr) minmax(120px, 1.2fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .control-line input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    .mini-select {
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+      color: var(--ink);
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .signal-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .manual-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .manual-card {
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+      padding: 14px;
+    }
+
+    .manual-card strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .manual-card p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+
+    .step-list,
+    .rule-list {
+      margin: 0;
+      padding-left: 19px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .status-box {
+      min-height: 72px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface-2);
+    }
+
+    .status-box b {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .status-box span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+      display: block;
+    }
+
+    .signal-row {
+      display: grid;
+      grid-template-columns: 1.05fr .85fr .55fr;
+      gap: 10px;
+      align-items: stretch;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+    }
+
+    .signal-row strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .signal-row p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+
+    .weight {
+      font-size: 27px;
+      font-weight: 850;
+      text-align: right;
+    }
+
+    .weights-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .story-card {
+      min-height: 198px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: #fff;
+      padding: 14px;
+    }
+
+    .story-card.primary {
+      border-color: rgba(227, 74, 74, .34);
+      background: linear-gradient(180deg, #fff7f7, #fff);
+    }
+
+    .story-card h3 {
+      color: var(--ink);
+      text-transform: none;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .story-card p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .lifecycle-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: var(--r);
+      font-size: 13px;
+    }
+
+    .lifecycle-table th,
+    .lifecycle-table td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .lifecycle-table th {
+      color: var(--muted);
+      background: var(--surface-2);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .matrix-card {
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 12px;
+      background: #fff;
+      min-height: 176px;
+    }
+
+    .matrix-card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .matrix-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    @media (max-width: 1100px) {
+      .hero-grid,
+      .grid-2,
+      .grid-3,
+      .weights-grid,
+      .manual-grid,
+      .matrix {
+        grid-template-columns: 1fr;
+      }
+
+      .trigger-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .phone {
+        position: static;
+        min-height: auto;
+      }
+
+      .horizontal-tabs {
+        top: 0;
+      }
+
+      .flow {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .semantic-flow-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: min(100vw - 18px, 520px);
+        padding-top: 12px;
+      }
+
+      .topbar {
+        display: block;
+      }
+
+      .status-pill {
+        margin-top: 12px;
+        width: fit-content;
+      }
+
+      .phone {
+        padding: 10px;
+        border-radius: 24px;
+      }
+
+      .phone-screen {
+        border-radius: 18px;
+      }
+
+      .header-card {
+        height: 168px;
+        margin: 9px;
+        padding: 16px;
+      }
+
+      .money {
+        font-size: 28px;
+      }
+
+      .pulse-copy {
+        font-size: 20px;
+      }
+
+      .section-head {
+        display: block;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .semantic-flow-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .signal-row {
+        grid-template-columns: 1fr;
+      }
+
+      .weight {
+        text-align: left;
+      }
+
+      .metric-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .control-line {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .scenario-buttons {
+        grid-template-columns: 1fr;
+      }
+
+      .tab-button {
+        min-height: 38px;
+        font-size: 12px;
+      }
+
+      .trigger-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .group-flow,
+      .shared-engine-trace,
+      .trace-stage-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <h1>Pulse Engine Panel</h1>
+        <p class="lede">
+          Under-the-hood mockup az AI-mentes pulse motorhoz: lokális forecastok,
+          triggerelt signalok, csoportosított storyk, header delivery és minden
+          szinten user-defined finomhangolás.
+        </p>
+      </div>
+      <div class="status-pill"><span class="dot"></span> Local deterministic · no AI</div>
+    </header>
+
+    <section class="card pulse-semantic-flowchart" data-pulse-semantic-flowchart aria-labelledby="semantic-flow-title">
+      <div class="section-head">
+        <div>
+          <h2 id="semantic-flow-title">Pulse decision flow · hogyan lesz egy triggerből header üzenet?</h2>
+          <p>
+            Ez nem egy triggerlista. A flow azt mutatja, hogy melyik jel mikor csak megfigyelés,
+            mikor kap storyt és score-t, mikor marad várakozó, és mikor jut el ténylegesen a headerig.
+          </p>
+        </div>
+        <span class="tag violet">score ≠ message</span>
+      </div>
+
+      <aside class="semantic-flow-legend" aria-label="Pulse decision flow legend">
+        <span><i class="semantic-flow-dot"></i>számítás / feldolgozás</span>
+        <span><i class="semantic-flow-dot wait"></i>várakozik, még nem kap score-t</span>
+        <span><i class="semantic-flow-dot stop"></i>elvetett / nincs header copy</span>
+        <span><i class="semantic-flow-dot compose"></i>story- és mondatépítés</span>
+        <span><i class="semantic-flow-dot go"></i>kiválasztott vagy megjelenített</span>
+      </aside>
+
+      <ol class="semantic-flow-grid">
+        <li class="semantic-flow-step" data-flow-stage="entry">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">01</span>
+            <div>
+              <h3>Belépési esemény</h3>
+              <p>A user-interakció és a motor trigger két külön dolog.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch wait" data-flow-branch="inspect-only">
+              <strong>User score kiválasztása / megnyitása</strong>
+              <p>Csak inspect: fókusz, filter vagy user-defined tuning. Nem indít raw signalt és nem jelenít meg Pulse-t.</p>
+              <div class="tagrow"><span class="tag warn">inspect-only</span><span class="tag">no header</span></div>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="trigger-input">
+              <strong>Metrika vagy app-state változik</strong>
+              <p>Forecast, limit, due date, data-quality threshold, scheduled calculation, app open/resume vagy date change indít calculation frame-et.</p>
+              <div class="tagrow"><span class="tag good">trigger-input</span><span class="tag info">recalculate</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">current state készül</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="recalculation">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">02</span>
+            <div>
+              <h3>Lokális recalculation</h3>
+              <p>Az engine a jelenlegi állapotot számolja, nem régi szöveget játszik vissza.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Raw signal record</strong>
+            <p>source ID · domain/target · zone · direction · severity · confidence · transition · fingerprint.</p>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mi változott?</strong>
+            <p>Csak a materially changed fingerprint tud később új deliveryt indítani; a state itt még nem header-jelölt.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">előbb gate, utána score</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="source-gate">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">03</span>
+            <div>
+              <h3>Source eligibility gate</h3>
+              <p>Előbb dől el, hogy egy jel egyáltalán versenyezhet-e.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch stop" data-flow-branch="no-copy">
+              <strong>Nem lehet belőle header mondat</strong>
+              <p>deferred (HF-008) és engine-only (HF-015–HF-019) nem készít header copyt; ezek policy/diagnostic ágak.</p>
+              <div class="tagrow"><span class="tag bad">no-copy</span><span class="tag">no score</span></div>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="wait-no-score">
+              <strong>Várakozik, score nélkül</strong>
+              <p>stale · muted · unchanged shown/dismissed fingerprint · insufficient confidence · data delay vagy group threshold még nem teljesült.</p>
+              <div class="tagrow"><span class="tag warn">wait-no-score</span><span class="tag">recalculate later</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">eligible source-ok mehetnek tovább</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="evidence">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">04</span>
+            <div>
+              <h3>Evidence + story formation</h3>
+              <p>Nem minden signal adódik össze: csak azonos domainhez vagy targethez tartozó evidence kapcsolható össze.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Published evidence rule</strong>
+            <p>1 critical · 1 material high-confidence high · 2 related medium · 3 related low · meaningful recovery · delayed/grouped data-quality.</p>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch wait" data-flow-branch="forming">
+              <strong>Forming candidate</strong>
+              <p>Hiányzik az evidence vagy a related threshold. A story megfigyelhető, de még nem ready és nem kap score-t.</p>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="ready">
+              <strong>Ready candidate</strong>
+              <p>Egy domináns source vezet; a rokon source-ok bizonyítékot, időzítést vagy caveatot adnak, nem új base weightet.</p>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">csak ready candidate pontozható</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="priority">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">05</span>
+            <div>
+              <h3>Priority score · nem küszöbkapu</h3>
+              <p>A score rangsorol; nem jogosít fel egy kizárt vagy forming signal feltámasztására.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-formula" data-flow-formula>
+            <code>clamp(0..100, domináns eligible source base + material-money +15 + due-within-3-days +10 + related evidence +10 - low confidence -20 - recent dismiss -30)</code>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Score önmagában nem elég</strong>
+            <p>Csak eligible + ready + current fingerprint + delivery opportunity esetén hasonlítható össze. Nincs univerzális megjelenítési küszöb: egy ready Data-quality story 35-tel is nyerhet, ha nincs erősebb ready story.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">ready candidate-ek rangsorolása</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="selection">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">06</span>
+            <div>
+              <h3>Selection · egy current story</h3>
+              <p>A motor nem küld ki tíz üzenetet, és a veszteseket nem teszi rejtett queue-ba.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch go" data-flow-branch="selected">
+              <strong>Legerősebb ready candidate → selected</strong>
+              <p>Azonos priority esetén: urgent due state → newer materially changed fingerprint → stable source-ID order.</p>
+              <div class="tagrow"><span class="tag good">selected</span><span class="tag violet">deterministic</span></div>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="suppressed-not-queued">
+              <strong>Alacsonyabb ready candidate → suppressed</strong>
+              <p>Nem queue. A következő current recalculationnál újra versenyezhet, ha az állapot még friss.</p>
+              <div class="tagrow"><span class="tag warn">suppressed-not-queued</span></div>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a winnerből áll össze a mondat</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="composition">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">07</span>
+            <div>
+              <h3>Story composition</h3>
+              <p>Egy header story több valós mondatrészből állhat, de minden résznek megnevezett source-a van.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branch compose">
+            <strong>Engedélyezett slotok</strong>
+            <p>headline claim · evidence phrase · time/cause clause · confidence caveat · recovery clause.</p>
+            <div class="tagrow"><span class="tag violet">HF headline</span><span class="tag violet">support</span><span class="tag violet">caveat</span></div>
+          </div>
+          <div class="semantic-flow-node">
+            <strong>Mi nem kerül bele?</strong>
+            <p>Redundáns, waiting, superseded vagy suppressed source; deferred és engine-only source sem írhat user-facing header copyt.</p>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">selected story deliveryre vár</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="delivery">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">08</span>
+            <div>
+              <h3>Delivery opportunity</h3>
+              <p>A döntés és a tényleges header-megjelenés külön állapot lehet.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch go" data-flow-branch="shown">
+              <strong>Foreground → delivered → shown</strong>
+              <p>Az aktuális selected story egyetlen header Pulse-ként jelenik meg.</p>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="pending-resume">
+              <strong>background → pending</strong>
+              <p>A background recalculation eltárolja az aktuális selected state-et; delivery csak open/resume után történik.</p>
+            </article>
+          </div>
+          <span class="semantic-flow-arrow" aria-hidden="true">a fingerprint dönti el a következő kört</span>
+        </li>
+
+        <li class="semantic-flow-step" data-flow-stage="lifecycle">
+          <div class="semantic-flow-step-head">
+            <span class="semantic-flow-index">09</span>
+            <div>
+              <h3>Lifecycle + visszacsatolás</h3>
+              <p>A Pulse nem végtelen ismétlődés: a state és a fingerprint viszi tovább a döntést.</p>
+            </div>
+          </div>
+          <div class="semantic-flow-branches">
+            <article class="semantic-flow-branch stop" data-flow-branch="no-header">
+              <strong>Nincs ready candidate → no header</strong>
+              <p>A trace és a source-card megmarad, de nincs üzenet és nincs score-alapú kényszerítés.</p>
+            </article>
+            <article class="semantic-flow-branch wait" data-flow-branch="superseded">
+              <strong>Erősebb friss state → superseded</strong>
+              <p>A pending vagy selected story lecserélhető, mielőtt elavult üzenet jutna a headerbe.</p>
+            </article>
+            <article class="semantic-flow-branch go" data-flow-branch="retrigger">
+              <strong>Új fingerprint / resolved state → retrigger</strong>
+              <p>A shown/dismissed fingerprint nem ismétel. Valódi változás, feloldás vagy új due-state újra a recalculation lépéshez vezet.</p>
+            </article>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="hero-grid">
+      <aside class="phone" aria-label="Header pulse preview">
+        <div class="phone-screen">
+          <div class="device-status"><span>9:41</span><span>EXPTV2</span></div>
+          <div class="header-card">
+            <div class="normal-kpi">
+              <div class="kicker">Balance</div>
+              <div class="money">-372 047 Ft</div>
+            </div>
+            <div class="pulse-kpi">
+              <div class="kicker">Pulse</div>
+              <div class="pulse-copy" id="phonePulse">A hónap vége szoros lesz.</div>
+              <div class="pulse-detail" id="phoneDetail">3 keret túlfutás felé tart, és még 42 000 Ft fix kiadás várható.</div>
+            </div>
+          </div>
+
+          <div class="phone-panel selected-story">
+            <div>
+              <h3>Header delivery</h3>
+              <p style="margin-top:7px;color:var(--muted);font-size:13px;line-height:1.45;">
+                A header egyetlen aktuális storyt kap. A többi signal nem
+                dobódik el: a panelben látható marad.
+              </p>
+            </div>
+            <div class="story-score">
+              <span id="selectedTitle">Budget + fixed load story</span>
+              <strong id="selectedScore">86</strong>
+            </div>
+            <div class="scorebar"><span id="scorebar"></span></div>
+            <div class="tagrow">
+              <span class="tag bad">eligible</span>
+              <span class="tag warn">bad_to_worse</span>
+              <span class="tag info">fingerprint changed</span>
+            </div>
+            <div class="scenario-buttons" role="tablist" aria-label="Header preview scenario">
+              <button class="active" type="button" role="tab" aria-selected="true" aria-controls="engine-trace-output" data-scenario="risk">Risk</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-scenario="recovery">Recovery</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-scenario="data">Data</button>
+            </div>
+          </div>
+
+          <div class="phone-panel">
+            <h3>User-defined delivery</h3>
+            <div class="user-defined" style="margin-top:10px;">
+              <strong><span>Header rules</span><span>user-defined</span></strong>
+              <div class="control-line">
+                <span>Cooldown</span>
+                <input type="range" min="1" max="14" value="4" data-out="cooldownOut">
+                <b><span id="cooldownOut">4</span>d</b>
+              </div>
+              <div class="control-line">
+                <span>Repeat</span>
+                <select class="mini-select">
+                  <option>Only changed fingerprint</option>
+                  <option>Daily max once</option>
+                  <option>Always ask</option>
+                </select>
+                <b>safe</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="content">
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <h2>Mi ez a pulse motor?</h2>
+              <p>
+                Nem AI, nem RAG, nem notification lista. A motor lokális pénzügyi
+                állapotot számol, abból signalokat képez, majd egyetlen aktuális
+                header storyt választ. A panel nem a usert spammeli, hanem
+                megmutatja, mi történt a háttérben.
+              </p>
+            </div>
+            <span class="tag good">state, not stale text</span>
+          </div>
+
+          <div class="flow">
+            <div class="flow-step">
+              <strong>1. Raw metrics</strong>
+              <p>Tranzakciók, limitek, recurring ghostok, score line és rolling aggregátumok.</p>
+              <div class="tagrow"><span class="tag info">local</span><span class="tag">Ft</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>2. Forecast states</strong>
+              <p>Hó vége, kategória burn, éves limit, ghost income, buffer napok.</p>
+              <div class="tagrow"><span class="tag warn">hidden charts</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>3. Raw signals</strong>
+              <p>Zone, direction, severity, confidence, transition és fingerprint.</p>
+              <div class="tagrow"><span class="tag bad">triggered</span><span class="tag good">recovery</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>4. Story builder</strong>
+              <p>Kapcsolódó signalok csoportosítása domain és target szerint.</p>
+              <div class="tagrow"><span class="tag violet">weighted</span></div>
+            </div>
+            <div class="flow-step">
+              <strong>5. Header delivery</strong>
+              <p>Egy story megy ki morph pulse-ként; a panel őrzi a teljes trace-t.</p>
+              <div class="tagrow"><span class="tag info">one current thought</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <h2>10 trigger esetén mi történik?</h2>
+              <p>
+                Nem dobjuk el őket, és nem játszunk le tíz header üzenetet. A
+                motor előbb elavult állapotot szűr, majd csoportosít, pontoz,
+                és egy komponált storyt küld a headernek. A panelben mind a tíz
+                signal látható marad.
+              </p>
+            </div>
+            <span class="tag bad">not an inbox</span>
+          </div>
+
+          <div class="signal-list">
+            <div class="signal-row" data-group-summary="budget" role="button" tabindex="0" aria-controls="group-budget">
+              <div>
+                <strong>Budget pressure group</strong>
+                <p>Food monthly burn, yearly travel limit, daily safe spend, weekly pace.</p>
+                <div class="tagrow"><span class="tag bad">4 signals</span><span class="tag warn">same story</span></div>
+              </div>
+              <div class="user-defined">
+                <strong><span>Group tuning</span><span>user-defined</span></strong>
+                <div class="control-line"><span>Weight</span><input type="range" min="30" max="120" value="92" data-out="budgetWeight"><b><span id="budgetWeight">92</span></b></div>
+              </div>
+              <div class="weight">92</div>
+            </div>
+            <div class="signal-row" data-group-summary="cashflow" role="button" tabindex="0" aria-controls="group-cashflow">
+              <div>
+                <strong>Cashflow pressure group</strong>
+                <p>Ghost income missing, income/expense ratio, savings risk, balance buffer.</p>
+                <div class="tagrow"><span class="tag bad">4 signals</span><span class="tag violet">composes with fixed load</span></div>
+              </div>
+              <div class="user-defined">
+                <strong><span>Group tuning</span><span>user-defined</span></strong>
+                <div class="control-line"><span>Prefer</span><select class="mini-select"><option>Warn early</option><option>Balanced</option><option>Only critical</option></select><b>watch</b></div>
+              </div>
+              <div class="weight">88</div>
+            </div>
+            <div class="signal-row" data-group-summary="data-quality" role="button" tabindex="0" aria-controls="group-data-quality">
+              <div>
+                <strong>Data quality group</strong>
+                <p>Uncategorized transactions can reduce category forecast confidence.</p>
+                <div class="tagrow"><span class="tag info">1 signal</span><span class="tag">delayed</span></div>
+              </div>
+              <div class="user-defined">
+                <strong><span>Group tuning</span><span>user-defined</span></strong>
+                <div class="control-line"><span>Delay</span><input type="range" min="1" max="48" value="12" data-out="dataDelay"><b><span id="dataDelay">12</span>h</b></div>
+              </div>
+              <div class="weight">35</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="card engine-decision-trace" data-engine-decision-trace aria-labelledby="engine-trace-title">
+      <div class="section-head">
+        <div>
+          <h2 id="engine-trace-title">Engine decision trace</h2>
+          <p>Ugyanaz a lokális állapot végigkövethető a raw signaloktól az egyetlen kiválasztott header-storyig.</p>
+        </div>
+        <span class="tag violet">why this pulse?</span>
+      </div>
+      <div class="scenario-buttons engine-scenario-tabs" role="tablist" aria-label="Engine trace scenario" data-engine-scenario-tabs>
+        <button class="active" type="button" role="tab" aria-selected="true" aria-controls="engine-trace-output" data-engine-scenario="risk">Risk</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-engine-scenario="recovery">Recovery</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="engine-trace-output" data-engine-scenario="data">Data quality</button>
+      </div>
+      <div class="engine-trace-output" id="engine-trace-output" role="tabpanel">
+        <section class="trace-stage" data-trace-stage="recalculation">
+          <h3>1. Recalculation</h3>
+          <p>Az adatváltozás vagy app resume friss calculation frame-et indít.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="eligibility">
+          <h3>2. Eligibility gate</h3>
+          <p>Csak current, nem muted, nem same-fingerprint és kellően megbízható source versenyezhet.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="formation">
+          <h3>3. Story formation</h3>
+          <p>Csak rokon domain- vagy target-evidence alkothat közös storyt.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="priority">
+          <h3>4. Priority ledger</h3>
+          <p>Domináns base weight és látható módosítók döntik el, melyik ready story erősebb.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="delivery">
+          <h3>5. Header delivery + lifecycle</h3>
+          <p>A selected story egyszer jut a headerhez; azonos fingerprint nem ismétel.</p>
+        </section>
+        <section class="trace-stage" data-trace-stage="copy-map">
+          <h3>6. Story copy map</h3>
+          <p>A headline, evidence, time/cause és caveat minden része konkrét HF source-hoz kötődik.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="Pulse group dossiers">
+      <div class="horizontal-tabs" role="tablist" aria-label="Pulse group rail">
+        <button class="tab-button active" id="group-rail-budget" type="button" role="tab" aria-selected="true" aria-controls="group-budget" data-group-rail="budget">Budget pressure</button>
+        <button class="tab-button" id="group-rail-cashflow" type="button" role="tab" aria-selected="false" aria-controls="group-cashflow" data-group-rail="cashflow">Cashflow pressure</button>
+        <button class="tab-button" id="group-rail-data-quality" type="button" role="tab" aria-selected="false" aria-controls="group-data-quality" data-group-rail="data-quality">Data quality</button>
+      </div>
+
+      <section class="group-panel active" id="group-budget" role="tabpanel" aria-labelledby="group-rail-budget" data-group-panel="budget">
+        <section class="card dossier-section" data-dossier-section="manual">
+          <div data-group-manual-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="forecasts">
+          <div data-group-forecast-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="triggers">
+          <div class="group-panel-head">
+            <div><h2>Budget pressure triggerek</h2><p>Minden budgethez tartozó számítás, küszöb és triggeresemény egy auditfelületen.</p></div>
+            <span class="tag bad">9 source</span>
+          </div>
+          <div class="trigger-grid" data-group-trigger-grid>
+            <article class="trigger-card" data-card-slot="HF-001" data-hf-id="HF-001" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-002" data-hf-id="HF-002" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-003" data-hf-id="HF-003" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-004" data-hf-id="HF-004" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-012" data-hf-id="HF-012" data-source-domain="behavior_shift"></article>
+            <article class="trigger-card" data-card-slot="HF-013" data-hf-id="HF-013" data-source-domain="behavior_shift"></article>
+            <article class="trigger-card" data-card-slot="HF-014" data-hf-id="HF-014" data-source-domain="behavior_shift"></article>
+            <article class="trigger-card" data-card-slot="HF-015" data-hf-id="HF-015" data-source-domain="budget_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-020" data-hf-id="HF-020" data-source-domain="budget_pressure"></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="story">
+          <div data-group-story-content></div>
+          <h3 style="margin:18px 0 10px;">Shared engine trace</h3>
+          <div class="shared-engine-trace" data-shared-engine-trace>
+            <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Priority and selection</strong><p>Filter, group, score, then select one current header story.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Lifecycle and fingerprint</strong><p>Changed state can retrigger; unchanged shown state cannot replay.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Header delivery</strong><p>Only the selected story morphs through the header.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-019" data-source-domain="engine"><strong>Panel diagnostics</strong><p>This panel exposes raw signals, formation, selection, history, and tuning.</p></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="tuning">
+          <div data-group-tuning-content></div>
+        </section>
+      </section>
+
+      <section class="group-panel" id="group-cashflow" role="tabpanel" aria-labelledby="group-rail-cashflow" data-group-panel="cashflow" hidden>
+        <section class="card dossier-section" data-dossier-section="manual">
+          <div data-group-manual-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="forecasts">
+          <div data-group-forecast-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="triggers">
+          <div class="group-panel-head">
+            <div><h2>Cashflow pressure triggerek</h2><p>Fix terhek, várt bevételek, arányok, célok és balance buffer egy közös pénzáramlási dossziéban.</p></div>
+            <span class="tag bad">6 active + 1 deferred</span>
+          </div>
+          <div class="trigger-grid" data-group-trigger-grid>
+            <article class="trigger-card" data-card-slot="HF-005" data-hf-id="HF-005" data-source-domain="fixed_load"></article>
+            <article class="trigger-card" data-card-slot="HF-006" data-hf-id="HF-006" data-source-domain="fixed_load"></article>
+            <article class="trigger-card" data-card-slot="HF-007" data-hf-id="HF-007" data-source-domain="cashflow_pressure"></article>
+            <article class="trigger-card deferred" data-card-slot="HF-008" data-hf-id="HF-008" data-source-domain="cashflow_pressure"><span class="tag">deferred</span><span class="source-domain">not active</span></article>
+            <article class="trigger-card" data-card-slot="HF-009" data-hf-id="HF-009" data-source-domain="cashflow_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-010" data-hf-id="HF-010" data-source-domain="cashflow_pressure"></article>
+            <article class="trigger-card" data-card-slot="HF-011" data-hf-id="HF-011" data-source-domain="cashflow_pressure"></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="story">
+          <div data-group-story-content></div>
+          <h3 style="margin:18px 0 10px;">Shared engine trace</h3>
+          <div class="shared-engine-trace" data-shared-engine-trace>
+            <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Priority and selection</strong><p>Filter, group, score, then select one current header story.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Lifecycle and fingerprint</strong><p>Changed state can retrigger; unchanged shown state cannot replay.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Header delivery</strong><p>Only the selected story morphs through the header.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-019" data-source-domain="engine"><strong>Panel diagnostics</strong><p>This panel exposes raw signals, formation, selection, history, and tuning.</p></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="tuning">
+          <div data-group-tuning-content></div>
+        </section>
+      </section>
+
+      <section class="group-panel" id="group-data-quality" role="tabpanel" aria-labelledby="group-rail-data-quality" data-group-panel="data-quality" hidden>
+        <section class="card dossier-section" data-dossier-section="manual">
+          <div data-group-manual-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="forecasts">
+          <div data-group-forecast-content></div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="triggers">
+          <div class="group-panel-head">
+            <div><h2>Data quality triggerek</h2><p>Ez nem pénzügyi riasztás: azt mutatja, amikor a hiányos input rontja a forecastok megbízhatóságát.</p></div>
+            <span class="tag info">1 delayed source</span>
+          </div>
+          <div class="trigger-grid" data-group-trigger-grid>
+            <article class="trigger-card" data-card-slot="HF-021" data-hf-id="HF-021" data-source-domain="data_quality"></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="story">
+          <div data-group-story-content></div>
+          <h3 style="margin:18px 0 10px;">Shared engine trace</h3>
+          <div class="shared-engine-trace" data-shared-engine-trace>
+            <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Priority and selection</strong><p>Filter, group, score, then select one current header story.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Lifecycle and fingerprint</strong><p>Changed state can retrigger; unchanged shown state cannot replay.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Header delivery</strong><p>Only the selected story morphs through the header.</p></article>
+            <article class="shared-engine-step" data-shared-hf-id="HF-019" data-source-domain="engine"><strong>Panel diagnostics</strong><p>This panel exposes raw signals, formation, selection, history, and tuning.</p></article>
+          </div>
+        </section>
+        <section class="card dossier-section" data-dossier-section="tuning">
+          <div data-group-tuning-content></div>
+        </section>
+      </section>
+    </section>
+
+    <section class="workspace legacy-workspace" aria-label="Legacy Pulse content sources" aria-hidden="true" hidden>
+      <div class="horizontal-tabs" role="tablist" aria-label="Pulse content tabs">
+        <button class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="panel-manual" data-legacy-tab-target="manual">Manual</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-forecasts" data-legacy-tab-target="forecasts">Forecasts</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-triggers" data-legacy-tab-target="triggers">Triggers</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-stories" data-legacy-tab-target="stories">Stories</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-tuning" data-legacy-tab-target="tuning">Tuning</button>
+      </div>
+
+      <div class="tab-panel active" id="panel-manual" role="tabpanel" data-legacy-tab-panel="manual">
+    <section class="card" style="margin-top:18px;">
+      <div class="section-head">
+        <div>
+          <h2>Pulse Operating Manual</h2>
+          <p>
+            A motor állapotot redukál és storyt komponál. Nem vár AI-ra, nem
+            küld nyers tranzakciót sehova, és nem notification queue. Minden
+            számítás lokális; a header csak egy aktuális, újraszámolt pulse
+            storyt kap.
+          </p>
+        </div>
+        <span class="tag violet">step by step</span>
+      </div>
+
+      <div class="manual-grid">
+        <article class="manual-card">
+          <strong>1. Mikor számol újra?</strong>
+          <p>Újraszámolás történik minden olyan ponton, ahol a pénzügyi igazság változhat.</p>
+          <ol class="step-list">
+            <li>új parsed tranzakció érkezik;</li>
+            <li>user szerkeszt, kategorizál vagy limitet állít;</li>
+            <li>recurring vagy income ghost aktiválódik, due vagy overdue lesz;</li>
+            <li>nap/periódus váltás történik;</li>
+            <li>app open vagy resume történik;</li>
+            <li>user a panelben tuningot módosít.</li>
+          </ol>
+          <div class="tagrow"><span class="tag info">local recompute</span><span class="tag">no stale text</span></div>
+        </article>
+
+        <article class="manual-card">
+          <strong>2. Mi történik egy recalculation alatt?</strong>
+          <ol class="step-list">
+            <li>raw local inputok begyűjtése;</li>
+            <li>hidden forecast metrikák frissítése;</li>
+            <li>metric state -> raw signal;</li>
+            <li>signal osztályozás domain, severity, direction szerint;</li>
+            <li>user-defined mute/tuning szabályok alkalmazása;</li>
+            <li>fingerprint összevetés az előző állapottal;</li>
+            <li>waiting / eligible / resolved / superseded státusz beállítása;</li>
+            <li>rokon signalok storyvá csoportosítása;</li>
+            <li>story score és priority döntés;</li>
+            <li>egy kiválasztott story átadása a header morphnak.</li>
+          </ol>
+        </article>
+
+        <article class="manual-card">
+          <strong>3. Mikor triggerel azonnal?</strong>
+          <p>Azonnal = a következő lokális újraszámolás után eligible. Backgroundban ez app open/resume-ig vár.</p>
+          <ul class="rule-list">
+            <li>actual over-limit vagy 100%+ budget state;</li>
+            <li>month-end forecast limit fölé lép material money impacttal;</li>
+            <li>critical category limit vagy yearly limit state;</li>
+            <li>expense/income ratio 100%+ vagy critical cashflow;</li>
+            <li>critical balance buffer;</li>
+            <li>ghost income overdue a grace window után;</li>
+            <li>3 napon belüli material fixed/recurring expense;</li>
+            <li>score threshold vagy score-zóna esés;</li>
+            <li>korábban mutatott risk érdemi recoveryje.</li>
+          </ul>
+          <div class="tagrow"><span class="tag bad">eligible now</span><span class="tag warn">still competes for header</span></div>
+        </article>
+
+        <article class="manual-card">
+          <strong>4. Mikor vár?</strong>
+          <p>A waiting signal nem elveszett. A panelben forming/waiting állapotban látszik, csak még nem header pulse.</p>
+          <ul class="rule-list">
+            <li>data-quality pulse késleltet és csoportosít;</li>
+            <li>daily safe spend csak meaningful zónaváltásra vagy parent story alá megy;</li>
+            <li>weekly pace material gapre vár, nem naptár tickre;</li>
+            <li>next recurring addig vár, míg due windowbe kerül;</li>
+            <li>low-confidence forecast rokon jelre vagy több adatra vár;</li>
+            <li>kis positive/stable jel csak recovery vagy hasznos stabilitás esetén látszik;</li>
+            <li>same fingerprint shown/dismissed után nem ismétlődik.</li>
+          </ul>
+          <div class="tagrow"><span class="tag info">forming</span><span class="tag">inspectable</span></div>
+        </article>
+
+        <article class="manual-card">
+          <strong>5. Mennyi trigger kell egy pulse-hoz?</strong>
+          <p>Nem fix darabszámú queue. Evidence threshold van, és csak rokon signalok adódnak össze.</p>
+          <ul class="rule-list">
+            <li><b>1 critical</b> signal önmagában elég;</li>
+            <li><b>1 high</b> signal elég, ha high confidence és material;</li>
+            <li><b>2 medium rokon</b> signal elég egy komponált storyhoz;</li>
+            <li><b>3 low rokon</b> signal elég, ha ugyanaz a domain vagy target;</li>
+            <li><b>1 recovery</b> elég, ha korábban fontos risket old meg;</li>
+            <li><b>data-quality</b> delay + count/money threshold után eligible;</li>
+            <li><b>unrelated</b> signalok nem adódnak össze automatikusan.</li>
+          </ul>
+          <div class="tagrow"><span class="tag bad">1 critical</span><span class="tag warn">2 medium</span><span class="tag info">3 low</span></div>
+        </article>
+
+        <article class="manual-card">
+          <strong>6. Signal osztályozás</strong>
+          <p>Minden signal ilyen mezőkkel kerül a reducerbe; ettől lesz auditálható és user-defined módon állítható.</p>
+          <div class="status-grid">
+            <div class="status-box"><b>domain</b><span>budget, cashflow, fixed, behavior, data_quality, engine</span></div>
+            <div class="status-box"><b>direction</b><span>bad, good, neutral, mixed</span></div>
+            <div class="status-box"><b>severity</b><span>info, low, medium, high, critical</span></div>
+            <div class="status-box"><b>urgency</b><span>now, today, 3d, 7d, period_end, passive</span></div>
+            <div class="status-box"><b>confidence</b><span>low, medium, high</span></div>
+            <div class="status-box"><b>transition</b><span>good_to_bad, bad_to_worse, recovery, stable_useful</span></div>
+          </div>
+        </article>
+
+        <article class="manual-card">
+          <strong>7. Confidence</strong>
+          <p>
+            A confidence nem AI-bizonyosság és nem fontosság. Azt méri, mennyire
+            megbízható a signal a lokális adatok alapján. A severity azt mondja,
+            mennyire fontos; a confidence azt, mennyire merjen a motor hinni neki.
+          </p>
+          <div class="status-grid">
+            <div class="status-box"><b>high</b><span>tény vagy erős adat: actual over-limit, overdue ghost income, due recurring, score zónaváltás</span></div>
+            <div class="status-box"><b>medium</b><span>használható, de részleges: elég eltelt nap, normál volatilitás, rolling trend</span></div>
+            <div class="status-box"><b>low</b><span>túl korai, ritka vagy hiányos: hónap eleje, új kategória, sok uncategorized, missing income baseline</span></div>
+          </div>
+          <ul class="rule-list" style="margin-top:10px;">
+            <li>high confidence + material severity azonnal eligible lehet;</li>
+            <li>medium confidence egyedül is eligible lehet, ha material, vagy rokon jelekkel compose-ol;</li>
+            <li>low confidence általában waiting, detail vagy panel-only;</li>
+            <li>low confidence copy nem lehet biztos állítás: "úgy látszik", "a jelenlegi ütem alapján";</li>
+            <li>user-defined: minimum header confidence, domain confidence floor, low-confidence detail engedélyezése.</li>
+          </ul>
+        </article>
+
+        <article class="manual-card">
+          <strong>8. Pulse típusok</strong>
+          <div class="status-grid">
+            <div class="status-box"><b>risk_warning</b><span>rossz irányú forecast vagy zónaátlépés</span></div>
+            <div class="status-box"><b>critical_alert</b><span>súlyos aktuális állapot</span></div>
+            <div class="status-box"><b>recovery</b><span>korábbi risk megoldódott</span></div>
+            <div class="status-box"><b>positive_momentum</b><span>érdemi javulás vagy trendforduló</span></div>
+            <div class="status-box"><b>stable_useful</b><span>hasznos stabilitás korábbi nyomás után</span></div>
+            <div class="status-box"><b>data_quality</b><span>app-state, ami forecast minőséget érint</span></div>
+          </div>
+          <p style="margin-top:10px;">Az engine_explanation panel-only típus: megmagyarázza, miért nyert vagy vesztett egy story.</p>
+        </article>
+
+        <article class="manual-card">
+          <strong>9. Statuszok</strong>
+          <p>Külön kezeljük a raw signal és a composed story statuszait.</p>
+          <div class="status-grid">
+            <div class="status-box"><b>observing</b><span>figyelt, de még nem meaningful</span></div>
+            <div class="status-box"><b>waiting</b><span>részben igaz, késleltet vagy evidence-re vár</span></div>
+            <div class="status-box"><b>eligible</b><span>aktuális, releváns, versenyezhet</span></div>
+            <div class="status-box"><b>suppressed</b><span>érvényes, de erősebb story nyert</span></div>
+            <div class="status-box"><b>superseded</b><span>frissebb/erősebb state felülírta</span></div>
+            <div class="status-box"><b>resolved</b><span>az állapot már nem igaz</span></div>
+            <div class="status-box"><b>forming</b><span>story alakul, threshold alatt</span></div>
+            <div class="status-box"><b>ready</b><span>story evidence threshold fölött</span></div>
+            <div class="status-box"><b>shown</b><span>headerben megjelent, same fingerprint nem ismétel</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+      </div>
+
+      <div class="tab-panel" id="panel-forecasts" role="tabpanel" data-legacy-tab-panel="forecasts" hidden>
+    <section class="card" style="margin-top:18px;">
+      <div class="section-head">
+        <div>
+          <h2>Hidden forecast chartok</h2>
+          <p>
+            Ezeket a user alapból nem látja a headerben. A panelben viszont
+            auditálhatóak: mit számol a motor, mi triggerelt, milyen zónába
+            került, és mit állíthat át a user.
+          </p>
+        </div>
+        <span class="tag info">forecast metrics visible here</span>
+      </div>
+
+      <div class="grid-3">
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Month-end expense forecast</strong><span>HF-001 · variable pace + fixed ghosts</span></div>
+            <span class="tag bad">over limit</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Month-end expense line chart">
+            <path d="M22 112 L72 100 L122 82 L172 74 L222 54 L296 34" fill="none" stroke="#e34a4a" stroke-width="4" stroke-linecap="round"/>
+            <path d="M22 112 L72 100 L122 82 L172 74" fill="none" stroke="#08a7c7" stroke-width="5" stroke-linecap="round"/>
+            <path d="M20 62 H300" stroke="#d08a00" stroke-width="2" stroke-dasharray="6 6"/>
+            <circle cx="172" cy="74" r="5" fill="#08a7c7"/>
+            <text x="22" y="25" fill="#647086" font-size="12">limit 100k</text>
+            <text x="220" y="28" fill="#e34a4a" font-size="12">forecast 114k</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>63k</b><small>spent</small></div>
+            <div class="metric"><b>20k</b><small>pending fixed</small></div>
+            <div class="metric"><b>+14k</b><small>risk</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Metric tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Baseline</span><select class="mini-select"><option>Trimmed daily median</option><option>Current pace</option><option>Last 3 months</option></select><b>safe</b></div>
+            <div class="control-line"><span>Sensitivity</span><input type="range" min="1" max="10" value="6" data-out="monthSensitivity"><b><span id="monthSensitivity">6</span>/10</b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Monthly category limit burn</strong><span>HF-002 · category projected ratio</span></div>
+            <span class="tag warn">watch</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Monthly category bar chart">
+            <rect x="34" y="58" width="36" height="64" rx="4" fill="#08a7c7"/>
+            <rect x="94" y="36" width="36" height="86" rx="4" fill="#d08a00"/>
+            <rect x="154" y="70" width="36" height="52" rx="4" fill="#16a36a"/>
+            <rect x="214" y="24" width="36" height="98" rx="4" fill="#e34a4a"/>
+            <path d="M20 42 H300" stroke="#d08a00" stroke-width="2" stroke-dasharray="6 6"/>
+            <text x="26" y="134" fill="#647086" font-size="11">Food</text>
+            <text x="87" y="134" fill="#647086" font-size="11">Home</text>
+            <text x="149" y="134" fill="#647086" font-size="11">Taxi</text>
+            <text x="211" y="134" fill="#647086" font-size="11">Fun</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>91%</b><small>Food projected</small></div>
+            <div class="metric"><b>104%</b><small>Fun projected</small></div>
+            <div class="metric"><b>1</b><small>current winner</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Signal tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Warning zone</span><input type="range" min="60" max="95" value="75" data-out="monthlyZone"><b><span id="monthlyZone">75</span>%</b></div>
+            <div class="control-line"><span>Muted target</span><select class="mini-select"><option>None</option><option>Fun category</option><option>Food category</option></select><b>open</b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Yearly category limit burn</strong><span>HF-020 · separate yearly scope</span></div>
+            <span class="tag violet">yearly</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Yearly category limit chart">
+            <path d="M20 116 L75 108 L130 95 L185 80 L240 54 L300 28" fill="none" stroke="#7657d9" stroke-width="4" stroke-linecap="round"/>
+            <path d="M20 102 L300 42" fill="none" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 6"/>
+            <circle cx="185" cy="80" r="5" fill="#7657d9"/>
+            <text x="22" y="26" fill="#647086" font-size="12">year pace</text>
+            <text x="202" y="126" fill="#7657d9" font-size="12">travel +18%</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>58%</b><small>year elapsed</small></div>
+            <div class="metric"><b>76%</b><small>limit used</small></div>
+            <div class="metric"><b>+18%</b><small>ahead</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Metric tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Period</span><select class="mini-select"><option>Calendar year</option><option>Rolling 12 months</option><option>Custom year</option></select><b>2026</b></div>
+            <div class="control-line"><span>Show wins</span><input type="range" min="0" max="1" value="1" data-out="yearWins"><b><span id="yearWins">1</span></b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Ghost income + fixed load</strong><span>HF-005 · HF-006 · HF-007</span></div>
+            <span class="tag bad">cashflow</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Ghost income and fixed expenses timeline">
+            <line x1="28" y1="72" x2="292" y2="72" stroke="#dbe3ec" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="62" cy="72" r="10" fill="#16a36a"/><text x="44" y="105" fill="#647086" font-size="11">salary</text>
+            <circle cx="124" cy="72" r="10" fill="#e34a4a"/><text x="104" y="105" fill="#647086" font-size="11">rent</text>
+            <circle cx="188" cy="72" r="10" fill="#d08a00"/><text x="160" y="105" fill="#647086" font-size="11">utilities</text>
+            <circle cx="250" cy="72" r="10" fill="#7657d9"/><text x="224" y="105" fill="#647086" font-size="11">income?</text>
+            <path d="M240 38 L260 38" stroke="#7657d9" stroke-width="4" stroke-dasharray="3 4"/>
+            <text x="182" y="29" fill="#7657d9" font-size="12">ghost pending</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>42k</b><small>next 7d fixed</small></div>
+            <div class="metric"><b>120k</b><small>missing income</small></div>
+            <div class="metric"><b>3</b><small>ghosts</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Signal tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Due window</span><input type="range" min="3" max="14" value="7" data-out="dueWindow"><b><span id="dueWindow">7</span>d</b></div>
+            <div class="control-line"><span>Merchant names</span><select class="mini-select"><option>Hide by default</option><option>Show trusted</option><option>Always show</option></select><b>privacy</b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Cashflow ratio + saving goal</strong><span>HF-009 · HF-010</span></div>
+            <span class="tag warn">tight</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Cashflow ratio stacked chart">
+            <rect x="40" y="32" width="240" height="24" rx="6" fill="#dbe3ec"/>
+            <rect x="40" y="32" width="218" height="24" rx="6" fill="#e34a4a"/>
+            <rect x="40" y="82" width="240" height="24" rx="6" fill="#dbe3ec"/>
+            <rect x="40" y="82" width="168" height="24" rx="6" fill="#16a36a"/>
+            <text x="40" y="24" fill="#647086" font-size="12">expense / income 91%</text>
+            <text x="40" y="76" fill="#647086" font-size="12">saving goal progress 70%</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>91%</b><small>ratio</small></div>
+            <div class="metric"><b>70%</b><small>goal path</small></div>
+            <div class="metric"><b>risk</b><small>zone</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Story tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Goal mode</span><select class="mini-select"><option>Strict saving goal</option><option>Flexible buffer</option><option>Hide saving goal</option></select><b>strict</b></div>
+            <div class="control-line"><span>Ratio zone</span><input type="range" min="60" max="100" value="90" data-out="ratioZone"><b><span id="ratioZone">90</span>%</b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Balance buffer days</strong><span>HF-011 · rolling variable pace</span></div>
+            <span class="tag good">stable</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Balance buffer gauge chart">
+            <path d="M70 112 A90 90 0 0 1 250 112" fill="none" stroke="#dbe3ec" stroke-width="18" stroke-linecap="round"/>
+            <path d="M70 112 A90 90 0 0 1 210 44" fill="none" stroke="#16a36a" stroke-width="18" stroke-linecap="round"/>
+            <line x1="160" y1="112" x2="214" y2="58" stroke="#172033" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="160" cy="112" r="7" fill="#172033"/>
+            <text x="132" y="102" fill="#172033" font-size="24" font-weight="800">31d</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>31</b><small>buffer days</small></div>
+            <div class="metric"><b>30d</b><small>stable zone</small></div>
+            <div class="metric"><b>good</b><small>direction</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Metric tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Average</span><select class="mini-select"><option>Rolling 30d variable</option><option>Rolling 60d variable</option><option>Current month</option></select><b>30d</b></div>
+            <div class="control-line"><span>Stable min</span><input type="range" min="14" max="60" value="30" data-out="stableMin"><b><span id="stableMin">30</span>d</b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Behavior shift</strong><span>HF-012 · HF-013 · HF-014</span></div>
+            <span class="tag violet">pattern</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Behavior shift rolling trend chart">
+            <path d="M26 96 C76 78 100 106 138 82 S210 46 294 40" fill="none" stroke="#d54f93" stroke-width="4" stroke-linecap="round"/>
+            <path d="M26 112 C78 110 112 106 150 92 S222 74 294 70" fill="none" stroke="#08a7c7" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 6"/>
+            <circle cx="236" cy="50" r="5" fill="#d54f93"/>
+            <text x="24" y="24" fill="#647086" font-size="12">rolling 30d variable +17%</text>
+            <text x="188" y="126" fill="#d54f93" font-size="12">score -8</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>+17%</b><small>trend</small></div>
+            <div class="metric"><b>+24%</b><small>food</small></div>
+            <div class="metric"><b>-8</b><small>score</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Signal tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Spike min</span><input type="range" min="5000" max="30000" step="1000" value="10000" data-out="spikeMin"><b><span id="spikeMin">10000</span> Ft</b></div>
+            <div class="control-line"><span>Positive pulse</span><select class="mini-select"><option>Show recoveries</option><option>Only big wins</option><option>Hide wins</option></select><b>on</b></div>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <div class="chart-title">
+            <div><strong>Data quality status</strong><span>HF-021 · delayed grouped app-state</span></div>
+            <span class="tag info">maintenance</span>
+          </div>
+          <svg class="chart" viewBox="0 0 320 142" role="img" aria-label="Data quality categorized chart">
+            <rect x="42" y="32" width="236" height="28" rx="6" fill="#dbe3ec"/>
+            <rect x="42" y="32" width="205" height="28" rx="6" fill="#16a36a"/>
+            <rect x="42" y="82" width="236" height="28" rx="6" fill="#dbe3ec"/>
+            <rect x="42" y="82" width="31" height="28" rx="6" fill="#d08a00"/>
+            <text x="42" y="24" fill="#647086" font-size="12">categorized</text>
+            <text x="42" y="76" fill="#647086" font-size="12">uncategorized</text>
+          </svg>
+          <div class="metric-strip">
+            <div class="metric"><b>3</b><small>items</small></div>
+            <div class="metric"><b>18k</b><small>unknown</small></div>
+            <div class="metric"><b>12h</b><small>delay</small></div>
+          </div>
+          <div class="user-defined">
+            <strong><span>Lifecycle tuning</span><span>user-defined</span></strong>
+            <div class="control-line"><span>Delay</span><input type="range" min="1" max="48" value="12" data-out="dqDelay"><b><span id="dqDelay">12</span>h</b></div>
+            <div class="control-line"><span>Resolve</span><select class="mini-select"><option>When categorized</option><option>After review</option><option>Manual only</option></select><b>auto</b></div>
+          </div>
+        </article>
+      </div>
+    </section>
+      </div>
+
+      <div class="tab-panel" id="panel-triggers" role="tabpanel" data-legacy-tab-panel="triggers" hidden>
+    <section class="card" style="margin-top:18px;">
+      <div class="section-head">
+        <div>
+          <h2>Pulse Trigger Catalog</h2>
+          <p>
+            Itt nem összevont chartok vannak, hanem minden aktív pulse-forrás
+            külön auditkártyán. Ami pulse-t triggerelhet, annak itt látszania
+            kell: aktuális érték, triggerfeltétel, lifecycle és user-defined
+            beállítás.
+          </p>
+        </div>
+        <span class="tag bad">all active triggers</span>
+      </div>
+
+      <div class="trigger-grid">
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-001</span><span class="tag bad">budget_pressure</span></div>
+          <strong>Month-end expense forecast</strong>
+          <p class="trigger-copy">Trigger, ha a becsült hó végi költés limit fölé megy, rosszabb zónába lép, vagy visszajön limit alá.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M14 62 L70 54 L126 42 L178 28 L226 16" fill="none" stroke="#e34a4a" stroke-width="4" stroke-linecap="round"/><path d="M14 42 H226" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/><circle cx="178" cy="28" r="5" fill="#e34a4a"/></svg>
+          <div class="trigger-meta"><span>Zone: over forecast</span><span>Transition: normal -> bad</span></div>
+          <div class="user-defined"><strong><span>Forecast baseline</span><span>user-defined</span></strong><div class="control-line"><span>Sensitivity</span><input type="range" min="1" max="10" value="6"><b>6</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-002</span><span class="tag warn">budget_pressure</span></div>
+          <strong>Monthly category limit burn</strong>
+          <p class="trigger-copy">Trigger, ha egy havi kategórialimit forecastja warning, critical vagy over zónába lép.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="22" y="34" width="28" height="32" rx="4" fill="#08a7c7"/><rect x="76" y="22" width="28" height="44" rx="4" fill="#d08a00"/><rect x="130" y="12" width="28" height="54" rx="4" fill="#e34a4a"/><rect x="184" y="40" width="28" height="26" rx="4" fill="#16a36a"/><path d="M14 26 H226" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/></svg>
+          <div class="trigger-meta"><span>Target: category</span><span>Supersedes lower zones</span></div>
+          <div class="user-defined"><strong><span>Category threshold</span><span>user-defined</span></strong><div class="control-line"><span>Warn at</span><input type="range" min="60" max="95" value="75"><b>75%</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-003</span><span class="tag info">coach</span></div>
+          <strong>Daily safe spend</strong>
+          <p class="trigger-copy">Trigger csak meaningful daily-ceiling zónaváltáskor, vagy erősebb budget/cashflow story magyarázó részleteként.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M20 58 H220" stroke="#dbe3ec" stroke-width="14" stroke-linecap="round"/><path d="M20 58 H92" stroke="#d08a00" stroke-width="14" stroke-linecap="round"/><text x="112" y="47" fill="#172033" font-size="18" font-weight="800">540 Ft/day</text></svg>
+          <div class="trigger-meta"><span>Low weight</span><span>No daily spam</span></div>
+          <div class="user-defined"><strong><span>Daily ceiling rule</span><span>user-defined</span></strong><div class="control-line"><span>Min drop</span><input type="range" min="5" max="50" value="20"><b>20%</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-004</span><span class="tag warn">rhythm</span></div>
+          <strong>Weekly pace</strong>
+          <p class="trigger-copy">Trigger, ha a heti változó költés érdemben gyorsabb vagy lassabb az aktuális hónap napjaiból számolt heti allowance-nál.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M18 48 L68 48 L118 48 L168 48 L222 48" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/><path d="M18 60 L68 56 L118 42 L168 28 L222 20" fill="none" stroke="#7657d9" stroke-width="4" stroke-linecap="round"/></svg>
+          <div class="trigger-meta"><span>No 4.345 constant</span><span>Current month length</span></div>
+          <div class="user-defined"><strong><span>Weekly sensitivity</span><span>user-defined</span></strong><div class="control-line"><span>Pace gap</span><input type="range" min="5" max="40" value="15"><b>15%</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-005</span><span class="tag violet">fixed_load</span></div>
+          <strong>Fixed cost load</strong>
+          <p class="trigger-copy">Trigger, ha a havi fix/recurring load material: total, activated, pending és legnagyobb fix tétel alapján.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="24" y="20" width="70" height="38" rx="6" fill="#16a36a"/><rect x="94" y="20" width="92" height="38" rx="6" fill="#d08a00"/><rect x="186" y="20" width="30" height="38" rx="6" fill="#e34a4a"/></svg>
+          <div class="trigger-meta"><span>Activated + pending</span><span>Composes often</span></div>
+          <div class="user-defined"><strong><span>Fixed scope</span><span>user-defined</span></strong><div class="control-line"><span>Include</span><select class="mini-select"><option>Recurring only</option><option>Recurring + marked fixed</option></select><b>set</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-006</span><span class="tag violet">fixed_load</span></div>
+          <strong>Next 7d recurring</strong>
+          <p class="trigger-copy">Trigger, ha a következő 7 nap pending recurring kiadásai összeadva fontosak vagy közeli esedékességűek.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><line x1="18" y1="40" x2="222" y2="40" stroke="#dbe3ec" stroke-width="5" stroke-linecap="round"/><circle cx="52" cy="40" r="9" fill="#e34a4a"/><circle cx="112" cy="40" r="9" fill="#d08a00"/><circle cx="178" cy="40" r="9" fill="#7657d9"/><text x="35" y="68" fill="#647086" font-size="11">1d</text><text x="95" y="68" fill="#647086" font-size="11">3d</text><text x="160" y="68" fill="#647086" font-size="11">6d</text></svg>
+          <div class="trigger-meta"><span>Window: 7 days</span><span>Nearest item wins detail</span></div>
+          <div class="user-defined"><strong><span>Due window</span><span>user-defined</span></strong><div class="control-line"><span>Days</span><input type="range" min="3" max="14" value="7"><b>7</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-007</span><span class="tag bad">cashflow</span></div>
+          <strong>Ghost income missing</strong>
+          <p class="trigger-copy">Trigger, ha várt income ghost due vagy overdue, de még nem activated. Érkezéskor positive recovery pulse is lehet.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="26" y="18" width="54" height="42" rx="6" fill="#16a36a"/><rect x="106" y="18" width="54" height="42" rx="6" fill="none" stroke="#e34a4a" stroke-width="4" stroke-dasharray="6 5"/><path d="M174 40 H220" stroke="#e34a4a" stroke-width="4" stroke-linecap="round"/></svg>
+          <div class="trigger-meta"><span>Missing: 120k</span><span>Direction can recover</span></div>
+          <div class="user-defined"><strong><span>Income trust</span><span>user-defined</span></strong><div class="control-line"><span>Grace</span><input type="range" min="0" max="7" value="2"><b>2d</b></div></div>
+        </article>
+
+        <article class="trigger-card deferred">
+          <div class="trigger-top"><span class="trigger-id">HF-008</span><span class="tag">deferred</span></div>
+          <strong>Income goal risk</strong>
+          <p class="trigger-copy">Nem aktív V1 pulse trigger. Korábban deferáltuk, mert átfed a saving-goal forecasttal és a ghost income jellel.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M24 54 H216" stroke="#cbd5e1" stroke-width="10" stroke-linecap="round"/><path d="M72 22 L168 58" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/><path d="M168 22 L72 58" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/></svg>
+          <div class="trigger-meta"><span>Not active</span><span>Covered elsewhere</span></div>
+          <div class="user-defined"><strong><span>Future option</span><span>deferred</span></strong><div class="control-line"><span>State</span><select class="mini-select"><option>Keep deferred</option></select><b>off</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-009</span><span class="tag warn">cashflow</span></div>
+          <strong>Expense / income ratio</strong>
+          <p class="trigger-copy">Trigger, ha current month expense / current month income watch, tight vagy negative cashflow zónába lép.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="22" y="22" width="196" height="16" rx="5" fill="#dbe3ec"/><rect x="22" y="22" width="178" height="16" rx="5" fill="#e34a4a"/><rect x="22" y="50" width="196" height="8" rx="4" fill="#16a36a"/></svg>
+          <div class="trigger-meta"><span>91% tight</span><span>No income: no panic</span></div>
+          <div class="user-defined"><strong><span>Ratio zones</span><span>user-defined</span></strong><div class="control-line"><span>Tight at</span><input type="range" min="80" max="100" value="90"><b>90%</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-010</span><span class="tag warn">cashflow</span></div>
+          <strong>Savings goal forecast</strong>
+          <p class="trigger-copy">Trigger, ha expected income mínusz HF-001 expense forecast alapján a saving goal at risk vagy likely missed zónába kerül.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M24 56 H216" stroke="#dbe3ec" stroke-width="14" stroke-linecap="round"/><path d="M24 56 H154" stroke="#d08a00" stroke-width="14" stroke-linecap="round"/><path d="M184 20 V68" stroke="#16a36a" stroke-width="3" stroke-dasharray="5 5"/></svg>
+          <div class="trigger-meta"><span>70% of goal</span><span>Uses HF-001</span></div>
+          <div class="user-defined"><strong><span>Goal mode</span><span>user-defined</span></strong><div class="control-line"><span>Strictness</span><input type="range" min="1" max="10" value="7"><b>7</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-011</span><span class="tag good">cashflow</span></div>
+          <strong>Balance buffer days</strong>
+          <p class="trigger-copy">Trigger, ha current balance / rolling 30-day variable daily spend zónát vált: stable, watch, tight vagy critical.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M48 60 A72 72 0 0 1 192 60" fill="none" stroke="#dbe3ec" stroke-width="13" stroke-linecap="round"/><path d="M48 60 A72 72 0 0 1 158 18" fill="none" stroke="#16a36a" stroke-width="13" stroke-linecap="round"/><text x="101" y="56" fill="#172033" font-size="18" font-weight="800">31d</text></svg>
+          <div class="trigger-meta"><span>30+ stable</span><span>Recovery can pulse</span></div>
+          <div class="user-defined"><strong><span>Buffer zones</span><span>user-defined</span></strong><div class="control-line"><span>Stable</span><input type="range" min="14" max="60" value="30"><b>30d</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-012</span><span class="tag violet">behavior</span></div>
+          <strong>Top category spike</strong>
+          <p class="trigger-copy">Trigger, ha egy változó kategória rolling 30 napban legalább 10k Ft és 30% növekedést mutat, vagy érdemben javul.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="44" y="38" width="42" height="28" rx="5" fill="#08a7c7"/><rect x="138" y="14" width="42" height="52" rx="5" fill="#d54f93"/><text x="42" y="26" fill="#647086" font-size="11">prev</text><text x="132" y="26" fill="#647086" font-size="11">now</text></svg>
+          <div class="trigger-meta"><span>Food +24%</span><span>Ignores fixed</span></div>
+          <div class="user-defined"><strong><span>Spike threshold</span><span>user-defined</span></strong><div class="control-line"><span>Min Ft</span><input type="range" min="5000" max="30000" value="10000"><b>10k</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-013</span><span class="tag violet">behavior</span></div>
+          <strong>Spend trend 30d</strong>
+          <p class="trigger-copy">Trigger, ha total rolling 30-day variable spend legalább +/-15% és +/-10k Ft mértékben romlik vagy javul.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M18 58 C58 62 82 54 116 42 S178 18 222 20" fill="none" stroke="#d54f93" stroke-width="4" stroke-linecap="round"/><path d="M18 62 H222" stroke="#dbe3ec" stroke-width="2"/></svg>
+          <div class="trigger-meta"><span>Rolling +17%</span><span>Recovery can pulse</span></div>
+          <div class="user-defined"><strong><span>Trend threshold</span><span>user-defined</span></strong><div class="control-line"><span>Change</span><input type="range" min="5" max="35" value="15"><b>15%</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-014</span><span class="tag violet">behavior</span></div>
+          <strong>Score direction</strong>
+          <p class="trigger-copy">Trigger existing scoreLine/kontrollScore alapján: legalább 8 pont mozgás vagy red/amber/green zónaváltás.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M18 30 L66 34 L114 44 L162 48 L222 58" fill="none" stroke="#e34a4a" stroke-width="4" stroke-linecap="round"/><path d="M18 52 H222" stroke="#d08a00" stroke-width="2" stroke-dasharray="4 5"/><text x="184" y="24" fill="#e34a4a" font-size="12">-8</text></svg>
+          <div class="trigger-meta"><span>Score 60 -> 52</span><span>No recalculation</span></div>
+          <div class="user-defined"><strong><span>Score movement</span><span>user-defined</span></strong><div class="control-line"><span>Min move</span><input type="range" min="4" max="15" value="8"><b>8</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-015</span><span class="tag bad">reducer</span></div>
+          <strong>Limit zone supersede</strong>
+          <p class="trigger-copy">Trigger zónaváltáskor. Egy targetnél csak a legerősebb aktuális állapot aktív: 75 helyett 90, 90 helyett over.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="24" y="24" width="42" height="34" rx="5" fill="#dbe3ec"/><rect x="78" y="24" width="42" height="34" rx="5" fill="#d08a00"/><rect x="132" y="24" width="42" height="34" rx="5" fill="#e34a4a"/><rect x="186" y="24" width="42" height="34" rx="5" fill="#9f2424"/><path d="M66 41 H78 M120 41 H132 M174 41 H186" stroke="#647086" stroke-width="3"/></svg>
+          <div class="trigger-meta"><span>75 -> 90</span><span>Older state superseded</span></div>
+          <div class="user-defined"><strong><span>Supersede strictness</span><span>user-defined</span></strong><div class="control-line"><span>Strict</span><input type="range" min="1" max="10" value="8"><b>8</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-016</span><span class="tag info">engine</span></div>
+          <strong>Pulse priority</strong>
+          <p class="trigger-copy">Nem pénzügyi chart, hanem selection trigger: irreleváns jelek dobása, grouping, score, majd egy header story kiválasztása.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="20" y="18" width="44" height="42" rx="6" fill="#e34a4a"/><rect x="76" y="26" width="44" height="34" rx="6" fill="#d08a00"/><rect x="132" y="34" width="44" height="26" rx="6" fill="#08a7c7"/><path d="M188 39 H222" stroke="#172033" stroke-width="6" stroke-linecap="round"/></svg>
+          <div class="trigger-meta"><span>One header story</span><span>Related details kept</span></div>
+          <div class="user-defined"><strong><span>Domain weights</span><span>user-defined</span></strong><div class="control-line"><span>Budget</span><input type="range" min="20" max="120" value="85"><b>85</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-017</span><span class="tag info">lifecycle</span></div>
+          <strong>Pulse lifecycle</strong>
+          <p class="trigger-copy">Trigger delivery/retrigger szabály: same fingerprint nem ismétlődik, changed fingerprint vagy resolved-then-triggered újra megjelenhet.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><circle cx="36" cy="40" r="12" fill="#d08a00"/><circle cx="88" cy="40" r="12" fill="#08a7c7"/><circle cx="140" cy="40" r="12" fill="#16a36a"/><circle cx="192" cy="40" r="12" fill="#7657d9"/><path d="M48 40 H76 M100 40 H128 M152 40 H180" stroke="#647086" stroke-width="3"/></svg>
+          <div class="trigger-meta"><span>eligible -> shown</span><span>resolved can retrigger</span></div>
+          <div class="user-defined"><strong><span>Retrigger rule</span><span>user-defined</span></strong><div class="control-line"><span>Repeat</span><select class="mini-select"><option>Fingerprint change</option><option>Period change</option></select><b>safe</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-018</span><span class="tag info">delivery</span></div>
+          <strong>Header morph pulse</strong>
+          <p class="trigger-copy">Nem külön pénzügyi signal, hanem delivery trigger: a kiválasztott story morphként jelenik meg, queue vagy badge nélkül.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="20" y="18" width="84" height="42" rx="12" fill="#08a7c7"/><path d="M114 39 H134" stroke="#647086" stroke-width="4"/><rect x="144" y="18" width="76" height="42" rx="12" fill="#d08a00"/></svg>
+          <div class="trigger-meta"><span>Normal -> pulse</span><span>Returns cleanly</span></div>
+          <div class="user-defined"><strong><span>Delivery tuning</span><span>user-defined</span></strong><div class="control-line"><span>Duration</span><input type="range" min="2" max="8" value="3"><b>3s</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-019</span><span class="tag info">panel</span></div>
+          <strong>Pulse engine panel</strong>
+          <p class="trigger-copy">Panel visibility source: hidden metrics, raw triggers, forming story, selected story, history és tuning itt látszik, nem notification inboxként.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="22" y="16" width="88" height="46" rx="7" fill="#08a7c7"/><rect x="126" y="16" width="40" height="18" rx="5" fill="#d08a00"/><rect x="126" y="44" width="92" height="18" rx="5" fill="#7657d9"/></svg>
+          <div class="trigger-meta"><span>Under the hood</span><span>User-defined everywhere</span></div>
+          <div class="user-defined"><strong><span>Panel depth</span><span>user-defined</span></strong><div class="control-line"><span>Mode</span><select class="mini-select"><option>Coach</option><option>Diagnostic</option><option>Expert</option></select><b>expert</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-020</span><span class="tag violet">yearly</span></div>
+          <strong>Yearly category limit burn</strong>
+          <p class="trigger-copy">Trigger, ha egy éves kategórialimit year-to-date pacing alapján warning/critical/over irányba megy. Nem havi copy.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><path d="M20 60 L72 54 L124 42 L176 28 L224 18" fill="none" stroke="#7657d9" stroke-width="4" stroke-linecap="round"/><path d="M20 50 L224 30" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/></svg>
+          <div class="trigger-meta"><span>Year scope</span><span>Separate period key</span></div>
+          <div class="user-defined"><strong><span>Yearly window</span><span>user-defined</span></strong><div class="control-line"><span>Window</span><select class="mini-select"><option>Calendar year</option><option>Rolling 12m</option></select><b>year</b></div></div>
+        </article>
+
+        <article class="trigger-card">
+          <div class="trigger-top"><span class="trigger-id">HF-021</span><span class="tag info">data_quality</span></div>
+          <strong>Uncategorized status</strong>
+          <p class="trigger-copy">Trigger késleltetve és csoportosítva, ha uncategorized tételek rontják a kategória forecast vagy summary megbízhatóságát.</p>
+          <svg class="trigger-chart" viewBox="0 0 240 78"><rect x="26" y="22" width="150" height="14" rx="5" fill="#16a36a"/><rect x="26" y="48" width="48" height="14" rx="5" fill="#d08a00"/><text x="88" y="60" fill="#647086" font-size="11">3 unknown</text></svg>
+          <div class="trigger-meta"><span>Delayed</span><span>Resolves on categorize</span></div>
+          <div class="user-defined"><strong><span>Data feedback</span><span>user-defined</span></strong><div class="control-line"><span>Delay</span><input type="range" min="1" max="48" value="12"><b>12h</b></div></div>
+        </article>
+      </div>
+    </section>
+      </div>
+
+      <div class="tab-panel" id="panel-stories" role="tabpanel" data-legacy-tab-panel="stories" hidden>
+    <section class="grid-2" style="margin-top:18px;">
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2>Story builder</h2>
+            <p>
+              A story nem egy signal. A story összerakott állítás: több jel
+              összeállhat egy hasznos mondattá, és ugyanúgy lehet negatív,
+              pozitív vagy stabil.
+            </p>
+          </div>
+        </div>
+        <div class="weights-grid">
+          <div class="story-card primary">
+            <h3>A hónap vége szoros lesz.</h3>
+            <p>Budget pressure + fixed load + ghost income. Ez kapja a headert, mert aktuális, pénzben nagy és több kapcsolódó jel erősíti.</p>
+            <div class="tagrow"><span class="tag bad">score 86</span><span class="tag warn">bad_to_worse</span></div>
+            <div class="user-defined">
+              <strong><span>Story preference</span><span>user-defined</span></strong>
+              <div class="control-line"><span>Tone</span><select class="mini-select"><option>Coach</option><option>Direct</option><option>Quiet</option></select><b>coach</b></div>
+            </div>
+          </div>
+          <div class="story-card">
+            <h3>A cashflow stabil maradt.</h3>
+            <p>Positive/stable story. Nem filler: csak akkor jelenik meg, ha korábban risk volt, majd a user állított vagy javult az állapot.</p>
+            <div class="tagrow"><span class="tag good">score 48</span><span class="tag good">bad_to_good</span></div>
+            <div class="user-defined">
+              <strong><span>Win visibility</span><span>user-defined</span></strong>
+              <div class="control-line"><span>Show</span><select class="mini-select"><option>Meaningful wins</option><option>All wins</option><option>Hide wins</option></select><b>medium</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2>Lifecycle trace</h2>
+            <p>
+              A motor állapotot tárol, nem régi mondatot. Ezért a 75%-os
+              figyelmeztetés superseded lesz, ha mire belépsz már 90% igaz.
+            </p>
+          </div>
+        </div>
+        <table class="lifecycle-table">
+          <thead>
+            <tr><th>Fingerprint</th><th>State</th><th>Reason</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>budget_food_2026-07_warning_bad</code></td>
+              <td><span class="tag violet">superseded</span></td>
+              <td>90%-os állapot felülírta a 75%-ot.</td>
+            </tr>
+            <tr>
+              <td><code>budget_food_2026-07_critical_bad</code></td>
+              <td><span class="tag bad">eligible</span></td>
+              <td>Aktuális, releváns, még nem shown.</td>
+            </tr>
+            <tr>
+              <td><code>ghost_income_salary_2026-07_good</code></td>
+              <td><span class="tag good">resolved</span></td>
+              <td>Megérkezett a várt bevétel.</td>
+            </tr>
+            <tr>
+              <td><code>data_uncat_2026-07_neutral</code></td>
+              <td><span class="tag info">delayed</span></td>
+              <td>Csak csoportosítva és késleltetve jelenik meg.</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="user-defined">
+          <strong><span>Lifecycle rules</span><span>user-defined</span></strong>
+          <div class="control-line"><span>Dismiss</span><select class="mini-select"><option>Until fingerprint changes</option><option>For this period</option><option>Forever for target</option></select><b>safe</b></div>
+          <div class="control-line"><span>Supersede</span><input type="range" min="1" max="10" value="8" data-out="supersedeStrict"><b><span id="supersedeStrict">8</span>/10</b></div>
+        </div>
+      </div>
+    </section>
+      </div>
+
+      <div class="tab-panel" id="panel-tuning" role="tabpanel" data-legacy-tab-panel="tuning" hidden>
+    <section class="card" style="margin-top:18px;">
+      <div class="section-head">
+        <div>
+          <h2>User-defined mindenhol</h2>
+          <p>
+            A panel egyik fő célja, hogy a user értse és szabályozhassa, hogyan
+            gondolkodik a motor. Nem egy globális "okos értesítések" kapcsoló,
+            hanem szintenként állítható, korlátozott és magyarázható vezérlés.
+          </p>
+        </div>
+        <span class="tag good">transparent tuning</span>
+      </div>
+
+      <div class="matrix">
+        <div class="matrix-card">
+          <strong>Metric level</strong>
+          <ul>
+            <li>custom baseline</li>
+            <li>period window</li>
+            <li>fixed cost include/exclude</li>
+            <li>confidence range</li>
+          </ul>
+        </div>
+        <div class="matrix-card">
+          <strong>Signal level</strong>
+          <ul>
+            <li>threshold zones</li>
+            <li>sensitivity</li>
+            <li>mute target</li>
+            <li>confirmation required</li>
+          </ul>
+        </div>
+        <div class="matrix-card">
+          <strong>Story level</strong>
+          <ul>
+            <li>domain weights</li>
+            <li>grouping preference</li>
+            <li>positive/stable visibility</li>
+            <li>tone style</li>
+          </ul>
+        </div>
+        <div class="matrix-card">
+          <strong>Delivery level</strong>
+          <ul>
+            <li>header eligibility</li>
+            <li>cooldown</li>
+            <li>quiet hours later</li>
+            <li>urgency handling</li>
+          </ul>
+        </div>
+        <div class="matrix-card">
+          <strong>Lifecycle level</strong>
+          <ul>
+            <li>dismiss duration</li>
+            <li>resolve rule</li>
+            <li>retrigger rule</li>
+            <li>supersede strictness</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+      </div>
+    </section>
+
+    <p class="footer-note">
+      Prototype artifact: docs/prototypes/pulse_engine_panel_mockup.html ·
+      This page is a design mockup for the future Flutter panel, not production code.
+    </p>
+  </main>
+
+  <script>
+    const decisionTraceScenarios = {
+      risk: {
+        phone: {
+          pulse: "A hónap vége szoros lesz.",
+          detail: "3 keret túlfutás felé tart, és még 42 000 Ft fix kiadás várható.",
+          title: "Budget + fixed load story"
+        },
+        recalculation: {
+          event: "Foreground transaction change",
+          background: "Backgroundban a state frissül, de a header delivery app open/resume-ig vár."
+        },
+        signals: [
+          { id: "HF-001", state: "eligible", group: "budget", reason: "Over-limit forecast, changed fingerprint." },
+          { id: "HF-002", state: "eligible", group: "budget", reason: "Food category critical; same month-end target." },
+          { id: "HF-005", state: "eligible", group: "cashflow", reason: "42 000 Ft fixed load material a hónap végéhez." },
+          { id: "HF-006", state: "eligible", group: "cashflow", reason: "Recurring cost inside the due window." },
+          { id: "HF-003", state: "waiting", group: "budget", reason: "Coach detail; nincs önálló napi pulse." },
+          { id: "HF-021", state: "waiting", group: "data-quality", reason: "A delay/group threshold még nem épített külön data storyt." }
+        ],
+        candidates: [
+          {
+            id: "month-end-tight",
+            title: "Budget + fixed load story",
+            status: "selected",
+            dominant: "HF-001",
+            base: 85,
+            baseLabel: "Month-end forecast over limit",
+            modifiers: [
+              { label: "Material money impact", value: 15 },
+              { label: "Related evidence in the same story", value: 10 }
+            ],
+            evidence: "1 high signal + related Budget/Cashflow evidence",
+            outcome: "Selected for the one current header pulse."
+          },
+          {
+            id: "cashflow-due",
+            title: "Upcoming fixed-cost story",
+            status: "suppressed",
+            dominant: "HF-006",
+            base: 70,
+            baseLabel: "Fixed cost due in 7 days",
+            modifiers: [{ label: "Due within 3 days", value: 10 }],
+            evidence: "1 high material due signal",
+            outcome: "Ready, but 80 loses to the selected 100 priority story."
+          }
+        ],
+        lifecycle: [
+          { state: "observing", reason: "Forecast inputs updated." },
+          { state: "eligible", reason: "Fingerprint changed and evidence is current." },
+          { state: "ready", reason: "High signal plus related material evidence." },
+          { state: "selected", reason: "Highest current priority." },
+          { state: "delivered", reason: "Foreground header can morph now." },
+          { state: "shown", reason: "Same fingerprint cannot replay." }
+        ],
+        copy: [
+          { slot: "Headline", source: "HF-001", text: "A hónap vége szoros lesz." },
+          { slot: "Evidence", source: "HF-002", text: "3 keret túlfutás felé tart," },
+          { slot: "Time/cause", source: "HF-005", text: "és még 42 000 Ft fix kiadás várható." }
+        ],
+        omitted: [
+          { id: "HF-003", reason: "Coach detail only; no daily standalone pulse." },
+          { id: "HF-021", reason: "Waiting for its own delay and grouping rule." }
+        ]
+      },
+      recovery: {
+        phone: {
+          pulse: "Visszajött a kereten belüli pálya.",
+          detail: "A ghost income érkezése után a forecast már tartható.",
+          title: "Recovery story"
+        },
+        recalculation: {
+          event: "App open after income activation",
+          background: "A resolved important risk csak új, meaningful transitionként lehet egyszer recovery."
+        },
+        signals: [
+          { id: "HF-001", state: "resolved", group: "budget", reason: "A forecast visszajött a limit alá." },
+          { id: "HF-007", state: "eligible", group: "cashflow", reason: "Expected income arrived; fingerprint changed." },
+          { id: "HF-014", state: "eligible", group: "budget", reason: "A meglévő score direction javult; okot nem talál ki." }
+        ],
+        candidates: [
+          {
+            id: "recovery",
+            title: "Recovery story",
+            status: "selected",
+            dominant: "HF-007",
+            base: 70,
+            baseLabel: "Meaningful recovery direction",
+            modifiers: [],
+            evidence: "Previously important risk resolved with current recovery evidence",
+            outcome: "Selected once; it is not routine praise."
+          }
+        ],
+        lifecycle: [
+          { state: "shown risk", reason: "A korábbi month-end risk már látszott." },
+          { state: "resolved", reason: "A limit és forecast ismét tartható." },
+          { state: "new fingerprint", reason: "Income activation új truth state." },
+          { state: "ready", reason: "Meaningful recovery after important risk." },
+          { state: "selected", reason: "Nincs erősebb current risk." },
+          { state: "shown recovery", reason: "A recovery nem ismétel ugyanazzal a fingerprinttel." }
+        ],
+        copy: [
+          { slot: "Headline", source: "HF-001", text: "Visszajött a kereten belüli pálya." },
+          { slot: "Recovery", source: "HF-007", text: "A ghost income érkezése után" },
+          { slot: "Evidence", source: "HF-014", text: "a forecast már tartható." }
+        ],
+        omitted: []
+      },
+      data: {
+        phone: {
+          pulse: "Találtam 3 kategorizálatlan tételt.",
+          detail: "A kategória forecast emiatt kevésbé pontos, de nem sürgős pénzügyi warning.",
+          title: "Data quality story"
+        },
+        recalculation: {
+          event: "Delayed app-state reevaluation",
+          background: "A háttérben a grouped state frissül; a header csak foregroundban presentál."
+        },
+        signals: [
+          { id: "HF-021", state: "eligible", group: "data-quality", reason: "12h delay és grouped count threshold teljesült." },
+          { id: "HF-014", state: "waiting", group: "budget", reason: "Unrelated score movement nem erősítheti automatikusan ezt a storyt." }
+        ],
+        candidates: [
+          {
+            id: "data-quality",
+            title: "Data quality story",
+            status: "selected",
+            dominant: "HF-021",
+            base: 35,
+            baseLabel: "Uncategorized transaction status",
+            modifiers: [],
+            evidence: "Delayed grouped app-state evidence",
+            outcome: "Selected only because no stronger ready financial story exists."
+          }
+        ],
+        lifecycle: [
+          { state: "observing", reason: "Uncategorized items are tracked." },
+          { state: "waiting", reason: "Delay and grouping prevent immediate noise." },
+          { state: "eligible", reason: "12h and count threshold passed." },
+          { state: "ready", reason: "Data-quality evidence is grouped." },
+          { state: "selected", reason: "No stronger ready story exists." },
+          { state: "shown", reason: "It remains an app-state explanation, not a financial emergency." }
+        ],
+        copy: [
+          { slot: "Headline", source: "HF-021", text: "Találtam 3 kategorizálatlan tételt." },
+          { slot: "Confidence caveat", source: "HF-021", text: "A kategória forecast emiatt kevésbé pontos." }
+        ],
+        omitted: [
+          { id: "HF-014", reason: "Unrelated source; it cannot strengthen the data-quality story." }
+        ]
+      }
+    };
+
+    const sourceCopyRoles = {
+      "HF-001": { group: "budget", role: "headline", mode: "can-lead", reason: "Month-end forecast claim." },
+      "HF-002": { group: "budget", role: "evidence", mode: "support", reason: "Monthly category limit proof." },
+      "HF-003": { group: "budget", role: "coach detail", mode: "support", reason: "Only meaningful zone change or parent-story detail." },
+      "HF-004": { group: "budget", role: "evidence", mode: "support", reason: "Weekly pace comparison." },
+      "HF-005": { group: "cashflow", role: "time/cause", mode: "support", reason: "Material fixed-load amount." },
+      "HF-006": { group: "cashflow", role: "time/cause", mode: "support", reason: "Due-window timing." },
+      "HF-007": { group: "cashflow", role: "headline or recovery", mode: "can-lead", reason: "Missing or arrived expected income." },
+      "HF-008": { group: "cashflow", role: "none", mode: "deferred-no-copy", reason: "Deferred V1 overlap with HF-007 and HF-010." },
+      "HF-009": { group: "cashflow", role: "headline", mode: "can-lead", reason: "Cashflow ratio risk." },
+      "HF-010": { group: "cashflow", role: "headline", mode: "can-lead", reason: "Savings-goal risk." },
+      "HF-011": { group: "cashflow", role: "headline", mode: "can-lead", reason: "Balance-buffer risk." },
+      "HF-012": { group: "budget", role: "evidence", mode: "support", reason: "Category behavior shift." },
+      "HF-013": { group: "budget", role: "evidence", mode: "support", reason: "Rolling total spend trend." },
+      "HF-014": { group: "budget", role: "context", mode: "support", reason: "Reports existing score movement only." },
+      "HF-015": { group: "budget", role: "none", mode: "engine-only", reason: "Supersede rule, not a copy source." },
+      "HF-016": { group: "engine", role: "none", mode: "engine-only", reason: "Priority and selection diagnostics." },
+      "HF-017": { group: "engine", role: "none", mode: "engine-only", reason: "Fingerprint lifecycle diagnostics." },
+      "HF-018": { group: "engine", role: "none", mode: "engine-only", reason: "Header delivery diagnostics." },
+      "HF-019": { group: "engine", role: "none", mode: "engine-only", reason: "Panel diagnostics." },
+      "HF-020": { group: "budget", role: "evidence", mode: "support", reason: "Yearly-limit context." },
+      "HF-021": { group: "data-quality", role: "confidence caveat", mode: "can-lead", reason: "Own data story or financial-confidence caveat." }
+    };
+
+    function copyRoleBadge(id) {
+      const role = sourceCopyRoles[id];
+      if (!role) return "";
+      const tone = role.mode === "can-lead" ? "bad"
+        : role.mode === "support" ? "violet"
+          : role.mode === "deferred-no-copy" ? "warn" : "info";
+      return '<span class="tag ' + tone + ' copy-role" title="' + role.reason + '">' + role.role + ' · ' + role.mode + '</span>';
+    }
+
+    function calculatePriority(candidate) {
+      const delta = candidate.modifiers.reduce((sum, modifier) => sum + modifier.value, 0);
+      return Math.max(0, Math.min(100, candidate.base + delta));
+    }
+
+    function traceTone(state) {
+      if (["eligible", "resolved", "ready", "shown", "shown recovery"].includes(state)) return "good";
+      if (["selected"].includes(state)) return "bad";
+      if (["suppressed", "waiting", "new fingerprint"].includes(state)) return "warn";
+      return "info";
+    }
+
+    function traceSourceControl(id, content) {
+      const role = sourceCopyRoles[id];
+      const canNavigate = role && !["engine-only", "deferred-no-copy"].includes(role.mode);
+      if (!canNavigate) {
+        return '<div class="trace-source-button"><div class="trigger-top"><span class="trigger-id">' + id + '</span>' + copyRoleBadge(id) + '</div>' + content + '<span>' + (role ? role.reason : "No source role") + '</span></div>';
+      }
+      return '<div class="trace-source-button" role="button" tabindex="0" data-trace-source="' + id + '"><div class="trigger-top"><span class="trigger-id">' + id + '</span>' + copyRoleBadge(id) + '</div>' + content + '</div>';
+    }
+
+    function renderAllSourceRoles() {
+      return Object.entries(sourceCopyRoles).map(([id, role]) => '<article class="trace-candidate">' + traceSourceControl(id, '<strong>' + role.role + '</strong><p>' + role.reason + '</p>') + '</article>').join("");
+    }
+
+    function renderSharedEngineRoleBadges() {
+      document.querySelectorAll("[data-shared-hf-id]").forEach((step) => {
+        const id = step.dataset.sharedHfId;
+        if (!step.querySelector(".copy-role")) {
+          step.insertAdjacentHTML("beforeend", '<div class="tagrow">' + copyRoleBadge(id) + '</div>');
+        }
+      });
+    }
+
+    function traceSignal(signal) {
+      return '<article class="trace-candidate">' + traceSourceControl(signal.id, '<div class="trigger-top"><span class="tag ' + traceTone(signal.state) + '">' + signal.state + '</span></div><strong>' + signal.group + '</strong><p>' + signal.reason + '</p>') + '</article>';
+    }
+
+    function traceCandidate(candidate) {
+      const score = calculatePriority(candidate);
+      const modifiers = candidate.modifiers.length
+        ? candidate.modifiers.map((modifier) => '<span>' + (modifier.value >= 0 ? "+" : "") + modifier.value + ' · ' + modifier.label + '</span>').join("")
+        : '<span>0 · no extra modifier</span>';
+      return '<article class="trace-candidate ' + candidate.status + '">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p><div class="trace-ledger"><span>Base ' + candidate.base + ' · ' + candidate.baseLabel + '</span>' + modifiers + '<b>Priority ' + score + ' / 100</b></div><p>' + candidate.outcome + '</p>') + '</article>';
+    }
+
+    function renderDecisionTrace(scenarioKey) {
+      const scenario = decisionTraceScenarios[scenarioKey];
+      const selected = scenario.candidates.find((candidate) => candidate.status === "selected");
+      const stage = (name) => document.querySelector('[data-trace-stage="' + name + '"]');
+
+      stage("recalculation").innerHTML = '<h3>1. Recalculation</h3><div class="trace-stage-grid"><article class="trace-candidate"><strong>Event</strong><p>' + scenario.recalculation.event + '</p></article><article class="trace-candidate"><strong>Foreground / background</strong><p>' + scenario.recalculation.background + '</p></article></div>';
+      stage("eligibility").innerHTML = '<h3>2. Eligibility gate</h3><p>Eligibility előbb dönt: a waiting, stale, muted vagy same-fingerprint source score-t sem kap.</p><div class="trace-source-list">' + scenario.signals.map(traceSignal).join("") + '</div>';
+      stage("formation").innerHTML = '<h3>3. Story formation</h3><p>Csak ugyanahhoz a domainhez vagy targethez tartozó evidence épül közös storyvá; unrelated jel nem adódik hozzá.</p><div class="trace-candidate-list">' + scenario.candidates.map((candidate) => '<article class="trace-candidate">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + candidate.status + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p>') + '</article>').join("") + '</div>';
+      stage("priority").innerHTML = '<h3>4. Priority ledger</h3><p>A domináns eligible source base weightjére csak a megnevezett story modifier kerül. A rokon source-ok base weightje nem adódik össze vakon.</p><div class="trace-candidate-list">' + scenario.candidates.map(traceCandidate).join("") + '</div>';
+      stage("delivery").innerHTML = '<h3>5. Header delivery + lifecycle</h3><p><b>' + selected.title + '</b> selected, mert priority ' + calculatePriority(selected) + ' / 100. A suppressed story nem queue-ba kerül, hanem a következő current recalculationkor újra versenyez.</p><div class="trace-source-list">' + traceSourceControl(selected.dominant, '<strong>Selected header source</strong><p>' + selected.outcome + '</p>') + '</div><div class="trace-lifecycle">' + scenario.lifecycle.map((entry) => '<span class="tag ' + traceTone(entry.state) + '" title="' + entry.reason + '">' + entry.state + '</span>').join("") + '</div>';
+      stage("copy-map").innerHTML = '<h3>6. Story copy map</h3><p>A header mondat nem triggerlista: minden kimondott mondatrésznek van source-a.</p><div class="trace-source-list">' + scenario.copy.map((entry) => '<article class="trace-copy-fragment">' + traceSourceControl(entry.source, '<strong>' + entry.slot + '</strong><p>' + entry.text + '</p>') + '</article>').join("") + '</div>' + (scenario.omitted.length ? '<div class="trace-source-list"><p class="trace-omitted">Omitted source-ok:</p>' + scenario.omitted.map((entry) => traceSourceControl(entry.id, '<strong>Omitted</strong><p>' + entry.reason + '</p>')).join("") + '</div>' : '') + '<details class="trace-all-role-map" data-all-source-roles><summary>Teljes HF source → copy role térkép</summary><div class="trace-candidate-list">' + renderAllSourceRoles() + '</div></details>';
+    }
+
+    const scenarioControlGroups = [
+      Array.from(document.querySelectorAll("[data-scenario]")),
+      Array.from(document.querySelectorAll("[data-engine-scenario]"))
+    ];
+
+    function scenarioKeyFor(button) {
+      return button.dataset.scenario || button.dataset.engineScenario;
+    }
+
+    function applyScenario(scenarioKey) {
+      const scenario = decisionTraceScenarios[scenarioKey];
+      scenarioControlGroups.flat().forEach((button) => {
+        const active = scenarioKeyFor(button) === scenarioKey;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      const selected = scenario.candidates.find((candidate) => candidate.status === "selected");
+      const score = calculatePriority(selected);
+      document.getElementById("phonePulse").textContent = scenario.phone.pulse;
+      document.getElementById("phoneDetail").textContent = scenario.phone.detail;
+      document.getElementById("selectedTitle").textContent = scenario.phone.title;
+      document.getElementById("selectedScore").textContent = score;
+      document.getElementById("scorebar").style.width = score + "%";
+      renderDecisionTrace(scenarioKey);
+    }
+
+    scenarioControlGroups.forEach((buttons) => {
+      buttons.forEach((button, index) => {
+        button.addEventListener("click", () => applyScenario(scenarioKeyFor(button)));
+        button.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const nextIndex = event.key === "Home" ? 0
+            : event.key === "End" ? buttons.length - 1
+            : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+          const next = buttons[nextIndex];
+          next.focus();
+          applyScenario(scenarioKeyFor(next));
+        });
+      });
+    });
+
+    applyScenario("risk");
+
+    const groupDossiers = {
+      budget: {
+        title: "Budget pressure",
+        tag: "spend pace + limits",
+        manual: [
+          ["Inputs", "Változó költés, havi és éves limitek, hátralévő napok, kategóriák és score line."],
+          ["Calculation", "Pacing, forecast ratio, daily ceiling, weekly allowance és rolling 30 napos változás."],
+          ["Trigger", "Csak zónaváltás, materialitás vagy érdemi recovery után lehet eligible."],
+          ["Confidence", "Korai hónap, kevés adat vagy kategorizálatlan tétel csökkenti a forecast bizalmát."]
+        ],
+        forecasts: [
+          ["Month-end expense forecast", "HF-001 · variable pace + fixed ghosts", "over limit", "bad", "line", "A változó ütemet a már aktivált és hátralévő fix terhek egészítik ki."],
+          ["Monthly category limit burn", "HF-002 · projected category ratio", "critical", "warn", "bars", "A havi kategória limit saját forecastot kap; nem a teljes költés másolata."],
+          ["Yearly category limit burn", "HF-020 · year-to-date pacing", "watch", "violet", "line", "Az éves keret külön időszakkulcs és külön pacing, ezért külön triggerforrás."],
+          ["Behavior shift", "HF-012 · HF-013 · HF-014", "material change", "violet", "wave", "Kategória spike, teljes rolling trend és a meglévő score direction együtt is auditálható."]
+        ],
+        triggers: {
+          "HF-001": ["Month-end expense forecast", "budget_pressure", "A becsült hó végi kiadás limit fölé lép, rosszabb zónába kerül, vagy érdemben visszajön limit alá.", "variable pace + activated/pending fixed load", "over forecast", "normal → bad", "line", "Forecast baseline", "Sensitivity", 1, 10, 6, "/10"],
+          "HF-002": ["Monthly category limit burn", "budget_pressure", "Egy havi kategórialimit forecastja warning, critical vagy over zónába lép.", "projected category spend / monthly limit", "Food critical", "warning → critical", "bars", "Category threshold", "Warn at", 60, 95, 75, "%"],
+          "HF-003": ["Daily safe spend", "budget_pressure", "Csak meaningful daily-ceiling zónaváltáskor jelez, vagy erősebb budget/cashflow story magyarázó részlete.", "remaining monthly budget / remaining days", "540 Ft/day", "coach zone changed", "gauge", "Daily ceiling rule", "Min drop", 5, 50, 20, "%"],
+          "HF-004": ["Weekly pace", "budget_pressure", "A heti változó költés érdemben gyorsabb vagy lassabb az aktuális hónap napi allowance-ánál.", "monthly limit / days in current month × 7", "ahead of pace", "normal → warning", "line", "Weekly sensitivity", "Pace gap", 5, 40, 15, "%"],
+          "HF-012": ["Top category spike", "behavior_shift", "Egy változó kategória rolling 30 napban legalább 10 000 Ft és 30% változást mutat, vagy új kategóriaként material.", "current category 30d − previous category 30d", "Food +24%", "stable → spike", "bars", "Category materiality", "Min amount", 5000, 30000, 10000, " Ft"],
+          "HF-013": ["Total spend trend 30d", "behavior_shift", "A teljes rolling 30 napos változó költés legalább ±15% és ±10 000 Ft mértékben romlik vagy javul.", "current variable 30d − previous variable 30d", "Rolling +17%", "normal → worse", "wave", "Trend materiality", "Min ratio", 5, 35, 15, "%"],
+          "HF-014": ["Score direction", "behavior_shift", "A meglévő scoreLine/kontrollScore legalább nyolc pontot mozdul, vagy red/amber/green zónát vált.", "existing score line only; no recalculation", "60 → 52", "green → amber", "line", "Score movement", "Min move", 4, 15, 8, " pts"],
+          "HF-015": ["Limit zone supersede", "budget_pressure", "Egy budget targetnél csak a legerősebb aktuális zóna aktív; a 90 felülírja a korábbi 75-öt.", "normal → warning → critical → over", "90%", "warning → critical", "steps", "Supersede strictness", "Strict", 1, 10, 8, "/10"],
+          "HF-020": ["Yearly category limit burn", "budget_pressure", "Az éves kategórialimit year-to-date pacing alapján warning, critical vagy over irányba megy.", "year-to-date spend / annual pace", "travel watch", "normal → warning", "line", "Yearly window", "Sensitivity", 1, 10, 6, "/10"]
+        },
+        story: ["Budget story path", "A rokon limit-, pace- és behavior jelek egy storyvá állhatnak össze. Egy critical signal önmagában elég; két medium rokon signal is elérheti az evidence thresholdot.", "Example", "Havi forecast + heti pace + kategória spike → a hónap vége szoros lehet.", "Lifecycle", "A régi 75%-os állapot superseded, ha már a 90% az aktuális igazság."],
+        tuning: ["Budget group tuning", "A csoport súlya, minimum confidencee és a positive/recovery láthatósága itt állítható.", "Group weight", "Weight", 30, 120, 92, ""]
+      },
+      cashflow: {
+        title: "Cashflow pressure",
+        tag: "income + fixed load + buffer",
+        manual: [
+          ["Inputs", "Aktuális balance, várt bevételek, recurring ghostok, fix terhek, saving goal és havi income/expense."],
+          ["Calculation", "Fix load, következő hét esedékessége, ghost income, arány, saving forecast és buffer napok."],
+          ["Trigger", "A due/overdue események, zónaváltások és material pénzmozgások gyorsabb priorityt kaphatnak."],
+          ["Confidence", "Hiányzó income baseline esetén nincs pánikjel; a forecast bizonytalanság látható marad."]
+        ],
+        forecasts: [
+          ["Ghost income + fixed load", "HF-005 · HF-006 · HF-007", "42k pending", "violet", "bars", "A fix terhek, a közeli esedékesség és a hiányzó várt income ugyanabban a cashflow történetben találkozhat."],
+          ["Cashflow ratio + saving goal", "HF-009 · HF-010", "tight", "warn", "gauge", "A megtakarítási cél a HF-001 expense forecastra épül, nem egy másik régi képletre."],
+          ["Balance buffer days", "HF-011 · rolling variable pace", "31 days", "good", "gauge", "A buffer a rolling változó napi költést használja; a fix terhek külön komponálható jelek."]
+        ],
+        triggers: {
+          "HF-005": ["Fixed cost load", "fixed_load", "A havi fix/recurring teher material a teljes, aktivált, pending és legnagyobb tétel alapján.", "activated + pending recurring expense ghosts", "42 000 Ft pending", "load increased", "bars", "Fixed-load sensitivity", "Min load", 10000, 100000, 30000, " Ft"],
+          "HF-006": ["Next 7d recurring", "fixed_load", "A következő hét pending recurring kiadásai fontosak vagy közeli esedékességűek.", "count + total + nearest due date", "3 item / 7d", "outside → due window", "steps", "Due window", "Days", 3, 14, 7, "d"],
+          "HF-007": ["Ghost income missing", "cashflow_pressure", "Várt income ghost due vagy overdue, de még nem activated; érkezéskor recovery is lehet.", "pending income ghost due state", "missing 120k", "expected → overdue", "steps", "Grace window", "Days", 0, 14, 3, "d"],
+          "HF-008": ["Income-goal risk", "cashflow_pressure", "Deferált V1 forrás: átfed a saving-goal forecasttal és a ghost-income jellel, ezért nem aktív trigger.", "covered by HF-007 + HF-010", "deferred", "not active", "mute", "Deferred source", "Visibility", 0, 1, 1, ""],
+          "HF-009": ["Expense / income ratio", "cashflow_pressure", "A current month expense / current month income watch, tight vagy negative cashflow zónába lép; income nélkül nincs pánik.", "current expense / current income", "91% tight", "watch → tight", "gauge", "Ratio zone", "Tight at", 60, 100, 90, "%"],
+          "HF-010": ["Savings goal forecast", "cashflow_pressure", "Expected income mínusz HF-001 expense forecast alapján a saving goal at risk vagy likely missed zónába kerül.", "expected income − month-end expense forecast", "70% of goal", "on track → at risk", "gauge", "Goal floor", "At risk", 50, 95, 75, "%"],
+          "HF-011": ["Balance buffer days", "cashflow_pressure", "Az aktuális balance / rolling 30 napos változó napi költés stable, watch, tight vagy critical zónát vált.", "balance / rolling variable daily spend", "31d stable", "watch → stable", "gauge", "Stable buffer", "Min days", 14, 60, 30, "d"]
+        },
+        story: ["Cashflow story path", "A fixed_load önmagában is lehet material, de gyakran a ghost income, ratio, savings vagy buffer mellé komponálódik.", "Example", "Hiányzó salary + három közeli fix kiadás + tight arány → cashflow pressure story.", "Lifecycle", "Megérkezett income vagy javult buffer esetén ugyanebből a domainből recovery pulse is születhet."],
+        tuning: ["Cashflow group tuning", "A korai warning preferencia, a fixed-load súly és a recovery láthatósága szabályozható.", "Group weight", "Weight", 30, 120, 88, ""]
+      },
+      "data-quality": {
+        title: "Data quality",
+        tag: "confidence + delayed feedback",
+        manual: [
+          ["Inputs", "Kategorizálatlan tranzakciók száma, összege, kora és az érintett forecastok."],
+          ["Calculation", "A motor egy csoportos app-state signalt képez, nem minden új tételhez küld külön pulse-t."],
+          ["Trigger", "Késleltetés és count/money threshold után lehet eligible; azonnal nem zavarja meg a pénzügyi storykat."],
+          ["Confidence", "A kategória- és summary-forecastok megbízhatóságára gyakorolt hatás látható, nem rejtett."]
+        ],
+        forecasts: [
+          ["Data quality status", "HF-021 · delayed grouped app-state", "3 unknown", "info", "bars", "A vizuál nem pénzügyi forecast: azt mutatja, mennyi input bizonytalanítja el a többi számítást."]
+        ],
+        triggers: {
+          "HF-021": ["Uncategorized status", "data_quality", "Kategorizálatlan tételek rontják a kategória forecast vagy summary megbízhatóságát; késleltetve és csoportosítva jelez.", "count + optional amount + oldest item", "3 unknown", "waiting → eligible", "bars", "Data feedback delay", "Delay", 1, 48, 12, "h"]
+        },
+        story: ["Data-quality story path", "A data-quality signal panelben látszik forming vagy waiting állapotban. Csak akkor jut headerig, ha hasznos magyarázat vagy kellően erős, csoportosított app-state.", "Example", "Három kategorizálatlan tétel → a Food forecast kevésbé pontos, de nem sürgős pénzügyi warning.", "Lifecycle", "Kategorizáláskor a signal resolved; ugyanaz a fingerprint nem ismétlődik feleslegesen."],
+        tuning: ["Data-quality tuning", "A késleltetés, a minimum tételszám és a headerbe engedés kontrollálható.", "Group delay", "Delay", 1, 48, 12, "h"]
+      }
+    };
+
+    function chartSvg(kind, tone) {
+      const colors = {
+        bad: "#e34a4a",
+        warn: "#d08a00",
+        violet: "#7657d9",
+        good: "#16a36a",
+        info: "#08a7c7"
+      };
+      const color = colors[tone] || colors.info;
+      if (kind === "bars") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><rect x="20" y="42" width="30" height="24" rx="4" fill="' + color + '"/><rect x="72" y="30" width="30" height="36" rx="4" fill="' + color + '" opacity=".76"/><rect x="124" y="17" width="30" height="49" rx="4" fill="' + color + '" opacity=".58"/><rect x="176" y="36" width="30" height="30" rx="4" fill="' + color + '" opacity=".38"/></svg>';
+      }
+      if (kind === "gauge") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M34 61 A86 86 0 0 1 206 61" fill="none" stroke="#dbe3ec" stroke-width="14" stroke-linecap="round"/><path d="M34 61 A86 86 0 0 1 166 22" fill="none" stroke="' + color + '" stroke-width="14" stroke-linecap="round"/><circle cx="166" cy="22" r="5" fill="' + color + '"/></svg>';
+      }
+      if (kind === "steps") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 60 H72 V46 H126 V30 H180 V14 H222" fill="none" stroke="' + color + '" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/><path d="M18 66 H222" stroke="#dbe3ec" stroke-width="2"/></svg>';
+      }
+      if (kind === "mute") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M26 39 H214" stroke="#cbd5e1" stroke-width="12" stroke-linecap="round"/><path d="M72 18 L168 60 M168 18 L72 60" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/></svg>';
+      }
+      if (kind === "wave") {
+        return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 58 C54 64 76 52 110 43 S174 18 222 22" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/><path d="M18 62 H222" stroke="#dbe3ec" stroke-width="2"/></svg>';
+      }
+      return '<svg class="trigger-chart" viewBox="0 0 240 78" aria-hidden="true"><path d="M18 62 L68 56 L118 43 L170 29 L222 16" fill="none" stroke="' + color + '" stroke-width="4" stroke-linecap="round"/><path d="M18 43 H222" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 5"/></svg>';
+    }
+
+    function safeOutputId(scope, title, label) {
+      return "group-" + scope + "-" + (title + "-" + label).toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-control";
+    }
+
+    function rangeControl(scope, title, label, min, max, value, unit) {
+      const outputId = safeOutputId(scope, title, label);
+      return '<div class="user-defined"><strong><span>' + title + '</span><span>user-defined</span></strong><div class="control-line"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" value="' + value + '" data-out="' + outputId + '"><b><span id="' + outputId + '">' + value + '</span>' + unit + '</b></div></div>';
+    }
+
+    function renderManual(dossier) {
+      return '<div class="group-panel-head"><div><h2>Hogyan működik a ' + dossier.title + '?</h2><p>Ez a dosszié együtt mutatja a számításokat, forecastokat, triggereseményeket és a headerhez vezető engine-utakat.</p></div><span class="tag info">' + dossier.tag + '</span></div><div class="group-flow">' + dossier.manual.map((entry) => '<article class="group-flow-step"><strong>' + entry[0] + '</strong><p>' + entry[1] + '</p></article>').join('') + '</div>';
+    }
+
+    function renderForecasts(dossier) {
+      return '<div class="group-panel-head"><div><h2>Forecastok és számítások</h2><p>A nagy grafikonok összefoglalók; a hozzájuk tartozó minden konkrét trigger az alábbi auditkártyákban látható.</p></div><span class="tag violet">calculation view</span></div><div class="grid-3">' + dossier.forecasts.map((entry) => '<article class="card chart-card"><div class="chart-title"><div><strong>' + entry[0] + '</strong><span>' + entry[1] + '</span></div><span class="tag ' + entry[3] + '">' + entry[2] + '</span></div>' + chartSvg(entry[4], entry[3]) + '<p class="source-domain">' + entry[5] + '</p></article>').join('') + '</div>';
+    }
+
+    function renderTriggerCard(group, id, trigger) {
+      const title = trigger[0];
+      const domain = trigger[1];
+      const deferred = trigger[4] === "deferred";
+      const tagTone = deferred ? "" : domain === "data_quality" ? "info" : domain === "behavior_shift" || domain === "fixed_load" ? "violet" : "bad";
+      return '<div class="trigger-top"><span class="trigger-id">' + id + '</span><span class="tag ' + tagTone + '">' + (deferred ? "deferred" : domain) + '</span>' + copyRoleBadge(id) + '</div><strong>' + title + '</strong><p class="trigger-copy">' + trigger[2] + '</p>' + chartSvg(trigger[6], tagTone || "info") + '<div class="trigger-meta"><span>Calculation: ' + trigger[3] + '</span><span>State: ' + trigger[4] + '</span><span>Transition: ' + trigger[5] + '</span></div><p class="source-domain">source domain · ' + domain + (deferred ? ' · not active' : '') + '</p>' + rangeControl(group, trigger[7], trigger[8], trigger[9], trigger[10], trigger[11], trigger[12]);
+    }
+
+    function renderStory(dossier) {
+      return '<div class="group-panel-head"><div><h2>' + dossier.story[0] + '</h2><p>' + dossier.story[1] + '</p></div><span class="tag warn">story → header</span></div><div class="status-grid"><div class="status-box"><b>' + dossier.story[2] + '</b><span>' + dossier.story[3] + '</span></div><div class="status-box"><b>' + dossier.story[4] + '</b><span>' + dossier.story[5] + '</span></div></div>';
+    }
+
+    function renderTuning(group, dossier) {
+      const tuning = dossier.tuning;
+      return '<div class="group-panel-head"><div><h2>' + tuning[0] + '</h2><p>' + tuning[1] + '</p></div><span class="tag good">transparent tuning</span></div>' + rangeControl(group, tuning[2], tuning[3], tuning[4], tuning[5], tuning[6], tuning[7]);
+    }
+
+    Object.entries(groupDossiers).forEach(([group, dossier]) => {
+      const panel = document.querySelector('[data-group-panel="' + group + '"]');
+      panel.querySelector('[data-group-manual-content]').innerHTML = renderManual(dossier);
+      panel.querySelector('[data-group-forecast-content]').innerHTML = renderForecasts(dossier);
+      panel.querySelector('[data-group-story-content]').innerHTML = renderStory(dossier);
+      panel.querySelector('[data-group-tuning-content]').innerHTML = renderTuning(group, dossier);
+      panel.querySelectorAll('[data-card-slot]').forEach((slot) => {
+        const trigger = dossier.triggers[slot.dataset.cardSlot];
+        if (!trigger) throw new Error('Missing group trigger data for ' + slot.dataset.cardSlot);
+        slot.classList.toggle('deferred', trigger[4] === 'deferred');
+        slot.innerHTML = renderTriggerCard(group, slot.dataset.cardSlot, trigger);
+      });
+    });
+
+    renderSharedEngineRoleBadges();
+
+    const groupRailButtons = Array.from(document.querySelectorAll('[data-group-rail]'));
+    const groupPanels = Array.from(document.querySelectorAll('[data-group-panel]'));
+    const groupSummaries = Array.from(document.querySelectorAll('[data-group-summary]'));
+    const groupRail = document.querySelector('[aria-label="Pulse group rail"]');
+
+    function selectGroup(group, shouldScroll = true) {
+      groupRailButtons.forEach((button) => {
+        const active = button.dataset.groupRail === group;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      groupPanels.forEach((panel) => {
+        const active = panel.dataset.groupPanel === group;
+        panel.hidden = !active;
+        panel.classList.toggle('active', active);
+      });
+      if (shouldScroll && groupRail) {
+        groupRail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function selectTraceSource(sourceId) {
+      const role = sourceCopyRoles[sourceId];
+      if (!role || role.group === "engine" || ["engine-only", "deferred-no-copy"].includes(role.mode)) return;
+      selectGroup(role.group, false);
+      requestAnimationFrame(() => {
+        const card = document.querySelector('[data-hf-id="' + sourceId + '"]');
+        if (!card) return;
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.tabIndex = -1;
+        card.focus({ preventScroll: true });
+      });
+    }
+
+    const traceRoot = document.querySelector("[data-engine-decision-trace]");
+    if (traceRoot) {
+      traceRoot.addEventListener("click", (event) => {
+        const source = event.target.closest("[data-trace-source]");
+        if (source) selectTraceSource(source.dataset.traceSource);
+      });
+      traceRoot.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const source = event.target.closest("[data-trace-source]");
+        if (!source) return;
+        event.preventDefault();
+        selectTraceSource(source.dataset.traceSource);
+      });
+    }
+
+    groupRailButtons.forEach((button, index) => {
+      button.addEventListener('click', () => selectGroup(button.dataset.groupRail));
+      button.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const nextIndex = event.key === 'Home' ? 0
+          : event.key === 'End' ? groupRailButtons.length - 1
+          : (index + (event.key === 'ArrowRight' ? 1 : -1) + groupRailButtons.length) % groupRailButtons.length;
+        const nextButton = groupRailButtons[nextIndex];
+        nextButton.focus();
+        selectGroup(nextButton.dataset.groupRail, false);
+      });
+    });
+
+    groupSummaries.forEach((summary) => {
+      const select = () => selectGroup(summary.dataset.groupSummary);
+      summary.addEventListener('click', select);
+      summary.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          select();
+        }
+      });
+    });
+
+    document.querySelectorAll("input[type='range'][data-out]").forEach((range) => {
+      const output = document.getElementById(range.dataset.out);
+      if (!output) return;
+      output.textContent = range.value;
+      range.addEventListener("input", () => {
+        output.textContent = range.value;
+      });
+    });
+
+    selectGroup('budget', false);
+  </script>
+</body>
+</html>

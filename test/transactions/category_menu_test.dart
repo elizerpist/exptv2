@@ -853,6 +853,74 @@ void main() {
     expect(decoration.color, theme.categoryCard);
   });
 
+  testWidgets('vendor selected card exposes category-style selected marker', (
+    tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 560,
+            child: VendorFilterPanel(
+              summaries: const [
+                VendorFilterSummary(
+                  name: 'Test Store',
+                  originalName: 'Test Store',
+                  total: 505,
+                  count: 1,
+                  colorHex: '#dc2626',
+                  categoryIconSlot: 2,
+                ),
+              ],
+              selectedVendors: const <String>{'Test Store'},
+              activeType: TransactionType.expense,
+              scrollController: scrollController,
+              accentColor: AppColors.primary,
+              cardSurfaceColor: AppColors.gray100,
+              cardSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              avatarSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              buttonSurfaceStyle: ExpenseSurfaceInteraction.neutralNeutral,
+              onToggle: (_) {},
+              onRename: (_, _) async {},
+              onResetName: (_) async {},
+              onApply: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('vendor-filter-active-border-Test Store')),
+      findsOneWidget,
+    );
+
+    final cardRect = tester.getRect(
+      find.byKey(const ValueKey('vendor-filter-row-Test Store')),
+    );
+    final avatarRect = tester.getRect(
+      find.byKey(const ValueKey('vendor-filter-avatar-surface-Test Store')),
+    );
+    final title = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('vendor-filter-name-Test Store')),
+        matching: find.text('Test Store'),
+      ),
+    );
+
+    expect(cardRect.height, 150);
+    expect(avatarRect.width, 65);
+    expect(avatarRect.height, 65);
+    expect(avatarRect.top - cardRect.top, 15);
+    expect(title.style?.fontSize, 15);
+    expect(title.style?.fontWeight, FontWeight.w700);
+  });
+
   testWidgets('vendor body press applies avatar neumorph in the same frame', (
     tester,
   ) async {

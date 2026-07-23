@@ -1,14 +1,12 @@
 package com.exptv2.app
 
 import android.accessibilityservice.AccessibilityService
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class PushAccessibilityService : AccessibilityService() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = LifecycleCoroutineScope(Dispatchers.IO)
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
@@ -35,7 +33,14 @@ class PushAccessibilityService : AccessibilityService() {
             accessibilityEventType = event.eventType.toString(),
         )
 
-        scope.launch {
+        scope.launchGuarded(
+            reportFailure = { error ->
+                val message =
+                    "[PushParser] accessibility failed package=${draft.packageName} error=${error.message}"
+                Log.e(LOG_TAG, message, error)
+                EventBroadcaster.publishDebugLog(message)
+            },
+        ) {
             val saved = NotificationEventRepository(this@PushAccessibilityService)
                 .insertDraft(draft)
             if (saved != null) EventBroadcaster.publish(saved)
@@ -43,4 +48,13 @@ class PushAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val LOG_TAG = "ExpenseNotification"
+    }
 }

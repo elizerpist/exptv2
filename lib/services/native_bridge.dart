@@ -18,6 +18,7 @@ import '../features/transactions/models/transaction_record.dart';
 import '../models/installed_app.dart';
 import '../models/notification_event.dart';
 import '../models/service_status.dart';
+import 'native_bridge_transport.dart';
 
 class ExpenseSettingsPayload {
   const ExpenseSettingsPayload({
@@ -78,16 +79,21 @@ class ExpenseTransactionPagePayload {
 }
 
 class NativeBridge {
-  NativeBridge({MethodChannel? methodChannel, EventChannel? eventChannel})
-    : _methodChannel =
-          methodChannel ?? const MethodChannel('pushparser/methods'),
-      _eventChannel = eventChannel ?? const EventChannel('pushparser/events');
+  NativeBridge({
+    MethodChannel? methodChannel,
+    EventChannel? eventChannel,
+    NativeBridgeTransport? transport,
+  }) : _transport =
+           transport ??
+           MethodChannelNativeBridgeTransport(
+             methodChannel: methodChannel,
+             eventChannel: eventChannel,
+           );
 
-  final MethodChannel _methodChannel;
-  final EventChannel _eventChannel;
+  final NativeBridgeTransport _transport;
 
   Future<List<NotificationEvent>> loadEvents() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>('loadEvents');
+    final rows = await _transport.invokeListMethod<dynamic>('loadEvents');
     return (rows ?? <dynamic>[])
         .cast<Map<dynamic, dynamic>>()
         .map(NotificationEvent.fromMap)
@@ -95,7 +101,7 @@ class NativeBridge {
   }
 
   Future<List<NotificationEvent>> loadEventsAfterId(int afterId) async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'loadEventsAfterId',
       {'afterId': afterId},
     );
@@ -108,7 +114,7 @@ class NativeBridge {
   Future<PushNotificationLogPage> loadNotificationEventPage(
     PushNotificationLogQuery query,
   ) async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'loadNotificationEventPage',
       query.toMap(),
     );
@@ -133,7 +139,7 @@ class NativeBridge {
   }
 
   Future<PushNotificationLogEvent?> loadNotificationEvent(int id) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'loadNotificationEvent',
       {'id': id},
     );
@@ -141,7 +147,7 @@ class NativeBridge {
   }
 
   Future<bool> markNotificationEventSystem(int id) async {
-    final updated = await _methodChannel.invokeMethod<bool>(
+    final updated = await _transport.invokeMethod<bool>(
       'markNotificationEventSystem',
       {'id': id},
     );
@@ -149,9 +155,7 @@ class NativeBridge {
   }
 
   Future<ServiceStatus> getStatus() async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
-      'getStatus',
-    );
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>('getStatus');
     return ServiceStatus.fromMap(map ?? <dynamic, dynamic>{});
   }
 
@@ -159,7 +163,7 @@ class NativeBridge {
     required int year,
     required int month,
   }) async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expensePickYearMonth',
       {'year': year, 'month': month},
     );
@@ -178,7 +182,7 @@ class NativeBridge {
   }
 
   Future<List<InstalledApp>> listInstalledApps() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'listInstalledApps',
     );
     return (rows ?? <dynamic>[])
@@ -188,7 +192,7 @@ class NativeBridge {
   }
 
   Future<ExpenseBootstrapPayload> expenseLoadBootstrap() async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseLoadBootstrap',
     );
     final payload = map ?? <dynamic, dynamic>{};
@@ -218,10 +222,33 @@ class NativeBridge {
     );
   }
 
+  Future<List<Map<String, Object?>>> expenseListStatsSnapshots() async {
+    final rows = await _transport.invokeListMethod<dynamic>(
+      'expenseListStatsSnapshots',
+    );
+    return [
+      for (final row in rows ?? const <dynamic>[])
+        if (row is Map)
+          row.map((key, value) => MapEntry(key.toString(), value)),
+    ];
+  }
+
+  Future<Map<String, Object?>> expenseUpsertStatsSnapshot(
+    Map<String, Object?> snapshot,
+  ) async {
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
+      'expenseUpsertStatsSnapshot',
+      snapshot,
+    );
+    return (row ?? const <dynamic, dynamic>{}).map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+  }
+
   Future<List<TransactionRecord>> expenseListTransactions(
     Map<String, Object?> filter,
   ) async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListTransactions',
       filter,
     );
@@ -234,7 +261,7 @@ class NativeBridge {
   Future<ExpenseTransactionPagePayload> expenseListTransactionPage(
     Map<String, Object?> filter,
   ) async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseListTransactionPage',
       filter,
     );
@@ -259,7 +286,7 @@ class NativeBridge {
   }
 
   Future<TransactionRecord?> expenseGetTransaction(int id) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseGetTransaction',
       {'id': id},
     );
@@ -267,7 +294,7 @@ class NativeBridge {
   }
 
   Future<int?> expenseNotificationEventIdForTransaction(int id) async {
-    final value = await _methodChannel.invokeMethod<Object?>(
+    final value = await _transport.invokeMethod<Object?>(
       'expenseNotificationEventIdForTransaction',
       {'id': id},
     );
@@ -278,7 +305,7 @@ class NativeBridge {
     List<int> eventIds,
   ) async {
     if (eventIds.isEmpty) return const <TransactionRecord>[];
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseTransactionsForNotificationEvents',
       {'eventIds': eventIds},
     );
@@ -291,7 +318,7 @@ class NativeBridge {
   Future<List<TransactionCategory>> expenseListCategories({
     String? type,
   }) async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListCategories',
       {'type': type},
     );
@@ -304,7 +331,7 @@ class NativeBridge {
   Future<TransactionRecord> expenseAddTransaction(
     Map<String, Object?> payload,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseAddTransaction',
       payload,
     );
@@ -315,7 +342,7 @@ class NativeBridge {
     int id,
     Map<String, Object?> payload,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateTransaction',
       {'id': id, ...payload},
     );
@@ -325,7 +352,7 @@ class NativeBridge {
   Future<TransactionCategory> expenseAddCategory(
     Map<String, Object?> payload,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseAddCategory',
       payload,
     );
@@ -336,7 +363,7 @@ class NativeBridge {
     int id,
     Map<String, Object?> payload,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateCategory',
       {'id': id, ...payload},
     );
@@ -344,7 +371,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseDeleteCategory(int id) async {
-    final deleted = await _methodChannel.invokeMethod<bool>(
+    final deleted = await _transport.invokeMethod<bool>(
       'expenseDeleteCategory',
       {'id': id},
     );
@@ -352,7 +379,7 @@ class NativeBridge {
   }
 
   Future<Map<int, int>> expenseCategoryCounts() async {
-    final rows = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final rows = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseCategoryCounts',
     );
     final counts = <int, int>{};
@@ -373,7 +400,7 @@ class NativeBridge {
     String? window,
     String? periodKey,
   }) async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListCategoryLimits',
       {
         'transactionType': transactionType,
@@ -390,7 +417,7 @@ class NativeBridge {
   Future<CategoryLimit> expenseUpsertCategoryLimit(
     Map<String, Object?> payload,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpsertCategoryLimit',
       payload,
     );
@@ -398,7 +425,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseDeleteTransaction(int id) async {
-    final deleted = await _methodChannel.invokeMethod<bool>(
+    final deleted = await _transport.invokeMethod<bool>(
       'expenseDeleteTransaction',
       {'id': id},
     );
@@ -409,7 +436,7 @@ class NativeBridge {
     String originalMerchant,
     String userAssignedName,
   ) async {
-    final count = await _methodChannel.invokeMethod<int>(
+    final count = await _transport.invokeMethod<int>(
       'expenseRenameTransactionsByMerchant',
       {
         'originalMerchant': originalMerchant,
@@ -422,7 +449,7 @@ class NativeBridge {
   Future<int> expenseResetTransactionNamesByMerchant(
     String originalMerchant,
   ) async {
-    final count = await _methodChannel.invokeMethod<int>(
+    final count = await _transport.invokeMethod<int>(
       'expenseResetTransactionNamesByMerchant',
       {'originalMerchant': originalMerchant},
     );
@@ -430,7 +457,7 @@ class NativeBridge {
   }
 
   Future<ExpenseSettingsPayload> expenseLoadSettings() async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseLoadSettings',
     );
     final payload = map ?? <dynamic, dynamic>{};
@@ -462,7 +489,7 @@ class NativeBridge {
     AppThemeSettings settings,
   ) async {
     final fallback = settings.toMap();
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateThemeSettings',
       fallback,
     );
@@ -474,7 +501,7 @@ class NativeBridge {
   Future<FastInfoConfig> expenseUpdateFastInfoConfig(
     FastInfoConfig config,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateFastInfoConfig',
       config.toMap(),
     );
@@ -486,10 +513,11 @@ class NativeBridge {
     required String mimeType,
     required String content,
   }) async {
-    final uri = await _methodChannel.invokeMethod<String>(
-      'expenseSaveTextFile',
-      {'fileName': fileName, 'mimeType': mimeType, 'content': content},
-    );
+    final uri = await _transport.invokeMethod<String>('expenseSaveTextFile', {
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'content': content,
+    });
     return uri ?? '';
   }
 
@@ -499,7 +527,7 @@ class NativeBridge {
     required String content,
     required String chooserTitle,
   }) {
-    return _methodChannel.invokeMethod<void>('expenseShareTextFile', {
+    return _transport.invokeMethod<void>('expenseShareTextFile', {
       'fileName': fileName,
       'mimeType': mimeType,
       'content': content,
@@ -510,7 +538,7 @@ class NativeBridge {
   Future<PushRecurringSettings> expenseUpdatePushRecurringSettings(
     PushRecurringSettings settings,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdatePushRecurringSettings',
       settings.toMap(),
     );
@@ -523,7 +551,7 @@ class NativeBridge {
   Future<NotificationSettings> expenseUpdateNotificationSettings(
     NotificationSettings settings,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateNotificationSettings',
       settings.toMap(),
     );
@@ -534,7 +562,7 @@ class NativeBridge {
   }
 
   Future<SecuritySettings> expenseSetSecurityPin(String pin) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseSetSecurityPin',
       {'pin': pin},
     );
@@ -545,7 +573,7 @@ class NativeBridge {
     required String currentPin,
     required String newPin,
   }) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseChangeSecurityPin',
       {'currentPin': currentPin, 'newPin': newPin},
     );
@@ -553,7 +581,7 @@ class NativeBridge {
   }
 
   Future<SecuritySettings> expenseClearSecurityPin(String currentPin) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseClearSecurityPin',
       {'currentPin': currentPin},
     );
@@ -561,7 +589,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseVerifySecurityPin(String pin) async {
-    final verified = await _methodChannel.invokeMethod<bool>(
+    final verified = await _transport.invokeMethod<bool>(
       'expenseVerifySecurityPin',
       {'pin': pin},
     );
@@ -569,7 +597,7 @@ class NativeBridge {
   }
 
   Future<SecuritySettings> expenseSetBiometricEnabled(bool enabled) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseSetBiometricEnabled',
       {'enabled': enabled},
     );
@@ -577,21 +605,21 @@ class NativeBridge {
   }
 
   Future<SecuritySettings> expenseGetBiometricAvailability() async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseGetBiometricAvailability',
     );
     return SecuritySettings.fromMap(row ?? <dynamic, dynamic>{});
   }
 
   Future<bool> expenseAuthenticateBiometric() async {
-    final authenticated = await _methodChannel.invokeMethod<bool>(
+    final authenticated = await _transport.invokeMethod<bool>(
       'expenseAuthenticateBiometric',
     );
     return authenticated ?? false;
   }
 
   Future<List<RecurringTransaction>> expenseListRecurringTransactions() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListRecurringTransactions',
     );
     return (rows ?? <dynamic>[])
@@ -603,7 +631,7 @@ class NativeBridge {
   Future<RecurringTransaction> expenseAddRecurringTransaction(
     RecurringTransactionDraft draft,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseAddRecurringTransaction',
       draft.toMap(),
     );
@@ -614,7 +642,7 @@ class NativeBridge {
     int id,
     RecurringTransactionDraft draft,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateRecurringTransaction',
       {'id': id, ...draft.toMap()},
     );
@@ -625,7 +653,7 @@ class NativeBridge {
     int id,
     bool isActive,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseToggleRecurringTransaction',
       {'id': id, 'isActive': isActive},
     );
@@ -633,7 +661,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseDeleteRecurringTransaction(int id) async {
-    final deleted = await _methodChannel.invokeMethod<bool>(
+    final deleted = await _transport.invokeMethod<bool>(
       'expenseDeleteRecurringTransaction',
       {'id': id},
     );
@@ -643,7 +671,7 @@ class NativeBridge {
   Future<List<TransactionRecord>> expenseProcessRecurringTransactions({
     DateTime? targetDate,
   }) async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseProcessRecurringTransactions',
       {
         if (targetDate != null)
@@ -658,7 +686,7 @@ class NativeBridge {
 
   Future<List<RecurringGhostRecord>>
   expenseListRecurringGhostTransactions() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListRecurringGhostTransactions',
     );
     return (rows ?? <dynamic>[])
@@ -670,7 +698,7 @@ class NativeBridge {
   Future<List<RecurringGhostRecord>> expenseEnsureRecurringGhostTransactions({
     DateTime? targetDate,
   }) async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseEnsureRecurringGhostTransactions',
       {
         if (targetDate != null)
@@ -684,7 +712,7 @@ class NativeBridge {
   }
 
   Future<List<RecurringRule>> expenseListRecurringRules() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListRecurringRules',
     );
     return (rows ?? <dynamic>[])
@@ -696,7 +724,7 @@ class NativeBridge {
   Future<RecurringRule> expenseAddRecurringRule(
     RecurringRuleDraft draft,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseAddRecurringRule',
       draft.toMap(),
     );
@@ -707,7 +735,7 @@ class NativeBridge {
     int id,
     RecurringRuleDraft draft,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseUpdateRecurringRule',
       {'id': id, ...draft.toMap()},
     );
@@ -718,7 +746,7 @@ class NativeBridge {
     int id,
     bool isActive,
   ) async {
-    final row = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final row = await _transport.invokeMapMethod<dynamic, dynamic>(
       'expenseToggleRecurringRule',
       {'id': id, 'isActive': isActive},
     );
@@ -726,7 +754,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseDeleteRecurringRule(int id) async {
-    final deleted = await _methodChannel.invokeMethod<bool>(
+    final deleted = await _transport.invokeMethod<bool>(
       'expenseDeleteRecurringRule',
       {'id': id},
     );
@@ -734,7 +762,7 @@ class NativeBridge {
   }
 
   Future<List<ExpenseNotificationCard>> expenseListNotificationCards() async {
-    final rows = await _methodChannel.invokeListMethod<dynamic>(
+    final rows = await _transport.invokeListMethod<dynamic>(
       'expenseListNotificationCards',
     );
     return (rows ?? <dynamic>[])
@@ -744,7 +772,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseMarkNotificationCardRead(int id) async {
-    final updated = await _methodChannel.invokeMethod<bool>(
+    final updated = await _transport.invokeMethod<bool>(
       'expenseMarkNotificationCardRead',
       {'id': id},
     );
@@ -752,7 +780,7 @@ class NativeBridge {
   }
 
   Future<bool> expenseDeleteNotificationCard(int id) async {
-    final deleted = await _methodChannel.invokeMethod<bool>(
+    final deleted = await _transport.invokeMethod<bool>(
       'expenseDeleteNotificationCard',
       {'id': id},
     );
@@ -760,7 +788,7 @@ class NativeBridge {
   }
 
   Future<int> expenseClearNotificationCards({String? monthKey}) async {
-    final count = await _methodChannel.invokeMethod<int>(
+    final count = await _transport.invokeMethod<int>(
       'expenseClearNotificationCards',
       {'monthKey': monthKey},
     );
@@ -768,7 +796,7 @@ class NativeBridge {
   }
 
   Future<NotificationParserConfig> loadNotificationParserProfiles() async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'loadNotificationParserProfiles',
     );
     return NotificationParserConfig.fromMap(map ?? <dynamic, dynamic>{});
@@ -777,7 +805,7 @@ class NativeBridge {
   Future<NotificationParserConfig> saveNotificationParserProfiles(
     NotificationParserConfig config,
   ) async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'saveNotificationParserProfiles',
       config.toMap(),
     );
@@ -785,7 +813,7 @@ class NativeBridge {
   }
 
   Future<NotificationParserRule> loadNotificationParserRule() async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'loadNotificationParserRule',
     );
     return NotificationParserRule.fromMap(map ?? <dynamic, dynamic>{});
@@ -794,7 +822,7 @@ class NativeBridge {
   Future<NotificationParserRule> saveNotificationParserRule(
     NotificationParserRule rule,
   ) async {
-    final map = await _methodChannel.invokeMapMethod<dynamic, dynamic>(
+    final map = await _transport.invokeMapMethod<dynamic, dynamic>(
       'saveNotificationParserRule',
       rule.toMap(),
     );
@@ -802,14 +830,14 @@ class NativeBridge {
   }
 
   Future<bool> loadAutomaticPushParserEnabled() async {
-    final enabled = await _methodChannel.invokeMethod<bool>(
+    final enabled = await _transport.invokeMethod<bool>(
       'loadAutomaticPushParserEnabled',
     );
     return enabled ?? true;
   }
 
   Future<bool> saveAutomaticPushParserEnabled(bool enabled) async {
-    final saved = await _methodChannel.invokeMethod<bool>(
+    final saved = await _transport.invokeMethod<bool>(
       'saveAutomaticPushParserEnabled',
       enabled,
     );
@@ -817,46 +845,46 @@ class NativeBridge {
   }
 
   Future<void> setCaptureMode(CaptureMode mode) async {
-    await _methodChannel.invokeMethod<void>('setCaptureMode', mode.nativeValue);
+    await _transport.invokeMethod<void>('setCaptureMode', mode.nativeValue);
   }
 
   Future<void> openNotificationAccessSettings() async {
-    await _methodChannel.invokeMethod<void>('openNotificationAccessSettings');
+    await _transport.invokeMethod<void>('openNotificationAccessSettings');
   }
 
   Future<void> openAccessibilitySettings() async {
-    await _methodChannel.invokeMethod<void>('openAccessibilitySettings');
+    await _transport.invokeMethod<void>('openAccessibilitySettings');
   }
 
   Future<void> openAppInfoSettings() async {
-    await _methodChannel.invokeMethod<void>('openAppInfoSettings');
+    await _transport.invokeMethod<void>('openAppInfoSettings');
   }
 
   Future<void> openAppNotificationSettings() async {
-    await _methodChannel.invokeMethod<void>('openAppNotificationSettings');
+    await _transport.invokeMethod<void>('openAppNotificationSettings');
   }
 
   Future<void> requestPostNotifications() async {
-    await _methodChannel.invokeMethod<void>('requestPostNotifications');
+    await _transport.invokeMethod<void>('requestPostNotifications');
   }
 
   Future<bool> requestPostNotificationsOnFirstLaunch() async {
-    final requested = await _methodChannel.invokeMethod<bool>(
+    final requested = await _transport.invokeMethod<bool>(
       'requestPostNotificationsOnFirstLaunch',
     );
     return requested ?? false;
   }
 
   Future<void> sendTestNotification() async {
-    await _methodChannel.invokeMethod<void>('sendTestNotification');
+    await _transport.invokeMethod<void>('sendTestNotification');
   }
 
   Future<void> clearDatabase() async {
-    await _methodChannel.invokeMethod<void>('clearDatabase');
+    await _transport.invokeMethod<void>('clearDatabase');
   }
 
   Stream<NotificationEvent> watchEvents({void Function(String)? onDebugLog}) {
-    return _eventChannel.receiveBroadcastStream().asyncExpand((payload) {
+    return _transport.receiveBroadcastStream().asyncExpand((payload) {
       final map = payload as Map<dynamic, dynamic>;
       if (map['type'] == 'debug_log') {
         final message = map['message']?.toString();

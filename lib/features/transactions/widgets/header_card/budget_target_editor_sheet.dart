@@ -161,8 +161,13 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
                           top: 8,
                           bottom: 8,
                         ),
-                        child: SizedBox(
-                          height: math.max(0.0, constraints.maxHeight - 28),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: math.max(
+                              0.0,
+                              constraints.maxHeight - 28,
+                            ),
+                          ),
                           child: _BudgetLimitCard(
                             item: _activeItem,
                             periodLabel: widget.periodLabel,
@@ -320,7 +325,11 @@ class _BudgetTargetEditorSheetState extends State<BudgetTargetEditorSheet> {
 
   String get _inputLabel {
     final overview = _activeItem.overview;
-    if (overview == null) return 'Kategória limit';
+    if (overview == null) {
+      return _activeItem.category?.transactionType == TransactionType.income
+          ? 'Bevételi cél'
+          : 'Kategória limit';
+    }
     return switch (overview.kind) {
       BudgetGoalKind.expenseBudget => 'Budget limit',
       BudgetGoalKind.incomeGoal => 'Bevételi cél',

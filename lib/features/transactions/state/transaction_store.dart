@@ -41,6 +41,18 @@ class VendorFilterSummary {
   final bool hasCustomName;
 }
 
+class StatsViewMutation {
+  const StatsViewMutation({
+    required this.merchantFilters,
+    required this.summaryWindow,
+    required this.referenceDate,
+  });
+
+  final Set<String>? merchantFilters;
+  final SummaryWindow? summaryWindow;
+  final DateTime? referenceDate;
+}
+
 class _VendorCategoryRollup {
   const _VendorCategoryRollup({
     required this.category,
@@ -148,6 +160,9 @@ class TransactionStore extends ChangeNotifier {
   Map<int, TransactionCategory> get categoriesById => _categoriesById;
   List<VendorFilterSummary> get vendorFilterSummaries =>
       _vendorFilterSummariesFor(_filter.type);
+
+  List<VendorFilterSummary> vendorFilterSummariesFor(TransactionType type) =>
+      _vendorFilterSummariesFor(type);
 
   List<TransactionCategory> get categories => _categoriesView;
   List<TransactionRecord> get transactions => _transactionsView;
@@ -517,7 +532,7 @@ class TransactionStore extends ChangeNotifier {
     final expense = _periodTotal(TransactionType.expense);
     final kinds = type == TransactionType.expense
         ? const [BudgetGoalKind.expenseBudget]
-        : const [BudgetGoalKind.incomeGoal, BudgetGoalKind.savingGoal];
+        : const [BudgetGoalKind.incomeGoal];
 
     final rows = List<OverviewBudgetData>.unmodifiable(
       kinds.map((kind) {
@@ -912,7 +927,6 @@ class TransactionStore extends ChangeNotifier {
       '[Perf] TypeSwitch state type=${type.name} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
     );
-    _prewarmActiveView('type-switch');
     DebugConsole.log(
       '[Perf] TypeSwitch notify type=${type.name} '
       'elapsed=${stopwatch.elapsedMilliseconds}ms',
@@ -1002,6 +1016,74 @@ class TransactionStore extends ChangeNotifier {
     }
     _prewarmActiveView('merchant-multi-filter');
     notifyListeners();
+  }
+
+  Future<StatsViewMutation> prepareStatsViewMutation({
+    Set<String>? merchantFilters,
+    SummaryWindow? summaryWindow,
+    int? year,
+    int? month,
+  }) async {
+    final normalizedMerchants = merchantFilters == null
+        ? null
+        : Set<String>.unmodifiable(
+            merchantFilters
+                .map((merchant) => merchant.trim())
+                .where((merchant) => merchant.isNotEmpty)
+                .toSet(),
+          );
+    final referenceDate = switch (summaryWindow) {
+      SummaryWindow.allTime => _periodReferenceDate,
+      SummaryWindow.yearly => DateTime(year ?? _periodReferenceDate.year),
+      SummaryWindow.monthly => DateTime(
+        year ?? _periodReferenceDate.year,
+        (month ?? _periodReferenceDate.month).clamp(1, 12).toInt(),
+      ),
+      null => null,
+    };
+    return StatsViewMutation(
+      merchantFilters: normalizedMerchants,
+      summaryWindow: summaryWindow,
+      referenceDate: referenceDate,
+    );
+  }
+
+  void commitStatsViewMutation(StatsViewMutation mutation) {
+    final merchants = mutation.merchantFilters;
+    if (merchants != null) {
+      _resetVisibleDisplayWindow();
+      if (merchants.isEmpty) {
+        _filter = _filter.copyWith(clearMerchant: true, searchQuery: '');
+      } else {
+        _filter = _filter.copyWith(
+          merchant: merchants.length == 1 ? merchants.first : null,
+          merchantFilters: merchants,
+          merchantColorHex: null,
+          searchQuery: '',
+        );
+      }
+    }
+    final summaryWindow = mutation.summaryWindow;
+    int? summaryGeneration;
+    if (summaryWindow != null) {
+      _summaryWindow = summaryWindow;
+      _periodReferenceDate = mutation.referenceDate!;
+      _prepareGhostProjectionForActiveWindow();
+      summaryGeneration = ++_summaryChangeGeneration;
+    }
+    _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
+    notifyListeners();
+    if (summaryWindow == SummaryWindow.monthly) {
+      // Stats frames consume the stable real-transaction view. Refresh only
+      // ghost state after the atomic publish without changing that revision.
+      unawaited(
+        _projectRecurringGhostsForActiveWindow(
+          generation: summaryGeneration,
+          notify: false,
+        ),
+      );
+    }
   }
 
   void clearMerchantFilter([String? merchant]) {
@@ -1453,6 +1535,29 @@ class TransactionStore extends ChangeNotifier {
     _scheduleNotificationRefresh();
   }
 
+  Future<void> saveCategoryLimitForBarInline(
+    CategoryBudgetBarData bar, {
+    required double limitAmount,
+    required bool alertActive,
+    bool notify = true,
+  }) async {
+    final amount = limitAmount < 0 ? 0.0 : limitAmount;
+    final hasLimit = amount > 0;
+    final saved = await _repository.upsertCategoryLimit({
+      'targetType': bar.targetType.nativeValue,
+      'targetId': bar.targetId,
+      'transactionType': bar.transactionType.nativeValue,
+      'window': bar.window.nativeValue,
+      'periodKey': bar.periodKey,
+      'hasLimit': hasLimit,
+      'limitAmount': hasLimit ? amount : 0.0,
+      'alertActive': hasLimit && alertActive,
+    });
+    _replaceSavedLimit(saved);
+    if (notify) notifyListeners();
+    _scheduleNotificationRefresh();
+  }
+
   Future<void> saveOverviewLimit(
     BudgetGoalKind kind, {
     required double limitAmount,
@@ -1475,6 +1580,55 @@ class TransactionStore extends ChangeNotifier {
     });
     await _reload();
     _scheduleNotificationRefresh();
+  }
+
+  Future<void> saveOverviewLimitInline(
+    BudgetGoalKind kind, {
+    required double limitAmount,
+    required bool alertActive,
+    bool notify = true,
+  }) async {
+    final amount = limitAmount < 0 ? 0.0 : limitAmount;
+    final hasLimit = amount > 0;
+    final saved = await _repository.upsertCategoryLimit({
+      'targetType': LimitTargetType.overview.nativeValue,
+      'targetId': 0,
+      'transactionType': kind.transactionType,
+      'window': LimitManager.windowForSummary(_summaryWindow).nativeValue,
+      'periodKey': LimitManager.periodKeyFor(
+        _summaryWindow,
+        _periodReferenceDate,
+      ),
+      'hasLimit': hasLimit,
+      'limitAmount': hasLimit ? amount : 0.0,
+      'alertActive': hasLimit && alertActive,
+    });
+    _replaceSavedLimit(saved);
+    if (notify) notifyListeners();
+    _scheduleNotificationRefresh();
+  }
+
+  void _replaceSavedLimit(CategoryLimit saved) {
+    final index = _limits.indexWhere((limit) => _sameLimitScope(limit, saved));
+    if (index >= 0) {
+      _limits = [
+        for (var i = 0; i < _limits.length; i += 1)
+          if (i == index) saved else _limits[i],
+      ];
+    } else {
+      _limits = [..._limits, saved];
+    }
+    _rebuildPublicViews();
+    _invalidateViewCaches();
+    _invalidateFastInfoMetrics();
+  }
+
+  bool _sameLimitScope(CategoryLimit left, CategoryLimit right) {
+    return left.targetType == right.targetType &&
+        left.targetId == right.targetId &&
+        left.transactionType == right.transactionType &&
+        left.window == right.window &&
+        left.periodKey == right.periodKey;
   }
 
   Future<void> _projectRecurringGhostsForActiveWindow({
@@ -1501,7 +1655,7 @@ class TransactionStore extends ChangeNotifier {
         return;
       }
       _replaceRecurringGhostTransactions(ghosts, stablePeriodKey: periodKey);
-      _rebuildPublicViews();
+      _rebuildRecurringGhostsView();
       _invalidateViewCaches();
       _invalidateFastInfoMetrics();
       _prewarmCriticalCaches('recurring-ghosts');
@@ -1593,10 +1747,14 @@ class TransactionStore extends ChangeNotifier {
   void _rebuildPublicViews() {
     _categoriesView = List<TransactionCategory>.unmodifiable(_categories);
     _transactionsView = List<TransactionRecord>.unmodifiable(_transactions);
+    _rebuildRecurringGhostsView();
+    _limitsView = List<CategoryLimit>.unmodifiable(_limits);
+  }
+
+  void _rebuildRecurringGhostsView() {
     _recurringGhostTransactionsView = List<RecurringGhostRecord>.unmodifiable(
       _recurringGhostTransactions,
     );
-    _limitsView = List<CategoryLimit>.unmodifiable(_limits);
   }
 
   void _rebuildDerivedIndexes() {

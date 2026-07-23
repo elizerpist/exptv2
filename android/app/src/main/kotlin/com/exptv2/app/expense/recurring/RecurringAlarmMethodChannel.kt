@@ -4,6 +4,7 @@ import android.content.Context
 import com.exptv2.app.expense.ExpenseRepository
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,6 +77,8 @@ class RecurringAlarmMethodChannel(
         launch {
             try {
                 result.success(withContext(Dispatchers.IO) { block() })
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (error: Exception) {
                 result.error("RECURRING_ALARM_ERROR", error.message, null)
             }

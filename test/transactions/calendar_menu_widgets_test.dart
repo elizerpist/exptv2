@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/calendar_render_builder.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
@@ -18,7 +20,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/stats_test_frame_worker.dart';
+
 void main() {
+  setUp(() {
+    StatsPage.debugRenderFrameWorkerOverride =
+        const TestImmediateStatsFrameWorker();
+  });
+
+  tearDown(() => StatsPage.debugRenderFrameWorkerOverride = null);
+
   testWidgets('calendar mode selector renders compact visual mode buttons', (
     tester,
   ) async {
@@ -778,29 +789,31 @@ void main() {
     expect(find.text('Teszt'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('stats page renders redesigned annual stats as a full screen tab', (
-    tester,
-  ) async {
-    final store = TransactionStore(CalendarHomeRepository());
-    await store.start();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 390,
-            height: 780,
-            child: StatsPage(store: store),
+  testWidgets(
+    'stats page renders redesigned annual stats as a full screen tab',
+    (tester) async {
+      final store = TransactionStore(CalendarHomeRepository());
+      await store.start();
+      unawaited(store.setSummaryYear(2026));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 780,
+              child: StatsPage(store: store),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
-    expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
-    expect(find.text('SCOPE SCORE'), findsOneWidget);
-  });
+      expect(find.byKey(const ValueKey('stats-page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-menu-overlay')), findsNothing);
+      expect(find.byKey(const ValueKey('stats-year-calendar')), findsOneWidget);
+      expect(find.text('SZŰRÉS PONTSZÁM'), findsOneWidget);
+    },
+  );
 }
 
 Future<void> _tapFirstMonthCard(WidgetTester tester) async {

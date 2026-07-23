@@ -20,6 +20,8 @@ class BottomNavItem extends StatefulWidget {
     this.activeBackgroundColor = AppColors.primaryActiveBackground,
     this.onPointerDown,
     this.badgeCount = 0,
+    this.label,
+    this.icon,
   });
 
   final AppTab tab;
@@ -32,6 +34,8 @@ class BottomNavItem extends StatefulWidget {
   final Color activeBackgroundColor;
   final VoidCallback? onPointerDown;
   final int badgeCount;
+  final String? label;
+  final IconData? icon;
 
   @override
   State<BottomNavItem> createState() => _BottomNavItemState();
@@ -58,6 +62,8 @@ class _BottomNavItemState extends State<BottomNavItem> {
         : surfaceStyle;
     final surfaceColor = widget.surfaceColor;
     final badgeCount = widget.badgeCount;
+    final icon = widget.icon ?? tab.icon;
+    final label = widget.label ?? tab.label;
     final color = active ? widget.accentColor : tab.inactiveColor;
     final radius = BorderRadius.circular(AppDimensions.navItemRadius);
     final surfaceTint =
@@ -136,7 +142,7 @@ class _BottomNavItemState extends State<BottomNavItem> {
                               alignment: Alignment.center,
                               children: [
                                 Icon(
-                                  tab.icon,
+                                  icon,
                                   size: AppDimensions.navIconSize,
                                   color: color,
                                 ),
@@ -156,7 +162,7 @@ class _BottomNavItemState extends State<BottomNavItem> {
                             height: AppDimensions.navLabelTopMargin,
                           ),
                           Text(
-                            tab.label,
+                            label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,

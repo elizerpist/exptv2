@@ -21,6 +21,7 @@ class StatsCategoryScopeSeries {
     this.scoreLine = const <StatsSeriesPoint>[],
     this.helperBars = const <StatsHelperBar>[],
     this.monthTicks = const <StatsMonthTick>[],
+    this.incomeComparisonBars = const <StatsIncomeComparisonBar>[],
   });
 
   final List<StatsSeriesPoint> occurrence;
@@ -39,12 +40,33 @@ class StatsCategoryScopeSeries {
   final List<StatsSeriesPoint> scoreLine;
   final List<StatsHelperBar> helperBars;
   final List<StatsMonthTick> monthTicks;
+  final List<StatsIncomeComparisonBar> incomeComparisonBars;
 
   static StatsCategoryScopeSeries fromYearData(StatsYearData data) {
-    final dailyAmounts = <double>[];
-    for (final month in data.graphMonths) {
-      dailyAmounts.addAll(month.days.map((day) => day.scopeAmount));
+    if (data.summaryScope == StatsSummaryScope.allTime ||
+        data.summaryScope == StatsSummaryScope.monthly) {
+      return _buildPeriodSeries(
+        activeType: data.activeType,
+        threshold: data.thresholdValue,
+        amounts: data.activeType == TransactionType.expense
+            ? data.scorePeriodAmounts
+            : data.periodAmounts,
+        matchingExpenseAmounts: data.matchingExpensePeriodAmounts,
+        labels: data.periodLabels,
+        preserveAllSamples: data.summaryScope == StatsSummaryScope.monthly,
+        monthlyCategoryTotals: [
+          for (final month in data.graphMonths) month.scopeCategoryTotals,
+        ],
+        monthlyThresholdHitDays: [
+          for (final month in data.graphMonths) month.thresholdHitDays,
+        ],
+        categoryNames: const <int, String>{},
+      );
     }
+    final graphDayCount = data.graphMonths.fold<int>(
+      0,
+      (count, month) => count + month.days.length,
+    );
     final categoryNames = <int, String>{};
     for (final month in data.graphMonths) {
       for (final categoryId in month.scopeCategoryTotals.keys) {
@@ -54,10 +76,10 @@ class StatsCategoryScopeSeries {
     return _build(
       activeType: data.activeType,
       threshold: data.thresholdValue,
-      dailyScopeAmounts: dailyAmounts,
+      dailyScopeAmounts: const <double>[],
       graphMonths: data.graphMonths,
       monthLabels: _monthLabels(data.graphMonths),
-      window: _trendWindowForDays(dailyAmounts.length),
+      window: _trendWindowForDays(graphDayCount),
       monthlyCategoryTotals: data.graphMonths
           .map((month) => month.scopeCategoryTotals)
           .toList(growable: false),
@@ -194,6 +216,149 @@ class StatsCategoryScopeSeries {
     );
   }
 
+  static StatsCategoryScopeSeries _buildPeriodSeries({
+    required TransactionType activeType,
+    required double threshold,
+    required List<double> amounts,
+    required List<double> matchingExpenseAmounts,
+    required List<String> labels,
+    required bool preserveAllSamples,
+    required List<Map<int, double>> monthlyCategoryTotals,
+    required List<int> monthlyThresholdHitDays,
+    required Map<int, String> categoryNames,
+  }) {
+    final monthlyBars = _monthlyBars(
+      monthlyCategoryTotals: monthlyCategoryTotals,
+      monthlyThresholdHitDays: monthlyThresholdHitDays,
+      categoryNames: categoryNames,
+    );
+    if (activeType == TransactionType.income) {
+      final visibleIndexes = [
+        for (var i = 0; i < amounts.length; i += 1)
+          if (preserveAllSamples || amounts[i] > 0) i,
+      ];
+      final visibleAmounts = [
+        for (final index in visibleIndexes) amounts[index],
+      ];
+      final patternIndexes = [
+        for (final index in visibleIndexes)
+          if (amounts[index] > 0) index,
+      ];
+      final patternAmounts = [
+        for (final index in patternIndexes) amounts[index],
+      ];
+      final scoreValues = _incomePatternTrendValues(patternAmounts);
+      final scoreLine = [
+        for (var i = 0; i < scoreValues.length; i += 1)
+          StatsSeriesPoint(
+            index: i,
+            value: scoreValues[i],
+            position: preserveAllSamples
+                ? _normalizedPosition(patternIndexes[i], amounts.length)
+                : _normalizedPosition(i, scoreValues.length),
+          ),
+      ];
+      final maxTotal = math.max(1, visibleAmounts.fold<double>(0, math.max));
+      final amountLine = [
+        for (var i = 0; i < visibleAmounts.length; i += 1)
+          StatsSeriesPoint(
+            index: i,
+            value: (visibleAmounts[i] / maxTotal * 100)
+                .clamp(0, 100)
+                .toDouble(),
+            position: _normalizedPosition(i, visibleAmounts.length),
+          ),
+      ];
+      final visibleLabels = [
+        for (final index in visibleIndexes)
+          if (index < labels.length) labels[index],
+      ];
+      final monthTicks = _periodTicks(visibleLabels);
+      final helperBars = _incomeThresholdExcessBars(
+        patternAmounts,
+        threshold,
+        positions: [
+          for (var i = 0; i < patternIndexes.length; i += 1)
+            preserveAllSamples
+                ? _normalizedPosition(patternIndexes[i], amounts.length)
+                : _normalizedPosition(i, patternIndexes.length),
+        ],
+      );
+      final incomeComparisonBars = [
+        for (var i = 0; i < visibleIndexes.length; i += 1)
+          _incomeComparisonBar(
+            index: i,
+            incomeAmount: visibleAmounts[i],
+            expenseAmount: visibleIndexes[i] < matchingExpenseAmounts.length
+                ? matchingExpenseAmounts[visibleIndexes[i]]
+                : 0,
+            position: preserveAllSamples
+                ? _barCenterPosition(visibleIndexes[i], amounts.length)
+                : _barCenterPosition(i, visibleIndexes.length),
+          ),
+      ];
+      return StatsCategoryScopeSeries(
+        occurrence: const <StatsSeriesPoint>[],
+        valueIndex: amountLine,
+        riskSegments: const <StatsRiskSegment>[],
+        kontrollScore: scoreLine.isNotEmpty ? scoreLine.last.value : 50,
+        macd: const <StatsMacdBar>[],
+        monthlyBars: monthlyBars,
+        latestImpactLabel: _latestImpactLabel(monthlyBars),
+        controlBars: [
+          for (final point in scoreLine)
+            StatsControlBar(
+              index: point.index,
+              value: point.value,
+              colorHex: _scoreColorHex(point.value),
+              position: point.position,
+            ),
+        ],
+        secondaryLine: amountLine,
+        monthLabels: [for (final tick in monthTicks) tick.label],
+        secondaryMetricLabel: 'küszöb feletti többlet',
+        secondaryReferenceAmount: threshold,
+        dynamicEmaPeriod: 0,
+        scoreLine: scoreLine,
+        helperBars: helperBars,
+        monthTicks: monthTicks,
+        incomeComparisonBars: incomeComparisonBars,
+      );
+    }
+    final monthTicks = _periodTicks(labels);
+    return _buildExpenseHtmlSeries(
+      threshold: threshold,
+      dailyScopeAmounts: amounts,
+      graphMonths: const <StatsMonthData>[],
+      monthLabels: labels,
+      monthlyCategoryTotals: monthlyCategoryTotals,
+      monthlyThresholdHitDays: monthlyThresholdHitDays,
+      categoryNames: categoryNames,
+    ).withMonthTicks(monthTicks);
+  }
+
+  StatsCategoryScopeSeries withMonthTicks(List<StatsMonthTick> ticks) {
+    return StatsCategoryScopeSeries(
+      occurrence: occurrence,
+      valueIndex: valueIndex,
+      riskSegments: riskSegments,
+      kontrollScore: kontrollScore,
+      macd: macd,
+      monthlyBars: monthlyBars,
+      latestImpactLabel: latestImpactLabel,
+      controlBars: controlBars,
+      secondaryLine: secondaryLine,
+      monthLabels: [for (final tick in ticks) tick.label],
+      secondaryMetricLabel: secondaryMetricLabel,
+      secondaryReferenceAmount: secondaryReferenceAmount,
+      dynamicEmaPeriod: dynamicEmaPeriod,
+      scoreLine: scoreLine,
+      helperBars: helperBars,
+      monthTicks: ticks,
+      incomeComparisonBars: incomeComparisonBars,
+    );
+  }
+
   static StatsCategoryScopeSeries _buildExpenseHtmlSeries({
     required double threshold,
     required List<double> dailyScopeAmounts,
@@ -207,7 +372,10 @@ class StatsCategoryScopeSeries {
         ? [
             for (final month in graphMonths)
               for (final day in month.days)
-                _ScopeDaySample(month: month.month, amount: day.scopeAmount),
+                _ScopeDaySample(
+                  month: month.month,
+                  amount: day.scoreScopeAmount,
+                ),
           ]
         : [
             for (var i = 0; i < dailyScopeAmounts.length; i += 1)
@@ -242,8 +410,8 @@ class StatsCategoryScopeSeries {
         secondaryLine: const <StatsSeriesPoint>[],
         monthLabels: const <String>[],
         secondaryMetricLabel: threshold > 0
-            ? 'threshold excess'
-            : 'min baseline',
+            ? 'küszöb feletti többlet'
+            : 'minimum alapú eltérés',
         secondaryReferenceAmount: 0,
         dynamicEmaPeriod: 7,
         scoreLine: scoreLine,
@@ -317,8 +485,8 @@ class StatsCategoryScopeSeries {
         secondaryLine: amountLine,
         monthLabels: [for (final tick in monthTicks) tick.label],
         secondaryMetricLabel: threshold > 0
-            ? 'threshold excess'
-            : 'min baseline',
+            ? 'küszöb feletti többlet'
+            : 'minimum alapú eltérés',
         secondaryReferenceAmount: 0,
         dynamicEmaPeriod: 1,
         scoreLine: scoreLine,
@@ -418,7 +586,9 @@ class StatsCategoryScopeSeries {
       ],
       secondaryLine: amountLine,
       monthLabels: [for (final tick in monthTicks) tick.label],
-      secondaryMetricLabel: threshold > 0 ? 'threshold excess' : 'min baseline',
+      secondaryMetricLabel: threshold > 0
+          ? 'küszöb feletti többlet'
+          : 'minimum alapú eltérés',
       secondaryReferenceAmount: 0,
       dynamicEmaPeriod: emaPeriod,
       scoreLine: scoreLine,
@@ -447,11 +617,7 @@ class StatsCategoryScopeSeries {
     final totals = [
       for (final month in visibleMonths) _incomeMetricTotal(month, threshold),
     ];
-    final activeDayCounts = [
-      for (final month in visibleMonths)
-        _incomeMetricDayCount(month, threshold).toDouble(),
-    ];
-    final scoreValues = _incomeHealthValues(totals, activeDayCounts);
+    final scoreValues = _incomePatternTrendValues(totals);
     final scoreLine = [
       for (var i = 0; i < scoreValues.length; i += 1)
         StatsSeriesPoint(
@@ -476,7 +642,31 @@ class StatsCategoryScopeSeries {
           position: _normalizedPosition(i, visibleMonths.length),
         ),
     ];
-    final helperBars = _incomeAverageDeviationBars(totals);
+    final graphDays = [
+      for (final month in graphMonths)
+        for (final day in month.days)
+          _ScopeDaySample(month: month.month, amount: day.scopeAmount),
+    ];
+    final helperDays = [
+      for (final day in graphDays)
+        if (_isThresholdHit(day.amount, threshold)) day,
+    ];
+    final helperBars = _incomeThresholdExcessBars(
+      [for (final day in helperDays) day.amount],
+      threshold,
+      positions: [
+        for (final day in helperDays) _positionInGraph(day, graphDays),
+      ],
+    );
+    final incomeComparisonBars = [
+      for (var i = 0; i < visibleMonths.length; i += 1)
+        _incomeComparisonBar(
+          index: i,
+          incomeAmount: totals[i],
+          expenseAmount: visibleMonths[i].matchingExpenseTotal,
+          position: _barCenterPosition(i, visibleMonths.length),
+        ),
+    ];
     return StatsCategoryScopeSeries(
       occurrence: const <StatsSeriesPoint>[],
       valueIndex: amountLine,
@@ -496,12 +686,34 @@ class StatsCategoryScopeSeries {
       ],
       secondaryLine: amountLine,
       monthLabels: [for (final tick in monthTicks) tick.label],
-      secondaryMetricLabel: 'atlag elteres',
-      secondaryReferenceAmount: _average(totals),
+      secondaryMetricLabel: 'küszöb feletti többlet',
+      secondaryReferenceAmount: threshold,
       dynamicEmaPeriod: 0,
       scoreLine: scoreLine,
       helperBars: helperBars,
       monthTicks: monthTicks,
+      incomeComparisonBars: incomeComparisonBars,
+    );
+  }
+
+  static StatsIncomeComparisonBar _incomeComparisonBar({
+    required int index,
+    required double incomeAmount,
+    required double expenseAmount,
+    required double position,
+  }) {
+    final signedValue = incomeAmount - expenseAmount;
+    return StatsIncomeComparisonBar(
+      index: index,
+      incomeAmount: incomeAmount,
+      expenseAmount: expenseAmount,
+      signedValue: signedValue,
+      position: position,
+      colorHex: signedValue > 0
+          ? '#22C55E'
+          : signedValue < 0
+          ? '#EF4444'
+          : '#FBBF24',
     );
   }
 
@@ -511,6 +723,10 @@ class StatsCategoryScopeSeries {
 
   static double _normalizedPosition(int index, int length) {
     return length <= 1 ? 0.5 : index / (length - 1);
+  }
+
+  static double _barCenterPosition(int index, int length) {
+    return length <= 0 ? 0.5 : (index + 0.5) / length;
   }
 
   static double _positionInGraph(
@@ -541,6 +757,39 @@ class StatsCategoryScopeSeries {
     return List.unmodifiable(ticks);
   }
 
+  static List<StatsMonthTick> _periodTicks(List<String> labels) {
+    if (labels.isEmpty) return const <StatsMonthTick>[];
+    final indexes = _visibleTickIndexes(labels.length);
+    return [
+      for (final index in indexes)
+        StatsMonthTick(
+          label: labels[index],
+          position: _normalizedPosition(index, labels.length),
+        ),
+    ];
+  }
+
+  static List<int> _visibleTickIndexes(int count) {
+    if (count <= 0) return const <int>[];
+    final indexes = <int>{0, count - 1};
+    if (count <= 10) {
+      indexes.addAll(List<int>.generate(count, (index) => index));
+    } else if (count <= 16) {
+      for (var i = 1; i < count - 1; i += 2) {
+        indexes.add(i);
+      }
+    } else if (count <= 31) {
+      for (var display = 5; display < count; display += 5) {
+        indexes.add(display - 1);
+      }
+    } else {
+      for (var display = 10; display < count; display += 10) {
+        indexes.add(display - 1);
+      }
+    }
+    return indexes.toList()..sort();
+  }
+
   static List<StatsHelperBar> _expenseHelperBars({
     required double threshold,
     required List<_ScopeDaySample> graphDays,
@@ -551,16 +800,22 @@ class StatsCategoryScopeSeries {
     final deltas = threshold > 0
         ? _thresholdExcessDeltas(rawValues, threshold)
         : _amountMinDeltas(rawValues);
-    return [
-      for (var i = 0; i < hitDays.length; i += 1)
+    final bars = <StatsHelperBar>[];
+    for (var graphIndex = 0; graphIndex < graphDays.length; graphIndex += 1) {
+      final day = graphDays[graphIndex];
+      if (!_isThresholdHit(day.amount, threshold)) continue;
+      final hitIndex = bars.length;
+      bars.add(
         StatsHelperBar(
-          index: i,
-          rawValue: hitDays[i].amount,
-          value: deltas[i],
-          position: _positionInGraph(hitDays[i], graphDays),
+          index: hitIndex,
+          rawValue: day.amount,
+          value: deltas[hitIndex],
+          position: _normalizedPosition(graphIndex, graphDays.length),
           colorHex: '#EF4444',
         ),
-    ];
+      );
+    }
+    return bars;
   }
 
   static List<double> _thresholdExcessDeltas(
@@ -599,68 +854,60 @@ class StatsCategoryScopeSeries {
     );
   }
 
-  static int _incomeMetricDayCount(StatsMonthData month, double threshold) {
-    if (threshold <= 0) {
-      return month.days.where((day) => day.scopeAmount > 0).length;
-    }
-    return month.thresholdHitDays;
-  }
-
-  static List<double> _incomeHealthValues(
-    List<double> monthlyTotals,
-    List<double> activeDayCounts,
-  ) {
+  static List<double> _incomePatternTrendValues(List<double> monthlyTotals) {
     if (monthlyTotals.isEmpty) return const <double>[];
-    final monthlyReference = _average(monthlyTotals);
-    final activeDayReference = _average(
-      activeDayCounts.where((days) => days > 0),
-    );
-    final totalIndexes = [
-      for (final total in monthlyTotals)
-        (50 * _ratio(total, monthlyReference)).clamp(0, 100).toDouble(),
-    ];
-    final activeDayIndexes = [
-      for (final days in activeDayCounts)
-        (50 * _ratio(days, activeDayReference)).clamp(0, 100).toDouble(),
-    ];
-    final stabilityIndexes = <double>[];
-    for (var i = 0; i < totalIndexes.length; i += 1) {
-      if (i == 0) {
-        stabilityIndexes.add(50);
-        continue;
-      }
-      final delta = (totalIndexes[i] - totalIndexes[i - 1]).abs();
-      stabilityIndexes.add((100 - delta * 1.2).clamp(0, 100).toDouble());
-    }
     return [
       for (var i = 0; i < monthlyTotals.length; i += 1)
-        (0.55 * totalIndexes[i] +
-                0.25 * activeDayIndexes[i] +
-                0.20 * stabilityIndexes[i])
-            .clamp(0, 100)
-            .toDouble(),
+        _incomePatternTrendScore(
+          monthlyTotals.take(i).toList(),
+          monthlyTotals[i],
+        ),
     ];
   }
 
-  static List<StatsHelperBar> _incomeAverageDeviationBars(List<double> totals) {
-    if (totals.isEmpty) return const <StatsHelperBar>[];
-    final avg = _average(totals);
-    final maxDeviation = math.max(
-      1,
-      totals.map((value) => (value - avg).abs()).fold<double>(0, math.max),
+  static double _incomePatternTrendScore(
+    List<double> previousVisibleValues,
+    double recentPatternAvg,
+  ) {
+    if (recentPatternAvg <= 0 || previousVisibleValues.isEmpty) return 50;
+    final previousWindowSize = math.min(3, previousVisibleValues.length);
+    final previousPatternAvg = _average(
+      previousVisibleValues.skip(
+        previousVisibleValues.length - previousWindowSize,
+      ),
     );
+    final baseline = math.max(
+      1,
+      math.max(
+        previousPatternAvg,
+        _median([...previousVisibleValues, recentPatternAvg]),
+      ),
+    );
+    final trendDelta = (recentPatternAvg - previousPatternAvg) / baseline;
+    final trendAdjustment = (trendDelta * 35).clamp(-30, 30).toDouble();
+    return (50 + trendAdjustment).clamp(0, 100).toDouble();
+  }
+
+  static List<StatsHelperBar> _incomeThresholdExcessBars(
+    List<double> totals,
+    double threshold, {
+    List<double>? positions,
+  }) {
+    if (totals.isEmpty) return const <StatsHelperBar>[];
+    final values = threshold > 0
+        ? _thresholdExcessDeltas(totals, threshold)
+        : _amountMinDeltas(totals);
     return [
       for (var i = 0; i < totals.length; i += 1)
-        () {
-          final delta = totals[i] - avg;
-          return StatsHelperBar(
-            index: i,
-            rawValue: totals[i],
-            value: (delta / maxDeviation * 100).clamp(-100, 100).toDouble(),
-            position: _normalizedPosition(i, totals.length),
-            colorHex: delta >= 0 ? '#22C55E' : '#EF4444',
-          );
-        }(),
+        StatsHelperBar(
+          index: i,
+          rawValue: totals[i],
+          value: values[i],
+          position: positions != null && i < positions.length
+              ? positions[i]
+              : _normalizedPosition(i, totals.length),
+          colorHex: '#22C55E',
+        ),
     ];
   }
 
@@ -806,9 +1053,12 @@ class StatsCategoryScopeSeries {
     return count == 0 ? 0 : sum / count;
   }
 
-  static double _ratio(double value, double reference) {
-    if (reference <= 0) return 0;
-    return value / reference;
+  static double _median(List<double> values) {
+    if (values.isEmpty) return 0;
+    final sorted = [...values]..sort();
+    final middle = sorted.length ~/ 2;
+    if (sorted.length.isOdd) return sorted[middle];
+    return (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
   static int _dynamicEmaPeriod(int activeScopeDays) {
@@ -830,14 +1080,14 @@ class StatsCategoryScopeSeries {
   static const _monthAbbreviations = [
     'Jan',
     'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
+    'Már',
+    'Ápr',
+    'Máj',
+    'Jún',
+    'Júl',
     'Aug',
-    'Sep',
-    'Oct',
+    'Szep',
+    'Okt',
     'Nov',
     'Dec',
   ];
@@ -883,6 +1133,24 @@ class StatsHelperBar {
   final int index;
   final double rawValue;
   final double value;
+  final double position;
+  final String colorHex;
+}
+
+class StatsIncomeComparisonBar {
+  const StatsIncomeComparisonBar({
+    required this.index,
+    required this.incomeAmount,
+    required this.expenseAmount,
+    required this.signedValue,
+    required this.position,
+    required this.colorHex,
+  });
+
+  final int index;
+  final double incomeAmount;
+  final double expenseAmount;
+  final double signedValue;
   final double position;
   final String colorHex;
 }

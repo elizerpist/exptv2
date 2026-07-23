@@ -1410,29 +1410,6 @@ void main() {
         ],
       ),
       _V25SurfaceCase(
-        id: 'bevetel_ebben_a_honapban',
-        metric: const FastInfoMetricResult(
-          pillValue: '+6% előzőhöz',
-          primaryValue: '620 000 Ft',
-          secondaryValues: <String>[
-            'eddig beérkezett',
-            'várt 780k · ghost 160k',
-            'Fedezet: 34 nap',
-          ],
-          visual: FastInfoVisualDescriptor(
-            kind: FastInfoVisualKind.incomeComparisonBars,
-            value: 620000,
-            compareValue: 585000,
-            marker: 780000,
-          ),
-        ),
-        expectedTexts: <String>['Havi bevétel', 'Bevételi tempó:', 'Fedezet:'],
-        expectedKeys: <String>[
-          'fastinfo-income-compare-bevetel_ebben_a_honapban',
-          'fastinfo-income-bars-bevetel_ebben_a_honapban',
-        ],
-      ),
-      _V25SurfaceCase(
         id: 'kiadas_bevetel_arany',
         metric: const FastInfoMetricResult(
           pillValue: '29% maradt',

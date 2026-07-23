@@ -1,5 +1,6 @@
 import 'package:exptv2/features/transactions/data/fast_info_period_aggregates.dart';
 import 'package:exptv2/features/transactions/models/fast_info_metric_snapshot.dart';
+import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -83,6 +84,74 @@ void main() {
       5000,
     );
   });
+
+  test(
+    'retains a card-independent monthly income summary for Pulse inputs',
+    () {
+      final data = FastInfoPeriodAggregates(
+        snapshot: FastInfoMetricSnapshot(
+          now: DateTime(2026, 6, 10, 12),
+          balance: 0,
+          transactions: [
+            _income(1, '2026.06.01', 100000, recurringTransactionId: 55),
+            _income(2, '2026.06.02', 25000),
+            _income(3, '2026.05.05', 40000),
+            _expense(4, '2026.06.10', 300000),
+          ],
+          recurringGhosts: const [
+            RecurringGhostRecord(
+              id: 5,
+              recurringTransactionId: 90,
+              periodKey: '2026-06',
+              name: 'Fizetes',
+              amount: 300000,
+              transactionType: 'income',
+              date: '2026.06.12',
+              time: '08:00',
+              categoryId: 2,
+              categoryName: 'Bevetel',
+              categoryColor: '#16a34a',
+              categoryIconSlot: 2,
+              triggerMillis: 0,
+              isActivated: false,
+              activatedTransactionId: null,
+              createdAt: 0,
+              updatedAt: 0,
+            ),
+            RecurringGhostRecord(
+              id: 6,
+              recurringTransactionId: 91,
+              periodKey: '2026-06',
+              name: 'Mar beert',
+              amount: 200000,
+              transactionType: 'income',
+              date: '2026.06.08',
+              time: '08:00',
+              categoryId: 2,
+              categoryName: 'Bevetel',
+              categoryColor: '#16a34a',
+              categoryIconSlot: 2,
+              triggerMillis: 0,
+              isActivated: true,
+              activatedTransactionId: 1006,
+              createdAt: 0,
+              updatedAt: 0,
+            ),
+          ],
+        ),
+      );
+
+      final summary = data.monthlyIncomeSummary;
+
+      expect(summary.receivedIncome, 125000);
+      expect(summary.pendingIncomeGhost, 300000);
+      expect(summary.expectedIncome, 425000);
+      expect(summary.variableIncome, 25000);
+      expect(summary.previousMonthSameDayVariableIncome, 40000);
+      expect(summary.coverageDays, closeTo(12.5, 0.001));
+      expect(summary.variableIncomeChangeRatio, closeTo(-0.375, 0.001));
+    },
+  );
 }
 
 TransactionRecord _expense(
@@ -102,6 +171,27 @@ TransactionRecord _expense(
     amount: -amount,
     userAssignedName: null,
     transactionCategoryID: 1,
+    recurringTransactionId: recurringTransactionId,
+  );
+}
+
+TransactionRecord _income(
+  int id,
+  String date,
+  double amount, {
+  int? recurringTransactionId,
+}) {
+  return TransactionRecord(
+    id: id,
+    date: date,
+    time: '12:00',
+    latitude: null,
+    longitude: null,
+    address: null,
+    merchant: 'Income $id',
+    amount: amount,
+    userAssignedName: null,
+    transactionCategoryID: 2,
     recurringTransactionId: recurringTransactionId,
   );
 }

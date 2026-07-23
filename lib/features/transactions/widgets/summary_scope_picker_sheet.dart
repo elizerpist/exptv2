@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../settings/models/app_theme_settings.dart';
+import 'category_menu/category_card.dart';
 import 'slide_up_panel_metrics.dart';
 
 class SummaryScopeSelection {
@@ -237,65 +238,83 @@ class _ScopeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final radius = BorderRadius.circular(18);
+    final scopeKey = title == 'Hónap' ? 'month' : 'year';
+    return SizedBox(
       key: rowKey,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.gray100,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: enabled ? accentColor : AppColors.gray200,
-          width: enabled ? 1.5 : 1,
-        ),
-      ),
-      child: Row(
+      child: Stack(
         children: [
-          Switch(
-            key: ValueKey('$title-summary-scope-switch'),
-            value: enabled,
-            activeThumbColor: accentColor,
-            onChanged: onEnabledChanged,
-          ),
-          SizedBox(
-            width: 58,
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gray700,
-              ),
+          ExpenseSurfaceContainer(
+            surfaceKey: ValueKey('summary-scope-$scopeKey-surface'),
+            style: ExpenseSurfaceInteraction.neutralNeutral,
+            color: AppColors.gray100,
+            borderRadius: radius,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            neutralBorder: Border.all(color: AppColors.gray200),
+            neutralShadow: categoryNeutralShadow(
+              ExpenseSurfaceInteraction.neutralNeutral,
             ),
-          ),
-          IconButton(
-            key: ValueKey('$title-summary-scope-decrease'),
-            onPressed: enabled ? onDecrease : null,
-            icon: const Icon(Icons.remove_rounded),
-          ),
-          Expanded(
-            child: GestureDetector(
-              key: ValueKey('$title-summary-scope-drag-value'),
-              behavior: HitTestBehavior.opaque,
-              onVerticalDragUpdate: enabled ? onVerticalDragUpdate : null,
-              onVerticalDragEnd: enabled ? (_) => onVerticalDragEnd() : null,
-              child: Text(
-                value,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: enabled ? AppColors.gray900 : AppColors.gray400,
+            child: Row(
+              children: [
+                Switch(
+                  key: ValueKey('$title-summary-scope-switch'),
+                  value: enabled,
+                  activeThumbColor: accentColor,
+                  onChanged: onEnabledChanged,
                 ),
-              ),
+                SizedBox(
+                  width: 58,
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.gray700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: ValueKey('$title-summary-scope-decrease'),
+                  onPressed: enabled ? onDecrease : null,
+                  icon: const Icon(Icons.remove_rounded),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    key: ValueKey('$title-summary-scope-drag-value'),
+                    behavior: HitTestBehavior.opaque,
+                    onVerticalDragUpdate: enabled ? onVerticalDragUpdate : null,
+                    onVerticalDragEnd: enabled
+                        ? (_) => onVerticalDragEnd()
+                        : null,
+                    child: Text(
+                      value,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: enabled ? AppColors.gray900 : AppColors.gray400,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: ValueKey('$title-summary-scope-increase'),
+                  onPressed: enabled ? onIncrease : null,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ],
             ),
           ),
-          IconButton(
-            key: ValueKey('$title-summary-scope-increase'),
-            onPressed: enabled ? onIncrease : null,
-            icon: const Icon(Icons.add_rounded),
-          ),
+          if (enabled)
+            Positioned.fill(
+              child: CategoryActiveBorder(
+                key: ValueKey('summary-scope-$scopeKey-active-border'),
+                radius: radius,
+                color: accentColor,
+              ),
+            ),
         ],
       ),
     );

@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/debug/debug_console.dart';
 import '../../core/debug/debug_floating_button.dart';
 import '../../core/keyboard/keyboard_inset_follower.dart';
+import '../../core/platform/browser_fullscreen_controller.dart';
+import '../../core/platform/browser_fullscreen_controller_factory.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../services/native_bridge.dart';
@@ -16,15 +19,23 @@ import '../notifications/notifications_page.dart';
 import '../notifications/state/notification_store.dart';
 import '../settings/models/app_theme_settings.dart';
 import '../settings/models/fast_info_config.dart';
+import '../settings/models/security_settings.dart';
 import '../settings/settings_page.dart';
 import '../settings/state/push_notification_log_store.dart';
 import '../settings/widgets/push_log/push_notification_event_sheet.dart';
 import '../settings/widgets/options/backheader_style_options_panel.dart';
 import '../settings/theme/expense_theme.dart';
+import '../stats/data/stats_snapshot.dart';
+import '../stats/data/stats_snapshot_repository.dart';
+import '../stats/data/stats_render_frame.dart';
+import '../stats/data/stats_render_frame_worker.dart';
+import '../stats/data/stats_render_prewarmer.dart';
+import '../stats/data/stats_year_data.dart';
 import '../stats/stats_page.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/sync/google_sheets_sync_controller.dart';
 import '../transactions/models/backheader_budget_item.dart';
+import '../transactions/models/summary_window.dart';
 import '../transactions/models/transaction_category.dart';
 import '../transactions/models/transaction_record.dart';
 import '../transactions/state/transaction_store.dart';
@@ -40,6 +51,7 @@ import '../transactions/widgets/slide_up_menu_card.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
+import 'widgets/spendee_test_bottom_nav.dart';
 
 class ExptShell extends StatefulWidget {
   const ExptShell({
@@ -47,11 +59,19 @@ class ExptShell extends StatefulWidget {
     required this.store,
     required this.nativeBridge,
     this.googleSheetsSyncController,
+    this.statsRenderFrameCache,
+    this.statsRenderFrameWorker,
+    this.browserFullscreenController,
+    this.onSecuritySettingsChanged,
   });
 
   final EventStore store;
   final NativeBridge nativeBridge;
   final GoogleSheetsSyncController? googleSheetsSyncController;
+  final StatsRenderFrameCache? statsRenderFrameCache;
+  final StatsRenderFrameWorker? statsRenderFrameWorker;
+  final BrowserFullscreenController? browserFullscreenController;
+  final ValueChanged<SecuritySettings>? onSecuritySettingsChanged;
 
   @override
   State<ExptShell> createState() => _ExptShellState();
@@ -70,13 +90,23 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   late final NotificationStore _notificationStore;
   late final NativeImeSheetBridge _nativeImeSheetBridge;
   late final RecurringAlarmService _recurringAlarmService;
+  late BrowserFullscreenController _browserFullscreenController;
+  late bool _ownsBrowserFullscreenController;
   final _sheetHostKey = GlobalKey<_ShellSheetHostState>();
   final _budgetEditorActiveKey = ValueNotifier<String?>(null);
-  late final PageController _pageController;
+  final _statsPageController = StatsPageController();
+  late AppTab _pageActiveTab;
+  final Map<AppTab, Widget> _retainedTabPages = <AppTab, Widget>{};
   var _homeBlockingOverlayOpen = false;
+  var _headerSettingsOpen = false;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
+  late final StatsSnapshotRepository _statsSnapshotRepository;
+  late final StatsRenderFrameCache _statsRenderFrameCache;
+  late final StatsRenderFrameWorker _statsRenderFrameWorker;
+  late final StatsRenderPrewarmer _statsRenderPrewarmer;
+  var _coldStartReady = false;
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
@@ -89,8 +119,15 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     DebugConsole.log('[Shell] start');
     _activeTab = _tabFromStoreKey(widget.store.shellActiveTabKey);
-    _pageController = PageController(initialPage: appTabs.indexOf(_activeTab));
-    _recurringAlarmService = RecurringAlarmService();
+    _pageActiveTab = _activeTab;
+    _ownsBrowserFullscreenController =
+        widget.browserFullscreenController == null;
+    _browserFullscreenController =
+        widget.browserFullscreenController ??
+        createBrowserFullscreenController();
+    _recurringAlarmService = kIsWeb
+        ? RecurringAlarmService.disabled()
+        : RecurringAlarmService();
     _notificationStore = NotificationStore(
       NotificationRepository(widget.nativeBridge),
     );
@@ -100,14 +137,33 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onNotificationsMayHaveChanged:
           _refreshNotificationsAfterTransactionChange,
     );
-    _nativeImeSheetBridge = NativeImeSheetBridge(
-      onTransactionCommitted: _handleNativeTransactionCommitted,
-      onSheetClosed: _handleNativeSheetClosed,
-      onDebugLog: (message) async => DebugConsole.log(message),
-    );
-    unawaited(_transactionStore.start());
+    _nativeImeSheetBridge = kIsWeb
+        ? NativeImeSheetBridge.disabled()
+        : NativeImeSheetBridge(
+            onTransactionCommitted: _handleNativeTransactionCommitted,
+            onSheetClosed: _handleNativeSheetClosed,
+            onDebugLog: (message) async => DebugConsole.log(message),
+          );
     _transactionHomePage = _buildTransactionHomePage();
+    _statsSnapshotRepository = NativeStatsSnapshotRepository(
+      widget.nativeBridge,
+    );
+    _statsRenderFrameCache =
+        widget.statsRenderFrameCache ?? StatsRenderFrameCache();
+    _statsRenderFrameWorker =
+        widget.statsRenderFrameWorker ?? const IsolateStatsRenderFrameWorker();
+    _statsRenderPrewarmer = StatsRenderPrewarmer(
+      cache: _statsRenderFrameCache,
+      worker: _statsRenderFrameWorker,
+    );
     _statsPage = _buildStatsPage();
+    if (_activeTab != AppTab.stats) {
+      _retainedTabPages[_activeTab] = _buildShellPage(
+        _activeTab,
+        ExpenseTheme.fromSettings(_themeSettings),
+      );
+    }
+    unawaited(_initializeApp());
     _requestPostNotificationsOnFirstLaunch();
     unawaited(_notificationStore.start());
     unawaited(_syncRecurringAlarms());
@@ -115,13 +171,36 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(covariant ExptShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(
+      oldWidget.browserFullscreenController,
+      widget.browserFullscreenController,
+    )) {
+      return;
+    }
+    if (_ownsBrowserFullscreenController) {
+      _browserFullscreenController.dispose();
+    }
+    _ownsBrowserFullscreenController =
+        widget.browserFullscreenController == null;
+    _browserFullscreenController =
+        widget.browserFullscreenController ??
+        createBrowserFullscreenController();
+    _transactionHomePage = _buildTransactionHomePage();
+    _refreshRetainedTabPages();
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pageController.dispose();
     _homeThemeSettingsSaveDebounce?.cancel();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     _nativeImeSheetBridge.dispose();
+    if (_ownsBrowserFullscreenController) {
+      _browserFullscreenController.dispose();
+    }
     _notificationStore.removeListener(_handleNotificationStoreChanged);
     _notificationStore.dispose();
     super.dispose();
@@ -130,6 +209,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    _statsPageController.refreshForLifecycle();
     unawaited(_refreshBackgroundTransactionsOnResume());
     unawaited(_processRecurringOnResume());
   }
@@ -182,12 +262,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
 
   TransactionHomePage _buildTransactionHomePage() {
     final fabSize = _themeSettings.fabSize.toDouble();
+    final logBottomPadding =
+        _themeSettings.dashboardDesignMode == DashboardDesignMode.spendeeTest
+        ? AppDimensions.bottomNavHeight + 16
+        : _rightFabLogBottomPadding(fabSize);
     return TransactionHomePage(
       store: _transactionStore,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
       fastInfoConfig: _fastInfoConfig,
-      logBottomPadding: _rightFabLogBottomPadding(fabSize),
+      logBottomPadding: logBottomPadding,
+      browserFullscreenController: _browserFullscreenController,
       onNotificationPressed: _handleHeaderNotificationPressed,
+      onSettingsPressed: _openHeaderSettings,
       notificationUnreadCount: _notificationStore.unreadCount,
       onEditTransaction: _openEditTransaction,
       onDeleteTransactionRequested: _confirmDeleteTransaction,
@@ -235,9 +321,16 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   StatsPage _buildStatsPage() {
     return StatsPage(
       store: _transactionStore,
+      controller: _statsPageController,
       expenseTheme: ExpenseTheme.fromSettings(_themeSettings),
+      snapshotRepository: _statsSnapshotRepository,
+      renderFrameCache: _statsRenderFrameCache,
+      renderFrameWorker: _statsRenderFrameWorker,
       onCategoryMenuRequested: (request) {
         _sheetHostKey.currentState?.openCategoryPicker(request);
+      },
+      onVendorSheetRequested: (type) {
+        _sheetHostKey.currentState?.openVendorFilter(activeType: type);
       },
       onAddCategoryEditorRequested: () {
         _sheetHostKey.currentState?.openCategory();
@@ -246,6 +339,78 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         _sheetHostKey.currentState?.openCategory(initialCategory: category);
       },
     );
+  }
+
+  Future<void> _initializeApp() async {
+    await _transactionStore.start();
+    if (!mounted) return;
+    await _prewarmPrimaryStatsUntilStable();
+    if (!mounted) return;
+    setState(() {
+      final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+      _retainedTabPages.putIfAbsent(
+        AppTab.home,
+        () => _buildShellPage(AppTab.home, expenseTheme),
+      );
+      _retainedTabPages.putIfAbsent(
+        AppTab.stats,
+        () => _buildShellPage(AppTab.stats, expenseTheme),
+      );
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    setState(() => _coldStartReady = true);
+    DebugConsole.log('[Perf] Shell cold start ready home=true stats=true');
+  }
+
+  Future<void> _prewarmPrimaryStatsUntilStable() async {
+    while (mounted && _transactionStore.error == null) {
+      final transactions = _transactionStore.transactions;
+      final categories = _transactionStore.categories;
+      final reference = _transactionStore.summaryReferenceDate;
+      final summaryWindow = _transactionStore.summaryWindow;
+      final today = _transactionStore.currentDate;
+      final vendorFilters = Set<String>.unmodifiable(
+        _transactionStore.activeMerchantFilters,
+      );
+      final summaryScope = switch (_transactionStore.summaryWindow) {
+        SummaryWindow.allTime => StatsSummaryScope.allTime,
+        SummaryWindow.yearly => StatsSummaryScope.yearly,
+        SummaryWindow.monthly => StatsSummaryScope.monthly,
+      };
+      try {
+        await _statsRenderPrewarmer.prewarmPrimary(
+          dataRevision: (transactions: transactions, categories: categories),
+          transactions: transactions,
+          categories: categories,
+          summaryScope: summaryScope,
+          year: reference.year,
+          month: reference.month,
+          today: today,
+          vendorFilters: vendorFilters,
+        );
+      } catch (error) {
+        DebugConsole.log('[Perf] Stats startup prewarm failed: $error');
+        return;
+      }
+      if (!mounted) return;
+      final currentFilters = _transactionStore.activeMerchantFilters;
+      final currentDate = _transactionStore.currentDate;
+      final stable =
+          identical(transactions, _transactionStore.transactions) &&
+          identical(categories, _transactionStore.categories) &&
+          reference == _transactionStore.summaryReferenceDate &&
+          summaryWindow == _transactionStore.summaryWindow &&
+          today.year == currentDate.year &&
+          today.month == currentDate.month &&
+          today.day == currentDate.day &&
+          vendorFilters.length == currentFilters.length &&
+          vendorFilters.containsAll(currentFilters);
+      if (stable) return;
+      DebugConsole.log(
+        '[Perf] Stats startup prewarm retry reason=data-revision-changed',
+      );
+    }
   }
 
   void _requestPostNotificationsOnFirstLaunch() {
@@ -314,12 +479,18 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   Future<void> _loadShellSettings() async {
     final payload = await widget.nativeBridge.expenseLoadSettings();
     if (!mounted) return;
+    var normalizedHiddenTab = false;
     setState(() {
       _themeSettings = payload.themeSettings;
       _fastInfoConfig = payload.fastInfoConfig;
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      normalizedHiddenTab = _normalizeSpendeeNavigationTab();
+      _refreshRetainedTabPages();
     });
+    if (normalizedHiddenTab) {
+      widget.store.setShellActiveTabKey(AppTab.home.id);
+    }
   }
 
   void _handleNotificationStoreChanged() {
@@ -331,6 +502,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     );
     setState(() {
       _transactionHomePage = _buildTransactionHomePage();
+      _refreshRetainedTabPages();
     });
   }
 
@@ -353,6 +525,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      _refreshRetainedTabPages();
     });
     DebugConsole.log('[NativeImeSheet] AddTransaction committed refresh end');
   }
@@ -362,11 +535,17 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _applyThemeSettings(AppThemeSettings settings) {
+    var normalizedHiddenTab = false;
     setState(() {
       _themeSettings = settings;
       _transactionHomePage = _buildTransactionHomePage();
       _statsPage = _buildStatsPage();
+      normalizedHiddenTab = _normalizeSpendeeNavigationTab();
+      _refreshRetainedTabPages();
     });
+    if (normalizedHiddenTab) {
+      widget.store.setShellActiveTabKey(AppTab.home.id);
+    }
     DebugConsole.log(
       '[ThemeSurface] shell apply ${_settingsSignature(settings)}',
     );
@@ -402,6 +581,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     setState(() {
       _fastInfoConfig = config;
       _transactionHomePage = _buildTransactionHomePage();
+      _refreshRetainedTabPages();
     });
   }
 
@@ -420,30 +600,14 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       'homeOverlay=$_homeBlockingOverlayOpen '
       '${_contextKeyboardTrace()}',
     );
-    _sheetHostKey.currentState?.closeAll();
-    DebugConsole.log(
-      '[Perf] BottomNav close sheets issued from=${previous.id} to=${tab.id} '
-      'elapsed=${_elapsedMs(requestedAt)}ms',
-    );
-    if (previous == AppTab.settings && tab != AppTab.settings) {
-      widget.store.setSettingsActiveMenuKey('root');
-      DebugConsole.log(
-        '[Settings] active menu reset reason=bottom_nav_leave target=${tab.id}',
-      );
-    }
     setState(() {
       _activeTab = tab;
       _homeBlockingOverlayOpen = false;
     });
-    widget.store.setShellActiveTabKey(tab.id);
     DebugConsole.log(
       '[Perf] BottomNav shell state queued from=${previous.id} to=${tab.id} '
       'elapsed=${_elapsedMs(requestedAt)}ms',
     );
-    _jumpToTabPage(tab, requestedAt);
-    if (tab == AppTab.notifications) {
-      unawaited(_openNotificationsTab(requestedAt));
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _activeTab != tab) return;
       DebugConsole.log(
@@ -451,49 +615,51 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         'elapsed=${_elapsedMs(requestedAt)}ms '
         '${_contextKeyboardTrace()}',
       );
+      _sheetHostKey.currentState?.closeAll();
+      DebugConsole.log(
+        '[Perf] BottomNav close sheets issued from=${previous.id} '
+        'to=${tab.id} elapsed=${_elapsedMs(requestedAt)}ms',
+      );
+      if (previous == AppTab.settings && tab != AppTab.settings) {
+        widget.store.setSettingsActiveMenuKey('root');
+        DebugConsole.log(
+          '[Settings] active menu reset reason=bottom_nav_leave '
+          'target=${tab.id}',
+        );
+      }
+      widget.store.setShellActiveTabKey(tab.id);
+      _jumpToTabPage(tab, requestedAt);
+      if (tab == AppTab.notifications) {
+        unawaited(_openNotificationsTab(requestedAt));
+      }
     });
   }
 
   void _jumpToTabPage(AppTab tab, DateTime requestedAt) {
     final pageIndex = appTabs.indexOf(tab);
-    if (tab == AppTab.stats) {
-      DebugConsole.log(
-        '[Perf] BottomNav page jump deferred tab=${tab.id} '
-        'reason=post-frame elapsed=${_elapsedMs(requestedAt)}ms',
+    DebugConsole.log(
+      '[Perf] BottomNav page jump deferred tab=${tab.id} '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
+    );
+    _activateRetainedPage(tab, pageIndex, requestedAt);
+  }
+
+  void _activateRetainedPage(AppTab tab, int pageIndex, DateTime requestedAt) {
+    setState(() {
+      _retainedTabPages.putIfAbsent(
+        tab,
+        () => _buildShellPage(tab, ExpenseTheme.fromSettings(_themeSettings)),
       );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _activeTab != tab || !_pageController.hasClients) {
-          return;
-        }
-        _pageController.jumpToPage(pageIndex);
-        DebugConsole.log(
-          '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
-          'deferred=true elapsed=${_elapsedMs(requestedAt)}ms',
-        );
-      });
-      return;
-    }
-    if (!_pageController.hasClients) {
-      DebugConsole.log(
-        '[Perf] BottomNav page jump deferred tab=${tab.id} '
-        'elapsed=${_elapsedMs(requestedAt)}ms',
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _activeTab != tab || !_pageController.hasClients) {
-          return;
-        }
-        _pageController.jumpToPage(pageIndex);
-        DebugConsole.log(
-          '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
-          'deferred=true elapsed=${_elapsedMs(requestedAt)}ms',
-        );
-      });
-      return;
-    }
-    _pageController.jumpToPage(pageIndex);
+      _pageActiveTab = tab;
+    });
+    _logRetainedPageJump(tab, pageIndex, requestedAt);
+  }
+
+  void _logRetainedPageJump(AppTab tab, int pageIndex, DateTime requestedAt) {
     DebugConsole.log(
       '[Perf] BottomNav page jump tab=${tab.id} index=$pageIndex '
-      'deferred=false elapsed=${_elapsedMs(requestedAt)}ms',
+      'deferred=true retained=${_retainedTabPages.length} '
+      'elapsed=${_elapsedMs(requestedAt)}ms',
     );
   }
 
@@ -509,6 +675,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   }
 
   void _handleFabPressed() {
+    if (_activeTab == AppTab.stats) {
+      DebugConsole.log('[Stats] threshold sheet inactive source=fab');
+      return;
+    }
     final requestedAt = DateTime.now();
     DebugConsole.log(
       '[SlideUpMenu] AddTransaction shell open requested source=fab',
@@ -526,9 +696,41 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     _sheetHostKey.currentState?.openRecurring();
   }
 
+  bool _normalizeSpendeeNavigationTab() {
+    if (_themeSettings.dashboardDesignMode != DashboardDesignMode.spendeeTest ||
+        _isSpendeeNavigationTab(_activeTab)) {
+      return false;
+    }
+    _activeTab = AppTab.home;
+    _pageActiveTab = AppTab.home;
+    _homeBlockingOverlayOpen = false;
+    _headerSettingsOpen = false;
+    _retainedTabPages.putIfAbsent(AppTab.home, () => _transactionHomePage);
+    return true;
+  }
+
+  bool _isSpendeeNavigationTab(AppTab tab) =>
+      tab == AppTab.home || tab == AppTab.settings;
+
   void _handleHeaderNotificationPressed() {
     DebugConsole.log('[Notification] header bell open requested');
     _selectTab(AppTab.notifications);
+  }
+
+  void _openHeaderSettings() {
+    DebugConsole.log('[Settings] header overlay open requested');
+    _sheetHostKey.currentState?.closeAll();
+    widget.store.setSettingsActiveMenuKey('root');
+    setState(() {
+      _headerSettingsOpen = true;
+      _homeBlockingOverlayOpen = false;
+    });
+  }
+
+  void _closeHeaderSettings() {
+    if (!_headerSettingsOpen) return;
+    DebugConsole.log('[Settings] header overlay close requested');
+    setState(() => _headerSettingsOpen = false);
   }
 
   void _openEditTransaction(TransactionRecord transaction) {
@@ -685,9 +887,39 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         child: ExptFab(
           primaryColor: expenseTheme.accent,
           surfaceStyle: expenseTheme.buttonSurfaceStyle,
+          icon: _activeTab == AppTab.stats ? Icons.tune_rounded : Icons.add,
           size: fabSize,
           onPressed: _handleFabPressed,
-          onLongPress: _handleFabLongPressed,
+          onLongPress: _activeTab == AppTab.stats
+              ? null
+              : _handleFabLongPressed,
+          onHorizontalDragStep: _activeTab == AppTab.stats
+              ? _statsPageController.stepSnapshot
+              : null,
+          onVerticalDragStep: null,
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildSpendeeTestShellNavigation(ExpenseTheme expenseTheme) {
+    return [
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: SpendeeTestBottomNav(
+          activeTab: _activeTab,
+          surfaceColor: expenseTheme.logBox,
+          surfaceStyle: expenseTheme.bottomNavSurfaceStyle,
+          buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
+          accentColor: expenseTheme.accent,
+          accentLightColor: expenseTheme.accentLight,
+          activeBackgroundColor: expenseTheme.activeBackground,
+          fabSize: expenseTheme.settings.fabSize.toDouble(),
+          onTabSelected: _selectTab,
+          onFabPressed: _handleFabPressed,
+          onFabLongPress: _handleFabLongPressed,
         ),
       ),
     ];
@@ -715,8 +947,16 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
           expenseTheme: expenseTheme,
           onThemeSettingsChanged: _applyThemeSettings,
           onFastInfoConfigChanged: _applyFastInfoConfig,
+          onSecuritySettingsChanged: widget.onSecuritySettingsChanged,
           onOpenTransaction: _openTransactionFromPushLog,
         );
+    }
+  }
+
+  void _refreshRetainedTabPages() {
+    final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
+    for (final tab in _retainedTabPages.keys.toList(growable: false)) {
+      _retainedTabPages[tab] = _buildShellPage(tab, expenseTheme);
     }
   }
 
@@ -724,23 +964,35 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final expenseTheme = ExpenseTheme.fromSettings(_themeSettings);
     _logThemeSurfaceOnce(expenseTheme);
-    final shellNavigation = _buildShellNavigation(expenseTheme);
+    final spendeeTestMode =
+        _themeSettings.dashboardDesignMode == DashboardDesignMode.spendeeTest;
+    final spendeeNavigationTab = _isSpendeeNavigationTab(_activeTab);
+    final shellNavigation = spendeeTestMode
+        ? _buildSpendeeTestShellNavigation(expenseTheme)
+        : _buildShellNavigation(expenseTheme);
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: expenseTheme.appBackground,
       body: Stack(
         children: [
           Positioned.fill(
-            child: PageView.builder(
+            child: Stack(
               key: const ValueKey('shell-page-stack'),
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: appTabs.length,
-              itemBuilder: (context, index) =>
-                  _buildShellPage(appTabs[index], expenseTheme),
+              fit: StackFit.expand,
+              children: [
+                for (final entry in _retainedTabPages.entries)
+                  _RetainedShellTab(
+                    key: ValueKey('retained-shell-tab-${entry.key.id}'),
+                    active: entry.key == _pageActiveTab,
+                    child: entry.value,
+                  ),
+              ],
             ),
           ),
-          if (!_homeBlockingOverlayOpen) ...shellNavigation,
+          if (!_homeBlockingOverlayOpen &&
+              !_headerSettingsOpen &&
+              (!spendeeTestMode || spendeeNavigationTab))
+            ...shellNavigation,
           DebugFloatingButton(
             bottomOffset: _rightFabDebugBottomOffset(
               _themeSettings.fabSize.toDouble(),
@@ -763,6 +1015,34 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
               onThemeSettingsChanged: _queueHomeThemeSettings,
             ),
           ),
+          if (_headerSettingsOpen)
+            Positioned.fill(
+              child: SettingsPage(
+                key: const ValueKey('header-settings-overlay'),
+                store: widget.store,
+                nativeBridge: widget.nativeBridge,
+                googleSheetsSyncController: widget.googleSheetsSyncController,
+                expenseTheme: expenseTheme,
+                onThemeSettingsChanged: _applyThemeSettings,
+                onFastInfoConfigChanged: _applyFastInfoConfig,
+                onSecuritySettingsChanged: widget.onSecuritySettingsChanged,
+                onOpenTransaction: _openTransactionFromPushLog,
+                onBackToHome: _closeHeaderSettings,
+              ),
+            ),
+          if (!_coldStartReady)
+            Positioned.fill(
+              child: ColoredBox(
+                key: const ValueKey('shell-cold-start-loading'),
+                color: expenseTheme.appBackground,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: expenseTheme.accent,
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -799,6 +1079,44 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       if (tab.id == key) return tab;
     }
     return AppTab.home;
+  }
+}
+
+class _RetainedShellTab extends StatefulWidget {
+  const _RetainedShellTab({
+    super.key,
+    required this.active,
+    required this.child,
+  });
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_RetainedShellTab> createState() => _RetainedShellTabState();
+}
+
+class _RetainedShellTabState extends State<_RetainedShellTab>
+    with AutomaticKeepAliveClientMixin<_RetainedShellTab> {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Offstage(
+      offstage: !widget.active,
+      child: TickerMode(
+        enabled: widget.active,
+        child: IgnorePointer(
+          ignoring: !widget.active,
+          child: ExcludeSemantics(
+            excluding: !widget.active,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -872,14 +1190,14 @@ class _ShellSheetHostState extends State<_ShellSheetHost> {
     _categoryPickerSlotKey.currentState?.open(request);
   }
 
-  void openVendorFilter() {
+  void openVendorFilter({TransactionType? activeType}) {
     _transactionSlotKey.currentState?.close();
     _categoryPickerSlotKey.currentState?.close();
     _categorySlotKey.currentState?.close();
     _recurringSlotKey.currentState?.close();
     _budgetSlotKey.currentState?.close();
     _backheaderTunerSlotKey.currentState?.close();
-    _vendorFilterSlotKey.currentState?.open();
+    _vendorFilterSlotKey.currentState?.open(activeType: activeType);
   }
 
   void openRecurring() {
@@ -1277,6 +1595,7 @@ class _VendorFilterSheetSlot extends StatefulWidget {
 class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
   final _scrollController = ScrollController();
   var _open = false;
+  TransactionType? _activeTypeOverride;
   Set<String> _pendingVendorFilters = const <String>{};
 
   @override
@@ -1285,10 +1604,11 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
     super.dispose();
   }
 
-  void open() {
+  void open({TransactionType? activeType}) {
     DebugConsole.clear();
     DebugConsole.log('[KeyboardFlow] VendorFilter debug cleared');
     setState(() {
+      _activeTypeOverride = activeType;
       _pendingVendorFilters = {...widget.store.activeMerchantFilters};
       _open = true;
     });
@@ -1297,7 +1617,10 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
 
   void close() {
     if (!_open) return;
-    setState(() => _open = false);
+    setState(() {
+      _open = false;
+      _activeTypeOverride = null;
+    });
     DebugConsole.log('[VendorFilter] shell closed');
   }
 
@@ -1310,6 +1633,7 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
     return ListenableBuilder(
       listenable: widget.store,
       builder: (context, _) {
+        final activeType = _activeTypeOverride ?? widget.store.activeType;
         return SlideUpMenuCard(
           cardKey: const ValueKey('vendor-filter-slide-card'),
           debugLabel: 'VendorFilter',
@@ -1327,9 +1651,9 @@ class _VendorFilterSheetSlotState extends State<_VendorFilterSheetSlot> {
             top: false,
             bottom: false,
             child: VendorFilterPanel(
-              summaries: widget.store.vendorFilterSummaries,
+              summaries: widget.store.vendorFilterSummariesFor(activeType),
               selectedVendors: _pendingVendorFilters,
-              activeType: widget.store.activeType,
+              activeType: activeType,
               scrollController: _scrollController,
               accentColor: widget.expenseTheme.accent,
               cardSurfaceColor: widget.expenseTheme.categoryCard,

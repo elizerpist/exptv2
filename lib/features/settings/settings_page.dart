@@ -10,6 +10,7 @@ import '../../state/event_store.dart';
 import 'data/settings_repository.dart';
 import 'models/app_theme_settings.dart';
 import 'models/fast_info_config.dart';
+import 'models/security_settings.dart';
 import 'theme/expense_theme.dart';
 import 'state/settings_store.dart';
 import 'widgets/notification_parser_rule_editor.dart';
@@ -58,7 +59,9 @@ class SettingsPage extends StatefulWidget {
     this.googleSheetsSyncController,
     this.onThemeSettingsChanged,
     this.onFastInfoConfigChanged,
+    this.onSecuritySettingsChanged,
     this.onOpenTransaction,
+    this.onBackToHome,
   });
 
   final EventStore store;
@@ -67,7 +70,9 @@ class SettingsPage extends StatefulWidget {
   final GoogleSheetsSyncController? googleSheetsSyncController;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
   final ValueChanged<FastInfoConfig>? onFastInfoConfigChanged;
+  final ValueChanged<SecuritySettings>? onSecuritySettingsChanged;
   final Future<void> Function(int transactionId)? onOpenTransaction;
+  final VoidCallback? onBackToHome;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -78,6 +83,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late _SettingsMenu _activeMenu;
   var _hapticFeedback = true;
   var _soundEnabled = true;
+  SecuritySettings? _lastReportedSecuritySettings;
 
   @override
   void initState() {
@@ -106,7 +112,13 @@ class _SettingsPageState extends State<SettingsPage> {
       _settingsStore.removeListener(_onStoreChanged);
       _settingsStore = SettingsStore(SettingsRepository(widget.nativeBridge));
       _settingsStore.addListener(_onStoreChanged);
+      _lastReportedSecuritySettings = null;
       _settingsStore.start();
+    }
+    if (oldWidget.onSecuritySettingsChanged !=
+        widget.onSecuritySettingsChanged) {
+      _lastReportedSecuritySettings = null;
+      _reportSecuritySettings();
     }
   }
 
@@ -118,11 +130,33 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _onStoreChanged() {
+    _reportSecuritySettings();
     if (!mounted) return;
     final storeMenu = _menuFromKey(widget.store.settingsActiveMenuKey);
     setState(() {
       _activeMenu = storeMenu;
     });
+  }
+
+  void _reportSecuritySettings() {
+    final callback = widget.onSecuritySettingsChanged;
+    if (callback == null ||
+        _settingsStore.loading ||
+        _settingsStore.error != null) {
+      return;
+    }
+    final settings = _settingsStore.securitySettings;
+    final previous = _lastReportedSecuritySettings;
+    if (previous != null && _sameSecuritySettings(previous, settings)) return;
+    _lastReportedSecuritySettings = settings;
+    callback(settings);
+  }
+
+  bool _sameSecuritySettings(SecuritySettings left, SecuritySettings right) {
+    return left.pinEnabled == right.pinEnabled &&
+        left.biometricEnabled == right.biometricEnabled &&
+        left.biometricAvailable == right.biometricAvailable &&
+        left.biometricLabel == right.biometricLabel;
   }
 
   @override
@@ -150,28 +184,43 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildRootMenu() {
+    final bottomPadding = widget.onBackToHome == null
+        ? AppDimensions.bottomNavHeight + AppDimensions.fabSize
+        : 32.0;
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          20,
-          16,
-          20,
-          AppDimensions.bottomNavHeight + AppDimensions.fabSize,
-        ),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(top: 8, bottom: 12),
-                child: Text(
-                  'Beállítások',
-                  style: TextStyle(
-                    color: AppColors.gray800,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              child: Row(
+                children: [
+                  if (widget.onBackToHome != null)
+                    IconButton(
+                      key: const ValueKey('settings-root-back'),
+                      onPressed: widget.onBackToHome,
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: AppColors.gray800,
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 48),
+                  const Expanded(
+                    child: Text(
+                      'Beállítások',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.gray800,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 48),
+                ],
               ),
             ),
             SettingsSection(
@@ -195,6 +244,14 @@ class _SettingsPageState extends State<SettingsPage> {
             SettingsSection(
               title: 'Megjelenítési beállítások',
               children: [
+                SettingsOptionItem(
+                  title: 'Dashboard design',
+                  subtitle: 'Jelenlegi vagy kísérleti Spendee főmenü',
+                  trailing: _DashboardDesignModeSelector(
+                    settings: _settingsStore.themeSettings,
+                    onChanged: _updateDashboardDesignMode,
+                  ),
+                ),
                 SettingsOptionItem(
                   title: 'Pénznem',
                   onTap: () => _open(_SettingsMenu.currency),
@@ -493,6 +550,12 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.onFastInfoConfigChanged?.call(_settingsStore.fastInfoConfig);
   }
 
+  void _updateDashboardDesignMode(DashboardDesignMode mode) {
+    _updateThemeSettings(
+      _settingsStore.themeSettings.copyWith(dashboardDesignMode: mode),
+    );
+  }
+
   void _updateThemeSettings(AppThemeSettings settings) {
     _settingsStore.updateThemeSettings(settings).then((_) {
       if (!mounted) return;
@@ -522,5 +585,52 @@ class _SettingsPageState extends State<SettingsPage> {
       if (menu.name == key) return menu;
     }
     return _SettingsMenu.root;
+  }
+}
+
+class _DashboardDesignModeSelector extends StatelessWidget {
+  const _DashboardDesignModeSelector({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  final AppThemeSettings settings;
+  final ValueChanged<DashboardDesignMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<DashboardDesignMode>(
+      segments: const [
+        ButtonSegment<DashboardDesignMode>(
+          value: DashboardDesignMode.current,
+          label: Text(
+            'Jelenlegi',
+            key: ValueKey('settings-dashboard-design-current'),
+          ),
+        ),
+        ButtonSegment<DashboardDesignMode>(
+          value: DashboardDesignMode.spendeeTest,
+          label: Text(
+            'Új',
+            key: ValueKey('settings-dashboard-design-spendee-test'),
+          ),
+        ),
+      ],
+      selected: {settings.dashboardDesignMode},
+      showSelectedIcon: false,
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: WidgetStateProperty.all(
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+      ),
+      onSelectionChanged: (selection) {
+        if (selection.isEmpty) return;
+        final selected = selection.first;
+        if (selected == settings.dashboardDesignMode) return;
+        onChanged(selected);
+      },
+    );
   }
 }
