@@ -29,29 +29,29 @@
 - Consumes: `docs/prototypes/pulse_engine_panel_mockup.html` UTF-8 tartalma.
 - Produces: sikeres Node-futtatás, ha a kiemelt látható angol feliratok nem maradnak a prototípusban és a PNG-flowchart még be van kötve.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 assert.doesNotMatch(html, />[^<]*(?:selected|suppressed|priority)[^<]*</i);
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node docs/prototypes/pulse_hungarian_copy_test.js`
 
 Expected: `AssertionError`, mert a jelenlegi látható feliratok angol szavakat tartalmaznak.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Fordítsd le a statikus és dinamikus embernek szóló szövegeket, majd egészítsd ki a tesztet a kulcsfontosságú chip- és állapotfeliratokkal.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node docs/prototypes/pulse_hungarian_copy_test.js`
 
 Expected: `pulse_hungarian_copy_test: PASS`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/prototypes/pulse_hungarian_copy_test.js docs/prototypes/pulse_engine_panel_mockup.html
@@ -71,29 +71,36 @@ git commit -m "feat: translate Pulse panel copy to Hungarian"
 - Consumes: Task 1 fordítási szerződése és a meglévő Pulse tesztek.
 - Produces: teljesen magyar, továbbra is működő Pulse prototípus.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 assert.doesNotMatch(dynamicCopy, /\\b(?:ready|waiting|source|story|evidence|confidence)\\b/i);
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node docs/prototypes/pulse_hungarian_copy_test.js`
 
 Expected: `AssertionError`, mert a JavaScript-forgatókönyvek még angol látható szöveget tartalmaznak.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Fordítsd le a teljes statikus és dinamikus felületet; hagyd meg a kódazonosítókat, HF-azonosítókat, számokat, a `Pulse` nevet és az alsó PNG-t.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node docs/prototypes/pulse_hungarian_copy_test.js && node docs/prototypes/pulse_plain_language_png_flowchart_test.js && node docs/prototypes/pulse_semantic_flowchart_test.js && node docs/prototypes/pulse_engine_decision_trace_test.js && node docs/prototypes/pulse_engine_panel_group_rail_test.js`
 
 Expected: minden teszt `PASS`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
+
+## Végrehajtási eredmény
+
+- A hibázó teszt a korábbi „User score” feliratot találta meg; ez igazolta a fordítási hiányt.
+- A teljes aktív felület közvetlenül magyar szöveget kapott. A belső állapot- és csoportkódok csak a programban maradtak angolok; megjelenítéskor magyar feliratot kapnak.
+- A már rejtett, sehová nem kötött régi felület kikerült a fájlból, ezért nem maradt benne félrefordított duplikátum.
+- Végső ellenőrzés: 5 Node teszt zöld, a beágyazott JavaScript elemezhető, a HTML és a PNG HTTP 200 választ ad.
 
 ```bash
 git add docs/prototypes/pulse_engine_panel_mockup.html docs/prototypes/pulse_hungarian_copy_test.js docs/superpowers/checklists/2026-07-23-pulse-teljes-magyar-feliratok.md
