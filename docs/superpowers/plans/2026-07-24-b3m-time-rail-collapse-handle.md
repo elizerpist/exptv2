@@ -34,4 +34,4 @@
 
 - [x] Run the focused contract, permanent-rail, geometry, Balance, Budget, Budget 3D, Mind, annual Mind and inline-script syntax regressions.
 - [x] Run `git diff --check`, audit checklist status and staged scope.
-- [ ] Commit the in-scope files and push branch `spendeetest`.
+- [x] Commit the in-scope files and push branch `spendeetest`.
