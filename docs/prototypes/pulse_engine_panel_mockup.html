@@ -1464,7 +1464,7 @@
           </div>
           <div class="semantic-flow-node">
             <strong>A jel leírása</strong>
-            <p>jel azonosítója · érintett terület · zóna · irány · erősség · adatbiztonság · változás · állapot-azonosító.</p>
+            <p>jel azonosítója · érintett terület · zóna · irány · erősség · számolhatóság · változás · állapot-azonosító.</p>
           </div>
           <div class="semantic-flow-node">
             <strong>Mi változott?</strong>
@@ -1487,9 +1487,16 @@
               <p>A későbbre halasztott HF-008 és a csak a motorhoz tartozó HF-015–HF-019 nem ír üzenetet; ezek a rendszer szabályai és ellenőrző ágai.</p>
               <div class="tagrow"><span class="tag bad">nincs üzenetszöveg</span><span class="tag">nincs pontszám</span></div>
             </article>
+            <article class="semantic-flow-branch go" data-flow-branch="input-check">
+              <strong>Adatellenőrzés a pontszám előtt</strong>
+              <p>Hiányzó összeg vagy dátum: az érintett jel várakozik, pontszám nélkül.</p>
+              <p>Hiányzó kategória csak a kategóriaalapú HF-002, HF-012 és HF-020 jeleket állítja meg; a teljes költés és pénzáramlás tovább számolható.</p>
+              <p>A várt, de meg nem érkezett bevétel nem adathiba: a HF-007 saját szabály szerint számolható.</p>
+              <div class="tagrow"><span class="tag good">hatókörhöz kötött</span><span class="tag warn">nincs általános levonás</span></div>
+            </article>
             <article class="semantic-flow-branch wait" data-flow-branch="wait-no-score">
               <strong>Várakozik, pontszám nélkül</strong>
-              <p>Elavult, elnémított, már megmutatott vagy elutasított azonos helyzet, bizonytalan adat, adatérkezési késés vagy még nem teljesült csoporthatár.</p>
+              <p>Elavult, elnémított, már megmutatott vagy elutasított azonos helyzet, hiányzó szükséges bemenet, adatérkezési késés vagy még nem teljesült csoporthatár.</p>
               <div class="tagrow"><span class="tag warn">még vár</span><span class="tag">később újraszámol</span></div>
             </article>
           </div>
@@ -1530,7 +1537,7 @@
             </div>
           </div>
           <div class="semantic-flow-formula" data-flow-formula>
-            <code>pontszám = fő jel alapértéke + pénzben nagy eltérés +15 + 3 napon belüli esedékesség +10 + kapcsolódó jel +10 − bizonytalan adat −20 − nemrég elutasított −30</code>
+            <code>pontszám = fő jel alapértéke + pénzben nagy eltérés +15 + 3 napon belüli esedékesség +10 + kapcsolódó jel +10 − nemrég elutasított −30</code>
           </div>
           <div class="semantic-flow-node">
             <strong>A pontszám önmagában nem elég</strong>
@@ -1721,7 +1728,7 @@
             </div>
             <div class="flow-step">
               <strong>3. Észlelt jelek</strong>
-              <p>Zóna, irány, erősség, adatbiztonság, változás és állapot-azonosító.</p>
+              <p>Zóna, irány, erősség, számolhatóság, változás és állapot-azonosító.</p>
               <div class="tagrow"><span class="tag bad">jelzést indít</span><span class="tag good">javulás</span></div>
             </div>
             <div class="flow-step">
@@ -1779,7 +1786,7 @@
             <div class="signal-row" data-group-summary="data-quality" role="button" tabindex="0" aria-controls="group-data-quality">
               <div>
                 <strong>Adatpontosság</strong>
-                <p>A kategorizálatlan tételek kevésbé pontossá tehetik a kategória-előrejelzést.</p>
+                <p>A kategorizálatlan tételek csak a kategóriaalapú előrejelzéseket állítják várakozásra.</p>
                 <div class="tagrow"><span class="tag info">1 jel</span><span class="tag">késleltetett</span></div>
               </div>
               <div class="user-defined">
@@ -1812,8 +1819,8 @@
           <p>Az adatváltozás vagy az alkalmazás újbóli megnyitása friss számítást indít.</p>
         </section>
         <section class="trace-stage" data-trace-stage="eligibility">
-          <h3>2. Versenybe kerülhet-e?</h3>
-          <p>Csak a friss, nem elnémított, valóban megváltozott és kellően megbízható jel versenyezhet.</p>
+          <h3>2. Adatellenőrzés és verseny</h3>
+          <p>Előbb a szükséges bemeneteket ellenőrzi. Csak ezután versenyezhet a friss, nem elnémított és valóban megváltozott jel.</p>
         </section>
         <section class="trace-stage" data-trace-stage="formation">
           <h3>3. Helyzet összeállítása</h3>
@@ -1926,7 +1933,7 @@
         </section>
         <section class="card dossier-section" data-dossier-section="triggers">
           <div class="group-panel-head">
-            <div><h2>Adatpontosságot jelző események</h2><p>Ez nem pénzügyi riasztás: azt mutatja, amikor a hiányos adat rontja az előrejelzések megbízhatóságát.</p></div>
+            <div><h2>Adatpontosságot jelző események</h2><p>Ez nem pénzügyi riasztás: megmutatja, ha a hiányzó kategória csak a kategóriaalapú számításokat állítja várakozásra.</p></div>
             <span class="tag info">1 késleltetett jel</span>
           </div>
           <div class="trigger-grid" data-group-trigger-grid>
@@ -1975,6 +1982,9 @@
           event: "Egy tranzakció megváltozott, miközben az alkalmazás nyitva van",
           background: "A háttérben az állapot frissül, de a felső üzenet a megnyitásig vár."
         },
+        inputChecks: [
+          { status: "számolható", scope: "A kiválasztott keret- és pénzáramlási helyzet", reason: "Az érintett tételek összege, dátuma és a szükséges kategóriaalapú alátámasztás megvan." }
+        ],
         signals: [
           { id: "HF-001", state: "eligible", group: "budget", reason: "A hó végi előrejelzés keret fölé ment, ez új helyzet." },
           { id: "HF-002", state: "eligible", group: "budget", reason: "Az ételkategória súlyos zónában van; ugyanahhoz a hó végi helyzethez tartozik." },
@@ -2038,6 +2048,9 @@
           event: "Az alkalmazás megnyílt a bevétel megérkezése után",
           background: "Egy megoldódott fontos kockázat csak új, érdemi változásként jelezhet egyszer javulást."
         },
+        inputChecks: [
+          { status: "számolható", scope: "A javuló helyzet", reason: "A bevétel megérkezése tényleges változás; az érintett összegek és dátumok megvannak." }
+        ],
         signals: [
           { id: "HF-001", state: "resolved", group: "budget", reason: "Az előrejelzés visszajött a keret alá." },
           { id: "HF-007", state: "eligible", group: "cashflow", reason: "Megérkezett a várt bevétel; valódi változás történt." },
@@ -2074,16 +2087,20 @@
       data: {
         phone: {
           pulse: "Találtam 3 kategorizálatlan tételt.",
-          detail: "A kategória-előrejelzés emiatt kevésbé pontos, de ez nem sürgős pénzügyi figyelmeztetés.",
+          detail: "A teljes költés és pénzáramlás számolható; csak a kategóriaalapú előrejelzések várakoznak.",
           title: "Adatpontossági helyzet"
         },
         recalculation: {
           event: "Késleltetett alkalmazásállapot-ellenőrzés",
           background: "A háttérben a csoportosított állapot frissül; a felső üzenet csak nyitott alkalmazásban jelenik meg."
         },
+        inputChecks: [
+          { status: "számolható", scope: "Teljes költés és pénzáramlás", reason: "Mindhárom tétel összege és dátuma megvan; a kategória hiánya ezt nem érinti." },
+          { status: "várakozik, pontszám nélkül", scope: "Kategóriaalapú jelek: HF-002, HF-012, HF-020", reason: "Három tételnek nincs kategóriája. Csak ezek állnak meg; a HF-021 külön magyarázó jel." }
+        ],
         signals: [
-          { id: "HF-021", state: "eligible", group: "data-quality", reason: "Teljesült a 12 órás késleltetés és a csoporthatár." },
-          { id: "HF-014", state: "waiting", group: "budget", reason: "Egy nem kapcsolódó pontszámváltozás nem erősítheti ezt a helyzetet." }
+          { id: "HF-021", state: "eligible", group: "data-quality", reason: "Teljesült a 12 órás késleltetés és a csoporthatár; nem von le pontot pénzügyi jelből." },
+          { id: "HF-002", state: "waiting", group: "budget", reason: "Három tételnek nincs kategóriája, ezért a havi kategórialimit nem kap pontszámot." }
         ],
         candidates: [
           {
@@ -2092,10 +2109,10 @@
             status: "selected",
             dominant: "HF-021",
             base: 35,
-            baseLabel: "Kategorizálatlan tételek állapota",
+            baseLabel: "Önálló, csoportosított adatpontossági jel",
             modifiers: [],
-            evidence: "Késleltetett, csoportosított alkalmazásállapot-jel",
-            outcome: "Csak azért lett kiválasztva, mert nincs erősebb kész pénzügyi helyzet."
+            evidence: "Három kategóriahiány a HF-002, HF-012 és HF-020 jelet állítja meg; a teljes költés és pénzáramlás ettől még számolható.",
+            outcome: "Saját, 35 pontos magyarázó jelként lett kiválasztva; egyetlen pénzügyi jel pontszámából sem von le."
           }
         ],
         lifecycle: [
@@ -2108,10 +2125,10 @@
         ],
         copy: [
           { slot: "Fő mondat", source: "HF-021", text: "Találtam 3 kategorizálatlan tételt." },
-          { slot: "Óvatos megfogalmazás", source: "HF-021", text: "A kategória-előrejelzés emiatt kevésbé pontos." }
+          { slot: "Óvatos megfogalmazás", source: "HF-021", text: "A teljes költés számolható, de a kategóriaalapú előrejelzések most várakoznak." }
         ],
         omitted: [
-          { id: "HF-014", reason: "Nem kapcsolódó jel; nem erősítheti az adatpontossági helyzetet." }
+          { id: "HF-002", reason: "A hiányzó kategória miatt várakozik, ezért nem kap pontszámot és nem lehet ennek a helyzetnek az alátámasztása." }
         ]
       }
     };
@@ -2137,7 +2154,7 @@
       "HF-018": { group: "engine", role: "nincs", mode: "engine-only", reason: "A felső üzenet megjelenésének magyarázata." },
       "HF-019": { group: "engine", role: "nincs", mode: "engine-only", reason: "A felület magyarázata." },
       "HF-020": { group: "budget", role: "alátámasztás", mode: "support", reason: "Éves kerethez tartozó háttér." },
-      "HF-021": { group: "data-quality", role: "óvatos megfogalmazás", mode: "can-lead", reason: "Saját adatpontossági helyzet vagy a pénzügyi előrejelzés bizonytalanságának jelzése." }
+      "HF-021": { group: "data-quality", role: "óvatos megfogalmazás", mode: "can-lead", reason: "Saját adatpontossági helyzet; nem von le pontot pénzügyi jelből." }
     };
 
     const magyarAllapot = {
@@ -2249,6 +2266,11 @@
       return '<article class="trace-candidate">' + traceSourceControl(signal.id, '<div class="trigger-top"><span class="tag ' + traceTone(signal.state) + '">' + allapotFelirat(signal.state) + '</span></div><strong>' + csoportFelirat(signal.group) + '</strong><p>' + signal.reason + '</p>') + '</article>';
     }
 
+    function traceInputCheck(check) {
+      const tone = check.status === "számolható" ? "good" : "warn";
+      return '<article class="trace-candidate"><div class="trigger-top"><span class="tag ' + tone + '">' + check.status + '</span></div><strong>' + check.scope + '</strong><p>' + check.reason + '</p></article>';
+    }
+
     function traceCandidate(candidate) {
       const score = calculatePriority(candidate);
       const modifiers = candidate.modifiers.length
@@ -2263,7 +2285,7 @@
       const stage = (name) => document.querySelector('[data-trace-stage="' + name + '"]');
 
       stage("recalculation").innerHTML = '<h3>1. Újraszámítás</h3><div class="trace-stage-grid"><article class="trace-candidate"><strong>Esemény</strong><p>' + scenario.recalculation.event + '</p></article><article class="trace-candidate"><strong>Nyitott vagy bezárt alkalmazás</strong><p>' + scenario.recalculation.background + '</p></article></div>';
-      stage("eligibility").innerHTML = '<h3>2. Versenybe kerülhet-e?</h3><p>Előbb ez dől el: a várakozó, elavult, elnémított vagy változatlan jel pontszámot sem kap.</p><div class="trace-source-list">' + scenario.signals.map(traceSignal).join("") + '</div>';
+      stage("eligibility").innerHTML = '<h3>2. Adatellenőrzés és verseny</h3><p>Előbb a szükséges bemenetek számolhatósága dől el. A várakozó, elavult, elnémított vagy változatlan jel pontszámot sem kap; a hiányzó kategória csak a saját kategóriaalapú jelét állítja meg.</p><div class="trace-candidate-list">' + scenario.inputChecks.map(traceInputCheck).join("") + '</div><div class="trace-source-list">' + scenario.signals.map(traceSignal).join("") + '</div>';
       stage("formation").innerHTML = '<h3>3. Helyzet összeállítása</h3><p>Csak egymáshoz tartozó alátámasztó jelek épülnek közös helyzetté; nem kapcsolódó jel nem adódik hozzá.</p><div class="trace-candidate-list">' + scenario.candidates.map((candidate) => '<article class="trace-candidate">' + traceSourceControl(candidate.dominant, '<div class="trigger-top"><span class="tag ' + traceTone(candidate.status) + '">' + allapotFelirat(candidate.status) + '</span></div><strong>' + candidate.title + '</strong><p>' + candidate.evidence + '</p>') + '</article>').join("") + '</div>';
       stage("priority").innerHTML = '<h3>4. Fontosság számítása</h3><p>A fő, versenyző jel alapértékére csak a megnevezett helyzetmódosító kerül. A rokon jelek alapértéke nem adódik össze automatikusan.</p><div class="trace-candidate-list">' + scenario.candidates.map(traceCandidate).join("") + '</div>';
       stage("delivery").innerHTML = '<h3>5. Megjelenés és ismétlés</h3><p><b>' + selected.title + '</b> lett kiválasztva, mert a fontossága ' + calculatePriority(selected) + ' / 100. A gyengébb helyzet nem várólistára kerül, hanem a következő újraszámításkor újra versenyez.</p><div class="trace-source-list">' + traceSourceControl(selected.dominant, '<strong>A kiválasztott felső üzenet jele</strong><p>' + selected.outcome + '</p>') + '</div><div class="trace-lifecycle">' + scenario.lifecycle.map((entry) => '<span class="tag ' + traceTone(entry.state) + '" title="' + entry.reason + '">' + allapotFelirat(entry.state) + '</span>').join("") + '</div>';
@@ -2323,7 +2345,7 @@
           ["Kiinduló adatok", "Változó költés, havi és éves keretek, hátralévő napok, kategóriák és a pontszám alakulása."],
           ["Számítás", "Költési ütem, előrejelzett arány, napi költési keret, heti lehetőség és gördülő 30 napos változás."],
           ["Kiváltó esemény", "Csak zónaváltás, pénzben érdemi eltérés vagy valódi javulás után kerülhet versenybe."],
-          ["Adatbiztonság", "A hónap eleje, kevés adat vagy kategorizálatlan tétel csökkenti az előrejelzés megbízhatóságát."]
+          ["Adatellenőrzés", "Hiányzó összeg vagy dátum csak az érintett jelet várakoztatja. Hiányzó kategória csak a HF-002, HF-012 és HF-020 jelet állítja meg; a teljes költés és pénzáramlás tovább számolható."]
         ],
         forecasts: [
           ["Hó végi kiadási előrejelzés", "HF-001 · változó költési ütem + fix tételek", "keret fölött", "bad", "line", "A változó ütemet a már aktivált és hátralévő fix terhek egészítik ki."],
@@ -2333,17 +2355,17 @@
         ],
         triggers: {
           "HF-001": ["Hó végi kiadási előrejelzés", "budget_pressure", "A becsült hó végi kiadás keret fölé lép, rosszabb zónába kerül, vagy érdemben visszajön a keret alá.", "változó költési ütem + már aktivált vagy várakozó fix kiadások", "keret fölötti előrejelzés", "normál → rosszabb", "line", "Előrejelzés kiinduló értéke", "Érzékenység", 1, 10, 6, "/10"],
-          "HF-002": ["Havi kategórialimit fogyása", "budget_pressure", "Egy havi kategóriakeret előrejelzése figyelmeztető, súlyos vagy túllépett zónába lép.", "előrejelzett kategóriaköltés / havi keret", "étel: súlyos", "figyelmeztető → súlyos", "bars", "Kategóriahatár", "Figyelmeztetés ettől", 60, 95, 75, "%"],
+          "HF-002": ["Havi kategórialimit fogyása", "budget_pressure", "Egy havi kategóriakeret előrejelzése figyelmeztető, súlyos vagy túllépett zónába lép. Hiányzó kategóriánál várakozik, és nem kap pontszámot.", "előrejelzett kategóriaköltés / havi keret", "étel: súlyos", "figyelmeztető → súlyos", "bars", "Kategóriahatár", "Figyelmeztetés ettől", 60, 95, 75, "%"],
           "HF-003": ["Napi biztonságos költés", "budget_pressure", "Csak érdemi napi költési határváltáskor jelez, vagy egy erősebb keret- vagy pénzáramlási helyzet magyarázó része.", "hátralévő havi keret / hátralévő napok", "540 Ft / nap", "segítő zóna megváltozott", "gauge", "Napi költési szabály", "Legkisebb esés", 5, 50, 20, "%"],
           "HF-004": ["Heti költési ütem", "budget_pressure", "A heti változó költés érdemben gyorsabb vagy lassabb az aktuális hónap napjaiból számolt heti lehetőségnél.", "havi keret / az aktuális hónap napjai × 7", "gyorsabb az ütemnél", "normál → figyelmeztető", "line", "Heti érzékenység", "Ütemkülönbség", 5, 40, 15, "%"],
-          "HF-012": ["Legnagyobb kategóriaugrás", "behavior_shift", "Egy változó kategória gördülő 30 napban legalább 10 000 Ft és 30% változást mutat, vagy új kategóriaként pénzben érdemi.", "aktuális kategória 30 napja − előző kategória 30 napja", "étel +24%", "stabil → kiugró", "bars", "Kategória pénzügyi jelentősége", "Legkisebb összeg", 5000, 30000, 10000, " Ft"],
+          "HF-012": ["Legnagyobb kategóriaugrás", "behavior_shift", "Egy változó kategória gördülő 30 napban legalább 10 000 Ft és 30% változást mutat, vagy új kategóriaként pénzben érdemi. Hiányzó kategóriánál várakozik, és nem kap pontszámot.", "aktuális kategória 30 napja − előző kategória 30 napja", "étel +24%", "stabil → kiugró", "bars", "Kategória pénzügyi jelentősége", "Legkisebb összeg", 5000, 30000, 10000, " Ft"],
           "HF-013": ["Teljes költési trend 30 nap", "behavior_shift", "A teljes gördülő 30 napos változó költés legalább ±15% és ±10 000 Ft mértékben romlik vagy javul.", "aktuális változó költés 30 napja − előző változó költés 30 napja", "gördülő +17%", "normál → rosszabb", "wave", "Trend pénzügyi jelentősége", "Legkisebb arány", 5, 35, 15, "%"],
           "HF-014": ["Pontszám iránya", "behavior_shift", "A meglévő pontszám legalább nyolc pontot mozdul, vagy piros, sárga vagy zöld zónát vált.", "csak a meglévő pontszám; nem számol újat", "60 → 52", "zöld → sárga", "line", "Pontszám mozgása", "Legkisebb mozgás", 4, 15, 8, " pont"],
           "HF-015": ["Erősebb zóna felülírja a régit", "budget_pressure", "Egy keretnél csak a legerősebb aktuális zóna aktív; a 90 felülírja a korábbi 75-öt.", "normál → figyelmeztető → súlyos → túllépett", "90%", "figyelmeztető → súlyos", "steps", "Felülírás szigorúsága", "Szigor", 1, 10, 8, "/10"],
-          "HF-020": ["Éves kategórialimit fogyása", "budget_pressure", "Az éves kategóriakeret az éves költési ütem alapján figyelmeztető, súlyos vagy túllépett irányba megy.", "év elejétől költött összeg / éves ütem", "utazás: figyel", "normál → figyelmeztető", "line", "Éves időszak", "Érzékenység", 1, 10, 6, "/10"]
+          "HF-020": ["Éves kategórialimit fogyása", "budget_pressure", "Az éves kategóriakeret az éves költési ütem alapján figyelmeztető, súlyos vagy túllépett irányba megy. Hiányzó kategóriánál várakozik, és nem kap pontszámot.", "év elejétől költött összeg / éves ütem", "utazás: figyel", "normál → figyelmeztető", "line", "Éves időszak", "Érzékenység", 1, 10, 6, "/10"]
         },
         story: ["Kerethelyzet útja", "A rokon keret-, ütem- és költésváltozási jelek egy helyzetté állhatnak össze. Egy súlyos jel önmagában elég; két kapcsolódó közepes jel is elérheti az alátámasztáshoz szükséges szintet.", "Példa", "Hó végi előrejelzés + heti ütem + kategóriaugrás → a hónap vége szoros lehet.", "Állapot útja", "A régi 75%-os állapot felülíródik, ha már a 90% az aktuális igazság."],
-        tuning: ["Keretcsoport beállítása", "A csoport fontossága, legalacsonyabb adatbiztonsága és a pozitív vagy javuló helyzetek láthatósága itt állítható.", "Csoport fontossága", "Fontosság", 30, 120, 92, ""]
+        tuning: ["Keretcsoport beállítása", "A csoport fontossága, az adatellenőrzés szabálya és a pozitív vagy javuló helyzetek láthatósága itt állítható.", "Csoport fontossága", "Fontosság", 30, 120, 92, ""]
       },
       cashflow: {
         title: "Pénzáramlási nyomás",
@@ -2352,7 +2374,7 @@
           ["Kiinduló adatok", "Aktuális egyenleg, várt bevételek, ismétlődő várható tételek, fix terhek, megtakarítási cél és havi bevétel–kiadás."],
           ["Számítás", "Fix kiadások, a következő hét esedékessége, hiányzó várt bevétel, arány, megtakarítási előrejelzés és tartaléknapok."],
           ["Kiváltó esemény", "Az esedékes vagy lejárt események, zónaváltások és pénzben érdemi mozgások magasabb fontosságot kaphatnak."],
-          ["Adatbiztonság", "Hiányzó bevételi kiindulópontnál nincs pánikjel; az előrejelzés bizonytalansága látható marad."]
+          ["Adatellenőrzés", "A várt, de meg nem érkezett bevétel nem adathiba: a HF-007 ezt a tényt számolja. Hiányzó összeg vagy dátum csak az érintett jelét várakoztatja."]
         ],
         forecasts: [
           ["Várt bevétel és fix kiadások", "HF-005 · HF-006 · HF-007", "42 ezer Ft vár", "violet", "bars", "A fix terhek, a közeli esedékesség és a hiányzó várt bevétel ugyanabban a pénzáramlási helyzetben találkozhat."],
@@ -2373,20 +2395,20 @@
       },
       "data-quality": {
         title: "Adatpontosság",
-        tag: "megbízhatóság + késleltetett jelzés",
+        tag: "adatellenőrzés + késleltetett jelzés",
         manual: [
-          ["Kiinduló adatok", "Kategorizálatlan tranzakciók száma, összege, kora és az érintett előrejelzések."],
-          ["Számítás", "A motor egy csoportos alkalmazásállapot-jelet képez, nem minden új tételhez küld külön Pulse-üzenetet."],
-          ["Kiváltó esemény", "Késleltetés és darabszám- vagy pénzösszeghatár után kerülhet versenybe; azonnal nem zavarja meg a pénzügyi helyzeteket."],
-          ["Adatbiztonság", "A kategória- és összesítő előrejelzések megbízhatóságára gyakorolt hatás látható, nem rejtett."]
+          ["Kiinduló adatok", "Kategorizálatlan tranzakciók száma, összege, kora, valamint az érintett kategóriaalapú jelek."],
+          ["Számítás", "A motor egy csoportos alkalmazásállapot-jelet képez, nem minden új tételhez küld külön Pulse-üzenetet. A teljes költés és pénzáramlás ettől még számolható."],
+          ["Kiváltó esemény", "Késleltetés és darabszám- vagy pénzösszeghatár után kerülhet versenybe. A HF-021 saját jel, nem von le pontot pénzügyi helyzetből."],
+          ["Adatellenőrzés", "Ha az összeg vagy dátum hiányzik, az érintett számítás várakozik. Ha csak a kategória hiányzik, kizárólag a HF-002, HF-012 és HF-020 várakozik."]
         ],
         forecasts: [
-          ["Adatpontosság állapota", "HF-021 · késleltetett, csoportosított alkalmazásállapot", "3 ismeretlen", "info", "bars", "A grafikon nem pénzügyi előrejelzés: azt mutatja, hány hiányos adat bizonytalanítja el a többi számítást."]
+          ["Adatpontosság állapota", "HF-021 · késleltetett, csoportosított alkalmazásállapot", "3 ismeretlen", "info", "bars", "A grafikon azt mutatja, hány tétel kategóriája hiányzik, ezért mely kategóriaalapú jelek várakoznak. Nem csökkenti a teljes pénzügyi pontszámot."]
         ],
         triggers: {
-          "HF-021": ["Kategorizálatlan tételek állapota", "data_quality", "Kategorizálatlan tételek rontják a kategória- vagy összesítő előrejelzés megbízhatóságát; késleltetve és csoportosítva jelez.", "darabszám + választható összeg + legrégebbi tétel", "3 ismeretlen", "várakozik → versenybe kerül", "bars", "Adatvisszajelzés késleltetése", "Késleltetés", 1, 48, 12, " óra"]
+          "HF-021": ["Kategorizálatlan tételek állapota", "data_quality", "A kategorizálatlan tételek csak a HF-002, HF-012 és HF-020 jelet állítják várakozásra. A HF-021 késleltetve, saját magyarázó jelként jelenhet meg; nem von le pontot más jelből.", "darabszám + kategorizálatlan összeg + legrégebbi tétel", "3 ismeretlen", "várakozik → versenybe kerül", "bars", "Adatvisszajelzés késleltetése", "Késleltetés", 1, 48, 12, " óra"]
         },
-        story: ["Adatpontossági helyzet útja", "Az adatpontossági jel a felületen még alakuló vagy várakozó állapotban látszik. Csak akkor jut felső üzenethez, ha hasznos magyarázatot ad vagy elég erős, csoportosított alkalmazásállapot.", "Példa", "Három kategorizálatlan tétel → az ételkategória előrejelzése kevésbé pontos, de ez nem sürgős pénzügyi figyelmeztetés.", "Állapot útja", "Kategorizáláskor a jel megoldódik; ugyanaz a helyzet nem ismétlődik feleslegesen."],
+        story: ["Adatpontossági helyzet útja", "Az adatpontossági jel a felületen még alakuló vagy várakozó állapotban látszik. Nem bünteti a pénzügyi helyzeteket: csak megmutatja, hogy mely kategóriaalapú számítások nem kaphatnak pontszámot.", "Példa", "Három kategorizálatlan tétel → a teljes költés számolható, a HF-002, HF-012 és HF-020 várakozik; a HF-021 ezt magyarázza.", "Állapot útja", "Kategorizáláskor a jel megoldódik; ugyanaz a helyzet nem ismétlődik feleslegesen."],
         tuning: ["Adatpontosság beállítása", "A késleltetés, a legkisebb tételszám és a felső üzenetbe engedés szabályozható.", "Csoport késleltetése", "Késleltetés", 1, 48, 12, " óra"]
       }
     };

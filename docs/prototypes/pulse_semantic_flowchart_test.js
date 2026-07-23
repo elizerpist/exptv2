@@ -44,7 +44,13 @@ assert.match(html, /fő jel alapértéke/, "a fő jel alapértékének magyaráz
 assert.match(html, /pénzben nagy eltérés \+15/, "a pénzben nagy eltérés módosítója kötelező");
 assert.match(html, /3 napon belüli esedékesség \+10/, "a közeli esedékesség módosítója kötelező");
 assert.match(html, /kapcsolódó jel \+10/, "a kapcsolódó jel módosítója kötelező");
-assert.match(html, /bizonytalan adat −20/, "a bizonytalan adat levonása kötelező");
+assert.equal(/bizonytalan adat/i.test(html), false, "a homályos adatminőségi fogalom nem maradhat");
+assert.match(html, /Adatellenőrzés a pontszám előtt/, "az adatellenőrzésnek a pontozás előtt kell állnia");
+assert.match(
+  html,
+  /Hiányzó kategória csak a kategóriaalapú HF-002, HF-012 és HF-020 jeleket állítja meg/,
+  "a kategóriahiány csak a saját hatókörében állíthat meg jelet",
+);
 assert.match(html, /nemrég elutasított −30/, "a nemrég elutasított levonása kötelező");
 assert.match(html, /pontszám = fő jel alapértéke/, "a pontszám képlete látható legyen");
 assert.match(
