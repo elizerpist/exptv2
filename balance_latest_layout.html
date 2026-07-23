@@ -22,18 +22,18 @@
           title: 'Mai költés',
           motherValue: '-12 400 Ft',
           motherMeta: '4 tranzakció ma',
-          childName: 'Napi változó keret',
-          childMeta: 'Mai költésből csak a változó rész',
+          childName: 'Mára még elkölthető',
+          childMeta: 'Fix tételek kizárva',
           childValue: '6 500 Ft',
           icon: 'shopping-cart.svg',
           visual: 'threshold',
           facts: [
-            { text: 'Változó költés: 8 900 Ft', tone: 'expense' },
-            { text: 'Napi átlag jel: 10 100 Ft' },
-            { text: 'Összes mai tranzakció: 4 db' },
+            { text: 'Ma elköltve: 8 900 Ft', tone: 'expense' },
+            { text: '30 napos napi átlag: 10 100 Ft' },
+            { text: 'Mai kiadási tételek: 4 db' },
           ],
-          visualTitle: 'Napi költési küszöb',
-          visualRange: 'napi keret és átlagjel',
+          visualTitle: 'Mai költés a kerethez képest',
+          visualRange: 'Keret: 15 400 Ft',
           axisStart: '0 Ft',
           axisEnd: 'keret',
         },
@@ -81,21 +81,19 @@
         },
         {
           id: 'koltesi_trend',
-          title: '30 napos trend',
+          title: '30 napos ritmus',
           motherValue: '+18%',
-          motherMeta: 'fixek nélkül',
-          childName: 'Két 30 nap eltérése',
-          childMeta: 'Változó költés összehasonlítása',
-          childValue: '+29 200 Ft',
+          motherMeta: 'Ezt megelőző 30 naphoz képest',
+          childName: '30 napos összevetés',
+          childMeta: 'Csak az eltérés iránya',
+          childValue: '+18% ↑',
           icon: 'chart-candlestick.svg',
           visual: 'zone-meter',
           facts: [
-            { text: 'Jelenlegi 30 nap: 191 200 Ft', tone: 'expense' },
-            { text: 'Előző 30 nap: 162 000 Ft' },
-            { text: 'Fix tételek kizárva' },
+            { text: '18% eltérés az ezt megelőző 30 naphoz képest', tone: 'expense' },
           ],
           visualTitle: 'Eltérés zónája',
-          visualRange: 'korábbi 30 naphoz képest',
+          visualRange: 'ezt megelőző 30 naphoz képest',
           axisStart: 'kevesebb',
           axisEnd: 'több',
         },
@@ -178,16 +176,15 @@
           id: 'no_spend_napok_szama',
           title: 'No-spend napok',
           motherValue: '3 / 7 nap',
-          motherMeta: 'változó költés nélkül',
+          motherMeta: 'Elmúlt 7 nap',
           childName: 'Költésmentes ritmus',
-          childMeta: '0 Ft változó kiadás egy napon',
+          childMeta: '0 Ft költés egy napon',
           childValue: '9 nap',
           icon: 'coffee.svg',
           visual: 'seven-day-strip',
           facts: [
             { text: 'Utolsó 7 nap: 3 költésmentes' },
             { text: 'Arány az eltelt hónapban: 43%' },
-            { text: 'Fix tétel nem szakítja meg' },
           ],
           visualTitle: 'Utolsó 7 nap',
           visualRange: 'ma kék jelöléssel',
@@ -207,6 +204,11 @@
           hideStage2Visual: true,
           hideStage2StatusDot: true,
           hideStage1PlaceholderChart: true,
+          categoryPeriods: [
+            { scope: 'Ezen a héten', category: 'Élelmiszer', amount: 36500, avatar: { icon: 'utensils.svg', color: '#24c889' } },
+            { scope: 'Ebben a hónapban', category: 'Lakás', amount: 112000, avatar: { icon: 'house.svg', color: '#d932c9' } },
+            { scope: 'Idén eddig', category: 'Lakás', amount: 1344000, avatar: { icon: 'house.svg', color: '#d932c9' } },
+          ],
           facts: [
             {
               text: 'Hét: Élelmiszer · 36 500 Ft',
@@ -240,21 +242,109 @@
             { text: 'Új kategória: nem' },
           ],
         },
+        {
+          id: 'kovetkezo_ismetlodo_tranzakcio',
+          title: 'Közelgő ismétlődés',
+          motherValue: '-3 490 Ft',
+          motherMeta: 'aug. 4.',
+          childName: 'Netflix',
+          childMeta: 'Előfizetések · aug. 4.',
+          childValue: '-3 490 Ft',
+          icon: 'clapperboard.svg',
+          visual: 'transaction-event',
+          upcomingDate: 'aug. 4.',
+          categoryAvatar: { icon: 'clapperboard.svg', color: '#8b5cf6', label: 'Előfizetések' },
+          facts: [
+            { text: 'Előfizetések · ismétlődő kiadás' },
+            { text: 'Esedékes: 2026.08.04.' },
+          ],
+        },
       ];
-      const editingCardId = 'koltesi_trend';
-      const topCategoriesEditingCardId = 'top_kategoria_heten';
-      const categoryChangeEditingCardId = 'legnagyobb_novekedo_kategoria';
-      const latestTransactionEditingCardId = 'legutobbi_tranzakcio';
-      const noSpendEditingCardId = 'no_spend_napok_szama';
-      const averageDailyEditingCardId = 'atlagos_napi_koltes';
+      const trendCardId = 'koltesi_trend';
+      const topCategoriesCardId = 'top_kategoria_heten';
+      const categoryChangeCardId = 'legnagyobb_novekedo_kategoria';
+      const latestTransactionCardId = 'legutobbi_tranzakcio';
+      const upcomingRecurringCardId = 'kovetkezo_ismetlodo_tranzakcio';
+      const noSpendCardId = 'no_spend_napok_szama';
+      const averageDailyCardId = 'atlagos_napi_koltes';
+      const topMerchantCardId = 'leggyakoribb_kereskedo';
       const todayRedesignCardId = 'mai_koltes';
+      const topMerchantDimensions = [
+        { id: 'year', label: 'Éves' },
+        { id: 'month', label: 'Havi' },
+        { id: 'all', label: 'Összesen' },
+      ];
+      const topMerchantDefaultDimensionId = 'month';
+      const topMerchantReferenceMonth = '2026-07';
+      const topMerchantReferenceYear = '2026';
       const todayRedesignReference = 'docs/prototypes/reference_assets/stage2redesign.png';
       const todayAnimationReference = 'docs/prototypes/reference_assets/stage2anim.png';
       // Color Lab layout fixture; production binds the same shape from the resolver.
       const trendDailySeriesFixture = {
         previous: [0, 8300, 0, 5800, 13600, 0, 11500, 0, 6600, 0, 18400, 0, 5300, 8700, 0, 11100, 0, 12500, 0, 7700, 0, 14700, 0, 4200, 17900, 0, 5900, 0, 9800, 0],
-        current: [0, 10500, 0, 6500, 15900, 0, 12600, 0, 7700, 0, 21900, 0, 6300, 10200, 0, 12800, 0, 14800, 0, 9100, 0, 17700, 0, 5200, 21400, 0, 7100, 0, 11500, 0],
+        current: [0, 10500, 0, 6500, 15900, 0, 12600, 0, 7700, 0, 21900, 0, 6300, 10200, 0, 12800, 0, 14800, 0, 9100, 0, 17700, 0, 5200, 21400, 0, 7100, 0, 11400, 0],
       };
+      // Direct visual inventory copied from the Pulse engine's hidden-forecast panel.
+      // These cards deliberately expose only the chart and a one-line explanation.
+      const pulseForecastGalleryFixture = [
+        {
+          id: 'PF-01',
+          chart: 'month-end-expense',
+          title: 'Month-end expense forecast',
+          reference: 'HF-001',
+          description: 'A jelenlegi költési ütem és a hátralévő fix terhek alapján a forecast a limit fölé tart.',
+        },
+        {
+          id: 'PF-02',
+          chart: 'monthly-category-burn',
+          title: 'Monthly category limit burn',
+          reference: 'HF-002',
+          description: 'A kategóriák várható havi költése a figyelmeztető zónához viszonyítva.',
+        },
+        {
+          id: 'PF-03',
+          chart: 'yearly-category-burn',
+          title: 'Yearly category limit burn',
+          reference: 'HF-020',
+          description: 'Az éves felhasználás a naptári ütemhez mérve látszik.',
+        },
+        {
+          id: 'PF-04',
+          chart: 'ghost-income-fixed-load',
+          title: 'Ghost income + fixed load',
+          reference: 'HF-005 · HF-006 · HF-007',
+          description: 'A következő fix terhek és a bizonytalan várt bevétel közös idővonala.',
+        },
+        {
+          id: 'PF-05',
+          chart: 'cashflow-saving-goal',
+          title: 'Cashflow ratio + saving goal',
+          reference: 'HF-009 · HF-010',
+          description: 'A költés–bevétel arány és a megtakarítási cél együtt mutatja a cashflow nyomást.',
+        },
+        {
+          id: 'PF-06',
+          chart: 'balance-buffer-days',
+          title: 'Balance buffer days',
+          reference: 'HF-011',
+          ariaLabel: '31 napos puffer: az egyenleg a rolling 30 napos változó költési tempó mellett még körülbelül 31 napra elég. A 30 nap fölötti zóna stabil; a fix és várt tételek külön cashflow jelek.',
+          description: '31 napos puffer: ennyi napra elég az egyenleg a 30 napos változó költési tempó mellett. A 30 nap fölötti zóna stabil; a fix és várt tételek külön cashflow jelek.',
+        },
+        {
+          id: 'PF-07',
+          chart: 'behavior-shift',
+          title: 'Behavior shift',
+          reference: 'HF-012 · HF-013 · HF-014',
+          description: 'A kategória- és teljes költési trend, valamint a score iránya együtt.',
+        },
+        {
+          id: 'PF-08',
+          chart: 'data-quality-status',
+          title: 'Data quality status',
+          reference: 'HF-021',
+          description: 'A kategorizálatlan tételek jelzik, mennyire bizonytalanok a további forecastok.',
+        },
+      ];
       // Color Lab fixture mirroring the visible no-spend card: 3/7 and 9/21 (43%).
       const noSpendFixture = {
         elapsedMonthDays: 21,
@@ -270,6 +360,11 @@
           { label: 'Ma', noSpend: false, isToday: true },
         ],
       };
+      const noSpendDimensionFixture = {
+        month: { noSpendDays: 9, observedDays: 21 },
+        year: { noSpendDays: 88, observedDays: 203 },
+        all: { noSpendDays: 325, observedDays: 731 },
+      };
       // Color Lab fixture for the resolver's rolling 30-day variable-spend inputs.
       const averageDailyFixture = {
         balance: 369460,
@@ -279,6 +374,45 @@
           6400, 0, 5500, 7300, 4100, 11000, 8800, 0, 6900, 0,
         ],
       };
+      // Complete prototype transaction input for the all-time Top merchants card.
+      // The list stays flat so the B3M-A renderer must aggregate every transaction.
+      const allTransactionMerchantFixture = [
+        { merchant: 'Lidl', amount: 3260, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-07-21' },
+        { merchant: 'Lidl', amount: 4250, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-07-18' },
+        { merchant: 'Lidl', amount: 2180, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-07-14' },
+        { merchant: 'Lidl', amount: 4120, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-07-06' },
+        { merchant: 'Lidl', amount: 3640, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-05-17' },
+        { merchant: 'Lidl', amount: 4890, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-04-22' },
+        { merchant: 'Lidl', amount: 5120, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-03-13' },
+        { merchant: 'Lidl', amount: 4180, icon: 'store.svg', avatarColor: '#1fbf86', date: '2026-02-07' },
+        { merchant: 'Tesco', amount: 2450, icon: 'shopping-cart.svg', avatarColor: '#8b7dfa', date: '2026-07-22' },
+        { merchant: 'Tesco', amount: 3800, icon: 'shopping-cart.svg', avatarColor: '#8b7dfa', date: '2026-07-15' },
+        { merchant: 'Tesco', amount: 2970, icon: 'shopping-cart.svg', avatarColor: '#8b7dfa', date: '2026-07-03' },
+        { merchant: 'Tesco', amount: 5120, icon: 'shopping-cart.svg', avatarColor: '#8b7dfa', date: '2026-06-23' },
+        { merchant: 'Tesco', amount: 3540, icon: 'shopping-cart.svg', avatarColor: '#8b7dfa', date: '2026-05-19' },
+        { merchant: 'Tesco', amount: 4990, icon: 'shopping-cart.svg', avatarColor: '#8b7dfa', date: '2026-02-14' },
+        { merchant: 'MOL', amount: 8900, icon: 'fuel.svg', avatarColor: '#fa8a39', date: '2026-07-22' },
+        { merchant: 'MOL', amount: 6310, icon: 'fuel.svg', avatarColor: '#fa8a39', date: '2026-07-20' },
+        { merchant: 'MOL', amount: 7200, icon: 'fuel.svg', avatarColor: '#fa8a39', date: '2026-06-11' },
+        { merchant: 'MOL', amount: 5800, icon: 'fuel.svg', avatarColor: '#fa8a39', date: '2026-04-18' },
+        { merchant: 'MOL', amount: 4600, icon: 'fuel.svg', avatarColor: '#fa8a39', date: '2026-01-12' },
+        { merchant: 'Wolt', amount: 4580, icon: 'utensils.svg', avatarColor: '#fb3e76', date: '2026-07-21' },
+        { merchant: 'Wolt', amount: 5120, icon: 'utensils.svg', avatarColor: '#fb3e76', date: '2026-07-04' },
+        { merchant: 'Wolt', amount: 3890, icon: 'utensils.svg', avatarColor: '#fb3e76', date: '2026-06-08' },
+        { merchant: 'Wolt', amount: 4460, icon: 'utensils.svg', avatarColor: '#fb3e76', date: '2026-03-30' },
+        { merchant: 'BKK', amount: 450, icon: 'bus-front.svg', avatarColor: '#3a95e6', date: '2026-07-21' },
+        { merchant: 'BKK', amount: 450, icon: 'bus-front.svg', avatarColor: '#3a95e6', date: '2026-05-02' },
+        { merchant: 'BKK', amount: 450, icon: 'bus-front.svg', avatarColor: '#3a95e6', date: '2026-01-23' },
+        { merchant: 'dm', amount: 2870, icon: 'store.svg', avatarColor: '#da4f9b', date: '2025-12-16' },
+        { merchant: 'dm', amount: 3460, icon: 'store.svg', avatarColor: '#da4f9b', date: '2025-11-12' },
+        { merchant: 'Auchan', amount: 1550, icon: 'store.svg', avatarColor: '#e87431', date: '2025-12-28' },
+        { merchant: 'Auchan', amount: 2420, icon: 'store.svg', avatarColor: '#e87431', date: '2025-11-21' },
+        { merchant: 'Auchan', amount: 1790, icon: 'store.svg', avatarColor: '#e87431', date: '2025-10-19' },
+        { merchant: 'Auchan', amount: 3360, icon: 'store.svg', avatarColor: '#e87431', date: '2025-09-22' },
+        { merchant: 'Auchan', amount: 2210, icon: 'store.svg', avatarColor: '#e87431', date: '2025-08-17' },
+        { merchant: 'Auchan', amount: 2940, icon: 'store.svg', avatarColor: '#e87431', date: '2025-07-11' },
+        { merchant: 'Auchan', amount: 1880, icon: 'store.svg', avatarColor: '#e87431', date: '2025-06-03' },
+      ];
       // Screenshot-driven Color Lab fixture for the dedicated Today spend redesign.
       const todayRedesignFixture = {
         balance: 372047472,
@@ -292,12 +426,60 @@
         transactionCount: 4,
         noSpendDays: 3,
         noSpendWindowDays: 7,
-        topCategory: 'Élelmiszer',
-        topCategoryStage1Meta: 'fixek nélkül',
         largestCategory: 'Közlekedés',
         largestCategoryDelta: 14200,
-        largestCategoryPeriod: '30 nap',
         monthTotal: 486320,
+      };
+      const variableBudgetDimensions = [
+        {
+          id: 'day',
+          label: 'Napi',
+          remainingLabel: 'Mára még elkölthető',
+          spentLabel: 'Ma elköltve',
+          transactionLabel: 'Mai kiadási tételek',
+          thresholdLabel: 'Mai költés a kerethez képest',
+        },
+        {
+          id: 'week',
+          label: 'Heti',
+          remainingLabel: 'A héten még elkölthető',
+          spentLabel: 'Héten elköltve',
+          transactionLabel: 'Heti kiadási tételek',
+          thresholdLabel: 'Heti költés a kerethez képest',
+        },
+        {
+          id: 'month',
+          label: 'Havi',
+          remainingLabel: 'Ebben a hónapban még elkölthető',
+          spentLabel: 'Hónapban elköltve',
+          transactionLabel: 'Havi kiadási tételek',
+          thresholdLabel: 'Havi költés a kerethez képest',
+        },
+      ];
+      const variableBudgetDefaultDimensionId = 'day';
+      const variableBudgetDimensionFixture = {
+        day: {
+          remaining: 6500,
+          spent: 8900,
+          transactionCount: 4,
+          budget: 15400,
+          referenceLabel: '30 napos napi átlag: 10 100 Ft',
+        },
+        week: {
+          remaining: 18200,
+          spent: 46800,
+          transactionCount: 17,
+          budget: 65000,
+          referenceLabel: 'Felhasználva: 72%',
+        },
+        month: {
+          remaining: 98800,
+          spent: 151200,
+          transactionCount: 79,
+          budget: 250000,
+          progressLabel: '61%',
+          referenceLabel: 'Felhasználva: 61%',
+        },
       };
       // Mirrors TransactionLogList._entries(): one raw record.date group at a time.
       // The first day retains the supplied animation rows; the rest make nested log scrolling testable.
@@ -1235,6 +1417,7 @@
         return element;
       }
 
+
       function installTodayRedesignStyles(doc) {
         if (doc.getElementById('balance-today-redesign-styles')) return;
         const style = doc.createElement('style');
@@ -1452,56 +1635,6 @@
             text-shadow: 0 1px 1px rgba(76, 43, 122, .12);
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-action {
-            position: absolute;
-            z-index: 3;
-            top: 19px;
-            right: 20px;
-            display: inline-flex;
-            align-items: center;
-            gap: 9px;
-            min-height: 31px;
-            padding: 0 11px 0 13px;
-            border: 1px solid rgba(255, 255, 255, .64);
-            border-radius: 18px;
-            background: rgba(255, 255, 255, .07);
-            color: #ffffff;
-            font: inherit;
-            font-size: 9px;
-            line-height: 1;
-            font-weight: 850;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-action b {
-            font-size: 20px;
-            line-height: .6;
-            font-weight: 500;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-chart {
-            position: absolute;
-            z-index: 1;
-            top: 72px;
-            left: 0;
-            width: 100%;
-            height: 72px;
-            overflow: visible;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-chart path {
-            fill: none;
-            stroke: rgba(255, 255, 255, .95);
-            stroke-width: 3;
-            stroke-linecap: round;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-chart circle {
-            fill: #fb88b2;
-            stroke: #ffffff;
-            stroke-width: 3;
-          }
-
           [data-today-redesign-screen="true"] .stage2-redesign-hero-speck {
             position: absolute;
             z-index: 1;
@@ -1592,37 +1725,64 @@
           [data-today-redesign-screen="true"] .stage2-redesign-ratio-copy span { margin-top: 6px; font-size: 7px; }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            display: flex;
+            min-width: 0;
             gap: 9px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-snap-type: x mandatory;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+            touch-action: pan-x pan-y;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-grid::-webkit-scrollbar {
+            display: none;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-card {
             position: relative;
             display: grid;
+            grid-template-rows: 27px minmax(0, 1fr);
+            align-content: start;
+            flex: 0 0 calc((100% - 18px) / 3);
+            min-height: 128px;
             min-width: 0;
+            gap: 10px;
             overflow: hidden;
-            padding: 14px 13px;
+            padding: 14px 13px 30px;
             border: 1px solid rgba(103, 112, 176, .11);
             border-radius: 26px;
             background: rgba(255, 255, 255, .94);
             box-shadow: 0 12px 25px rgba(82, 75, 147, .10), inset 0 1px 0 rgba(255, 255, 255, .94);
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.top-category {
-            border-color: rgba(252, 102, 162, .26);
-            box-shadow: 0 12px 25px rgba(246, 89, 151, .12), inset 0 1px 0 rgba(255, 255, 255, .96);
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-card.category-change {
-            box-shadow: 0 12px 25px rgba(69, 109, 169, .10), inset 0 1px 0 rgba(255, 255, 255, .96);
+            border-color: rgba(239, 65, 115, .19);
+            box-shadow: 0 12px 25px rgba(239, 65, 115, .12), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.latest-transaction {
+            border-color: rgba(82, 126, 213, .18);
+            box-shadow: 0 12px 25px rgba(82, 126, 213, .11), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.upcoming-recurring {
+            border-color: rgba(139, 92, 246, .18);
+            background: linear-gradient(145deg, rgba(249, 247, 255, .98), rgba(255, 255, 255, .95));
+            box-shadow: 0 12px 25px rgba(139, 92, 246, .11), inset 0 1px 0 rgba(255, 255, 255, .96);
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-head {
-            display: flex;
+            display: grid;
+            grid-template-columns: 27px minmax(0, 1fr);
+            grid-template-rows: 27px;
             min-width: 0;
             align-items: center;
-            gap: 7px;
+            column-gap: 7px;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-icon {
@@ -1637,9 +1797,8 @@
             background: #f0efff;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.top-category .stage2-redesign-insight-icon { background: #fff2eb; }
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.category-change .stage2-redesign-insight-icon { background: #eafbf1; }
-
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.category-change .stage2-redesign-insight-icon { background: #fff0f4; }
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.latest-transaction .stage2-redesign-insight-icon { background: #edf3ff; }
           [data-today-redesign-screen="true"] .stage2-redesign-moon-glyph {
             width: 15px;
             height: 15px;
@@ -1664,11 +1823,11 @@
             height: 15px;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-up-glyph {
-            color: #16b678;
-            font-size: 20px;
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-icon-glyph {
+            color: #5f55ec;
+            font-size: 17px;
             line-height: 1;
-            font-weight: 900;
+            font-weight: 950;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-title {
@@ -1681,10 +1840,18 @@
             letter-spacing: 0;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-body {
-            align-self: end;
-            min-width: 0;
-          }
+[data-today-redesign-screen="true"] .stage2-redesign-insight-body {
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: 22px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  gap: 0;
+  padding-left: 0;
+  justify-items: center;
+  text-align: center;
+  align-content: stretch;
+}
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-kicker,
           [data-today-redesign-screen="true"] .stage2-redesign-insight-meta {
@@ -1696,9 +1863,20 @@
             font-weight: 750;
           }
 
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-meta {
+            grid-column: 1;
+            grid-row: 2;
+            align-self: end;
+          }
+
           [data-today-redesign-screen="true"] .stage2-redesign-insight-value {
-            display: block;
-            margin-top: 5px;
+            display: inline-flex;
+            grid-column: 1;
+            grid-row: 1;
+            align-self: start;
+            align-items: center;
+            gap: 4px;
+            margin-top: 0;
             color: #19274c;
             font-size: 16px;
             line-height: 1.05;
@@ -1706,35 +1884,202 @@
             letter-spacing: 0;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.top-category .stage2-redesign-insight-value {
-            font-size: 14px;
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.latest-transaction .stage2-redesign-insight-value {
+            color: #526fc5;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-card.category-change .stage2-redesign-insight-value {
-            font-size: 13px;
+            color: #ef4173;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.top-category .stage2-redesign-insight-meta {
-            margin-top: 7px;
-            color: #fb3e76;
-            font-weight: 900;
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-direction {
+            color: currentColor;
+            font-size: 17px;
+            line-height: 1;
+            font-weight: 950;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.category-change .stage2-redesign-insight-meta {
-            margin-top: 7px;
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-direction[data-direction="down"] {
+            color: #16a36a;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-no-spend-wave {
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-direction[data-direction="flat"] {
+            color: #65718e;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.trend-comparison[data-trend-direction="up"] .stage2-redesign-insight-value,
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.trend-comparison[data-trend-direction="up"] .stage2-redesign-insight-direction {
+            color: #ef4173;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.trend-comparison[data-trend-direction="down"] .stage2-redesign-insight-value,
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.trend-comparison[data-trend-direction="down"] .stage2-redesign-insight-direction {
+            color: #16a36a;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-ghost-toggle {
             position: absolute;
-            right: 0;
-            bottom: -1px;
-            left: 0;
-            width: 100%;
-            height: 33px;
-            opacity: .48;
+            right: 9px;
+            bottom: 8px;
+            display: grid;
+            width: 22px;
+            height: 22px;
+            place-items: center;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(240, 239, 255, .92);
+            color: #5f55ec;
+            cursor: pointer;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-no-spend-wave path { fill: #8b7dfa; }
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-ghost-toggle[aria-pressed="false"] {
+            background: rgba(148, 163, 184, .12);
+            color: #94a3b8;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-ghost-toggle .slot-icon {
+            width: 12px;
+            height: 12px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-category-change-avatar {
+            background: #eafbf1;
+            box-shadow: inset 0 0 0 1px rgba(37, 187, 117, .08);
+          }
+
+[data-today-redesign-screen="true"] .stage2-redesign-category-change-metrics {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 5px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-category-change-amount {
+            color: #ef4173;
+            font-size: 14px;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: 0;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-category-change-direction {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            color: #ef4173;
+            font-size: 8px;
+            line-height: 1;
+            font-weight: 950;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-category-change-direction .slot-icon {
+            width: 9px;
+            height: 9px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.trend-comparison {
+            border-color: rgba(118, 87, 217, .18);
+            background: linear-gradient(145deg, rgba(248, 246, 255, .98), rgba(255, 255, 255, .95));
+            box-shadow: 0 12px 25px rgba(118, 87, 217, .10), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-trend-icon {
+            background: #eeeaff;
+            box-shadow: inset 0 0 0 1px rgba(118, 87, 217, .10);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-upcoming-recurring-value {
+            display: flex;
+            width: 100%;
+            align-items: baseline;
+            justify-content: center;
+            gap: 6px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-upcoming-recurring-name {
+            min-width: 0;
+            overflow: hidden;
+            color: #1b294d;
+            font-size: 10px;
+            line-height: 1;
+            font-weight: 900;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-upcoming-recurring-amount {
+            color: #ef4173;
+            font-size: 9.5px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-upcoming-recurring-date {
+            color: #65718e;
+            font-size: 8px;
+            font-weight: 800;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.upcoming-recurring .stage2-redesign-insight-body {
+            grid-template-rows: 12px 16px minmax(10px, 1fr);
+            row-gap: 2px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-insight-card.upcoming-recurring .stage2-redesign-upcoming-recurring-date {
+            grid-column: 1;
+            grid-row: 3;
+            align-self: end;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-upcoming-recurring-mini-avatar {
+            grid-column: 1;
+            grid-row: 2;
+            display: grid;
+            align-self: center;
+            width: 16px;
+            height: 16px;
+            place-items: center;
+            border-radius: 50%;
+            background: var(--today-recurring-category-color, #8b5cf6);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24);
+            pointer-events: none;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-upcoming-recurring-mini-avatar .slot-icon {
+            width: 9px;
+            height: 9px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel {
+            display: flex;
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            gap: 11px;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+            touch-action: pan-x pan-y;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel::-webkit-scrollbar {
+            display: none;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-today-detail,
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-top-categories-detail,
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-top-merchants-detail,
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-average-daily-detail {
+            flex: 0 0 100%;
+            min-width: 0;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+          }
 
           [data-today-redesign-screen="true"] .stage2-redesign-today-detail {
             position: relative;
@@ -1746,6 +2091,346 @@
             border-radius: 26px;
             background: rgba(255, 255, 255, .94);
             box-shadow: 0 15px 30px rgba(83, 75, 150, .12), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-detail {
+            position: relative;
+            display: grid;
+            grid-template-rows: 18px 46px 1px 1fr;
+            overflow: hidden;
+            padding: 13px 19px 10px;
+            border: 1px solid rgba(102, 111, 171, .11);
+            border-radius: 26px;
+            background: rgba(255, 255, 255, .94);
+            box-shadow: 0 15px 30px rgba(83, 75, 150, .12), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-detail {
+            position: relative;
+            display: grid;
+            grid-template-rows: 18px 1px minmax(0, 1fr);
+            overflow: hidden;
+            padding: 13px 19px 10px;
+            border: 1px solid rgba(102, 111, 171, .11);
+            border-radius: 26px;
+            background: rgba(255, 255, 255, .94);
+            box-shadow: 0 15px 30px rgba(83, 75, 150, .12), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-detail {
+            position: relative;
+            display: grid;
+            grid-template-rows: 18px 38px 1px 88px 38px;
+            overflow: hidden;
+            padding: 13px 19px 10px;
+            border: 1px solid rgba(102, 111, 171, .11);
+            border-radius: 26px;
+            background: rgba(255, 255, 255, .94);
+            box-shadow: 0 15px 30px rgba(83, 75, 150, .12), inset 0 1px 0 rgba(255, 255, 255, .96);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-detail .fastinfo-sparkline {
+            background: linear-gradient(180deg, rgba(139, 125, 250, .15), rgba(139, 125, 250, .03));
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-scope {
+            color: #0ba4c2;
+            font-size: 7px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-main {
+            display: grid;
+            grid-template-columns: 38px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 10px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-tile {
+            display: grid;
+            width: 38px;
+            height: 38px;
+            place-items: center;
+            border-radius: 13px;
+            background: linear-gradient(145deg, #9b8fff, #8b7dfa);
+            box-shadow: 0 8px 13px rgba(139, 125, 250, .22), inset 0 1px 0 rgba(255, 255, 255, .42);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-tile .slot-icon {
+            width: 20px;
+            height: 20px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-copy {
+            display: grid;
+            min-width: 0;
+            gap: 4px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-copy strong {
+            overflow: hidden;
+            color: #1d2b50;
+            font-size: 9px;
+            line-height: 1;
+            font-weight: 950;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-copy span {
+            overflow: hidden;
+            color: #77829d;
+            font-size: 6.5px;
+            line-height: 1;
+            font-weight: 800;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-amount {
+            color: #8b7dfa;
+            font-size: 14px;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: 0;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-facts {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            align-items: center;
+            padding-top: 5px;
+            border-top: 1px solid #edf0f6;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-fact {
+            display: grid;
+            min-width: 0;
+            gap: 3px;
+            padding: 0 7px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-fact:first-child { padding-left: 1px; }
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-fact + .stage2-redesign-average-daily-fact { border-left: 1px solid #edf0f6; }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-fact span {
+            color: #7a859f;
+            font-size: 5.8px;
+            line-height: 1.08;
+            font-weight: 850;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-average-daily-fact strong {
+            overflow: hidden;
+            color: #26355a;
+            font-size: 7.5px;
+            line-height: 1.08;
+            font-weight: 950;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-main {
+            display: grid;
+            grid-template-columns: 43px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-tile {
+            display: grid;
+            width: 43px;
+            height: 43px;
+            place-items: center;
+            border-radius: 14px;
+            background: linear-gradient(145deg, #31ce91, #1fbf86);
+            box-shadow: 0 8px 13px rgba(31, 191, 134, .22), inset 0 1px 0 rgba(255, 255, 255, .42);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-tile .slot-icon {
+            width: 22px;
+            height: 22px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-scope {
+            color: #fb3e76;
+            font-size: 7px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-scope {
+            color: #fb3e76;
+            font-size: 7px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-dimensions {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 2px;
+            padding: 2px;
+            border: 1px solid #edf0f6;
+            border-radius: 9px;
+            background: rgba(248, 249, 253, .92);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-dimension {
+            min-height: 14px;
+            padding: 0 5px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: #7d88a2;
+            cursor: pointer;
+            font: inherit;
+            font-size: 5.8px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-dimension[aria-pressed="true"] {
+            background: #f24cae;
+            color: #ffffff;
+            box-shadow: 0 3px 6px rgba(242, 76, 174, .24);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-periods {
+            display: grid;
+            grid-template-rows: repeat(3, minmax(0, 1fr));
+            gap: 3px;
+            padding-top: 5px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-list {
+            display: grid;
+            min-height: 0;
+            grid-template-rows: repeat(5, minmax(0, 1fr));
+            padding-top: 5px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period {
+            display: grid;
+            grid-template-columns: 18px minmax(0, 1fr) auto;
+            min-width: 0;
+            align-items: center;
+            gap: 7px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-row {
+            display: grid;
+            grid-template-columns: 18px minmax(0, 1fr) auto;
+            min-width: 0;
+            align-items: center;
+            gap: 7px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period + .stage2-redesign-top-categories-period {
+            border-top: 1px solid #f0f2f7;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-row + .stage2-redesign-top-merchants-row {
+            border-top: 1px solid #f0f2f7;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period-avatar {
+            display: grid;
+            width: 18px;
+            height: 18px;
+            place-items: center;
+            border-radius: 50%;
+            background: var(--today-top-category-color);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-avatar {
+            display: grid;
+            width: 18px;
+            height: 18px;
+            place-items: center;
+            border-radius: 50%;
+            background: var(--today-top-merchant-color);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period-avatar .slot-icon {
+            width: 10px;
+            height: 10px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-avatar .slot-icon {
+            width: 10px;
+            height: 10px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period-copy {
+            display: grid;
+            min-width: 0;
+            gap: 2px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-copy {
+            display: grid;
+            min-width: 0;
+            gap: 2px;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period-copy span {
+            color: #7d88a2;
+            font-size: 6.5px;
+            line-height: 1;
+            font-weight: 900;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-copy span {
+            color: #7d88a2;
+            font-size: 6.5px;
+            line-height: 1;
+            font-weight: 900;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period-copy strong {
+            overflow: hidden;
+            color: #26355a;
+            font-size: 8px;
+            line-height: 1;
+            font-weight: 900;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-copy strong {
+            overflow: hidden;
+            color: #26355a;
+            font-size: 8px;
+            line-height: 1;
+            font-weight: 900;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-categories-period > strong {
+            color: #26355a;
+            font-size: 8px;
+            line-height: 1;
+            font-weight: 950;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-top-merchants-row > strong {
+            color: #26355a;
+            font-size: 8px;
+            line-height: 1;
+            font-weight: 950;
+            white-space: nowrap;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-detail-topline {
@@ -1762,14 +2447,36 @@
             letter-spacing: 0;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-detail-live-dot {
-            width: 9px;
-            height: 9px;
-            margin-top: -1px;
-            border: 2px solid #ffd6e4;
-            border-radius: 50%;
-            background: #ff4677;
-            box-shadow: 0 0 0 4px rgba(255, 70, 119, .09);
+          [data-today-redesign-screen="true"] .stage2-redesign-variable-budget-dimensions {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 2px;
+            padding: 2px;
+            border: 1px solid #edf0f6;
+            border-radius: 9px;
+            background: rgba(248, 249, 253, .92);
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-variable-budget-dimension {
+            min-height: 14px;
+            padding: 0 5px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: #7d88a2;
+            cursor: pointer;
+            font: inherit;
+            font-size: 5.8px;
+            line-height: 1;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-variable-budget-dimension[aria-pressed="true"] {
+            background: #f24cae;
+            color: #ffffff;
+            box-shadow: 0 3px 6px rgba(242, 76, 174, .24);
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-detail-main {
@@ -1831,7 +2538,7 @@
 
           [data-today-redesign-screen="true"] .stage2-redesign-fact-grid {
             display: grid;
-            grid-template-columns: 1fr 1.16fr .96fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             align-items: center;
           }
 
@@ -1863,7 +2570,6 @@
             background: #ff4677;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-fact.average .stage2-redesign-fact-dot { background: #ad53f3; }
           [data-today-redesign-screen="true"] .stage2-redesign-fact.transactions .stage2-redesign-fact-dot { background: #19c793; }
 
           [data-today-redesign-screen="true"] .stage2-redesign-fact strong {
@@ -1878,8 +2584,8 @@
 
           [data-today-redesign-screen="true"] .stage2-redesign-threshold {
             display: grid;
-            grid-template-rows: 27px 1fr;
-            align-items: end;
+            grid-template-rows: 18px 16px 1fr;
+            align-items: center;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-threshold-copy {
@@ -1937,15 +2643,14 @@
             transform: translate(-50%, -50%);
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-threshold-average {
-            position: absolute;
-            top: -6px;
-            bottom: -6px;
-            left: var(--today-redesign-average-marker);
-            width: 2px;
-            border-radius: 2px;
-            background: #10bfc1;
-            transform: translateX(-50%);
+          [data-today-redesign-screen="true"] .stage2-redesign-threshold-reference {
+            align-self: start;
+            padding-top: 4px;
+            color: #7f8ba5;
+            font-size: 7px;
+            line-height: 1.1;
+            font-weight: 800;
+            text-align: right;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-action-grid {
@@ -2326,7 +3031,6 @@
             --today-redesign-pill-shift: -9px;
             --today-redesign-hero-stat-opacity: 1;
             --today-redesign-hero-stat-shift: 0px;
-            --today-redesign-hero-chart-shift: 0px;
             --today-redesign-post-budget-shift: 0px;
             display: block;
             overflow: hidden;
@@ -2383,22 +3087,12 @@
             will-change: height;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-overlay .stage2-redesign-hero-action {
-            pointer-events: auto;
-          }
-
           [data-today-redesign-screen="true"] .stage2-redesign-hero-stat-grid {
             opacity: var(--today-redesign-hero-stat-opacity);
             transform: translateY(var(--today-redesign-hero-stat-shift));
             transform-origin: center bottom;
             transition: opacity .08s linear, transform .08s linear;
             will-change: opacity, transform;
-          }
-
-          [data-today-redesign-screen="true"] .stage2-redesign-hero-chart {
-            transform: translateY(var(--today-redesign-hero-chart-shift));
-            transform-origin: center;
-            transition: transform .08s linear;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-insight-grid {
@@ -2412,7 +3106,7 @@
             will-change: opacity, transform;
           }
 
-          [data-today-redesign-screen="true"] .stage2-redesign-today-detail {
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel {
             height: 210px;
             min-height: 210px;
             opacity: var(--today-redesign-detail-opacity);
@@ -2421,6 +3115,14 @@
             transform-origin: center top;
             transition: opacity .08s linear, transform .08s linear;
             will-change: opacity, transform;
+          }
+
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-today-detail,
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-top-categories-detail,
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-top-merchants-detail,
+          [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel > .stage2-redesign-average-daily-detail {
+            height: 210px;
+            min-height: 210px;
           }
 
           [data-today-redesign-screen="true"] .stage2-redesign-post-budget-content {
@@ -2875,9 +3577,8 @@
             [data-today-redesign-screen="true"] .stage2-redesign-scroll-content,
             [data-today-redesign-screen="true"] .stage2-redesign-hero-overlay .stage2-redesign-balance-hero,
             [data-today-redesign-screen="true"] .stage2-redesign-hero-stat-grid,
-            [data-today-redesign-screen="true"] .stage2-redesign-hero-chart,
             [data-today-redesign-screen="true"] .stage2-redesign-insight-grid,
-            [data-today-redesign-screen="true"] .stage2-redesign-today-detail,
+            [data-today-redesign-screen="true"] .stage2-redesign-detail-carousel,
             [data-today-redesign-screen="true"] .stage2-redesign-post-budget-content,
             [data-today-redesign-screen="true"] .stage2-redesign-budget-pill,
             [data-today-redesign-screen="true"] .stage2-redesign-time-scope-toggle .slot-icon,
@@ -2893,9 +3594,8 @@
       function attachTodayRedesignScrollInteraction(screen, headerViewport, transactionViewport) {
         const layout = screen.querySelector('.stage2-redesign-layout');
         const insightGrid = screen.querySelector('.stage2-redesign-insight-grid');
-        const detail = screen.querySelector('.stage2-redesign-today-detail');
+        const detailCarousel = screen.querySelector('.stage2-redesign-detail-carousel');
         const budgetPill = screen.querySelector('.stage2-redesign-budget-pill');
-        const heroAction = screen.querySelector('.stage2-redesign-hero-action');
         const budgetPillBehavior = screen.dataset.todayBudgetPillBehavior || 'sticky';
         const keepsBudgetPill = budgetPillBehavior === 'sticky';
         const collapseDistance = 180;
@@ -2910,7 +3610,7 @@
         const collapsedPostBudgetShift = -((expandedInsightHeight + (scrollStackGap * 2) + expandedDetailHeight) - collapseDistance - compactBudgetPillHeight - collapsedHeaderContentGap);
         const windowRef = screen.ownerDocument.defaultView;
         const reducedMotion = windowRef?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-        if (!layout || !insightGrid || !detail || !budgetPill || !transactionViewport) {
+        if (!layout || !insightGrid || !detailCarousel || !budgetPill || !transactionViewport) {
           throw new Error('Today redesign scroll controller could not find its required surfaces');
         }
 
@@ -2946,11 +3646,10 @@
           layout.style.setProperty('--today-redesign-pill-shift', `${(-9 + (9 * pillProgress)).toFixed(2)}px`);
           layout.style.setProperty('--today-redesign-hero-stat-opacity', heroStatOpacity.toFixed(3));
           layout.style.setProperty('--today-redesign-hero-stat-shift', `${(10 * (1 - heroStatOpacity)).toFixed(2)}px`);
-          layout.style.setProperty('--today-redesign-hero-chart-shift', `${(-4 * progress).toFixed(2)}px`);
           layout.style.setProperty('--today-redesign-post-budget-shift', `${(postBudgetShift * detailProgress).toFixed(2)}px`);
 
           insightGrid.style.pointerEvents = insightProgress > .96 ? 'none' : 'auto';
-          detail.style.pointerEvents = detailProgress > .96 ? 'none' : 'auto';
+          detailCarousel.style.pointerEvents = detailProgress > .96 ? 'none' : 'auto';
           budgetPill.style.pointerEvents = keepsBudgetPill && pillProgress > .12 ? 'auto' : 'none';
           budgetPill.setAttribute('aria-hidden', keepsBudgetPill && pillProgress > .12 ? 'false' : 'true');
           screen.dataset.todayRedesignState = progress > .98 ? 'collapsed' : progress > 0 ? 'collapsing' : 'expanded';
@@ -2984,7 +3683,6 @@
         headerViewport.addEventListener('scroll', scheduleUpdate, { passive: true });
         transactionViewport.addEventListener('scroll', updateTransactionScrollState, { passive: true });
         budgetPill.addEventListener('click', expand);
-        heroAction?.addEventListener('click', expand);
         update();
         updateTransactionScrollState();
       }
@@ -4137,7 +4835,7 @@
         const current = createTrendAlternativeElement(doc, 'article', 'common-balance-trend-alternative-window common-balance-trend-alternative-window--current');
         current.append(
           createTrendAlternativeElement(doc, 'span', '', 'Mostani 30 nap'),
-          createTrendAlternativeElement(doc, 'strong', '', '191 200 Ft'),
+          createTrendAlternativeElement(doc, 'strong', '', '191 100 Ft'),
           createTrendAlternativeElement(doc, 'small', '', 'jelenlegi gördülő ablak'),
         );
         windows.append(previous, bridge, current);
@@ -4146,7 +4844,7 @@
         const deltaCopy = doc.createElement('div');
         deltaCopy.append(
           createTrendAlternativeElement(doc, 'span', '', 'Eltérés a két ablak között'),
-          createTrendAlternativeElement(doc, 'strong', '', '+29 200 Ft'),
+          createTrendAlternativeElement(doc, 'strong', '', '+29 100 Ft'),
         );
         delta.append(deltaCopy, createTrendAlternativeElement(doc, 'em', '', '+18%'));
 
@@ -4200,8 +4898,8 @@
           createTrendAlternativeElement(doc, 'span', 'common-balance-trend-pulse-map-boundary common-balance-trend-pulse-map-boundary--amount', '+10 000 Ft'),
         );
         const marker = createTrendAlternativeElement(doc, 'span', 'common-balance-trend-pulse-map-marker');
-        marker.setAttribute('aria-label', 'Aktuális pont: +18 százalék és +29 200 forint');
-        marker.append(createTrendAlternativeElement(doc, 'span', '', '+18% · +29 200 Ft'));
+        marker.setAttribute('aria-label', 'Aktuális pont: +18 százalék és +29 100 forint');
+        marker.append(createTrendAlternativeElement(doc, 'span', '', '+18% · +29 100 Ft'));
         plane.append(marker);
 
         const outcome = createTrendAlternativeElement(doc, 'div', 'common-balance-trend-pulse-map-outcome');
@@ -4238,13 +4936,13 @@
         const delta = createTrendAlternativeElement(doc, 'article', 'common-balance-trend-equation-term common-balance-trend-equation-term--delta');
         delta.append(
           createTrendAlternativeElement(doc, 'span', '', 'Változó többlet'),
-          createTrendAlternativeElement(doc, 'strong', '', '+29 200 Ft'),
+          createTrendAlternativeElement(doc, 'strong', '', '+29 100 Ft'),
           createTrendAlternativeElement(doc, 'small', '', 'az előzőhöz képest'),
         );
         const current = createTrendAlternativeElement(doc, 'article', 'common-balance-trend-equation-term common-balance-trend-equation-term--current');
         current.append(
           createTrendAlternativeElement(doc, 'span', '', 'Mostani ablak'),
-          createTrendAlternativeElement(doc, 'strong', '', '191 200 Ft'),
+          createTrendAlternativeElement(doc, 'strong', '', '191 100 Ft'),
           createTrendAlternativeElement(doc, 'small', '', 'jelenlegi összeg'),
         );
         flow.append(
@@ -4309,9 +5007,9 @@
         const currentValue = doc.createElement('div');
         currentValue.append(
           createTrendAlternativeElement(doc, 'span', '', 'Mostani 30 nap'),
-          createTrendAlternativeElement(doc, 'strong', '', '191 200 Ft'),
+          createTrendAlternativeElement(doc, 'strong', '', '191 100 Ft'),
         );
-        values.append(previousValue, createTrendAlternativeElement(doc, 'span', 'common-balance-trend-window-tape-delta', '+29 200 Ft'), currentValue);
+        values.append(previousValue, createTrendAlternativeElement(doc, 'span', 'common-balance-trend-window-tape-delta', '+29 100 Ft'), currentValue);
 
         panel.replaceChildren(
           heading,
@@ -4365,8 +5063,8 @@
 
         const summary = createTrendAlternativeElement(doc, 'div', 'common-balance-trend-data-sparkline-summary');
         summary.append(
-          createTrendAlternativeElement(doc, 'strong', '', '+29 200 Ft'),
-          createTrendAlternativeElement(doc, 'span', '', 'Stage1 előnézetből kibontva · 191 200 Ft most, 162 000 Ft előző · +18%.'),
+          createTrendAlternativeElement(doc, 'strong', '', '+29 100 Ft'),
+          createTrendAlternativeElement(doc, 'span', '', 'Stage1 előnézetből kibontva · 191 100 Ft most, 162 000 Ft előző · +18%.'),
         );
 
         panel.replaceChildren(
@@ -4390,7 +5088,7 @@
       function populateTrendSplitZone(column, card) {
         const { doc, panel } = prepareTrendAlternative(column, card, 'trend-split-zone', 'B3M-F', 'két időszak összetétele');
         const previousAmount = 162000;
-        const currentAmount = 191200;
+        const currentAmount = 191100;
         const shares = calculatePeriodShares(previousAmount, currentAmount);
         const currentSpendState = currentAmount > previousAmount ? 'higher' : currentAmount < previousAmount ? 'lower' : 'equal';
         populateFacts(panel, card.facts);
@@ -4402,7 +5100,7 @@
         const deltaCopy = doc.createElement('div');
         deltaCopy.append(
           createTrendAlternativeElement(doc, 'span', '', 'Eltérés a két ablak között'),
-          createTrendAlternativeElement(doc, 'strong', '', '+29 200 Ft'),
+          createTrendAlternativeElement(doc, 'strong', '', '+29 100 Ft'),
         );
         delta.append(deltaCopy, createTrendAlternativeElement(doc, 'em', '', '+18%'));
 
@@ -4410,7 +5108,7 @@
         const zoneHead = createTrendAlternativeElement(doc, 'div', 'common-balance-trend-split-zone-head');
         zoneHead.append(
           createTrendAlternativeElement(doc, 'strong', '', card.visualTitle),
-          createTrendAlternativeElement(doc, 'span', '', '100% = 353 200 Ft'),
+          createTrendAlternativeElement(doc, 'span', '', '100% = 353 100 Ft'),
         );
 
         const composition = createTrendAlternativeElement(doc, 'div', 'common-balance-trend-period-composition');
@@ -4747,19 +5445,137 @@
         return `${Math.round(value).toLocaleString('hu-HU').replace(/\u00a0/g, ' ')} Ft`;
       }
 
+      function formatTodayRedesignSignedForint(value) {
+        const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+        return `${sign}${formatTodayRedesignForint(Math.abs(value))}`;
+      }
+
+      function getTopMerchantDimension(dimensionId) {
+        const dimension = topMerchantDimensions.find((entry) => entry.id === dimensionId);
+        if (!dimension) throw new Error(`Unknown Top merchants dimension: ${dimensionId}`);
+        return dimension;
+      }
+
+      function isTopMerchantTransactionInDimension(transaction, dimensionId) {
+        getTopMerchantDimension(dimensionId);
+        if (!transaction || !/^\d{4}-\d{2}-\d{2}$/.test(transaction.date || '')) {
+          throw new Error('Top merchants transaction date is invalid');
+        }
+        if (dimensionId === 'all') return true;
+        if (dimensionId === 'year') return transaction.date.startsWith(topMerchantReferenceYear);
+        return transaction.date.startsWith(topMerchantReferenceMonth);
+      }
+
+      function summarizeTopMerchantsFixture(
+        fixture = allTransactionMerchantFixture,
+        dimensionId = topMerchantDefaultDimensionId,
+      ) {
+        if (!Array.isArray(fixture) || fixture.length === 0) {
+          throw new Error('Top merchants requires complete transaction input');
+        }
+
+        const merchantsByName = new Map();
+        for (const transaction of fixture) {
+          if (!isTopMerchantTransactionInDimension(transaction, dimensionId)) continue;
+          if (
+            typeof transaction.merchant !== 'string' ||
+            !transaction.merchant ||
+            !Number.isFinite(transaction.amount)
+          ) {
+            throw new Error('Top merchants transaction input is invalid');
+          }
+
+          const merchant = merchantsByName.get(transaction.merchant) || {
+            merchant: transaction.merchant,
+            icon: transaction.icon,
+            avatarColor: transaction.avatarColor,
+            transactionCount: 0,
+            totalAmount: 0,
+          };
+          merchant.transactionCount += 1;
+          merchant.totalAmount += Math.abs(transaction.amount);
+          merchantsByName.set(transaction.merchant, merchant);
+        }
+
+        return [...merchantsByName.values()]
+          .sort((left, right) =>
+            right.transactionCount - left.transactionCount ||
+            right.totalAmount - left.totalAmount ||
+            left.merchant.localeCompare(right.merchant, 'hu')
+          )
+          .slice(0, 5);
+      }
+
+      function summarizeNoSpendDimensionFixture(dimensionId = topMerchantDefaultDimensionId) {
+        getTopMerchantDimension(dimensionId);
+        const summary = noSpendDimensionFixture[dimensionId];
+        if (
+          !summary ||
+          summary.noSpendDays < 0 ||
+          summary.observedDays <= 0 ||
+          summary.noSpendDays > summary.observedDays
+        ) {
+          throw new Error('No-spend dimension fixture is invalid');
+        }
+        return { ...summary };
+      }
+
+      function summarizeTrendComparisonFixture(series = trendDailySeriesFixture) {
+        const previousTotal = series.previous.reduce((sum, value) => sum + value, 0);
+        const currentTotal = series.current.reduce((sum, value) => sum + value, 0);
+        const relativeChange = previousTotal > 0
+          ? ((currentTotal - previousTotal) / previousTotal) * 100
+          : 0;
+        return {
+          previousTotal,
+          currentTotal,
+          percentage: Math.round(Math.abs(relativeChange)),
+          direction: relativeChange > 0 ? 'up' : relativeChange < 0 ? 'down' : 'flat',
+        };
+      }
+
+      function getVariableBudgetDimension(dimensionId) {
+        const dimension = variableBudgetDimensions.find((entry) => entry.id === dimensionId);
+        if (!dimension) throw new Error('Unknown variable budget dimension: ' + dimensionId);
+        return dimension;
+      }
+
+      function summarizeVariableBudgetDimensionFixture(dimensionId = variableBudgetDefaultDimensionId) {
+        const dimension = getVariableBudgetDimension(dimensionId);
+        const source = variableBudgetDimensionFixture[dimensionId];
+        if (
+          !source ||
+          !Number.isFinite(source.remaining) ||
+          !Number.isFinite(source.spent) ||
+          !Number.isInteger(source.transactionCount) ||
+          !Number.isFinite(source.budget) ||
+          source.remaining < 0 ||
+          source.spent < 0 ||
+          source.transactionCount <= 0 ||
+          source.budget <= 0 ||
+          Math.abs(source.remaining + source.spent - source.budget) > .01
+        ) {
+          throw new Error('Variable budget dimension fixture is invalid');
+        }
+        const progress = Math.round((source.spent / source.budget) * 10000) / 100;
+        if (progress < 0 || progress > 100) throw new Error('Variable budget progress is invalid');
+        return {
+          ...dimension,
+          ...source,
+          progress,
+          progressLabel: source.progressLabel || String(Math.round(progress)) + '%',
+        };
+      }
+
       function summarizeTodayRedesignFixture() {
         const dailyCeiling = todayRedesignFixture.variableExpense + todayRedesignFixture.dailyRemaining;
         const progress = dailyCeiling > 0
           ? (todayRedesignFixture.variableExpense / dailyCeiling) * 100
           : 0;
-        const averageMarker = dailyCeiling > 0
-          ? Math.min(100, (todayRedesignFixture.dailyAverage / dailyCeiling) * 100)
-          : 0;
         return {
           ...todayRedesignFixture,
           dailyCeiling,
           progress,
-          averageMarker,
         };
       }
 
@@ -4888,20 +5704,105 @@
         }
       }
 
-      function populateTodayRedesignScreen(column, card) {
+      function createTodayRedesignInsightCard(doc, config) {
+        const {
+          id,
+          variant = '',
+          title,
+          icon,
+          iconColor = '#5f55ec',
+          iconGlyph,
+          value,
+          secondary,
+          direction = null,
+          ghostTransactionsIncluded = true,
+        } = config;
+        const card = createTodayRedesignElement(
+          doc,
+          'article',
+          `stage2-redesign-insight-card ${variant}`.trim(),
+        );
+        card.setAttribute('data-insight-card', id);
+        const head = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-head');
+        const iconWrap = createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-icon');
+        if (icon) {
+          const slot = createTodayRedesignElement(doc, 'span', 'slot-icon');
+          slot.style.setProperty('--icon-url', `url('/assets/icons/lucide/${icon}')`);
+          slot.style.setProperty('--icon-color', iconColor);
+          iconWrap.append(slot);
+        } else {
+          iconWrap.append(createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-icon-glyph', iconGlyph || '•'));
+        }
+        head.append(iconWrap, createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-title', title));
+
+        const body = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-body');
+        const valueElement = createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-value', value);
+        if (direction) {
+          const directionGlyph = direction === 'up' ? '↑' : direction === 'down' ? '↓' : '→';
+          const directionElement = createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-direction', directionGlyph);
+          directionElement.setAttribute('data-direction', direction);
+          directionElement.setAttribute('aria-hidden', 'true');
+          valueElement.append(directionElement);
+        }
+        const secondaryElement = createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-meta', secondary);
+        body.append(valueElement, secondaryElement);
+
+        const ghostToggle = createTodayRedesignElement(doc, 'button', 'stage2-redesign-insight-ghost-toggle');
+        ghostToggle.type = 'button';
+        ghostToggle.setAttribute('data-ghost-transaction-toggle', id);
+        const ghostIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
+        ghostIcon.style.setProperty('--icon-url', "url('/assets/icons/lucide/ghost.svg')");
+        ghostIcon.style.setProperty('--icon-color', 'currentColor');
+        ghostToggle.append(ghostIcon);
+
+        let includeGhostTransactions = ghostTransactionsIncluded;
+        const setGhostTransactionsIncluded = (nextValue) => {
+          includeGhostTransactions = Boolean(nextValue);
+          card.setAttribute('data-include-ghost-transactions', String(includeGhostTransactions));
+          ghostToggle.setAttribute('aria-pressed', String(includeGhostTransactions));
+          ghostToggle.setAttribute(
+            'aria-label',
+            includeGhostTransactions
+              ? 'Ghost tranzakciók beleszámítanak. Kikapcsolás.'
+              : 'Ghost tranzakciók kizárva. Bekapcsolás.',
+          );
+        };
+        ghostToggle.addEventListener('click', () => setGhostTransactionsIncluded(!includeGhostTransactions));
+        setGhostTransactionsIncluded(includeGhostTransactions);
+        card.append(head, body, ghostToggle);
+        return { card, body, valueElement, secondaryElement, ghostToggle, setGhostTransactionsIncluded };
+      }
+
+      function populateTodayRedesignScreen(column, card, topCategoriesCard, categoryChangeCard, latestTransactionCard, averageDailyCard, trendCard, upcomingRecurringCard) {
         const { doc, screen, sourceBrand } = prepareTodayRedesignScreen(column, card);
         const summary = summarizeTodayRedesignFixture();
+        if (!topCategoriesCard || !Array.isArray(topCategoriesCard.categoryPeriods) || topCategoriesCard.categoryPeriods.length !== 3) {
+          throw new Error('Today redesign requires three structured Top categories period facts');
+        }
+        if (!categoryChangeCard) {
+          throw new Error('Today redesign requires the category-change catalog card');
+        }
+        if (!latestTransactionCard) {
+          throw new Error('Today redesign requires the Latest transaction catalog card');
+        }
+        if (!averageDailyCard) {
+          throw new Error('Today redesign requires the Average daily catalog card');
+        }
+        if (!trendCard) {
+          throw new Error('Today redesign requires the 30-day rhythm catalog card');
+        }
+        if (!upcomingRecurringCard || !upcomingRecurringCard.categoryAvatar || !upcomingRecurringCard.upcomingDate) {
+          throw new Error('Today redesign requires the upcoming recurring transaction catalog card');
+        }
+        const topCategoryPeriods = topCategoriesCard.categoryPeriods;
+        const averageDailySummary = summarizeAverageDailyFixture();
         const balanceText = `-${formatTodayRedesignForint(summary.balance)}`;
         const reserveText = `${summary.reservePercent}%`;
         const incomeText = `${summary.incomeRatio}%`;
         const expenseText = `${summary.expenseRatio}%`;
         const noSpendText = `${summary.noSpendDays} / ${summary.noSpendWindowDays} nap`;
-        const topCategoryText = summary.topCategory;
         const largestCategoryText = summary.largestCategory;
         const remainingText = formatTodayRedesignForint(summary.dailyRemaining);
-        const variableText = formatTodayRedesignForint(summary.variableExpense);
-        const averageText = formatTodayRedesignForint(summary.dailyAverage);
-        const transactionText = `${summary.transactionCount} db`;
         const categoryDeltaText = `+${formatTodayRedesignForint(summary.largestCategoryDelta)}`;
         const monthText = `-${formatTodayRedesignForint(summary.monthTotal)}`;
 
@@ -4926,24 +5827,6 @@
 
         const hero = createTodayRedesignElement(doc, 'section', 'stage2-redesign-balance-hero');
         hero.style.setProperty('--today-redesign-reserve', reserveText);
-        const heroAction = createTodayRedesignElement(doc, 'button', 'stage2-redesign-hero-action');
-        heroAction.type = 'button';
-        heroAction.setAttribute('aria-label', 'Balance részletek');
-        heroAction.append(
-          createTodayRedesignElement(doc, 'span', '', 'Részletek'),
-          createTodayRedesignElement(doc, 'b', '', '→'),
-        );
-        const chart = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        chart.classList.add('stage2-redesign-hero-chart');
-        chart.setAttribute('viewBox', '0 0 372 72');
-        chart.setAttribute('preserveAspectRatio', 'none');
-        const chartPath = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
-        chartPath.setAttribute('d', 'M0 56 C25 61 47 46 70 40 S108 27 133 38 S171 58 197 42 S236 21 261 30 S289 47 315 24 S343 11 359 12');
-        const chartDot = doc.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        chartDot.setAttribute('cx', '359');
-        chartDot.setAttribute('cy', '12');
-        chartDot.setAttribute('r', '4');
-        chart.append(chartPath, chartDot);
         const reserve = createTodayRedesignElement(doc, 'div', 'stage2-redesign-reserve');
         reserve.append(
           createTodayRedesignElement(doc, 'span', 'stage2-redesign-hero-stat-title', 'Tartalék'),
@@ -4974,8 +5857,6 @@
         hero.append(
           createTodayRedesignElement(doc, 'span', 'stage2-redesign-hero-label', 'Egyenleg'),
           createTodayRedesignElement(doc, 'strong', 'stage2-redesign-hero-amount', balanceText),
-          heroAction,
-          chart,
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-hero-speck one'),
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-hero-speck two'),
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-hero-speck three'),
@@ -4983,60 +5864,99 @@
         );
 
         const insightGrid = createTodayRedesignElement(doc, 'section', 'stage2-redesign-insight-grid');
-        const noSpend = createTodayRedesignElement(doc, 'article', 'stage2-redesign-insight-card no-spend');
-        const noSpendHead = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-head');
-        const moonIcon = createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-icon');
-        moonIcon.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-moon-glyph'));
-        noSpendHead.append(moonIcon, createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-title', 'No-spend napok'));
-        const noSpendBody = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-body');
-        noSpendBody.append(
-          createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-value', noSpendText),
-          createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-meta', 'változó költés nélkül'),
-        );
-        const noSpendWave = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        noSpendWave.classList.add('stage2-redesign-no-spend-wave');
-        noSpendWave.setAttribute('viewBox', '0 0 120 33');
-        noSpendWave.setAttribute('preserveAspectRatio', 'none');
-        const noSpendWavePath = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
-        noSpendWavePath.setAttribute('d', 'M0 24 C18 29 28 17 43 25 S67 33 85 19 S106 20 120 29 V33 H0 Z');
-        noSpendWave.append(noSpendWavePath);
-        noSpend.append(noSpendHead, noSpendBody, noSpendWave);
+        const noSpend = createTodayRedesignInsightCard(doc, {
+          id: 'no-spend',
+          variant: 'no-spend',
+          title: 'No-spend napok',
+          iconGlyph: '☾',
+          value: noSpendText,
+          secondary: 'Elmúlt 7 nap',
+        }).card;
+        noSpend.setAttribute('aria-label', `No-spend napok: ${noSpendText}, elmúlt 7 nap`);
 
-        const topCategory = createTodayRedesignElement(doc, 'article', 'stage2-redesign-insight-card top-category');
-        const topCategoryHead = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-head');
-        const trophyIcon = createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-icon');
-        const trophySlot = createTodayRedesignElement(doc, 'span', 'slot-icon');
-        trophySlot.style.setProperty('--icon-url', "url('/assets/icons/lucide/trophy.svg')");
-        trophySlot.style.setProperty('--icon-color', '#f28a22');
-        trophyIcon.append(trophySlot);
-        topCategoryHead.append(trophyIcon, createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-title', 'Top kategóriák'));
-        const topCategoryBody = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-body');
-        topCategoryBody.append(
-          createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-kicker', 'Ma'),
-          createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-value', topCategoryText),
-          createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-meta', summary.topCategoryStage1Meta),
-        );
-        topCategory.append(topCategoryHead, topCategoryBody);
+        const categoryChange = createTodayRedesignInsightCard(doc, {
+          id: 'category-change',
+          variant: 'category-change',
+          title: categoryChangeCard.title,
+          icon: categoryChangeCard.icon,
+          iconColor: '#ef4173',
+          value: categoryDeltaText,
+          secondary: `${largestCategoryText} · előző 30 naphoz képest`,
+        }).card;
+        categoryChange.setAttribute('aria-label', `${categoryChangeCard.title}: ${categoryDeltaText}, ${largestCategoryText}, előző 30 naphoz képest`);
 
-        const categoryChange = createTodayRedesignElement(doc, 'article', 'stage2-redesign-insight-card category-change');
-        const categoryChangeHead = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-head');
-        const categoryChangeIcon = createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-icon');
-        categoryChangeIcon.append(createTodayRedesignElement(doc, 'span', 'stage2-redesign-up-glyph', '↗'));
-        categoryChangeHead.append(categoryChangeIcon, createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-title', 'Legnagyobb kategóriaváltozás'));
-        const categoryChangeBody = createTodayRedesignElement(doc, 'div', 'stage2-redesign-insight-body');
-        categoryChangeBody.append(
-          createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-value', largestCategoryText),
-          createTodayRedesignElement(doc, 'strong', 'stage2-redesign-insight-value', categoryDeltaText),
-          createTodayRedesignElement(doc, 'span', 'stage2-redesign-insight-meta', summary.largestCategoryPeriod),
+        const latestTransaction = createTodayRedesignInsightCard(doc, {
+          id: 'latest-transaction',
+          variant: 'latest-transaction',
+          title: latestTransactionCard.title,
+          icon: latestTransactionCard.icon,
+          iconColor: '#5277d3',
+          value: latestTransactionCard.motherValue,
+          secondary: latestTransactionCard.motherMeta,
+        }).card;
+        latestTransaction.setAttribute('aria-label', `${latestTransactionCard.title}: ${latestTransactionCard.motherValue}, ${latestTransactionCard.motherMeta}`);
+
+        const trendSummary = summarizeTrendComparisonFixture();
+        const trend = createTodayRedesignInsightCard(doc, {
+          id: 'trend-comparison',
+          variant: 'trend-comparison',
+          title: trendCard.title,
+          icon: 'chart-candlestick.svg',
+          iconColor: '#7657d9',
+          value: `${trendSummary.percentage}%`,
+          secondary: trendCard.motherMeta,
+          direction: trendSummary.direction,
+        }).card;
+        trend.setAttribute('data-trend-comparison', '30-plus-30');
+        trend.setAttribute('data-trend-direction', trendSummary.direction);
+        trend.setAttribute(
+          'aria-label',
+          `${trendCard.title}: ${trendSummary.percentage}% ${trendSummary.direction === 'up' ? 'növekedés' : trendSummary.direction === 'down' ? 'csökkenés' : 'változatlan'} ezt megelőző 30 naphoz képest.`,
         );
-        categoryChange.append(categoryChangeHead, categoryChangeBody);
-        insightGrid.append(noSpend, topCategory, categoryChange);
+
+        const upcomingRecurring = createTodayRedesignInsightCard(doc, {
+          id: 'upcoming-recurring',
+          variant: 'upcoming-recurring',
+          title: upcomingRecurringCard.title,
+          iconGlyph: '↻',
+          value: '',
+          secondary: upcomingRecurringCard.upcomingDate,
+        });
+        upcomingRecurring.card.style.setProperty('--today-recurring-category-color', upcomingRecurringCard.categoryAvatar.color);
+        upcomingRecurring.valueElement.className += ' stage2-redesign-upcoming-recurring-value';
+        upcomingRecurring.secondaryElement.className += ' stage2-redesign-upcoming-recurring-date';
+        const recurringMiniAvatar = createTodayRedesignElement(doc, 'span', 'stage2-redesign-upcoming-recurring-mini-avatar');
+        recurringMiniAvatar.setAttribute('aria-hidden', 'true');
+        const recurringMiniAvatarIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
+        recurringMiniAvatarIcon.style.setProperty('--icon-url', `url('/assets/icons/lucide/${upcomingRecurringCard.categoryAvatar.icon}')`);
+        recurringMiniAvatarIcon.style.setProperty('--icon-color', '#ffffff');
+        recurringMiniAvatar.append(recurringMiniAvatarIcon);
+        const recurringName = createTodayRedesignElement(doc, 'span', 'stage2-redesign-upcoming-recurring-name', upcomingRecurringCard.childName);
+        const recurringAmount = createTodayRedesignElement(doc, 'span', 'stage2-redesign-upcoming-recurring-amount', upcomingRecurringCard.motherValue);
+        upcomingRecurring.valueElement.replaceChildren(recurringName, recurringAmount);
+        upcomingRecurring.body.insertBefore(recurringMiniAvatar, upcomingRecurring.secondaryElement);
+        upcomingRecurring.card.setAttribute(
+          'aria-label',
+          `${upcomingRecurringCard.title}: ${upcomingRecurringCard.childName}, ${upcomingRecurringCard.categoryAvatar.label}, ${upcomingRecurringCard.motherValue}, ${upcomingRecurringCard.upcomingDate}.`,
+        );
+
+        insightGrid.append(noSpend, categoryChange, latestTransaction, trend, upcomingRecurring.card);
 
         const detail = createTodayRedesignElement(doc, 'section', 'stage2-redesign-today-detail');
         const detailTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
+        const budgetDimensions = createTodayRedesignElement(doc, 'div', 'stage2-redesign-variable-budget-dimensions');
+        const budgetDimensionButtons = [];
+        for (const dimension of variableBudgetDimensions) {
+          const button = createTodayRedesignElement(doc, 'button', 'stage2-redesign-variable-budget-dimension', dimension.label);
+          button.type = 'button';
+          button.setAttribute('data-variable-budget-dimension-option', dimension.id);
+          button.setAttribute('aria-pressed', 'false');
+          budgetDimensions.append(button);
+          budgetDimensionButtons.push(button);
+        }
         detailTopline.append(
-          createTodayRedesignElement(doc, 'strong', '', 'Napi változó keret'),
-          createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-live-dot'),
+          createTodayRedesignElement(doc, 'strong', '', 'Változó keret'),
+          budgetDimensions,
         );
         const detailMain = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-main');
         const cartTile = createTodayRedesignElement(doc, 'div', 'stage2-redesign-cart-tile');
@@ -5045,41 +5965,67 @@
         cartSlot.style.setProperty('--icon-color', '#ffffff');
         cartTile.append(cartSlot);
         const detailCopy = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-copy');
+        const detailRemainingLabel = createTodayRedesignElement(doc, 'strong');
         detailCopy.append(
-          createTodayRedesignElement(doc, 'strong', '', 'Napi változó keret'),
-          createTodayRedesignElement(doc, 'span', '', 'Mai költésből csak a változó rész'),
+          detailRemainingLabel,
+          createTodayRedesignElement(doc, 'span', '', 'Fix tételek kizárva'),
         );
-        detailMain.append(cartTile, detailCopy, createTodayRedesignElement(doc, 'strong', 'stage2-redesign-detail-amount', remainingText));
+        const detailRemainingValue = createTodayRedesignElement(doc, 'strong', 'stage2-redesign-detail-amount');
+        detailMain.append(cartTile, detailCopy, detailRemainingValue);
         const factGrid = createTodayRedesignElement(doc, 'div', 'stage2-redesign-fact-grid');
         const variableFact = createTodayRedesignElement(doc, 'div', 'stage2-redesign-fact variable');
         const variableLabel = createTodayRedesignElement(doc, 'span', 'stage2-redesign-fact-label');
-        variableLabel.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-fact-dot'), createTodayRedesignElement(doc, 'span', '', 'Változó költés'));
-        variableFact.append(variableLabel, createTodayRedesignElement(doc, 'strong', '', variableText));
-        const averageFact = createTodayRedesignElement(doc, 'div', 'stage2-redesign-fact average');
-        const averageLabel = createTodayRedesignElement(doc, 'span', 'stage2-redesign-fact-label');
-        averageLabel.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-fact-dot'), createTodayRedesignElement(doc, 'span', '', 'Napi átlag jel'));
-        averageFact.append(averageLabel, createTodayRedesignElement(doc, 'strong', '', averageText));
+        const detailSpentLabel = createTodayRedesignElement(doc, 'span');
+        variableLabel.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-fact-dot'), detailSpentLabel);
+        const detailSpentValue = createTodayRedesignElement(doc, 'strong');
+        variableFact.append(variableLabel, detailSpentValue);
         const transactionFact = createTodayRedesignElement(doc, 'div', 'stage2-redesign-fact transactions');
         const transactionLabel = createTodayRedesignElement(doc, 'span', 'stage2-redesign-fact-label');
-        transactionLabel.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-fact-dot'), createTodayRedesignElement(doc, 'span', '', 'Összes mai tranzakció'));
-        transactionFact.append(transactionLabel, createTodayRedesignElement(doc, 'strong', '', transactionText));
-        factGrid.append(variableFact, averageFact, transactionFact);
+        const detailTransactionLabel = createTodayRedesignElement(doc, 'span');
+        transactionLabel.append(createTodayRedesignElement(doc, 'i', 'stage2-redesign-fact-dot'), detailTransactionLabel);
+        const detailTransactionValue = createTodayRedesignElement(doc, 'strong');
+        transactionFact.append(transactionLabel, detailTransactionValue);
+        factGrid.append(variableFact, transactionFact);
         const threshold = createTodayRedesignElement(doc, 'div', 'stage2-redesign-threshold');
         const thresholdCopy = createTodayRedesignElement(doc, 'div', 'stage2-redesign-threshold-copy');
-        thresholdCopy.append(
-          createTodayRedesignElement(doc, 'strong', '', 'Napi költési küszöb'),
-          createTodayRedesignElement(doc, 'span', '', 'napi keret és átlagjel'),
-        );
+        const thresholdTitle = createTodayRedesignElement(doc, 'strong');
+        const thresholdBudget = createTodayRedesignElement(doc, 'span');
+        thresholdCopy.append(thresholdTitle, thresholdBudget);
         const thresholdBar = createTodayRedesignElement(doc, 'div', 'stage2-redesign-threshold-bar');
-        thresholdBar.style.setProperty('--today-redesign-progress', `${summary.progress}%`);
-        thresholdBar.style.setProperty('--today-redesign-average-marker', `${summary.averageMarker}%`);
-        thresholdBar.setAttribute('aria-label', `${variableText} a ${formatTodayRedesignForint(summary.dailyCeiling)} napi változó keretből`);
         thresholdBar.append(
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-threshold-fill'),
-          createTodayRedesignElement(doc, 'i', 'stage2-redesign-threshold-average'),
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-threshold-marker'),
         );
-        threshold.append(thresholdCopy, thresholdBar);
+        const thresholdReference = createTodayRedesignElement(doc, 'div', 'stage2-redesign-threshold-reference');
+        const thresholdReferenceText = createTodayRedesignElement(doc, 'span');
+        thresholdReference.append(thresholdReferenceText);
+        threshold.append(thresholdCopy, thresholdBar, thresholdReference);
+        const renderVariableBudgetDimension = (dimensionId) => {
+          const budgetSummary = summarizeVariableBudgetDimensionFixture(dimensionId);
+          const remaining = formatTodayRedesignForint(budgetSummary.remaining);
+          const spent = formatTodayRedesignForint(budgetSummary.spent);
+          const budget = formatTodayRedesignForint(budgetSummary.budget);
+          detail.setAttribute('data-variable-budget-dimension', dimensionId);
+          detail.setAttribute('aria-label', 'Változó keret, ' + budgetSummary.label + ': ' + budgetSummary.remainingLabel + ' ' + remaining);
+          detailRemainingLabel.textContent = budgetSummary.remainingLabel;
+          detailRemainingValue.textContent = remaining;
+          detailSpentLabel.textContent = budgetSummary.spentLabel;
+          detailSpentValue.textContent = formatTodayRedesignForint(budgetSummary.spent);
+          detailTransactionLabel.textContent = budgetSummary.transactionLabel;
+          detailTransactionValue.textContent = `${budgetSummary.transactionCount} db`;
+          thresholdTitle.textContent = budgetSummary.thresholdLabel;
+          thresholdBudget.textContent = 'Keret: ' + budget;
+          thresholdBar.style.setProperty('--today-redesign-progress', `${budgetSummary.progress}%`);
+          thresholdBar.setAttribute('aria-label', budgetSummary.spentLabel + ': ' + spent + ' a ' + budget + ' keretből (' + budgetSummary.progressLabel + ')');
+          thresholdReferenceText.textContent = budgetSummary.referenceLabel;
+          for (const button of budgetDimensionButtons) {
+            button.setAttribute('aria-pressed', String(button.dataset.variableBudgetDimensionOption === dimensionId));
+          }
+        };
+        for (const button of budgetDimensionButtons) {
+          button.addEventListener('click', () => renderVariableBudgetDimension(button.dataset.variableBudgetDimensionOption));
+        }
+        renderVariableBudgetDimension(variableBudgetDefaultDimensionId);
         detail.append(
           detailTopline,
           detailMain,
@@ -5088,6 +6034,164 @@
           createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
           threshold,
         );
+
+        const topCategoriesDetail = createTodayRedesignElement(doc, 'article', 'stage2-redesign-top-categories-detail');
+        topCategoriesDetail.setAttribute('aria-label', `${topCategoriesCard.title} részletei`);
+        const topCategoriesTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
+        topCategoriesTopline.append(
+          createTodayRedesignElement(doc, 'strong', '', topCategoriesCard.title),
+          createTodayRedesignElement(doc, 'span', 'stage2-redesign-top-categories-scope', 'Fix tételek kizárva'),
+        );
+        const topCategoriesMain = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-categories-main');
+        const topCategoriesTile = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-categories-tile');
+        const topCategoriesSlot = createTodayRedesignElement(doc, 'span', 'slot-icon');
+        topCategoriesSlot.style.setProperty('--icon-url', `url('/assets/icons/lucide/${topCategoriesCard.icon}')`);
+        topCategoriesSlot.style.setProperty('--icon-color', '#ffffff');
+        topCategoriesTile.append(topCategoriesSlot);
+        const topCategoriesCopy = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-copy');
+        topCategoriesCopy.append(
+          createTodayRedesignElement(doc, 'strong', '', topCategoriesCard.childName),
+          createTodayRedesignElement(doc, 'span', '', topCategoriesCard.childMeta),
+        );
+        topCategoriesMain.append(
+          topCategoriesTile,
+          topCategoriesCopy,
+          createTodayRedesignElement(doc, 'strong', 'stage2-redesign-detail-amount', topCategoriesCard.childValue),
+        );
+        const topCategoriesPeriods = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-categories-periods');
+        for (const period of topCategoryPeriods) {
+          const periodRow = createTodayRedesignElement(doc, 'article', 'stage2-redesign-top-categories-period');
+          const periodAvatar = createTodayRedesignElement(doc, 'span', 'stage2-redesign-top-categories-period-avatar');
+          periodAvatar.style.setProperty('--today-top-category-color', period.avatar.color);
+          const periodIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
+          periodIcon.style.setProperty('--icon-url', `url('/assets/icons/lucide/${period.avatar.icon}')`);
+          periodIcon.style.setProperty('--icon-color', '#ffffff');
+          periodAvatar.append(periodIcon);
+          const periodCopy = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-categories-period-copy');
+          periodCopy.append(
+            createTodayRedesignElement(doc, 'span', '', period.scope),
+            createTodayRedesignElement(doc, 'strong', '', period.category),
+          );
+          periodRow.append(periodAvatar, periodCopy, createTodayRedesignElement(doc, 'strong', '', formatTodayRedesignForint(period.amount)));
+          topCategoriesPeriods.append(periodRow);
+        }
+        topCategoriesDetail.append(
+          topCategoriesTopline,
+          topCategoriesMain,
+          createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
+          topCategoriesPeriods,
+        );
+
+        const topMerchantsDetail = createTodayRedesignElement(doc, 'article', 'stage2-redesign-top-merchants-detail');
+        const topMerchantsTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
+        const topMerchantsDimensions = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-merchants-dimensions');
+        const topMerchantDimensionButtons = [];
+        for (const dimension of topMerchantDimensions) {
+          const button = createTodayRedesignElement(doc, 'button', 'stage2-redesign-top-merchants-dimension', dimension.label);
+          button.type = 'button';
+          button.setAttribute('data-top-merchants-dimension-option', dimension.id);
+          button.setAttribute('aria-pressed', 'false');
+          topMerchantsDimensions.append(button);
+          topMerchantDimensionButtons.push(button);
+        }
+        topMerchantsTopline.append(
+          createTodayRedesignElement(doc, 'strong', '', 'Top 5 kereskedő'),
+          topMerchantsDimensions,
+        );
+        const topMerchantsList = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-merchants-list');
+        const renderTopMerchantsRows = (dimensionId) => {
+          const dimension = getTopMerchantDimension(dimensionId);
+          const merchants = summarizeTopMerchantsFixture(allTransactionMerchantFixture, dimensionId);
+          topMerchantsDetail.setAttribute('data-top-merchants-dimension', dimensionId);
+          topMerchantsDetail.setAttribute('aria-label', `Top 5 kereskedő, ${dimension.label}`);
+          for (const button of topMerchantDimensionButtons) {
+            button.setAttribute('aria-pressed', String(button.dataset.topMerchantsDimensionOption === dimensionId));
+          }
+          topMerchantsList.replaceChildren(...merchants.map((merchant) => {
+            const merchantRow = createTodayRedesignElement(doc, 'article', 'stage2-redesign-top-merchants-row');
+            const amountText = formatTodayRedesignForint(merchant.totalAmount);
+            merchantRow.setAttribute('aria-label', `${merchant.merchant}: ${merchant.transactionCount} tranzakció, ${amountText}`);
+            const merchantAvatar = createTodayRedesignElement(doc, 'span', 'stage2-redesign-top-merchants-avatar');
+            merchantAvatar.style.setProperty('--today-top-merchant-color', merchant.avatarColor);
+            const merchantIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
+            merchantIcon.style.setProperty('--icon-url', `url('/assets/icons/lucide/${merchant.icon}')`);
+            merchantIcon.style.setProperty('--icon-color', '#ffffff');
+            merchantAvatar.append(merchantIcon);
+            const merchantCopy = createTodayRedesignElement(doc, 'div', 'stage2-redesign-top-merchants-copy');
+            merchantCopy.append(
+              createTodayRedesignElement(doc, 'strong', '', merchant.merchant),
+              createTodayRedesignElement(doc, 'span', '', `${merchant.transactionCount} tranzakció`),
+            );
+            merchantRow.append(
+              merchantAvatar,
+              merchantCopy,
+              createTodayRedesignElement(doc, 'strong', '', amountText),
+            );
+            return merchantRow;
+          }));
+        };
+        for (const button of topMerchantDimensionButtons) {
+          button.addEventListener('click', () => renderTopMerchantsRows(button.dataset.topMerchantsDimensionOption));
+        }
+        renderTopMerchantsRows(topMerchantDefaultDimensionId);
+        topMerchantsDetail.append(
+          topMerchantsTopline,
+          createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
+          topMerchantsList,
+        );
+
+        const averageDailyDetail = createTodayRedesignElement(doc, 'article', 'stage2-redesign-average-daily-detail');
+        averageDailyDetail.setAttribute('aria-label', `${averageDailyCard.title}: ${formatAverageDailyForint(averageDailySummary.average)} naponta, elmúlt 30 nap`);
+        const averageDailyTopline = createTodayRedesignElement(doc, 'div', 'stage2-redesign-detail-topline');
+        averageDailyTopline.append(
+          createTodayRedesignElement(doc, 'strong', '', averageDailyCard.title),
+          createTodayRedesignElement(doc, 'span', 'stage2-redesign-average-daily-scope', 'Fix tételek kizárva'),
+        );
+        const averageDailyMain = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-main');
+        const averageDailyTile = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-tile');
+        const averageDailyIcon = createTodayRedesignElement(doc, 'span', 'slot-icon');
+        averageDailyIcon.style.setProperty('--icon-url', `url('/assets/icons/lucide/${averageDailyCard.icon}')`);
+        averageDailyIcon.style.setProperty('--icon-color', '#ffffff');
+        averageDailyTile.append(averageDailyIcon);
+        const averageDailyCopy = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-copy');
+        averageDailyCopy.append(
+          createTodayRedesignElement(doc, 'strong', '', 'Elmúlt 30 nap'),
+          createTodayRedesignElement(doc, 'span', '', `${formatAverageDailyForint(averageDailySummary.rollingTotal)} / 30 nap`),
+        );
+        averageDailyMain.append(
+          averageDailyTile,
+          averageDailyCopy,
+          createTodayRedesignElement(doc, 'strong', 'stage2-redesign-average-daily-amount', `${formatAverageDailyForint(averageDailySummary.average)} / nap`),
+        );
+        const averageDailyChart = createTodayRedesignElement(doc, 'div', 'fastinfo-sparkline common-balance-trend-expanded-sparkline');
+        averageDailyChart.setAttribute('aria-label', `30 napos napi változó költés: ${averageDailySummary.spikeDays.length} kiugró nap az átlag 1,5×-ese felett`);
+        averageDailyChart.style.setProperty('clip-path', buildTrendSparklineClipPath(averageDailyFixture.values));
+        const averageDailyFacts = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-facts');
+        const averageDailyFactData = [
+          { label: 'Egyenleg puffer', value: `${averageDailySummary.bufferDays} nap` },
+          { label: 'Legmagasabb nap', value: formatAverageDailyForint(averageDailySummary.highestDay) },
+          { label: `Kiugrások > ${formatAverageDailyForint(averageDailySummary.spikeThreshold)}`, value: `${averageDailySummary.spikeDays.length} db` },
+        ];
+        for (const fact of averageDailyFactData) {
+          const factElement = createTodayRedesignElement(doc, 'div', 'stage2-redesign-average-daily-fact');
+          factElement.append(
+            createTodayRedesignElement(doc, 'span', '', fact.label),
+            createTodayRedesignElement(doc, 'strong', '', fact.value),
+          );
+          averageDailyFacts.append(factElement);
+        }
+        averageDailyDetail.append(
+          averageDailyTopline,
+          averageDailyMain,
+          createTodayRedesignElement(doc, 'i', 'stage2-redesign-detail-divider'),
+          averageDailyChart,
+          averageDailyFacts,
+        );
+
+        const detailCarousel = createTodayRedesignElement(doc, 'section', 'stage2-redesign-detail-carousel');
+        detailCarousel.setAttribute('aria-label', 'Napi insight részletek');
+        detailCarousel.setAttribute('data-today-swipe-region', 'detail-carousel');
+        detailCarousel.append(detail, topCategoriesDetail, topMerchantsDetail, averageDailyDetail);
 
         const actions = createTodayRedesignElement(doc, 'section', 'stage2-redesign-action-grid');
         const incomeAction = createTodayRedesignElement(doc, 'button', 'stage2-redesign-action-card stage2-redesign-income-action');
@@ -5229,7 +6333,7 @@
         } else {
           postBudgetContent.append(actions, monthSummary, searchRow, transactionSection);
         }
-        scrollContent.append(insightGrid, detail, postBudgetContent);
+        scrollContent.append(insightGrid, detailCarousel, postBudgetContent);
         scrollViewport.append(scrollContent);
         const heroOverlay = createTodayRedesignElement(doc, 'section', 'stage2-redesign-hero-overlay');
         heroOverlay.append(hero);
@@ -5237,6 +6341,139 @@
         screen.replaceChildren(layout);
         attachTodayRedesignScrollInteraction(screen, scrollViewport, transactionViewport);
         attachTodayTimeScopeDrawer(screen);
+      }
+
+      function installPulseForecastGalleryStyles(doc) {
+        if (doc.getElementById('balance-pulse-forecast-gallery-styles')) return;
+        const style = doc.createElement('style');
+        style.id = 'balance-pulse-forecast-gallery-styles';
+        style.textContent = [
+          '[data-exact-b3m-gallery="true"].common-header-mode {',
+          '  display: block;',
+          '  width: max-content;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-gallery {',
+          '  width: max-content;',
+          '  margin-top: 40px;',
+          '  padding: 0 24px 42px;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-gallery-row {',
+          '  display: flex;',
+          '  width: max-content;',
+          '  gap: 16px;',
+          '  align-items: stretch;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-card {',
+          '  display: grid;',
+          '  grid-template-rows: auto 128px auto;',
+          '  width: 252px;',
+          '  min-height: 214px;',
+          '  overflow: hidden;',
+          '  padding: 15px;',
+          '  border: 1px solid rgba(101, 112, 142, .18);',
+          '  border-radius: 20px;',
+          '  background: linear-gradient(160deg, rgba(255, 255, 255, .98), rgba(244, 247, 252, .94));',
+          '  box-shadow: 0 15px 32px rgba(49, 67, 107, .12), inset 0 1px 0 rgba(255, 255, 255, .95);',
+          '  color: #172033;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-card-header {',
+          '  display: grid;',
+          '  gap: 3px;',
+          '  min-height: 39px;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-card-header strong {',
+          '  color: #172033;',
+          '  font-size: 13px;',
+          '  line-height: 1.08;',
+          '  font-weight: 900;',
+          '  letter-spacing: -.02em;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-card-header span {',
+          '  color: #647086;',
+          '  font-size: 10px;',
+          '  line-height: 1.1;',
+          '  font-weight: 800;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-chart {',
+          '  display: block;',
+          '  width: 100%;',
+          '  height: 128px;',
+          '  overflow: visible;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-chart text {',
+          '  font-family: Inter, ui-sans-serif, system-ui, sans-serif;',
+          '}',
+          '',
+          '[data-exact-b3m-gallery="true"] .pulse-forecast-description {',
+          '  margin: 3px 0 0;',
+          '  color: #536078;',
+          '  font-size: 10px;',
+          '  line-height: 1.28;',
+          '  font-weight: 650;',
+          '}',
+        ].join('\n');
+        doc.head.append(style);
+      }
+
+      function createPulseForecastChart(doc, chartId, ariaLabel) {
+        const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.classList.add('pulse-forecast-chart');
+        svg.setAttribute('viewBox', '0 0 320 142');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', ariaLabel);
+        const charts = {
+          'month-end-expense': '<path d="M22 112 L72 100 L122 82 L172 74 L222 54 L296 34" fill="none" stroke="#e34a4a" stroke-width="4" stroke-linecap="round"/><path d="M22 112 L72 100 L122 82 L172 74" fill="none" stroke="#08a7c7" stroke-width="5" stroke-linecap="round"/><path d="M20 62 H300" stroke="#d08a00" stroke-width="2" stroke-dasharray="6 6"/><circle cx="172" cy="74" r="5" fill="#08a7c7"/><text x="22" y="25" fill="#647086" font-size="12">limit 100k</text><text x="220" y="28" fill="#e34a4a" font-size="12">forecast 114k</text>',
+          'monthly-category-burn': '<rect x="34" y="58" width="36" height="64" rx="4" fill="#08a7c7"/><rect x="94" y="36" width="36" height="86" rx="4" fill="#d08a00"/><rect x="154" y="70" width="36" height="52" rx="4" fill="#16a36a"/><rect x="214" y="24" width="36" height="98" rx="4" fill="#e34a4a"/><path d="M20 42 H300" stroke="#d08a00" stroke-width="2" stroke-dasharray="6 6"/><text x="26" y="134" fill="#647086" font-size="11">Food</text><text x="87" y="134" fill="#647086" font-size="11">Home</text><text x="149" y="134" fill="#647086" font-size="11">Taxi</text><text x="211" y="134" fill="#647086" font-size="11">Fun</text>',
+          'yearly-category-burn': '<path d="M20 116 L75 108 L130 95 L185 80 L240 54 L300 28" fill="none" stroke="#7657d9" stroke-width="4" stroke-linecap="round"/><path d="M20 102 L300 42" fill="none" stroke="#d08a00" stroke-width="2" stroke-dasharray="5 6"/><circle cx="185" cy="80" r="5" fill="#7657d9"/><text x="22" y="26" fill="#647086" font-size="12">year pace</text><text x="202" y="126" fill="#7657d9" font-size="12">travel +18%</text>',
+          'ghost-income-fixed-load': '<line x1="28" y1="72" x2="292" y2="72" stroke="#dbe3ec" stroke-width="5" stroke-linecap="round"/><circle cx="62" cy="72" r="10" fill="#16a36a"/><text x="44" y="105" fill="#647086" font-size="11">salary</text><circle cx="124" cy="72" r="10" fill="#e34a4a"/><text x="104" y="105" fill="#647086" font-size="11">rent</text><circle cx="188" cy="72" r="10" fill="#d08a00"/><text x="160" y="105" fill="#647086" font-size="11">utilities</text><circle cx="250" cy="72" r="10" fill="#7657d9"/><text x="224" y="105" fill="#647086" font-size="11">income?</text><path d="M240 38 L260 38" stroke="#7657d9" stroke-width="4" stroke-dasharray="3 4"/><text x="182" y="29" fill="#7657d9" font-size="12">ghost pending</text>',
+          'cashflow-saving-goal': '<rect x="40" y="32" width="240" height="24" rx="6" fill="#dbe3ec"/><rect x="40" y="32" width="218" height="24" rx="6" fill="#e34a4a"/><rect x="40" y="82" width="240" height="24" rx="6" fill="#dbe3ec"/><rect x="40" y="82" width="168" height="24" rx="6" fill="#16a36a"/><text x="40" y="24" fill="#647086" font-size="12">expense / income 91%</text><text x="40" y="76" fill="#647086" font-size="12">saving goal progress 70%</text>',
+          'balance-buffer-days': '<path d="M70 112 A90 90 0 0 1 250 112" fill="none" stroke="#e7ebf1" stroke-width="16" stroke-linecap="round"/><path data-pulse-buffer-zone="critical" d="M70 112 A90 90 0 0 1 80 70" fill="none" stroke="#e34a4a" stroke-width="11" stroke-linecap="round"/><path data-pulse-buffer-zone="tight" d="M84 60 A90 90 0 0 1 111 36" fill="none" stroke="#ef9b28" stroke-width="11" stroke-linecap="round"/><path data-pulse-buffer-zone="watch" d="M121 31 A90 90 0 0 1 204 34" fill="none" stroke="#d6a600" stroke-width="11" stroke-linecap="round"/><path data-pulse-buffer-zone="stable" d="M214 40 A90 90 0 0 1 250 112" fill="none" stroke="#16a36a" stroke-width="11" stroke-linecap="round"/><line x1="160" y1="112" x2="213" y2="57" stroke="#172033" stroke-width="3.5" stroke-linecap="round"/><circle cx="160" cy="112" r="6" fill="#172033"/><circle cx="213" cy="57" r="5.5" fill="#16a36a" stroke="#ffffff" stroke-width="3"/><text x="139" y="89" fill="#172033" font-size="25" font-weight="800">31</text><text x="145" y="104" fill="#647086" font-size="11" font-weight="700">nap puffer</text><text x="57" y="130" fill="#e34a4a" font-size="9" font-weight="800">0–7</text><text x="95" y="25" fill="#ef9b28" font-size="9" font-weight="800">14</text><text x="201" y="25" fill="#16a36a" font-size="9" font-weight="800">30+</text><text x="71" y="140" fill="#647086" font-size="8.5">kritikus</text><text x="138" y="140" fill="#647086" font-size="8.5">figyelő</text><text x="213" y="140" fill="#647086" font-size="8.5">stabil</text><text x="72" y="119" fill="#647086" font-size="8.5">egyenleg ÷ rolling 30 napos változó költés</text>',
+          'behavior-shift': '<path d="M26 96 C76 78 100 106 138 82 S210 46 294 40" fill="none" stroke="#d54f93" stroke-width="4" stroke-linecap="round"/><path d="M26 112 C78 110 112 106 150 92 S222 74 294 70" fill="none" stroke="#08a7c7" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 6"/><circle cx="236" cy="50" r="5" fill="#d54f93"/><text x="24" y="24" fill="#647086" font-size="12">rolling 30d variable +17%</text><text x="188" y="126" fill="#d54f93" font-size="12">score -8</text>',
+          'data-quality-status': '<rect x="42" y="32" width="236" height="28" rx="6" fill="#dbe3ec"/><rect x="42" y="32" width="205" height="28" rx="6" fill="#16a36a"/><rect x="42" y="82" width="236" height="28" rx="6" fill="#dbe3ec"/><rect x="42" y="82" width="31" height="28" rx="6" fill="#d08a00"/><text x="42" y="24" fill="#647086" font-size="12">categorized</text><text x="42" y="76" fill="#647086" font-size="12">uncategorized</text>',
+        };
+        if (!charts[chartId]) throw new Error('Unknown Pulse forecast chart: ' + chartId);
+        svg.innerHTML = charts[chartId];
+        return svg;
+      }
+
+      function createPulseForecastGallery(doc) {
+        const gallery = doc.createElement('section');
+        gallery.className = 'pulse-forecast-gallery';
+        gallery.setAttribute('aria-label', 'Pulse forecast grafikonok');
+        gallery.setAttribute('data-pulse-forecast-gallery', 'true');
+        const row = doc.createElement('div');
+        row.className = 'pulse-forecast-gallery-row';
+        for (const forecast of pulseForecastGalleryFixture) {
+          const card = doc.createElement('article');
+          card.className = 'pulse-forecast-card';
+          card.setAttribute('data-pulse-forecast-card', forecast.id);
+          const header = doc.createElement('header');
+          header.className = 'pulse-forecast-card-header';
+          const title = doc.createElement('strong');
+          title.textContent = forecast.title;
+          const reference = doc.createElement('span');
+          reference.textContent = forecast.reference;
+          header.append(title, reference);
+          const description = doc.createElement('p');
+          description.className = 'pulse-forecast-description';
+          description.textContent = forecast.description;
+          card.append(
+            header,
+            createPulseForecastChart(doc, forecast.chart, forecast.ariaLabel || forecast.title + ' · ' + forecast.reference),
+            description,
+          );
+          row.append(card);
+        }
+        gallery.append(row);
+        return gallery;
       }
 
       function setB3MContent(column, card, index) {
@@ -5260,7 +6497,6 @@
         setStage1Card(stage1Cards[2], next);
         stage1Cards[1]?.setAttribute('data-balance-mother-child-parent', card.id);
         stage1Cards[1]?.setAttribute('aria-label', `${card.title} kiválasztott anya insight`);
-        if (card.id === editingCardId) renderTrendSeriesPreview(column);
         childLayer?.setAttribute('data-balance-mother-child-child', card.id);
         panel?.setAttribute('aria-label', `${card.title} részletei`);
 
@@ -5273,7 +6509,7 @@
         populateShare(panel, card.share);
         populateFacts(panel, card.facts);
         populateVisual(panel, card);
-        if (card.id === categoryChangeEditingCardId) populateCategoryChangeBase(panel, card);
+        if (card.id === categoryChangeCardId) populateCategoryChangeBase(panel, card);
       }
 
       function renderExactB3M(doc) {
@@ -5284,37 +6520,36 @@
         if (!viewport || !host || !surface || !sourceColumn) throw new Error('Color Lab B3M zoom source was not found');
         if (!sourceColumn.querySelector('.common-header-stage2-mother-child')) throw new Error('Color Lab B3M header component was not found');
         if (!sourceColumn.querySelector('.common-balance-mother-child-panel')) throw new Error('Color Lab B3M child panel was not found');
-        installTrendAlternativeStyles(doc);
         installTodayRedesignStyles(doc);
         installTodayRedesignInteractionStyles(doc);
-        installAverageDailyAlternativeStyles(doc);
-        installNoSpendAlternativeStyles(doc);
-        installCategoryChangeAlternativeStyles(doc);
+        installPulseForecastGalleryStyles(doc);
 
         const mode = doc.createElement('section');
         mode.className = 'common-header-mode';
         mode.setAttribute('data-common-header-mode', 'balance');
         mode.setAttribute('data-exact-b3m-gallery', 'true');
-        mode.setAttribute('data-editing-card', editingCardId);
-        const editingCard = catalog.find((card) => card.id === editingCardId);
-        const topCategoriesEditingCard = catalog.find((card) => card.id === topCategoriesEditingCardId);
-        const categoryChangeEditingCard = catalog.find((card) => card.id === categoryChangeEditingCardId);
-        const latestTransactionEditingCard = catalog.find((card) => card.id === latestTransactionEditingCardId);
-        const noSpendEditingCard = catalog.find((card) => card.id === noSpendEditingCardId);
-        const averageDailyEditingCard = catalog.find((card) => card.id === averageDailyEditingCardId);
-        if (!editingCard) throw new Error(`Unknown editing card: ${editingCardId}`);
-        if (!topCategoriesEditingCard) throw new Error(`Unknown editing card: ${topCategoriesEditingCardId}`);
-        if (!categoryChangeEditingCard) throw new Error(`Unknown editing card: ${categoryChangeEditingCardId}`);
-        if (!latestTransactionEditingCard) throw new Error(`Unknown editing card: ${latestTransactionEditingCardId}`);
-        if (!noSpendEditingCard) throw new Error(`Unknown editing card: ${noSpendEditingCardId}`);
-        if (!averageDailyEditingCard) throw new Error(`Unknown editing card: ${averageDailyEditingCardId}`);
+        mode.setAttribute('data-upper-insight-card', trendCardId);
+        const trendCard = catalog.find((card) => card.id === trendCardId);
+        const topCategoriesCard = catalog.find((card) => card.id === topCategoriesCardId);
+        const categoryChangeCard = catalog.find((card) => card.id === categoryChangeCardId);
+        const latestTransactionCard = catalog.find((card) => card.id === latestTransactionCardId);
+        const upcomingRecurringCard = catalog.find((card) => card.id === upcomingRecurringCardId);
+        const averageDailyCard = catalog.find((card) => card.id === averageDailyCardId);
+        if (!trendCard) throw new Error(`Unknown card: ${trendCardId}`);
+        if (!topCategoriesCard) throw new Error(`Unknown card: ${topCategoriesCardId}`);
+        if (!categoryChangeCard) throw new Error(`Unknown card: ${categoryChangeCardId}`);
+        if (!latestTransactionCard) throw new Error(`Unknown card: ${latestTransactionCardId}`);
+        if (!upcomingRecurringCard) throw new Error(`Unknown card: ${upcomingRecurringCardId}`);
+        if (!averageDailyCard) throw new Error(`Unknown card: ${averageDailyCardId}`);
         const carouselCards = catalog.filter((card) =>
-          card.id !== editingCardId &&
-          card.id !== topCategoriesEditingCardId &&
-          card.id !== categoryChangeEditingCardId &&
-          card.id !== latestTransactionEditingCardId &&
-          card.id !== noSpendEditingCardId &&
-          card.id !== averageDailyEditingCardId,
+          card.id !== trendCardId &&
+          card.id !== topCategoriesCardId &&
+          card.id !== categoryChangeCardId &&
+          card.id !== latestTransactionCardId &&
+          card.id !== upcomingRecurringCardId &&
+          card.id !== noSpendCardId &&
+          card.id !== averageDailyCardId &&
+          card.id !== topMerchantCardId,
         );
         const carouselRow = doc.createElement('div');
         carouselRow.className = 'common-header-row';
@@ -5326,7 +6561,7 @@
             todayB3mAColumn.setAttribute('data-today-budget-pill-behavior', 'exit');
             todayB3mAColumn.setAttribute('data-stage2-alternative', 'today-budget-pill-exit');
             setB3MContent(todayB3mAColumn, card, catalog.indexOf(card));
-            populateTodayRedesignScreen(todayB3mAColumn, card);
+            populateTodayRedesignScreen(todayB3mAColumn, card, topCategoriesCard, categoryChangeCard, latestTransactionCard, averageDailyCard, trendCard, upcomingRecurringCard);
             carouselRow.append(todayB3mAColumn);
             return;
           }
@@ -5335,113 +6570,13 @@
           carouselRow.append(column);
         });
 
-        const editorRow = doc.createElement('div');
-        editorRow.className = 'common-header-row';
-        editorRow.setAttribute('data-section-row', 'exact-b3m-editor');
-        editorRow.style.marginTop = '28px';
-        const editingColumn = sourceColumn.cloneNode(true);
-        editingColumn.setAttribute('data-editing-card', 'true');
-        setB3MContent(editingColumn, editingCard, catalog.indexOf(editingCard));
-        const alternativeColumn = sourceColumn.cloneNode(true);
-        alternativeColumn.setAttribute('data-stage2-alternative', 'trend-comparison');
-        setB3MContent(alternativeColumn, editingCard, catalog.indexOf(editingCard));
-        populateTrendAlternative(alternativeColumn, editingCard);
-        const pulseMapColumn = sourceColumn.cloneNode(true);
-        pulseMapColumn.setAttribute('data-stage2-alternative', 'trend-pulse-map');
-        setB3MContent(pulseMapColumn, editingCard, catalog.indexOf(editingCard));
-        populateTrendPulseMap(pulseMapColumn, editingCard);
-        const equationColumn = sourceColumn.cloneNode(true);
-        equationColumn.setAttribute('data-stage2-alternative', 'trend-equation');
-        setB3MContent(equationColumn, editingCard, catalog.indexOf(editingCard));
-        populateTrendEquation(equationColumn, editingCard);
-        const tapeColumn = sourceColumn.cloneNode(true);
-        tapeColumn.setAttribute('data-stage2-alternative', 'trend-window-tape');
-        setB3MContent(tapeColumn, editingCard, catalog.indexOf(editingCard));
-        populateTrendWindowTape(tapeColumn, editingCard);
-        const dataRibbonColumn = sourceColumn.cloneNode(true);
-        dataRibbonColumn.setAttribute('data-stage2-alternative', 'trend-data-ribbon');
-        setB3MContent(dataRibbonColumn, editingCard, catalog.indexOf(editingCard));
-        populateTrendDataRibbon(dataRibbonColumn, editingCard);
-        const splitZoneColumn = sourceColumn.cloneNode(true);
-        splitZoneColumn.setAttribute('data-stage2-alternative', 'trend-split-zone');
-        setB3MContent(splitZoneColumn, editingCard, catalog.indexOf(editingCard));
-        populateTrendSplitZone(splitZoneColumn, editingCard);
-        editorRow.append(editingColumn, alternativeColumn, pulseMapColumn, equationColumn, tapeColumn, dataRibbonColumn, splitZoneColumn);
-
-        const topCategoriesRow = doc.createElement('div');
-        topCategoriesRow.className = 'common-header-row';
-        topCategoriesRow.setAttribute('data-section-row', 'exact-b3m-top-categories-editor');
-        topCategoriesRow.style.marginTop = '28px';
-        const topCategoriesColumn = sourceColumn.cloneNode(true);
-        topCategoriesColumn.setAttribute('data-editing-card', 'top-categories');
-        setB3MContent(topCategoriesColumn, topCategoriesEditingCard, catalog.indexOf(topCategoriesEditingCard));
-        topCategoriesRow.append(topCategoriesColumn);
-
-        const categoryChangeRow = doc.createElement('div');
-        categoryChangeRow.className = 'common-header-row';
-        categoryChangeRow.setAttribute('data-section-row', 'exact-b3m-category-change-editor');
-        categoryChangeRow.style.marginTop = '28px';
-        const categoryChangeColumn = sourceColumn.cloneNode(true);
-        categoryChangeColumn.setAttribute('data-editing-card', 'category-change');
-        setB3MContent(categoryChangeColumn, categoryChangeEditingCard, catalog.indexOf(categoryChangeEditingCard));
-        categoryChangeRow.append(categoryChangeColumn);
-
-        const latestTransactionRow = doc.createElement('div');
-        latestTransactionRow.className = 'common-header-row';
-        latestTransactionRow.setAttribute('data-section-row', 'exact-b3m-latest-transaction-editor');
-        latestTransactionRow.style.marginTop = '28px';
-        const latestTransactionColumn = sourceColumn.cloneNode(true);
-        latestTransactionColumn.setAttribute('data-editing-card', 'latest-transaction');
-        setB3MContent(latestTransactionColumn, latestTransactionEditingCard, catalog.indexOf(latestTransactionEditingCard));
-        latestTransactionRow.append(latestTransactionColumn);
-
-        const noSpendRow = doc.createElement('div');
-        noSpendRow.className = 'common-header-row';
-        noSpendRow.setAttribute('data-section-row', 'exact-b3m-no-spend-editor');
-        noSpendRow.style.marginTop = '28px';
-        const noSpendColumn = sourceColumn.cloneNode(true);
-        noSpendColumn.setAttribute('data-editing-card', 'no-spend');
-        setB3MContent(noSpendColumn, noSpendEditingCard, catalog.indexOf(noSpendEditingCard));
-        const noSpendMonthRingColumn = sourceColumn.cloneNode(true);
-        noSpendMonthRingColumn.setAttribute('data-stage2-alternative', 'no-spend-month-ring');
-        setB3MContent(noSpendMonthRingColumn, noSpendEditingCard, catalog.indexOf(noSpendEditingCard));
-        populateNoSpendMonthRing(noSpendMonthRingColumn, noSpendEditingCard);
-        const noSpendMonthMapColumn = sourceColumn.cloneNode(true);
-        noSpendMonthMapColumn.setAttribute('data-stage2-alternative', 'no-spend-month-map');
-        setB3MContent(noSpendMonthMapColumn, noSpendEditingCard, catalog.indexOf(noSpendEditingCard));
-        populateNoSpendMonthMap(noSpendMonthMapColumn, noSpendEditingCard);
-        const noSpendWeekCadenceColumn = sourceColumn.cloneNode(true);
-        noSpendWeekCadenceColumn.setAttribute('data-stage2-alternative', 'no-spend-week-cadence');
-        setB3MContent(noSpendWeekCadenceColumn, noSpendEditingCard, catalog.indexOf(noSpendEditingCard));
-        populateNoSpendWeekCadence(noSpendWeekCadenceColumn, noSpendEditingCard);
-        noSpendRow.append(noSpendColumn, noSpendMonthRingColumn, noSpendMonthMapColumn, noSpendWeekCadenceColumn);
-
-        const averageDailyRow = doc.createElement('div');
-        averageDailyRow.className = 'common-header-row';
-        averageDailyRow.setAttribute('data-section-row', 'exact-b3m-average-daily-editor');
-        averageDailyRow.style.marginTop = '28px';
-        const averageDailyColumn = sourceColumn.cloneNode(true);
-        averageDailyColumn.setAttribute('data-editing-card', 'average-daily');
-        setB3MContent(averageDailyColumn, averageDailyEditingCard, catalog.indexOf(averageDailyEditingCard));
-        const averageDailyRunwayColumn = sourceColumn.cloneNode(true);
-        averageDailyRunwayColumn.setAttribute('data-stage2-alternative', 'average-daily-runway');
-        setB3MContent(averageDailyRunwayColumn, averageDailyEditingCard, catalog.indexOf(averageDailyEditingCard));
-        populateAverageDailyRunway(averageDailyRunwayColumn, averageDailyEditingCard);
-        const averageDailySpikeMapColumn = sourceColumn.cloneNode(true);
-        averageDailySpikeMapColumn.setAttribute('data-stage2-alternative', 'average-daily-spike-map');
-        setB3MContent(averageDailySpikeMapColumn, averageDailyEditingCard, catalog.indexOf(averageDailyEditingCard));
-        populateAverageDailySpikeMap(averageDailySpikeMapColumn, averageDailyEditingCard);
-        const averageDailyEquationColumn = sourceColumn.cloneNode(true);
-        averageDailyEquationColumn.setAttribute('data-stage2-alternative', 'average-daily-equation');
-        setB3MContent(averageDailyEquationColumn, averageDailyEditingCard, catalog.indexOf(averageDailyEditingCard));
-        populateAverageDailyEquation(averageDailyEquationColumn, averageDailyEditingCard);
-        averageDailyRow.append(averageDailyColumn, averageDailyRunwayColumn, averageDailySpikeMapColumn, averageDailyEquationColumn);
-
-        mode.append(carouselRow, editorRow, topCategoriesRow, categoryChangeRow, latestTransactionRow, noSpendRow, averageDailyRow);
+        const pulseForecastGallery = createPulseForecastGallery(doc);
+        mode.append(carouselRow, pulseForecastGallery);
         surface.replaceChildren(mode);
         const carouselColumnCount = carouselRow.children.length;
-        surface.style.minWidth = `calc((var(--screen-w) * ${carouselColumnCount}) + ${28 * (carouselColumnCount - 1) + 48}px)`;
-        surface.style.minHeight = 'calc((var(--screen-h) * 7) + 284px)';
+        const pulseGalleryWidth = (pulseForecastGalleryFixture.length * 252) + ((pulseForecastGalleryFixture.length - 1) * 16) + 48;
+        surface.style.minWidth = `max(calc((var(--screen-w) * ${carouselColumnCount}) + ${28 * (carouselColumnCount - 1) + 48}px), ${pulseGalleryWidth}px)`;
+        surface.style.minHeight = 'calc(var(--screen-h) + 338px)';
         surface.setAttribute('data-exact-b3m-gallery', 'true');
         doc.documentElement.setAttribute('data-balance-stage2-exact-b3m', 'true');
 
