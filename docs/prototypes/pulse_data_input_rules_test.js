@@ -42,6 +42,17 @@ assert.match(
   "a HF-021 nem lehet pénzügyi pontlevonás",
 );
 assert.match(html, /inputChecks:\s*\[/, "minden döntési példához kell adatellenőrzés");
+for (const scenarioKey of ["risk", "recovery", "data"]) {
+  const start = html.indexOf("      " + scenarioKey + ": {");
+  assert.notEqual(start, -1, scenarioKey + " döntési példa kötelező");
+  const next = html.indexOf("\n      },", start);
+  const scenario = html.slice(start, next === -1 ? undefined : next);
+  assert.match(
+    scenario,
+    /inputChecks:\s*\[/,
+    scenarioKey + " döntési példának saját adatellenőrzést kell mutatnia",
+  );
+}
 assert.match(html, /function traceInputCheck\(check\)/, "adatellenőrzés-kirajzoló kötelező");
 assert.match(
   html,
