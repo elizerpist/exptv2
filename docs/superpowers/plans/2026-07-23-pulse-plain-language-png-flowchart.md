@@ -37,7 +37,7 @@
 
 **Produces:** A failing contract that requires a valid asset and its semantic bottom figure.
 
-- [ ] **Step 1: Create the failing test**
+- [x] **Step 1: Create the failing test**
 
 ~~~js
 #!/usr/bin/env node
@@ -84,7 +84,7 @@ assert.equal((html.match(/data-group-rail=/g) || []).length, 3, "no fourth prima
 console.log("pulse_plain_language_png_flowchart_test: PASS");
 ~~~
 
-- [ ] **Step 2: Confirm it fails**
+- [x] **Step 2: Confirm it fails**
 
 Run:
 
@@ -102,7 +102,7 @@ Expected: fails with plain-language PNG asset is required.
 
 **Produces:** One direct-inspection-approved, readable Hungarian infographic.
 
-- [ ] **Step 1: Generate one image with the built-in image tool**
+- [x] **Step 1: Generate one image with the built-in image tool**
 
 Use exactly this prompt:
 
@@ -125,7 +125,7 @@ Constraints: render every Hungarian sentence accurately and exactly, with correc
 Avoid: garbled text, pseudo-language, tiny type, dashboard UI, code, mathematical formulas, gradient-heavy backgrounds.
 ~~~
 
-- [ ] **Step 2: Inspect and copy the accepted output**
+- [x] **Step 2: Inspect and copy the accepted output**
 
 Inspect the generated image directly. Verify all Hungarian text, accents, arrows,
 central sentence, wait/no-message exits, and lack of prohibited jargon. If a
@@ -156,7 +156,7 @@ Expected: PNG image data.
 
 **Produces:** A full-width responsive bottom figure, without changing current engine behavior.
 
-- [ ] **Step 1: Add this scoped CSS near the footer styles**
+- [x] **Step 1: Add this scoped CSS near the footer styles**
 
 ~~~css
 .plain-language-flowchart-image {
@@ -189,7 +189,7 @@ Expected: PNG image data.
 }
 ~~~
 
-- [ ] **Step 2: Insert this immediately before the footer note**
+- [x] **Step 2: Insert this immediately before the footer note**
 
 ~~~html
 <figure class="plain-language-flowchart-image" data-plain-language-flowchart>
@@ -200,7 +200,7 @@ Expected: PNG image data.
 </figure>
 ~~~
 
-- [ ] **Step 3: Run contracts and commit the feature**
+- [x] **Step 3: Run contracts and commit the feature**
 
 ~~~sh
 node docs/prototypes/pulse_plain_language_png_flowchart_test.js
@@ -222,7 +222,7 @@ git commit -m "feat: add plain-language Pulse flowchart PNG"
 
 **Produces:** Honest static, direct-image, server, and scope evidence.
 
-- [ ] **Step 1: Run final verification**
+- [x] **Step 1: Run final verification**
 
 ~~~sh
 node docs/prototypes/pulse_plain_language_png_flowchart_test.js
@@ -234,7 +234,7 @@ git diff --check
 test "$(git hash-object balance_latest_layout.html)" = "a4b940489c11582f7252d6d2f5b86c0114f9817a"
 ~~~
 
-- [ ] **Step 2: Update checklist, plan, and commit evidence**
+- [x] **Step 2: Update checklist, plan, and commit evidence**
 
 Set PLPF-001, PLPF-002, PLPF-006, PLPF-007, and PLPF-008 to DONE only after
 direct checks pass. Set PLPF-003 through PLPF-005 to DONE only after direct
@@ -252,3 +252,15 @@ git commit -m "docs: verify plain-language Pulse PNG flowchart"
 - The test, asset filename, HTML source, and figure anchor use the same paths.
 - The image carries the explanation; the HTML repeats the central rule as an accessible fallback.
 - Direct asset inspection is mandatory before claiming readable Hungarian wording.
+
+## Execution Record — 2026-07-23
+
+- TDD red/green: the focused contract first failed because the PNG asset did
+  not exist, then failed at the expected missing-bottom-figure checkpoint, and
+  passed after the generated PNG and responsive figure were added.
+- The accepted generated asset is a `1694 × 928` project-local PNG. Direct
+  inspection confirmed readable Hungarian text and no forbidden technical
+  terms.
+- Fresh verification passed for the PNG contract, existing Pulse contracts,
+  embedded-script parsing, both live HTTP resources, whitespace, and the
+  protected Balance-layout hash.
