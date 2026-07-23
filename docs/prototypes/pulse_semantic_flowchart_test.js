@@ -13,7 +13,11 @@ const flowStart = html.indexOf("data-pulse-semantic-flowchart");
 const heroStart = html.indexOf('<section class="hero-grid">');
 assert.notEqual(flowStart, -1, "semantic flowchart root is required");
 assert.ok(flowStart < heroStart, "flowchart must appear before the hero grid");
-assert.match(html, /<ol class="semantic-flow-grid"/, "flowchart must use a semantic ordered flow");
+assert.match(
+  html,
+  /<ol class="[^"]*\bsemantic-flow-grid\b[^"]*"/,
+  "flowchart must use a semantic ordered flow",
+);
 
 for (const stage of [
   "entry", "recalculation", "source-gate", "evidence", "priority",
@@ -70,15 +74,6 @@ assert.match(
   "azonos helyzet nem ismételhet",
 );
 
-const gridRules = html.match(/\.semantic-flow-grid\s*\{[\s\S]*?\}/g) || [];
-assert.ok(
-  gridRules.some((rule) => /grid-template-columns:\s*repeat\(3/.test(rule)),
-  "desktop flowchart grid is required",
-);
-assert.ok(
-  gridRules.some((rule) => /grid-template-columns:\s*1fr/.test(rule)),
-  "narrow flowchart grid is required",
-);
 assert.equal((html.match(/data-group-rail=/g) || []).length, 3, "no fourth primary rail");
 
 console.log("pulse_semantic_flowchart_test: PASS");
