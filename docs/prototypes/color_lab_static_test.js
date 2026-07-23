@@ -1363,18 +1363,15 @@ const triggerTypeScreenBlock =
   triggerTypeScreenStart >= 0 && triggerTypeScreenEnd > triggerTypeScreenStart
     ? queryMenuBlock.slice(triggerTypeScreenStart, triggerTypeScreenEnd)
     : '';
-const triggerTypeProgressMarkup =
-  triggerTypeScreenBlock.match(/<div class="recurring-wizard-progress"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
 assert(
   triggerTypeScreenBlock.includes('data-screen="alt-recurring-trigger-type"') &&
     triggerTypeScreenBlock.includes('data-recurring-wizard-screen="trigger-type"') &&
     triggerTypeScreenBlock.includes('data-recurring-trigger-step="0"') &&
     triggerTypeScreenBlock.includes('data-recurring-wizard-size="q2-inline-sheet"') &&
     (triggerTypeScreenBlock.match(/class="recurring-wizard-sheet"/g) || []).length === 1 &&
-    triggerTypeScreenBlock.includes('0. lépés a 9-ből') &&
-    (triggerTypeProgressMarkup.match(/<span><\/span>/g) || []).length === 9 &&
-    !triggerTypeProgressMarkup.includes('class="active"') &&
-    !triggerTypeProgressMarkup.includes('class="complete"') &&
+    !triggerTypeScreenBlock.includes('data-recurring-trigger-progress') &&
+    !triggerTypeScreenBlock.includes('class="recurring-wizard-progress"') &&
+    !triggerTypeScreenBlock.includes('0. lépés a 9-ből') &&
     triggerTypeScreenBlock.includes('data-recurring-wizard-choice-group') &&
     /<button class="recurring-wizard-card selected"[^>]*data-recurring-wizard-selectable[^>]*aria-pressed="true">[\s\S]*?<strong>Push alapú<\/strong>/.test(
       triggerTypeScreenBlock,
@@ -1383,7 +1380,38 @@ assert(
       triggerTypeScreenBlock,
     ) &&
     triggerTypeScreenBlock.includes('Tovább'),
-  'Q3A must be a 0. lépés trigger-type chooser with one Q2-sized sheet and Push selected by default',
+  'Q3A must be an unprogressed trigger-type initializer with one Q2-sized sheet and Push selected by default',
+);
+const q4PushBasicsStart = queryMenuBlock.indexOf(
+  '<div class="screen-title">Q4 · Push trigger · Alapadatok</div>',
+);
+const q4PushBasicsEnd = queryMenuBlock.indexOf(
+  '<div class="screen-title">Q5 · Push trigger · Összeg beállítása</div>',
+  q4PushBasicsStart,
+);
+const q4PushBasicsBlock =
+  q4PushBasicsStart >= 0 && q4PushBasicsEnd > q4PushBasicsStart
+    ? queryMenuBlock.slice(q4PushBasicsStart, q4PushBasicsEnd)
+    : '';
+assert(
+  q4PushBasicsBlock.includes('data-screen="alt-recurring-push-basics"') &&
+    (q4PushBasicsBlock.match(/class="pill-field transaction-name-pill"/g) || []).length === 1 &&
+    q4PushBasicsBlock.includes('Lakbér / tranzakció neve') &&
+    (q4PushBasicsBlock.match(/data-transaction-inline-category-picker/g) || []).length === 1 &&
+    (q4PushBasicsBlock.match(/data-transaction-inline-category-window/g) || []).length === 1 &&
+    (q4PushBasicsBlock.match(/data-category-inline-option=/g) || []).length === 8 &&
+    /<button class="transaction-inline-category-row[^\"]* selected"[^>]*data-category-inline-option="home"[^>]*aria-pressed="true">/.test(
+      q4PushBasicsBlock,
+    ) &&
+    q4PushBasicsBlock.indexOf('data-transaction-inline-category-window') <
+      q4PushBasicsBlock.indexOf('data-category-inline-new-category') &&
+    q4PushBasicsBlock.includes('data-category-inline-new-category') &&
+    q4PushBasicsBlock.includes('Új kategória') &&
+    !q4PushBasicsBlock.includes('class="recurring-wizard-field"') &&
+    !q4PushBasicsBlock.includes('Partner / Kedvezményezett') &&
+    !q4PushBasicsBlock.includes('Megjegyzés (opcionális)') &&
+    /<button class="recurring-wizard-primary"[^>]*>Tovább<\/button>/.test(q4PushBasicsBlock),
+  'Q4 must contain only the Q2-style name pill, inline category window, Új kategória, and Tovább',
 );
 assert.strictEqual(
   (html.match(/data-screen="alt-add-transaction-sheet"/g) || []).length,
@@ -1425,7 +1453,7 @@ assert(
   'The trigger chooser must be a distinct pre-step, not a tenth Push-trigger step',
 );
 const recurringPushWizardScreens = [
-  ['Q4 · Push trigger · Alapadatok', 'alt-recurring-push-basics', '1', ['Várható tranzakció', 'Név', 'Kategória', 'Partner / Kedvezményezett', 'Megjegyzés (opcionális)']],
+  ['Q4 · Push trigger · Alapadatok', 'alt-recurring-push-basics', '1', ['Lakbér / tranzakció neve', 'Lakás', 'Új kategória']],
   ['Q5 · Push trigger · Összeg beállítása', 'alt-recurring-push-amount', '2', ['Várható összeg', 'Fix összeg', 'Tartomány', 'Bármilyen', 'Tolerancia (opcionális)']],
   ['Q6 · Push trigger · Gyakoriság és időzítés', 'alt-recurring-push-schedule', '3', ['Gyakoriság', 'Ismétlődés', 'Minden hónap', 'Első esedékesség', 'Időablak a teljesítéshez']],
   ['Q7 · Push trigger · Trigger forrása', 'alt-recurring-push-source', '4', ['Hogyan ismerjük fel?', 'Válassz egy elkapott értesítést', 'Várj a következő értesítésre', 'Illessz be egy példát']],
@@ -1496,8 +1524,9 @@ assert(
     !/\.recurring-wizard-sheet\s*\{[^}]*inset:\s*42px 18px 0;/s.test(html) &&
     /\.recurring-wizard-screen::after\s*\{[\s\S]*?inset:\s*0;[\s\S]*?background:\s*rgba\(0,0,0,\.28\);[\s\S]*?z-index:\s*7;[\s\S]*?\}/.test(html) &&
     /\.recurring-wizard-progress\s*\{[\s\S]*?grid-template-columns:\s*repeat\(9,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(html) &&
+    /\.recurring-wizard-field\s*\{[\s\S]*?min-height:\s*50px;[\s\S]*?border:\s*1px solid rgba\(226,232,240,\.76\);[\s\S]*?border-radius:\s*25px;[\s\S]*?background:\s*rgba\(255,255,255,\.88\);[\s\S]*?box-shadow:\s*var\(--spendee-soft-card-shadow\);[\s\S]*?\}/.test(html) &&
     /\.recurring-wizard-primary\s*\{[\s\S]*?height:\s*48px;[\s\S]*?border-radius:\s*24px;[\s\S]*?\}/.test(html),
-  'Q4-Q12 must use the current 570px Q2 inline-sheet geometry, one sheet per screen, nine-step progress, and a primary CTA',
+  'Q4-Q12 must use the current 570px Q2 inline-sheet geometry, Q2-style text-input pills, nine-step progress, and a primary CTA',
 );
 assert(
   /\.add-income-transaction-card\s+\.transaction-amount-hero\s*\{[\s\S]*?background:\s*var\(--income-transaction-amount-hero-bg\);[\s\S]*?\}/.test(html) &&
