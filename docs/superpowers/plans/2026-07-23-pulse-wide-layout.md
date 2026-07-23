@@ -32,4 +32,4 @@
 - [x] Futtasd az új széles-elrendezés tesztet, majd az összes meglévő Pulse statikus tesztet.
 - [x] Ellenőrizd a HTML-szintaxist, a whitespace-et és a futó szerver HTTP 200 válaszát.
 - [x] Frissítsd az elfogadási lista minden állapotát kizárólag bizonyított DONE-ra.
-- [ ] A célzott fájlokat külön commitban rögzítsd; ne érintsd a Balance fájlt vagy a többi munkafa-módosítást.
+- [x] A célzott fájlokat külön commitban rögzítsd; ne érintsd a Balance fájlt vagy a többi munkafa-módosítást.
