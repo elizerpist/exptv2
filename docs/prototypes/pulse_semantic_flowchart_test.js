@@ -38,30 +38,30 @@ for (const branch of [
   );
 }
 
-assert.match(html, /Score önmagában nem elég/, "score must not be enough on its own");
-assert.match(html, /Nincs univerzális megjelenítési küszöb/, "priority needs no universal threshold rule");
-assert.match(html, /domináns eligible source base/, "priority needs a dominant base explanation");
-assert.match(html, /material-money \+15/, "material-money modifier is required");
-assert.match(html, /due-within-3-days \+10/, "due-window modifier is required");
-assert.match(html, /related evidence \+10/, "related evidence modifier is required");
-assert.match(html, /low confidence -20/, "low confidence modifier is required");
-assert.match(html, /recent dismiss -30/, "recent dismiss modifier is required");
-assert.match(html, /clamp\(0\.\.100,/, "priority must be visibly clamped");
+assert.match(html, /A pontszám önmagában nem elég/, "a pontszám önmagában nem elég");
+assert.match(html, /Nincs általános megjelenési határ/, "a pontszám nem általános megjelenési küszöb");
+assert.match(html, /fő jel alapértéke/, "a fő jel alapértékének magyarázata kötelező");
+assert.match(html, /pénzben nagy eltérés \+15/, "a pénzben nagy eltérés módosítója kötelező");
+assert.match(html, /3 napon belüli esedékesség \+10/, "a közeli esedékesség módosítója kötelező");
+assert.match(html, /kapcsolódó jel \+10/, "a kapcsolódó jel módosítója kötelező");
+assert.match(html, /bizonytalan adat −20/, "a bizonytalan adat levonása kötelező");
+assert.match(html, /nemrég elutasított −30/, "a nemrég elutasított levonása kötelező");
+assert.match(html, /pontszám = fő jel alapértéke/, "a pontszám képlete látható legyen");
 assert.match(
   html,
-  /urgent due state[\s\S]*newer materially changed fingerprint[\s\S]*stable source-ID order/,
-  "tie-break order is required",
+  /sürgős határidő[\s\S]*frissebb valódi változás[\s\S]*állandó HF-sorrend/,
+  "a döntetlen feloldásának sorrendje kötelező",
 );
 assert.match(
   html,
-  /deferred[\s\S]*engine-only[\s\S]*nem készít header copyt/,
-  "deferred and engine-only sources must remain no-copy",
+  /későbbre halasztott HF-008[\s\S]*csak a motorhoz tartozó HF-015–HF-019[\s\S]*nem ír üzenetet/,
+  "a későbbre halasztott és a csak motorhoz tartozó jelek nem írhatnak üzenetet",
 );
-assert.match(html, /background[\s\S]*open\/resume/, "background delivery route is required");
+assert.match(html, /alkalmazás nincs nyitva[\s\S]*csak megnyitás után jelenik meg/, "a háttérben számolt üzenet útja kötelező");
 assert.match(
   html,
-  /shown\/dismissed fingerprint[\s\S]*nem ismétel/,
-  "same fingerprint must not replay",
+  /már megmutatott vagy elutasított azonos helyzet nem ismétel/,
+  "azonos helyzet nem ismételhet",
 );
 
 const gridRules = html.match(/\.semantic-flow-grid\s*\{[\s\S]*?\}/g) || [];

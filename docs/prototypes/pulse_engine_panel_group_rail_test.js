@@ -51,7 +51,7 @@ for (const [group, ids] of Object.entries(groups)) {
   }
 }
 
-assert.match(html, /data-hf-id="HF-008"[\s\S]*?deferred[\s\S]*?not active/, 'HF-008 must remain deferred');
+assert.match(html, /data-hf-id="HF-008"[\s\S]*?későbbre halasztva[\s\S]*?nem aktív/, 'HF-008 must remain deferred');
 assert.match(html, /data-source-domain="fixed_load"/, 'fixed_load provenance must remain visible');
 assert.match(html, /data-source-domain="behavior_shift"/, 'behavior_shift provenance must remain visible');
 assert.match(html, /data-source-domain="engine"/, 'engine provenance must remain visible');
