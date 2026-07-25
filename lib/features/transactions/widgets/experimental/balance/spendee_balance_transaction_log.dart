@@ -163,6 +163,8 @@ class _SpendeeBalanceTransactionLogState
                           physics: const ClampingScrollPhysics(),
                           keyboardDismissBehavior:
                               ScrollViewKeyboardDismissBehavior.onDrag,
+                          // Flutter 3.41 still exposes only this legacy name.
+                          // ignore: deprecated_member_use
                           cacheExtent: SpendeeBalanceTransactionLog.cacheExtent,
                           semanticChildCount: _rowCount,
                           slivers: [

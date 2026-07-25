@@ -110,6 +110,8 @@ void main() {
       final scrollView = tester.widget<CustomScrollView>(
         find.descendant(of: viewport, matching: find.byType(CustomScrollView)),
       );
+      // Flutter 3.41 still exposes only this legacy name.
+      // ignore: deprecated_member_use
       expect(scrollView.cacheExtent, SpendeeBalanceTransactionLog.cacheExtent);
       expect(_mountedProductionRows(), inInclusiveRange(1, 18));
       expect(

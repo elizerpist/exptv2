@@ -1051,6 +1051,8 @@ void main() {
         matching: find.byType(CustomScrollView),
       ),
     );
+    // Flutter 3.41 still exposes only this legacy name.
+    // ignore: deprecated_member_use
     expect(list.cacheExtent, 360);
     expect(
       find.byKey(const ValueKey('spendee-balance-transaction-row-record-1')),
