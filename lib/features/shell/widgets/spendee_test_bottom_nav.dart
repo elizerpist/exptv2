@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../settings/models/app_theme_settings.dart';
+import '../../transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import '../app_tab.dart';
 import 'bottom_nav_item.dart';
 import 'expt_fab.dart';
@@ -16,6 +17,7 @@ class SpendeeTestBottomNav extends StatefulWidget {
     required this.onTabSelected,
     required this.onFabPressed,
     this.onFabLongPress,
+    this.dashboardMode = SpendeeDashboardMode.budget,
     this.surfaceColor = AppColors.white,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.buttonSurfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
@@ -29,6 +31,7 @@ class SpendeeTestBottomNav extends StatefulWidget {
   final ValueChanged<AppTab> onTabSelected;
   final VoidCallback onFabPressed;
   final VoidCallback? onFabLongPress;
+  final SpendeeDashboardMode dashboardMode;
   final Color surfaceColor;
   final ExpenseSurfaceInteraction surfaceStyle;
   final ExpenseSurfaceInteraction buttonSurfaceStyle;
@@ -60,19 +63,26 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
 
   @override
   Widget build(BuildContext context) {
-    final centerSlotWidth = math.max(widget.fabSize + 16, 74).toDouble();
+    final balance = widget.dashboardMode == SpendeeDashboardMode.balance;
+    final fabSize = balance ? 58.0 : widget.fabSize;
+    final centerSlotWidth = math.max(fabSize + 16, 74).toDouble();
+    final surfaceColor = balance ? AppColors.white : widget.surfaceColor;
+    final surfaceStyle = balance
+        ? ExpenseSurfaceInteraction.neutralNeutral
+        : widget.surfaceStyle;
     return KeyedSubtree(
       key: const ValueKey('spendee-test-bottom-nav'),
       child: ExpenseSurfaceContainer(
         surfaceKey: const ValueKey('expt-bottom-nav'),
-        style: widget.surfaceStyle,
-        color: widget.surfaceColor,
+        style: surfaceStyle,
+        color: surfaceColor,
         borderRadius: BorderRadius.zero,
         animatePress: false,
         clipContent: false,
         height: AppDimensions.bottomNavHeight,
-        padding: const EdgeInsets.symmetric(
+        padding: EdgeInsets.symmetric(
           horizontal: AppDimensions.bottomNavHorizontalPadding,
+          vertical: balance ? AppDimensions.bottomNavVerticalPadding : 0,
         ),
         neutralBorder: const Border(top: BorderSide(color: AppColors.gray200)),
         neutralShadow: const [
@@ -104,10 +114,13 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
               minHeight: 0,
               maxHeight: double.infinity,
               child: ExptFab(
-                primaryColor: widget.accentColor,
-                surfaceStyle: widget.buttonSurfaceStyle,
-                size: widget.fabSize,
-                borderRadius: widget.fabSize / 2,
+                primaryColor: balance ? AppColors.primary : widget.accentColor,
+                backgroundGradient: widget.dashboardMode.fabGradient,
+                surfaceStyle: balance
+                    ? ExpenseSurfaceInteraction.neutralNeutral
+                    : widget.buttonSurfaceStyle,
+                size: fabSize,
+                borderRadius: fabSize / 2,
                 onPressed: widget.onFabPressed,
                 onLongPress: widget.onFabLongPress,
               ),
@@ -119,16 +132,33 @@ class _SpendeeTestBottomNavState extends State<SpendeeTestBottomNav> {
   }
 
   Widget _buildItem(AppTab tab, {String? label, IconData? icon}) {
+    final balance = widget.dashboardMode == SpendeeDashboardMode.balance;
     return BottomNavItem(
       tab: tab,
       label: label,
       icon: icon,
+      iconGlyph: balance ? (tab == AppTab.home ? '⌂' : '⚙') : null,
       active: _optimisticActiveTab == tab,
-      surfaceColor: widget.surfaceColor,
-      surfaceStyle: widget.surfaceStyle,
-      accentColor: widget.accentColor,
-      accentLightColor: widget.accentLightColor,
-      activeBackgroundColor: widget.activeBackgroundColor,
+      surfaceColor: balance ? AppColors.white : widget.surfaceColor,
+      surfaceStyle: balance
+          ? ExpenseSurfaceInteraction.neutralNeutral
+          : widget.surfaceStyle,
+      accentColor: balance ? AppColors.primary : widget.accentColor,
+      accentLightColor: balance
+          ? AppColors.primaryLight
+          : widget.accentLightColor,
+      activeBackgroundColor: balance
+          ? const Color(0x1A06B6D4)
+          : widget.activeBackgroundColor,
+      horizontalMargin: balance ? 0 : AppDimensions.navItemHorizontalMargin,
+      radius: balance ? 18 : AppDimensions.navItemRadius,
+      iconSize: balance ? 22 : AppDimensions.navIconSize,
+      iconBoxWidth: balance ? 32 : 34,
+      iconBoxHeight: balance ? 22 : AppDimensions.navIconSize,
+      labelFontSize: balance ? 11 : 12,
+      itemHeight: balance ? 55 : null,
+      fontFamily: balance ? 'Inter' : null,
+      iconFontFamily: balance ? 'B3ma3Symbols' : null,
       onTap: () => _selectTab(tab),
     );
   }

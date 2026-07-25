@@ -68,9 +68,18 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/b3ma3/
     - assets/brand/
     - assets/category_icons/
     - assets/icons/lucide/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/InterVariable.ttf
+    - family: B3ma3Symbols
+      fonts:
+        - asset: assets/fonts/DejaVuSans.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

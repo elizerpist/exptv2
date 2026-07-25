@@ -5,11 +5,15 @@ import 'package:exptv2/features/stats/stats_page.dart';
 import 'package:exptv2/main.dart';
 import 'package:exptv2/services/native_bridge.dart';
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
+import 'package:exptv2/features/shell/widgets/spendee_test_bottom_nav.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
+import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/add_transaction_sheet.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_menu_card.dart';
 import 'package:exptv2/features/transactions/widgets/slide_up_panel_metrics.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_post_content.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:exptv2/state/event_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +34,15 @@ Map<String, Object?>? themeSettingsOverride;
 Map<String, Object?>? expenseBootstrapOverride;
 var firstLaunchNotificationPromptEnabled = false;
 var firstLaunchNotificationPromptCalls = 0;
+const captureB3ma3Goldens = bool.fromEnvironment('B3MA3_CAPTURE_GOLDENS');
+
+Future<void> _loadB3ma3GoldenFonts() async {
+  final interLoader = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
+  final symbolLoader = FontLoader('B3ma3Symbols')
+    ..addFont(rootBundle.load('assets/fonts/DejaVuSans.ttf'));
+  await Future.wait([interLoader.load(), symbolLoader.load()]);
+}
 
 Future<void> _dragSpendeeHeaderByExactDelta(
   WidgetTester tester,
@@ -244,6 +257,7 @@ void main() {
     NativeBridge? nativeBridge,
     EventStore? store,
     BrowserFullscreenController? browserFullscreenController,
+    DateTime Function()? transactionClock,
   }) {
     final bridge = nativeBridge ?? NativeBridge();
     return Exptv2App(
@@ -251,6 +265,7 @@ void main() {
       nativeBridge: bridge,
       statsRenderFrameWorker: const TestImmediateStatsFrameWorker(),
       browserFullscreenController: browserFullscreenController,
+      transactionClock: transactionClock,
     );
   }
 
@@ -454,6 +469,161 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Balance selection propagates from header to shell FAB mode', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    themeSettingsOverride = <String, Object?>{
+      'magnetType': 'fade',
+      'cardColor': 'lightgray',
+      'theme': 'Türkiz',
+      'backgroundColor': 'gray',
+      'boxColor': 'gray',
+      'backheaderStyle': 'classic',
+      'dashboardDesignMode': 'spendeeTest',
+    };
+
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-menu-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-test-header-background-balance')),
+    );
+    await tester.pumpAndSettle();
+
+    final nav = tester.widget<SpendeeTestBottomNav>(
+      find.byType(SpendeeTestBottomNav),
+    );
+    expect(nav.dashboardMode, SpendeeDashboardMode.balance);
+    expect(
+      find.byKey(const ValueKey('spendee-balance-dashboard')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('spendee-test-dashboard')), findsNothing);
+    expect(find.byKey(const ValueKey('expt-fab-gradient')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('spendee-balance-shell-frame'))),
+      const Rect.fromLTWH(0, 0, 412, 892),
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('spendee-balance-dashboard'))),
+      const Rect.fromLTWH(1, 1, 410, 890),
+    );
+    expect(find.byKey(const ValueKey('debug-floating-button')), findsNothing);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('expt-bottom-nav'))),
+      const Rect.fromLTWH(1, 811, 410, 80),
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('expt-fab'))),
+      const Rect.fromLTWH(177, 822.5, 58, 58),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-balance-filter-button')),
+    );
+    await tester.pump();
+    expect(
+      DebugConsole.allText,
+      contains('[Balance] filter action requested; query menu deferred'),
+    );
+  });
+
+  testWidgets(
+    'captures production Balance expanded and collapsed evidence',
+    (tester) async {
+      final previousDebugDisableShadows = debugDisableShadows;
+      debugDisableShadows = false;
+      try {
+        await _loadB3ma3GoldenFonts();
+        tester.view.physicalSize = const Size(412, 892);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        themeSettingsOverride = <String, Object?>{
+          'magnetType': 'fade',
+          'cardColor': 'lightgray',
+          'theme': 'Türkiz',
+          'backgroundColor': 'gray',
+          'boxColor': 'gray',
+          'backheaderStyle': 'classic',
+          'dashboardDesignMode': 'spendeeTest',
+        };
+        expenseBootstrapOverride = _b3ma3GoldenBootstrapPayload();
+
+        final goldenNow = DateTime(2026, 7, 25, 12);
+        await tester.pumpWidget(buildApp(transactionClock: () => goldenNow));
+        await tester.pumpAndSettle();
+        final transactionStore = tester
+            .widget<TransactionHomePage>(find.byType(TransactionHomePage))
+            .store;
+        await tester.runAsync(
+          () => SpendeeBalanceActionToggle.precacheAssets(
+            tester.element(find.byType(TransactionHomePage)),
+          ),
+        );
+        await tester.pump();
+        expect(transactionStore.currentDate, goldenNow);
+        await tester.runAsync(() => transactionStore.setSummaryMonth(2026, 7));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('spendee-test-header-menu-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('spendee-test-header-background-balance')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(transactionStore.summaryWindow.name, 'monthly');
+        expect(transactionStore.summaryReferenceDate, DateTime(2026, 7));
+        expect(find.text('-372 047 472 Ft'), findsOneWidget);
+        expect(find.text('3 / 7 nap'), findsOneWidget);
+        expect(find.text('+14 200 Ft'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(
+              const ValueKey('spendee-balance-fast-info-latestTransaction'),
+            ),
+            matching: find.text('-4 250 Ft'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('6500 Ft'), findsOneWidget);
+        expect(find.text('8900 Ft'), findsOneWidget);
+        expect(find.text('-486 320 Ft'), findsOneWidget);
+
+        await expectLater(
+          find.byKey(const ValueKey('expt-shell')),
+          matchesGoldenFile('goldens/b3ma3_app_expanded.png'),
+        );
+
+        final handle = find.byKey(
+          const ValueKey('spendee-balance-collapse-handle'),
+        );
+        final gesture = await tester.startGesture(tester.getCenter(handle));
+        await gesture.moveBy(const Offset(0, -20));
+        await gesture.moveBy(const Offset(0, -100));
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        await expectLater(
+          find.byKey(const ValueKey('expt-shell')),
+          matchesGoldenFile('goldens/b3ma3_app_collapsed.png'),
+        );
+      } finally {
+        debugDisableShadows = previousDebugDisableShadows;
+      }
+    },
+    skip: !captureB3ma3Goldens,
+  );
 
   testWidgets(
     'dashboard design switch replaces navigation while Settings is active',
@@ -853,7 +1023,7 @@ void main() {
 
     expect(tester.getRect(header), const Rect.fromLTWH(20, 104, 372, 104));
     expect(tester.getRect(brand), const Rect.fromLTWH(0, 33.3, 412, 118));
-    expect(tester.getRect(logo), const Rect.fromLTWH(30, 39.3, 47.88, 47.88));
+    expect(tester.getRect(logo), const Rect.fromLTWH(17, 44.5, 56, 56));
     expect(tester.getTopLeft(homeContent), const Offset(0, 212));
     expect(tester.getRect(typeRow), const Rect.fromLTWH(0, 212, 412, 66));
     expect(tester.getRect(incomePill), const Rect.fromLTWH(28, 224, 173, 42));
@@ -2970,6 +3140,299 @@ Map<String, Object?> expenseBootstrapPayload() {
       },
     ],
     'transactions': transactions,
+  };
+}
+
+Map<String, Object?> _b3ma3GoldenBootstrapPayload() {
+  Map<String, Object?> transaction({
+    required int id,
+    required String date,
+    required String time,
+    required String merchant,
+    required double amount,
+    required int categoryId,
+    int? recurringTransactionId,
+  }) {
+    return <String, Object?>{
+      'id': id,
+      'date': date,
+      'time': time,
+      'merchant': merchant,
+      'amount': amount,
+      'userAssignedName': null,
+      'transactionCategoryID': categoryId,
+      'recurringTransactionId': recurringTransactionId,
+    };
+  }
+
+  return <String, Object?>{
+    'categories': <Map<String, Object?>>[
+      <String, Object?>{
+        'transactionCategoryID': 5,
+        'name': 'Fizetés',
+        'type': 'bevétel',
+        'colorSlot': 2,
+        'iconSlot': 0,
+        'backgroundColor': '#3b82f6',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 6,
+        'name': 'Közlekedés',
+        'type': 'kiadás',
+        'colorSlot': 7,
+        'iconSlot': 2,
+        'backgroundColor': '#ef4173',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 7,
+        'name': 'Élelmiszer',
+        'type': 'kiadás',
+        'colorSlot': 1,
+        'iconSlot': 3,
+        'backgroundColor': '#10b981',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 8,
+        'name': 'Számlák',
+        'type': 'kiadás',
+        'colorSlot': 5,
+        'iconSlot': 5,
+        'backgroundColor': '#8b5cf6',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 9,
+        'name': 'Szórakozás',
+        'type': 'kiadás',
+        'colorSlot': 4,
+        'iconSlot': 4,
+        'backgroundColor': '#f59e0b',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+      <String, Object?>{
+        'transactionCategoryID': 10,
+        'name': 'Lakhatás',
+        'type': 'kiadás',
+        'colorSlot': 6,
+        'iconSlot': 6,
+        'backgroundColor': '#06b6d4',
+        'hasLimit': false,
+        'limitAmount': 0,
+        'alertActive': false,
+        'isCustomIcon': true,
+      },
+    ],
+    'transactions': <Map<String, Object?>>[
+      transaction(
+        id: 26072501,
+        date: '2026.07.25',
+        time: '11:42:00',
+        merchant: 'Lidl',
+        amount: -4250,
+        categoryId: 7,
+      ),
+      transaction(
+        id: 26072502,
+        date: '2026.07.25',
+        time: '10:15:00',
+        merchant: 'BKK',
+        amount: -2500,
+        categoryId: 6,
+      ),
+      transaction(
+        id: 26072503,
+        date: '2026.07.25',
+        time: '08:20:00',
+        merchant: 'Pékség',
+        amount: -1150,
+        categoryId: 7,
+      ),
+      transaction(
+        id: 26072504,
+        date: '2026.07.25',
+        time: '07:10:00',
+        merchant: 'Kávézó',
+        amount: -1000,
+        categoryId: 9,
+      ),
+      transaction(
+        id: 26072401,
+        date: '2026.07.24',
+        time: '17:30:00',
+        merchant: 'MOL',
+        amount: -7000,
+        categoryId: 6,
+      ),
+      transaction(
+        id: 26072201,
+        date: '2026.07.22',
+        time: '16:05:00',
+        merchant: 'MÁV',
+        amount: -4700,
+        categoryId: 6,
+      ),
+      transaction(
+        id: 26072001,
+        date: '2026.07.20',
+        time: '09:00:00',
+        merchant: 'E.ON',
+        amount: -54000,
+        categoryId: 8,
+      ),
+      transaction(
+        id: 26071801,
+        date: '2026.07.18',
+        time: '12:00:00',
+        merchant: 'Bérleti díj',
+        amount: -48400,
+        categoryId: 10,
+      ),
+      transaction(
+        id: 26071501,
+        date: '2026.07.15',
+        time: '18:10:00',
+        merchant: 'Tesco',
+        amount: -50000,
+        categoryId: 7,
+      ),
+      transaction(
+        id: 26071001,
+        date: '2026.07.10',
+        time: '08:45:00',
+        merchant: 'MVM',
+        amount: -50000,
+        categoryId: 8,
+      ),
+      transaction(
+        id: 26070501,
+        date: '2026.07.05',
+        time: '20:00:00',
+        merchant: 'Cinema City',
+        amount: -40000,
+        categoryId: 9,
+      ),
+      transaction(
+        id: 26070101,
+        date: '2026.07.01',
+        time: '08:00:00',
+        merchant: 'Lakbér',
+        amount: -40000,
+        categoryId: 10,
+      ),
+      transaction(
+        id: 26070102,
+        date: '2026.07.01',
+        time: '07:30:00',
+        merchant: 'Munkabér',
+        amount: 228857,
+        categoryId: 5,
+      ),
+      transaction(
+        id: 26071002,
+        date: '2026.07.10',
+        time: '07:00:00',
+        merchant: 'Fix havi tételek',
+        amount: -183320,
+        categoryId: 8,
+        recurringTransactionId: 901,
+      ),
+      transaction(
+        id: 26062001,
+        date: '2026.06.20',
+        time: '12:00:00',
+        merchant: 'Korábbi élelmiszer',
+        amount: -47400,
+        categoryId: 7,
+      ),
+      transaction(
+        id: 26061501,
+        date: '2026.06.15',
+        time: '12:00:00',
+        merchant: 'Korábbi számlák',
+        amount: -95990,
+        categoryId: 8,
+      ),
+      transaction(
+        id: 26061001,
+        date: '2026.06.10',
+        time: '12:00:00',
+        merchant: 'Korábbi szórakozás',
+        amount: -32990,
+        categoryId: 9,
+      ),
+      transaction(
+        id: 26060501,
+        date: '2026.06.05',
+        time: '12:00:00',
+        merchant: 'Korábbi lakhatás',
+        amount: -80400,
+        categoryId: 10,
+      ),
+      transaction(
+        id: 24010101,
+        date: '2024.01.01',
+        time: '08:00:00',
+        merchant: 'Történeti fix egyenleg',
+        amount: -371533229,
+        categoryId: 10,
+        recurringTransactionId: 902,
+      ),
+    ],
+    'limits': <Map<String, Object?>>[
+      <String, Object?>{
+        'id': 2607,
+        'targetType': 'overview',
+        'targetId': 0,
+        'transactionType': 'expense',
+        'window': 'monthly',
+        'periodKey': '2026-07',
+        'hasLimit': true,
+        'limitAmount': 401900,
+        'alertActive': false,
+        'createdAt': 0,
+        'updatedAt': 0,
+      },
+    ],
+    'recurringGhostTransactions': <Map<String, Object?>>[
+      <String, Object?>{
+        'id': 26080401,
+        'recurringTransactionId': 903,
+        'periodKey': '2026-08',
+        'name': 'Netflix',
+        'amount': -3490,
+        'triggerTypeSnapshot': 'date',
+        'transactionType': 'expense',
+        'date': '2026.08.04',
+        'time': '08:00:00',
+        'categoryId': 9,
+        'categoryName': 'Szórakozás',
+        'categoryColor': '#8b5cf6',
+        'categoryIconSlot': 4,
+        'triggerMillis': 1785823200000,
+        'isActivated': false,
+        'activatedTransactionId': null,
+        'createdAt': 0,
+        'updatedAt': 0,
+      },
+    ],
   };
 }
 

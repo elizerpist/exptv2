@@ -18,12 +18,14 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
 import 'package:exptv2/features/transactions/transaction_home_page.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_header_glass.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_mind_stats_adapter.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_test_dashboard.dart';
 import 'package:exptv2/features/transactions/widgets/glossy_category_avatar.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -478,6 +480,274 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'header menu exposes exactly one selected Balance Budget Mind mode',
+    (tester) async {
+      final selected = <SpendeeDashboardMode>[];
+      await _pumpDashboard(
+        tester,
+        dashboardMode: SpendeeDashboardMode.budget,
+        onDashboardModeChanged: selected.add,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-test-header-menu-button')),
+      );
+      await tester.pumpAndSettle();
+
+      final balance = find.byKey(
+        const ValueKey('spendee-test-header-background-balance'),
+      );
+      final budget = find.byKey(
+        const ValueKey('spendee-test-header-background-budget'),
+      );
+      final mind = find.byKey(
+        const ValueKey('spendee-test-header-background-mind'),
+      );
+      expect(balance, findsOneWidget);
+      expect(budget, findsOneWidget);
+      expect(mind, findsOneWidget);
+      expect(
+        tester.widget<CheckedPopupMenuItem<dynamic>>(balance).checked,
+        isFalse,
+      );
+      expect(
+        tester.widget<CheckedPopupMenuItem<dynamic>>(budget).checked,
+        isTrue,
+      );
+      expect(
+        tester.widget<CheckedPopupMenuItem<dynamic>>(mind).checked,
+        isFalse,
+      );
+
+      await tester.tap(balance);
+      await tester.pumpAndSettle();
+      expect(selected, [SpendeeDashboardMode.balance]);
+    },
+  );
+
+  testWidgets(
+    'Balance Budget Mind round trip retains Balance collapse and ghost state',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = TransactionStore(
+        _DashboardTestRepository(),
+        clock: () => DateTime(2026, 7, 17),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      var mode = SpendeeDashboardMode.balance;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setHostState) {
+                return ListenableBuilder(
+                  listenable: store,
+                  builder: (context, _) {
+                    return SpendeeTestDashboard(
+                      store: store,
+                      expenseTheme: ExpenseTheme.fromSettings(
+                        AppThemeSettings.defaults(),
+                      ),
+                      dashboardMode: mode,
+                      onDashboardModeChanged: (value) {
+                        setHostState(() => mode = value);
+                      },
+                      onPickSummaryMonth: () {},
+                      onEditTransaction: (_) {},
+                      onDeleteTransactionRequested: (_) async => true,
+                      onVendorSheetRequested: () {},
+                      logBottomPadding: 0,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      const sharedLogoRect = Rect.fromLTWH(17, 44.5, 56, 56);
+      Rect currentLogoRect() =>
+          tester.getRect(find.byKey(const ValueKey('spendee-test-brand-logo')));
+      expect(currentLogoRect(), sharedLogoRect);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard')),
+        findsNothing,
+        reason:
+            'Balance must not build the hidden legacy dashboard or expose its '
+            'focus targets.',
+      );
+
+      final ghost = find.byKey(
+        const ValueKey('spendee-balance-fast-info-ghost-no-spend'),
+      );
+      await tester.tap(ghost);
+      await tester.pump();
+      expect(
+        tester.getSemantics(ghost).flagsCollection.isToggled,
+        ui.Tristate.isFalse,
+      );
+      final handle = find.byKey(
+        const ValueKey('spendee-balance-collapse-handle'),
+      );
+      final collapseGesture = await tester.startGesture(
+        tester.getCenter(handle),
+      );
+      await collapseGesture.moveBy(const Offset(0, -20));
+      await collapseGesture.moveBy(const Offset(0, -120));
+      await collapseGesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Transform>(
+              find.byKey(
+                const ValueKey('spendee-balance-post-content-transform'),
+              ),
+            )
+            .transform
+            .getTranslation()
+            .y,
+        -132,
+      );
+
+      Future<void> selectMode(ValueKey<String> key) async {
+        await tester.tap(
+          find.byKey(const ValueKey('spendee-test-header-menu-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(key));
+        await tester.pumpAndSettle();
+      }
+
+      await selectMode(const ValueKey('spendee-test-header-background-budget'));
+      expect(find.byKey(const ValueKey('spendee-test-dashboard')), findsOne);
+      expect(currentLogoRect(), sharedLogoRect);
+      await selectMode(const ValueKey('spendee-test-header-background-mind'));
+      expect(find.byKey(const ValueKey('spendee-test-dashboard')), findsOne);
+      expect(currentLogoRect(), sharedLogoRect);
+      await selectMode(
+        const ValueKey('spendee-test-header-background-balance'),
+      );
+
+      expect(find.byKey(const ValueKey('spendee-balance-dashboard')), findsOne);
+      expect(currentLogoRect(), sharedLogoRect);
+      expect(
+        find.byKey(const ValueKey('spendee-test-dashboard')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<Transform>(
+              find.byKey(
+                const ValueKey('spendee-balance-post-content-transform'),
+              ),
+            )
+            .transform
+            .getTranslation()
+            .y,
+        -132,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(ghost).flagsCollection.isToggled,
+        ui.Tristate.isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'Balance keeps all four header surfaces through expanded and collapsed states',
+    (tester) async {
+      final store = await _pumpDashboard(
+        tester,
+        dashboardMode: SpendeeDashboardMode.balance,
+      );
+      addTearDown(store.dispose);
+
+      Future<void> selectSurface(
+        ValueKey<String> menuKey,
+        ValueKey<String> surfaceKey,
+      ) async {
+        await tester.tap(
+          find.byKey(const ValueKey('spendee-test-header-menu-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(menuKey));
+        await tester.pumpAndSettle();
+        expect(find.byKey(surfaceKey), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('spendee-balance-dashboard')),
+          findsOneWidget,
+        );
+      }
+
+      const surfaces = <(ValueKey<String>, ValueKey<String>)>[
+        (
+          ValueKey('spendee-test-header-surface-normal'),
+          ValueKey('spendee-balance-header-surface-normal'),
+        ),
+        (
+          ValueKey('spendee-test-header-surface-html-c2-glass'),
+          ValueKey('spendee-balance-header-surface-c2'),
+        ),
+        (
+          ValueKey('spendee-test-header-surface-liquid-glass'),
+          ValueKey('spendee-balance-header-surface-liquid'),
+        ),
+        (
+          ValueKey('spendee-test-header-surface-acrylic'),
+          ValueKey('spendee-balance-header-surface-acrylic'),
+        ),
+      ];
+      for (final (menuKey, surfaceKey) in surfaces) {
+        await selectSurface(menuKey, surfaceKey);
+      }
+
+      final handle = find.byKey(
+        const ValueKey('spendee-balance-collapse-handle'),
+      );
+      await tester.tap(handle);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Transform>(
+              find.byKey(
+                const ValueKey('spendee-balance-post-content-transform'),
+              ),
+            )
+            .transform
+            .getTranslation()
+            .y,
+        -132,
+      );
+      for (final (menuKey, surfaceKey) in surfaces) {
+        await selectSurface(menuKey, surfaceKey);
+        expect(
+          tester
+              .widget<Transform>(
+                find.byKey(
+                  const ValueKey('spendee-balance-post-content-transform'),
+                ),
+              )
+              .transform
+              .getTranslation()
+              .y,
+          -132,
+        );
+      }
+    },
+  );
 
   testWidgets('expense type pill does not paint a pink glow', (tester) async {
     await _pumpDashboard(tester);
@@ -4973,7 +5243,7 @@ void main() {
       );
       expect(
         tester.getRect(find.byKey(const ValueKey('spendee-test-brand-logo'))),
-        const Rect.fromLTWH(30, 39.3, 47.88, 47.88),
+        const Rect.fromLTWH(17, 44.5, 56, 56),
       );
 
       await tester.tap(
@@ -5027,6 +5297,34 @@ void main() {
       );
     },
   );
+
+  testWidgets('brand logo exposes one node and Enter or Space opens editor', (
+    tester,
+  ) async {
+    for (final key in <LogicalKeyboardKey>[
+      LogicalKeyboardKey.enter,
+      LogicalKeyboardKey.space,
+    ]) {
+      await _pumpDashboard(tester);
+      final logoTap = find.byKey(const ValueKey('spendee-test-brand-logo-tap'));
+      final semantics = tester.getSemantics(logoTap);
+      expect(semantics.label, 'Fluvi ikon testreszabása');
+      expect(semantics.flagsCollection.isButton, isTrue);
+      expect(semantics.childrenCount, 0);
+
+      Focus.of(tester.element(logoTap)).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(key);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-test-logo-editor-sheet')),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    }
+  });
 
   testWidgets('logo editor sends custom endpoint and boundary to an arc SVG', (
     tester,
@@ -5151,6 +5449,8 @@ Future<TransactionStore> _pumpDashboard(
   ValueChanged<TransactionRecord>? onEditTransaction,
   Future<bool> Function(TransactionRecord record)? onDeleteTransactionRequested,
   TransactionRepositoryContract? repository,
+  SpendeeDashboardMode dashboardMode = SpendeeDashboardMode.budget,
+  ValueChanged<SpendeeDashboardMode>? onDashboardModeChanged,
 }) async {
   tester.view.physicalSize = const Size(412, 892);
   tester.view.devicePixelRatio = 1;
@@ -5174,6 +5474,8 @@ Future<TransactionStore> _pumpDashboard(
               expenseTheme: ExpenseTheme.fromSettings(
                 AppThemeSettings.defaults(),
               ),
+              dashboardMode: dashboardMode,
+              onDashboardModeChanged: onDashboardModeChanged,
               onPickSummaryMonth: () {},
               onEditTransaction: onEditTransaction ?? (_) {},
               onDeleteTransactionRequested:

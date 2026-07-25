@@ -13,6 +13,7 @@ class ExptFab extends StatefulWidget {
     super.key,
     required this.onPressed,
     this.primaryColor = AppColors.primary,
+    this.backgroundGradient,
     this.surfaceStyle = ExpenseSurfaceInteraction.neutralNeutral,
     this.onLongPress,
     this.onHorizontalDragStep,
@@ -20,10 +21,12 @@ class ExptFab extends StatefulWidget {
     this.icon = Icons.add,
     this.size = AppDimensions.fabSize,
     this.borderRadius = 18,
+    this.semanticLabel = 'Tranzakció hozzáadása',
   });
 
   final VoidCallback onPressed;
   final Color primaryColor;
+  final Gradient? backgroundGradient;
   final ExpenseSurfaceInteraction surfaceStyle;
   final VoidCallback? onLongPress;
   final ValueChanged<int>? onHorizontalDragStep;
@@ -31,6 +34,7 @@ class ExptFab extends StatefulWidget {
   final IconData icon;
   final double size;
   final double borderRadius;
+  final String semanticLabel;
 
   @override
   State<ExptFab> createState() => _ExptFabState();
@@ -99,6 +103,55 @@ class _ExptFabState extends State<ExptFab> {
       builder: (context, pressed) {
         final borderRadius = BorderRadius.circular(widget.borderRadius);
         final shapeBorder = RoundedRectangleBorder(borderRadius: borderRadius);
+        final interactionSurface = Material(
+          color: Colors.transparent,
+          shape: shapeBorder,
+          child: InkResponse(
+            containedInkWell: true,
+            customBorder: shapeBorder,
+            overlayColor: materialFeedback
+                ? null
+                : ExpenseSurface.transparentOverlayColor,
+            splashColor: materialFeedback ? null : Colors.transparent,
+            highlightColor: materialFeedback
+                ? Colors.white30
+                : Colors.transparent,
+            onTap: _handleTap,
+            onLongPress:
+                widget.onLongPress == null && widget.onVerticalDragStep == null
+                ? null
+                : _handleLongPress,
+            child: ExcludeSemantics(
+              child: widget.backgroundGradient == null
+                  ? Icon(
+                      widget.icon,
+                      color: AppColors.white,
+                      size: widget.size * AppDimensions.fabIconScale,
+                    )
+                  : const Text(
+                      '+',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontFamily: 'Inter',
+                        fontSize: 34,
+                        height: 1,
+                        fontWeight: FontWeight.w300,
+                      ),
+                    ),
+            ),
+          ),
+        );
+        final surfaceChild = widget.backgroundGradient == null
+            ? interactionSurface
+            : DecoratedBox(
+                key: const ValueKey('expt-fab-gradient'),
+                decoration: BoxDecoration(
+                  gradient: widget.backgroundGradient,
+                  borderRadius: borderRadius,
+                ),
+                child: interactionSurface,
+              );
         return Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown:
@@ -222,50 +275,48 @@ class _ExptFabState extends State<ExptFab> {
                     horizontalFeedback?.knobOffsetX ?? 0,
                     joystickFeedback?.knobOffsetY ?? 0,
                   ),
-                  child: ExpenseSurfaceContainer(
-                    surfaceKey: const ValueKey('expt-fab'),
-                    style: widget.surfaceStyle,
-                    color: widget.primaryColor,
-                    borderRadius: borderRadius,
-                    pressed: pressed,
-                    primary: true,
-                    primaryColor: widget.primaryColor,
-                    width: widget.size,
-                    height: widget.size,
-                    neutralShadow: const [
-                      BoxShadow(
-                        color: AppColors.fabShadow,
-                        offset: Offset(0, 5),
-                        blurRadius: 12,
-                      ),
-                    ],
-                    child: Material(
-                      color: Colors.transparent,
-                      shape: shapeBorder,
-                      child: InkResponse(
-                        containedInkWell: true,
-                        customBorder: shapeBorder,
-                        overlayColor: materialFeedback
-                            ? null
-                            : ExpenseSurface.transparentOverlayColor,
-                        splashColor: materialFeedback
-                            ? null
-                            : Colors.transparent,
-                        highlightColor: materialFeedback
-                            ? Colors.white30
-                            : Colors.transparent,
-                        onTap: _handleTap,
-                        onLongPress:
-                            widget.onLongPress == null &&
-                                widget.onVerticalDragStep == null
-                            ? null
-                            : _handleLongPress,
-                        child: Icon(
-                          widget.icon,
-                          color: AppColors.white,
-                          size: widget.size * AppDimensions.fabIconScale,
-                        ),
-                      ),
+                  child: Semantics(
+                    label: widget.semanticLabel,
+                    button: true,
+                    child: ExpenseSurfaceContainer(
+                      surfaceKey: const ValueKey('expt-fab'),
+                      style: widget.surfaceStyle,
+                      color: widget.backgroundGradient == null
+                          ? widget.primaryColor
+                          : Colors.transparent,
+                      borderRadius: borderRadius,
+                      pressed: pressed,
+                      primary: widget.backgroundGradient == null,
+                      primaryColor: widget.primaryColor,
+                      width: widget.size,
+                      height: widget.size,
+                      neutralShadow: widget.backgroundGradient == null
+                          ? const [
+                              BoxShadow(
+                                color: AppColors.fabShadow,
+                                offset: Offset(0, 5),
+                                blurRadius: 12,
+                              ),
+                            ]
+                          : const [
+                              BoxShadow(
+                                color: Color(0x422563EB),
+                                offset: Offset(0, 6),
+                                blurRadius: 14,
+                              ),
+                              BoxShadow(
+                                color: Color(0x2414213A),
+                                offset: Offset(0, 2),
+                                blurRadius: 8,
+                              ),
+                              BoxShadow(
+                                color: Color(0x61FFFFFF),
+                                offset: Offset(0, 1),
+                                blurRadius: 0,
+                                blurStyle: BlurStyle.inner,
+                              ),
+                            ],
+                      child: surfaceChild,
                     ),
                   ),
                 ),

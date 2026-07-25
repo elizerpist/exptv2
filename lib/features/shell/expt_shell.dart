@@ -48,6 +48,8 @@ import '../transactions/widgets/header_card/budget_target_editor_sheet.dart';
 import '../transactions/widgets/transaction_menu_metrics.dart';
 import '../transactions/widgets/recurring_manager_sheet.dart';
 import '../transactions/widgets/slide_up_menu_card.dart';
+import '../transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
+import '../transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'app_tab.dart';
 import 'widgets/expt_bottom_nav.dart';
 import 'widgets/expt_fab.dart';
@@ -63,6 +65,7 @@ class ExptShell extends StatefulWidget {
     this.statsRenderFrameWorker,
     this.browserFullscreenController,
     this.onSecuritySettingsChanged,
+    this.transactionClock,
   });
 
   final EventStore store;
@@ -72,6 +75,7 @@ class ExptShell extends StatefulWidget {
   final StatsRenderFrameWorker? statsRenderFrameWorker;
   final BrowserFullscreenController? browserFullscreenController;
   final ValueChanged<SecuritySettings>? onSecuritySettingsChanged;
+  final DateTime Function()? transactionClock;
 
   @override
   State<ExptShell> createState() => _ExptShellState();
@@ -99,6 +103,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   final Map<AppTab, Widget> _retainedTabPages = <AppTab, Widget>{};
   var _homeBlockingOverlayOpen = false;
   var _headerSettingsOpen = false;
+  var _spendeeDashboardMode = SpendeeDashboardMode.budget;
   AppThemeSettings _themeSettings = AppThemeSettings.defaults();
   FastInfoConfig _fastInfoConfig = FastInfoConfig.defaults();
   late TransactionHomePage _transactionHomePage;
@@ -110,6 +115,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   double _lastKeyboardInset = 0;
   String? _lastThemeSurfaceLogSignature;
   Timer? _homeThemeSettingsSaveDebounce;
+  Timer? _transactionDateBoundaryTimer;
   var _homeThemeSettingsRevision = 0;
   late StatsPage _statsPage;
 
@@ -134,9 +140,11 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     _notificationStore.addListener(_handleNotificationStoreChanged);
     _transactionStore = TransactionStore(
       TransactionRepository(widget.nativeBridge),
+      clock: widget.transactionClock,
       onNotificationsMayHaveChanged:
           _refreshNotificationsAfterTransactionChange,
     );
+    _scheduleTransactionDateBoundaryRefresh();
     _nativeImeSheetBridge = kIsWeb
         ? NativeImeSheetBridge.disabled()
         : NativeImeSheetBridge(
@@ -195,6 +203,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _homeThemeSettingsSaveDebounce?.cancel();
+    _transactionDateBoundaryTimer?.cancel();
     _budgetEditorActiveKey.dispose();
     _transactionStore.dispose();
     _nativeImeSheetBridge.dispose();
@@ -209,9 +218,23 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    _transactionStore.refreshForDateBoundary();
+    _scheduleTransactionDateBoundaryRefresh();
     _statsPageController.refreshForLifecycle();
     unawaited(_refreshBackgroundTransactionsOnResume());
     unawaited(_processRecurringOnResume());
+  }
+
+  void _scheduleTransactionDateBoundaryRefresh() {
+    _transactionDateBoundaryTimer?.cancel();
+    final now = DateTime.now();
+    final nextDay = DateTime(now.year, now.month, now.day + 1);
+    final delay = nextDay.difference(now) + const Duration(milliseconds: 100);
+    _transactionDateBoundaryTimer = Timer(delay, () {
+      if (!mounted) return;
+      _transactionStore.refreshForDateBoundary();
+      _scheduleTransactionDateBoundaryRefresh();
+    });
   }
 
   @override
@@ -272,6 +295,8 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       fastInfoConfig: _fastInfoConfig,
       logBottomPadding: logBottomPadding,
       browserFullscreenController: _browserFullscreenController,
+      dashboardMode: _spendeeDashboardMode,
+      onDashboardModeChanged: _setSpendeeDashboardMode,
       onNotificationPressed: _handleHeaderNotificationPressed,
       onSettingsPressed: _openHeaderSettings,
       notificationUnreadCount: _notificationStore.unreadCount,
@@ -295,6 +320,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       onVendorSheetRequested: () {
         _sheetHostKey.currentState?.openVendorFilter();
       },
+      onBalanceFilterRequested: _handleBalanceFilterRequested,
       onFocusedSheetDismissRequested: () {
         _sheetHostKey.currentState?.closeAll();
       },
@@ -316,6 +342,10 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
       ),
       budgetEditorActiveKey: _budgetEditorActiveKey,
     );
+  }
+
+  void _handleBalanceFilterRequested() {
+    DebugConsole.log('[Balance] filter action requested; query menu deferred');
   }
 
   StatsPage _buildStatsPage() {
@@ -910,6 +940,7 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         bottom: 0,
         child: SpendeeTestBottomNav(
           activeTab: _activeTab,
+          dashboardMode: _spendeeDashboardMode,
           surfaceColor: expenseTheme.logBox,
           surfaceStyle: expenseTheme.bottomNavSurfaceStyle,
           buttonSurfaceStyle: expenseTheme.buttonSurfaceStyle,
@@ -923,6 +954,15 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
         ),
       ),
     ];
+  }
+
+  void _setSpendeeDashboardMode(SpendeeDashboardMode mode) {
+    if (_spendeeDashboardMode == mode) return;
+    setState(() {
+      _spendeeDashboardMode = mode;
+      _transactionHomePage = _buildTransactionHomePage();
+      _refreshRetainedTabPages();
+    });
   }
 
   Widget _buildShellPage(AppTab tab, ExpenseTheme expenseTheme) {
@@ -967,32 +1007,34 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
     final spendeeTestMode =
         _themeSettings.dashboardDesignMode == DashboardDesignMode.spendeeTest;
     final spendeeNavigationTab = _isSpendeeNavigationTab(_activeTab);
+    final balanceShellFrame =
+        spendeeTestMode &&
+        _activeTab == AppTab.home &&
+        _spendeeDashboardMode == SpendeeDashboardMode.balance;
     final shellNavigation = spendeeTestMode
         ? _buildSpendeeTestShellNavigation(expenseTheme)
         : _buildShellNavigation(expenseTheme);
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: expenseTheme.appBackground,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Stack(
-              key: const ValueKey('shell-page-stack'),
-              fit: StackFit.expand,
-              children: [
-                for (final entry in _retainedTabPages.entries)
-                  _RetainedShellTab(
-                    key: ValueKey('retained-shell-tab-${entry.key.id}'),
-                    active: entry.key == _pageActiveTab,
-                    child: entry.value,
-                  ),
-              ],
-            ),
+    final shellBody = Stack(
+      children: [
+        Positioned.fill(
+          child: Stack(
+            key: const ValueKey('shell-page-stack'),
+            fit: StackFit.expand,
+            children: [
+              for (final entry in _retainedTabPages.entries)
+                _RetainedShellTab(
+                  key: ValueKey('retained-shell-tab-${entry.key.id}'),
+                  active: entry.key == _pageActiveTab,
+                  child: entry.value,
+                ),
+            ],
           ),
-          if (!_homeBlockingOverlayOpen &&
-              !_headerSettingsOpen &&
-              (!spendeeTestMode || spendeeNavigationTab))
-            ...shellNavigation,
+        ),
+        if (!_homeBlockingOverlayOpen &&
+            !_headerSettingsOpen &&
+            (!spendeeTestMode || spendeeNavigationTab))
+          ...shellNavigation,
+        if (!balanceShellFrame)
           DebugFloatingButton(
             bottomOffset: _rightFabDebugBottomOffset(
               _themeSettings.fabSize.toDouble(),
@@ -1002,49 +1044,82 @@ class _ExptShellState extends State<ExptShell> with WidgetsBindingObserver {
             onRecurringChanged:
                 _transactionStore.refreshAfterRecurringProcessing,
           ),
+        Positioned.fill(
+          child: _ShellSheetHost(
+            key: _sheetHostKey,
+            store: _transactionStore,
+            nativeBridge: widget.nativeBridge,
+            budgetEditorActiveKey: _budgetEditorActiveKey,
+            expenseTheme: expenseTheme,
+            resolveNotificationEventId:
+                widget.nativeBridge.expenseNotificationEventIdForTransaction,
+            onOpenNotificationEvent: _openNotificationEventFromTransaction,
+            onThemeSettingsChanged: _queueHomeThemeSettings,
+          ),
+        ),
+        if (_headerSettingsOpen)
           Positioned.fill(
-            child: _ShellSheetHost(
-              key: _sheetHostKey,
-              store: _transactionStore,
+            child: SettingsPage(
+              key: const ValueKey('header-settings-overlay'),
+              store: widget.store,
               nativeBridge: widget.nativeBridge,
-              budgetEditorActiveKey: _budgetEditorActiveKey,
+              googleSheetsSyncController: widget.googleSheetsSyncController,
               expenseTheme: expenseTheme,
-              resolveNotificationEventId:
-                  widget.nativeBridge.expenseNotificationEventIdForTransaction,
-              onOpenNotificationEvent: _openNotificationEventFromTransaction,
-              onThemeSettingsChanged: _queueHomeThemeSettings,
+              onThemeSettingsChanged: _applyThemeSettings,
+              onFastInfoConfigChanged: _applyFastInfoConfig,
+              onSecuritySettingsChanged: widget.onSecuritySettingsChanged,
+              onOpenTransaction: _openTransactionFromPushLog,
+              onBackToHome: _closeHeaderSettings,
             ),
           ),
-          if (_headerSettingsOpen)
-            Positioned.fill(
-              child: SettingsPage(
-                key: const ValueKey('header-settings-overlay'),
-                store: widget.store,
-                nativeBridge: widget.nativeBridge,
-                googleSheetsSyncController: widget.googleSheetsSyncController,
-                expenseTheme: expenseTheme,
-                onThemeSettingsChanged: _applyThemeSettings,
-                onFastInfoConfigChanged: _applyFastInfoConfig,
-                onSecuritySettingsChanged: widget.onSecuritySettingsChanged,
-                onOpenTransaction: _openTransactionFromPushLog,
-                onBackToHome: _closeHeaderSettings,
-              ),
-            ),
-          if (!_coldStartReady)
-            Positioned.fill(
-              child: ColoredBox(
-                key: const ValueKey('shell-cold-start-loading'),
-                color: expenseTheme.appBackground,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: expenseTheme.accent,
-                    strokeWidth: 2,
-                  ),
+        if (!_coldStartReady)
+          Positioned.fill(
+            child: ColoredBox(
+              key: const ValueKey('shell-cold-start-loading'),
+              color: expenseTheme.appBackground,
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: expenseTheme.accent,
+                  strokeWidth: 2,
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
+    );
+    final body = balanceShellFrame
+        ? Container(
+            key: const ValueKey('spendee-balance-shell-frame'),
+            decoration: BoxDecoration(
+              color: SpendeeBalanceVisualSpec.pageBackground,
+              border: Border.all(color: const Color(0x6164748B)),
+              borderRadius: BorderRadius.circular(
+                SpendeeBalanceVisualSpec.screenRadius,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x470F172A),
+                  offset: Offset(0, 20),
+                  blurRadius: 50,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(
+                SpendeeBalanceVisualSpec.screenRadius -
+                    SpendeeBalanceVisualSpec.screenBorderWidth,
+              ),
+              child: shellBody,
+            ),
+          )
+        : shellBody;
+    return Scaffold(
+      key: const ValueKey('expt-shell'),
+      resizeToAvoidBottomInset: false,
+      backgroundColor: balanceShellFrame
+          ? SpendeeBalanceVisualSpec.pageBackground
+          : expenseTheme.appBackground,
+      body: body,
     );
   }
 

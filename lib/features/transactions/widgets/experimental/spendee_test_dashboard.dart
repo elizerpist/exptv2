@@ -27,9 +27,13 @@ import '../../state/transaction_store.dart';
 import '../glossy_category_avatar.dart';
 import '../search_pill.dart';
 import '../transaction_log_box.dart';
+import '../../state/balance_frame.dart';
+import 'balance/spendee_balance_dashboard.dart';
+import 'balance/spendee_balance_transaction_log.dart';
 import 'fluvi_logo.dart';
 import 'spendee_center_carousel_controller.dart';
 import 'spendee_acrylic_surface.dart';
+import 'spendee_dashboard_mode.dart';
 import 'spendee_header_glass.dart';
 import 'spendee_liquid_glass_surface.dart';
 import 'spendee_header_stage_controller.dart';
@@ -247,6 +251,7 @@ bool _listEquals<T>(List<T> left, List<T> right) {
 }
 
 enum _HeaderDesignMenuAction {
+  headerBackgroundBalance,
   headerBackgroundBudget,
   headerBackgroundMind,
   headerNormal,
@@ -1806,6 +1811,9 @@ class SpendeeTestDashboard extends StatefulWidget {
     required this.onDeleteTransactionRequested,
     required this.onVendorSheetRequested,
     required this.logBottomPadding,
+    this.onBalanceFilterRequested,
+    this.dashboardMode = SpendeeDashboardMode.budget,
+    this.onDashboardModeChanged,
   });
 
   final TransactionStore store;
@@ -1815,7 +1823,10 @@ class SpendeeTestDashboard extends StatefulWidget {
   final ValueChanged<TransactionRecord>? onEditTransaction;
   final TransactionDeleteRequest? onDeleteTransactionRequested;
   final VoidCallback? onVendorSheetRequested;
+  final VoidCallback? onBalanceFilterRequested;
   final double logBottomPadding;
+  final SpendeeDashboardMode dashboardMode;
+  final ValueChanged<SpendeeDashboardMode>? onDashboardModeChanged;
 
   @override
   State<SpendeeTestDashboard> createState() => _SpendeeTestDashboardState();
@@ -1862,6 +1873,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   var _chartSurfaceSoftness = 0.0;
   var _chartListSurfaceSoftness = 0.0;
   var _headerBackgroundMode = _HeaderBackgroundMode.budget;
+  late SpendeeDashboardMode _dashboardMode;
+  var _balanceInitialized = false;
+  Widget? _balanceDashboardCache;
   var _mindStage1Surface = _PanelSurface.glass;
   var _mindStage2Surface = _PanelSurface.glass;
   var _mindSumStage1Surface = _PanelSurface.glass;
@@ -1918,6 +1932,11 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   @override
   void initState() {
     super.initState();
+    _dashboardMode = widget.dashboardMode;
+    _balanceInitialized = _dashboardMode == SpendeeDashboardMode.balance;
+    _headerBackgroundMode = _dashboardMode == SpendeeDashboardMode.mind
+        ? _HeaderBackgroundMode.mind
+        : _HeaderBackgroundMode.budget;
     _stageNotifier = ValueNotifier<SpendeeHeaderStage>(_stage);
     _mindGlobalRailPresentation = ValueNotifier(
       _currentMindGlobalRailPresentation(),
@@ -1930,6 +1949,17 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   @override
   void didUpdateWidget(covariant SpendeeTestDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.dashboardMode != widget.dashboardMode) {
+      _dashboardMode = widget.dashboardMode;
+      if (_dashboardMode == SpendeeDashboardMode.balance) {
+        _balanceInitialized = true;
+      }
+      if (_dashboardMode != SpendeeDashboardMode.balance) {
+        _headerBackgroundMode = _dashboardMode == SpendeeDashboardMode.mind
+            ? _HeaderBackgroundMode.mind
+            : _HeaderBackgroundMode.budget;
+      }
+    }
     if (oldWidget.store != widget.store ||
         oldWidget.expenseTheme != widget.expenseTheme ||
         oldWidget.onPickSummaryMonth != widget.onPickSummaryMonth ||
@@ -1937,8 +1967,11 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         oldWidget.onDeleteTransactionRequested !=
             widget.onDeleteTransactionRequested ||
         oldWidget.onVendorSheetRequested != widget.onVendorSheetRequested ||
-        oldWidget.logBottomPadding != widget.logBottomPadding) {
+        oldWidget.onBalanceFilterRequested != widget.onBalanceFilterRequested ||
+        oldWidget.logBottomPadding != widget.logBottomPadding ||
+        oldWidget.dashboardMode != widget.dashboardMode) {
       _homeContent = _buildHomeContent();
+      _balanceDashboardCache = null;
     }
   }
 
@@ -3200,16 +3233,23 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           child: Text('Header background'),
         ),
         CheckedPopupMenuItem<_HeaderDesignMenuAction>(
+          key: const ValueKey('spendee-test-header-background-balance'),
+          value: _HeaderDesignMenuAction.headerBackgroundBalance,
+          checked: _dashboardMode == SpendeeDashboardMode.balance,
+          height: 38,
+          child: const Text('Background: Balance'),
+        ),
+        CheckedPopupMenuItem<_HeaderDesignMenuAction>(
           key: const ValueKey('spendee-test-header-background-budget'),
           value: _HeaderDesignMenuAction.headerBackgroundBudget,
-          checked: _headerBackgroundMode == _HeaderBackgroundMode.budget,
+          checked: _dashboardMode == SpendeeDashboardMode.budget,
           height: 38,
           child: const Text('Background: Budget'),
         ),
         CheckedPopupMenuItem<_HeaderDesignMenuAction>(
           key: const ValueKey('spendee-test-header-background-mind'),
           value: _HeaderDesignMenuAction.headerBackgroundMind,
-          checked: _headerBackgroundMode == _HeaderBackgroundMode.mind,
+          checked: _dashboardMode == SpendeeDashboardMode.mind,
           height: 38,
           child: const Text('Background: Mind'),
         ),
@@ -3543,14 +3583,24 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     if (action == null || !mounted) return;
     HapticFeedback.selectionClick();
     final updatesMindRail =
+        action == _HeaderDesignMenuAction.headerBackgroundBalance ||
         action == _HeaderDesignMenuAction.headerBackgroundBudget ||
         action == _HeaderDesignMenuAction.headerBackgroundMind;
+    SpendeeDashboardMode? selectedDashboardMode;
     setState(() {
       switch (action) {
+        case _HeaderDesignMenuAction.headerBackgroundBalance:
+          _dashboardMode = SpendeeDashboardMode.balance;
+          _balanceInitialized = true;
+          selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerBackgroundBudget:
+          _dashboardMode = SpendeeDashboardMode.budget;
           _headerBackgroundMode = _HeaderBackgroundMode.budget;
+          selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerBackgroundMind:
+          _dashboardMode = SpendeeDashboardMode.mind;
           _headerBackgroundMode = _HeaderBackgroundMode.mind;
+          selectedDashboardMode = _dashboardMode;
         case _HeaderDesignMenuAction.headerNormal:
           _headerSurface = _HeaderSurface.normal;
         case _HeaderDesignMenuAction.headerHtmlC2Glass:
@@ -3612,6 +3662,9 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
       }
       if (updatesMindRail) _syncMindGlobalRailPresentation();
     });
+    if (selectedDashboardMode case final mode?) {
+      widget.onDashboardModeChanged?.call(mode);
+    }
   }
 
   Future<void> _openAvatarLayoutMenu() async {
@@ -4228,8 +4281,211 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
     );
   }
 
+  Widget _buildBalanceDashboard() {
+    final store = widget.store;
+    return SpendeeBalanceDashboard(
+      input: BalanceFrameInput.fromStore(store),
+      brand: _SpendeeBrandLockup(
+        key: const ValueKey('spendee-test-brand-lockup'),
+        logoFills: _logoFills,
+        onLogoTap: _openLogoEditor,
+      ),
+      menuButton: Builder(
+        builder: (menuContext) {
+          return SpendeeHeaderMenuButton(
+            spec: _budgetHeaderVisualSpec,
+            onPressed: () => _openHeaderDesignMenu(menuContext),
+          );
+        },
+      ),
+      headerSurfaceBuilder: _buildBalanceHeaderSurface,
+      onTypeChanged: store.setActiveType,
+      onSummaryTap: widget.onPickSummaryMonth,
+      onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
+      onShiftPeriod: (direction) =>
+          unawaited(store.shiftSummaryPeriod(direction)),
+      onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
+      onQueryChanged: store.setSearchQuery,
+      onRemoveFilter: (filter) {
+        final separator = filter.keyValue.indexOf(':');
+        if (separator < 0) return;
+        final kind = filter.keyValue.substring(0, separator);
+        final value = filter.keyValue.substring(separator + 1);
+        if (kind == 'category') {
+          final categoryId = int.tryParse(value);
+          if (categoryId != null) store.clearCategoryFilterId(categoryId);
+        } else if (kind == 'merchant') {
+          store.clearMerchantFilter(value);
+        }
+      },
+      // The query-menu contents are explicitly deferred by A3-SEARCH-004.
+      // This callback is intentionally separate from the legacy vendor sheet.
+      onFilterPressed: widget.onBalanceFilterRequested,
+      onScopeSelected: (option) {
+        switch (option.window) {
+          case SummaryWindow.monthly:
+            unawaited(
+              store.setSummaryMonth(
+                option.referenceDate.year,
+                option.referenceDate.month,
+              ),
+            );
+          case SummaryWindow.yearly:
+            unawaited(store.setSummaryYear(option.referenceDate.year));
+          case SummaryWindow.allTime:
+            unawaited(store.setSummaryAllTime());
+        }
+      },
+      onScopeFallback: (query) =>
+          unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
+      transactionLogRevision: (
+        widget.logBottomPadding,
+        widget.onEditTransaction,
+        widget.onDeleteTransactionRequested,
+      ),
+      transactionLogBuilder: (context, frame) {
+        return SpendeeBalanceTransactionLog(
+          groups: frame.logGroups,
+          categoriesById: store.categoriesById,
+          queryKey: _balanceLogQueryKey(frame),
+          hasMore: frame.hasMoreLogEntries,
+          onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
+          bottomPadding: widget.logBottomPadding,
+          onFastFilter: (record, _) =>
+              store.setMerchantFilter(record.displayMerchant),
+          onRecordTap: widget.onEditTransaction ?? (_) {},
+          onDeleteRequested:
+              widget.onDeleteTransactionRequested ?? (_) async => false,
+          onCategoryFilter: store.setCategoryFilter,
+          onEditTransaction: widget.onEditTransaction ?? (_) {},
+          onRenameMerchantRequested: _requestBalanceMerchantRename,
+          onResetMerchantName: (record) =>
+              unawaited(store.resetTransactionNamesByMerchant(record)),
+        );
+      },
+    );
+  }
+
+  Widget _balanceDashboard({required bool refresh}) {
+    final cached = _balanceDashboardCache;
+    if (!refresh && cached != null) return cached;
+    final dashboard = _buildBalanceDashboard();
+    _balanceDashboardCache = dashboard;
+    return dashboard;
+  }
+
+  String _balanceLogQueryKey(BalanceRenderFrame frame) {
+    final query = frame.query;
+    final categories = query.categoryIds.toList()..sort();
+    final merchants = query.merchantFilters.toList()..sort();
+    return [
+      query.activeType.name,
+      query.summaryWindow.name,
+      query.effectiveReferenceDate.toIso8601String(),
+      query.searchQuery,
+      categories.join(','),
+      merchants.join('|'),
+    ].join('::');
+  }
+
+  Widget _buildBalanceHeaderSurface(
+    BuildContext context,
+    BorderRadius borderRadius,
+    Widget child,
+  ) {
+    final radius = borderRadius.topLeft.x;
+    return switch (_headerSurface) {
+      _HeaderSurface.normal => KeyedSubtree(
+        key: const ValueKey('spendee-balance-header-surface-normal'),
+        child: child,
+      ),
+      _HeaderSurface.htmlC2Glass => _C2GlassSurface(
+        key: const ValueKey('spendee-balance-header-surface-c2'),
+        clipKey: const ValueKey('spendee-balance-header-c2-clip'),
+        paintKey: const ValueKey('spendee-balance-header-c2-paint'),
+        maskKey: const ValueKey('spendee-balance-header-c2-mask'),
+        borderRadius: radius,
+        useBottomFade: false,
+        child: child,
+      ),
+      _HeaderSurface.liquidGlass => SpendeeLiquidGlassSurface(
+        key: const ValueKey('spendee-balance-header-surface-liquid'),
+        fallbackKey: const ValueKey('spendee-balance-header-liquid-fallback'),
+        glareKey: const ValueKey('spendee-balance-header-liquid-glare'),
+        borderRadius: radius,
+        softness: _headerLiquidSoftness,
+        child: child,
+      ),
+      _HeaderSurface.acrylic => SpendeeAcrylicSurface(
+        key: const ValueKey('spendee-balance-header-surface-acrylic'),
+        fluentKey: const ValueKey('spendee-balance-header-acrylic-fluent'),
+        highlightKey: const ValueKey(
+          'spendee-balance-header-acrylic-highlight',
+        ),
+        borderRadius: radius,
+        child: child,
+      ),
+    };
+  }
+
+  Future<void> _requestBalanceMerchantRename(TransactionRecord record) async {
+    final controller = TextEditingController(text: record.displayMerchant);
+    final nextName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          key: const ValueKey('spendee-balance-merchant-rename-dialog'),
+          title: const Text('Kereskedő átnevezése'),
+          content: TextField(
+            key: const ValueKey('spendee-balance-merchant-rename-field'),
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) =>
+                Navigator.of(dialogContext).pop(value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Mégse'),
+            ),
+            FilledButton(
+              key: const ValueKey('spendee-balance-merchant-rename-save'),
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Mentés'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (nextName == null || nextName.trim().isEmpty) return;
+    await widget.store.renameTransactionsByMerchant(record, nextName);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final balanceMode = _dashboardMode == SpendeeDashboardMode.balance;
+    if (balanceMode) {
+      return IndexedStack(
+        key: const ValueKey('spendee-test-mode-stack'),
+        index: 1,
+        sizing: StackFit.expand,
+        children: [
+          const SizedBox(
+            key: ValueKey('spendee-test-legacy-dashboard-unmounted'),
+          ),
+          ExcludeFocus(
+            excluding: false,
+            child: TickerMode(
+              enabled: true,
+              child: _balanceDashboard(refresh: true),
+            ),
+          ),
+        ],
+      );
+    }
     final controller = _controllerFor(context);
     final geometry = controller.geometry;
     final budgetBars = _previewBudgetBars(widget.store.categoryBudgetBars);
@@ -4289,7 +4545,7 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
         mindStatsFrame?.activeFrame.yearData.activeType ??
         widget.store.activeType;
 
-    return ColoredBox(
+    final legacyDashboard = ColoredBox(
       color: const Color(0xFFF1F5F9),
       child: Stack(
         key: const ValueKey('spendee-test-dashboard'),
@@ -4452,6 +4708,28 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
             ),
         ],
       ),
+    );
+    return IndexedStack(
+      key: const ValueKey('spendee-test-mode-stack'),
+      index: balanceMode ? 1 : 0,
+      sizing: StackFit.expand,
+      children: [
+        ExcludeFocus(
+          excluding: false,
+          child: TickerMode(enabled: true, child: legacyDashboard),
+        ),
+        ExcludeFocus(
+          excluding: true,
+          child: TickerMode(
+            enabled: false,
+            child: _balanceInitialized
+                ? _balanceDashboard(refresh: false)
+                : const SizedBox(
+                    key: ValueKey('spendee-balance-dashboard-uninitialized'),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -10294,95 +10572,131 @@ class _SpendeeBrandLockup extends StatelessWidget {
     required this.onLogoTap,
   });
 
-  static const _logoSize = 47.88;
-
   final Map<FluviLogoArc, FluviLogoFill> logoFills;
   final VoidCallback onLogoTap;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          left: 30,
-          top: 6,
-          width: _logoSize,
-          height: _logoSize,
-          child: GestureDetector(
-            key: const ValueKey('spendee-test-brand-logo-tap'),
-            behavior: HitTestBehavior.opaque,
-            onTap: onLogoTap,
-            child: Stack(
-              clipBehavior: Clip.none,
-              fit: StackFit.expand,
-              children: [
-                Transform.translate(
-                  offset: const Offset(0, 3),
-                  child: ImageFiltered(
-                    imageFilter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.mode(
-                        Color(0x1A0F172A),
-                        BlendMode.srcIn,
-                      ),
-                      child: FluviLogo(fills: logoFills),
+    const logoSize = 56.0;
+    const logoTop = 11.2;
+    const logoShadow = Color(0x244653AB);
+    const wordmarkTop = 19.93;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Standalone tests host this content at the full 412 px viewport,
+        // while production hosts it inside the 1 px screen border (410 px).
+        // Keep the authored brand at the same viewport coordinate in both.
+        final screenBorderInset = constraints.maxWidth > 410 ? 1.0 : 0.0;
+        final logoLeft = 16.0 + screenBorderInset;
+        final wordmarkLeft = 82.0 + screenBorderInset;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: logoLeft,
+              top: logoTop,
+              width: logoSize,
+              height: logoSize,
+              child: Semantics(
+                button: true,
+                label: 'Fluvi ikon testreszabása',
+                onTap: onLogoTap,
+                excludeSemantics: true,
+                child: FocusableActionDetector(
+                  shortcuts: const <ShortcutActivator, Intent>{
+                    SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+                    SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+                  },
+                  actions: <Type, Action<Intent>>{
+                    ActivateIntent: CallbackAction<ActivateIntent>(
+                      onInvoke: (_) {
+                        onLogoTap();
+                        return null;
+                      },
+                    ),
+                  },
+                  child: GestureDetector(
+                    key: const ValueKey('spendee-test-brand-logo-tap'),
+                    behavior: HitTestBehavior.opaque,
+                    excludeFromSemantics: true,
+                    onTap: onLogoTap,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      fit: StackFit.expand,
+                      children: [
+                        Transform.translate(
+                          offset: const Offset(0, 3),
+                          child: ImageFiltered(
+                            imageFilter: ui.ImageFilter.blur(
+                              sigmaX: 4,
+                              sigmaY: 4,
+                            ),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.mode(
+                                logoShadow,
+                                BlendMode.srcIn,
+                              ),
+                              child: FluviLogo(fills: logoFills),
+                            ),
+                          ),
+                        ),
+                        FluviLogo(
+                          key: const ValueKey('spendee-test-brand-logo'),
+                          fills: logoFills,
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                FluviLogo(
-                  key: const ValueKey('spendee-test-brand-logo'),
-                  fills: logoFills,
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-        Positioned(
-          left: 82.25,
-          top: 10.602,
-          right: 20,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'fluvi',
-                maxLines: 1,
-                style: TextStyle(
-                  color: Color(0xFF14213A),
-                  fontSize: 30.096,
-                  height: .96,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(height: 1.368),
-              Text.rich(
-                const TextSpan(
-                  children: [
-                    TextSpan(text: 'your personal '),
-                    TextSpan(
-                      text: 'financial trainer',
-                      style: TextStyle(color: Color(0xFF06AECA)),
+            Positioned(
+              left: wordmarkLeft,
+              top: wordmarkTop,
+              right: 20,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'fluvi',
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: Color(0xFF101D57),
+                      fontSize: 23,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.92,
                     ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.visible,
-                softWrap: false,
-                style: const TextStyle(
-                  color: Color(0xFF536078),
-                  fontSize: 13.84416,
-                  height: 1.02,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0,
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    const TextSpan(
+                      children: [
+                        TextSpan(text: 'your personal '),
+                        TextSpan(
+                          text: 'financial trainer',
+                          style: TextStyle(color: Color(0xFF04AECA)),
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                    style: const TextStyle(
+                      color: Color(0xFF657092),
+                      fontSize: 11,
+                      height: 1.05,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -.11,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

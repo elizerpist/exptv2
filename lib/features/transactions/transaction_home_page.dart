@@ -31,6 +31,7 @@ import 'widgets/header_card/header_fast_info_surface.dart';
 import 'widgets/header_card/transaction_header_metrics.dart';
 import 'widgets/header_card/transaction_header_card.dart';
 import 'widgets/experimental/spendee_test_dashboard.dart';
+import 'widgets/experimental/spendee_dashboard_mode.dart';
 import 'models/limit_allocation_data.dart';
 import 'widgets/search_pill.dart';
 import 'widgets/slide_up_menu_card.dart';
@@ -63,6 +64,7 @@ class TransactionHomePage extends StatefulWidget {
     this.onFocusedSheetDismissRequested,
     this.onCategoryMenuRequested,
     this.onVendorSheetRequested,
+    this.onBalanceFilterRequested,
     this.onAddCategoryEditorRequested,
     this.onEditCategoryEditorRequested,
     this.onThemeSettingsChanged,
@@ -74,6 +76,8 @@ class TransactionHomePage extends StatefulWidget {
     this.logBottomPadding = 96,
     this.budgetEditorActiveKey,
     this.browserFullscreenController,
+    this.dashboardMode = SpendeeDashboardMode.budget,
+    this.onDashboardModeChanged,
   });
 
   final TransactionStore store;
@@ -88,6 +92,7 @@ class TransactionHomePage extends StatefulWidget {
   final VoidCallback? onFocusedSheetDismissRequested;
   final CategoryMenuSheetRequested? onCategoryMenuRequested;
   final VoidCallback? onVendorSheetRequested;
+  final VoidCallback? onBalanceFilterRequested;
   final VoidCallback? onAddCategoryEditorRequested;
   final ValueChanged<TransactionCategory>? onEditCategoryEditorRequested;
   final ValueChanged<AppThemeSettings>? onThemeSettingsChanged;
@@ -100,6 +105,8 @@ class TransactionHomePage extends StatefulWidget {
   final double logBottomPadding;
   final ValueNotifier<String?>? budgetEditorActiveKey;
   final BrowserFullscreenController? browserFullscreenController;
+  final SpendeeDashboardMode dashboardMode;
+  final ValueChanged<SpendeeDashboardMode>? onDashboardModeChanged;
 
   @override
   State<TransactionHomePage> createState() => _TransactionHomePageState();
@@ -214,11 +221,14 @@ class _TransactionHomePageState extends State<TransactionHomePage>
             return SpendeeTestDashboard(
               store: widget.store,
               expenseTheme: expenseTheme,
+              dashboardMode: widget.dashboardMode,
+              onDashboardModeChanged: widget.onDashboardModeChanged,
               browserFullscreenController: widget.browserFullscreenController,
               onPickSummaryMonth: _pickSummaryMonth,
               onEditTransaction: widget.onEditTransaction,
               onDeleteTransactionRequested: widget.onDeleteTransactionRequested,
               onVendorSheetRequested: _openVendorSheet,
+              onBalanceFilterRequested: widget.onBalanceFilterRequested,
               logBottomPadding: widget.logBottomPadding,
             );
           }

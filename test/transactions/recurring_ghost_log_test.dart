@@ -54,7 +54,7 @@ void main() {
     },
   );
 
-  test('monthly display pins ghosts above normal date headers', () async {
+  test('monthly display groups real and ghost rows in date order', () async {
     final repository = GhostRepository(projectedGhosts: [ghostFixture(day: 1)]);
     final store = TransactionStore(
       repository,
@@ -64,17 +64,17 @@ void main() {
     await store.cycleSummaryWindow();
 
     expect(store.summaryWindow, SummaryWindow.monthly);
-    expect(store.visibleLogEntries.first.isGhost, isTrue);
+    expect(store.visibleLogEntries.first.record?.displayMerchant, 'Real Shop');
 
     final displayEntries = store.visibleDisplayLogEntries;
     expect(displayEntries, hasLength(4));
     expect(displayEntries[0].isHeader, isTrue);
-    expect(displayEntries[0].header, '2026.05.01');
-    expect(displayEntries[1].isGhost, isTrue);
-    expect(displayEntries[1].ghost?.periodKey, '2026-05');
+    expect(displayEntries[0].header, '2026.05.10');
+    expect(displayEntries[1].record?.displayMerchant, 'Real Shop');
     expect(displayEntries[2].isHeader, isTrue);
-    expect(displayEntries[2].header, '2026.05.10');
-    expect(displayEntries[3].record?.displayMerchant, 'Real Shop');
+    expect(displayEntries[2].header, '2026.05.01');
+    expect(displayEntries[3].isGhost, isTrue);
+    expect(displayEntries[3].ghost?.periodKey, '2026-05');
     expect(store.visibleDisplayLogEntryTotalCount, displayEntries.length);
   });
 
@@ -109,7 +109,7 @@ void main() {
   });
 
   test(
-    'delayed projection notifies the shifted month only after ghosts are ready',
+    'delayed projection publishes scope immediately with stable ghosts',
     () async {
       final repository = DelayedGhostRepository(
         immediateProjections: {
@@ -133,8 +133,11 @@ void main() {
       expect(repository.pendingPeriodKeys, contains('2026-06'));
       expect(
         notifiedTitles.where((title) => title.contains('Június 2026')),
-        isEmpty,
+        isNotEmpty,
       );
+      expect(store.summaryReferenceDate, DateTime(2026, 6));
+      expect(store.recurringGhostTransactions.single.periodKey, '2026-05');
+      expect(store.visibleGhostTransactions, isEmpty);
 
       repository.completeProjection('2026-06', [
         ghostFixture(id: 6, month: 6, name: 'June Rent'),

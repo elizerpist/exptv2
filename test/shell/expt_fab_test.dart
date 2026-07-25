@@ -1,8 +1,52 @@
+import 'dart:ui';
+
 import 'package:exptv2/features/shell/widgets/expt_fab.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'FAB exposes one understandable Hungarian node and keeps both gestures',
+    (tester) async {
+      var taps = 0;
+      var longPresses = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ExptFab(
+                onPressed: () => taps += 1,
+                onLongPress: () => longPresses += 1,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final fab = find.byKey(const ValueKey('expt-fab'));
+      final semantics = tester.getSemantics(fab);
+      expect(semantics.label, 'Tranzakció hozzáadása');
+      expect(semantics.flagsCollection.isButton, isTrue);
+      expect(
+        semantics.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      expect(
+        semantics.getSemanticsData().hasAction(SemanticsAction.longPress),
+        isTrue,
+      );
+      expect(semantics.childrenCount, 0);
+      expect(find.bySemanticsLabel('Tranzakció hozzáadása'), findsOneWidget);
+
+      await tester.tap(fab);
+      await tester.longPress(fab);
+      await tester.pump();
+
+      expect(taps, 1);
+      expect(longPresses, 1);
+    },
+  );
+
   testWidgets('FAB horizontal drag steps once and suppresses tap dispatch', (
     tester,
   ) async {

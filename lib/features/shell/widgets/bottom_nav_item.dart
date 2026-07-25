@@ -22,6 +22,16 @@ class BottomNavItem extends StatefulWidget {
     this.badgeCount = 0,
     this.label,
     this.icon,
+    this.iconGlyph,
+    this.horizontalMargin = AppDimensions.navItemHorizontalMargin,
+    this.radius = AppDimensions.navItemRadius,
+    this.iconSize = AppDimensions.navIconSize,
+    this.iconBoxWidth = 34,
+    this.iconBoxHeight = AppDimensions.navIconSize,
+    this.labelFontSize = 12,
+    this.itemHeight,
+    this.fontFamily,
+    this.iconFontFamily,
   });
 
   final AppTab tab;
@@ -36,6 +46,16 @@ class BottomNavItem extends StatefulWidget {
   final int badgeCount;
   final String? label;
   final IconData? icon;
+  final String? iconGlyph;
+  final double horizontalMargin;
+  final double radius;
+  final double iconSize;
+  final double iconBoxWidth;
+  final double iconBoxHeight;
+  final double labelFontSize;
+  final double? itemHeight;
+  final String? fontFamily;
+  final String? iconFontFamily;
 
   @override
   State<BottomNavItem> createState() => _BottomNavItemState();
@@ -65,7 +85,7 @@ class _BottomNavItemState extends State<BottomNavItem> {
     final icon = widget.icon ?? tab.icon;
     final label = widget.label ?? tab.label;
     final color = active ? widget.accentColor : tab.inactiveColor;
-    final radius = BorderRadius.circular(AppDimensions.navItemRadius);
+    final radius = BorderRadius.circular(widget.radius);
     final surfaceTint =
         active && activeSurfaceStyle != ExpenseSurfaceInteraction.neutralNeutral
         ? Color.lerp(surfaceColor, widget.accentLightColor, 0.16)!
@@ -74,117 +94,144 @@ class _BottomNavItemState extends State<BottomNavItem> {
       activeSurfaceStyle,
     );
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.navItemHorizontalMargin,
-        ),
-        child: ExpensePressable(
-          enabled: activeSurfaceStyle.hasPressEffect,
-          forcePressed: _pressed,
-          builder: (context, pressed) {
-            final resolvedColor =
-                active &&
-                    activeSurfaceStyle ==
-                        ExpenseSurfaceInteraction.neutralNeutral
-                ? widget.activeBackgroundColor
-                : surfaceTint;
-            return ExpenseSurfaceContainer(
-              surfaceKey: ValueKey('bottom-nav-${tab.id}-surface'),
-              style: activeSurfaceStyle,
-              color: resolvedColor,
-              primaryColor: widget.accentColor,
-              borderRadius: radius,
-              pressed: pressed,
-              neutralShadow: null,
-              profile: active
-                  ? ExpenseSurfaceProfile.activeNavItem
-                  : ExpenseSurfaceProfile.standard,
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: radius,
-                child: Listener(
-                  behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) {
-                    _releaseTimer?.cancel();
-                    _setPressed(true);
-                    widget.onPointerDown?.call();
-                  },
-                  onPointerUp: (_) => _releasePressedSoon(),
-                  onPointerCancel: (_) => _releasePressedSoon(),
-                  child: InkWell(
-                    key: ValueKey('bottom-nav-${tab.id}'),
-                    borderRadius: radius,
-                    overlayColor: materialFeedback
-                        ? null
-                        : ExpenseSurface.transparentOverlayColor,
-                    splashColor: materialFeedback ? null : Colors.transparent,
-                    highlightColor: materialFeedback
-                        ? null
-                        : Colors.transparent,
-                    onHighlightChanged: activeSurfaceStyle.hasPressEffect
-                        ? _handleHighlightChanged
-                        : null,
-                    onTap: widget.onTap,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppDimensions.navItemVerticalPadding,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 34,
-                            height: AppDimensions.navIconSize,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  icon,
-                                  size: AppDimensions.navIconSize,
-                                  color: color,
-                                ),
-                                if (badgeCount > 0)
-                                  Positioned(
-                                    top: -5,
-                                    right: 0,
-                                    child: _UnreadBadge(
-                                      tabId: tab.id,
-                                      count: badgeCount,
+    final surface = ExpensePressable(
+      enabled: activeSurfaceStyle.hasPressEffect,
+      forcePressed: _pressed,
+      builder: (context, pressed) {
+        final resolvedColor =
+            active &&
+                activeSurfaceStyle == ExpenseSurfaceInteraction.neutralNeutral
+            ? widget.activeBackgroundColor
+            : surfaceTint;
+        return ExpenseSurfaceContainer(
+          surfaceKey: ValueKey('bottom-nav-${tab.id}-surface'),
+          style: activeSurfaceStyle,
+          color: resolvedColor,
+          primaryColor: widget.accentColor,
+          borderRadius: radius,
+          pressed: pressed,
+          neutralShadow: null,
+          profile: active
+              ? ExpenseSurfaceProfile.activeNavItem
+              : ExpenseSurfaceProfile.standard,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                _releaseTimer?.cancel();
+                _setPressed(true);
+                widget.onPointerDown?.call();
+              },
+              onPointerUp: (_) => _releasePressedSoon(),
+              onPointerCancel: (_) => _releasePressedSoon(),
+              child: Semantics(
+                label: label,
+                button: true,
+                selected: active,
+                excludeSemantics: true,
+                onTap: widget.onTap,
+                child: InkWell(
+                  key: ValueKey('bottom-nav-${tab.id}'),
+                  borderRadius: radius,
+                  overlayColor: materialFeedback
+                      ? null
+                      : ExpenseSurface.transparentOverlayColor,
+                  splashColor: materialFeedback ? null : Colors.transparent,
+                  highlightColor: materialFeedback ? null : Colors.transparent,
+                  onHighlightChanged: activeSurfaceStyle.hasPressEffect
+                      ? _handleHighlightChanged
+                      : null,
+                  onTap: widget.onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppDimensions.navItemVerticalPadding,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: widget.iconBoxWidth,
+                          height: widget.iconBoxHeight,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.center,
+                            children: [
+                              if (widget.iconGlyph case final glyph?)
+                                ExcludeSemantics(
+                                  child: Text(
+                                    glyph,
+                                    maxLines: 1,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontFamily:
+                                          widget.iconFontFamily ??
+                                          widget.fontFamily,
+                                      fontSize: widget.iconSize,
+                                      height: 1,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
-                              ],
-                            ),
+                                )
+                              else
+                                ExcludeSemantics(
+                                  child: Icon(
+                                    icon,
+                                    size: widget.iconSize,
+                                    color: color,
+                                  ),
+                                ),
+                              if (badgeCount > 0)
+                                Positioned(
+                                  top: -5,
+                                  right: 0,
+                                  child: _UnreadBadge(
+                                    tabId: tab.id,
+                                    count: badgeCount,
+                                  ),
+                                ),
+                            ],
                           ),
-                          const SizedBox(
-                            height: AppDimensions.navLabelTopMargin,
+                        ),
+                        const SizedBox(height: AppDimensions.navLabelTopMargin),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: color,
+                            fontFamily: widget.fontFamily,
+                            fontSize: widget.labelFontSize,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                            height: 1,
                           ),
-                          Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0,
-                              height: 1,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
+    final paddedSurface = Padding(
+      padding: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
+      child: widget.itemHeight == null
+          ? surface
+          : SizedBox(
+              height: widget.itemHeight,
+              width: double.infinity,
+              child: surface,
+            ),
+    );
+    return Expanded(child: paddedSurface);
   }
 
   void _setPressed(bool value) {

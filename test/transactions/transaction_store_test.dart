@@ -10,6 +10,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/slots/category_color_manager.dart';
 import 'package:exptv2/features/transactions/state/transaction_store.dart';
+import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _savingGoal = CategoryLimit(
@@ -34,6 +35,46 @@ const _rentGhost = RecurringGhostRecord(
   amount: 100000,
   transactionType: 'expense',
   date: '2025.09.28',
+  time: '08:00',
+  categoryId: 6,
+  categoryName: 'Q',
+  categoryColor: '#dc2626',
+  categoryIconSlot: 2,
+  triggerMillis: 0,
+  isActivated: false,
+  activatedTransactionId: null,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _octoberGhost = RecurringGhostRecord(
+  id: 101,
+  recurringTransactionId: 101,
+  periodKey: '2025-10',
+  name: 'October pending',
+  amount: 2000,
+  transactionType: 'expense',
+  date: '2025.10.28',
+  time: '08:00',
+  categoryId: 6,
+  categoryName: 'Q',
+  categoryColor: '#dc2626',
+  categoryIconSlot: 2,
+  triggerMillis: 0,
+  isActivated: false,
+  activatedTransactionId: null,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _novemberGhost = RecurringGhostRecord(
+  id: 102,
+  recurringTransactionId: 102,
+  periodKey: '2025-11',
+  name: 'November pending',
+  amount: 3000,
+  transactionType: 'expense',
+  date: '2025.11.28',
   time: '08:00',
   categoryId: 6,
   categoryName: 'Q',
@@ -141,6 +182,79 @@ void main() {
       greaterThan(0),
     );
   });
+
+  test(
+    'filter-derived caches use a bounded LRU and broad invalidation clears it',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      addTearDown(store.dispose);
+      await store.start();
+
+      List<Object> readFilterRevision(String query) {
+        store.setSearchQuery(query);
+        final revision = <Object>[
+          store.visibleTransactions,
+          store.visibleGhostTransactions,
+          store.visibleLogEntries,
+          store.visibleDisplayLogEntries,
+          store.balanceVisibleDisplayLogEntries,
+          store.activeSummary,
+        ];
+        store.balanceVisibleDisplayLogEntryTotalCount;
+        store.visibleDisplayLogEntryTotalCount;
+        return revision;
+      }
+
+      final first = readFilterRevision('lru-query-0');
+      final second = readFilterRevision('lru-query-1');
+      for (
+        var index = 2;
+        index < TransactionStore.maxFilterCacheEntries;
+        index += 1
+      ) {
+        readFilterRevision('lru-query-$index');
+      }
+
+      expect(
+        store.filterCacheEntryCount,
+        TransactionStore.maxFilterCacheEntries,
+      );
+
+      final firstCacheHit = readFilterRevision('lru-query-0');
+      for (var index = 0; index < first.length; index += 1) {
+        expect(
+          identical(firstCacheHit[index], first[index]),
+          isTrue,
+          reason: 'Reading the oldest revision must promote every cache hit.',
+        );
+      }
+
+      readFilterRevision('lru-query-${TransactionStore.maxFilterCacheEntries}');
+      expect(
+        store.filterCacheEntryCount,
+        TransactionStore.maxFilterCacheEntries,
+      );
+
+      final firstAfterEviction = readFilterRevision('lru-query-0');
+      for (var index = 0; index < first.length; index += 1) {
+        expect(identical(firstAfterEviction[index], first[index]), isTrue);
+      }
+      final secondAfterEviction = readFilterRevision('lru-query-1');
+      for (var index = 0; index < second.length; index += 1) {
+        expect(
+          identical(secondAfterEviction[index], second[index]),
+          isFalse,
+          reason: 'The least-recently-used filter revision must be rebuilt.',
+        );
+      }
+
+      store.startAddTransactionForm(
+        categories: store.categories,
+        type: TransactionType.expense,
+      );
+      expect(store.filterCacheEntryCount, 0);
+    },
+  );
 
   test(
     'store merges notification-linked transactions without full reload',
@@ -282,6 +396,101 @@ void main() {
       final beforeProjection = store.fastInfoMetrics;
       await store.cycleSummaryWindow();
       expect(identical(store.fastInfoMetrics, beforeProjection), isFalse);
+    },
+  );
+
+  test(
+    'date boundary invalidates daily Balance metrics exactly once',
+    () async {
+      var now = DateTime(2025, 9, 25, 23, 59);
+      final store = TransactionStore(
+        FakeTransactionRepository(),
+        clock: () => now,
+      );
+      await store.start();
+      var notifications = 0;
+      store.addListener(() => notifications += 1);
+      final metrics = store.fastInfoMetrics;
+
+      expect(store.refreshForDateBoundary(), isFalse);
+      expect(notifications, 0);
+      expect(identical(store.fastInfoMetrics, metrics), isTrue);
+
+      now = DateTime(2025, 9, 26);
+      expect(store.refreshForDateBoundary(), isTrue);
+      expect(notifications, 1);
+      expect(identical(store.fastInfoMetrics, metrics), isFalse);
+
+      expect(store.refreshForDateBoundary(), isFalse);
+      expect(notifications, 1);
+    },
+  );
+
+  test(
+    'month boundary follows the current month and projects its recurring ghosts',
+    () async {
+      var now = DateTime(2025, 9, 30, 23, 59);
+      final repository = _MonthAwareGhostProjectionRepository();
+      final store = TransactionStore(repository, clock: () => now);
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 9);
+      repository.requestedMonths.clear();
+
+      now = DateTime(2025, 10, 1);
+      expect(store.refreshForDateBoundary(), isTrue);
+      expect(store.summaryReferenceDate, DateTime(2025, 10));
+
+      for (var attempt = 0; attempt < 10; attempt += 1) {
+        if (repository.requestedMonths.isNotEmpty &&
+            !store.recurringGhostProjectionInFlight) {
+          break;
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(repository.requestedMonths, [DateTime(2025, 10)]);
+      expect(store.recurringGhostTransactions.map((ghost) => ghost.id), const [
+        101,
+      ]);
+      expect(
+        store.balanceRecurringGhostTransactions.map((ghost) => ghost.id),
+        const [91, 101],
+      );
+    },
+  );
+
+  test(
+    'month boundary refreshes Balance card ghosts while a yearly scope stays put',
+    () async {
+      var now = DateTime(2025, 9, 30, 23, 59);
+      final repository = _MonthAwareGhostProjectionRepository();
+      final store = TransactionStore(repository, clock: () => now);
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryYear(2025);
+      repository.requestedMonths.clear();
+
+      now = DateTime(2025, 10, 1);
+      expect(store.refreshForDateBoundary(), isTrue);
+
+      for (var attempt = 0; attempt < 10; attempt += 1) {
+        if (repository.requestedMonths.isNotEmpty &&
+            store.balanceRecurringGhostTransactions.any(
+              (ghost) => ghost.id == _octoberGhost.id,
+            )) {
+          break;
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(store.summaryWindow, SummaryWindow.yearly);
+      expect(store.summaryReferenceDate, DateTime(2025));
+      expect(repository.requestedMonths, [DateTime(2025, 10)]);
+      expect(
+        store.balanceRecurringGhostTransactions.map((ghost) => ghost.id),
+        const [91, 101],
+      );
     },
   );
 
@@ -431,9 +640,11 @@ void main() {
     await store.start();
 
     final category = store.categories.firstWhere((item) => item.name == 'Q');
+    store.setSearchQuery('rr');
     store.setMerchantFilter('Rrr');
     store.setCategoryFilter(category);
 
+    expect(store.searchQuery, 'rr');
     expect(store.merchantFilter, 'Rrr');
     expect(store.activeCategory?.name, 'Q');
     expect(store.visibleTransactions.length, 2);
@@ -444,6 +655,30 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'query category and merchant filters remain independent canonical state',
+    () async {
+      final store = TransactionStore(FakeTransactionRepository());
+      await store.start();
+      final category = store.categories.firstWhere((item) => item.name == 'Q');
+
+      store.setSearchQuery('rr');
+      store.setMerchantFilters({'Rrr', 'Test Store'});
+      store.setCategoryFilters(
+        type: TransactionType.expense,
+        categoryIds: {category.transactionCategoryID},
+      );
+
+      expect(store.searchQuery, 'rr');
+      expect(store.activeMerchantFilters, {'Rrr', 'Test Store'});
+      expect(store.activeCategoryIds, {category.transactionCategoryID});
+      expect(
+        store.visibleTransactions.map((record) => record.displayMerchant),
+        ['Rrr', 'Rrr'],
+      );
+    },
+  );
 
   test(
     'store keeps fast filter color while category filter is active',
@@ -724,10 +959,10 @@ void main() {
   });
 
   test(
-    'display log entries expose the full virtualized list for large datasets',
+    'legacy Budget and Mind log remains complete while Balance owns paging',
     () async {
       final repository = FakeTransactionRepository();
-      for (var index = 0; index < 260; index += 1) {
+      for (var index = 0; index < 550; index += 1) {
         repository.transactions.add(
           TransactionRecord.fromMap({
             'id': 300000 + index,
@@ -743,16 +978,492 @@ void main() {
       final store = TransactionStore(repository);
       await store.start();
 
-      final initialEntries = store.visibleDisplayLogEntries;
+      final legacyEntries = store.visibleDisplayLogEntries;
+      final initialEntries = store.balanceVisibleDisplayLogEntries;
 
-      expect(store.visibleDisplayLogEntryTotalCount, greaterThan(260));
-      expect(initialEntries.length, store.visibleDisplayLogEntryTotalCount);
+      expect(
+        legacyEntries.where((entry) => !entry.isHeader),
+        hasLength(store.visibleTransactions.length),
+        reason: 'Budget/Mind consume the legacy getter without a load-more UI.',
+      );
+      expect(legacyEntries, hasLength(store.visibleDisplayLogEntryTotalCount));
       expect(store.hasMoreVisibleDisplayLogEntries, isFalse);
+      expect(store.balanceVisibleDisplayLogEntryTotalCount, greaterThan(550));
+      expect(
+        initialEntries.length,
+        lessThan(store.balanceVisibleDisplayLogEntryTotalCount),
+      );
+      expect(initialEntries.last.isHeader, isFalse);
+      expect(store.hasMoreBalanceVisibleDisplayLogEntries, isTrue);
+      expect(
+        initialEntries.where((entry) => !entry.isHeader).length,
+        TransactionStore.visibleDisplayLogPageSize,
+      );
 
-      store.loadMoreVisibleDisplayLogEntries();
+      store.loadMoreBalanceVisibleDisplayLogEntries();
 
-      final nextEntries = store.visibleDisplayLogEntries;
-      expect(identical(nextEntries, initialEntries), isTrue);
+      final nextEntries = store.balanceVisibleDisplayLogEntries;
+      expect(nextEntries.length, greaterThan(initialEntries.length));
+      expect(nextEntries.last.isHeader, isFalse);
+
+      store.setSearchQuery('Future Shop');
+
+      expect(
+        store.balanceVisibleDisplayLogEntries
+            .where((entry) => !entry.isHeader)
+            .length,
+        TransactionStore.visibleDisplayLogPageSize,
+        reason: 'A filter change must reset only the Balance page window.',
+      );
+      expect(
+        store.visibleDisplayLogEntries.where((entry) => !entry.isHeader),
+        hasLength(550),
+        reason: 'The full legacy view stays complete after filtering too.',
+      );
+    },
+  );
+
+  test(
+    'Balance paging stays bounded for a 10k single-day group and invalidates',
+    () async {
+      final repository = FakeTransactionRepository();
+      repository.transactions
+        ..clear()
+        ..addAll(
+          List<TransactionRecord>.generate(10020, (index) {
+            return TransactionRecord.fromMap({
+              'id': 400000 + index,
+              'date': '2026.05.20',
+              'time': '${(index % 23).toString().padLeft(2, '0')}:10',
+              'merchant': 'Single Day $index',
+              'amount': -1000 - index,
+              'userAssignedName': null,
+              'transactionCategoryID': 6,
+            });
+          }),
+        );
+      final store = TransactionStore(repository);
+      await store.start();
+
+      expect(store.balanceVisibleDisplayLogEntries, hasLength(97));
+      expect(store.balanceVisibleDisplayLogEntries.first.isHeader, isTrue);
+      expect(store.balanceVisibleDisplayLogEntries.last.isHeader, isFalse);
+      expect(store.hasMoreBalanceVisibleDisplayLogEntries, isTrue);
+      expect(
+        store.visibleDisplayLogEntries.where((entry) => !entry.isHeader),
+        hasLength(10020),
+        reason: 'Legacy completeness is asserted after Balance paging.',
+      );
+
+      store.loadMoreBalanceVisibleDisplayLogEntries();
+      expect(store.balanceVisibleDisplayLogEntries, hasLength(193));
+
+      store.mergeExternalTransactions([
+        TransactionRecord.fromMap({
+          'id': 999999,
+          'date': '2026.05.21',
+          'time': '23:59',
+          'merchant': 'Newest mutation',
+          'amount': -42,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+      ]);
+
+      final resetRows = store.balanceVisibleDisplayLogEntries;
+      expect(
+        resetRows.where((entry) => !entry.isHeader),
+        hasLength(TransactionStore.visibleDisplayLogPageSize),
+      );
+      expect(resetRows[1].record?.id, 999999);
+      expect(
+        store.balanceVisibleDisplayLogEntryTotalCount,
+        10023,
+        reason: '10 021 records plus two date headers are canonical.',
+      );
+    },
+  );
+
+  test('fromStore nearest fallback metadata can be committed once', () async {
+    final store = TransactionStore(
+      FakeTransactionRepository(),
+      clock: () => DateTime(2026, 7, 25),
+    );
+    await store.start();
+    await store.setSummaryYear(2024);
+
+    final staleFrame = BalanceFrameResolver.resolve(
+      BalanceFrameInput.fromStore(store),
+    );
+
+    expect(staleFrame.query.effectiveReferenceDate, DateTime(2025));
+    expect(staleFrame.query.hasPendingScopeFallback, isTrue);
+    expect(staleFrame.visibleLogRowCount, 3);
+    expect(staleFrame.totalLogEntryCount, 4);
+    expect(staleFrame.hasMoreLogEntries, isFalse);
+
+    expect(
+      await BalanceScopeCommitAdapter.commitIfNeeded(store, staleFrame.query),
+      isTrue,
+    );
+    expect(store.summaryWindow, SummaryWindow.yearly);
+    expect(store.summaryReferenceDate, DateTime(2025));
+
+    final committedFrame = BalanceFrameResolver.resolve(
+      BalanceFrameInput.fromStore(store),
+    );
+    expect(committedFrame.query.hasPendingScopeFallback, isFalse);
+    expect(
+      await BalanceScopeCommitAdapter.commitIfNeeded(
+        store,
+        committedFrame.query,
+      ),
+      isFalse,
+      reason: 'The adapter is idempotent and cannot create a build loop.',
+    );
+  });
+
+  test(
+    'fromStore keeps card ghost inputs independent of summary window',
+    () async {
+      final store = TransactionStore(
+        FakeTransactionRepository(),
+        clock: () => DateTime(2025, 9, 25),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+
+      expect(
+        BalanceFrameInput.fromStore(store).recurringGhosts.map((row) => row.id),
+        [91],
+      );
+      await store.setSummaryYear(2025);
+      expect(store.summaryWindow, SummaryWindow.yearly);
+      expect(
+        BalanceFrameInput.fromStore(store).recurringGhosts.map((row) => row.id),
+        [91],
+      );
+      await store.setSummaryAllTime();
+      expect(store.summaryWindow, SummaryWindow.allTime);
+      expect(
+        BalanceFrameInput.fromStore(store).recurringGhosts.map((row) => row.id),
+        [91],
+      );
+    },
+  );
+
+  test('fromStore snapshots identify an unchanged store revision', () async {
+    final repository = FakeTransactionRepository();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2025, 9, 25),
+    );
+    addTearDown(store.dispose);
+    await store.start();
+
+    final first = BalanceFrameInput.fromStore(store);
+    final sameRevision = BalanceFrameInput.fromStore(store);
+    expect(first.sameRevisionAs(sameRevision), isTrue);
+
+    store.setSearchQuery('rent');
+    final changedRevision = BalanceFrameInput.fromStore(store);
+    expect(first.sameRevisionAs(changedRevision), isFalse);
+  });
+
+  test(
+    'monthly summary mutations publish immediately with the stable ghost snapshot',
+    () async {
+      final repository = _QueuedGhostProjectionRepository();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2025, 9, 25),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+
+      final observations = <(SummaryWindow, DateTime, List<int>)>[];
+      void observe() {
+        observations.add((
+          store.summaryWindow,
+          store.summaryReferenceDate,
+          store.recurringGhostTransactions.map((ghost) => ghost.id).toList(),
+        ));
+      }
+
+      store.addListener(observe);
+      addTearDown(() => store.removeListener(observe));
+
+      Future<void> expectImmediatePublication({
+        required Future<void> Function() mutate,
+        required DateTime expectedReference,
+        required List<int> expectedStableGhostIds,
+        required int requestIndex,
+        required List<RecurringGhostRecord> projectedGhosts,
+      }) async {
+        observations.clear();
+
+        final pending = mutate();
+
+        expect(
+          observations,
+          hasLength(1),
+          reason: 'The new summary scope must publish before async projection.',
+        );
+        expect(observations.single.$1, SummaryWindow.monthly);
+        expect(observations.single.$2, expectedReference);
+        expect(observations.single.$3, expectedStableGhostIds);
+
+        await _waitForGhostProjectionRequest(repository, requestIndex + 1);
+        expect(repository.requestedMonths[requestIndex], expectedReference);
+        repository.release(requestIndex, projectedGhosts);
+        await pending;
+      }
+
+      await expectImmediatePublication(
+        mutate: store.cycleSummaryWindow,
+        expectedReference: DateTime(2025, 9),
+        expectedStableGhostIds: const [91],
+        requestIndex: 0,
+        projectedGhosts: const [_rentGhost],
+      );
+      await expectImmediatePublication(
+        mutate: () => store.shiftSummaryPeriod(1),
+        expectedReference: DateTime(2025, 10),
+        expectedStableGhostIds: const [91],
+        requestIndex: 1,
+        projectedGhosts: const [_octoberGhost],
+      );
+      await expectImmediatePublication(
+        mutate: store.resetSummaryToCurrentMonth,
+        expectedReference: DateTime(2025, 9),
+        expectedStableGhostIds: const [101],
+        requestIndex: 2,
+        projectedGhosts: const [_rentGhost],
+      );
+      await expectImmediatePublication(
+        mutate: () => store.setSummaryMonth(2025, 10),
+        expectedReference: DateTime(2025, 10),
+        expectedStableGhostIds: const [91],
+        requestIndex: 3,
+        projectedGhosts: const [_octoberGhost],
+      );
+    },
+  );
+
+  test('latest monthly ghost projection generation wins races', () async {
+    final repository = _QueuedGhostProjectionRepository();
+    final store = TransactionStore(
+      repository,
+      clock: () => DateTime(2025, 9, 25),
+    );
+    addTearDown(store.dispose);
+    await store.start();
+
+    final observations = <(DateTime, List<int>)>[];
+    void observe() {
+      observations.add((
+        store.summaryReferenceDate,
+        store.recurringGhostTransactions.map((ghost) => ghost.id).toList(),
+      ));
+    }
+
+    store.addListener(observe);
+    addTearDown(() => store.removeListener(observe));
+
+    final octoberChange = store.setSummaryMonth(2025, 10);
+    expect(observations.single.$1, DateTime(2025, 10));
+    expect(observations.single.$2, const [91]);
+    await _waitForGhostProjectionRequest(repository, 1);
+
+    final novemberChange = store.setSummaryMonth(2025, 11);
+    expect(observations.last.$1, DateTime(2025, 11));
+    expect(observations.last.$2, const [91]);
+    await _waitForGhostProjectionRequest(repository, 2);
+
+    repository.release(1, const [_novemberGhost]);
+    await novemberChange;
+    expect(store.summaryReferenceDate, DateTime(2025, 11));
+    expect(store.recurringGhostTransactions.map((ghost) => ghost.id), const [
+      102,
+    ]);
+
+    final notificationCountAfterLatest = observations.length;
+    repository.release(0, const [_octoberGhost]);
+    await octoberChange;
+
+    expect(store.summaryReferenceDate, DateTime(2025, 11));
+    expect(store.recurringGhostTransactions.map((ghost) => ghost.id), const [
+      102,
+    ]);
+    expect(
+      observations,
+      hasLength(notificationCountAfterLatest),
+      reason: 'A stale generation must neither replace state nor republish it.',
+    );
+  });
+
+  test(
+    'Balance keeps its card ghost pool while lower rail projection changes',
+    () async {
+      final repository = _QueuedGhostProjectionRepository();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2025, 9, 25),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+
+      expect(
+        store.balanceRecurringGhostTransactions.map((ghost) => ghost.id),
+        const [91],
+      );
+
+      final octoberChange = store.setSummaryMonth(2025, 10);
+      final inFlight = BalanceFrameResolver.resolve(
+        BalanceFrameInput.fromStore(store),
+      );
+      expect(inFlight.query.effectiveReferenceDate, DateTime(2025, 10));
+      expect(inFlight.query.hasPendingScopeFallback, isFalse);
+
+      await _waitForGhostProjectionRequest(repository, 1);
+      repository.release(0, const [_octoberGhost]);
+      await octoberChange;
+
+      expect(store.recurringGhostTransactions.map((ghost) => ghost.id), const [
+        101,
+      ]);
+      expect(
+        store.balanceRecurringGhostTransactions.map((ghost) => ghost.id),
+        const [91, 101],
+      );
+    },
+  );
+
+  test(
+    'fromStore never labels an in-flight prior-month ghost as current',
+    () async {
+      final repository = _PausedGhostProjectionRepository();
+      repository.transactions.add(
+        TransactionRecord.fromMap({
+          'id': 260001,
+          'date': '2025.10.05',
+          'time': '12:00',
+          'merchant': 'October real',
+          'amount': -4200,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+        }),
+      );
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2025, 9, 25),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+
+      final pendingChange = store.setSummaryMonth(2025, 10);
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.requestedMonth, DateTime(2025, 10));
+
+      final inFlight = BalanceFrameResolver.resolve(
+        BalanceFrameInput.fromStore(store),
+      );
+      expect(inFlight.query.effectiveReferenceDate, DateTime(2025, 10));
+      expect(inFlight.query.hasPendingScopeFallback, isFalse);
+      expect(inFlight.visibleLogRowCount, 1);
+      expect(inFlight.totalLogEntryCount, 2);
+      expect(
+        inFlight.logGroups
+            .expand((group) => group.rows)
+            .where((row) => row.isGhost),
+        isEmpty,
+        reason: 'September stable ghosts cannot be labeled as October rows.',
+      );
+
+      repository.release(const <RecurringGhostRecord>[_octoberGhost]);
+      await pendingChange;
+
+      final settled = BalanceFrameResolver.resolve(
+        BalanceFrameInput.fromStore(store),
+      );
+      expect(settled.visibleLogRowCount, 2);
+      expect(settled.totalLogEntryCount, 4);
+      expect(
+        settled.logGroups
+            .expand((group) => group.rows)
+            .where((row) => row.isGhost)
+            .single
+            .ghost
+            ?.id,
+        101,
+      );
+    },
+  );
+
+  test(
+    'pending ghosts share real day groups and generated ghosts are deduped',
+    () async {
+      final repository = FakeTransactionRepository();
+      repository.transactions.add(
+        TransactionRecord.fromMap({
+          'id': 250990,
+          'date': '2025.09.28',
+          'time': '08:00',
+          'merchant': 'Rent',
+          'amount': -100000,
+          'userAssignedName': null,
+          'transactionCategoryID': 6,
+          'recurringTransactionId': 91,
+        }),
+      );
+      repository.recurringGhostTransactions.add(
+        const RecurringGhostRecord(
+          id: 92,
+          recurringTransactionId: 92,
+          periodKey: '2025-09',
+          name: 'Rrr',
+          amount: 3200,
+          transactionType: 'expense',
+          date: '2025.09.25',
+          time: '18:00',
+          categoryId: 6,
+          categoryName: 'Q',
+          categoryColor: '#dc2626',
+          categoryIconSlot: 2,
+          triggerMillis: 0,
+          isActivated: false,
+          activatedTransactionId: null,
+          createdAt: 0,
+          updatedAt: 0,
+        ),
+      );
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2025, 9, 25, 12),
+      );
+      await store.start();
+      await store.resetSummaryToCurrentMonth();
+
+      expect(
+        store.visibleLogEntries.where(
+          (entry) => entry.ghost?.recurringTransactionId == 91,
+        ),
+        isEmpty,
+        reason: 'A generated real transaction replaces its pending ghost.',
+      );
+      expect(
+        store.visibleLogEntries.where(
+          (entry) => entry.ghost?.recurringTransactionId == 92,
+        ),
+        hasLength(1),
+      );
+      expect(
+        store.visibleDisplayLogEntries
+            .where((entry) => entry.isHeader && entry.date == '2025.09.25')
+            .length,
+        1,
+        reason: 'Real and pending rows on one date use one shared day group.',
+      );
     },
   );
 
@@ -1111,4 +1822,68 @@ class _PausedBootstrapRepository extends FakeTransactionRepository {
       recurringGhostTransactions: recurringGhostTransactions,
     );
   }
+}
+
+class _PausedGhostProjectionRepository extends FakeTransactionRepository {
+  final _projection = Completer<List<RecurringGhostRecord>>();
+  DateTime? requestedMonth;
+
+  void release(List<RecurringGhostRecord> ghosts) {
+    if (!_projection.isCompleted) _projection.complete(ghosts);
+  }
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) {
+    requestedMonth = targetDate;
+    return _projection.future;
+  }
+}
+
+class _QueuedGhostProjectionRepository extends FakeTransactionRepository {
+  final requestedMonths = <DateTime>[];
+  final _projections = <Completer<List<RecurringGhostRecord>>>[];
+
+  void release(int index, List<RecurringGhostRecord> ghosts) {
+    _projections[index].complete(ghosts);
+  }
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) {
+    requestedMonths.add(targetDate!);
+    final projection = Completer<List<RecurringGhostRecord>>();
+    _projections.add(projection);
+    return projection.future;
+  }
+}
+
+class _MonthAwareGhostProjectionRepository extends FakeTransactionRepository {
+  final requestedMonths = <DateTime>[];
+
+  @override
+  Future<List<RecurringGhostRecord>> ensureRecurringGhostTransactions({
+    DateTime? targetDate,
+  }) async {
+    requestedMonths.add(targetDate!);
+    return targetDate.year == 2025 && targetDate.month == 10
+        ? const [_octoberGhost]
+        : const [_rentGhost];
+  }
+}
+
+Future<void> _waitForGhostProjectionRequest(
+  _QueuedGhostProjectionRepository repository,
+  int count,
+) async {
+  for (var attempt = 0; attempt < 10; attempt += 1) {
+    if (repository.requestedMonths.length >= count) return;
+    await Future<void>.delayed(Duration.zero);
+  }
+  fail(
+    'Expected $count recurring ghost projection request(s), '
+    'got ${repository.requestedMonths.length}.',
+  );
 }

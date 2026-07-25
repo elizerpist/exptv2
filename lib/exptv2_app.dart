@@ -53,6 +53,7 @@ class Exptv2App extends StatefulWidget {
     this.statsRenderFrameWorker,
     this.webPreviewFrameEnabled,
     this.browserFullscreenController,
+    this.transactionClock,
   });
 
   final EventStore store;
@@ -60,6 +61,7 @@ class Exptv2App extends StatefulWidget {
   final StatsRenderFrameWorker? statsRenderFrameWorker;
   final bool? webPreviewFrameEnabled;
   final BrowserFullscreenController? browserFullscreenController;
+  final DateTime Function()? transactionClock;
 
   @override
   State<Exptv2App> createState() => _Exptv2AppState();
@@ -128,6 +130,7 @@ class _Exptv2AppState extends State<Exptv2App> {
             googleSheetsSyncController: _googleSheetsSyncController,
             statsRenderFrameWorker: widget.statsRenderFrameWorker,
             browserFullscreenController: widget.browserFullscreenController,
+            transactionClock: widget.transactionClock,
             onSecuritySettingsChanged: _securityGateController.updateSettings,
           ),
         ),
