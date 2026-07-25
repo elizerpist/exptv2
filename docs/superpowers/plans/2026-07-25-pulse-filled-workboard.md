@@ -214,7 +214,7 @@ curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8790/docs/prototypes
 
 Expected: every Node test prints `PASS`; curl prints `200`.
 
-- [ ] **Step 2: Complete acceptance and commit only targeted files**
+- [x] **Step 2: Complete acceptance and commit only targeted files**
 
 Set PFW-001 through PFW-006 to `DONE` only after the preceding commands pass.
 Then run:
