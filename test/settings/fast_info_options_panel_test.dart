@@ -1,3 +1,4 @@
+import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/features/settings/models/fast_info_config.dart';
 import 'package:exptv2/features/settings/widgets/options/fast_info_options_panel.dart';
 import 'package:flutter/material.dart';
@@ -252,16 +253,14 @@ void main() {
   testWidgets(
     'preview uses live-like metrics instead of catalog placeholders',
     (tester) async {
+      final config = FastInfoConfig.defaults();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 390,
               height: 780,
-              child: FastInfoOptionsPanel(
-                config: FastInfoConfig.defaults(),
-                onChanged: (_) {},
-              ),
+              child: FastInfoOptionsPanel(config: config, onChanged: (_) {}),
             ),
           ),
         ),
@@ -279,7 +278,16 @@ void main() {
         find.byKey(const ValueKey('fastinfo-card-pool')),
       );
       final delegate = pool.childrenDelegate as SliverChildBuilderDelegate;
-      expect(delegate.childCount, 11);
+      final assignedIds = <String>{
+        for (final slot in [...config.pills, ...config.boxes])
+          if (slot != null) slot.id,
+      };
+      expect(
+        delegate.childCount,
+        fastInfoCardCatalog
+            .where((card) => !assignedIds.contains(card.id))
+            .length,
+      );
     },
   );
 
