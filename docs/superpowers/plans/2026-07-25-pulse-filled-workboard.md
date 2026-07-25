@@ -31,7 +31,7 @@
 - Consumes: `.page`, `.layout-board`, `data-layout-board`, `data-pulse-phase-rail`, `data-pulse-phase`.
 - Produces: a rácsos, teljes szélességű elrendezést őrző, futtatható Node szerződés.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `docs/prototypes/pulse_filled_workboard_test.js` with the following assertions:
 
@@ -66,7 +66,7 @@ assert.doesNotMatch(html, /horizontal-lane/);
 console.log('pulse_filled_workboard_test: PASS');
 ~~~
 
-- [ ] **Step 2: Run the test to verify red**
+- [x] **Step 2: Run the test to verify red**
 
 Run:
 
@@ -76,7 +76,7 @@ node docs/prototypes/pulse_filled_workboard_test.js
 
 Expected: fail because `.layout-board` and `data-pulse-phase-rail` do not yet exist.
 
-- [ ] **Step 3: Update the former wide-layout test contract**
+- [x] **Step 3: Update the former wide-layout test contract**
 
 Replace `horizontal-lane` expectations in `pulse_wide_layout_test.js` with the
 same `layout-board` and `data-layout-board` contract. Keep the checks that
@@ -95,7 +95,7 @@ main content has internal `overflow-x: auto` or a right-arrow-only flow.
 - Consumes: the classes and data attributes from Task 1.
 - Produces: five compact phase cards and visible grid areas for every detailed Pulse block.
 
-- [ ] **Step 1: Replace the page and lane CSS**
+- [x] **Step 1: Replace the page and lane CSS**
 
 Use this layout contract:
 
@@ -146,7 +146,7 @@ Use this layout contract:
 Remove the `.horizontal-lane` rules and class usage. Do not remove the
 rail's own `.horizontal-tabs` overflow behavior.
 
-- [ ] **Step 2: Add the five-phase reading rail**
+- [x] **Step 2: Add the five-phase reading rail**
 
 Insert this after `.semantic-flow-legend` and before the detailed `<ol>`:
 
@@ -163,7 +163,7 @@ Insert this after `.semantic-flow-legend` and before the detailed `<ol>`:
 Style `.pulse-phase-rail` as a five-column grid with a two-column breakpoint
 and clear sequence numbers. Keep its text compact and Hungarian.
 
-- [ ] **Step 3: Mark every dense area as a board**
+- [x] **Step 3: Mark every dense area as a board**
 
 Use these exact patterns:
 
@@ -175,7 +175,7 @@ Use these exact patterns:
 <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
 ~~~
 
-- [ ] **Step 4: Run red tests to green**
+- [x] **Step 4: Run red tests to green**
 
 Run:
 
@@ -198,7 +198,7 @@ Expected: both print `PASS`.
 - Consumes the final HTML and test contracts.
 - Produces verified acceptance evidence and a scoped commit.
 
-- [ ] **Step 1: Run the full Pulse verification set**
+- [x] **Step 1: Run the full Pulse verification set**
 
 ~~~sh
 node docs/prototypes/pulse_filled_workboard_test.js

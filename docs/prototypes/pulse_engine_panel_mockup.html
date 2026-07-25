@@ -40,7 +40,8 @@
     }
 
     .page {
-      width: min(1440px, calc(100vw - 28px));
+      width: calc(100vw - 28px);
+      max-width: none;
       margin: 0 auto;
       padding: 22px 0 48px;
     }
@@ -1395,34 +1396,86 @@
       }
     }
 
-    .horizontal-lane {
+    .layout-board {
       display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: minmax(260px, 330px);
-      grid-template-columns: none;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       align-items: stretch;
       gap: 12px;
       min-width: 0;
       max-width: 100%;
-      overflow-x: auto;
-      overscroll-behavior-x: contain;
-      scroll-snap-type: x proximity;
-      scrollbar-color: rgba(100, 112, 134, .55) transparent;
-      padding: 2px 2px 12px;
+      overflow-x: visible;
     }
 
-    .horizontal-lane > * {
+    .layout-board > * {
       min-width: 0;
-      scroll-snap-align: start;
     }
 
-    .horizontal-lane::-webkit-scrollbar {
-      height: 9px;
+    .layout-board--flow,
+    .layout-board--forecast {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    .horizontal-lane::-webkit-scrollbar-thumb {
-      border-radius: 99px;
-      background: rgba(100, 112, 134, .42);
+    .layout-board--trigger,
+    .layout-board--manual,
+    .layout-board--engine {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .layout-board--trigger .trigger-card,
+    .layout-board--forecast .chart-card {
+      min-height: 0;
+    }
+
+    .pulse-phase-rail {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0 0 14px;
+    }
+
+    .pulse-phase {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid rgba(79, 55, 168, .22);
+      border-radius: var(--r);
+      background: rgba(255, 255, 255, .86);
+    }
+
+    .pulse-phase > span {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #4f37a8;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .pulse-phase strong {
+      align-self: center;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .pulse-phase p {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .semantic-flow-step:nth-child(3n) .semantic-flow-arrow::before {
+      content: "↓";
+    }
+
+    .semantic-flow-step:last-child .semantic-flow-arrow {
+      display: none;
     }
 
     @media (max-width: 860px) {
@@ -1433,6 +1486,56 @@
       .group-panel > .dossier-section[data-dossier-section="story"],
       .group-panel > .dossier-section[data-dossier-section="tuning"] {
         grid-column: 1;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .page {
+        width: calc(100vw - 20px);
+        max-width: none;
+      }
+
+      .layout-board--flow,
+      .layout-board--forecast,
+      .layout-board--trigger,
+      .layout-board--manual,
+      .layout-board--engine {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .pulse-phase-rail {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .semantic-flow-step:nth-child(3n) .semantic-flow-arrow::before {
+        content: "→";
+      }
+
+      .semantic-flow-step:nth-child(2n) .semantic-flow-arrow::before {
+        content: "↓";
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        width: calc(100vw - 16px);
+        max-width: none;
+      }
+
+      .layout-board--flow,
+      .layout-board--forecast,
+      .layout-board--trigger,
+      .layout-board--manual,
+      .layout-board--engine {
+        grid-template-columns: 1fr;
+      }
+
+      .pulse-phase-rail {
+        grid-template-columns: 1fr;
+      }
+
+      .semantic-flow-step .semantic-flow-arrow::before {
+        content: "↓";
       }
     }
   </style>
@@ -1471,7 +1574,15 @@
         <span><i class="semantic-flow-dot go"></i>kiválasztott vagy megjelenített</span>
       </aside>
 
-      <ol class="semantic-flow-grid horizontal-lane" data-horizontal-lane="semantic-flow">
+      <div class="pulse-phase-rail" data-pulse-phase-rail aria-label="A Pulse egyszerű olvasási útja">
+        <article class="pulse-phase" data-pulse-phase="change"><span>1</span><strong>Változás</strong><p>Valami pénzügyi vagy alkalmazásállapot változik.</p></article>
+        <article class="pulse-phase" data-pulse-phase="validation"><span>2</span><strong>Adatellenőrzés</strong><p>Csak a számolható jel mehet tovább.</p></article>
+        <article class="pulse-phase" data-pulse-phase="situation"><span>3</span><strong>Helyzet</strong><p>Az összetartozó jelek egy történetté állnak össze.</p></article>
+        <article class="pulse-phase" data-pulse-phase="priority"><span>4</span><strong>Fontosság</strong><p>A kész helyzetek közül egy nyer.</p></article>
+        <article class="pulse-phase" data-pulse-phase="message"><span>5</span><strong>Felső üzenet</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
+      </div>
+
+      <ol class="semantic-flow-grid layout-board layout-board--flow" data-layout-board="semantic-flow">
         <li class="semantic-flow-step" data-flow-stage="entry">
           <div class="semantic-flow-step-head">
             <span class="semantic-flow-index">01</span>
@@ -1901,7 +2012,7 @@
             <div><h2>Keretnyomást kiváltó események</h2><p>Minden kerethez tartozó számítás, határ és kiváltó esemény egy átnézhető felületen.</p></div>
             <span class="tag bad">9 jel</span>
           </div>
-          <div class="trigger-grid horizontal-lane" data-group-trigger-grid data-horizontal-lane="triggers">
+          <div class="trigger-grid layout-board layout-board--trigger" data-group-trigger-grid data-layout-board="triggers">
             <article class="trigger-card" data-card-slot="HF-001" data-hf-id="HF-001" data-source-domain="budget_pressure"></article>
             <article class="trigger-card" data-card-slot="HF-002" data-hf-id="HF-002" data-source-domain="budget_pressure"></article>
             <article class="trigger-card" data-card-slot="HF-003" data-hf-id="HF-003" data-source-domain="budget_pressure"></article>
@@ -1916,7 +2027,7 @@
         <section class="card dossier-section" data-dossier-section="story">
           <div data-group-story-content></div>
           <h3 style="margin:18px 0 10px;">Közös motorfolyamat</h3>
-          <div class="shared-engine-trace horizontal-lane" data-shared-engine-trace data-horizontal-lane="engine">
+          <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
             <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Fontosság és kiválasztás</strong><p>Szűr, csoportosít, pontoz, majd kiválaszt egy aktuális felső üzenetet.</p></article>
             <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Állapot és ismétlés</strong><p>A megváltozott helyzet újra jelezhet; a változatlanul megmutatott nem ismétlődik.</p></article>
             <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Felső üzenet megjelenése</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
@@ -1940,7 +2051,7 @@
             <div><h2>Pénzáramlást kiváltó események</h2><p>Fix terhek, várt bevételek, arányok, célok és egyenlegtartalék egy közös pénzáramlási nézetben.</p></div>
             <span class="tag bad">6 aktív + 1 későbbre halasztott</span>
           </div>
-          <div class="trigger-grid horizontal-lane" data-group-trigger-grid data-horizontal-lane="triggers">
+          <div class="trigger-grid layout-board layout-board--trigger" data-group-trigger-grid data-layout-board="triggers">
             <article class="trigger-card" data-card-slot="HF-005" data-hf-id="HF-005" data-source-domain="fixed_load"></article>
             <article class="trigger-card" data-card-slot="HF-006" data-hf-id="HF-006" data-source-domain="fixed_load"></article>
             <article class="trigger-card" data-card-slot="HF-007" data-hf-id="HF-007" data-source-domain="cashflow_pressure"></article>
@@ -1953,7 +2064,7 @@
         <section class="card dossier-section" data-dossier-section="story">
           <div data-group-story-content></div>
           <h3 style="margin:18px 0 10px;">Közös motorfolyamat</h3>
-          <div class="shared-engine-trace horizontal-lane" data-shared-engine-trace data-horizontal-lane="engine">
+          <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
             <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Fontosság és kiválasztás</strong><p>Szűr, csoportosít, pontoz, majd kiválaszt egy aktuális felső üzenetet.</p></article>
             <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Állapot és ismétlés</strong><p>A megváltozott helyzet újra jelezhet; a változatlanul megmutatott nem ismétlődik.</p></article>
             <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Felső üzenet megjelenése</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
@@ -1977,14 +2088,14 @@
             <div><h2>Adatpontosságot jelző események</h2><p>Ez nem pénzügyi riasztás: megmutatja, ha a hiányzó kategória csak a kategóriaalapú számításokat állítja várakozásra.</p></div>
             <span class="tag info">1 késleltetett jel</span>
           </div>
-          <div class="trigger-grid horizontal-lane" data-group-trigger-grid data-horizontal-lane="triggers">
+          <div class="trigger-grid layout-board layout-board--trigger" data-group-trigger-grid data-layout-board="triggers">
             <article class="trigger-card" data-card-slot="HF-021" data-hf-id="HF-021" data-source-domain="data_quality"></article>
           </div>
         </section>
         <section class="card dossier-section" data-dossier-section="story">
           <div data-group-story-content></div>
           <h3 style="margin:18px 0 10px;">Közös motorfolyamat</h3>
-          <div class="shared-engine-trace horizontal-lane" data-shared-engine-trace data-horizontal-lane="engine">
+          <div class="shared-engine-trace layout-board layout-board--engine" data-shared-engine-trace data-layout-board="engine">
             <article class="shared-engine-step" data-shared-hf-id="HF-016" data-source-domain="engine"><strong>Fontosság és kiválasztás</strong><p>Szűr, csoportosít, pontoz, majd kiválaszt egy aktuális felső üzenetet.</p></article>
             <article class="shared-engine-step" data-shared-hf-id="HF-017" data-source-domain="engine"><strong>Állapot és ismétlés</strong><p>A megváltozott helyzet újra jelezhet; a változatlanul megmutatott nem ismétlődik.</p></article>
             <article class="shared-engine-step" data-shared-hf-id="HF-018" data-source-domain="engine"><strong>Felső üzenet megjelenése</strong><p>Csak a kiválasztott helyzet jelenik meg felül.</p></article>
@@ -2491,11 +2602,11 @@
     }
 
     function renderManual(dossier) {
-      return '<div class="group-panel-head"><div><h2>Hogyan működik a ' + dossier.title + '?</h2><p>Ez a nézet együtt mutatja a számításokat, előrejelzéseket, kiváltó eseményeket és a felső üzenethez vezető utakat.</p></div><span class="tag info">' + dossier.tag + '</span></div><div class="group-flow horizontal-lane" data-horizontal-lane="manual">' + dossier.manual.map((entry) => '<article class="group-flow-step"><strong>' + entry[0] + '</strong><p>' + entry[1] + '</p></article>').join('') + '</div>';
+      return '<div class="group-panel-head"><div><h2>Hogyan működik a ' + dossier.title + '?</h2><p>Ez a nézet együtt mutatja a számításokat, előrejelzéseket, kiváltó eseményeket és a felső üzenethez vezető utakat.</p></div><span class="tag info">' + dossier.tag + '</span></div><div class="group-flow layout-board layout-board--manual" data-layout-board="manual">' + dossier.manual.map((entry) => '<article class="group-flow-step"><strong>' + entry[0] + '</strong><p>' + entry[1] + '</p></article>').join('') + '</div>';
     }
 
     function renderForecasts(dossier) {
-      return '<div class="group-panel-head"><div><h2>Előrejelzések és számítások</h2><p>A nagy grafikonok összefoglalók; a hozzájuk tartozó minden konkrét kiváltó esemény az alábbi átnézőkártyákban látható.</p></div><span class="tag violet">számítási nézet</span></div><div class="grid-3 horizontal-lane" data-horizontal-lane="forecasts">' + dossier.forecasts.map((entry) => '<article class="card chart-card"><div class="chart-title"><div><strong>' + entry[0] + '</strong><span>' + entry[1] + '</span></div><span class="tag ' + entry[3] + '">' + entry[2] + '</span></div>' + chartSvg(entry[4], entry[3]) + '<p class="source-domain">' + entry[5] + '</p></article>').join('') + '</div>';
+      return '<div class="group-panel-head"><div><h2>Előrejelzések és számítások</h2><p>A nagy grafikonok összefoglalók; a hozzájuk tartozó minden konkrét kiváltó esemény az alábbi átnézőkártyákban látható.</p></div><span class="tag violet">számítási nézet</span></div><div class="grid-3 layout-board layout-board--forecast" data-layout-board="forecasts">' + dossier.forecasts.map((entry) => '<article class="card chart-card"><div class="chart-title"><div><strong>' + entry[0] + '</strong><span>' + entry[1] + '</span></div><span class="tag ' + entry[3] + '">' + entry[2] + '</span></div>' + chartSvg(entry[4], entry[3]) + '<p class="source-domain">' + entry[5] + '</p></article>').join('') + '</div>';
     }
 
     function renderTriggerCard(group, id, trigger) {
