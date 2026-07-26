@@ -334,6 +334,7 @@ class _NoSpendFastInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _fastInfoVisualStyle(SpendeeBalanceFastInfoKind.noSpend);
     return Column(
       key: const ValueKey('spendee-balance-fast-info-noSpend'),
       children: [
@@ -349,10 +350,10 @@ class _NoSpendFastInfo extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          icon: const CustomPaint(
+          icon: CustomPaint(
             key: ValueKey('spendee-balance-no-spend-moon'),
-            painter: SpendeeBalanceMoonPainter(),
-            size: Size.square(15),
+            painter: SpendeeBalanceMoonPainter(moonColor: style.iconColor),
+            size: const Size.square(15),
           ),
         ),
         const SizedBox(height: 3),
@@ -374,15 +375,18 @@ class _CategoryChangeFastInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _fastInfoVisualStyle(
+      SpendeeBalanceFastInfoKind.categoryChange,
+    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-categoryChange'),
       children: [
         _FastInfoHeader(
           title: model.title,
-          iconBackground: const Color(0xFFFFF0F4),
+          iconBackground: style.iconBackground,
           icon: _LucideIcon(
             asset: model.iconAsset,
-            color: const Color(0xFFEF4173),
+            color: style.iconColor,
             size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
           ),
         ),
@@ -406,15 +410,18 @@ class _LatestTransactionFastInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _fastInfoVisualStyle(
+      SpendeeBalanceFastInfoKind.latestTransaction,
+    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-latestTransaction'),
       children: [
         _FastInfoHeader(
           title: model.title,
-          iconBackground: const Color(0xFFEDF3FF),
+          iconBackground: style.iconBackground,
           icon: _LucideIcon(
             asset: model.iconAsset,
-            color: const Color(0xFF5277D3),
+            color: style.iconColor,
             size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
           ),
         ),
@@ -450,15 +457,18 @@ class _TrendComparisonFastInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _fastInfoVisualStyle(
+      SpendeeBalanceFastInfoKind.trendComparison,
+    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-trendComparison'),
       children: [
         _FastInfoHeader(
           title: model.title,
-          iconBackground: const Color(0xFFEEEAFF),
+          iconBackground: style.iconBackground,
           icon: _LucideIcon(
             asset: model.iconAsset,
-            color: const Color(0xFF7657D9),
+            color: style.iconColor,
             size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
           ),
         ),
@@ -494,11 +504,15 @@ class _UpcomingRecurringFastInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = _fastInfoVisualStyle(
+      SpendeeBalanceFastInfoKind.upcomingRecurring,
+    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-upcomingRecurring'),
       children: [
         _FastInfoHeader(
           title: model.title,
+          iconBackground: style.iconBackground,
           icon: const Text(
             '↻',
             key: ValueKey('spendee-balance-upcoming-recurring-glyph'),
@@ -681,54 +695,66 @@ class _FastInfoValue extends StatelessWidget {
   }
 }
 
+class _FastInfoVisualStyle {
+  const _FastInfoVisualStyle({
+    required this.iconColor,
+    required this.iconBackground,
+    required this.inset,
+    this.gradient,
+  });
+
+  final Color iconColor;
+  final Color iconBackground;
+  final Color inset;
+  final Gradient? gradient;
+
+  Color get border => iconColor.withValues(alpha: 0x30 / 0xFF);
+  Color get glow => iconColor.withValues(alpha: 0x1F / 0xFF);
+}
+
+_FastInfoVisualStyle _fastInfoVisualStyle(SpendeeBalanceFastInfoKind kind) {
+  return switch (kind) {
+    SpendeeBalanceFastInfoKind.categoryChange => const _FastInfoVisualStyle(
+      iconColor: Color(0xFFEF4173),
+      iconBackground: Color(0xFFFFF0F4),
+      inset: Color(0xF5FFFFFF),
+    ),
+    SpendeeBalanceFastInfoKind.latestTransaction => const _FastInfoVisualStyle(
+      iconColor: Color(0xFF5277D3),
+      iconBackground: Color(0xFFEDF3FF),
+      inset: Color(0xF5FFFFFF),
+    ),
+    SpendeeBalanceFastInfoKind.trendComparison => const _FastInfoVisualStyle(
+      iconColor: Color(0xFF7657D9),
+      iconBackground: Color(0xFFEEEAFF),
+      inset: Color(0xF0FFFFFF),
+    ),
+    SpendeeBalanceFastInfoKind.upcomingRecurring => const _FastInfoVisualStyle(
+      iconColor: Color(0xFF5F55EC),
+      iconBackground: Color(0xFFF0EFFF),
+      inset: Color(0xF5FFFFFF),
+      gradient: CssLinearGradient(
+        cssDegrees: 145,
+        colors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
+      ),
+    ),
+    SpendeeBalanceFastInfoKind.noSpend => const _FastInfoVisualStyle(
+      iconColor: Color(0xFF5F55EC),
+      iconBackground: Color(0xFFF0EFFF),
+      inset: Color(0xF5FFFFFF),
+    ),
+  };
+}
+
 BoxDecoration _fastInfoDecoration(SpendeeBalanceFastInfoKind kind) {
-  final ({Color border, Color shadow, Gradient? gradient, Color inset}) style =
-      switch (kind) {
-        SpendeeBalanceFastInfoKind.categoryChange => (
-          border: const Color(0x30EF4173),
-          shadow: const Color(0x1FEF4173),
-          gradient: null,
-          inset: const Color(0xF5FFFFFF),
-        ),
-        SpendeeBalanceFastInfoKind.latestTransaction => (
-          border: const Color(0x305277D3),
-          shadow: const Color(0x1F5277D3),
-          gradient: null,
-          inset: const Color(0xF5FFFFFF),
-        ),
-        SpendeeBalanceFastInfoKind.trendComparison => (
-          border: const Color(0x1C6770B0),
-          shadow: const Color(0x1A524B93),
-          gradient: null,
-          inset: const Color(0xF0FFFFFF),
-        ),
-        SpendeeBalanceFastInfoKind.upcomingRecurring => (
-          border: const Color(0x308B5CF6),
-          shadow: const Color(0x1F8B5CF6),
-          gradient: const CssLinearGradient(
-            cssDegrees: 145,
-            colors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
-          ),
-          inset: const Color(0xF5FFFFFF),
-        ),
-        SpendeeBalanceFastInfoKind.noSpend => (
-          border: const Color(0x305F55EC),
-          shadow: const Color(0x1F5F55EC),
-          gradient: null,
-          inset: const Color(0xF5FFFFFF),
-        ),
-      };
+  final style = _fastInfoVisualStyle(kind);
   return BoxDecoration(
     color: style.gradient == null ? const Color(0xF0FFFFFF) : null,
     gradient: style.gradient,
     border: Border.all(color: style.border),
     borderRadius: BorderRadius.circular(26),
     boxShadow: [
-      BoxShadow(
-        color: style.shadow,
-        offset: const Offset(0, 12),
-        blurRadius: 25,
-      ),
+      BoxShadow(color: style.glow, offset: const Offset(0, 12), blurRadius: 25),
       BoxShadow(
         color: style.inset,
         offset: const Offset(0, 1),

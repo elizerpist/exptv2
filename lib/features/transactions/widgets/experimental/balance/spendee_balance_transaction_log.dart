@@ -405,20 +405,12 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
             'spendee-balance-transaction-day-decoration-${layout.key}',
           ),
           decoration: BoxDecoration(
-            color: const Color(0xF5FFFFFF),
-            border: Border.all(color: const Color(0x1A666FAB)),
             borderRadius: BorderRadius.circular(18),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x14524B93),
                 offset: Offset(0, 9),
                 blurRadius: 19,
-              ),
-              BoxShadow(
-                color: Color(0xF5FFFFFF),
-                offset: Offset(0, 1),
-                blurRadius: 0,
-                blurStyle: BlurStyle.inner,
               ),
             ],
           ),
@@ -686,61 +678,91 @@ class _BalanceTransactionRowState extends State<_BalanceTransactionRow> {
         onHorizontalDragEnd: _endDrag,
         child: SizedBox(
           height: SpendeeBalanceTransactionLog.rowHeight,
-          child: ClipRRect(
-            borderRadius: BorderRadius.vertical(
-              top: widget.isFirst ? const Radius.circular(17) : Radius.zero,
-              bottom: widget.isLast ? const Radius.circular(17) : Radius.zero,
-            ),
-            child: ValueListenableBuilder<double>(
-              valueListenable: _visualOffset,
-              child: Semantics(
-                key: ValueKey('spendee-balance-transaction-semantics-$_token'),
-                container: true,
-                explicitChildNodes: true,
-                button: onRecordActivate != null,
-                onTap: onRecordActivate,
-                label: '$merchant, $categoryName, $semanticAmount, $time',
-                customSemanticsActions: rowActions,
-                child: _BalanceTransactionRowContents(
-                  token: _token,
-                  merchant: merchant,
-                  categoryName: categoryName,
-                  amount: amount,
-                  time: time,
-                  category: widget.category,
-                  avatarColor: widget.avatarColor,
-                  showSeparator: widget.showSeparator,
-                  hasCustomName: hasCustomName,
-                  onCategoryFilter: widget.category == null
-                      ? null
-                      : () => widget.onCategoryFilter(widget.category!),
-                  onRename:
-                      record == null || widget.onRenameMerchantRequested == null
-                      ? null
-                      : () => widget.onRenameMerchantRequested!(record),
-                  onReset:
-                      record == null ||
-                          !hasCustomName ||
-                          widget.onResetMerchantName == null
-                      ? null
-                      : () => widget.onResetMerchantName!(record),
+          child: ValueListenableBuilder<double>(
+            valueListenable: _visualOffset,
+            child: Semantics(
+              key: ValueKey('spendee-balance-transaction-semantics-$_token'),
+              container: true,
+              explicitChildNodes: true,
+              button: onRecordActivate != null,
+              onTap: onRecordActivate,
+              label: '$merchant, $categoryName, $semanticAmount, $time',
+              customSemanticsActions: rowActions,
+              child: DecoratedBox(
+                key: ValueKey('spendee-balance-transaction-surface-$_token'),
+                decoration: _transactionRowSurfaceDecoration(
+                  isFirst: widget.isFirst,
+                  isLast: widget.isLast,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.vertical(
+                    top: widget.isFirst
+                        ? const Radius.circular(17)
+                        : Radius.zero,
+                    bottom: widget.isLast
+                        ? const Radius.circular(17)
+                        : Radius.zero,
+                  ),
+                  child: _BalanceTransactionRowContents(
+                    token: _token,
+                    merchant: merchant,
+                    categoryName: categoryName,
+                    amount: amount,
+                    time: time,
+                    category: widget.category,
+                    avatarColor: widget.avatarColor,
+                    showSeparator: widget.showSeparator,
+                    hasCustomName: hasCustomName,
+                    onCategoryFilter: widget.category == null
+                        ? null
+                        : () => widget.onCategoryFilter(widget.category!),
+                    onRename:
+                        record == null ||
+                            widget.onRenameMerchantRequested == null
+                        ? null
+                        : () => widget.onRenameMerchantRequested!(record),
+                    onReset:
+                        record == null ||
+                            !hasCustomName ||
+                            widget.onResetMerchantName == null
+                        ? null
+                        : () => widget.onResetMerchantName!(record),
+                  ),
                 ),
               ),
-              builder: (context, dx, child) {
-                return Transform.translate(
-                  key: ValueKey(
-                    'spendee-balance-transaction-transform-$_token',
-                  ),
-                  offset: Offset(dx, 0),
-                  child: child,
-                );
-              },
             ),
+            builder: (context, dx, child) {
+              return Transform.translate(
+                key: ValueKey('spendee-balance-transaction-transform-$_token'),
+                offset: Offset(dx, 0),
+                child: child,
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+BoxDecoration _transactionRowSurfaceDecoration({
+  required bool isFirst,
+  required bool isLast,
+}) {
+  const edge = BorderSide(color: Color(0x1A666FAB));
+  return BoxDecoration(
+    color: const Color(0xF5FFFFFF),
+    border: Border(
+      top: isFirst ? edge : BorderSide.none,
+      right: edge,
+      bottom: isLast ? edge : BorderSide.none,
+      left: edge,
+    ),
+    borderRadius: BorderRadius.vertical(
+      top: isFirst ? const Radius.circular(17) : Radius.zero,
+      bottom: isLast ? const Radius.circular(17) : Radius.zero,
+    ),
+  );
 }
 
 class _BalanceTransactionRowContents extends StatelessWidget {

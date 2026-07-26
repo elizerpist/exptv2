@@ -5,13 +5,16 @@ import 'package:flutter/material.dart';
 
 /// Paints the CSS-authored crescent used by the B3M-A3 no-spend card.
 class SpendeeBalanceMoonPainter extends CustomPainter {
-  const SpendeeBalanceMoonPainter();
+  const SpendeeBalanceMoonPainter({this.moonColor = defaultMoonColor});
 
   static const designSize = 15.0;
   static const insetShadowOffset = Offset(6, -2);
-  static const moonColor = Color(0xFF5F55EC);
+  static const defaultMoonColor = Color(0xFF5F55EC);
   static const insetShadowColor = Color(0xFFF0EFFF);
   static const plusColor = Color(0xFF8A80FF);
+
+  /// The FastInfo surface supplies the same token to its edge and glow.
+  final Color moonColor;
 
   @visibleForTesting
   SpendeeBalanceMoonGeometry geometryForSize(Size size) {
@@ -65,7 +68,8 @@ class SpendeeBalanceMoonPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(SpendeeBalanceMoonPainter oldDelegate) => false;
+  bool shouldRepaint(SpendeeBalanceMoonPainter oldDelegate) =>
+      oldDelegate.moonColor != moonColor;
 }
 
 @immutable

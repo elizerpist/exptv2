@@ -142,11 +142,27 @@ void main() {
                   .decoration
               as BoxDecoration;
       expect(decoration.borderRadius, BorderRadius.circular(18));
-      expect(decoration.color, const Color(0xF5FFFFFF));
-      expect(decoration.border, Border.all(color: const Color(0x1A666FAB)));
-      expect(decoration.boxShadow, hasLength(2));
+      expect(decoration.color, isNull);
+      expect(decoration.border, isNull);
+      expect(decoration.boxShadow, hasLength(1));
       expect(decoration.boxShadow!.first.offset, const Offset(0, 9));
       expect(decoration.boxShadow!.first.blurRadius, 19);
+
+      final rowSurface = tester.widget<DecoratedBox>(
+        find.byKey(
+          const ValueKey('spendee-balance-transaction-surface-record-1'),
+        ),
+      );
+      final rowDecoration = rowSurface.decoration as BoxDecoration;
+      expect(rowDecoration.color, const Color(0xF5FFFFFF));
+      expect(
+        rowDecoration.borderRadius,
+        const BorderRadius.vertical(top: Radius.circular(17)),
+      );
+      final rowBorder = rowDecoration.border! as Border;
+      expect(rowBorder.top.color, const Color(0x1A666FAB));
+      expect(rowBorder.left.color, const Color(0x1A666FAB));
+      expect(rowBorder.right.color, const Color(0x1A666FAB));
     },
   );
 
@@ -869,6 +885,54 @@ void main() {
     await tester.pump();
     expect(transformDx(tester, 1), 0);
   });
+
+  testWidgets(
+    'horizontal swipe translates the painted LogBox surface with its contents',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceTransactionLog(
+            groups: oneGroup(),
+            categoriesById: {7: category()},
+            viewportHeight: 100,
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => false,
+            onCategoryFilter: (_) {},
+            onEditTransaction: (_) {},
+          ),
+        ),
+      );
+
+      final row = find.byKey(
+        const ValueKey('spendee-balance-transaction-row-record-1'),
+      );
+      final surface = find.byKey(
+        const ValueKey('spendee-balance-transaction-surface-record-1'),
+      );
+      final avatar = find.byKey(
+        const ValueKey('spendee-balance-transaction-avatar-record-1'),
+      );
+      final transform = find.byKey(
+        const ValueKey('spendee-balance-transaction-transform-record-1'),
+      );
+      expect(surface, findsOneWidget);
+      expect(find.descendant(of: transform, matching: surface), findsOneWidget);
+      expect(find.descendant(of: transform, matching: avatar), findsOneWidget);
+
+      final gesture = await tester.startGesture(tester.getCenter(row));
+      await gesture.moveBy(const Offset(-20, 0));
+      // The first movement only resolves Flutter's horizontal drag arena.
+      await gesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+
+      expect(transformDx(tester, 1), closeTo(-20, .01));
+      final decoration =
+          tester.widget<DecoratedBox>(surface).decoration as BoxDecoration;
+      expect(decoration.color, const Color(0xF5FFFFFF));
+      await gesture.up();
+    },
+  );
 
   testWidgets('right swipe freezes at 44px until delete is cancelled', (
     tester,

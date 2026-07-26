@@ -1,6 +1,7 @@
 import 'dart:ui' show BlurStyle, SemanticsAction, Tristate;
 
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_card_painters.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_cards.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
@@ -56,14 +57,14 @@ void main() {
                 ),
             SpendeeBalanceFastInfoKind.trendComparison:
                 const _FastSurfaceExpectation(
-                  border: Color(0x1C6770B0),
-                  outerShadow: Color(0x1A524B93),
+                  border: Color(0x307657D9),
+                  outerShadow: Color(0x1F7657D9),
                   innerShadow: Color(0xF0FFFFFF),
                 ),
             SpendeeBalanceFastInfoKind.upcomingRecurring:
                 const _FastSurfaceExpectation(
-                  border: Color(0x308B5CF6),
-                  outerShadow: Color(0x1F8B5CF6),
+                  border: Color(0x305F55EC),
+                  outerShadow: Color(0x1F5F55EC),
                   innerShadow: Color(0xF5FFFFFF),
                   gradientColors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
                 ),
@@ -160,6 +161,63 @@ void main() {
       );
       expect(find.byType(PageView), findsNothing);
     });
+
+    testWidgets(
+      'every FastInfo edge and glow derives its hue from the visible icon',
+      (tester) async {
+        const iconColors = <SpendeeBalanceFastInfoKind, Color>{
+          SpendeeBalanceFastInfoKind.noSpend: Color(0xFF5F55EC),
+          SpendeeBalanceFastInfoKind.categoryChange: Color(0xFFEF4173),
+          SpendeeBalanceFastInfoKind.latestTransaction: Color(0xFF5277D3),
+          SpendeeBalanceFastInfoKind.trendComparison: Color(0xFF7657D9),
+          SpendeeBalanceFastInfoKind.upcomingRecurring: Color(0xFF5F55EC),
+        };
+
+        for (final model in fastInfoModels()) {
+          await tester.pumpWidget(
+            host(
+              SpendeeBalanceFastInfoCard(
+                model: model,
+                onGhostChanged: (_, _) {},
+              ),
+            ),
+          );
+          final decoration =
+              tester
+                      .widget<DecoratedBox>(
+                        find.byKey(
+                          ValueKey(
+                            'spendee-balance-fast-info-surface-${model.kind.name}',
+                          ),
+                        ),
+                      )
+                      .decoration
+                  as BoxDecoration;
+          final border = decoration.border! as Border;
+          final iconColor = iconColors[model.kind]!;
+
+          expect(border.top.color.withValues(alpha: 1), iconColor);
+          expect(border.top.color.a, closeTo(0x30 / 0xFF, .001));
+          expect(
+            decoration.boxShadow!.first.color.withValues(alpha: 1),
+            iconColor,
+          );
+          expect(
+            decoration.boxShadow!.first.color.a,
+            closeTo(0x1F / 0xFF, .001),
+          );
+          if (model.kind == SpendeeBalanceFastInfoKind.noSpend) {
+            final moon = tester.widget<CustomPaint>(
+              find.byKey(const ValueKey('spendee-balance-no-spend-moon')),
+            );
+            expect(
+              (moon.painter! as SpendeeBalanceMoonPainter).moonColor,
+              iconColor,
+            );
+          }
+        }
+      },
+    );
 
     testWidgets('renders five distinct internal card hierarchies', (
       tester,
