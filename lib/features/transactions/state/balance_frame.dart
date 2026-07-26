@@ -26,6 +26,15 @@ enum BalanceCategoryPeriod { day, week, month, year }
 
 enum BalanceMerchantPeriod { year, month, allTime }
 
+/// Dimensions for the query-derived ranking detail cards.
+enum SpendeeBalanceRankDimension { month, year, all }
+
+/// Dimensions for the query-derived average detail card.
+enum SpendeeBalanceAverageDimension { day, week, month, year }
+
+/// Four query-derived views for the no-spend FastInfo card.
+enum SpendeeBalanceNoSpendDimension { week, month, year, all }
+
 enum BalanceGhostSection {
   noSpend,
   categoryChange,
@@ -139,7 +148,10 @@ class BalanceFrameInput {
       recurringGhosts: store.balanceRecurringGhostTransactions,
       categories: store.categories,
       limits: store.limits,
-      fastInfoMetrics: store.fastInfoMetrics,
+      // Balance resolves its own query-and-rail-scoped metrics below. Reading
+      // the legacy global map here would synchronously scan every transaction
+      // on each rail/type change, despite not being consumed by this frame.
+      fastInfoMetrics: const <String, FastInfoMetricResult>{},
       displayLogEntries: displayLogEntries,
       displayLogSummaryWindow: store.summaryWindow,
       displayLogSummaryReferenceDate: store.summaryReferenceDate,
@@ -151,6 +163,25 @@ class BalanceFrameInput {
   }
 
   bool sameRevisionAs(BalanceFrameInput other) {
+    return _sameSourceAndQueryAs(other) &&
+        identical(recurringGhosts, other.recurringGhosts) &&
+        identical(fastInfoMetrics, other.fastInfoMetrics) &&
+        identical(displayLogEntries, other.displayLogEntries) &&
+        _sameDisplayWindowAs(other);
+  }
+
+  /// Compares the immutable source/query revision used by the bounded Balance
+  /// history cache. A rail return deliberately rebuilds the presentation-log
+  /// list and the obsolete store FastInfo map; neither changes the frame
+  /// resolver's result. Generated ghosts remain part of the comparison so a
+  /// changed recurring projection can never reuse stale card or log data.
+  bool sameHistoryRevisionAs(BalanceFrameInput other) {
+    return _sameSourceAndQueryAs(other) &&
+        _sameRecurringGhostSnapshot(recurringGhosts, other.recurringGhosts) &&
+        _sameDisplayWindowAs(other);
+  }
+
+  bool _sameSourceAndQueryAs(BalanceFrameInput other) {
     return now == other.now &&
         activeType == other.activeType &&
         summaryWindow == other.summaryWindow &&
@@ -159,12 +190,12 @@ class BalanceFrameInput {
         _sameSet(merchantFilters, other.merchantFilters) &&
         _sameSet(categoryIds, other.categoryIds) &&
         identical(transactions, other.transactions) &&
-        identical(recurringGhosts, other.recurringGhosts) &&
         identical(categories, other.categories) &&
-        identical(limits, other.limits) &&
-        identical(fastInfoMetrics, other.fastInfoMetrics) &&
-        identical(displayLogEntries, other.displayLogEntries) &&
-        displayLogSummaryWindow == other.displayLogSummaryWindow &&
+        identical(limits, other.limits);
+  }
+
+  bool _sameDisplayWindowAs(BalanceFrameInput other) {
+    return displayLogSummaryWindow == other.displayLogSummaryWindow &&
         displayLogSummaryReferenceDate ==
             other.displayLogSummaryReferenceDate &&
         visibleLogEntryLimit == other.visibleLogEntryLimit &&
@@ -196,6 +227,39 @@ class BalanceFrameInput {
 
 bool _sameSet<T>(Set<T> left, Set<T> right) =>
     left.length == right.length && left.containsAll(right);
+
+bool _sameRecurringGhostSnapshot(
+  List<RecurringGhostRecord> left,
+  List<RecurringGhostRecord> right,
+) {
+  if (identical(left, right)) return true;
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index += 1) {
+    final first = left[index];
+    final second = right[index];
+    if (first.id != second.id ||
+        first.recurringTransactionId != second.recurringTransactionId ||
+        first.periodKey != second.periodKey ||
+        first.name != second.name ||
+        first.amount != second.amount ||
+        first.triggerType != second.triggerType ||
+        first.transactionType != second.transactionType ||
+        first.date != second.date ||
+        first.time != second.time ||
+        first.categoryId != second.categoryId ||
+        first.categoryName != second.categoryName ||
+        first.categoryColor != second.categoryColor ||
+        first.categoryIconSlot != second.categoryIconSlot ||
+        first.triggerMillis != second.triggerMillis ||
+        first.isActivated != second.isActivated ||
+        first.activatedTransactionId != second.activatedTransactionId ||
+        first.createdAt != second.createdAt ||
+        first.updatedAt != second.updatedAt) {
+      return false;
+    }
+  }
+  return true;
+}
 
 class BalanceTimeScopeOption {
   const BalanceTimeScopeOption({
@@ -389,6 +453,61 @@ class BalanceAverageDailyFrame {
   final int spikeDays;
 }
 
+/// One immutable, pre-ranked category or vendor result.
+class BalanceRankRow {
+  const BalanceRankRow({
+    required this.rank,
+    required this.id,
+    required this.name,
+    required this.amount,
+    required this.transactionCount,
+    this.category,
+  });
+
+  final int rank;
+  final String id;
+  final String name;
+  final double amount;
+  final int transactionCount;
+  final TransactionCategory? category;
+}
+
+/// Traceable input-derived average statistics for one calendar dimension.
+class BalanceAverageFrame {
+  BalanceAverageFrame({
+    required this.total,
+    required this.observedDays,
+    required this.dailyAverage,
+    required this.trend,
+    required this.bufferDays,
+    required this.maximum,
+    required this.outlierThreshold,
+    required this.outlierCount,
+    required List<double> dailyValues,
+  }) : dailyValues = List<double>.unmodifiable(dailyValues);
+
+  final double total;
+  final int observedDays;
+  final double dailyAverage;
+  final double trend;
+  final int? bufferDays;
+  final double maximum;
+  final double outlierThreshold;
+  final int outlierCount;
+  final List<double> dailyValues;
+}
+
+/// Calendar-day coverage for one no-spend view.
+class BalanceNoSpendFrame {
+  const BalanceNoSpendFrame({
+    required this.observedDays,
+    required this.noSpendDays,
+  });
+
+  final int observedDays;
+  final int noSpendDays;
+}
+
 class BalanceSummaryFrame {
   const BalanceSummaryFrame({
     required this.window,
@@ -462,6 +581,14 @@ class BalanceRenderFrame {
     required this.visibleLogRowCount,
     required this.totalLogEntryCount,
     required this.hasMoreLogEntries,
+    required this.transactionCount,
+    required List<String> availableMonthScopes,
+    required List<int> availableYearScopes,
+    required Map<SpendeeBalanceRankDimension, List<BalanceRankRow>>
+    categoryRanks,
+    required Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> vendorRanks,
+    required Map<SpendeeBalanceAverageDimension, BalanceAverageFrame> averages,
+    required Map<SpendeeBalanceNoSpendDimension, BalanceNoSpendFrame> noSpend,
   }) : insights = Map<BalanceInsightKind, BalanceInsightFrame>.unmodifiable(
          insights,
        ),
@@ -482,7 +609,21 @@ class BalanceRenderFrame {
        fastInfoMetrics = Map<String, FastInfoMetricResult>.unmodifiable(
          fastInfoMetrics,
        ),
-       logGroups = List<BalanceLogGroup>.unmodifiable(logGroups);
+       logGroups = List<BalanceLogGroup>.unmodifiable(logGroups),
+       availableMonthScopes = List<String>.unmodifiable(availableMonthScopes),
+       availableYearScopes = List<int>.unmodifiable(availableYearScopes),
+       _categoryRanks = _immutableRanks(categoryRanks),
+       _vendorRanks = _immutableRanks(vendorRanks),
+       _averages =
+           Map<
+             SpendeeBalanceAverageDimension,
+             BalanceAverageFrame
+           >.unmodifiable(averages),
+       _noSpend =
+           Map<
+             SpendeeBalanceNoSpendDimension,
+             BalanceNoSpendFrame
+           >.unmodifiable(noSpend);
 
   final BalanceQueryFrame query;
   final double balance;
@@ -501,7 +642,34 @@ class BalanceRenderFrame {
   final int visibleLogRowCount;
   final int totalLogEntryCount;
   final bool hasMoreLogEntries;
+  final int transactionCount;
+  final List<String> availableMonthScopes;
+  final List<int> availableYearScopes;
+  final Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> _categoryRanks;
+  final Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> _vendorRanks;
+  final Map<SpendeeBalanceAverageDimension, BalanceAverageFrame> _averages;
+  final Map<SpendeeBalanceNoSpendDimension, BalanceNoSpendFrame> _noSpend;
+
+  List<BalanceRankRow> topCategoriesFor(
+    SpendeeBalanceRankDimension dimension,
+  ) => _categoryRanks[dimension] ?? const <BalanceRankRow>[];
+
+  List<BalanceRankRow> topVendorsFor(SpendeeBalanceRankDimension dimension) =>
+      _vendorRanks[dimension] ?? const <BalanceRankRow>[];
+
+  BalanceAverageFrame averageFor(SpendeeBalanceAverageDimension dimension) =>
+      _averages[dimension]!;
+
+  BalanceNoSpendFrame noSpendFor(SpendeeBalanceNoSpendDimension dimension) =>
+      _noSpend[dimension]!;
 }
+
+Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> _immutableRanks(
+  Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> ranks,
+) => Map<SpendeeBalanceRankDimension, List<BalanceRankRow>>.unmodifiable({
+  for (final entry in ranks.entries)
+    entry.key: List<BalanceRankRow>.unmodifiable(entry.value),
+});
 
 class BalanceFrameResolver {
   const BalanceFrameResolver._();
@@ -515,6 +683,144 @@ class BalanceFrameResolver {
       ghostPolicy ?? BalanceGhostPolicy.all,
     ).resolve();
   }
+}
+
+/// Bounded LRU for the expensive aggregate bundles behind Balance detail
+/// cards. Store-backed [BalanceFrameInput] instances retain their immutable
+/// source-list identities while a recent action, filter or rail query returns,
+/// so that query's expensive aggregate does not run again.
+class _BalanceMetricBundleCache {
+  static const _capacity = 12;
+  static final Map<_BalanceMetricBundleCacheKey, _BalanceMetricBundlePair>
+  _entries = <_BalanceMetricBundleCacheKey, _BalanceMetricBundlePair>{};
+
+  static _BalanceMetricBundlePair resolve({
+    required BalanceFrameInput input,
+    required DateTime referenceDate,
+    required List<TransactionRecord> transactions,
+    required List<RecurringGhostRecord> ghosts,
+  }) {
+    final key = _BalanceMetricBundleCacheKey.fromInput(
+      input,
+      referenceDate: referenceDate,
+    );
+    final cached = _entries.remove(key);
+    if (cached != null) {
+      _entries[key] = cached;
+      return cached;
+    }
+    final snapshot = FastInfoMetricSnapshot(
+      now: referenceDate,
+      balance: transactions.fold<double>(
+        0,
+        (sum, record) => sum + record.amount,
+      ),
+      transactions: transactions,
+      categories: input.categories,
+      limits: input.limits,
+    );
+    final canonical = BalanceMetricsResolver.resolve(snapshot);
+    final resolved = _BalanceMetricBundlePair(
+      canonical: canonical,
+      withGhosts: ghosts.isEmpty
+          ? canonical
+          : BalanceMetricsResolver.resolve(snapshot, includedGhosts: ghosts),
+    );
+    _entries[key] = resolved;
+    if (_entries.length > _capacity) {
+      _entries.remove(_entries.keys.first);
+    }
+    return resolved;
+  }
+}
+
+class _BalanceMetricBundlePair {
+  const _BalanceMetricBundlePair({
+    required this.canonical,
+    required this.withGhosts,
+  });
+
+  final BalanceMetricBundle canonical;
+  final BalanceMetricBundle withGhosts;
+}
+
+class _BalanceMetricBundleCacheKey {
+  _BalanceMetricBundleCacheKey._({
+    required this.transactions,
+    required this.recurringGhosts,
+    required this.categories,
+    required this.limits,
+    required this.referenceDate,
+    required this.summaryWindow,
+    required this.summaryReferenceDate,
+    required this.activeType,
+    required this.searchQuery,
+    required this.merchantFilterKey,
+    required this.categoryFilterKey,
+  });
+
+  factory _BalanceMetricBundleCacheKey.fromInput(
+    BalanceFrameInput input, {
+    required DateTime referenceDate,
+  }) {
+    final merchants = input.merchantFilters.toList()..sort();
+    final categoryIds = input.categoryIds.toList()..sort();
+    return _BalanceMetricBundleCacheKey._(
+      transactions: input.transactions,
+      recurringGhosts: input.recurringGhosts,
+      categories: input.categories,
+      limits: input.limits,
+      referenceDate: referenceDate,
+      summaryWindow: input.summaryWindow,
+      summaryReferenceDate: input.summaryReferenceDate,
+      activeType: input.activeType,
+      searchQuery: input.searchQuery,
+      merchantFilterKey: merchants.join('\u001f'),
+      categoryFilterKey: categoryIds.join(','),
+    );
+  }
+
+  final List<TransactionRecord> transactions;
+  final List<RecurringGhostRecord> recurringGhosts;
+  final List<TransactionCategory> categories;
+  final List<CategoryLimit> limits;
+  final DateTime referenceDate;
+  final SummaryWindow summaryWindow;
+  final DateTime summaryReferenceDate;
+  final TransactionType activeType;
+  final String searchQuery;
+  final String merchantFilterKey;
+  final String categoryFilterKey;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BalanceMetricBundleCacheKey &&
+      identical(transactions, other.transactions) &&
+      identical(recurringGhosts, other.recurringGhosts) &&
+      identical(categories, other.categories) &&
+      identical(limits, other.limits) &&
+      referenceDate == other.referenceDate &&
+      summaryWindow == other.summaryWindow &&
+      summaryReferenceDate == other.summaryReferenceDate &&
+      activeType == other.activeType &&
+      searchQuery == other.searchQuery &&
+      merchantFilterKey == other.merchantFilterKey &&
+      categoryFilterKey == other.categoryFilterKey;
+
+  @override
+  int get hashCode => Object.hash(
+    identityHashCode(transactions),
+    identityHashCode(recurringGhosts),
+    identityHashCode(categories),
+    identityHashCode(limits),
+    referenceDate,
+    summaryWindow,
+    summaryReferenceDate,
+    activeType,
+    searchQuery,
+    merchantFilterKey,
+    categoryFilterKey,
+  );
 }
 
 class _BalanceFrameScope {
@@ -569,21 +875,28 @@ class _BalanceFrameScope {
             ),
           )
         : const <RecurringGhostRecord>[];
-    final snapshot = FastInfoMetricSnapshot(
-      now: input.now,
-      balance: input.transactions.fold<double>(
-        0,
-        (sum, record) => sum + record.amount,
-      ),
-      transactions: input.transactions,
-      categories: input.categories,
-      limits: input.limits,
+    // Detail cards share the exact selected rail scope with the header, log,
+    // summary and FastInfo values. Their Havi/Éves/Össz. pills only choose a
+    // presentation aggregation inside this active result set; they may never
+    // pull a record back in from another rail period.
+    canonicalDetailRows = _detailRowsFromRecords(scopedRecords);
+    scopedGhostDetailRows = _detailRowsFromGhosts(scopedGhosts);
+    detailAnchorDay = _detailAnchorFor(
+      window: input.summaryWindow,
+      referenceDate: effectiveReferenceDate,
+      now: now,
     );
-    canonicalBalanceMetrics = BalanceMetricsResolver.resolve(snapshot);
-    ghostBalanceMetrics = BalanceMetricsResolver.resolve(
-      snapshot,
-      includedGhosts: pendingGhosts,
+    final bundlePair = _BalanceMetricBundleCache.resolve(
+      input: input,
+      // Every visible Balance metric uses the same active type/search/filter
+      // query and selected rail period as the log and summary. Detail cards
+      // retain their own calendar dimensions below, anchored to this scope.
+      referenceDate: detailAnchorDay ?? now,
+      transactions: scopedRecords,
+      ghosts: scopedGhosts,
     );
+    canonicalBalanceMetrics = bundlePair.canonical;
+    ghostBalanceMetrics = bundlePair.withGhosts;
   }
 
   final BalanceFrameInput input;
@@ -600,21 +913,33 @@ class _BalanceFrameScope {
   late final DateTime effectiveReferenceDate;
   late final List<TransactionRecord> scopedRecords;
   late final List<RecurringGhostRecord> scopedGhosts;
+  late final List<_BalanceDetailRow> canonicalDetailRows;
+  late final List<_BalanceDetailRow> scopedGhostDetailRows;
+  late final DateTime? detailAnchorDay;
+  final Map<BalanceGhostSection, List<_BalanceDetailRow>> _detailRowsBySection =
+      <BalanceGhostSection, List<_BalanceDetailRow>>{};
   late final BalanceMetricBundle canonicalBalanceMetrics;
   late final BalanceMetricBundle ghostBalanceMetrics;
 
   BalanceRenderFrame resolve() {
-    final globalIncome = input.transactions
+    final globalIncome = scopedRecords
         .where((record) => record.amount > 0)
         .fold<double>(0, (sum, record) => sum + record.amount);
-    final globalExpense = input.transactions
+    final globalExpense = scopedRecords
         .where((record) => record.amount < 0)
         .fold<double>(0, (sum, record) => sum + record.amount.abs());
     final balance = globalIncome - globalExpense;
     final globalFlow = globalIncome + globalExpense;
-    final currentMonthStart = DateTime(now.year, now.month);
-    final nextMonthStart = DateTime(now.year, now.month + 1);
-    final currentMonthRows = input.transactions.where((record) {
+    final metricReference = detailAnchorDay ?? now;
+    final currentMonthStart = DateTime(
+      metricReference.year,
+      metricReference.month,
+    );
+    final nextMonthStart = DateTime(
+      metricReference.year,
+      metricReference.month + 1,
+    );
+    final currentMonthRows = scopedRecords.where((record) {
       final date = _parseDate(record.normalizedDate);
       return date != null &&
           !date.isBefore(currentMonthStart) &&
@@ -672,6 +997,9 @@ class _BalanceFrameScope {
         : visibleLogRowCount < scopedRecords.length + scopedGhosts.length;
     final insights = _buildInsights();
     final averageDaily = _buildAverageDaily();
+    final detailAggregates = _buildDetailAggregates();
+    final detailScopes = _buildDetailScopes();
+    final noSpend = _buildNoSpendFrames();
     final fastInfoMetrics = <String, FastInfoMetricResult>{
       ...canonicalBalanceMetrics.fastInfoMetrics,
       'no_spend_napok_szama':
@@ -713,6 +1041,13 @@ class _BalanceFrameScope {
       visibleLogRowCount: visibleLogRowCount,
       totalLogEntryCount: totalLogEntryCount,
       hasMoreLogEntries: hasMore,
+      transactionCount: visibleLogRowCount,
+      availableMonthScopes: detailScopes.months,
+      availableYearScopes: detailScopes.years,
+      categoryRanks: detailAggregates.categoryRanks,
+      vendorRanks: detailAggregates.vendorRanks,
+      averages: detailAggregates.averages,
+      noSpend: noSpend,
     );
   }
 
@@ -760,6 +1095,337 @@ class _BalanceFrameScope {
       ghostPolicy.includes(section)
       ? ghostBalanceMetrics
       : canonicalBalanceMetrics;
+
+  _BalanceDetailScopes _buildDetailScopes() {
+    final months = <String>{};
+    final years = <int>{};
+    for (final row in canonicalDetailRows) {
+      months.add(_monthKey(row.date));
+      years.add(row.date.year);
+    }
+    return _BalanceDetailScopes(
+      months: (months.toList()..sort()),
+      years: (years.toList()..sort()),
+    );
+  }
+
+  _BalanceDetailAggregates _buildDetailAggregates() {
+    final categoryRows = _detailRowsFor(BalanceGhostSection.topCategories);
+    final vendorRows = _detailRowsFor(BalanceGhostSection.topMerchants);
+    final averageRows = _detailRowsFor(BalanceGhostSection.averageDaily);
+    final rankMonthStart = DateTime(
+      effectiveReferenceDate.year,
+      effectiveReferenceDate.month,
+    );
+    final rankYearStart = DateTime(effectiveReferenceDate.year);
+    final rankRows = <SpendeeBalanceRankDimension, List<_BalanceDetailRow>>{
+      SpendeeBalanceRankDimension.all: categoryRows,
+      SpendeeBalanceRankDimension.month: _rowsInRange(
+        categoryRows,
+        rankMonthStart,
+        DateTime(rankMonthStart.year, rankMonthStart.month + 1),
+      ),
+      SpendeeBalanceRankDimension.year: _rowsInRange(
+        categoryRows,
+        rankYearStart,
+        DateTime(rankYearStart.year + 1),
+      ),
+    };
+    final vendorRankRows =
+        <SpendeeBalanceRankDimension, List<_BalanceDetailRow>>{
+          SpendeeBalanceRankDimension.all: vendorRows,
+          SpendeeBalanceRankDimension.month: _rowsInRange(
+            vendorRows,
+            rankMonthStart,
+            DateTime(rankMonthStart.year, rankMonthStart.month + 1),
+          ),
+          SpendeeBalanceRankDimension.year: _rowsInRange(
+            vendorRows,
+            rankYearStart,
+            DateTime(rankYearStart.year + 1),
+          ),
+        };
+    final anchor = detailAnchorDay;
+    return _BalanceDetailAggregates(
+      categoryRanks: <SpendeeBalanceRankDimension, List<BalanceRankRow>>{
+        for (final entry in rankRows.entries)
+          entry.key: _rankCategories(entry.value),
+      },
+      vendorRanks: <SpendeeBalanceRankDimension, List<BalanceRankRow>>{
+        for (final entry in vendorRankRows.entries)
+          entry.key: _rankVendors(entry.value),
+      },
+      averages: <SpendeeBalanceAverageDimension, BalanceAverageFrame>{
+        for (final dimension in SpendeeBalanceAverageDimension.values)
+          dimension: anchor == null
+              ? _emptyAverageFrame()
+              : _averageForRows(
+                  averageRows,
+                  start: _averageStartFor(dimension, anchor),
+                  endExclusive: anchor.add(const Duration(days: 1)),
+                ),
+      },
+    );
+  }
+
+  List<_BalanceDetailRow> _detailRowsFor(BalanceGhostSection section) {
+    return _detailRowsBySection.putIfAbsent(section, () {
+      if (!ghostPolicy.includes(section) || scopedGhostDetailRows.isEmpty) {
+        return canonicalDetailRows;
+      }
+      return List<_BalanceDetailRow>.unmodifiable([
+        ...canonicalDetailRows,
+        ...scopedGhostDetailRows,
+      ]);
+    });
+  }
+
+  List<_BalanceDetailRow> _detailRowsFromRecords(
+    Iterable<TransactionRecord> records,
+  ) => List<_BalanceDetailRow>.unmodifiable([
+    for (final record in records)
+      if (_parseDate(record.normalizedDate) case final date?)
+        _BalanceDetailRow.record(record, date),
+  ]);
+
+  List<_BalanceDetailRow> _detailRowsFromGhosts(
+    Iterable<RecurringGhostRecord> ghosts,
+  ) => List<_BalanceDetailRow>.unmodifiable([
+    for (final ghost in ghosts)
+      if (_parseDate(ghost.normalizedDate) case final date?)
+        _BalanceDetailRow.ghost(ghost, date),
+  ]);
+
+  List<_BalanceDetailRow> _rowsInRange(
+    Iterable<_BalanceDetailRow> rows,
+    DateTime start,
+    DateTime endExclusive,
+  ) => List<_BalanceDetailRow>.unmodifiable(
+    rows.where((row) => _isInRange(row.date, start, endExclusive)),
+  );
+
+  DateTime _averageStartFor(
+    SpendeeBalanceAverageDimension dimension,
+    DateTime anchor,
+  ) => switch (dimension) {
+    SpendeeBalanceAverageDimension.day => anchor,
+    SpendeeBalanceAverageDimension.week => anchor.subtract(
+      Duration(days: anchor.weekday - DateTime.monday),
+    ),
+    SpendeeBalanceAverageDimension.month => DateTime(anchor.year, anchor.month),
+    SpendeeBalanceAverageDimension.year => DateTime(anchor.year),
+  };
+
+  List<BalanceRankRow> _rankCategories(Iterable<_BalanceDetailRow> records) {
+    final categoriesById = <int, TransactionCategory>{
+      for (final category in input.categories)
+        category.transactionCategoryID: category,
+    };
+    final groups = <String, List<_BalanceDetailRow>>{};
+    for (final record in records) {
+      final id = record.categoryId?.toString() ?? 'uncategorized';
+      (groups[id] ??= <_BalanceDetailRow>[]).add(record);
+    }
+    return _rankRows(
+      groups,
+      nameFor: (id, _) => id == 'uncategorized'
+          ? 'Nincs kategória'
+          : categoriesById[int.parse(id)]?.name ?? 'Nincs kategória',
+      categoryFor: (id, _) =>
+          id == 'uncategorized' ? null : categoriesById[int.parse(id)],
+    );
+  }
+
+  List<BalanceRankRow> _rankVendors(Iterable<_BalanceDetailRow> records) {
+    final groups = <String, List<_BalanceDetailRow>>{};
+    for (final record in records) {
+      final name = record.merchant.trim();
+      final id = name.isEmpty ? 'unknown-vendor' : name;
+      (groups[id] ??= <_BalanceDetailRow>[]).add(record);
+    }
+    return _rankRows(
+      groups,
+      nameFor: (id, _) => id == 'unknown-vendor' ? 'Ismeretlen' : id,
+      categoryFor: (_, rows) => _dominantCategory(rows),
+    );
+  }
+
+  List<BalanceRankRow> _rankRows(
+    Map<String, List<_BalanceDetailRow>> groups, {
+    required String Function(String id, List<_BalanceDetailRow> rows) nameFor,
+    required TransactionCategory? Function(
+      String id,
+      List<_BalanceDetailRow> rows,
+    )
+    categoryFor,
+  }) {
+    final rows =
+        <_BalanceRankAggregate>[
+          for (final entry in groups.entries)
+            _BalanceRankAggregate(
+              id: entry.key,
+              name: nameFor(entry.key, entry.value),
+              amount: entry.value.fold<double>(
+                0,
+                (sum, record) => sum + record.amount.abs(),
+              ),
+              transactionCount: entry.value.length,
+              category: categoryFor(entry.key, entry.value),
+            ),
+        ]..sort((left, right) {
+          final amount = right.amount.compareTo(left.amount);
+          if (amount != 0) return amount;
+          final name = left.name.compareTo(right.name);
+          if (name != 0) return name;
+          return left.id.compareTo(right.id);
+        });
+    return List<BalanceRankRow>.unmodifiable([
+      for (var index = 0; index < rows.length && index < 4; index += 1)
+        BalanceRankRow(
+          rank: index + 1,
+          id: rows[index].id,
+          name: rows[index].name,
+          amount: rows[index].amount,
+          transactionCount: rows[index].transactionCount,
+          category: rows[index].category,
+        ),
+    ]);
+  }
+
+  TransactionCategory? _dominantCategory(List<_BalanceDetailRow> records) {
+    final categoriesById = <int, TransactionCategory>{
+      for (final category in input.categories)
+        category.transactionCategoryID: category,
+    };
+    final amounts = <int?, double>{};
+    for (final record in records) {
+      amounts.update(
+        record.categoryId,
+        (amount) => amount + record.amount.abs(),
+        ifAbsent: () => record.amount.abs(),
+      );
+    }
+    final entries = amounts.entries.toList()
+      ..sort((left, right) {
+        final amount = right.value.compareTo(left.value);
+        if (amount != 0) return amount;
+        final leftName = categoriesById[left.key]?.name ?? 'Nincs kategória';
+        final rightName = categoriesById[right.key]?.name ?? 'Nincs kategória';
+        final name = leftName.compareTo(rightName);
+        if (name != 0) return name;
+        return (left.key ?? -1).compareTo(right.key ?? -1);
+      });
+    return entries.isEmpty ? null : categoriesById[entries.first.key];
+  }
+
+  BalanceAverageFrame _emptyAverageFrame() => _averageForRows(
+    const <_BalanceDetailRow>[],
+    start: now,
+    endExclusive: now,
+  );
+
+  BalanceAverageFrame _averageForRows(
+    Iterable<_BalanceDetailRow> rows, {
+    required DateTime start,
+    required DateTime endExclusive,
+  }) {
+    final byDate = <DateTime, double>{};
+    for (final row in rows) {
+      final day = _dateOnly(row.date);
+      if (!_isInRange(day, start, endExclusive)) continue;
+      byDate.update(
+        day,
+        (amount) => amount + row.amount.abs(),
+        ifAbsent: () => row.amount.abs(),
+      );
+    }
+    final observedDays = math.max(0, endExclusive.difference(start).inDays);
+    final values = <double>[
+      for (var offset = 0; offset < observedDays; offset += 1)
+        byDate[start.add(Duration(days: offset))] ?? 0,
+    ];
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    final average = observedDays == 0 ? 0.0 : total / observedDays;
+    final split = (observedDays / 2).ceil();
+    final first = values.take(split).toList();
+    final second = values.skip(split).toList();
+    final firstAverage = first.isEmpty
+        ? 0.0
+        : first.fold<double>(0, (sum, value) => sum + value) / first.length;
+    final secondAverage = second.isEmpty
+        ? firstAverage
+        : second.fold<double>(0, (sum, value) => sum + value) / second.length;
+    final threshold = average * 1.5;
+    final activeNet = rows
+        .where((row) => _isInRange(row.date, start, endExclusive))
+        .fold<double>(0, (sum, row) => sum + row.amount);
+    return BalanceAverageFrame(
+      total: total,
+      observedDays: observedDays,
+      dailyAverage: average,
+      trend: secondAverage - firstAverage,
+      bufferDays: average <= 0 || activeNet <= 0
+          ? null
+          : (activeNet / average).floor(),
+      maximum: values.fold<double>(0, math.max),
+      outlierThreshold: threshold,
+      outlierCount: values.where((value) => value > threshold).length,
+      dailyValues: values,
+    );
+  }
+
+  Map<SpendeeBalanceNoSpendDimension, BalanceNoSpendFrame>
+  _buildNoSpendFrames() {
+    final anchor = detailAnchorDay;
+    if (anchor == null) {
+      return Map<
+        SpendeeBalanceNoSpendDimension,
+        BalanceNoSpendFrame
+      >.unmodifiable(<SpendeeBalanceNoSpendDimension, BalanceNoSpendFrame>{
+        for (final dimension in SpendeeBalanceNoSpendDimension.values)
+          dimension: const BalanceNoSpendFrame(observedDays: 0, noSpendDays: 0),
+      });
+    }
+    final nowDay = _dateOnly(anchor);
+    final spendDays = <DateTime>{};
+    DateTime? firstSpendDay;
+    for (final row in _detailRowsFor(BalanceGhostSection.noSpend)) {
+      final day = _dateOnly(row.date);
+      if (day.isAfter(nowDay)) continue;
+      spendDays.add(day);
+      if (firstSpendDay == null || day.isBefore(firstSpendDay)) {
+        firstSpendDay = day;
+      }
+    }
+
+    BalanceNoSpendFrame frameFor(DateTime? start) {
+      if (start == null || start.isAfter(nowDay)) {
+        return const BalanceNoSpendFrame(observedDays: 0, noSpendDays: 0);
+      }
+      final observedDays = nowDay.difference(start).inDays + 1;
+      final daysWithSpend = spendDays
+          .where((day) => !day.isBefore(start) && !day.isAfter(nowDay))
+          .length;
+      return BalanceNoSpendFrame(
+        observedDays: observedDays,
+        noSpendDays: math.max(0, observedDays - daysWithSpend),
+      );
+    }
+
+    return Map<
+      SpendeeBalanceNoSpendDimension,
+      BalanceNoSpendFrame
+    >.unmodifiable(<SpendeeBalanceNoSpendDimension, BalanceNoSpendFrame>{
+      SpendeeBalanceNoSpendDimension.week: frameFor(
+        nowDay.subtract(Duration(days: nowDay.weekday - DateTime.monday)),
+      ),
+      SpendeeBalanceNoSpendDimension.month: frameFor(
+        DateTime(nowDay.year, nowDay.month),
+      ),
+      SpendeeBalanceNoSpendDimension.year: frameFor(DateTime(nowDay.year)),
+      SpendeeBalanceNoSpendDimension.all: frameFor(firstSpendDay),
+    });
+  }
 
   Iterable<RecurringGhostRecord> _dedupePendingGhosts() sync* {
     final seen = <String>{};
@@ -1113,6 +1779,77 @@ class _BalanceFrameScope {
   }
 }
 
+class _BalanceDetailScopes {
+  _BalanceDetailScopes({required this.months, required this.years});
+
+  final List<String> months;
+  final List<int> years;
+}
+
+class _BalanceDetailAggregates {
+  _BalanceDetailAggregates({
+    required this.categoryRanks,
+    required this.vendorRanks,
+    required this.averages,
+  });
+
+  final Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> categoryRanks;
+  final Map<SpendeeBalanceRankDimension, List<BalanceRankRow>> vendorRanks;
+  final Map<SpendeeBalanceAverageDimension, BalanceAverageFrame> averages;
+}
+
+/// One immutable, query-filtered row shared by detail cards.
+///
+/// Recurring ghosts are materialized only when the card's own ghost policy
+/// permits them, so each toggle changes data as well as its presentation.
+class _BalanceDetailRow {
+  const _BalanceDetailRow({
+    required this.date,
+    required this.amount,
+    required this.merchant,
+    required this.categoryId,
+  });
+
+  factory _BalanceDetailRow.record(TransactionRecord record, DateTime date) =>
+      _BalanceDetailRow(
+        date: _dateOnly(date),
+        amount: record.amount,
+        merchant: record.displayMerchant,
+        categoryId: record.transactionCategoryID,
+      );
+
+  factory _BalanceDetailRow.ghost(RecurringGhostRecord ghost, DateTime date) =>
+      _BalanceDetailRow(
+        date: _dateOnly(date),
+        amount: ghost.type == TransactionType.income
+            ? ghost.amount.abs()
+            : -ghost.amount.abs(),
+        merchant: ghost.name,
+        categoryId: ghost.categoryId,
+      );
+
+  final DateTime date;
+  final double amount;
+  final String merchant;
+  final int? categoryId;
+}
+
+class _BalanceRankAggregate {
+  const _BalanceRankAggregate({
+    required this.id,
+    required this.name,
+    required this.amount,
+    required this.transactionCount,
+    required this.category,
+  });
+
+  final String id;
+  final String name;
+  final double amount;
+  final int transactionCount;
+  final TransactionCategory? category;
+}
+
 BalanceBudgetPeriod _budgetPeriod(BalanceMetricBudgetPeriod value) =>
     switch (value) {
       BalanceMetricBudgetPeriod.day => BalanceBudgetPeriod.day,
@@ -1148,6 +1885,39 @@ bool _inSummaryWindow(
     SummaryWindow.allTime => true,
   };
 }
+
+/// Last observable day of the active rail scope.
+///
+/// The HTML source computes detail cards against the selected time scope: a
+/// past month/year is complete, while the current scope stops at today's day.
+/// A future-only rail position intentionally has no observable calendar.
+DateTime? _detailAnchorFor({
+  required SummaryWindow window,
+  required DateTime referenceDate,
+  required DateTime now,
+}) {
+  final today = _dateOnly(now);
+  if (window == SummaryWindow.allTime) return today;
+  final start = switch (window) {
+    SummaryWindow.monthly => DateTime(referenceDate.year, referenceDate.month),
+    SummaryWindow.yearly => DateTime(referenceDate.year),
+    SummaryWindow.allTime => today,
+  };
+  if (start.isAfter(today)) return null;
+  final endExclusive = switch (window) {
+    SummaryWindow.monthly => DateTime(
+      referenceDate.year,
+      referenceDate.month + 1,
+    ),
+    SummaryWindow.yearly => DateTime(referenceDate.year + 1),
+    SummaryWindow.allTime => today.add(const Duration(days: 1)),
+  };
+  final scopeLastDay = endExclusive.subtract(const Duration(days: 1));
+  return scopeLastDay.isAfter(today) ? today : scopeLastDay;
+}
+
+bool _isInRange(DateTime date, DateTime start, DateTime end) =>
+    !date.isBefore(start) && date.isBefore(end);
 
 bool _sameSummaryPeriod(SummaryWindow window, DateTime left, DateTime right) {
   return switch (window) {

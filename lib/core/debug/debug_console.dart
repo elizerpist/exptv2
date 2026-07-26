@@ -452,11 +452,15 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     color: Color(0xFF06B6D4),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Debug Console',
-                    style: TextStyle(
-                      color: Color(0xFFCDD6F4),
-                      fontWeight: FontWeight.w700,
+                  const Expanded(
+                    child: Text(
+                      'Debug Console',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Color(0xFFCDD6F4),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -467,10 +471,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                       fontSize: 12,
                     ),
                   ),
-                  const Spacer(),
                   IconButton(
                     key: const ValueKey('debug-console-copy'),
                     onPressed: count == 0 ? null : _copyAll,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 34,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    splashRadius: 17,
                     icon: Icon(
                       _copied ? Icons.check : Icons.copy_outlined,
                       size: 16,
@@ -482,11 +492,25 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   IconButton(
                     key: const ValueKey('debug-console-clear'),
                     onPressed: count == 0 ? null : DebugConsole.clear,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 34,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    splashRadius: 17,
                     icon: const Icon(Icons.delete_outline, size: 16),
                     color: const Color(0xFFEF4444),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 34,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    splashRadius: 17,
                     icon: const Icon(Icons.close, size: 16),
                     color: const Color(0xFF94A3B8),
                   ),

@@ -1474,7 +1474,10 @@ class TransactionStore extends ChangeNotifier {
   Future<void> _finishSummaryChange(String reason, int generation) async {
     await Future<void>.delayed(Duration.zero);
     if (generation != _summaryChangeGeneration) return;
-    _prewarmCriticalCaches(reason);
+    // A rail settle must publish the selected scope before any broad cache
+    // warming. The old all-type prewarm repeatedly rebuilt unrelated Budget
+    // and overview views on the UI path, making a one-pill move feel frozen.
+    _prewarmActiveView(reason);
     await _projectRecurringGhostsForActiveWindow(generation: generation);
   }
 
@@ -1949,7 +1952,7 @@ class TransactionStore extends ChangeNotifier {
       _rebuildRecurringGhostsView();
       _invalidateViewCaches();
       _invalidateFastInfoMetrics();
-      _prewarmCriticalCaches('recurring-ghosts');
+      _prewarmActiveView('recurring-ghosts');
       DebugConsole.log(
         '[Recurring] projected ${visibleGhostTransactions.length} ghosts for $periodKey',
       );

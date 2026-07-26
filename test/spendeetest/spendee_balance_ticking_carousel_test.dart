@@ -84,6 +84,24 @@ void main() {
     expect(haptics, 2);
   });
 
+  testWidgets('rail viewport does not clip pill shadows or grow-shrink paint', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(onIndexChanged: (_) {}, onTick: () {}));
+
+    final stack = tester.widget<Stack>(
+      find.byKey(const ValueKey('spendee-balance-ticking-stack')),
+    );
+    expect(stack.clipBehavior, Clip.none);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('ticking-test-viewport')),
+        matching: find.byType(ClipRect),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'two-item viewport materializes the other option on both wrap sides',
     (tester) async {
@@ -147,6 +165,70 @@ void main() {
       closeTo(400, .01),
     );
   });
+
+  testWidgets(
+    '0726 virtualizes long rails and commits only once after center settle',
+    (tester) async {
+      final previews = <int>[];
+      final commits = <int>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SpendeeBalanceTickingViewport(
+                key: const ValueKey('long-rail-viewport'),
+                width: 300,
+                height: 80,
+                itemCount: 120,
+                slotDistance: 60,
+                centerAnchor: 150,
+                maxVisibleLogicalDistance: 3,
+                onIndexChanged: previews.add,
+                onIndexSettled: commits.add,
+                onTick: () {},
+                itemSizeBuilder: (_, _) => const Size(50, 40),
+                itemBuilder: (context, index, selected, select) =>
+                    GestureDetector(
+                      key: ValueKey('long-rail-item-$index'),
+                      onTap: select,
+                      child: ColoredBox(
+                        color: selected ? Colors.purple : Colors.grey,
+                      ),
+                    ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final railSlots = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'spendee-balance-ticking-slot-',
+            ),
+      );
+      expect(
+        railSlots,
+        findsNWidgets(7),
+        reason: 'only the three neighbors on either side are built',
+      );
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('long-rail-viewport'))),
+      );
+      // Start the recognizer, then cross a full logical slot to assert the
+      // live preview callback.
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-130, 0));
+      await tester.pump();
+      expect(previews, isNotEmpty);
+      expect(commits, isEmpty);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(commits, hasLength(1));
+      expect(commits.single, previews.last);
+    },
+  );
 
   testWidgets(
     'tap and fling use the same logical index and survive count changes',

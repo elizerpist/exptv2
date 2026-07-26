@@ -41,6 +41,7 @@ void main() {
     VoidCallback? onSummaryReset,
     ValueChanged<int>? onShiftPeriod,
     VoidCallback? onCycleSummary,
+    SpendeeBalanceTransactionLogBuilder? transactionLogBuilder,
   }) {
     return MaterialApp(
       home: MediaQuery(
@@ -66,19 +67,21 @@ void main() {
             onSummaryReset: onSummaryReset,
             onShiftPeriod: onShiftPeriod,
             onCycleSummary: onCycleSummary,
-            transactionLogBuilder: (context, frame) => SizedBox(
-              key: const ValueKey('balance-test-log'),
-              width: 378,
-              height: 407,
-              child: Text('${frame.visibleLogRowCount} log rows'),
-            ),
+            transactionLogBuilder:
+                transactionLogBuilder ??
+                (context, frame) => SizedBox(
+                  key: const ValueKey('balance-test-log'),
+                  width: 378,
+                  height: 407,
+                  child: Text('${frame.visibleLogRowCount} log rows'),
+                ),
           ),
         ),
       ),
     );
   }
 
-  testWidgets('expanded screen freezes every B3M-A3 authored y coordinate', (
+  testWidgets('0726 expanded screen freezes source-of-truth y coordinates', (
     tester,
   ) async {
     configureReferenceViewport(tester);
@@ -99,23 +102,23 @@ void main() {
       tester.getRect(
         find.byKey(const ValueKey('spendee-balance-detail-stage')),
       ),
-      const Rect.fromLTWH(17, 356, 378, 186),
+      const Rect.fromLTWH(17, 356, 378, 218),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-actions'))),
-      const Rect.fromLTWH(17, 553, 378, 42),
+      const Rect.fromLTWH(17, 585, 378, 42),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-summary'))),
-      const Rect.fromLTWH(17, 606, 378, 59),
+      const Rect.fromLTWH(17, 638, 378, 59),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-search-row'))),
-      const Rect.fromLTWH(17, 676, 378, 39),
+      const Rect.fromLTWH(17, 708, 378, 39),
     );
     expect(
-      tester.getRect(find.byKey(const ValueKey('spendee-balance-time-rail'))),
-      const Rect.fromLTWH(17, 726, 378, 79),
+      find.byKey(const ValueKey('spendee-balance-time-rail')),
+      findsNothing,
     );
     expect(find.text('Aktuális hónap'), findsOneWidget);
     expect(
@@ -132,6 +135,37 @@ void main() {
     expect(find.byKey(const ValueKey('balance-test-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('balance-test-menu')), findsOneWidget);
   });
+
+  testWidgets(
+    '0726 SummaryPill starts with a hidden bare rail and keeps handler/count visible',
+    (tester) async {
+      configureReferenceViewport(tester);
+      await tester.pumpWidget(host(_input()));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('spendee-balance-time-rail')),
+        findsNothing,
+      );
+      expect(find.text('HÓNAP FINOMÍTÁS'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+        findsOneWidget,
+      );
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-summary-chevron')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('spendee-balance-time-rail')),
+        findsOneWidget,
+      );
+      expect(find.text('HÓNAP FINOMÍTÁS'), findsNothing);
+    },
+  );
 
   testWidgets('handle follows the 180px path and snaps to collapsed layout', (
     tester,
@@ -174,14 +208,8 @@ void main() {
       closeTo(342, .01),
     );
     expect(
-      tester
-          .getTopLeft(find.byKey(const ValueKey('spendee-balance-time-rail')))
-          .dy,
-      closeTo(392, .01),
-    );
-    expect(
       tester.getTopLeft(find.byKey(const ValueKey('balance-test-log'))).dy,
-      closeTo(482, .01),
+      closeTo(435, .01),
     );
     final insightOpacity = tester.widget<Opacity>(
       find.byKey(const ValueKey('spendee-balance-insight-opacity')),
@@ -236,7 +264,7 @@ void main() {
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-actions')))
           .dy,
-      553,
+      585,
     );
   });
 
@@ -337,29 +365,41 @@ void main() {
     expect(find.text('log revision 0'), findsNothing);
   });
 
-  testWidgets('in-flight empty month keeps the complete rail label', (
-    tester,
-  ) async {
-    configureReferenceViewport(tester);
-    await tester.pumpWidget(
-      host(
-        _input(
-          summaryReferenceDate: DateTime(2026, 8),
-          ghostProjectionInFlight: true,
+  testWidgets(
+    'in-flight empty month keeps query rail options without a stale requested pill',
+    (tester) async {
+      configureReferenceViewport(tester);
+      await tester.pumpWidget(
+        host(
+          _input(
+            summaryReferenceDate: DateTime(2026, 8),
+            ghostProjectionInFlight: true,
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.text('HÓNAP FINOMÍTÁS'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('spendee-balance-time-rail')),
-        matching: find.text('Augusztus 2026'),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(find.text('HÓNAP FINOMÍTÁS'), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-summary-chevron')),
+      );
+      await tester.pumpAndSettle();
+      final rail = find.byKey(const ValueKey('spendee-balance-time-rail'));
+      expect(
+        find.descendant(
+          of: rail,
+          matching: find.byKey(
+            const ValueKey('spendee-balance-year-pill-2026-07'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: rail, matching: find.text('Augusztus')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets(
     'production callbacks keep action query filter scope and summary',
@@ -397,6 +437,10 @@ void main() {
         find.byKey(const ValueKey('spendee-balance-filter-button')),
       );
       await tester.tap(
+        find.byKey(const ValueKey('spendee-balance-summary-chevron')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
         find.byKey(const ValueKey('spendee-balance-year-pill-2026-06')),
       );
       await tester.pumpAndSettle();
@@ -420,11 +464,52 @@ void main() {
       expect(cycles, 0);
     },
   );
+
+  testWidgets('recent action frames return from the bounded Balance cache', (
+    tester,
+  ) async {
+    configureReferenceViewport(tester);
+    final expenseInput = _input();
+    final incomeInput = _input(activeType: TransactionType.income);
+    var input = expenseInput;
+    final frames = <BalanceRenderFrame>[];
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) => host(
+          input,
+          onTypeChanged: (type) => setState(
+            () => input = type == TransactionType.income
+                ? incomeInput
+                : expenseInput,
+          ),
+          transactionLogBuilder: (context, frame) {
+            frames.add(frame);
+            return const SizedBox(key: ValueKey('balance-cache-test-log'));
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-balance-income-action')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-balance-expense-action')),
+    );
+    await tester.pump();
+
+    expect(frames, hasLength(3));
+    expect(identical(frames.first, frames.last), isTrue);
+  });
 }
 
 BalanceFrameInput _input({
   DateTime? summaryReferenceDate,
   bool ghostProjectionInFlight = false,
+  TransactionType activeType = TransactionType.expense,
 }) {
   const expense = TransactionCategory(
     transactionCategoryID: 1,
@@ -458,7 +543,7 @@ BalanceFrameInput _input({
   );
   return BalanceFrameInput(
     now: DateTime(2026, 7, 25),
-    activeType: TransactionType.expense,
+    activeType: activeType,
     summaryWindow: SummaryWindow.monthly,
     summaryReferenceDate: summaryReferenceDate ?? DateTime(2026, 7),
     transactions: const [

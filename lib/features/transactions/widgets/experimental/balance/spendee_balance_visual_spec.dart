@@ -78,7 +78,9 @@ abstract final class SpendeeBalanceVisualSpec {
   static const canvas = Size(410, 890);
   static const screenBorderWidth = 1.0;
   static const screenRadius = 34.0;
-  static const pageBackground = Color(0xFFF8FAFC);
+
+  /// Approved HTML permanent-screen Grey 100 page surface.
+  static const pageBackground = Color(0xFFF1F5F9);
   static const horizontalInset = 16.0;
   static const contentWidth = 378.0;
   static const stackGap = 11.0;
@@ -100,8 +102,10 @@ abstract final class SpendeeBalanceVisualSpec {
   static const insightGap = 9.0;
 
   static const detailTop = 356.0;
-  static const detailStageHeight = 186.0;
-  static const detailCardHeight = 176.0;
+
+  /// `balance_latest_layout.html`: 208px card + 4px gap + 6px pagination.
+  static const detailStageHeight = 218.0;
+  static const detailCardHeight = 208.0;
   static const detailPaginationHeight = 6.0;
   static const detailPaginationGap = 4.0;
   static const detailDotInactive = 4.0;
@@ -109,30 +113,46 @@ abstract final class SpendeeBalanceVisualSpec {
   static const detailDotColor = Color(0xFFE1E4EC);
   static const detailDotActiveColor = Color(0xFFE84CAE);
 
-  static const actionTop = 553.0;
+  static const actionTop = 585.0;
   static const actionHeight = 42.0;
   static const actionSideInset = 4.0;
   static const actionGap = 10.0;
   static const actionRadius = 16.0;
   static const actionPulseDuration = Duration(milliseconds: 420);
 
-  static const summaryTop = 606.0;
+  static const summaryTop = 638.0;
   static const summaryHeight = 59.0;
   static const summaryRadius = 20.0;
   static const summaryHorizontalPadding = 15.0;
   static const summaryColumnGap = 9.0;
   static const summarySettleDuration = Duration(milliseconds: 160);
+  static const summarySurfaceColor = Color(0xF0FFFFFF);
+  static const summarySurfaceBorder = Border.fromBorderSide(
+    BorderSide(color: Color(0x1A666FAB)),
+  );
+  static const summarySurfaceShadows = <BoxShadow>[
+    BoxShadow(color: Color(0x14524B93), offset: Offset(0, 8), blurRadius: 17),
+    BoxShadow(
+      color: Color(0xF0FFFFFF),
+      offset: Offset(0, 1),
+      blurRadius: 0,
+      blurStyle: BlurStyle.inner,
+    ),
+  ];
 
-  static const searchTop = 676.0;
+  static const searchTop = 708.0;
   static const searchHeight = 39.0;
   static const searchGap = 9.0;
   static const searchFieldRadius = 21.0;
   static const filterWidth = 40.0;
   static const filterRadius = 17.0;
 
-  static const timeRailTop = 726.0;
+  static const timeRailTop = 758.0;
   static const timeRailHeight = 79.0;
   static const timeRailControlHeight = 21.0;
+  static const timeRailViewportHeight = 37.0;
+  static const timeRailSlotDistance = 69.2;
+  static const timeRailVisibleLogicalDistance = 2;
   static const handleSize = Size(92, 21);
   static const handleBarSize = Size(22, 3);
   static const yearPillSize = Size(49, 30);
@@ -142,15 +162,15 @@ abstract final class SpendeeBalanceVisualSpec {
   static const bottomNavHeight = 80.0;
   static const bottomNavTop = 810.0;
 
-  static const transactionViewportHeight = 407.0;
+  static const transactionViewportHeight = 422.0;
   static const dayCardRadius = 18.0;
-  static const transactionRowMinHeight = 50.0;
-  static const transactionAvatarSize = 31.0;
-  static const transactionEditSize = 22.0;
-  static const transactionRowGap = 9.0;
+  static const transactionRowMinHeight = 55.0;
+  static const transactionAvatarSize = 34.0;
+  static const transactionEditSize = 24.0;
+  static const transactionRowGap = 10.0;
   static const transactionRowPadding = EdgeInsets.symmetric(
     horizontal: 12,
-    vertical: 7,
+    vertical: 8,
   );
 
   static const heroGradient = CssLinearGradient(

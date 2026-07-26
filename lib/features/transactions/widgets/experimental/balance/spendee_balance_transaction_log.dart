@@ -36,14 +36,14 @@ class SpendeeBalanceTransactionLog extends StatefulWidget {
     this.onLoadMore,
     this.hasMore = false,
     this.queryKey,
-    this.viewportHeight = 407,
+    this.viewportHeight = SpendeeBalanceVisualSpec.transactionViewportHeight,
     this.bottomPadding = 0,
     this.scrollController,
   });
 
   static const cacheExtent = 360.0;
   static const loadMoreThreshold = 320.0;
-  static const rowHeight = 50.0;
+  static const rowHeight = SpendeeBalanceVisualSpec.transactionRowMinHeight;
 
   final List<BalanceLogGroup> groups;
   final Map<int, TransactionCategory> categoriesById;
@@ -121,84 +121,51 @@ class _SpendeeBalanceTransactionLogState
     final layouts = _groupLayouts(widget.groups);
     return SizedBox(
       key: const ValueKey('spendee-balance-transaction-section'),
-      height: widget.viewportHeight + 16,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 1),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(
-              key: ValueKey('spendee-balance-transaction-heading'),
-              height: 8,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'TRANZAKCIÓK',
-                  semanticsLabel: 'Tranzakciók',
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: Color(0xFF6975A0),
-                    fontSize: 8,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
-                    fontVariations: SpendeeBalanceVisualSpec.weight950,
-                    letterSpacing: 0,
+      height: widget.viewportHeight,
+      child: SizedBox(
+        key: const ValueKey('spendee-balance-transaction-viewport'),
+        height: widget.viewportHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: layouts.isEmpty
+              ? const _EmptyTransactionLog()
+              : NotificationListener<ScrollNotification>(
+                  onNotification: _handleScrollNotification,
+                  child: CustomScrollView(
+                    controller: _controller,
+                    primary: false,
+                    physics: const ClampingScrollPhysics(),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    // Flutter 3.41 still exposes only this legacy name.
+                    // ignore: deprecated_member_use
+                    cacheExtent: SpendeeBalanceTransactionLog.cacheExtent,
+                    semanticChildCount: _rowCount,
+                    slivers: [
+                      for (var index = 0; index < layouts.length; index += 1)
+                        _BalanceTransactionDaySliver(
+                          key: ValueKey(
+                            'spendee-balance-transaction-group-${layouts[index].key}',
+                          ),
+                          layout: layouts[index],
+                          showGroupGap: index < layouts.length - 1,
+                          categoriesById: widget.categoriesById,
+                          onFastFilter: widget.onFastFilter,
+                          onRecordTap: widget.onRecordTap,
+                          onDeleteRequested: widget.onDeleteRequested,
+                          onCategoryFilter: widget.onCategoryFilter,
+                          onEditTransaction: widget.onEditTransaction,
+                          onRenameMerchantRequested:
+                              widget.onRenameMerchantRequested,
+                          onResetMerchantName: widget.onResetMerchantName,
+                        ),
+                      if (widget.bottomPadding > 0)
+                        SliverToBoxAdapter(
+                          child: SizedBox(height: widget.bottomPadding),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 7),
-            SizedBox(
-              key: const ValueKey('spendee-balance-transaction-viewport'),
-              height: widget.viewportHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: layouts.isEmpty
-                    ? const _EmptyTransactionLog()
-                    : NotificationListener<ScrollNotification>(
-                        onNotification: _handleScrollNotification,
-                        child: CustomScrollView(
-                          controller: _controller,
-                          primary: false,
-                          physics: const ClampingScrollPhysics(),
-                          keyboardDismissBehavior:
-                              ScrollViewKeyboardDismissBehavior.onDrag,
-                          // Flutter 3.41 still exposes only this legacy name.
-                          // ignore: deprecated_member_use
-                          cacheExtent: SpendeeBalanceTransactionLog.cacheExtent,
-                          semanticChildCount: _rowCount,
-                          slivers: [
-                            for (
-                              var index = 0;
-                              index < layouts.length;
-                              index += 1
-                            )
-                              _BalanceTransactionDaySliver(
-                                key: ValueKey(
-                                  'spendee-balance-transaction-group-${layouts[index].key}',
-                                ),
-                                layout: layouts[index],
-                                showGroupGap: index < layouts.length - 1,
-                                categoriesById: widget.categoriesById,
-                                onFastFilter: widget.onFastFilter,
-                                onRecordTap: widget.onRecordTap,
-                                onDeleteRequested: widget.onDeleteRequested,
-                                onCategoryFilter: widget.onCategoryFilter,
-                                onEditTransaction: widget.onEditTransaction,
-                                onRenameMerchantRequested:
-                                    widget.onRenameMerchantRequested,
-                                onResetMerchantName: widget.onResetMerchantName,
-                              ),
-                            if (widget.bottomPadding > 0)
-                              SliverToBoxAdapter(
-                                child: SizedBox(height: widget.bottomPadding),
-                              ),
-                          ],
-                        ),
-                      ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -426,7 +393,7 @@ class _DateTitleText extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
         color: Color(0xFF64748B),
-        fontSize: 8,
+        fontSize: 10,
         height: 1,
         fontWeight: FontWeight.w700,
       ),
@@ -743,7 +710,7 @@ class _BalanceTransactionRowContents extends StatelessWidget {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: SpendeeBalanceVisualSpec.transactionRowPadding,
           child: Row(
             children: [
               _BalanceTransactionAvatar(
@@ -752,7 +719,7 @@ class _BalanceTransactionRowContents extends StatelessWidget {
                 color: avatarColor,
                 onTap: onCategoryFilter,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
               Expanded(
                 child: _BalanceTransactionCopy(
                   token: token,
@@ -763,9 +730,9 @@ class _BalanceTransactionRowContents extends StatelessWidget {
                   onReset: onReset,
                 ),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
               _BalanceTransactionValue(amount: amount, time: time),
-              const SizedBox(width: 9),
+              const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
               _BalanceEditButton(
                 token: token,
                 merchant: merchant,
@@ -809,7 +776,7 @@ class _BalanceTransactionAvatar extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(11),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x61FFFFFF),
@@ -825,12 +792,12 @@ class _BalanceTransactionAvatar extends StatelessWidget {
               ],
             ),
             child: SizedBox.square(
-              dimension: 31,
+              dimension: SpendeeBalanceVisualSpec.transactionAvatarSize,
               child: Center(
                 child: CategorySlotIcon(
                   slot: iconSlot,
                   color: Colors.white,
-                  size: 16,
+                  size: 18,
                   listenForSlotChanges: true,
                 ),
               ),
@@ -863,7 +830,7 @@ class _BalanceTransactionCopy extends StatelessWidget {
   Widget build(BuildContext context) {
     final reset = hasCustomName ? onReset : null;
     return SizedBox(
-      height: 21,
+      height: 29,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -871,7 +838,7 @@ class _BalanceTransactionCopy extends StatelessWidget {
             left: 0,
             right: reset == null ? 0 : 16,
             top: 0,
-            height: 9,
+            height: 13,
             child: _BalanceMerchantRenameTarget(
               token: token,
               merchant: merchant,
@@ -881,8 +848,8 @@ class _BalanceTransactionCopy extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 14,
-            height: 7,
+            top: 19,
+            height: 10,
             child: ExcludeSemantics(
               child: GestureDetector(
                 key: ValueKey('spendee-balance-transaction-category-$token'),
@@ -894,7 +861,7 @@ class _BalanceTransactionCopy extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF7D88A4),
-                    fontSize: 7,
+                    fontSize: 10,
                     height: 1,
                     fontWeight: FontWeight.w800,
                     fontVariations: SpendeeBalanceVisualSpec.weight750,
@@ -954,7 +921,7 @@ class _BalanceMerchantRenameTargetState
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFF1D2B50),
-              fontSize: 9,
+              fontSize: 13,
               height: 1,
               fontWeight: FontWeight.w900,
             ),
@@ -1134,28 +1101,28 @@ class _BalanceTransactionValue extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           SizedBox(
-            height: 9,
+            height: 13,
             child: Text(
               amount,
               maxLines: 1,
               style: const TextStyle(
                 color: Color(0xFFFF3E73),
-                fontSize: 9,
+                fontSize: 13,
                 height: 1,
                 fontWeight: FontWeight.w900,
                 fontVariations: SpendeeBalanceVisualSpec.weight950,
               ),
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           SizedBox(
-            height: 7,
+            height: 10,
             child: Text(
               time,
               maxLines: 1,
               style: const TextStyle(
                 color: Color(0xFF7D88A4),
-                fontSize: 7,
+                fontSize: 10,
                 height: 1,
                 fontWeight: FontWeight.w800,
                 fontVariations: SpendeeBalanceVisualSpec.weight750,
@@ -1235,15 +1202,15 @@ class _BalanceEditButtonState extends State<_BalanceEditButton> {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: const Color(0x1A7D8798),
-                      borderRadius: BorderRadius.circular(7),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: SizedBox.square(
-                      dimension: 22,
+                      dimension: SpendeeBalanceVisualSpec.transactionEditSize,
                       child: Center(
                         child: SvgPicture.asset(
                           'assets/icons/lucide/pencil.svg',
-                          width: 12,
-                          height: 12,
+                          width: 13,
+                          height: 13,
                           fit: BoxFit.contain,
                           colorFilter: const ColorFilter.mode(
                             Color(0xFF7D8798),

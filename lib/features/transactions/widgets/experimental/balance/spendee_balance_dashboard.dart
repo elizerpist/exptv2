@@ -9,6 +9,7 @@ import '../../../state/balance_amount_formatter.dart';
 import '../../../state/balance_frame.dart';
 import 'spendee_balance_cards.dart';
 import 'spendee_balance_collapse_controller.dart';
+import 'spendee_balance_debug_trace.dart';
 import 'spendee_balance_header.dart';
 import 'spendee_balance_post_content.dart';
 import 'spendee_balance_visual_spec.dart';
@@ -39,6 +40,7 @@ class SpendeeBalanceDashboard extends StatefulWidget {
     this.onFilterPressed,
     this.onScopeSelected,
     this.onScopeFallback,
+    this.onOpenDebugPanel,
   });
 
   final BalanceFrameInput input;
@@ -63,6 +65,7 @@ class SpendeeBalanceDashboard extends StatefulWidget {
   final VoidCallback? onFilterPressed;
   final ValueChanged<BalanceTimeScopeOption>? onScopeSelected;
   final ValueChanged<BalanceQueryFrame>? onScopeFallback;
+  final VoidCallback? onOpenDebugPanel;
 
   @override
   State<SpendeeBalanceDashboard> createState() =>
@@ -72,6 +75,7 @@ class SpendeeBalanceDashboard extends StatefulWidget {
 class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     with SingleTickerProviderStateMixin {
   static const _collapseSettleDuration = Duration(milliseconds: 260);
+  static const _frameHistoryCapacity = 8;
 
   late final SpendeeBalanceCollapseController _collapseController;
   late final AnimationController _collapseSettleController;
@@ -81,8 +85,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       .toSet();
   var _budgetDimension = SpendeeBalanceBudgetDimension.day;
   var _merchantDimension = SpendeeBalanceMerchantDimension.month;
+  var _categoryRankDimension = SpendeeBalanceRankDimension.month;
+  var _vendorRankDimension = SpendeeBalanceRankDimension.month;
+  var _averageDimension = SpendeeBalanceAverageDimension.day;
+  var _noSpendDimension = SpendeeBalanceNoSpendDimension.week;
+  var _timeRailExpanded = false;
   BalanceFrameInput? _cachedInput;
   BalanceRenderFrame? _cachedFrame;
+  final List<_BalanceFrameHistoryEntry> _frameHistory =
+      <_BalanceFrameHistoryEntry>[];
   Widget? _cachedTransactionLog;
   BalanceRenderFrame? _cachedTransactionLogFrame;
   Object? _cachedTransactionLogRevision;
@@ -192,49 +203,50 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     final visuals = SpendeeBalanceCollapseVisuals.forProgress(
       _collapseController.progress,
     );
-    final inheritedTheme = Theme.of(context);
-    return Theme(
-      data: inheritedTheme.copyWith(
-        textTheme: inheritedTheme.textTheme.apply(fontFamily: 'Inter'),
-        primaryTextTheme: inheritedTheme.primaryTextTheme.apply(
-          fontFamily: 'Inter',
-        ),
-      ),
-      child: FocusTraversalGroup(
-        key: const ValueKey('spendee-balance-focus-traversal'),
-        policy: ReadingOrderTraversalPolicy(),
-        child: DefaultTextStyle.merge(
-          style: const TextStyle(fontFamily: 'Inter'),
-          child: ColoredBox(
-            color: SpendeeBalanceVisualSpec.pageBackground,
-            child: ClipRect(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  key: const ValueKey('spendee-balance-dashboard'),
-                  width: SpendeeBalanceVisualSpec.canvas.width,
-                  height: SpendeeBalanceVisualSpec.canvas.height,
-                  child: Stack(
-                    clipBehavior: Clip.hardEdge,
-                    children: [
-                      Positioned(
-                        top: 33.3,
-                        right: 0,
-                        left: 0,
-                        height: 70,
-                        child: widget.brand,
-                      ),
-                      _buildCollapsibleContent(frame, visuals),
-                      _buildPostContent(frame, visuals),
-                      if (widget.menuButton case final menu?)
-                        Positioned(
-                          top: SpendeeBalanceVisualSpec.menuTop,
-                          right: SpendeeBalanceVisualSpec.menuRight,
-                          child: menu,
-                        ),
-                    ],
+    return FocusTraversalGroup(
+      key: const ValueKey('spendee-balance-focus-traversal'),
+      policy: ReadingOrderTraversalPolicy(),
+      child: ColoredBox(
+        color: SpendeeBalanceVisualSpec.pageBackground,
+        child: ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              key: const ValueKey('spendee-balance-dashboard'),
+              width: SpendeeBalanceVisualSpec.canvas.width,
+              height: SpendeeBalanceVisualSpec.canvas.height,
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  Positioned(
+                    top: 33.3,
+                    right: 0,
+                    left: 0,
+                    height: 70,
+                    child: widget.brand,
                   ),
-                ),
+                  _buildCollapsibleContent(frame, visuals),
+                  _buildPostContent(frame, visuals),
+                  if (widget.menuButton case final menu?)
+                    Positioned(
+                      top: SpendeeBalanceVisualSpec.menuTop,
+                      right: SpendeeBalanceVisualSpec.menuRight,
+                      child: menu,
+                    ),
+                  if (widget.onOpenDebugPanel case final onOpenDebugPanel?)
+                    Positioned(
+                      top: 43,
+                      left: 8,
+                      child: IconButton(
+                        key: const ValueKey(
+                          'spendee-balance-debug-panel-button',
+                        ),
+                        tooltip: 'Debug log',
+                        icon: const Icon(Icons.terminal, size: 18),
+                        onPressed: onOpenDebugPanel,
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -253,16 +265,51 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       _cachedInput = widget.input;
       return cached;
     }
-    final frame = BalanceFrameResolver.resolve(
-      widget.input,
-      ghostPolicy: BalanceGhostPolicy.only(_includedGhostSections),
-    );
+    for (final entry in _frameHistory) {
+      if (!entry.matches(widget.input, _includedGhostSections)) continue;
+      _cachedInput = widget.input;
+      _cachedFrame = entry.frame;
+      _cachedTransactionLog = null;
+      _cachedTransactionLogFrame = null;
+      _cachedTransactionLogRevision = null;
+      return entry.frame;
+    }
+    final trace = BalanceDebugTrace.begin('balance-frame-resolve');
+    late final BalanceRenderFrame frame;
+    try {
+      frame = BalanceFrameResolver.resolve(
+        widget.input,
+        ghostPolicy: BalanceGhostPolicy.only(_includedGhostSections),
+      );
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+    BalanceDebugTrace.finish(trace);
     _cachedInput = widget.input;
     _cachedFrame = frame;
+    _rememberFrame(widget.input, frame);
     _cachedTransactionLog = null;
     _cachedTransactionLogFrame = null;
     _cachedTransactionLogRevision = null;
     return frame;
+  }
+
+  void _rememberFrame(BalanceFrameInput input, BalanceRenderFrame frame) {
+    _frameHistory.removeWhere(
+      (entry) => entry.matches(input, _includedGhostSections),
+    );
+    _frameHistory.insert(
+      0,
+      _BalanceFrameHistoryEntry(
+        input: input,
+        includedGhostSections: _includedGhostSections,
+        frame: frame,
+      ),
+    );
+    if (_frameHistory.length > _frameHistoryCapacity) {
+      _frameHistory.removeLast();
+    }
   }
 
   void _scheduleScopeFallback(BalanceQueryFrame query) {
@@ -346,6 +393,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                             child: SpendeeBalanceFastInfoBelt(
                               cards: _fastInfoModels(frame),
                               onGhostChanged: _setGhostSection,
+                              onNoSpendCycle: _cycleNoSpendDimension,
                             ),
                           ),
                         ),
@@ -389,6 +437,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                               onMerchantDimensionChanged: (value) {
                                 setState(() => _merchantDimension = value);
                               },
+                              onCategoryRankDimensionChanged: (value) {
+                                setState(() => _categoryRankDimension = value);
+                              },
+                              onVendorRankDimensionChanged: (value) {
+                                setState(() => _vendorRankDimension = value);
+                              },
+                              onAverageDimensionChanged: (value) {
+                                setState(() => _averageDimension = value);
+                              },
                             ),
                           ),
                         ),
@@ -430,14 +487,16 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                 onVerticalDragCancel: _cancelCollapseDrag,
                 child: SpendeeBalanceActionToggle(
                   activeType: frame.query.activeType,
-                  onChanged: widget.onTypeChanged ?? (_) {},
+                  onChanged: _changeType,
                 ),
               ),
               const SizedBox(height: SpendeeBalanceVisualSpec.stackGap),
               SpendeeBalanceSummary(
                 label: _summaryLabel(frame),
                 amount: frame.summary.amountText,
-                onOpenScopePicker: widget.onSummaryTap ?? () {},
+                scopeExpanded: _timeRailExpanded,
+                onOpenScopePicker: _toggleTimeRail,
+                onSummaryTap: widget.onSummaryTap,
                 onResetCurrentMonth: widget.onSummaryReset ?? () {},
                 onShiftPeriod: widget.onShiftPeriod ?? (_) {},
                 onCycleScope: widget.onCycleSummary ?? () {},
@@ -452,32 +511,56 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                 onCycleScope: widget.onCycleSummary ?? () {},
               ),
               const SizedBox(height: SpendeeBalanceVisualSpec.stackGap),
-              SpendeeBalanceTimeScopeRail(
-                label: frame.query.summaryWindow == SummaryWindow.monthly
-                    ? 'HÓNAP FINOMÍTÁS'
-                    : 'ÉV FINOMÍTÁS',
-                currentLabel:
-                    frame.query.selectedScope?.label ?? frame.summary.label,
-                selectedKey: frame.query.selectedScope?.key ?? '',
-                options: [
-                  for (final option in frame.query.scopeOptions)
-                    SpendeeBalanceTimeScopeItem(
-                      key: option.key,
-                      label: option.label,
-                    ),
-                ],
+              AnimatedSize(
+                duration: _reducedMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                clipBehavior: Clip.none,
+                child: _timeRailExpanded
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SpendeeBalanceTimeScopeRail(
+                            label: '',
+                            currentLabel: '',
+                            selectedKey: frame.query.selectedScope?.key ?? '',
+                            options: [
+                              for (final option in frame.query.scopeOptions)
+                                SpendeeBalanceTimeScopeItem(
+                                  key: option.key,
+                                  label: option.label,
+                                ),
+                            ],
+                            collapseProgress: visuals.progress,
+                            dragging: _collapseController.dragging,
+                            showChrome: false,
+                            onSelected: (item) {
+                              final selected = frame.query.scopeOptions
+                                  .firstWhere(
+                                    (option) => option.key == item.key,
+                                  );
+                              _selectScope(selected);
+                            },
+                            onCollapseDragStart: _beginCollapseDrag,
+                            onCollapseDragUpdate: _updateCollapseDrag,
+                            onCollapseDragEnd: _endCollapseDrag,
+                            onCollapseToggle: _toggleCollapse,
+                          ),
+                          const SizedBox(height: 3),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              SpendeeBalanceCollapseControl(
+                transactionCount: frame.transactionCount,
                 collapseProgress: visuals.progress,
                 dragging: _collapseController.dragging,
-                onSelected: (item) {
-                  final selected = frame.query.scopeOptions.firstWhere(
-                    (option) => option.key == item.key,
-                  );
-                  widget.onScopeSelected?.call(selected);
-                },
-                onCollapseDragStart: _beginCollapseDrag,
-                onCollapseDragUpdate: _updateCollapseDrag,
-                onCollapseDragEnd: _endCollapseDrag,
-                onCollapseToggle: _toggleCollapse,
+                onDragStart: _beginCollapseDrag,
+                onDragUpdate: _updateCollapseDrag,
+                onDragEnd: _endCollapseDrag,
+                onToggle: _toggleCollapse,
               ),
               const SizedBox(height: SpendeeBalanceVisualSpec.stackGap),
               RepaintBoundary(
@@ -503,10 +586,35 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         _includedGhostSections.remove(section);
       }
       _cachedFrame = null;
+      _frameHistory.clear();
       _cachedTransactionLog = null;
       _cachedTransactionLogFrame = null;
       _cachedTransactionLogRevision = null;
     });
+  }
+
+  void _toggleTimeRail() {
+    final trace = BalanceDebugTrace.begin('balance-rail-toggle');
+    try {
+      setState(() => _timeRailExpanded = !_timeRailExpanded);
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+    _finishTraceAfterNextFrame(trace);
+  }
+
+  void _finishTraceAfterNextFrame(BalanceDebugTraceToken? trace) {
+    if (trace == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      BalanceDebugTrace.finish(trace);
+    });
+  }
+
+  void _cycleNoSpendDimension() {
+    final dimensions = SpendeeBalanceNoSpendDimension.values;
+    final next = (_noSpendDimension.index + 1) % dimensions.length;
+    setState(() => _noSpendDimension = dimensions[next]);
   }
 
   Widget _transactionLog(BuildContext context, BalanceRenderFrame frame) {
@@ -518,11 +626,41 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         _cachedTransactionLogRevision == revision) {
       return cached;
     }
-    final result = widget.transactionLogBuilder(context, frame);
+    final trace = BalanceDebugTrace.begin('balance-transaction-log-build');
+    late final Widget result;
+    try {
+      result = widget.transactionLogBuilder(context, frame);
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+    BalanceDebugTrace.finish(trace);
     _cachedTransactionLogFrame = frame;
     _cachedTransactionLogRevision = revision;
     _cachedTransactionLog = result;
     return result;
+  }
+
+  void _changeType(TransactionType type) {
+    final trace = BalanceDebugTrace.begin('balance-action-type-change');
+    try {
+      widget.onTypeChanged?.call(type);
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+    _finishTraceAfterNextFrame(trace);
+  }
+
+  void _selectScope(BalanceTimeScopeOption option) {
+    final trace = BalanceDebugTrace.begin('balance-rail-select');
+    try {
+      widget.onScopeSelected?.call(option);
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+    _finishTraceAfterNextFrame(trace);
   }
 
   List<SpendeeBalanceFastInfoCardModel> _fastInfoModels(
@@ -535,12 +673,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     final recurring = frame.insights[BalanceInsightKind.upcomingRecurring]!;
     final recurringCategory = recurring.category;
     final recurringGhost = recurring.ghost;
+    final noSpendFrame = frame.noSpendFor(_noSpendDimension);
     return [
       SpendeeBalanceNoSpendCardModel(
         id: 'no-spend',
         title: noSpend.title,
-        value: noSpend.primaryText,
-        secondary: noSpend.secondaryText,
+        value: '${noSpendFrame.noSpendDays} nap',
+        secondary: '${noSpendFrame.observedDays} megfigyelt napból',
+        dimension: _noSpendDimension,
+        dimensionLabel: _noSpendDimension.label,
         includeGhostTransactions: _ghostIncluded(BalanceGhostSection.noSpend),
       ),
       SpendeeBalanceCategoryChangeCardModel(
@@ -600,37 +741,20 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
           for (final entry in frame.variableBudgets.entries)
             _budgetPresentation(entry.key): _budgetDimensionModel(entry.value),
         };
+    final categoryRanks = frame.topCategoriesFor(_categoryRankDimension);
+    final categoryLeader = categoryRanks.isEmpty ? null : categoryRanks.first;
     final categoryRows = <SpendeeBalanceTopCategoryRowModel>[
-      _categoryRow(
-        frame.topCategories[BalanceCategoryPeriod.week],
-        'Ezen a héten',
-      ),
-      _categoryRow(
-        frame.topCategories[BalanceCategoryPeriod.month],
-        'Ebben a hónapban',
-      ),
-      _categoryRow(
-        frame.topCategories[BalanceCategoryPeriod.year],
-        'Idén eddig',
-      ),
-    ];
-    final featured =
-        frame.topCategories[BalanceCategoryPeriod.day] ??
-        frame.topCategories.values.whereType<BalanceCategoryRank>().firstOrNull;
-    final merchantPeriod = _merchantDomain(_merchantDimension);
-    final merchantRows = [...?frame.topMerchants[merchantPeriod]];
-    while (merchantRows.length < 5) {
-      merchantRows.add(
-        BalanceMerchantRank(
-          period: merchantPeriod,
-          rank: merchantRows.length + 1,
-          name: 'Nincs adat',
-          amount: 0,
-          transactionCount: 0,
+      for (final row in categoryRanks.skip(1))
+        SpendeeBalanceTopCategoryRowModel(
+          scope: '${row.rank}. hely',
+          category: row.name,
+          amount: formatBalanceForint(row.amount),
+          iconAsset: _categoryIcon(row.category),
+          color: row.category?.slotColor ?? const Color(0xFFF24CAE),
         ),
-      );
-    }
-    final average = frame.averageDaily;
+    ];
+    final vendorRanks = frame.topVendorsFor(_vendorRankDimension);
+    final average = frame.averageFor(_averageDimension);
     return [
       SpendeeBalanceVariableBudgetModel(
         id: 'variable-budget',
@@ -644,29 +768,31 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       SpendeeBalanceTopCategoriesModel(
         id: 'top-categories',
         title: 'Top kategóriák',
-        featuredCategory: featured?.category?.name ?? 'Nincs adat',
-        featuredMeta: 'Ma vezető kategóriája',
-        featuredAmount: formatBalanceForint(featured?.amount ?? 0),
-        featuredIconAsset: _categoryIcon(featured?.category),
+        featuredCategory: categoryLeader?.name ?? 'Nincs adat',
+        featuredMeta: '${_categoryRankDimension.label} · 1. hely',
+        featuredAmount: formatBalanceForint(categoryLeader?.amount ?? 0),
+        featuredIconAsset: _categoryIcon(categoryLeader?.category),
         rows: categoryRows,
+        rankDimension: _categoryRankDimension,
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.topCategories,
         ),
       ),
       SpendeeBalanceTopMerchantsModel(
         id: 'top-merchants',
-        title: 'Top 5 kereskedő',
+        title: 'Top 4 kereskedő',
         selectedDimension: _merchantDimension,
         rows: [
-          for (final row in merchantRows.take(5))
+          for (final row in vendorRanks)
             SpendeeBalanceMerchantRowModel(
               merchant: row.name,
               transactionCount: '${row.transactionCount} tranzakció',
               amount: formatBalanceForint(row.amount),
               iconAsset: _categoryIcon(row.category),
-              color: row.category?.slotColor ?? const Color(0xFF8B7DFA),
+              color: row.category?.slotColor ?? const Color(0xFFF24CAE),
             ),
         ],
+        rankDimension: _vendorRankDimension,
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.topMerchants,
         ),
@@ -674,11 +800,11 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       SpendeeBalanceAverageDailyModel(
         id: 'average-daily',
         title: 'Átlagos napi költés',
-        periodLabel: 'Elmúlt 30 nap',
+        periodLabel: _averageDimension.label,
         rollingTotalLabel:
-            '${formatBalanceForint(average.rollingTotal)} / 30 nap',
-        averageLabel: '${formatBalanceForint(average.average)} / nap',
-        dailyValues: average.dailySeries,
+            '${formatBalanceForint(average.total)} / ${average.observedDays} nap',
+        averageLabel: '${formatBalanceForint(average.dailyAverage)} / nap',
+        dailyValues: average.dailyValues,
         facts: [
           SpendeeBalanceDailyFactModel(
             label: 'Egyenleg puffer',
@@ -688,13 +814,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
           ),
           SpendeeBalanceDailyFactModel(
             label: 'Legmagasabb nap',
-            value: formatBalanceForint(average.highestDay),
+            value: formatBalanceForint(average.maximum),
           ),
           SpendeeBalanceDailyFactModel(
-            label: 'Kiugrások > ${formatBalanceForint(average.spikeThreshold)}',
-            value: '${average.spikeDays} db',
+            label:
+                'Kiugrások > ${formatBalanceForint(average.outlierThreshold)}',
+            value: '${average.outlierCount} db',
           ),
         ],
+        selectedDimension: _averageDimension,
         iconAsset: 'assets/icons/lucide/chart-candlestick.svg',
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.averageDaily,
@@ -748,19 +876,6 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     );
   }
 
-  SpendeeBalanceTopCategoryRowModel _categoryRow(
-    BalanceCategoryRank? row,
-    String scope,
-  ) {
-    return SpendeeBalanceTopCategoryRowModel(
-      scope: scope,
-      category: row?.category?.name ?? 'Nincs adat',
-      amount: formatBalanceForint(row?.amount ?? 0),
-      iconAsset: _categoryIcon(row?.category),
-      color: row?.category?.slotColor ?? const Color(0xFF8B7DFA),
-    );
-  }
-
   List<SpendeeBalanceSearchChip> _searchChips(BalanceRenderFrame frame) {
     final categoriesById = {
       for (final category in widget.input.categories)
@@ -801,6 +916,28 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       _includedGhostSections.contains(section);
 }
 
+class _BalanceFrameHistoryEntry {
+  _BalanceFrameHistoryEntry({
+    required this.input,
+    required Set<BalanceGhostSection> includedGhostSections,
+    required this.frame,
+  }) : includedGhostSections = Set<BalanceGhostSection>.unmodifiable(
+         includedGhostSections,
+       );
+
+  final BalanceFrameInput input;
+  final Set<BalanceGhostSection> includedGhostSections;
+  final BalanceRenderFrame frame;
+
+  bool matches(
+    BalanceFrameInput candidate,
+    Set<BalanceGhostSection> candidateSections,
+  ) =>
+      input.sameHistoryRevisionAs(candidate) &&
+      includedGhostSections.length == candidateSections.length &&
+      includedGhostSections.containsAll(candidateSections);
+}
+
 BalanceGhostSection? _ghostSectionForId(String id) => switch (id) {
   'no-spend' => BalanceGhostSection.noSpend,
   'category-change' => BalanceGhostSection.categoryChange,
@@ -819,13 +956,6 @@ SpendeeBalanceBudgetDimension _budgetPresentation(BalanceBudgetPeriod value) =>
       BalanceBudgetPeriod.day => SpendeeBalanceBudgetDimension.day,
       BalanceBudgetPeriod.week => SpendeeBalanceBudgetDimension.week,
       BalanceBudgetPeriod.month => SpendeeBalanceBudgetDimension.month,
-    };
-
-BalanceMerchantPeriod _merchantDomain(SpendeeBalanceMerchantDimension value) =>
-    switch (value) {
-      SpendeeBalanceMerchantDimension.year => BalanceMerchantPeriod.year,
-      SpendeeBalanceMerchantDimension.month => BalanceMerchantPeriod.month,
-      SpendeeBalanceMerchantDimension.all => BalanceMerchantPeriod.allTime,
     };
 
 String _categoryIcon(TransactionCategory? category) =>

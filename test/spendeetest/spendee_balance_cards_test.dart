@@ -1,5 +1,6 @@
 import 'dart:ui' show BlurStyle, SemanticsAction, Tristate;
 
+import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_cards.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
@@ -251,6 +252,41 @@ void main() {
       expect(changedId, 'no-spend');
       expect(changedValue, isFalse);
     });
+
+    testWidgets(
+      '0726 no-spend exposes the selected four-state view and cycle',
+      (tester) async {
+        var cycles = 0;
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceFastInfoCard(
+              model: const SpendeeBalanceNoSpendCardModel(
+                id: 'no-spend',
+                title: 'No-spend napok',
+                value: '18 nap',
+                secondary: '31 megfigyelt napból',
+                dimension: SpendeeBalanceNoSpendDimension.month,
+                dimensionLabel: 'Havi',
+                includeGhostTransactions: true,
+              ),
+              onGhostChanged: (_, _) {},
+              onNoSpendCycle: () => cycles += 1,
+            ),
+          ),
+        );
+
+        expect(
+          find.byKey(const ValueKey('spendee-balance-no-spend-view-label')),
+          findsOneWidget,
+        );
+        expect(find.text('Havi'), findsOneWidget);
+        expect(find.text('18 nap'), findsOneWidget);
+        await tester.tap(
+          find.byKey(const ValueKey('spendee-balance-no-spend-cycle')),
+        );
+        expect(cycles, 1);
+      },
+    );
 
     testWidgets(
       'traditional focus paints inset ghost outlines without geometry shift',
@@ -598,52 +634,55 @@ void main() {
       ]);
     });
 
-    testWidgets('uses a 176px page plus 4/6px pagination dots', (tester) async {
-      await tester.pumpWidget(
-        host(
-          SpendeeBalanceDetailCarousel(
-            pages: detailModels(),
-            onGhostChanged: (_, _) {},
-            onBudgetDimensionChanged: (_) {},
-            onMerchantDimensionChanged: (_) {},
+    testWidgets(
+      '0726 uses the approved 208px page plus 4px gap and 6px pagination',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailCarousel(
+              pages: detailModels(),
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(
-        tester.getSize(
-          find.byKey(const ValueKey('spendee-balance-detail-stage')),
-        ),
-        const Size(378, 186),
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
-        findsOneWidget,
-      );
-      expect(find.byType(PageView), findsNothing);
-      expect(
-        tester.getSize(
-          find
-              .byKey(const ValueKey('spendee-balance-detail-page-variable'))
-              .first,
-        ),
-        const Size(378, 176),
-      );
-      expect(
-        tester.getSize(
-          find.byKey(const ValueKey('spendee-balance-detail-dot-0')),
-        ),
-        const Size.square(6),
-      );
-      for (var index = 1; index < 4; index += 1) {
         expect(
           tester.getSize(
-            find.byKey(ValueKey('spendee-balance-detail-dot-$index')),
+            find.byKey(const ValueKey('spendee-balance-detail-stage')),
           ),
-          const Size.square(4),
+          const Size(378, 218),
         );
-      }
-    });
+        expect(
+          find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
+          findsOneWidget,
+        );
+        expect(find.byType(PageView), findsNothing);
+        expect(
+          tester.getSize(
+            find
+                .byKey(const ValueKey('spendee-balance-detail-page-variable'))
+                .first,
+          ),
+          const Size(378, 208),
+        );
+        expect(
+          tester.getSize(
+            find.byKey(const ValueKey('spendee-balance-detail-dot-0')),
+          ),
+          const Size.square(6),
+        );
+        for (var index = 1; index < 4; index += 1) {
+          expect(
+            tester.getSize(
+              find.byKey(ValueKey('spendee-balance-detail-dot-$index')),
+            ),
+            const Size.square(4),
+          );
+        }
+      },
+    );
 
     testWidgets(
       'only the active detail page exposes focus and reduced motion removes dot animation',
@@ -1072,6 +1111,189 @@ void main() {
         everyElement(inInclusiveRange(14.08, 49.92)),
       );
     });
+
+    testWidgets(
+      '0726 query cards expose exact source pills and replace their live rows',
+      (tester) async {
+        SpendeeBalanceRankDimension? categorySelection;
+        SpendeeBalanceRankDimension? vendorSelection;
+        SpendeeBalanceAverageDimension? averageSelection;
+        final category = SpendeeBalanceTopCategoriesModel(
+          id: 'top-categories',
+          title: 'Top kategóriák',
+          featuredCategory: 'Élelmiszer',
+          featuredMeta: 'Havi · 1. hely',
+          featuredAmount: '36 500 Ft',
+          featuredIconAsset: 'assets/icons/lucide/utensils.svg',
+          rows: const [
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '2. hely',
+              category: 'Közlekedés',
+              amount: '18 200 Ft',
+              iconAsset: 'assets/icons/lucide/bus-front.svg',
+              color: Color(0xFF3A95E6),
+            ),
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '3. hely',
+              category: 'Egészség',
+              amount: '12 400 Ft',
+              iconAsset: 'assets/icons/lucide/heart-pulse.svg',
+              color: Color(0xFFFF4C79),
+            ),
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '4. hely',
+              category: 'Otthon',
+              amount: '9 900 Ft',
+              iconAsset: 'assets/icons/lucide/house.svg',
+              color: Color(0xFF8B7DFA),
+            ),
+          ],
+          rankDimension: SpendeeBalanceRankDimension.month,
+          includeGhostTransactions: true,
+        );
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: category,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+              onCategoryRankDimensionChanged: (value) =>
+                  categorySelection = value,
+              onVendorRankDimensionChanged: (value) => vendorSelection = value,
+              onAverageDimensionChanged: (value) => averageSelection = value,
+            ),
+          ),
+        );
+
+        expect(find.text('Havi'), findsOneWidget);
+        expect(find.text('Éves'), findsOneWidget);
+        expect(find.text('Össz.'), findsOneWidget);
+        expect(find.text('Élelmiszer'), findsOneWidget);
+        expect(find.text('2. hely'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('spendee-balance-top-category-row-2')),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey('spendee-balance-top-category-dimension-year'),
+          ),
+        );
+        expect(categorySelection, SpendeeBalanceRankDimension.year);
+
+        final vendor = SpendeeBalanceTopMerchantsModel(
+          id: 'top-merchants',
+          title: 'Top 4 kereskedő',
+          selectedDimension: SpendeeBalanceMerchantDimension.month,
+          rankDimension: SpendeeBalanceRankDimension.month,
+          rows: const [
+            SpendeeBalanceMerchantRowModel(
+              merchant: 'Lidl',
+              transactionCount: '4 tranzakció',
+              amount: '13 810 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+            SpendeeBalanceMerchantRowModel(
+              merchant: 'Tesco',
+              transactionCount: '3 tranzakció',
+              amount: '9 220 Ft',
+              iconAsset: 'assets/icons/lucide/shopping-cart.svg',
+              color: Color(0xFF8B7DFA),
+            ),
+            SpendeeBalanceMerchantRowModel(
+              merchant: 'MOL',
+              transactionCount: '2 tranzakció',
+              amount: '8 500 Ft',
+              iconAsset: 'assets/icons/lucide/fuel.svg',
+              color: Color(0xFFFA8A39),
+            ),
+            SpendeeBalanceMerchantRowModel(
+              merchant: 'Wolt',
+              transactionCount: '2 tranzakció',
+              amount: '6 200 Ft',
+              iconAsset: 'assets/icons/lucide/utensils.svg',
+              color: Color(0xFFFB3E76),
+            ),
+          ],
+          includeGhostTransactions: true,
+        );
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: vendor,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+              onCategoryRankDimensionChanged: (value) =>
+                  categorySelection = value,
+              onVendorRankDimensionChanged: (value) => vendorSelection = value,
+              onAverageDimensionChanged: (value) => averageSelection = value,
+            ),
+          ),
+        );
+        expect(find.text('Top 4 kereskedő'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('spendee-balance-top-merchant-row-3')),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey('spendee-balance-top-vendor-dimension-all'),
+          ),
+        );
+        expect(vendorSelection, SpendeeBalanceRankDimension.all);
+
+        final average = SpendeeBalanceAverageDailyModel(
+          id: 'average-daily',
+          title: 'Átlagos napi költés',
+          periodLabel: 'Elmúlt 7 nap',
+          rollingTotalLabel: '42 000 Ft / 7 nap',
+          averageLabel: '6 000 Ft / nap',
+          dailyValues: const [3200, 7400, 5100, 6800],
+          facts: const [
+            SpendeeBalanceDailyFactModel(
+              label: 'Egyenleg puffer',
+              value: '18 nap',
+            ),
+            SpendeeBalanceDailyFactModel(
+              label: 'Legmagasabb nap',
+              value: '7 400 Ft',
+            ),
+            SpendeeBalanceDailyFactModel(
+              label: 'Kiugrások > 9 000 Ft',
+              value: '0 db',
+            ),
+          ],
+          selectedDimension: SpendeeBalanceAverageDimension.week,
+          iconAsset: 'assets/icons/lucide/chart-candlestick.svg',
+          includeGhostTransactions: true,
+        );
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: average,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+              onCategoryRankDimensionChanged: (value) =>
+                  categorySelection = value,
+              onVendorRankDimensionChanged: (value) => vendorSelection = value,
+              onAverageDimensionChanged: (value) => averageSelection = value,
+            ),
+          ),
+        );
+        expect(find.text('Napi'), findsOneWidget);
+        expect(find.text('Heti'), findsOneWidget);
+        expect(find.text('Havi'), findsOneWidget);
+        expect(find.text('Éves'), findsOneWidget);
+        await tester.tap(
+          find.byKey(const ValueKey('spendee-balance-average-dimension-year')),
+        );
+        expect(averageSelection, SpendeeBalanceAverageDimension.year);
+      },
+    );
 
     testWidgets('every detail page has an independent semantic ghost toggle', (
       tester,

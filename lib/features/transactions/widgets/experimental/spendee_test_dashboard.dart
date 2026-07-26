@@ -29,6 +29,7 @@ import '../search_pill.dart';
 import '../transaction_log_box.dart';
 import '../../state/balance_frame.dart';
 import 'balance/spendee_balance_dashboard.dart';
+import 'balance/spendee_balance_debug_trace.dart';
 import 'balance/spendee_balance_transaction_log.dart';
 import 'fluvi_logo.dart';
 import 'spendee_center_carousel_controller.dart';
@@ -4282,87 +4283,104 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
   }
 
   Widget _buildBalanceDashboard() {
-    final store = widget.store;
-    return SpendeeBalanceDashboard(
-      input: BalanceFrameInput.fromStore(store),
-      brand: _SpendeeBrandLockup(
-        key: const ValueKey('spendee-test-brand-lockup'),
-        logoFills: _logoFills,
-        onLogoTap: _openLogoEditor,
-      ),
-      menuButton: Builder(
-        builder: (menuContext) {
-          return SpendeeHeaderMenuButton(
-            spec: _budgetHeaderVisualSpec,
-            onPressed: () => _openHeaderDesignMenu(menuContext),
+    final trace = BalanceDebugTrace.begin('balance-entry');
+    try {
+      final store = widget.store;
+      final dashboard = SpendeeBalanceDashboard(
+        input: BalanceFrameInput.fromStore(store),
+        brand: _SpendeeBrandLockup(
+          key: const ValueKey('spendee-test-brand-lockup'),
+          logoFills: _logoFills,
+          onLogoTap: _openLogoEditor,
+        ),
+        menuButton: Builder(
+          builder: (menuContext) {
+            return SpendeeHeaderMenuButton(
+              spec: _budgetHeaderVisualSpec,
+              onPressed: () => _openHeaderDesignMenu(menuContext),
+            );
+          },
+        ),
+        headerSurfaceBuilder: _buildBalanceHeaderSurface,
+        onOpenDebugPanel: _openBalanceDebugPanel,
+        onTypeChanged: store.setActiveType,
+        onSummaryTap: widget.onPickSummaryMonth,
+        onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
+        onShiftPeriod: (direction) =>
+            unawaited(store.shiftSummaryPeriod(direction)),
+        onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
+        onQueryChanged: store.setSearchQuery,
+        onRemoveFilter: (filter) {
+          final separator = filter.keyValue.indexOf(':');
+          if (separator < 0) return;
+          final kind = filter.keyValue.substring(0, separator);
+          final value = filter.keyValue.substring(separator + 1);
+          if (kind == 'category') {
+            final categoryId = int.tryParse(value);
+            if (categoryId != null) store.clearCategoryFilterId(categoryId);
+          } else if (kind == 'merchant') {
+            store.clearMerchantFilter(value);
+          }
+        },
+        // The query-menu contents are explicitly deferred by A3-SEARCH-004.
+        // This callback is intentionally separate from the legacy vendor sheet.
+        onFilterPressed: widget.onBalanceFilterRequested,
+        onScopeSelected: (option) {
+          switch (option.window) {
+            case SummaryWindow.monthly:
+              unawaited(
+                store.setSummaryMonth(
+                  option.referenceDate.year,
+                  option.referenceDate.month,
+                ),
+              );
+            case SummaryWindow.yearly:
+              unawaited(store.setSummaryYear(option.referenceDate.year));
+            case SummaryWindow.allTime:
+              unawaited(store.setSummaryAllTime());
+          }
+        },
+        onScopeFallback: (query) =>
+            unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
+        transactionLogRevision: (
+          widget.logBottomPadding,
+          widget.onEditTransaction,
+          widget.onDeleteTransactionRequested,
+        ),
+        transactionLogBuilder: (context, frame) {
+          return SpendeeBalanceTransactionLog(
+            groups: frame.logGroups,
+            categoriesById: store.categoriesById,
+            queryKey: _balanceLogQueryKey(frame),
+            hasMore: frame.hasMoreLogEntries,
+            onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
+            bottomPadding: widget.logBottomPadding,
+            onFastFilter: (record, _) =>
+                store.setMerchantFilter(record.displayMerchant),
+            onRecordTap: widget.onEditTransaction ?? (_) {},
+            onDeleteRequested:
+                widget.onDeleteTransactionRequested ?? (_) async => false,
+            onCategoryFilter: store.setCategoryFilter,
+            onEditTransaction: widget.onEditTransaction ?? (_) {},
+            onRenameMerchantRequested: _requestBalanceMerchantRename,
+            onResetMerchantName: (record) =>
+                unawaited(store.resetTransactionNamesByMerchant(record)),
           );
         },
-      ),
-      headerSurfaceBuilder: _buildBalanceHeaderSurface,
-      onTypeChanged: store.setActiveType,
-      onSummaryTap: widget.onPickSummaryMonth,
-      onSummaryReset: () => unawaited(store.resetSummaryToCurrentMonth()),
-      onShiftPeriod: (direction) =>
-          unawaited(store.shiftSummaryPeriod(direction)),
-      onCycleSummary: () => unawaited(store.cycleSummaryWindow()),
-      onQueryChanged: store.setSearchQuery,
-      onRemoveFilter: (filter) {
-        final separator = filter.keyValue.indexOf(':');
-        if (separator < 0) return;
-        final kind = filter.keyValue.substring(0, separator);
-        final value = filter.keyValue.substring(separator + 1);
-        if (kind == 'category') {
-          final categoryId = int.tryParse(value);
-          if (categoryId != null) store.clearCategoryFilterId(categoryId);
-        } else if (kind == 'merchant') {
-          store.clearMerchantFilter(value);
-        }
-      },
-      // The query-menu contents are explicitly deferred by A3-SEARCH-004.
-      // This callback is intentionally separate from the legacy vendor sheet.
-      onFilterPressed: widget.onBalanceFilterRequested,
-      onScopeSelected: (option) {
-        switch (option.window) {
-          case SummaryWindow.monthly:
-            unawaited(
-              store.setSummaryMonth(
-                option.referenceDate.year,
-                option.referenceDate.month,
-              ),
-            );
-          case SummaryWindow.yearly:
-            unawaited(store.setSummaryYear(option.referenceDate.year));
-          case SummaryWindow.allTime:
-            unawaited(store.setSummaryAllTime());
-        }
-      },
-      onScopeFallback: (query) =>
-          unawaited(BalanceScopeCommitAdapter.commitIfNeeded(store, query)),
-      transactionLogRevision: (
-        widget.logBottomPadding,
-        widget.onEditTransaction,
-        widget.onDeleteTransactionRequested,
-      ),
-      transactionLogBuilder: (context, frame) {
-        return SpendeeBalanceTransactionLog(
-          groups: frame.logGroups,
-          categoriesById: store.categoriesById,
-          queryKey: _balanceLogQueryKey(frame),
-          hasMore: frame.hasMoreLogEntries,
-          onLoadMore: store.loadMoreBalanceVisibleDisplayLogEntries,
-          bottomPadding: widget.logBottomPadding,
-          onFastFilter: (record, _) =>
-              store.setMerchantFilter(record.displayMerchant),
-          onRecordTap: widget.onEditTransaction ?? (_) {},
-          onDeleteRequested:
-              widget.onDeleteTransactionRequested ?? (_) async => false,
-          onCategoryFilter: store.setCategoryFilter,
-          onEditTransaction: widget.onEditTransaction ?? (_) {},
-          onRenameMerchantRequested: _requestBalanceMerchantRename,
-          onResetMerchantName: (record) =>
-              unawaited(store.resetTransactionNamesByMerchant(record)),
-        );
-      },
+      );
+      BalanceDebugTrace.finish(trace);
+      return dashboard;
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+  }
+
+  void _openBalanceDebugPanel() {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => const DebugConsoleDialog(),
     );
   }
 

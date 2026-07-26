@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../state/balance_frame.dart';
 import 'spendee_balance_card_painters.dart';
 import 'spendee_balance_ticking_carousel.dart';
 import 'spendee_balance_visual_spec.dart';
@@ -46,11 +47,15 @@ final class SpendeeBalanceNoSpendCardModel
     required super.title,
     required this.value,
     required this.secondary,
+    this.dimension = SpendeeBalanceNoSpendDimension.week,
+    this.dimensionLabel = 'Heti',
     required super.includeGhostTransactions,
   }) : super(kind: SpendeeBalanceFastInfoKind.noSpend);
 
   final String value;
   final String secondary;
+  final SpendeeBalanceNoSpendDimension dimension;
+  final String dimensionLabel;
 }
 
 @immutable
@@ -137,6 +142,7 @@ class SpendeeBalanceFastInfoBelt extends StatelessWidget {
     super.key,
     required this.cards,
     required this.onGhostChanged,
+    this.onNoSpendCycle,
     this.initialIndex = 0,
     this.onIndexChanged,
   }) : assert(cards.length == 5),
@@ -144,6 +150,7 @@ class SpendeeBalanceFastInfoBelt extends StatelessWidget {
 
   final List<SpendeeBalanceFastInfoCardModel> cards;
   final SpendeeBalanceGhostChanged onGhostChanged;
+  final VoidCallback? onNoSpendCycle;
   final int initialIndex;
   final ValueChanged<int>? onIndexChanged;
 
@@ -173,6 +180,7 @@ class SpendeeBalanceFastInfoBelt extends StatelessWidget {
             initialIndex: initialIndex,
             onIndexChanged: onIndexChanged,
             onGhostChanged: onGhostChanged,
+            onNoSpendCycle: onNoSpendCycle,
           );
         },
       ),
@@ -188,6 +196,7 @@ class _FastInfoPager extends StatefulWidget {
     required this.initialIndex,
     required this.onIndexChanged,
     required this.onGhostChanged,
+    required this.onNoSpendCycle,
   });
 
   final double width;
@@ -195,6 +204,7 @@ class _FastInfoPager extends StatefulWidget {
   final int initialIndex;
   final ValueChanged<int>? onIndexChanged;
   final SpendeeBalanceGhostChanged onGhostChanged;
+  final VoidCallback? onNoSpendCycle;
 
   @override
   State<_FastInfoPager> createState() => _FastInfoPagerState();
@@ -225,6 +235,7 @@ class _FastInfoPagerState extends State<_FastInfoPager> {
           child: SpendeeBalanceFastInfoCard(
             model: widget.cards[index],
             onGhostChanged: widget.onGhostChanged,
+            onNoSpendCycle: widget.onNoSpendCycle,
           ),
         );
       },
@@ -237,15 +248,17 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
     super.key,
     required this.model,
     required this.onGhostChanged,
+    this.onNoSpendCycle,
   });
 
   final SpendeeBalanceFastInfoCardModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
+  final VoidCallback? onNoSpendCycle;
 
   @override
   Widget build(BuildContext context) {
     final decoration = _fastInfoDecoration(model.kind);
-    return SizedBox(
+    final surface = SizedBox(
       height: SpendeeBalanceVisualSpec.insightHeight,
       child: DecoratedBox(
         key: ValueKey('spendee-balance-fast-info-surface-${model.kind.name}'),
@@ -291,6 +304,22 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
         ),
       ),
     );
+    if (model case final SpendeeBalanceNoSpendCardModel noSpend
+        when onNoSpendCycle != null) {
+      return Semantics(
+        button: true,
+        label:
+            'No-spend napok, ${noSpend.dimensionLabel}: ${noSpend.value}. Tap a következő nézethez.',
+        onTap: onNoSpendCycle,
+        child: GestureDetector(
+          key: const ValueKey('spendee-balance-no-spend-cycle'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onNoSpendCycle,
+          child: surface,
+        ),
+      );
+    }
+    return surface;
   }
 }
 
@@ -306,6 +335,16 @@ class _NoSpendFastInfo extends StatelessWidget {
       children: [
         _FastInfoHeader(
           title: model.title,
+          trailing: Text(
+            model.dimensionLabel,
+            key: const ValueKey('spendee-balance-no-spend-view-label'),
+            style: const TextStyle(
+              color: Color(0xFF1EA8A0),
+              fontSize: 6.4,
+              height: 1,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           icon: const CustomPaint(
             key: ValueKey('spendee-balance-no-spend-moon'),
             painter: SpendeeBalanceMoonPainter(),
@@ -570,11 +609,13 @@ class _FastInfoHeader extends StatelessWidget {
     required this.title,
     required this.icon,
     this.iconBackground = const Color(0xFFF0EFFF),
+    this.trailing,
   });
 
   final String title;
   final Widget icon;
   final Color iconBackground;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -604,6 +645,10 @@ class _FastInfoHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (trailing case final trailing?) ...[
+            const SizedBox(width: 3),
+            trailing,
+          ],
         ],
       ),
     );
@@ -751,6 +796,34 @@ extension SpendeeBalanceMerchantDimensionLabel
   };
 }
 
+extension SpendeeBalanceRankDimensionLabel on SpendeeBalanceRankDimension {
+  String get label => switch (this) {
+    SpendeeBalanceRankDimension.month => 'Havi',
+    SpendeeBalanceRankDimension.year => 'Éves',
+    SpendeeBalanceRankDimension.all => 'Össz.',
+  };
+}
+
+extension SpendeeBalanceAverageDimensionLabel
+    on SpendeeBalanceAverageDimension {
+  String get label => switch (this) {
+    SpendeeBalanceAverageDimension.day => 'Napi',
+    SpendeeBalanceAverageDimension.week => 'Heti',
+    SpendeeBalanceAverageDimension.month => 'Havi',
+    SpendeeBalanceAverageDimension.year => 'Éves',
+  };
+}
+
+extension SpendeeBalanceNoSpendDimensionLabel
+    on SpendeeBalanceNoSpendDimension {
+  String get label => switch (this) {
+    SpendeeBalanceNoSpendDimension.week => 'Heti',
+    SpendeeBalanceNoSpendDimension.month => 'Havi',
+    SpendeeBalanceNoSpendDimension.year => 'Éves',
+    SpendeeBalanceNoSpendDimension.all => 'Össz.',
+  };
+}
+
 @immutable
 sealed class SpendeeBalanceDetailPageModel {
   const SpendeeBalanceDetailPageModel({
@@ -838,6 +911,7 @@ final class SpendeeBalanceTopCategoriesModel
     required this.featuredAmount,
     required this.featuredIconAsset,
     required this.rows,
+    this.rankDimension,
     required super.includeGhostTransactions,
   });
 
@@ -846,6 +920,7 @@ final class SpendeeBalanceTopCategoriesModel
   final String featuredAmount;
   final String featuredIconAsset;
   final List<SpendeeBalanceTopCategoryRowModel> rows;
+  final SpendeeBalanceRankDimension? rankDimension;
 }
 
 @immutable
@@ -873,11 +948,13 @@ final class SpendeeBalanceTopMerchantsModel
     required super.title,
     required this.selectedDimension,
     required this.rows,
+    this.rankDimension,
     required super.includeGhostTransactions,
   });
 
   final SpendeeBalanceMerchantDimension selectedDimension;
   final List<SpendeeBalanceMerchantRowModel> rows;
+  final SpendeeBalanceRankDimension? rankDimension;
 }
 
 @immutable
@@ -902,6 +979,7 @@ final class SpendeeBalanceAverageDailyModel
     required this.averageLabel,
     required this.dailyValues,
     required this.facts,
+    this.selectedDimension,
     required this.iconAsset,
     required super.includeGhostTransactions,
   });
@@ -911,6 +989,7 @@ final class SpendeeBalanceAverageDailyModel
   final String averageLabel;
   final List<double> dailyValues;
   final List<SpendeeBalanceDailyFactModel> facts;
+  final SpendeeBalanceAverageDimension? selectedDimension;
   final String iconAsset;
 }
 
@@ -921,6 +1000,9 @@ class SpendeeBalanceDetailCarousel extends StatefulWidget {
     required this.onGhostChanged,
     required this.onBudgetDimensionChanged,
     required this.onMerchantDimensionChanged,
+    this.onCategoryRankDimensionChanged,
+    this.onVendorRankDimensionChanged,
+    this.onAverageDimensionChanged,
     this.initialPage = 0,
     this.onPageChanged,
   }) : assert(pages.length == 4),
@@ -931,6 +1013,10 @@ class SpendeeBalanceDetailCarousel extends StatefulWidget {
   final ValueChanged<SpendeeBalanceBudgetDimension> onBudgetDimensionChanged;
   final ValueChanged<SpendeeBalanceMerchantDimension>
   onMerchantDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>?
+  onCategoryRankDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>? onVendorRankDimensionChanged;
+  final ValueChanged<SpendeeBalanceAverageDimension>? onAverageDimensionChanged;
   final int initialPage;
   final ValueChanged<int>? onPageChanged;
 
@@ -993,6 +1079,12 @@ class _SpendeeBalanceDetailCarouselState
                             widget.onBudgetDimensionChanged,
                         onMerchantDimensionChanged:
                             widget.onMerchantDimensionChanged,
+                        onCategoryRankDimensionChanged:
+                            widget.onCategoryRankDimensionChanged,
+                        onVendorRankDimensionChanged:
+                            widget.onVendorRankDimensionChanged,
+                        onAverageDimensionChanged:
+                            widget.onAverageDimensionChanged,
                       ),
                     ),
                   ),
@@ -1058,6 +1150,9 @@ class SpendeeBalanceDetailPage extends StatelessWidget {
     required this.onGhostChanged,
     required this.onBudgetDimensionChanged,
     required this.onMerchantDimensionChanged,
+    this.onCategoryRankDimensionChanged,
+    this.onVendorRankDimensionChanged,
+    this.onAverageDimensionChanged,
   });
 
   final SpendeeBalanceDetailPageModel model;
@@ -1065,6 +1160,10 @@ class SpendeeBalanceDetailPage extends StatelessWidget {
   final ValueChanged<SpendeeBalanceBudgetDimension> onBudgetDimensionChanged;
   final ValueChanged<SpendeeBalanceMerchantDimension>
   onMerchantDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>?
+  onCategoryRankDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>? onVendorRankDimensionChanged;
+  final ValueChanged<SpendeeBalanceAverageDimension>? onAverageDimensionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1077,15 +1176,18 @@ class SpendeeBalanceDetailPage extends StatelessWidget {
       final SpendeeBalanceTopCategoriesModel value => _TopCategoriesDetail(
         model: value,
         onGhostChanged: onGhostChanged,
+        onDimensionChanged: onCategoryRankDimensionChanged,
       ),
       final SpendeeBalanceTopMerchantsModel value => _TopMerchantsDetail(
         model: value,
         onGhostChanged: onGhostChanged,
         onDimensionChanged: onMerchantDimensionChanged,
+        onRankDimensionChanged: onVendorRankDimensionChanged,
       ),
       final SpendeeBalanceAverageDailyModel value => _AverageDailyDetail(
         model: value,
         onGhostChanged: onGhostChanged,
+        onDimensionChanged: onAverageDimensionChanged,
       ),
     };
   }
@@ -1257,10 +1359,12 @@ class _TopCategoriesDetail extends StatelessWidget {
   const _TopCategoriesDetail({
     required this.model,
     required this.onGhostChanged,
+    required this.onDimensionChanged,
   });
 
   final SpendeeBalanceTopCategoriesModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>? onDimensionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1271,9 +1375,17 @@ class _TopCategoriesDetail extends StatelessWidget {
         children: [
           SizedBox(
             height: 15,
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: _DetailTitle(model.title),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _DetailTitle(model.title)),
+                if (model.rankDimension case final selected?)
+                  _RankDimensionSelector(
+                    keyPrefix: 'spendee-balance-top-category-dimension',
+                    selected: selected,
+                    onChanged: onDimensionChanged ?? (_) {},
+                  ),
+              ],
             ),
           ),
           SizedBox(
@@ -1304,27 +1416,30 @@ class _TopCategoriesDetail extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: 2, right: 23),
-              child: Column(
-                children: List<Widget>.generate(model.rows.length * 2 - 1, (
-                  index,
-                ) {
-                  if (index.isOdd) {
-                    return const SizedBox(
-                      height: 1,
-                      child: ColoredBox(color: Color(0xFFF0F2F7)),
-                    );
-                  }
-                  final rowIndex = index ~/ 2;
-                  return Expanded(
-                    child: _TopCategoryRow(
-                      key: ValueKey(
-                        'spendee-balance-top-category-row-$rowIndex',
+              child: model.rows.isEmpty
+                  ? const SizedBox.shrink()
+                  : Column(
+                      children: List<Widget>.generate(
+                        model.rows.length * 2 - 1,
+                        (index) {
+                          if (index.isOdd) {
+                            return const SizedBox(
+                              height: 1,
+                              child: ColoredBox(color: Color(0xFFF0F2F7)),
+                            );
+                          }
+                          final rowIndex = index ~/ 2;
+                          return Expanded(
+                            child: _TopCategoryRow(
+                              key: ValueKey(
+                                'spendee-balance-top-category-row-$rowIndex',
+                              ),
+                              model: model.rows[rowIndex],
+                            ),
+                          );
+                        },
                       ),
-                      model: model.rows[rowIndex],
                     ),
-                  );
-                }),
-              ),
             ),
           ),
         ],
@@ -1338,14 +1453,106 @@ class _TopMerchantsDetail extends StatelessWidget {
     required this.model,
     required this.onGhostChanged,
     required this.onDimensionChanged,
+    required this.onRankDimensionChanged,
   });
 
   final SpendeeBalanceTopMerchantsModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
   final ValueChanged<SpendeeBalanceMerchantDimension> onDimensionChanged;
+  final ValueChanged<SpendeeBalanceRankDimension>? onRankDimensionChanged;
 
   @override
   Widget build(BuildContext context) {
+    final rankDimension = model.rankDimension;
+    if (rankDimension != null) {
+      final leader = model.rows.isEmpty
+          ? const SpendeeBalanceMerchantRowModel(
+              merchant: 'Nincs adat',
+              transactionCount: '0 tranzakció',
+              amount: '0 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            )
+          : model.rows.first;
+      final following = model.rows.skip(1).toList(growable: false);
+      return _DetailCardShell(
+        model: model,
+        onGhostChanged: onGhostChanged,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 15,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _DetailTitle(model.title)),
+                  _RankDimensionSelector(
+                    keyPrefix: 'spendee-balance-top-vendor-dimension',
+                    selected: rankDimension,
+                    onChanged: onRankDimensionChanged ?? (_) {},
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 36,
+              child: Row(
+                key: const ValueKey('spendee-balance-top-merchant-row-0'),
+                children: [
+                  _LucideTile(
+                    size: 36,
+                    radius: 11,
+                    iconSize: 19,
+                    iconAsset: leader.iconAsset,
+                    colors: const [Color(0xFFF571B8), Color(0xFFF24CAE)],
+                    shadowColor: const Color(0x3DF24CAE),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: _DetailMainCopy(
+                      title: leader.merchant,
+                      subtitle: '${leader.transactionCount} · 1. hely',
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  _DetailAmount(leader.amount),
+                ],
+              ),
+            ),
+            const _DetailDivider(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2, right: 23),
+                child: following.isEmpty
+                    ? const SizedBox.shrink()
+                    : Column(
+                        children: List<Widget>.generate(
+                          following.length * 2 - 1,
+                          (index) {
+                            if (index.isOdd) {
+                              return const SizedBox(
+                                height: 1,
+                                child: ColoredBox(color: Color(0xFFF0F2F7)),
+                              );
+                            }
+                            final rowIndex = index ~/ 2;
+                            return Expanded(
+                              child: _TopMerchantRow(
+                                key: ValueKey(
+                                  'spendee-balance-top-merchant-row-${rowIndex + 1}',
+                                ),
+                                model: following[rowIndex],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return _DetailCardShell(
       model: model,
       onGhostChanged: onGhostChanged,
@@ -1400,10 +1607,12 @@ class _AverageDailyDetail extends StatelessWidget {
   const _AverageDailyDetail({
     required this.model,
     required this.onGhostChanged,
+    required this.onDimensionChanged,
   });
 
   final SpendeeBalanceAverageDailyModel model;
   final SpendeeBalanceGhostChanged onGhostChanged;
+  final ValueChanged<SpendeeBalanceAverageDimension>? onDimensionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1414,9 +1623,16 @@ class _AverageDailyDetail extends StatelessWidget {
         children: [
           SizedBox(
             height: 15,
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: _DetailTitle(model.title),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _DetailTitle(model.title)),
+                if (model.selectedDimension case final selected?)
+                  _AverageDimensionSelector(
+                    selected: selected,
+                    onChanged: onDimensionChanged ?? (_) {},
+                  ),
+              ],
             ),
           ),
           SizedBox(
@@ -1459,7 +1675,7 @@ class _AverageDailyDetail extends StatelessWidget {
             child: CustomPaint(
               key: const ValueKey('spendee-balance-average-daily-chart'),
               painter: SpendeeBalanceDailyChartPainter(
-                dailyValues: model.dailyValues,
+                dailyValues: _thirtyColumnChartValues(model.dailyValues),
               ),
               size: const Size(double.infinity, 64),
             ),
@@ -1526,6 +1742,14 @@ class _AverageDailyDetail extends StatelessWidget {
       ),
     );
   }
+}
+
+List<double> _thirtyColumnChartValues(List<double> values) {
+  if (values.length == 30) return values;
+  final latest = values.length > 30
+      ? values.sublist(values.length - 30)
+      : values;
+  return <double>[...List<double>.filled(30 - latest.length, 0), ...latest];
 }
 
 class _DetailCardShell extends StatelessWidget {
@@ -1636,6 +1860,60 @@ class _MerchantDimensionSelector extends StatelessWidget {
           _DimensionChip(
             key: ValueKey(
               'spendee-balance-merchant-dimension-${dimension.name}',
+            ),
+            label: dimension.label,
+            selected: dimension == selected,
+            onTap: () => onChanged(dimension),
+          ),
+      ],
+    );
+  }
+}
+
+class _RankDimensionSelector extends StatelessWidget {
+  const _RankDimensionSelector({
+    required this.keyPrefix,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final String keyPrefix;
+  final SpendeeBalanceRankDimension selected;
+  final ValueChanged<SpendeeBalanceRankDimension> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DimensionRail(
+      children: [
+        for (final dimension in SpendeeBalanceRankDimension.values)
+          _DimensionChip(
+            key: ValueKey('$keyPrefix-${dimension.name}'),
+            label: dimension.label,
+            selected: dimension == selected,
+            onTap: () => onChanged(dimension),
+          ),
+      ],
+    );
+  }
+}
+
+class _AverageDimensionSelector extends StatelessWidget {
+  const _AverageDimensionSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final SpendeeBalanceAverageDimension selected;
+  final ValueChanged<SpendeeBalanceAverageDimension> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DimensionRail(
+      children: [
+        for (final dimension in SpendeeBalanceAverageDimension.values)
+          _DimensionChip(
+            key: ValueKey(
+              'spendee-balance-average-dimension-${dimension.name}',
             ),
             label: dimension.label,
             selected: dimension == selected,

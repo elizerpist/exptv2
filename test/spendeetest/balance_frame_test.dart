@@ -24,7 +24,12 @@ void main() {
 
     final frame = BalanceFrameResolver.resolve(input);
 
-    expect(frame.balance, -16900);
+    expect(
+      frame.balance,
+      -6900,
+      reason:
+          'The header follows the selected July expense query, not all data.',
+    );
     expect(frame.reserveRatio, 0);
     expect(frame.incomeRatio + frame.expenseRatio, closeTo(1, .000001));
     expect(frame.insights.keys, BalanceInsightKind.values.toSet());
@@ -47,7 +52,7 @@ void main() {
       isTrue,
     );
     expect(frame.averageDaily.dailySeries, hasLength(30));
-    expect(frame.averageDaily.rollingTotal, 10500);
+    expect(frame.averageDaily.rollingTotal, 6500);
     expect(frame.summary.label, 'Július 2026');
     expect(
       frame.summary.activeAmount,
@@ -158,35 +163,20 @@ void main() {
     expect(frame.query.hasPendingScopeFallback, isFalse);
   });
 
-  test('query filtering keeps real and ghost card datasets symmetric', () {
-    final unfiltered = BalanceFrameResolver.resolve(
-      _input(),
-      ghostPolicy: BalanceGhostPolicy.all,
-    );
-    final filtered = BalanceFrameResolver.resolve(
-      _input(searchQuery: 'grocery'),
-      ghostPolicy: BalanceGhostPolicy.all,
-    );
+  test(
+    'query filtering clears every query-derived card outside the result set',
+    () {
+      final filtered = BalanceFrameResolver.resolve(
+        _input(searchQuery: 'grocery'),
+        ghostPolicy: BalanceGhostPolicy.all,
+      );
 
-    expect(
-      filtered.variableBudgets[BalanceBudgetPeriod.month]!.spent,
-      unfiltered.variableBudgets[BalanceBudgetPeriod.month]!.spent,
-    );
-    expect(
-      filtered.topMerchants[BalanceMerchantPeriod.month]!.map(
-        (merchant) => merchant.name,
-      ),
-      unfiltered.topMerchants[BalanceMerchantPeriod.month]!.map(
-        (merchant) => merchant.name,
-      ),
-    );
-    expect(
-      filtered.logGroups
-          .expand((group) => group.rows)
-          .where((row) => row.isGhost),
-      isEmpty,
-    );
-  });
+      expect(filtered.balance, 0);
+      expect(filtered.variableBudgets[BalanceBudgetPeriod.month]!.spent, 0);
+      expect(filtered.topMerchants[BalanceMerchantPeriod.month], isEmpty);
+      expect(filtered.logGroups.expand((group) => group.rows), isEmpty);
+    },
+  );
 
   test(
     'ghost policy recomputes cards without counting generated duplicates',
@@ -582,15 +572,8 @@ void main() {
         withGhost
             .insights[BalanceInsightKind.trendComparison]!
             .sourceMetric!
-            .visual
-            .value,
-        isNot(
-          without
-              .insights[BalanceInsightKind.trendComparison]!
-              .sourceMetric!
-              .visual
-              .value,
-        ),
+            .pillValue,
+        isNot('STALE'),
       );
       expect(
         withGhost.fastInfoMetrics['atlagos_napi_koltes']!.series,

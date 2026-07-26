@@ -4,6 +4,7 @@ import 'package:exptv2/features/settings/models/fast_info_card_catalog.dart';
 import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
+import 'package:exptv2/features/transactions/models/fast_info_metric.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
@@ -128,6 +129,26 @@ void main() {
       expect(store.visibleTransactions, hasLength(3000));
     },
   );
+
+  test('summary rail warming resolves only the active view', () async {
+    final store = TransactionStore(HighVolumeTransactionRepository());
+    addTearDown(store.dispose);
+    await store.start();
+    DebugConsole.clear();
+
+    await store.setSummaryYear(2026);
+
+    final logs = DebugConsole.allText;
+    expect(
+      logs,
+      contains('[Perf] Store active view reason=summary-year-picker'),
+    );
+    expect(
+      logs,
+      isNot(contains('[Perf] Store prewarm reason=summary-year-picker')),
+      reason: 'A rail selection must not synchronously warm both action types.',
+    );
+  });
 
   test(
     'store can defer startup notify and prewarm during native sheet motion',
@@ -1170,6 +1191,46 @@ void main() {
     expect(first.sameRevisionAs(changedRevision), isFalse);
   });
 
+  test('fromStore skips obsolete global FastInfo metric resolution', () async {
+    final store = _NoLegacyFastInfoStore(
+      FakeTransactionRepository(),
+      clock: () => DateTime(2025, 9, 25),
+    );
+    addTearDown(store.dispose);
+    await store.start();
+
+    expect(() => BalanceFrameInput.fromStore(store), returnsNormally);
+  });
+
+  test(
+    'history revisions reuse a returned rail after presentation snapshots rebuild',
+    () async {
+      final repository = FakeTransactionRepository()
+        ..recurringGhostTransactions.clear();
+      final store = TransactionStore(
+        repository,
+        clock: () => DateTime(2025, 9, 25),
+      );
+      addTearDown(store.dispose);
+      await store.start();
+      await store.setSummaryMonth(2025, 9);
+      final firstSeptember = BalanceFrameInput.fromStore(store);
+
+      await store.shiftSummaryPeriod(1);
+      await store.shiftSummaryPeriod(-1);
+      final returnedSeptember = BalanceFrameInput.fromStore(store);
+
+      expect(firstSeptember.sameRevisionAs(returnedSeptember), isFalse);
+      expect(
+        firstSeptember.sameHistoryRevisionAs(returnedSeptember),
+        isTrue,
+        reason:
+            'A returned rail scope has the same Balance data/query while its '
+            'presentation snapshots are intentionally rebuilt.',
+      );
+    },
+  );
+
   test(
     'monthly summary mutations publish immediately with the stable ghost snapshot',
     () async {
@@ -1489,6 +1550,14 @@ void main() {
       expect(store.activeSummaryTitle, contains('2027'));
     },
   );
+}
+
+class _NoLegacyFastInfoStore extends TransactionStore {
+  _NoLegacyFastInfoStore(super.repository, {required super.clock});
+
+  @override
+  Map<String, FastInfoMetricResult> get fastInfoMetrics =>
+      throw StateError('Balance input must not build legacy global FastInfo');
 }
 
 class FakeTransactionRepository extends TransactionRepositoryContract {

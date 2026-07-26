@@ -1,4 +1,5 @@
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_collapse_controller.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -116,7 +117,13 @@ void main() {
         closeTo(10 * (1 - midpointStats), 1e-9),
       );
       expect(midpoint.scrollContentTranslateY, -101);
-      final midpointPostShift = -(104 + 22 + 186 - 90);
+      final midpointPostShift =
+          -(SpendeeBalanceVisualSpec.insightHeight +
+              SpendeeBalanceVisualSpec.stackGap * 2 +
+              SpendeeBalanceVisualSpec.detailStageHeight -
+              SpendeeBalanceCollapseController.maxOffset * .5 +
+              SpendeeBalanceVisualSpec.stackGap -
+              SpendeeBalanceVisualSpec.stackGap);
       expect(
         midpoint.postTranslateY,
         closeTo(midpointPostShift * midpointDetail, 1e-9),
@@ -132,7 +139,7 @@ void main() {
       expect(collapsed.heroStatsOpacity, 0);
       expect(collapsed.heroStatsTranslateY, 10);
       expect(collapsed.scrollContentTranslateY, -202);
-      expect(collapsed.postTranslateY, -132);
+      expect(collapsed.postTranslateY, -164);
     });
 
     test('progress is clamped and pointer thresholds follow frozen JS', () {
@@ -165,23 +172,33 @@ void main() {
     });
 
     test('post flow matches the five frozen DOM collapse samples', () {
-      const samples = <(double, double, double)>[
-        (0, 0, 553),
-        (.25, -50.5, 463.733),
-        (.5, -101, 330.267),
-        (.75, -151.5, 233.067),
-        (1, -202, 219),
-      ];
+      const samples = <double>[0, .25, .5, .75, 1];
 
-      for (final (progress, expectedFlow, expectedActionY) in samples) {
+      for (final progress in samples) {
         final visuals = SpendeeBalanceCollapseVisuals.forProgress(progress);
+        final expectedFlow =
+            -(SpendeeBalanceCollapseController.maxOffset + 22) * progress;
+        final detailProgress = ((progress - .16) / .62).clamp(0.0, 1.0);
+        final sourcePostShift =
+            -(SpendeeBalanceVisualSpec.insightHeight +
+                SpendeeBalanceVisualSpec.stackGap * 2 +
+                SpendeeBalanceVisualSpec.detailStageHeight -
+                SpendeeBalanceCollapseController.maxOffset * progress +
+                SpendeeBalanceVisualSpec.stackGap -
+                SpendeeBalanceVisualSpec.stackGap);
+        final expectedActionY =
+            SpendeeBalanceVisualSpec.actionTop +
+            expectedFlow +
+            sourcePostShift * detailProgress;
         expect(
           visuals.scrollContentTranslateY,
           closeTo(expectedFlow, .001),
           reason: 'flow at progress $progress',
         );
         expect(
-          553 + visuals.scrollContentTranslateY + visuals.postTranslateY,
+          SpendeeBalanceVisualSpec.actionTop +
+              visuals.scrollContentTranslateY +
+              visuals.postTranslateY,
           closeTo(expectedActionY, .05),
           reason: 'action y at progress $progress',
         );

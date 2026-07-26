@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,6 @@ const _incomeActionRaster = AssetImage(
 const _expenseActionRaster = AssetImage(
   'assets/b3ma3/expense_glass_shopping_bag_3d_perspective_fixed_final1_mapped.png',
 );
-const _filterGlyphRaster = AssetImage('assets/b3ma3/filter_glyph.png');
 const _traditionalFocusOutlineColor = Color(0x6B7D8798);
 
 class SpendeeBalanceActionToggle extends StatefulWidget {
@@ -43,7 +43,6 @@ class SpendeeBalanceActionToggle extends StatefulWidget {
     return Future.wait([
       precacheImage(_incomeActionRaster, context, size: const Size(50, 50)),
       precacheImage(_expenseActionRaster, context, size: const Size(48, 48)),
-      precacheImage(_filterGlyphRaster, context, size: const Size(18, 18)),
     ]);
   }
 
@@ -57,8 +56,6 @@ class _SpendeeBalanceActionToggleState extends State<SpendeeBalanceActionToggle>
   late final AnimationController _pulseController;
   TransactionType? _pulsingType;
   double? _preloadedDevicePixelRatio;
-  var _preloadGeneration = 0;
-  var _assetsReady = false;
 
   @override
   void initState() {
@@ -75,20 +72,13 @@ class _SpendeeBalanceActionToggleState extends State<SpendeeBalanceActionToggle>
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     if (_preloadedDevicePixelRatio == devicePixelRatio) return;
     _preloadedDevicePixelRatio = devicePixelRatio;
-    _assetsReady = false;
-    final generation = ++_preloadGeneration;
-    unawaited(_preloadActionAssets(generation));
-  }
-
-  Future<void> _preloadActionAssets(int generation) async {
-    await SpendeeBalanceActionToggle.precacheAssets(context);
-    if (!mounted || generation != _preloadGeneration) return;
-    setState(() => _assetsReady = true);
+    // Decode the decorative rasters opportunistically, but never hide the
+    // type controls while an image codec is warming up.
+    unawaited(SpendeeBalanceActionToggle.precacheAssets(context));
   }
 
   @override
   void dispose() {
-    _preloadGeneration += 1;
     _pulseController
       ..removeListener(_handlePulseTick)
       ..dispose();
@@ -125,14 +115,6 @@ class _SpendeeBalanceActionToggleState extends State<SpendeeBalanceActionToggle>
 
   @override
   Widget build(BuildContext context) {
-    if (!_assetsReady) {
-      return const SizedBox(
-        key: ValueKey('spendee-balance-actions'),
-        width: SpendeeBalanceVisualSpec.contentWidth,
-        height: SpendeeBalanceVisualSpec.actionHeight,
-        child: SizedBox(key: ValueKey('spendee-balance-action-assets-loading')),
-      );
-    }
     return Semantics(
       key: const ValueKey('spendee-balance-actions-semantics'),
       container: true,
@@ -219,18 +201,24 @@ class _ActionButtonState extends State<_ActionButton> {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: radius,
+            color: widget.active
+                ? null
+                : SpendeeBalanceVisualSpec.summarySurfaceColor,
+            border: widget.active
+                ? null
+                : SpendeeBalanceVisualSpec.summarySurfaceBorder,
             gradient: _gradient,
-            boxShadow: [
-              BoxShadow(
-                color: widget.active
-                    ? (_income
+            boxShadow: widget.active
+                ? [
+                    BoxShadow(
+                      color: _income
                           ? const Color(0x4D7054ED)
-                          : const Color(0x4DF5368D))
-                    : const Color(0x14707070),
-                offset: const Offset(0, 11),
-                blurRadius: 20,
-              ),
-            ],
+                          : const Color(0x4DF5368D),
+                      offset: const Offset(0, 11),
+                      blurRadius: 20,
+                    ),
+                  ]
+                : SpendeeBalanceVisualSpec.summarySurfaceShadows,
           ),
           child: InkWell(
             borderRadius: radius,
@@ -311,7 +299,7 @@ class _ActionButtonState extends State<_ActionButton> {
     );
   }
 
-  Gradient get _gradient {
+  Gradient? get _gradient {
     if (_income && widget.active) {
       return const LinearGradient(
         begin: Alignment.centerLeft,
@@ -338,13 +326,7 @@ class _ActionButtonState extends State<_ActionButton> {
         stops: [0, .36, 136 / 180, 1],
       );
     }
-    return CssLinearGradient(
-      cssDegrees: 126,
-      colors: _income
-          ? const [Color(0xFFF7F7F7), Color(0xFFD4D4D4), Color(0xFFE4E4E4)]
-          : const [Color(0xFFE4E4E4), Color(0xFFEDEDED), Color(0xFFF7F7F7)],
-      stops: const [0, .45, 1],
-    );
+    return null;
   }
 }
 
@@ -440,6 +422,8 @@ class SpendeeBalanceSummary extends StatelessWidget {
     required this.onResetCurrentMonth,
     required this.onShiftPeriod,
     required this.onCycleScope,
+    this.onSummaryTap,
+    this.scopeExpanded = false,
   });
 
   final String label;
@@ -448,9 +432,12 @@ class SpendeeBalanceSummary extends StatelessWidget {
   final VoidCallback onResetCurrentMonth;
   final ValueChanged<int> onShiftPeriod;
   final VoidCallback onCycleScope;
+  final VoidCallback? onSummaryTap;
+  final bool scopeExpanded;
 
   @override
   Widget build(BuildContext context) {
+    final summaryTap = onSummaryTap ?? onOpenScopePicker;
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
@@ -469,7 +456,7 @@ class SpendeeBalanceSummary extends StatelessWidget {
           button: true,
           excludeSemantics: true,
           label: '$label, $amount',
-          onTap: onOpenScopePicker,
+          onTap: summaryTap,
           customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
             _previousPeriodSemanticsAction: () => onShiftPeriod(-1),
             _nextPeriodSemanticsAction: () => onShiftPeriod(1),
@@ -478,7 +465,7 @@ class SpendeeBalanceSummary extends StatelessWidget {
           },
           child: _SpendeeBalanceSlideGesture(
             transformKey: const ValueKey('spendee-balance-summary-transform'),
-            onTap: onOpenScopePicker,
+            onTap: summaryTap,
             onDoubleTap: onResetCurrentMonth,
             onHorizontalAction: onShiftPeriod,
             onVerticalAction: onCycleScope,
@@ -490,24 +477,12 @@ class SpendeeBalanceSummary extends StatelessWidget {
                 horizontal: SpendeeBalanceVisualSpec.summaryHorizontalPadding,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xF0FFFFFF),
-                border: Border.all(color: const Color(0x1A666FAB)),
+                color: SpendeeBalanceVisualSpec.summarySurfaceColor,
+                border: SpendeeBalanceVisualSpec.summarySurfaceBorder,
                 borderRadius: BorderRadius.circular(
                   SpendeeBalanceVisualSpec.summaryRadius,
                 ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x14524B93),
-                    offset: Offset(0, 8),
-                    blurRadius: 17,
-                  ),
-                  BoxShadow(
-                    color: Color(0xF0FFFFFF),
-                    offset: Offset(0, 1),
-                    blurRadius: 0,
-                    blurStyle: BlurStyle.inner,
-                  ),
-                ],
+                boxShadow: SpendeeBalanceVisualSpec.summarySurfaceShadows,
               ),
               child: Row(
                 children: [
@@ -535,7 +510,7 @@ class SpendeeBalanceSummary extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF677392),
-                        fontSize: 10,
+                        fontSize: 11,
                         height: 1,
                         fontWeight: FontWeight.w800,
                       ),
@@ -553,16 +528,14 @@ class SpendeeBalanceSummary extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 9),
-                  const SizedBox(
-                    width: 16,
-                    child: Text(
-                      '⌄',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF7D88A4),
-                        fontSize: 21,
-                        height: 1,
-                      ),
+                  GestureDetector(
+                    key: const ValueKey('spendee-balance-summary-chevron'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onOpenScopePicker,
+                    child: SizedBox(
+                      width: 26,
+                      height: 34,
+                      child: _SummaryChevron(expanded: scopeExpanded),
                     ),
                   ),
                 ],
@@ -571,6 +544,45 @@ class SpendeeBalanceSummary extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SummaryChevron extends StatelessWidget {
+  const _SummaryChevron({required this.expanded});
+
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return TweenAnimationBuilder<double>(
+      duration: reducedMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.ease,
+      tween: Tween<double>(end: expanded ? 1 : 0),
+      builder: (context, value, _) {
+        return Transform.rotate(
+          angle: math.pi * value,
+          child: Center(
+            child: SvgPicture.asset(
+              'assets/icons/lucide/chevron-down.svg',
+              width: 18,
+              height: 18,
+              colorFilter: ColorFilter.mode(
+                Color.lerp(
+                  const Color(0xFF7D88A4),
+                  const Color(0xFF6855E7),
+                  value,
+                )!,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -614,12 +626,15 @@ class SpendeeBalanceSearchFilter extends StatefulWidget {
 class _SpendeeBalanceSearchFilterState
     extends State<SpendeeBalanceSearchFilter> {
   late final TextEditingController _controller;
+  late final FocusNode _searchFocusNode;
   var _filterShowsFocusOutline = false;
+  var _searchShowsFocusOutline = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.query);
+    _searchFocusNode = FocusNode()..addListener(_handleSearchFocusChange);
   }
 
   @override
@@ -635,8 +650,17 @@ class _SpendeeBalanceSearchFilterState
 
   @override
   void dispose() {
+    _searchFocusNode
+      ..removeListener(_handleSearchFocusChange)
+      ..dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _handleSearchFocusChange() {
+    final focused = _searchFocusNode.hasFocus;
+    if (_searchShowsFocusOutline == focused) return;
+    setState(() => _searchShowsFocusOutline = focused);
   }
 
   void _handleFilterFocusChange(bool focused) {
@@ -719,14 +743,19 @@ class _SpendeeBalanceSearchFilterState
                           onTap: widget.onFilterPressed,
                           child: Stack(
                             children: [
-                              const Center(
-                                child: Image(
-                                  key: ValueKey('spendee-balance-filter-glyph'),
-                                  image: _filterGlyphRaster,
-                                  width: 18,
-                                  height: 18,
+                              Center(
+                                child: SvgPicture.asset(
+                                  'assets/icons/lucide/funnel.svg',
+                                  key: const ValueKey(
+                                    'spendee-balance-filter-glyph',
+                                  ),
+                                  width: 15,
+                                  height: 15,
                                   fit: BoxFit.contain,
-                                  filterQuality: FilterQuality.high,
+                                  colorFilter: const ColorFilter.mode(
+                                    Color(0xFF7F8AA5),
+                                    BlendMode.srcIn,
+                                  ),
                                   excludeFromSemantics: true,
                                 ),
                               ),
@@ -756,113 +785,152 @@ class _SpendeeBalanceSearchFilterState
   }
 
   Widget _buildField() {
-    return Container(
-      key: const ValueKey('spendee-balance-search-field'),
-      height: SpendeeBalanceVisualSpec.searchHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 17),
-      decoration: BoxDecoration(
-        color: const Color(0xF0FFFFFF),
-        border: Border.all(color: const Color(0x17666FAB)),
-        borderRadius: BorderRadius.circular(
-          SpendeeBalanceVisualSpec.searchFieldRadius,
+    final radius = BorderRadius.circular(
+      SpendeeBalanceVisualSpec.searchFieldRadius,
+    );
+    return GestureDetector(
+      key: const ValueKey('spendee-balance-search-pill'),
+      behavior: HitTestBehavior.opaque,
+      onTap: _searchFocusNode.requestFocus,
+      child: Container(
+        key: const ValueKey('spendee-balance-search-field'),
+        height: SpendeeBalanceVisualSpec.searchHeight,
+        decoration: BoxDecoration(
+          color: const Color(0xF0FFFFFF),
+          border: Border.all(color: const Color(0x17666FAB)),
+          borderRadius: radius,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x12524B93),
+              offset: Offset(0, 7),
+              blurRadius: 15,
+            ),
+            BoxShadow(
+              color: Color(0xF0FFFFFF),
+              offset: Offset(0, 1),
+              blurRadius: 0,
+              blurStyle: BlurStyle.inner,
+            ),
+          ],
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12524B93),
-            offset: Offset(0, 7),
-            blurRadius: 15,
-          ),
-          BoxShadow(
-            color: Color(0xF0FFFFFF),
-            offset: Offset(0, 1),
-            blurRadius: 0,
-            blurStyle: BlurStyle.inner,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            key: ValueKey('spendee-balance-search-glyph'),
-            width: 14,
-            height: 14,
-            child: CustomPaint(painter: _SearchGlyphPainter()),
-          ),
-          const SizedBox(width: 11),
-          if (widget.filters.isNotEmpty)
-            Flexible(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final filter in widget.filters)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: Semantics(
-                          button: true,
-                          label: '${filter.label} szűrő törlése',
-                          child: InkWell(
-                            splashFactory: NoSplash.splashFactory,
-                            overlayColor: const WidgetStatePropertyAll<Color>(
-                              Colors.transparent,
-                            ),
-                            onTap: () => widget.onRemoveFilter(filter),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              height: 20,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: filter.color.withValues(alpha: .12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                '${filter.label} ×',
-                                style: TextStyle(
-                                  color: filter.color,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 17),
+              child: Row(
+                children: [
+                  SvgPicture.asset(
+                    'assets/icons/material/search.svg',
+                    key: const ValueKey('spendee-balance-search-glyph'),
+                    width: 18,
+                    height: 18,
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFF9AA5BE),
+                      BlendMode.srcIn,
+                    ),
+                    excludeFromSemantics: true,
+                  ),
+                  const SizedBox(width: 11),
+                  if (widget.filters.isNotEmpty)
+                    Flexible(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final filter in widget.filters)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: Semantics(
+                                  button: true,
+                                  label: '${filter.label} szűrő törlése',
+                                  child: InkWell(
+                                    splashFactory: NoSplash.splashFactory,
+                                    overlayColor:
+                                        const WidgetStatePropertyAll<Color>(
+                                          Colors.transparent,
+                                        ),
+                                    onTap: () => widget.onRemoveFilter(filter),
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      height: 20,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: filter.color.withValues(
+                                          alpha: .12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${filter.label} ×',
+                                        style: TextStyle(
+                                          color: filter.color,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: SizedBox(
+                      height: 30,
+                      child: TextField(
+                        key: const ValueKey('spendee-balance-search-editable'),
+                        focusNode: _searchFocusNode,
+                        controller: _controller,
+                        onChanged: widget.onQueryChanged,
+                        maxLines: 1,
+                        textAlignVertical: TextAlignVertical.center,
+                        style: const TextStyle(
+                          color: Color(0xFF1D2B50),
+                          fontSize: 11,
+                          height: 1,
+                          fontWeight: FontWeight.w700,
+                          fontVariations: SpendeeBalanceVisualSpec.weight750,
+                        ),
+                        decoration: InputDecoration(
+                          isCollapsed: true,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          hintText: widget.filters.isEmpty
+                              ? 'Keresés tranzakciók között...'
+                              : null,
+                          hintStyle: const TextStyle(
+                            color: Color(0xFF7E89A4),
+                            fontSize: 11,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                            fontVariations: SpendeeBalanceVisualSpec.weight750,
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              onChanged: widget.onQueryChanged,
-              maxLines: 1,
-              style: const TextStyle(
-                color: Color(0xFF1D2B50),
-                fontSize: 9,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                fontVariations: SpendeeBalanceVisualSpec.weight750,
-              ),
-              decoration: InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: widget.filters.isEmpty
-                    ? 'Keresés tranzakciók között...'
-                    : null,
-                hintStyle: const TextStyle(
-                  color: Color(0xFF7E89A4),
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
-                  fontVariations: SpendeeBalanceVisualSpec.weight750,
+            if (_searchShowsFocusOutline)
+              Positioned.fill(
+                child: _TraditionalFocusOutline(
+                  outlineKey: const ValueKey(
+                    'spendee-balance-search-field-focus-outline',
+                  ),
+                  borderRadius: BorderRadius.circular(
+                    SpendeeBalanceVisualSpec.searchFieldRadius - 1,
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -890,6 +958,7 @@ class SpendeeBalanceTimeScopeRail extends StatefulWidget {
     required this.onCollapseDragUpdate,
     required this.onCollapseDragEnd,
     required this.onCollapseToggle,
+    this.showChrome = true,
   });
 
   final String label;
@@ -903,6 +972,7 @@ class SpendeeBalanceTimeScopeRail extends StatefulWidget {
   final ValueChanged<double> onCollapseDragUpdate;
   final VoidCallback onCollapseDragEnd;
   final VoidCallback onCollapseToggle;
+  final bool showChrome;
 
   @override
   State<SpendeeBalanceTimeScopeRail> createState() =>
@@ -912,7 +982,6 @@ class SpendeeBalanceTimeScopeRail extends StatefulWidget {
 class _SpendeeBalanceTimeScopeRailState
     extends State<SpendeeBalanceTimeScopeRail> {
   late String _activeKey;
-  var _collapseHandleShowsFocusOutline = false;
 
   @override
   void initState() {
@@ -939,266 +1008,226 @@ class _SpendeeBalanceTimeScopeRailState
     return index < 0 ? 0 : index;
   }
 
-  void _selectIndex(int index) {
+  void _previewIndex(int index) {
     if (index < 0 || index >= widget.options.length) return;
     final option = widget.options[index];
     if (_activeKey != option.key) {
       setState(() => _activeKey = option.key);
     }
+  }
+
+  void _commitIndex(int index) {
+    if (index < 0 || index >= widget.options.length) return;
+    final option = widget.options[index];
+    _previewIndex(index);
     widget.onSelected(option);
   }
 
-  void _handleCollapseFocusChange(bool focused) {
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: const ValueKey('spendee-balance-time-rail'),
+    width: SpendeeBalanceVisualSpec.contentWidth,
+    height: SpendeeBalanceVisualSpec.timeRailViewportHeight,
+    child: _buildRailViewport(),
+  );
+
+  Widget _buildRailViewport() {
+    return SizedBox(
+      height: SpendeeBalanceVisualSpec.timeRailViewportHeight,
+      child: widget.options.isEmpty
+          ? const SizedBox(
+              key: ValueKey('spendee-balance-rail-ticking-viewport'),
+            )
+          : SpendeeBalanceTickingViewport(
+              key: const ValueKey('spendee-balance-rail-ticking-viewport'),
+              width: SpendeeBalanceVisualSpec.contentWidth,
+              height: SpendeeBalanceVisualSpec.timeRailViewportHeight,
+              itemCount: widget.options.length,
+              slotDistance: SpendeeBalanceVisualSpec.timeRailSlotDistance,
+              centerAnchor: SpendeeBalanceVisualSpec.contentWidth / 2,
+              selectedIndex: _activeIndex,
+              maxVisibleLogicalDistance:
+                  SpendeeBalanceVisualSpec.timeRailVisibleLogicalDistance,
+              onIndexChanged: _previewIndex,
+              onIndexSettled: _commitIndex,
+              semanticLabel: 'Választható időszakok',
+              itemSizeBuilder: (_, _) =>
+                  SpendeeBalanceVisualSpec.activeYearPillSize,
+              itemScaleBuilder: (_, _, centeredness) {
+                final idleScale =
+                    SpendeeBalanceVisualSpec.yearPillSize.width /
+                    SpendeeBalanceVisualSpec.activeYearPillSize.width;
+                return idleScale + (1 - idleScale) * centeredness;
+              },
+              itemBuilder: (context, index, selected, select) {
+                return _YearPill(
+                  item: widget.options[index],
+                  selected: selected,
+                  onPressed: select,
+                );
+              },
+              decorativeItemBuilder: (context, index, selected, select) {
+                return _YearPill(
+                  item: widget.options[index],
+                  selected: selected,
+                  onPressed: select,
+                  decorative: true,
+                );
+              },
+            ),
+    );
+  }
+}
+
+/// The source-screen handle and count live outside the optional rail drawer.
+/// It deliberately has no explanatory copy: the 34×4px bar is the affordance.
+class SpendeeBalanceCollapseControl extends StatefulWidget {
+  const SpendeeBalanceCollapseControl({
+    super.key,
+    required this.transactionCount,
+    required this.collapseProgress,
+    required this.dragging,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+    required this.onToggle,
+  });
+
+  final int transactionCount;
+  final double collapseProgress;
+  final bool dragging;
+  final VoidCallback onDragStart;
+  final ValueChanged<double> onDragUpdate;
+  final VoidCallback onDragEnd;
+  final VoidCallback onToggle;
+
+  @override
+  State<SpendeeBalanceCollapseControl> createState() =>
+      _SpendeeBalanceCollapseControlState();
+}
+
+class _SpendeeBalanceCollapseControlState
+    extends State<SpendeeBalanceCollapseControl> {
+  var _showFocusOutline = false;
+
+  void _handleFocusChange(bool focused) {
     final show =
         focused &&
         FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    if (_collapseHandleShowsFocusOutline == show) return;
-    setState(() => _collapseHandleShowsFocusOutline = show);
+    if (_showFocusOutline == show) return;
+    setState(() => _showFocusOutline = show);
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      key: const ValueKey('spendee-balance-time-rail'),
-      width: SpendeeBalanceVisualSpec.contentWidth,
-      height: SpendeeBalanceVisualSpec.timeRailHeight,
-      child: Column(
-        children: [
-          SizedBox(
-            height: SpendeeBalanceVisualSpec.timeRailControlHeight,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.label,
-                        style: const TextStyle(
-                          color: Color(0xFF51647A),
-                          fontSize: 6.5,
-                          height: 1,
-                          fontWeight: FontWeight.w900,
-                          fontVariations: SpendeeBalanceVisualSpec.weight950,
-                        ),
-                      ),
-                      const SizedBox(width: 9),
-                      Text(
-                        widget.currentLabel,
-                        style: const TextStyle(
-                          color: Color(0xFF1D2B50),
-                          fontSize: 8,
-                          height: 1,
-                          fontWeight: FontWeight.w900,
-                          fontVariations: SpendeeBalanceVisualSpec.weight950,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  left: 178,
-                  child: CallbackShortcuts(
-                    bindings: <ShortcutActivator, VoidCallback>{
-                      const SingleActivator(LogicalKeyboardKey.enter):
-                          widget.onCollapseToggle,
-                      const SingleActivator(LogicalKeyboardKey.space):
-                          widget.onCollapseToggle,
-                    },
-                    child: Focus(
-                      onFocusChange: _handleCollapseFocusChange,
-                      child: Semantics(
-                        key: const ValueKey(
-                          'spendee-balance-collapse-handle-semantics',
-                        ),
-                        button: true,
-                        expanded: widget.collapseProgress <= .98,
-                        label: widget.collapseProgress > .5
-                            ? 'Nézet kibontása'
-                            : 'Nézet összecsukása',
-                        onTap: widget.onCollapseToggle,
-                        child: RawGestureDetector(
+    return Column(
+      key: const ValueKey('spendee-balance-collapse-control'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CallbackShortcuts(
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.enter): widget.onToggle,
+            const SingleActivator(LogicalKeyboardKey.space): widget.onToggle,
+          },
+          child: Focus(
+            onFocusChange: _handleFocusChange,
+            child: Semantics(
+              key: const ValueKey('spendee-balance-collapse-handle-semantics'),
+              button: true,
+              expanded: widget.collapseProgress <= .98,
+              label: widget.collapseProgress > .5
+                  ? 'Nézet kibontása'
+                  : 'Nézet összecsukása',
+              onTap: widget.onToggle,
+              child: RawGestureDetector(
+                key: const ValueKey('spendee-balance-collapse-handle'),
+                behavior: HitTestBehavior.opaque,
+                gestures: {
+                  VerticalDragGestureRecognizer:
+                      GestureRecognizerFactoryWithHandlers<
+                        VerticalDragGestureRecognizer
+                      >(VerticalDragGestureRecognizer.new, (recognizer) {
+                        recognizer.gestureSettings =
+                            const DeviceGestureSettings(touchSlop: 3);
+                        recognizer.onStart = (_) => widget.onDragStart();
+                        recognizer.onUpdate = (details) =>
+                            widget.onDragUpdate(details.delta.dy);
+                        recognizer.onEnd = (_) => widget.onDragEnd();
+                        recognizer.onCancel = widget.onDragEnd;
+                      }),
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  excludeFromSemantics: true,
+                  onTap: widget.onToggle,
+                  child: SizedBox(
+                    width: SpendeeBalanceVisualSpec.contentWidth,
+                    height: 20,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
                           key: const ValueKey(
-                            'spendee-balance-collapse-handle',
+                            'spendee-balance-collapse-handle-bar',
                           ),
-                          behavior: HitTestBehavior.opaque,
-                          gestures: {
-                            VerticalDragGestureRecognizer:
-                                GestureRecognizerFactoryWithHandlers<
-                                  VerticalDragGestureRecognizer
-                                >(VerticalDragGestureRecognizer.new, (
-                                  recognizer,
-                                ) {
-                                  recognizer.gestureSettings =
-                                      const DeviceGestureSettings(touchSlop: 3);
-                                  recognizer.onStart = (_) {
-                                    widget.onCollapseDragStart();
-                                  };
-                                  recognizer.onUpdate = (details) {
-                                    widget.onCollapseDragUpdate(
-                                      details.delta.dy,
-                                    );
-                                  };
-                                  recognizer.onEnd = (_) {
-                                    widget.onCollapseDragEnd();
-                                  };
-                                  recognizer.onCancel =
-                                      widget.onCollapseDragEnd;
-                                }),
-                          },
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            excludeFromSemantics: true,
-                            onTap: widget.onCollapseToggle,
-                            child: SizedBox(
-                              width: 92,
-                              height: 21,
-                              child: Stack(
-                                children: [
-                                  Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 22,
-                                        height: 3,
-                                        child: DecoratedBox(
-                                          key: const ValueKey(
-                                            'spendee-balance-collapse-handle-bar',
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: widget.dragging
-                                                ? const Color(0xFF6E5CF1)
-                                                : const Color(0xFFAEB7C8),
-                                            borderRadius:
-                                                const BorderRadius.all(
-                                                  Radius.circular(99),
-                                                ),
-                                            boxShadow: const [
-                                              BoxShadow(
-                                                color: Color(0x94FFFFFF),
-                                                offset: Offset(0, 1),
-                                                blurRadius: 0,
-                                                blurStyle: BlurStyle.inner,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Expanded(
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            'Húzd a nézetet',
-                                            key: const ValueKey(
-                                              'spendee-balance-collapse-handle-label',
-                                            ),
-                                            maxLines: 1,
-                                            style: TextStyle(
-                                              color: widget.dragging
-                                                  ? const Color(0xFF4C3ED3)
-                                                  : const Color(0xFF65748B),
-                                              fontSize: 6.5,
-                                              height: 1,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (_collapseHandleShowsFocusOutline)
-                                    Positioned.fill(
-                                      child: _TraditionalFocusOutline(
-                                        outlineKey: const ValueKey(
-                                          'spendee-balance-collapse-handle-focus-outline',
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          9.5,
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                          width: 34,
+                          height: 4,
+                          child: const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: CssLinearGradient(
+                                cssDegrees: 90,
+                                colors: [Color(0xFF8E80F1), Color(0xFFBC7EE8)],
                               ),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(99),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0x406954DE),
+                                  offset: Offset(0, 2),
+                                  blurRadius: 5,
+                                ),
+                                BoxShadow(
+                                  color: Color(0x94FFFFFF),
+                                  offset: Offset(0, 1),
+                                  blurRadius: 0,
+                                  blurStyle: BlurStyle.inner,
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
+                        if (_showFocusOutline)
+                          Positioned.fill(
+                            child: _TraditionalFocusOutline(
+                              outlineKey: const ValueKey(
+                                'spendee-balance-collapse-handle-focus-outline',
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              inset: 1,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: 7),
-          SizedBox(
-            height: 37,
-            child: widget.options.isEmpty
-                ? const SizedBox(
-                    key: ValueKey('spendee-balance-rail-ticking-viewport'),
-                  )
-                : SpendeeBalanceTickingViewport(
-                    key: const ValueKey(
-                      'spendee-balance-rail-ticking-viewport',
-                    ),
-                    width: SpendeeBalanceVisualSpec.contentWidth,
-                    height: 37,
-                    itemCount: widget.options.length,
-                    slotDistance: 68.5,
-                    centerAnchor: SpendeeBalanceVisualSpec.contentWidth / 2,
-                    selectedIndex: _activeIndex,
-                    centerOffsetBuilder: _railCenterOffset,
-                    onIndexChanged: _selectIndex,
-                    semanticLabel: 'Választható időszakok',
-                    itemSizeBuilder: (_, selected) => selected
-                        ? SpendeeBalanceVisualSpec.activeYearPillSize
-                        : SpendeeBalanceVisualSpec.yearPillSize,
-                    itemBuilder: (context, index, selected, select) {
-                      return _YearPill(
-                        item: widget.options[index],
-                        selected: selected,
-                        onPressed: select,
-                      );
-                    },
-                    decorativeItemBuilder: (context, index, selected, select) {
-                      return _YearPill(
-                        item: widget.options[index],
-                        selected: selected,
-                        onPressed: select,
-                        decorative: true,
-                      );
-                    },
-                  ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${widget.transactionCount} tranzakció listázva',
+          key: const ValueKey('spendee-balance-listed-transaction-count'),
+          style: const TextStyle(
+            color: Color(0xFF7A86A3),
+            fontSize: 9,
+            height: 1,
+            fontWeight: FontWeight.w800,
           ),
-          const SizedBox(height: 9),
-          SizedBox(
-            height: 5,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var index = 0; index < widget.options.length; index++) ...[
-                  _RailDot(
-                    item: widget.options[index],
-                    active: widget.options[index].key == _activeKey,
-                  ),
-                  if (index != widget.options.length - 1)
-                    const SizedBox(width: 9),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
-  }
-
-  double _railCenterOffset(int logicalOffset) {
-    if (logicalOffset == 0) return 0;
-    final direction = logicalOffset.isNegative ? -1.0 : 1.0;
-    return direction * (68.5 + (logicalOffset.abs() - 1) * 59);
   }
 }
 
@@ -1232,9 +1261,10 @@ class _YearPillState extends State<_YearPill> {
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.selected
-        ? SpendeeBalanceVisualSpec.activeYearPillSize
-        : SpendeeBalanceVisualSpec.yearPillSize;
+    // The ticking viewport owns the continuous grow/shrink transform.  Every
+    // pill keeps the 68×37 layout box so its visual centre never drifts while
+    // the rail settles; inactive pills are painted at 49/68 scale there.
+    final size = SpendeeBalanceVisualSpec.activeYearPillSize;
     return Semantics(
       button: true,
       selected: widget.selected,
@@ -1418,51 +1448,6 @@ class _TimeScopePillLabel extends StatelessWidget {
               style: style.copyWith(fontSize: selected ? 11 : 9),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RailDot extends StatelessWidget {
-  const _RailDot({required this.item, required this.active});
-
-  final SpendeeBalanceTimeScopeItem item;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      key: ValueKey('spendee-balance-year-dot-${item.key}'),
-      width: SpendeeBalanceVisualSpec.railDotSize,
-      height: SpendeeBalanceVisualSpec.railDotSize,
-      child: DecoratedBox(
-        key: ValueKey('spendee-balance-year-dot-decoration-${item.key}'),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFF24CAE) : const Color(0xFFE1E4EC),
-          shape: BoxShape.circle,
-          boxShadow: active
-              ? const [
-                  BoxShadow(
-                    color: Color(0x47F24CAE),
-                    offset: Offset(0, 2),
-                    blurRadius: 5,
-                  ),
-                  BoxShadow(
-                    color: Color(0x85FFFFFF),
-                    offset: Offset(0, 1),
-                    blurRadius: 0,
-                    blurStyle: BlurStyle.inner,
-                  ),
-                ]
-              : const [
-                  BoxShadow(
-                    color: Color(0xD1FFFFFF),
-                    offset: Offset(0, 1),
-                    blurRadius: 0,
-                    blurStyle: BlurStyle.inner,
-                  ),
-                ],
         ),
       ),
     );
@@ -1664,33 +1649,4 @@ class _SpendeeBalanceSlideGestureState
       ),
     );
   }
-}
-
-class _SearchGlyphPainter extends CustomPainter {
-  const _SearchGlyphPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF9AA5BE)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.7
-      ..isAntiAlias = true;
-    canvas.drawCircle(const Offset(7, 7), 6.15, paint);
-    paint.style = PaintingStyle.fill;
-    canvas.save();
-    canvas.translate(12, 16.15);
-    canvas.rotate(.8377580409572781);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0, -.85, 7, 1.7),
-        const Radius.circular(2),
-      ),
-      paint,
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _SearchGlyphPainter oldDelegate) => false;
 }

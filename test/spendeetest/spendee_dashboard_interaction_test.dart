@@ -615,7 +615,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -132,
+        -164,
       );
 
       Future<void> selectMode(ValueKey<String> key) async {
@@ -653,7 +653,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -132,
+        -164,
       );
       await tester.tap(
         find.byKey(const ValueKey('spendee-balance-collapse-handle')),
@@ -729,7 +729,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -132,
+        -164,
       );
       for (final (menuKey, surfaceKey) in surfaces) {
         await selectSurface(menuKey, surfaceKey);
@@ -743,9 +743,31 @@ void main() {
               .transform
               .getTranslation()
               .y,
-          -132,
+          -164,
         );
       }
+    },
+  );
+
+  testWidgets(
+    'Balance host opens Debug Console from its visible debug control',
+    (tester) async {
+      final store = await _pumpDashboard(
+        tester,
+        dashboardMode: SpendeeDashboardMode.balance,
+      );
+      addTearDown(store.dispose);
+
+      final control = find.byKey(
+        const ValueKey('spendee-balance-debug-panel-button'),
+      );
+      expect(control, findsOneWidget);
+
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DebugConsoleDialog), findsOneWidget);
+      expect(find.text('Debug Console'), findsOneWidget);
     },
   );
 
@@ -1535,6 +1557,28 @@ void main() {
           'SpendeeTestDashboard does not render the classic ghost log input.',
     );
   });
+
+  testWidgets(
+    'Balance host keeps its debug control tappable and opens the debug console',
+    (tester) async {
+      final store = await _pumpDashboard(
+        tester,
+        dashboardMode: SpendeeDashboardMode.balance,
+      );
+      addTearDown(store.dispose);
+
+      final button = find.byKey(
+        const ValueKey('spendee-balance-debug-panel-button'),
+      );
+      expect(button, findsOneWidget);
+      expect(tester.getRect(button).size, const Size(48, 48));
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DebugConsoleDialog), findsOneWidget);
+    },
+  );
 
   testWidgets('header geometry drag does not requery spendee log content', (
     tester,

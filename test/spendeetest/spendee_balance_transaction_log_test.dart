@@ -27,133 +27,131 @@ void main() {
     );
   }
 
-  testWidgets('ports the exact grouped HTML transaction geometry', (
-    tester,
-  ) async {
-    final groups = [
-      BalanceLogGroup(
-        date: '2026.07.25.',
-        rows: [
-          BalanceLogRow.record(record(1, merchant: 'Lidl', amount: -4250)),
-          BalanceLogRow.record(record(2, merchant: 'MOL', amount: -18000)),
-        ],
-      ),
-      BalanceLogGroup(
-        date: '2026.07.24.',
-        rows: [BalanceLogRow.record(record(3, merchant: 'Cinema City'))],
-      ),
-    ];
-
-    await tester.pumpWidget(
-      host(
-        SpendeeBalanceTransactionLog(
-          groups: groups,
-          categoriesById: {7: category()},
-          viewportHeight: 220,
-          onFastFilter: (_, _) {},
-          onRecordTap: (_) {},
-          onDeleteRequested: (_) => false,
-          onCategoryFilter: (_) {},
-          onEditTransaction: (_) {},
+  testWidgets(
+    '0726 ports the exact title-free grouped HTML transaction geometry',
+    (tester) async {
+      final groups = [
+        BalanceLogGroup(
+          date: '2026.07.25.',
+          rows: [
+            BalanceLogRow.record(record(1, merchant: 'Lidl', amount: -4250)),
+            BalanceLogRow.record(record(2, merchant: 'MOL', amount: -18000)),
+          ],
         ),
-      ),
-    );
-
-    final section = find.byKey(
-      const ValueKey('spendee-balance-transaction-section'),
-    );
-    final heading = find.byKey(
-      const ValueKey('spendee-balance-transaction-heading'),
-    );
-    final viewport = find.byKey(
-      const ValueKey('spendee-balance-transaction-viewport'),
-    );
-    final firstTitle = find.byKey(
-      const ValueKey('spendee-balance-transaction-day-title-2026-07-25'),
-    );
-    final secondTitle = find.byKey(
-      const ValueKey('spendee-balance-transaction-day-title-2026-07-24'),
-    );
-    final firstCard = find.byKey(
-      const ValueKey('spendee-balance-transaction-day-card-2026-07-25'),
-    );
-    final firstRow = find.byKey(
-      const ValueKey('spendee-balance-transaction-row-record-1'),
-    );
-    final secondRow = find.byKey(
-      const ValueKey('spendee-balance-transaction-row-record-2'),
-    );
-
-    expect(tester.getSize(section), const Size(378, 236));
-    expect(tester.getSize(heading), const Size(378, 8));
-    expect(tester.getTopLeft(heading).dy - tester.getTopLeft(section).dy, 1);
-    expect(tester.getSize(viewport), const Size(378, 220));
-    expect(tester.getTopLeft(viewport).dy - tester.getTopLeft(section).dy, 16);
-    expect(tester.getSize(firstTitle), const Size(374, 15));
-    final cardSliver = tester.renderObject<RenderSliver>(firstCard);
-    expect(cardSliver.constraints.crossAxisExtent, 374);
-    expect(cardSliver.geometry?.scrollExtent, 102);
-    expect(
-      tester.getTopLeft(firstRow).dy - tester.getTopLeft(firstTitle).dy,
-      21,
-    );
-    expect(
-      tester.getTopLeft(secondTitle).dy - tester.getTopLeft(firstTitle).dy,
-      132,
-    );
-    expect(tester.getSize(firstRow), const Size(372, 50));
-    expect(tester.getSize(secondRow), const Size(372, 50));
-    expect(
-      tester.getSize(
-        find.byKey(
-          const ValueKey('spendee-balance-transaction-avatar-record-1'),
+        BalanceLogGroup(
+          date: '2026.07.24.',
+          rows: [BalanceLogRow.record(record(3, merchant: 'Cinema City'))],
         ),
-      ),
-      const Size.square(31),
-    );
-    expect(
-      tester.getSize(
-        find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
-      ),
-      const Size.square(22),
-    );
-    expect(
-      tester.getSize(
-        find.byKey(
-          const ValueKey('spendee-balance-transaction-separator-record-2'),
-        ),
-      ),
-      const Size(372, 1),
-    );
-    expect(find.text('TRANZAKCIÓK'), findsOneWidget);
-    expect(
-      tester.getSemantics(find.text('TRANZAKCIÓK')),
-      matchesSemantics(label: 'Tranzakciók'),
-    );
-    expect(find.text('2026.07.25.'), findsOneWidget);
-    expect(find.text('Lidl'), findsOneWidget);
-    expect(find.text('Élelmiszer'), findsNWidgets(3));
-    expect(find.text('-4250 Ft'), findsNWidgets(2));
-    expect(find.text('11:42'), findsWidgets);
+      ];
 
-    final decoration =
-        tester
-                .widget<DecoratedSliver>(
-                  find.byKey(
-                    const ValueKey(
-                      'spendee-balance-transaction-day-decoration-2026-07-25',
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceTransactionLog(
+            groups: groups,
+            categoriesById: {7: category()},
+            viewportHeight: 220,
+            onFastFilter: (_, _) {},
+            onRecordTap: (_) {},
+            onDeleteRequested: (_) => false,
+            onCategoryFilter: (_) {},
+            onEditTransaction: (_) {},
+          ),
+        ),
+      );
+
+      final section = find.byKey(
+        const ValueKey('spendee-balance-transaction-section'),
+      );
+      final viewport = find.byKey(
+        const ValueKey('spendee-balance-transaction-viewport'),
+      );
+      final firstTitle = find.byKey(
+        const ValueKey('spendee-balance-transaction-day-title-2026-07-25'),
+      );
+      final secondTitle = find.byKey(
+        const ValueKey('spendee-balance-transaction-day-title-2026-07-24'),
+      );
+      final firstCard = find.byKey(
+        const ValueKey('spendee-balance-transaction-day-card-2026-07-25'),
+      );
+      final firstRow = find.byKey(
+        const ValueKey('spendee-balance-transaction-row-record-1'),
+      );
+      final secondRow = find.byKey(
+        const ValueKey('spendee-balance-transaction-row-record-2'),
+      );
+
+      expect(tester.getSize(section), const Size(378, 220));
+      expect(
+        find.byKey(const ValueKey('spendee-balance-transaction-heading')),
+        findsNothing,
+      );
+      expect(tester.getSize(viewport), const Size(378, 220));
+      expect(tester.getTopLeft(viewport).dy - tester.getTopLeft(section).dy, 0);
+      expect(tester.getSize(firstTitle), const Size(374, 15));
+      final cardSliver = tester.renderObject<RenderSliver>(firstCard);
+      expect(cardSliver.constraints.crossAxisExtent, 374);
+      expect(cardSliver.geometry?.scrollExtent, 112);
+      expect(
+        tester.getTopLeft(firstRow).dy - tester.getTopLeft(firstTitle).dy,
+        21,
+      );
+      expect(
+        tester.getTopLeft(secondTitle).dy - tester.getTopLeft(firstTitle).dy,
+        142,
+      );
+      expect(tester.getSize(firstRow), const Size(372, 55));
+      expect(tester.getSize(secondRow), const Size(372, 55));
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('spendee-balance-transaction-avatar-record-1'),
+          ),
+        ),
+        const Size.square(34),
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('spendee-balance-transaction-edit-record-1'),
+          ),
+        ),
+        const Size.square(24),
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('spendee-balance-transaction-separator-record-2'),
+          ),
+        ),
+        const Size(372, 1),
+      );
+      expect(find.text('TRANZAKCIÓK'), findsNothing);
+      expect(find.text('2026.07.25.'), findsOneWidget);
+      expect(find.text('Lidl'), findsOneWidget);
+      expect(find.text('Élelmiszer'), findsNWidgets(3));
+      expect(find.text('-4250 Ft'), findsNWidgets(2));
+      expect(find.text('11:42'), findsWidgets);
+
+      final decoration =
+          tester
+                  .widget<DecoratedSliver>(
+                    find.byKey(
+                      const ValueKey(
+                        'spendee-balance-transaction-day-decoration-2026-07-25',
+                      ),
                     ),
-                  ),
-                )
-                .decoration
-            as BoxDecoration;
-    expect(decoration.borderRadius, BorderRadius.circular(18));
-    expect(decoration.color, const Color(0xF5FFFFFF));
-    expect(decoration.border, Border.all(color: const Color(0x1A666FAB)));
-    expect(decoration.boxShadow, hasLength(2));
-    expect(decoration.boxShadow!.first.offset, const Offset(0, 9));
-    expect(decoration.boxShadow!.first.blurRadius, 19);
-  });
+                  )
+                  .decoration
+              as BoxDecoration;
+      expect(decoration.borderRadius, BorderRadius.circular(18));
+      expect(decoration.color, const Color(0xF5FFFFFF));
+      expect(decoration.border, Border.all(color: const Color(0x1A666FAB)));
+      expect(decoration.boxShadow, hasLength(2));
+      expect(decoration.boxShadow!.first.offset, const Offset(0, 9));
+      expect(decoration.boxShadow!.first.blurRadius, 19);
+    },
+  );
 
   testWidgets(
     'real and ghost income rows use the exact signed four-digit formatter',
@@ -589,7 +587,7 @@ void main() {
       final originalRowRect = tester.getRect(row);
       final originalAvatarRect = tester.getRect(avatar);
       final originalEditRect = tester.getRect(edit);
-      expect(originalRowRect.size, const Size(372, 50));
+      expect(originalRowRect.size, const Size(372, 55));
       expect(rename, findsOneWidget);
       expect(reset, findsNothing);
 
@@ -608,7 +606,7 @@ void main() {
       );
       final renameRect = tester.getRect(rename);
       final resetRect = tester.getRect(reset);
-      expect(renameRect.height, 9);
+      expect(renameRect.height, 13);
       expect(renameRect.overlaps(originalAvatarRect), isFalse);
       expect(renameRect.overlaps(resetRect), isFalse);
       expect(renameRect.overlaps(originalEditRect), isFalse);

@@ -101,6 +101,7 @@ void main() {
       expect(logBuilderCalls, 1);
       expect(logProbeBuilds, 1);
       expect(latestFrame?.visibleLogRowCount, 96);
+      expect(latestFrame?.transactionCount, 96);
       expect(latestFrame?.totalLogEntryCount, 601);
       expect(latestFrame?.hasMoreLogEntries, isTrue);
 
@@ -159,6 +160,7 @@ void main() {
       expect(logBuilderCalls, 2);
       expect(logProbeBuilds, 2);
       expect(latestFrame?.visibleLogRowCount, 192);
+      expect(latestFrame?.transactionCount, 192);
       expect(latestFrame?.totalLogEntryCount, 601);
       expect(latestFrame?.hasMoreLogEntries, isTrue);
       expect(

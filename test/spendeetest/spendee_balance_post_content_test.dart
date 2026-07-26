@@ -115,16 +115,19 @@ void main() {
       ),
     ]);
     final inactiveExpenseDecoration = _actionDecoration(tester, expense);
-    expect(inactiveExpenseDecoration.gradient, isA<CssLinearGradient>());
+    expect(inactiveExpenseDecoration.color, const Color(0xF0FFFFFF));
     expect(
-      (inactiveExpenseDecoration.gradient! as CssLinearGradient).cssDegrees,
-      126,
+      inactiveExpenseDecoration.border,
+      Border.all(color: const Color(0x1A666FAB)),
     );
+    expect(inactiveExpenseDecoration.gradient, isNull);
     expect(inactiveExpenseDecoration.boxShadow, const [
+      BoxShadow(color: Color(0x14524B93), offset: Offset(0, 8), blurRadius: 17),
       BoxShadow(
-        color: Color(0x14707070),
-        offset: Offset(0, 11),
-        blurRadius: 20,
+        color: Color(0xF0FFFFFF),
+        offset: Offset(0, 1),
+        blurRadius: 0,
+        blurStyle: BlurStyle.inner,
       ),
     ]);
 
@@ -213,8 +216,46 @@ void main() {
     );
   });
 
+  testWidgets('0726 inactive action pill uses the exact SummaryPill material', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SpendeeBalanceActionToggle(
+              activeType: TransactionType.income,
+              onChanged: (_) {},
+            ),
+            const SizedBox(height: 10),
+            SpendeeBalanceSummary(
+              label: 'Aktuális hónap',
+              amount: '-486 320 Ft',
+              onOpenScopePicker: () {},
+              onResetCurrentMonth: () {},
+              onShiftPeriod: (_) {},
+              onCycleScope: () {},
+            ),
+          ],
+        ),
+      ),
+    );
+    await settleActionAssets(tester);
+
+    final inactive = _actionDecoration(
+      tester,
+      find.byKey(const ValueKey('spendee-balance-expense-action')),
+    );
+    final summary = _summaryDecoration(tester);
+    expect(inactive.color, summary.color);
+    expect(inactive.border, summary.border);
+    expect(inactive.boxShadow, summary.boxShadow);
+    expect(inactive.gradient, isNull);
+  });
+
   testWidgets(
-    'action row is exposed only after both DPR-selected raster frames decode',
+    'action row stays interactive while both DPR-selected raster frames decode',
     (tester) async {
       PaintingBinding.instance.imageCache
         ..clear()
@@ -230,7 +271,7 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('spendee-balance-action-assets-loading')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-actions')),
@@ -243,45 +284,14 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-income-action')),
-        findsNothing,
-        reason: 'a capture must never observe a half-decoded action row',
+        findsOneWidget,
+        reason: 'the type switch must not wait for a raster decode',
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-expense-action')),
-        findsNothing,
-        reason: 'a capture must never observe a half-decoded action row',
-      );
-
-      await settleActionAssets(tester);
-
-      expect(
-        find.byKey(const ValueKey('spendee-balance-action-assets-loading')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('spendee-balance-actions')),
         findsOneWidget,
+        reason: 'the type switch must not wait for a raster decode',
       );
-      final incomeRender = tester.widget<RawImage>(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey('spendee-balance-income-wallet-raster'),
-          ),
-          matching: find.byType(RawImage),
-        ),
-      );
-      final expenseRender = tester.widget<RawImage>(
-        find.descendant(
-          of: find.byKey(const ValueKey('spendee-balance-expense-bag-raster')),
-          matching: find.byType(RawImage),
-        ),
-      );
-      expect(incomeRender.image, isNotNull);
-      expect(incomeRender.image!.width, 50);
-      expect(incomeRender.image!.height, 50);
-      expect(expenseRender.image, isNotNull);
-      expect(expenseRender.image!.width, 48);
-      expect(expenseRender.image!.height, 48);
     },
   );
 
@@ -311,9 +321,6 @@ void main() {
         'assets/b3ma3/3.0x/expense_glass_shopping_bag_3d_perspective_fixed_final1_mapped.png',
         144,
       ),
-      ('assets/b3ma3/filter_glyph.png', 18),
-      ('assets/b3ma3/2.0x/filter_glyph.png', 36),
-      ('assets/b3ma3/3.0x/filter_glyph.png', 54),
     ];
 
     for (final (asset, expectedDimension) in variants) {
@@ -324,6 +331,21 @@ void main() {
       ), reason: asset);
     }
   });
+
+  test(
+    '0726 SearchPill and filter use the approved source SVG assets',
+    () async {
+      final search = await rootBundle.loadString(
+        'assets/icons/material/search.svg',
+      );
+      final funnel = await rootBundle.loadString(
+        'assets/icons/lucide/funnel.svg',
+      );
+
+      expect(search, contains('<svg'));
+      expect(funnel, contains('<svg'));
+    },
+  );
 
   test('action SVG assets retain the approved authored layer graphs', () async {
     final income = await rootBundle.loadString(
@@ -526,6 +548,30 @@ void main() {
     expect(direction, 1);
   });
 
+  testWidgets(
+    '0726 SummaryPill uses an animated chevron icon instead of a text glyph',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceSummary(
+            label: 'Aktuális hónap',
+            amount: '-486 320 Ft',
+            onOpenScopePicker: () {},
+            onResetCurrentMonth: () {},
+            onShiftPeriod: (_) {},
+            onCycleScope: () {},
+          ),
+        ),
+      );
+
+      expect(find.text('⌄'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('spendee-balance-summary-chevron')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('reduced motion commits summary slide without settle frames', (
     tester,
   ) async {
@@ -660,18 +706,13 @@ void main() {
       tester.getSize(
         find.byKey(const ValueKey('spendee-balance-search-glyph')),
       ),
-      const Size(14, 14),
+      const Size(18, 18),
     );
     expect(
       tester.getSize(
         find.byKey(const ValueKey('spendee-balance-filter-glyph')),
       ),
-      const Size(18, 18),
-    );
-    expect(
-      _imageAssetName(tester, const ValueKey('spendee-balance-filter-glyph')),
-      'assets/b3ma3/filter_glyph.png',
-      reason: 'the filter uses the frozen browser-rendered CSS glyph',
+      const Size(15, 15),
     );
 
     await tester.enterText(find.byType(TextField), 'lidl');
@@ -681,6 +722,47 @@ void main() {
     expect(filterCalls, 1);
     expect(find.byType(BottomSheet), findsNothing);
   });
+
+  testWidgets(
+    '0726 SearchPill gives its full 30px editable hit area and outer focus ring',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceSearchFilter(
+            query: '',
+            filters: const [],
+            onQueryChanged: (_) {},
+            onRemoveFilter: (_) {},
+            onFilterPressed: () {},
+            onCycleScope: () {},
+          ),
+        ),
+      );
+
+      final field = find.byKey(const ValueKey('spendee-balance-search-field'));
+      final editable = find.byKey(
+        const ValueKey('spendee-balance-search-editable'),
+      );
+      expect(tester.getSize(editable).height, 30);
+      expect(
+        find.byKey(const ValueKey('spendee-balance-search-glyph')),
+        findsOneWidget,
+      );
+
+      await tester.tap(field);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-search-field-focus-outline'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<TextField>(editable).decoration!.border,
+        InputBorder.none,
+      );
+    },
+  );
 
   testWidgets(
     'filter keyboard traversal paints an inset outline and activates once',
@@ -848,7 +930,7 @@ void main() {
     }
   });
 
-  testWidgets('permanent rail keeps exact handle pills and dots', (
+  testWidgets('permanent rail keeps only the five-pill viewport', (
     tester,
   ) async {
     String? selected;
@@ -878,21 +960,21 @@ void main() {
     );
 
     final rail = find.byKey(const ValueKey('spendee-balance-time-rail'));
-    final handle = find.byKey(
-      const ValueKey('spendee-balance-collapse-handle'),
+    expect(tester.getSize(rail), const Size(378, 37));
+    expect(
+      find.byKey(const ValueKey('spendee-balance-collapse-handle')),
+      findsNothing,
     );
-    expect(tester.getSize(rail), const Size(378, 79));
-    expect(tester.getSize(handle), const Size(92, 21));
-    expect(tester.getTopLeft(handle).dx - tester.getTopLeft(rail).dx, 178);
-    expect(find.text('ÉV FINOMÍTÁS'), findsOneWidget);
-    expect(find.text('2024'), findsNWidgets(2));
+    expect(find.text('Húzd a nézetet'), findsNothing);
+    expect(find.text('ÉV FINOMÍTÁS'), findsNothing);
+    expect(find.text('2024'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('spendee-balance-year-pill-2024')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey('spendee-balance-year-dot-2024')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('spendee-balance-rail-ticking-viewport')),
@@ -932,34 +1014,6 @@ void main() {
       (idlePill.decoration! as BoxDecoration).boxShadow!.last.blurStyle,
       BlurStyle.inner,
     );
-    expect(
-      (tester
-                  .widget<DecoratedBox>(
-                    find.byKey(
-                      const ValueKey(
-                        'spendee-balance-year-dot-decoration-2024',
-                      ),
-                    ),
-                  )
-                  .decoration
-              as BoxDecoration)
-          .boxShadow,
-      hasLength(2),
-    );
-    expect(
-      (tester
-                  .widget<DecoratedBox>(
-                    find.byKey(
-                      const ValueKey(
-                        'spendee-balance-year-dot-decoration-2023',
-                      ),
-                    ),
-                  )
-                  .decoration
-              as BoxDecoration)
-          .boxShadow,
-      hasLength(1),
-    );
 
     await tester.tap(
       find.byKey(const ValueKey('spendee-balance-year-pill-2025')),
@@ -967,6 +1021,93 @@ void main() {
     await tester.pumpAndSettle();
     expect(selected, '2025');
   });
+
+  testWidgets(
+    '0726 bare rail exposes five slots and moves highlight/scale to center',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceTimeScopeRail(
+            label: '',
+            currentLabel: '',
+            selectedKey: '2024',
+            options: const [
+              SpendeeBalanceTimeScopeItem(key: '2020', label: '2020'),
+              SpendeeBalanceTimeScopeItem(key: '2021', label: '2021'),
+              SpendeeBalanceTimeScopeItem(key: '2022', label: '2022'),
+              SpendeeBalanceTimeScopeItem(key: '2023', label: '2023'),
+              SpendeeBalanceTimeScopeItem(key: '2024', label: '2024'),
+              SpendeeBalanceTimeScopeItem(key: '2025', label: '2025'),
+              SpendeeBalanceTimeScopeItem(key: '2026', label: '2026'),
+              SpendeeBalanceTimeScopeItem(key: '2027', label: '2027'),
+              SpendeeBalanceTimeScopeItem(key: '2028', label: '2028'),
+            ],
+            collapseProgress: 0,
+            showChrome: false,
+            onSelected: (_) {},
+            onCollapseDragStart: () {},
+            onCollapseDragUpdate: (_) {},
+            onCollapseDragEnd: () {},
+            onCollapseToggle: () {},
+          ),
+        ),
+      );
+
+      final rail = find.byKey(const ValueKey('spendee-balance-time-rail'));
+      expect(tester.getSize(rail), const Size(378, 37));
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-4-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-2--2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-6-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-1--3')),
+        findsNothing,
+      );
+
+      final viewport = find.byKey(
+        const ValueKey('spendee-balance-rail-ticking-viewport'),
+      );
+      final activeSlot = find.byKey(
+        const ValueKey('spendee-balance-ticking-slot-4-0'),
+      );
+      final activeCenterBeforeDrag = tester.getCenter(activeSlot).dx;
+      final gesture = await tester.startGesture(tester.getCenter(viewport));
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-45, 0));
+      await tester.pump();
+
+      expect(tester.getCenter(activeSlot).dx, lessThan(activeCenterBeforeDrag));
+
+      final oldScale = tester.widget<Transform>(
+        find.byKey(const ValueKey('spendee-balance-ticking-scale-4-0')),
+      );
+      final newScale = tester.widget<Transform>(
+        find.byKey(const ValueKey('spendee-balance-ticking-scale-5-1')),
+      );
+      expect(
+        oldScale.transform.entry(0, 0),
+        lessThan(newScale.transform.entry(0, 0)),
+      );
+      final oldPill = tester.widget<Container>(
+        find.byKey(const ValueKey('spendee-balance-year-pill-2024')),
+      );
+      final newPill = tester.widget<Container>(
+        find.byKey(const ValueKey('spendee-balance-year-pill-2025')),
+      );
+      expect((oldPill.decoration! as BoxDecoration).gradient, isNull);
+      expect((newPill.decoration! as BoxDecoration).gradient, isNotNull);
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('monthly rail labels stay complete inside two-line pills', (
     tester,
@@ -1064,58 +1205,41 @@ void main() {
     }
   });
 
-  testWidgets('collapse handle exposes exact idle and dragging materials', (
+  testWidgets('separate collapse control is visual-only and keeps its count', (
     tester,
   ) async {
-    Widget rail({required bool dragging}) {
-      return SpendeeBalanceTimeScopeRail(
-        label: 'ÉV FINOMÍTÁS',
-        currentLabel: '2024',
-        selectedKey: '2024',
-        options: const [
-          SpendeeBalanceTimeScopeItem(key: '2024', label: '2024'),
-        ],
-        collapseProgress: 0,
-        dragging: dragging,
-        onSelected: (_) {},
-        onCollapseDragStart: () {},
-        onCollapseDragUpdate: (_) {},
-        onCollapseDragEnd: () {},
-        onCollapseToggle: () {},
-      );
-    }
+    await tester.pumpWidget(
+      host(
+        SpendeeBalanceCollapseControl(
+          transactionCount: 12,
+          collapseProgress: 0,
+          dragging: false,
+          onDragStart: () {},
+          onDragUpdate: (_) {},
+          onDragEnd: () {},
+          onToggle: () {},
+        ),
+      ),
+    );
 
-    await tester.pumpWidget(host(rail(dragging: false)));
-
-    BoxDecoration barDecoration() =>
+    final bar = find.byKey(
+      const ValueKey('spendee-balance-collapse-handle-bar'),
+    );
+    final decoration =
         tester
                 .widget<DecoratedBox>(
-                  find.byKey(
-                    const ValueKey('spendee-balance-collapse-handle-bar'),
-                  ),
+                  find.descendant(of: bar, matching: find.byType(DecoratedBox)),
                 )
                 .decoration
             as BoxDecoration;
-    TextStyle labelStyle() => tester
-        .widget<Text>(
-          find.byKey(const ValueKey('spendee-balance-collapse-handle-label')),
-        )
-        .style!;
-
-    expect(barDecoration().color, const Color(0xFFAEB7C8));
-    expect(barDecoration().boxShadow, const [
-      BoxShadow(
-        color: Color(0x94FFFFFF),
-        offset: Offset(0, 1),
-        blurRadius: 0,
-        blurStyle: BlurStyle.inner,
-      ),
-    ]);
-    expect(labelStyle().color, const Color(0xFF65748B));
-
-    await tester.pumpWidget(host(rail(dragging: true)));
-    expect(barDecoration().color, const Color(0xFF6E5CF1));
-    expect(labelStyle().color, const Color(0xFF4C3ED3));
+    expect(tester.getSize(bar), const Size(34, 4));
+    expect(decoration.gradient, isA<CssLinearGradient>());
+    expect(find.text('Húzd a nézetet'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('spendee-balance-collapse-handle-label')),
+      findsNothing,
+    );
+    expect(find.text('12 tranzakció listázva'), findsOneWidget);
   });
 
   testWidgets('scope pills expose one node and Enter or Space selects once', (
@@ -1168,19 +1292,14 @@ void main() {
     var toggleCount = 0;
     await tester.pumpWidget(
       host(
-        SpendeeBalanceTimeScopeRail(
-          label: 'ÉV FINOMÍTÁS',
-          currentLabel: '2024',
-          selectedKey: '2024',
-          options: const [
-            SpendeeBalanceTimeScopeItem(key: '2024', label: '2024'),
-          ],
+        SpendeeBalanceCollapseControl(
+          transactionCount: 1,
           collapseProgress: 0,
-          onSelected: (_) {},
-          onCollapseDragStart: () {},
-          onCollapseDragUpdate: (_) {},
-          onCollapseDragEnd: () {},
-          onCollapseToggle: () => toggleCount += 1,
+          dragging: false,
+          onDragStart: () {},
+          onDragUpdate: (_) {},
+          onDragEnd: () {},
+          onToggle: () => toggleCount += 1,
         ),
       ),
     );
@@ -1215,20 +1334,34 @@ void main() {
       );
       await tester.pumpWidget(
         host(
-          SpendeeBalanceTimeScopeRail(
-            label: 'ÉV FINOMÍTÁS',
-            currentLabel: '2024',
-            selectedKey: '2024',
-            options: const [
-              SpendeeBalanceTimeScopeItem(key: '2024', label: '2024'),
-              SpendeeBalanceTimeScopeItem(key: '2025', label: '2025'),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SpendeeBalanceTimeScopeRail(
+                label: 'ÉV FINOMÍTÁS',
+                currentLabel: '2024',
+                selectedKey: '2024',
+                options: const [
+                  SpendeeBalanceTimeScopeItem(key: '2024', label: '2024'),
+                  SpendeeBalanceTimeScopeItem(key: '2025', label: '2025'),
+                ],
+                collapseProgress: 0,
+                onSelected: (_) {},
+                onCollapseDragStart: () {},
+                onCollapseDragUpdate: (_) {},
+                onCollapseDragEnd: () {},
+                onCollapseToggle: () {},
+              ),
+              SpendeeBalanceCollapseControl(
+                transactionCount: 1,
+                collapseProgress: 0,
+                dragging: false,
+                onDragStart: () {},
+                onDragUpdate: (_) {},
+                onDragEnd: () {},
+                onToggle: () {},
+              ),
             ],
-            collapseProgress: 0,
-            onSelected: (_) {},
-            onCollapseDragStart: () {},
-            onCollapseDragUpdate: (_) {},
-            onCollapseDragEnd: () {},
-            onCollapseToggle: () {},
           ),
         ),
       );
@@ -1270,7 +1403,7 @@ void main() {
         outlineKey: const ValueKey(
           'spendee-balance-collapse-handle-focus-outline',
         ),
-        borderRadius: BorderRadius.circular(9.5),
+        borderRadius: BorderRadius.circular(10),
       );
       expect(tester.getRect(handle), handleRect);
     },
@@ -1350,6 +1483,15 @@ double _iconScale(WidgetTester tester, TransactionType type) {
 BoxDecoration _actionDecoration(WidgetTester tester, Finder action) {
   final ink = find.descendant(of: action, matching: find.byType(Ink));
   return tester.widget<Ink>(ink).decoration! as BoxDecoration;
+}
+
+BoxDecoration _summaryDecoration(WidgetTester tester) {
+  return tester
+          .widget<Container>(
+            find.byKey(const ValueKey('spendee-balance-summary')),
+          )
+          .decoration!
+      as BoxDecoration;
 }
 
 String _imageAssetName(WidgetTester tester, ValueKey<String> key) {

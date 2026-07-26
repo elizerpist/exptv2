@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'spendee_balance_visual_spec.dart';
+
 enum SpendeeBalanceCollapseState { expanded, collapsing, collapsed }
 
 enum SpendeeBalanceCollapseTarget { expanded, collapsed }
@@ -117,7 +119,7 @@ class SpendeeBalanceCollapseVisuals {
     // The HTML multiplies the changing disappearing-stack shift by the detail
     // progress rather than applying a simple linear endpoint tween.
     const insightHeight = 104.0;
-    const detailHeight = 186.0;
+    const detailHeight = SpendeeBalanceVisualSpec.detailStageHeight;
     const stackGap = 11.0;
     const stackGapCount = 2;
     const heroGap = 11.0;
