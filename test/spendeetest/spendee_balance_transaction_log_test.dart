@@ -4,6 +4,7 @@ import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart'
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
+import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_transaction_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -111,12 +112,8 @@ void main() {
         const Size.square(34),
       );
       expect(
-        tester.getSize(
-          find.byKey(
-            const ValueKey('spendee-balance-transaction-edit-record-1'),
-          ),
-        ),
-        const Size.square(24),
+        find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
+        findsNothing,
       );
       expect(
         tester.getSize(
@@ -208,11 +205,10 @@ void main() {
     },
   );
 
-  testWidgets('nested avatar edit and row targets dispatch once in isolation', (
+  testWidgets('avatar and row targets dispatch once in isolation', (
     tester,
   ) async {
     var avatarCalls = 0;
-    var editCalls = 0;
     var rowCalls = 0;
     await tester.pumpWidget(
       host(
@@ -224,7 +220,7 @@ void main() {
           onRecordTap: (_) => rowCalls += 1,
           onDeleteRequested: (_) => false,
           onCategoryFilter: (_) => avatarCalls += 1,
-          onEditTransaction: (_) => editCalls += 1,
+          onEditTransaction: (_) {},
         ),
       ),
     );
@@ -233,21 +229,86 @@ void main() {
       find.byKey(const ValueKey('spendee-balance-transaction-avatar-record-1')),
     );
     await tester.pump();
-    expect((avatarCalls, editCalls, rowCalls), (1, 0, 0));
-
-    await tester.tap(
+    expect((avatarCalls, rowCalls), (1, 0));
+    expect(
       find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
+      findsNothing,
     );
-    await tester.pump();
-    expect((avatarCalls, editCalls, rowCalls), (1, 1, 0));
 
     final row = find.byKey(
       const ValueKey('spendee-balance-transaction-row-record-1'),
     );
     await tester.tapAt(tester.getCenter(row) + const Offset(40, 0));
     await tester.pump();
-    expect((avatarCalls, editCalls, rowCalls), (1, 1, 1));
+    expect((avatarCalls, rowCalls), (1, 1));
   });
+
+  testWidgets(
+    'mounted log avatars track the live central category colour and icon',
+    (tester) async {
+      var currentCategory = category();
+      late StateSetter setHostState;
+      await tester.pumpWidget(
+        host(
+          StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return SpendeeBalanceTransactionLog(
+                groups: oneGroup(),
+                categoriesById: {7: currentCategory},
+                viewportHeight: 100,
+                onFastFilter: (_, _) {},
+                onRecordTap: (_) {},
+                onDeleteRequested: (_) => false,
+                onCategoryFilter: (_) {},
+                onEditTransaction: (_) {},
+              );
+            },
+          ),
+        ),
+      );
+
+      final avatar = find.byKey(
+        const ValueKey('spendee-balance-transaction-avatar-record-1'),
+      );
+      BoxDecoration avatarDecoration() =>
+          tester
+                  .widget<DecoratedBox>(
+                    find
+                        .descendant(
+                          of: avatar,
+                          matching: find.byType(DecoratedBox),
+                        )
+                        .first,
+                  )
+                  .decoration
+              as BoxDecoration;
+      CategorySlotIcon slotIcon() => tester.widget<CategorySlotIcon>(
+        find.descendant(of: avatar, matching: find.byType(CategorySlotIcon)),
+      );
+
+      expect(
+        (avatarDecoration().gradient! as LinearGradient).colors[1],
+        currentCategory.slotColor,
+      );
+      expect(slotIcon().slot, 1);
+
+      setHostState(() {
+        currentCategory = TransactionCategory.fromMap({
+          ...currentCategory.toMap(),
+          'colorSlot': 8,
+          'iconSlot': 2,
+        });
+      });
+      await tester.pump();
+
+      expect(
+        (avatarDecoration().gradient! as LinearGradient).colors[1],
+        currentCategory.slotColor,
+      );
+      expect(slotIcon().slot, 2);
+    },
+  );
 
   testWidgets(
     'row swipe actions have semantic alternatives and nested buttons activate '
@@ -256,7 +317,6 @@ void main() {
       var fastFilterCalls = 0;
       var deleteCalls = 0;
       var avatarCalls = 0;
-      var editCalls = 0;
       var rowCalls = 0;
       await tester.pumpWidget(
         host(
@@ -271,7 +331,7 @@ void main() {
               return false;
             },
             onCategoryFilter: (_) => avatarCalls += 1,
-            onEditTransaction: (_) => editCalls += 1,
+            onEditTransaction: (_) {},
           ),
         ),
       );
@@ -284,8 +344,8 @@ void main() {
       expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(
         node.childrenCount,
-        2,
-        reason: 'only the category and edit actions remain child nodes',
+        1,
+        reason: 'the category avatar is the only nested action',
       );
       final actionIds =
           node.getSemanticsData().customSemanticsActionIds ?? const <int>[];
@@ -323,14 +383,10 @@ void main() {
       await tester.pump();
       expect((avatarCalls, rowCalls), (1, 0));
 
-      final edit = find.byKey(
-        const ValueKey('spendee-balance-transaction-edit-record-1'),
+      expect(
+        find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
+        findsNothing,
       );
-      Focus.of(tester.element(edit)).requestFocus();
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.space);
-      await tester.pump();
-      expect((editCalls, rowCalls), (1, 0));
 
       final row = find.byKey(
         const ValueKey('spendee-balance-transaction-row-record-1'),
@@ -478,7 +534,7 @@ void main() {
     },
   );
 
-  testWidgets('edit target paints exact focus outline and .92 press scale', (
+  testWidgets('log rows expose no redundant right-edge edit target', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -496,28 +552,10 @@ void main() {
       ),
     );
 
-    final edit = find.byKey(
-      const ValueKey('spendee-balance-transaction-edit-record-1'),
+    expect(
+      find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
+      findsNothing,
     );
-    Focus.of(tester.element(edit)).requestFocus();
-    await tester.pump();
-    final focusPaint = tester.widget<CustomPaint>(
-      find.byKey(
-        const ValueKey('spendee-balance-transaction-edit-focus-record-1'),
-      ),
-    );
-    expect(focusPaint.foregroundPainter, isNotNull);
-
-    final gesture = await tester.startGesture(tester.getCenter(edit));
-    await tester.pump();
-    final pressedTransform = tester.widget<Transform>(
-      find.byKey(
-        const ValueKey('spendee-balance-transaction-edit-transform-record-1'),
-      ),
-    );
-    expect(pressedTransform.transform.storage[0], closeTo(.92, .001));
-    await gesture.up();
-    await tester.pump();
   });
 
   testWidgets(
@@ -528,7 +566,6 @@ void main() {
       var renameCalls = 0;
       var resetCalls = 0;
       var avatarCalls = 0;
-      var editCalls = 0;
       var rowCalls = 0;
       late StateSetter setHostState;
 
@@ -559,7 +596,7 @@ void main() {
                 onRecordTap: (_) => rowCalls += 1,
                 onDeleteRequested: (_) => false,
                 onCategoryFilter: (_) => avatarCalls += 1,
-                onEditTransaction: (_) => editCalls += 1,
+                onEditTransaction: (_) {},
                 onRenameMerchantRequested: (_) => renameCalls += 1,
                 onResetMerchantName: (_) => resetCalls += 1,
               );
@@ -574,9 +611,6 @@ void main() {
       final avatar = find.byKey(
         const ValueKey('spendee-balance-transaction-avatar-record-1'),
       );
-      final edit = find.byKey(
-        const ValueKey('spendee-balance-transaction-edit-record-1'),
-      );
       final rename = find.byKey(
         const ValueKey('spendee-balance-transaction-rename-record-1'),
       );
@@ -586,7 +620,6 @@ void main() {
 
       final originalRowRect = tester.getRect(row);
       final originalAvatarRect = tester.getRect(avatar);
-      final originalEditRect = tester.getRect(edit);
       expect(originalRowRect.size, const Size(372, 55));
       expect(rename, findsOneWidget);
       expect(reset, findsNothing);
@@ -596,7 +629,6 @@ void main() {
 
       expect(tester.getRect(row), originalRowRect);
       expect(tester.getRect(avatar), originalAvatarRect);
-      expect(tester.getRect(edit), originalEditRect);
       expect(tester.getSize(reset), const Size.square(14));
       expect(
         find.descendant(of: reset, matching: find.byType(SvgPicture)),
@@ -609,9 +641,7 @@ void main() {
       expect(renameRect.height, 13);
       expect(renameRect.overlaps(originalAvatarRect), isFalse);
       expect(renameRect.overlaps(resetRect), isFalse);
-      expect(renameRect.overlaps(originalEditRect), isFalse);
       expect(resetRect.overlaps(originalAvatarRect), isFalse);
-      expect(resetRect.overlaps(originalEditRect), isFalse);
       expect(originalRowRect.contains(renameRect.topLeft), isTrue);
       expect(
         originalRowRect.contains(
@@ -629,18 +659,12 @@ void main() {
 
       await tester.tap(rename);
       await tester.pump();
-      expect(
-        (renameCalls, resetCalls, avatarCalls, editCalls, rowCalls),
-        (1, 0, 0, 0, 0),
-      );
+      expect((renameCalls, resetCalls, avatarCalls, rowCalls), (1, 0, 0, 0));
       expect(transformDx(tester, 1), 0);
 
       await tester.tap(reset);
       await tester.pump();
-      expect(
-        (renameCalls, resetCalls, avatarCalls, editCalls, rowCalls),
-        (1, 1, 0, 0, 0),
-      );
+      expect((renameCalls, resetCalls, avatarCalls, rowCalls), (1, 1, 0, 0));
       expect(transformDx(tester, 1), 0);
 
       final renameNode = tester.getSemantics(rename);

@@ -690,7 +690,9 @@ class BalanceFrameResolver {
 /// source-list identities while a recent action, filter or rail query returns,
 /// so that query's expensive aggregate does not run again.
 class _BalanceMetricBundleCache {
-  static const _capacity = 12;
+  // Five-plus rail periods × two transaction types must survive a fast return
+  // gesture; the old 12-entry cache evicted a just-visited year too early.
+  static const _capacity = 32;
   static final Map<_BalanceMetricBundleCacheKey, _BalanceMetricBundlePair>
   _entries = <_BalanceMetricBundleCacheKey, _BalanceMetricBundlePair>{};
 

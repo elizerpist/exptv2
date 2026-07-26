@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
@@ -96,25 +97,25 @@ void main() {
       tester.getRect(
         find.byKey(const ValueKey('spendee-balance-fast-info-belt')),
       ),
-      const Rect.fromLTWH(17, 241, 378, 104),
+      const Rect.fromLTWH(17, 241, 378, 72),
     );
     expect(
       tester.getRect(
         find.byKey(const ValueKey('spendee-balance-detail-stage')),
       ),
-      const Rect.fromLTWH(17, 356, 378, 218),
+      const Rect.fromLTWH(17, 324, 378, 218),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-actions'))),
-      const Rect.fromLTWH(17, 585, 378, 42),
+      const Rect.fromLTWH(17, 553, 378, 42),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-summary'))),
-      const Rect.fromLTWH(17, 638, 378, 59),
+      const Rect.fromLTWH(17, 606, 378, 59),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-search-row'))),
-      const Rect.fromLTWH(17, 708, 378, 39),
+      const Rect.fromLTWH(17, 676, 378, 39),
     );
     expect(
       find.byKey(const ValueKey('spendee-balance-time-rail')),
@@ -166,6 +167,29 @@ void main() {
       expect(find.text('HÓNAP FINOMÍTÁS'), findsNothing);
     },
   );
+
+  testWidgets('no-spend view switch emits the bounded FastInfo trace', (
+    tester,
+  ) async {
+    configureReferenceViewport(tester);
+    DebugConsole.clear();
+    await tester.pumpWidget(host(_input()));
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('spendee-balance-no-spend-cycle')),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      DebugConsole.allText,
+      contains('operation=balance-fast-info-dimension'),
+    );
+    expect(DebugConsole.allText, contains('card=no_spend'));
+    expect(DebugConsole.allText, contains('from_dimension=week'));
+    expect(DebugConsole.allText, contains('to_dimension=month'));
+  });
 
   testWidgets('handle follows the 180px path and snaps to collapsed layout', (
     tester,
@@ -264,7 +288,7 @@ void main() {
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-actions')))
           .dy,
-      585,
+      553,
     );
   });
 

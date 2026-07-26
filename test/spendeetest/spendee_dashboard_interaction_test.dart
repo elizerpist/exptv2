@@ -615,7 +615,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -164,
+        -132,
       );
 
       Future<void> selectMode(ValueKey<String> key) async {
@@ -653,7 +653,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -164,
+        -132,
       );
       await tester.tap(
         find.byKey(const ValueKey('spendee-balance-collapse-handle')),
@@ -729,7 +729,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -164,
+        -132,
       );
       for (final (menuKey, surfaceKey) in surfaces) {
         await selectSurface(menuKey, surfaceKey);
@@ -743,7 +743,7 @@ void main() {
               .transform
               .getTranslation()
               .y,
-          -164,
+          -132,
         );
       }
     },

@@ -118,7 +118,7 @@ class SpendeeBalanceCollapseVisuals {
     // Exit-mode B3M-A3 has two pre-post stack gaps and no compact budget pill.
     // The HTML multiplies the changing disappearing-stack shift by the detail
     // progress rather than applying a simple linear endpoint tween.
-    const insightHeight = 104.0;
+    const insightHeight = SpendeeBalanceVisualSpec.insightHeight;
     const detailHeight = SpendeeBalanceVisualSpec.detailStageHeight;
     const stackGap = 11.0;
     const stackGapCount = 2;

@@ -8,7 +8,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../models/transaction_category.dart';
 import '../../../models/transaction_record.dart';
 import '../../../state/balance_frame.dart';
+import '../../../state/transaction_store.dart';
+import '../../../slots/category_color_resolver.dart';
 import '../../category_slot_icon.dart';
+import 'spendee_balance_debug_trace.dart';
 import 'spendee_balance_visual_spec.dart';
 
 typedef SpendeeBalanceTransactionContextCallback =
@@ -45,6 +48,12 @@ class SpendeeBalanceTransactionLog extends StatefulWidget {
   static const loadMoreThreshold = 320.0;
   static const rowHeight = SpendeeBalanceVisualSpec.transactionRowMinHeight;
 
+  static int mountedRowBound(double viewportHeight) =>
+      ((viewportHeight + cacheExtent * 2) / rowHeight).ceil();
+
+  static int visibleRowBound(double viewportHeight) =>
+      (viewportHeight / rowHeight).ceil();
+
   final List<BalanceLogGroup> groups;
   final Map<int, TransactionCategory> categoriesById;
   final SpendeeBalanceTransactionContextCallback onFastFilter;
@@ -73,6 +82,7 @@ class _SpendeeBalanceTransactionLogState
   bool _loadMoreScheduled = false;
   int? _lastRequestedRowCount;
   int _queryGeneration = 0;
+  BalanceDebugTraceToken? _scrollTrace;
 
   ScrollController get _controller =>
       widget.scrollController ?? _internalScrollController;
@@ -112,6 +122,7 @@ class _SpendeeBalanceTransactionLogState
 
   @override
   void dispose() {
+    _finishScrollTrace(reason: 'dispose');
     _internalScrollController.dispose();
     super.dispose();
   }
@@ -154,7 +165,6 @@ class _SpendeeBalanceTransactionLogState
                           onRecordTap: widget.onRecordTap,
                           onDeleteRequested: widget.onDeleteRequested,
                           onCategoryFilter: widget.onCategoryFilter,
-                          onEditTransaction: widget.onEditTransaction,
                           onRenameMerchantRequested:
                               widget.onRenameMerchantRequested,
                           onResetMerchantName: widget.onResetMerchantName,
@@ -176,15 +186,44 @@ class _SpendeeBalanceTransactionLogState
       return false;
     }
     final rowCount = _rowCount;
+    if (notification is ScrollStartNotification) {
+      _finishScrollTrace(reason: 'replaced');
+      if (BalanceDebugTrace.enabled) {
+        _scrollTrace = BalanceDebugTrace.begin(
+          'balance-log-scroll',
+          fields: <String, Object?>{
+            'groups': widget.groups.length,
+            'loaded_rows': rowCount,
+            'visible_rows': SpendeeBalanceTransactionLog.visibleRowBound(
+              widget.viewportHeight,
+            ),
+            'build_bound': SpendeeBalanceTransactionLog.mountedRowBound(
+              widget.viewportHeight,
+            ),
+            'cache_extent': SpendeeBalanceTransactionLog.cacheExtent,
+          },
+        );
+      }
+    }
     if (notification is ScrollEndNotification && _loadMorePending) {
+      _markScrollNearEnd(notification.metrics.extentAfter);
       _scheduleLoadMore(rowCount);
       return false;
     }
-    if (!_canRequestLoadMore(rowCount, notification.metrics)) return false;
-    _loadMorePending = true;
-    _lastRequestedRowCount = rowCount;
+    if (_canRequestLoadMore(rowCount, notification.metrics)) {
+      _loadMorePending = true;
+      _lastRequestedRowCount = rowCount;
+      if (notification is ScrollEndNotification) {
+        _markScrollNearEnd(notification.metrics.extentAfter);
+        _scheduleLoadMore(rowCount);
+      }
+      return false;
+    }
     if (notification is ScrollEndNotification) {
-      _scheduleLoadMore(rowCount);
+      _finishScrollTrace(
+        extentAfter: notification.metrics.extentAfter,
+        loadMore: false,
+      );
     }
     return false;
   }
@@ -207,8 +246,67 @@ class _SpendeeBalanceTransactionLogState
       _loadMoreScheduled = false;
       _loadMorePending = false;
       if (!widget.hasMore || requestedRowCount != _rowCount) return;
+      _markScrollWindowRequest(requestedRowCount);
       widget.onLoadMore?.call();
+      _finishScrollTrace(requestedRows: requestedRowCount, loadMore: true);
     });
+  }
+
+  void _markScrollNearEnd(double extentAfter) {
+    final trace = _scrollTrace;
+    if (trace == null) return;
+    BalanceDebugTrace.mark(
+      trace,
+      'near_end',
+      fields: <String, Object?>{'extent_after': extentAfter, 'load_more': true},
+    );
+  }
+
+  void _markScrollWindowRequest(int requestedRowCount) {
+    final trace = _scrollTrace;
+    if (trace == null) return;
+    BalanceDebugTrace.mark(
+      trace,
+      'window_request',
+      fields: <String, Object?>{
+        'from_rows': requestedRowCount,
+        'page_size': TransactionStore.visibleDisplayLogPageSize,
+      },
+    );
+  }
+
+  void _finishScrollTrace({
+    String? reason,
+    double? extentAfter,
+    int? requestedRows,
+    bool? loadMore,
+  }) {
+    final trace = _scrollTrace;
+    if (trace == null) return;
+    BalanceDebugTrace.finish(
+      trace,
+      fields: <String, Object?>{
+        ...switch (reason) {
+          final reason? => <String, Object?>{'reason': reason},
+          null => const <String, Object?>{},
+        },
+        ...switch (extentAfter) {
+          final extentAfter? => <String, Object?>{'extent_after': extentAfter},
+          null => const <String, Object?>{},
+        },
+        ...switch (requestedRows) {
+          final requestedRows? => <String, Object?>{
+            'requested_rows': requestedRows,
+          },
+          null => const <String, Object?>{},
+        },
+        ...switch (loadMore) {
+          final loadMore? => <String, Object?>{'load_more': loadMore},
+          null => const <String, Object?>{},
+        },
+      },
+    );
+    _scrollTrace = null;
   }
 }
 
@@ -237,31 +335,18 @@ class _EmptyTransactionLog extends StatelessWidget {
 
 List<_BalanceGroupLayout> _groupLayouts(List<BalanceLogGroup> groups) {
   final layouts = <_BalanceGroupLayout>[];
-  var colorIndex = 0;
   for (final group in groups) {
     if (group.rows.isEmpty) continue;
-    layouts.add(
-      _BalanceGroupLayout(
-        group: group,
-        key: _dateKey(group.date),
-        firstColorIndex: colorIndex,
-      ),
-    );
-    colorIndex += group.rows.length;
+    layouts.add(_BalanceGroupLayout(group: group, key: _dateKey(group.date)));
   }
   return layouts;
 }
 
 class _BalanceGroupLayout {
-  const _BalanceGroupLayout({
-    required this.group,
-    required this.key,
-    required this.firstColorIndex,
-  });
+  const _BalanceGroupLayout({required this.group, required this.key});
 
   final BalanceLogGroup group;
   final String key;
-  final int firstColorIndex;
 }
 
 class _BalanceTransactionDaySliver extends StatelessWidget {
@@ -274,7 +359,6 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
     required this.onRecordTap,
     required this.onDeleteRequested,
     required this.onCategoryFilter,
-    required this.onEditTransaction,
     required this.onRenameMerchantRequested,
     required this.onResetMerchantName,
   });
@@ -286,7 +370,6 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
   final ValueChanged<TransactionRecord> onRecordTap;
   final SpendeeBalanceTransactionDeleteRequest onDeleteRequested;
   final ValueChanged<TransactionCategory> onCategoryFilter;
-  final ValueChanged<TransactionRecord> onEditTransaction;
   final ValueChanged<TransactionRecord>? onRenameMerchantRequested;
   final ValueChanged<TransactionRecord>? onResetMerchantName;
 
@@ -350,15 +433,18 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
               addSemanticIndexes: false,
               itemBuilder: (context, index) {
                 final row = group.rows[index];
+                final category = _categoryFor(row, categoriesById);
                 return _BalanceTransactionRow(
                   key: ValueKey(
                     'spendee-balance-transaction-state-${_rowToken(row)}',
                   ),
                   row: row,
-                  category: _categoryFor(row, categoriesById),
-                  avatarColor:
-                      _transactionColors[(layout.firstColorIndex + index) %
-                          _transactionColors.length],
+                  category: category,
+                  avatarColor: CategoryColorResolver.color(
+                    category: category,
+                    snapshotHex: row.ghost?.categoryColor,
+                    fallback: const Color(0xFF7D88A4),
+                  ),
                   showSeparator: index > 0,
                   isFirst: index == 0,
                   isLast: index == group.rows.length - 1,
@@ -366,7 +452,6 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
                   onRecordTap: onRecordTap,
                   onDeleteRequested: onDeleteRequested,
                   onCategoryFilter: onCategoryFilter,
-                  onEditTransaction: onEditTransaction,
                   onRenameMerchantRequested: onRenameMerchantRequested,
                   onResetMerchantName: onResetMerchantName,
                 );
@@ -414,7 +499,6 @@ class _BalanceTransactionRow extends StatefulWidget {
     required this.onRecordTap,
     required this.onDeleteRequested,
     required this.onCategoryFilter,
-    required this.onEditTransaction,
     required this.onRenameMerchantRequested,
     required this.onResetMerchantName,
   });
@@ -429,7 +513,6 @@ class _BalanceTransactionRow extends StatefulWidget {
   final ValueChanged<TransactionRecord> onRecordTap;
   final SpendeeBalanceTransactionDeleteRequest onDeleteRequested;
   final ValueChanged<TransactionCategory> onCategoryFilter;
-  final ValueChanged<TransactionRecord> onEditTransaction;
   final ValueChanged<TransactionRecord>? onRenameMerchantRequested;
   final ValueChanged<TransactionRecord>? onResetMerchantName;
 
@@ -631,9 +714,6 @@ class _BalanceTransactionRowState extends State<_BalanceTransactionRow> {
                   onCategoryFilter: widget.category == null
                       ? null
                       : () => widget.onCategoryFilter(widget.category!),
-                  onEdit: record == null
-                      ? null
-                      : () => widget.onEditTransaction(record),
                   onRename:
                       record == null || widget.onRenameMerchantRequested == null
                       ? null
@@ -675,7 +755,6 @@ class _BalanceTransactionRowContents extends StatelessWidget {
     required this.showSeparator,
     required this.hasCustomName,
     required this.onCategoryFilter,
-    required this.onEdit,
     required this.onRename,
     required this.onReset,
   });
@@ -690,7 +769,6 @@ class _BalanceTransactionRowContents extends StatelessWidget {
   final bool showSeparator;
   final bool hasCustomName;
   final VoidCallback? onCategoryFilter;
-  final VoidCallback? onEdit;
   final VoidCallback? onRename;
   final VoidCallback? onReset;
 
@@ -732,12 +810,6 @@ class _BalanceTransactionRowContents extends StatelessWidget {
               ),
               const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
               _BalanceTransactionValue(amount: amount, time: time),
-              const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
-              _BalanceEditButton(
-                token: token,
-                merchant: merchant,
-                onPressed: onEdit,
-              ),
             ],
           ),
         ),
@@ -775,7 +847,17 @@ class _BalanceTransactionAvatar extends StatelessWidget {
           onTap: onTap,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: color,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.lerp(color, Colors.white, .24)!,
+                  color,
+                  Color.lerp(color, Colors.black, .16)!,
+                ],
+                stops: const [.0, .58, 1],
+              ),
+              border: Border.all(color: Colors.white.withValues(alpha: .36)),
               borderRadius: BorderRadius.circular(11),
               boxShadow: const [
                 BoxShadow(
@@ -793,12 +875,53 @@ class _BalanceTransactionAvatar extends StatelessWidget {
             ),
             child: SizedBox.square(
               dimension: SpendeeBalanceVisualSpec.transactionAvatarSize,
-              child: Center(
-                child: CategorySlotIcon(
-                  slot: iconSlot,
-                  color: Colors.white,
-                  size: 18,
-                  listenForSlotChanges: true,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: 12,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0x66FFFFFF), Color(0x00FFFFFF)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: CategorySlotIcon(
+                        slot: iconSlot,
+                        color: Colors.white,
+                        size: 18,
+                        // The Balance shell warms this exact authored stroke
+                        // at startup. Reusing it prevents each newly mounted
+                        // lazy row from scheduling a fresh SVG decode while
+                        // the list is moving.
+                        strokeWidth: 1.35,
+                        listenForSlotChanges: true,
+                        debugSource: 'balance-log-avatar',
+                      ),
+                    ),
+                    const IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            top: BorderSide(color: Color(0x4DFFFFFF)),
+                            left: BorderSide(color: Color(0x33FFFFFF)),
+                            right: BorderSide(color: Color(0x1A000000)),
+                            bottom: BorderSide(color: Color(0x26000000)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1135,124 +1258,6 @@ class _BalanceTransactionValue extends StatelessWidget {
   }
 }
 
-class _BalanceEditButton extends StatefulWidget {
-  const _BalanceEditButton({
-    required this.token,
-    required this.merchant,
-    required this.onPressed,
-  });
-
-  final String token;
-  final String merchant;
-  final VoidCallback? onPressed;
-
-  @override
-  State<_BalanceEditButton> createState() => _BalanceEditButtonState();
-}
-
-class _BalanceEditButtonState extends State<_BalanceEditButton> {
-  bool _pressed = false;
-  bool _focused = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value || !mounted) return;
-    setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: '${widget.merchant} tranzakció szerkesztése',
-      child: Semantics(
-        button: true,
-        enabled: widget.onPressed != null,
-        label: '${widget.merchant} tranzakció szerkesztése',
-        onTap: widget.onPressed,
-        excludeSemantics: true,
-        child: _BalanceKeyboardTapTarget(
-          onActivate: widget.onPressed,
-          onFocusChange: (value) => setState(() => _focused = value),
-          child: Listener(
-            key: ValueKey('spendee-balance-transaction-edit-${widget.token}'),
-            behavior: HitTestBehavior.opaque,
-            onPointerDown: widget.onPressed == null
-                ? null
-                : (_) => _setPressed(true),
-            onPointerUp: widget.onPressed == null
-                ? null
-                : (_) => _setPressed(false),
-            onPointerCancel: widget.onPressed == null
-                ? null
-                : (_) => _setPressed(false),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.onPressed,
-              child: Transform.scale(
-                key: ValueKey(
-                  'spendee-balance-transaction-edit-transform-${widget.token}',
-                ),
-                scale: _pressed ? .92 : 1,
-                child: CustomPaint(
-                  key: ValueKey(
-                    'spendee-balance-transaction-edit-focus-${widget.token}',
-                  ),
-                  foregroundPainter: _focused
-                      ? const _BalanceEditFocusOutlinePainter()
-                      : null,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0x1A7D8798),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: SizedBox.square(
-                      dimension: SpendeeBalanceVisualSpec.transactionEditSize,
-                      child: Center(
-                        child: SvgPicture.asset(
-                          'assets/icons/lucide/pencil.svg',
-                          width: 13,
-                          height: 13,
-                          fit: BoxFit.contain,
-                          colorFilter: const ColorFilter.mode(
-                            Color(0xFF7D8798),
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BalanceEditFocusOutlinePainter extends CustomPainter {
-  const _BalanceEditFocusOutlinePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final outline = Paint()
-      ..color = const Color(0x6B7D8798)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTRB(-2, -2, size.width + 2, size.height + 2),
-        const Radius.circular(9),
-      ),
-      outline,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BalanceEditFocusOutlinePainter oldDelegate) =>
-      false;
-}
-
 class _BalanceKeyboardTapTarget extends StatelessWidget {
   const _BalanceKeyboardTapTarget({
     required this.onActivate,
@@ -1287,14 +1292,6 @@ class _BalanceKeyboardTapTarget extends StatelessWidget {
     );
   }
 }
-
-const _transactionColors = <Color>[
-  Color(0xFFFF4B78),
-  Color(0xFF42CF82),
-  Color(0xFF7858F4),
-  Color(0xFFF49B36),
-  Color(0xFF16B9D4),
-];
 
 const _fastFilterSemanticsAction = CustomSemanticsAction(
   label: 'Kereskedő gyorsszűrése',

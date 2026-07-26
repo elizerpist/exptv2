@@ -107,7 +107,8 @@ void main() {
         stops: [0, 46 / 180, .64, 1],
       ),
     );
-    expect(incomeDecoration.boxShadow, const [
+    expect(incomeDecoration.boxShadow, isNull);
+    expect(_actionShadowDecoration(tester, income).boxShadow, const [
       BoxShadow(
         color: Color(0x4D7054ED),
         offset: Offset(0, 11),
@@ -121,7 +122,8 @@ void main() {
       Border.all(color: const Color(0x1A666FAB)),
     );
     expect(inactiveExpenseDecoration.gradient, isNull);
-    expect(inactiveExpenseDecoration.boxShadow, const [
+    expect(inactiveExpenseDecoration.boxShadow, isNull);
+    expect(_actionShadowDecoration(tester, expense).boxShadow, const [
       BoxShadow(color: Color(0x14524B93), offset: Offset(0, 8), blurRadius: 17),
       BoxShadow(
         color: Color(0xF0FFFFFF),
@@ -199,7 +201,8 @@ void main() {
         stops: [0, .36, 136 / 180, 1],
       ),
     );
-    expect(activeExpenseDecoration.boxShadow, const [
+    expect(activeExpenseDecoration.boxShadow, isNull);
+    expect(_actionShadowDecoration(tester, expense).boxShadow, const [
       BoxShadow(
         color: Color(0x4DF5368D),
         offset: Offset(0, 11),
@@ -250,8 +253,21 @@ void main() {
     final summary = _summaryDecoration(tester);
     expect(inactive.color, summary.color);
     expect(inactive.border, summary.border);
-    expect(inactive.boxShadow, summary.boxShadow);
+    final inactiveShadow = _actionShadowDecoration(
+      tester,
+      find.byKey(const ValueKey('spendee-balance-expense-action')),
+    );
+    expect(inactiveShadow.boxShadow, summary.boxShadow);
     expect(inactive.gradient, isNull);
+    final clip = find.ancestor(
+      of: find.byKey(const ValueKey('spendee-balance-expense-action')),
+      matching: find.byType(ClipRRect),
+    );
+    expect(clip, findsOneWidget);
+    expect(
+      tester.widget<ClipRRect>(clip).borderRadius,
+      BorderRadius.circular(16),
+    );
   });
 
   testWidgets(
@@ -724,7 +740,7 @@ void main() {
   });
 
   testWidgets(
-    '0726 SearchPill gives its full 30px editable hit area and outer focus ring',
+    '0726 SearchPill centers a readable editable area and paints one outer blue focus ring',
     (tester) async {
       await tester.pumpWidget(
         host(
@@ -743,7 +759,8 @@ void main() {
       final editable = find.byKey(
         const ValueKey('spendee-balance-search-editable'),
       );
-      expect(tester.getSize(editable).height, 30);
+      expect(tester.getSize(editable).height, 34);
+      expect(tester.widget<TextField>(editable).style?.fontSize, 13);
       expect(
         find.byKey(const ValueKey('spendee-balance-search-glyph')),
         findsOneWidget,
@@ -757,6 +774,13 @@ void main() {
         ),
         findsOneWidget,
       );
+      final fieldDecoration =
+          tester.widget<Container>(field).decoration! as BoxDecoration;
+      expect(fieldDecoration.border, Border.all(color: Colors.transparent));
+      final outline = find.byKey(
+        const ValueKey('spendee-balance-search-field-focus-outline'),
+      );
+      expect(tester.getRect(outline), tester.getRect(field));
       expect(
         tester.widget<TextField>(editable).decoration!.border,
         InputBorder.none,
@@ -1023,7 +1047,7 @@ void main() {
   });
 
   testWidgets(
-    '0726 bare rail exposes five slots and moves highlight/scale to center',
+    '0726 bare rail prebuilds both entering neighbours while preserving the five visible slots',
     (tester) async {
       await tester.pumpWidget(
         host(
@@ -1069,7 +1093,13 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-ticking-slot-1--3')),
-        findsNothing,
+        findsOneWidget,
+        reason: 'the next left pill must exist before it enters the viewport',
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-7-3')),
+        findsOneWidget,
+        reason: 'the next right pill must exist before it enters the viewport',
       );
 
       final viewport = find.byKey(
@@ -1483,6 +1513,11 @@ double _iconScale(WidgetTester tester, TransactionType type) {
 BoxDecoration _actionDecoration(WidgetTester tester, Finder action) {
   final ink = find.descendant(of: action, matching: find.byType(Ink));
   return tester.widget<Ink>(ink).decoration! as BoxDecoration;
+}
+
+BoxDecoration _actionShadowDecoration(WidgetTester tester, Finder action) {
+  final outer = find.ancestor(of: action, matching: find.byType(DecoratedBox));
+  return tester.widget<DecoratedBox>(outer.first).decoration as BoxDecoration;
 }
 
 BoxDecoration _summaryDecoration(WidgetTester tester) {

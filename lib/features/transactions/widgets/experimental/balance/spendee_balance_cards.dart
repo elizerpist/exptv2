@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../state/balance_frame.dart';
+import 'spendee_balance_b3ma3_manifest.dart';
 import 'spendee_balance_card_painters.dart';
 import 'spendee_balance_ticking_carousel.dart';
 import 'spendee_balance_visual_spec.dart';
@@ -225,6 +226,7 @@ class _FastInfoPagerState extends State<_FastInfoPager> {
       initialIndex: widget.initialIndex,
       onIndexChanged: widget.onIndexChanged,
       semanticLabel: 'Balance gyorsinformációk',
+      clipToViewport: true,
       itemSizeBuilder: (_, _) =>
           Size(cardWidth, SpendeeBalanceVisualSpec.insightHeight),
       itemBuilder: (context, index, selected, select) {
@@ -264,13 +266,15 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
         key: ValueKey('spendee-balance-fast-info-surface-${model.kind.name}'),
         decoration: decoration,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(
+            SpendeeBalanceB3mA3Manifest.fastInfoCardRadius,
+          ),
           child: Stack(
             clipBehavior: Clip.hardEdge,
             children: [
               Positioned.fill(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+                  padding: SpendeeBalanceB3mA3Manifest.fastInfoPadding,
                   child: switch (model) {
                     final SpendeeBalanceNoSpendCardModel value =>
                       _NoSpendFastInfo(model: value),
@@ -286,14 +290,14 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
                 ),
               ),
               Positioned(
-                right: 8,
-                bottom: 6,
+                right: SpendeeBalanceB3mA3Manifest.fastInfoGhostRight,
+                bottom: SpendeeBalanceB3mA3Manifest.fastInfoGhostBottom,
                 child: _GhostToggle(
                   key: ValueKey('spendee-balance-fast-info-ghost-${model.id}'),
                   included: model.includeGhostTransactions,
-                  size: 20,
-                  radius: 10,
-                  iconSize: 11,
+                  size: SpendeeBalanceB3mA3Manifest.fastInfoGhostSize,
+                  radius: SpendeeBalanceB3mA3Manifest.fastInfoGhostSize / 2,
+                  iconSize: SpendeeBalanceB3mA3Manifest.fastInfoGhostIconSize,
                   circular: true,
                   onTap: () =>
                       onGhostChanged(model.id, !model.includeGhostTransactions),
@@ -351,7 +355,7 @@ class _NoSpendFastInfo extends StatelessWidget {
             size: Size.square(15),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
         Expanded(
           child: _FastInfoValueBody(
             value: model.value,
@@ -379,10 +383,10 @@ class _CategoryChangeFastInfo extends StatelessWidget {
           icon: _LucideIcon(
             asset: model.iconAsset,
             color: const Color(0xFFEF4173),
-            size: 14,
+            size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
         Expanded(
           child: _FastInfoValueBody(
             value: model.value,
@@ -411,10 +415,10 @@ class _LatestTransactionFastInfo extends StatelessWidget {
           icon: _LucideIcon(
             asset: model.iconAsset,
             color: const Color(0xFF5277D3),
-            size: 14,
+            size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
         Expanded(
           child: _FastInfoValueBody(
             value: model.amount,
@@ -455,19 +459,21 @@ class _TrendComparisonFastInfo extends StatelessWidget {
           icon: _LucideIcon(
             asset: model.iconAsset,
             color: const Color(0xFF7657D9),
-            size: 14,
+            size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
         Expanded(
           child: _FastInfoValueBody(
             value: model.percentage,
             valueColor: _color,
-            trailing: Text(
+            valueSize: SpendeeBalanceB3mA3Manifest.fastInfoTrendValueSize,
+            showSecondary: false,
+            leading: Text(
               _directionGlyph,
               style: TextStyle(
                 color: _color,
-                fontSize: 17,
+                fontSize: SpendeeBalanceB3mA3Manifest.fastInfoTrendGlyphSize,
                 height: 1,
                 fontWeight: FontWeight.w900,
                 fontVariations: SpendeeBalanceVisualSpec.weight950,
@@ -505,98 +511,11 @@ class _UpcomingRecurringFastInfo extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
         Expanded(
-          child: Column(
-            children: [
-              SizedBox(
-                key: const ValueKey(
-                  'spendee-balance-upcoming-recurring-value-slot',
-                ),
-                height: 11,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        model.name,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          color: Color(0xFF1B294D),
-                          fontSize: 9.5,
-                          height: 1,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        model.amount,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFEF4173),
-                          fontSize: 9,
-                          height: 1,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 1),
-              SizedBox(
-                key: const ValueKey(
-                  'spendee-balance-upcoming-recurring-avatar-slot',
-                ),
-                height: 14,
-                child: Center(
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: model.categoryColor,
-                      shape: BoxShape.circle,
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x3DFFFFFF),
-                          spreadRadius: 1,
-                          blurStyle: BlurStyle.inner,
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: _LucideIcon(
-                      asset: model.categoryIconAsset,
-                      color: Colors.white,
-                      size: 8,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 1),
-              Expanded(
-                key: const ValueKey(
-                  'spendee-balance-upcoming-recurring-date-slot',
-                ),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Text(
-                    model.dueText,
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: Color(0xFF65718E),
-                      fontSize: 7.5,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          child: _FastInfoValueBody(
+            value: model.name,
+            secondary: '${model.amount} · ${model.dueText}',
           ),
         ),
       ],
@@ -620,12 +539,12 @@ class _FastInfoHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 24,
+      height: SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize,
       child: Row(
         children: [
           Container(
-            width: 24,
-            height: 24,
+            width: SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize,
+            height: SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize,
             decoration: BoxDecoration(
               color: iconBackground,
               shape: BoxShape.circle,
@@ -633,14 +552,14 @@ class _FastInfoHeader extends StatelessWidget {
             alignment: Alignment.center,
             child: icon,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: SpendeeBalanceB3mA3Manifest.fastInfoHeaderGap),
           Expanded(
             child: Text(
               title,
               style: const TextStyle(
                 color: Color(0xFF1B294D),
-                fontSize: 8,
-                height: 1.18,
+                fontSize: SpendeeBalanceB3mA3Manifest.fastInfoTitleSize,
+                height: SpendeeBalanceB3mA3Manifest.fastInfoTitleLineHeight,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -660,54 +579,101 @@ class _FastInfoValueBody extends StatelessWidget {
     required this.value,
     required this.secondary,
     this.valueColor = const Color(0xFF19274C),
-    this.trailing,
+    this.leading,
+    this.valueSize = SpendeeBalanceB3mA3Manifest.fastInfoValueSize,
+    this.showSecondary = true,
   });
 
   final String value;
   final String secondary;
   final Color valueColor;
-  final Widget? trailing;
+  final Widget? leading;
+  final double valueSize;
+  final bool showSecondary;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
+        if (showSecondary)
+          SizedBox(
+            height: SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight,
+            child: Center(
+              child: _FastInfoValue(
+                value: value,
+                valueColor: valueColor,
+                valueSize: valueSize,
+                leading: leading,
+              ),
+            ),
+          ),
+        if (showSecondary)
+          Expanded(
+            child: Align(
+              alignment: Alignment.bottomCenter,
               child: Text(
-                value,
+                secondary,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: valueColor,
-                  fontSize: 15,
-                  height: 1.05,
-                  fontWeight: FontWeight.w900,
-                  fontVariations: SpendeeBalanceVisualSpec.weight950,
+                style: const TextStyle(
+                  color: Color(0xFF65718E),
+                  fontSize: SpendeeBalanceB3mA3Manifest.fastInfoMetaSize,
+                  height: 1.1,
+                  fontWeight: FontWeight.w700,
+                  fontVariations: SpendeeBalanceVisualSpec.weight750,
                 ),
               ),
             ),
-            if (trailing case final trailing?) ...[
-              const SizedBox(width: 4),
-              trailing,
-            ],
-          ],
-        ),
-        Text(
-          secondary,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF65718E),
-            fontSize: 7.2,
-            height: 1.1,
-            fontWeight: FontWeight.w700,
-            fontVariations: SpendeeBalanceVisualSpec.weight750,
+          ),
+        if (!showSecondary)
+          Expanded(
+            child: Center(
+              child: _FastInfoValue(
+                value: value,
+                valueColor: valueColor,
+                valueSize: valueSize,
+                leading: leading,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FastInfoValue extends StatelessWidget {
+  const _FastInfoValue({
+    required this.value,
+    required this.valueColor,
+    required this.valueSize,
+    required this.leading,
+  });
+
+  final String value;
+  final Color valueColor;
+  final double valueSize;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (leading case final leading?) ...[leading, const SizedBox(width: 4)],
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: valueSize,
+              height: SpendeeBalanceB3mA3Manifest.fastInfoValueLineHeight,
+              fontWeight: FontWeight.w900,
+              fontVariations: SpendeeBalanceVisualSpec.weight950,
+            ),
           ),
         ),
       ],
@@ -725,23 +691,20 @@ BoxDecoration _fastInfoDecoration(SpendeeBalanceFastInfoKind kind) {
           inset: const Color(0xF5FFFFFF),
         ),
         SpendeeBalanceFastInfoKind.latestTransaction => (
-          border: const Color(0x2E527ED5),
-          shadow: const Color(0x1C527ED5),
+          border: const Color(0x305277D3),
+          shadow: const Color(0x1F5277D3),
           gradient: null,
           inset: const Color(0xF5FFFFFF),
         ),
         SpendeeBalanceFastInfoKind.trendComparison => (
-          border: const Color(0x2E7657D9),
-          shadow: const Color(0x1A7657D9),
-          gradient: const CssLinearGradient(
-            cssDegrees: 145,
-            colors: [Color(0xFAF8F6FF), Color(0xF2FFFFFF)],
-          ),
-          inset: const Color(0xF5FFFFFF),
+          border: const Color(0x1C6770B0),
+          shadow: const Color(0x1A524B93),
+          gradient: null,
+          inset: const Color(0xF0FFFFFF),
         ),
         SpendeeBalanceFastInfoKind.upcomingRecurring => (
-          border: const Color(0x2E8B5CF6),
-          shadow: const Color(0x1C8B5CF6),
+          border: const Color(0x308B5CF6),
+          shadow: const Color(0x1F8B5CF6),
           gradient: const CssLinearGradient(
             cssDegrees: 145,
             colors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
@@ -749,10 +712,10 @@ BoxDecoration _fastInfoDecoration(SpendeeBalanceFastInfoKind kind) {
           inset: const Color(0xF5FFFFFF),
         ),
         SpendeeBalanceFastInfoKind.noSpend => (
-          border: const Color(0x1C6770B0),
-          shadow: const Color(0x1A524B93),
+          border: const Color(0x305F55EC),
+          shadow: const Color(0x1F5F55EC),
           gradient: null,
-          inset: const Color(0xF0FFFFFF),
+          inset: const Color(0xF5FFFFFF),
         ),
       };
   return BoxDecoration(
@@ -1059,6 +1022,7 @@ class _SpendeeBalanceDetailCarouselState
                 widget.onPageChanged?.call(logicalIndex);
               },
               semanticLabel: 'Balance részletkártyák',
+              clipToViewport: true,
               itemSizeBuilder: (_, _) => const Size(
                 SpendeeBalanceVisualSpec.contentWidth,
                 SpendeeBalanceVisualSpec.detailCardHeight,

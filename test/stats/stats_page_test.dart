@@ -1314,6 +1314,8 @@ void main() {
         record(id: 3, date: '2026-07-03', amount: -11000, categoryId: 1),
       ]);
 
+      expect(worker.requests, hasLength(requestsBeforeMerge));
+      await tester.pump(const Duration(milliseconds: 420));
       expect(worker.requests, hasLength(requestsBeforeMerge + 2));
       expect(
         worker.requests
@@ -1387,6 +1389,7 @@ void main() {
       store.mergeExternalTransactions([
         record(id: 3, date: '2026-07-03', amount: -11000, categoryId: 1),
       ]);
+      await tester.pump(const Duration(milliseconds: 420));
       expect(worker.requests, hasLength(requestsBeforeMerge + 2));
 
       await tester.pumpWidget(statsHost(active: true));

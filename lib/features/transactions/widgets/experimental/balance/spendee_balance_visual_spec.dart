@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'spendee_balance_b3ma3_manifest.dart';
+
 /// A CSS Images level-3 linear gradient.
 ///
 /// Flutter's [LinearGradient] alignments do not preserve a CSS angle on
@@ -74,53 +76,59 @@ abstract final class SpendeeBalanceVisualSpec {
   static const weight850 = <ui.FontVariation>[ui.FontVariation('wght', 850)];
   static const weight950 = <ui.FontVariation>[ui.FontVariation('wght', 950)];
 
-  static const viewport = Size(412, 892);
+  static const viewport = SpendeeBalanceB3mA3Manifest.viewport;
   static const canvas = Size(410, 890);
   static const screenBorderWidth = 1.0;
   static const screenRadius = 34.0;
 
   /// Approved HTML permanent-screen Grey 100 page surface.
-  static const pageBackground = Color(0xFFF1F5F9);
-  static const horizontalInset = 16.0;
-  static const contentWidth = 378.0;
-  static const stackGap = 11.0;
+  static const pageBackground = SpendeeBalanceB3mA3Manifest.pageBackground;
+  static const horizontalInset = SpendeeBalanceB3mA3Manifest.horizontalInset;
+  // The 17px authored gutter is measured from the 412px screen edge. The
+  // Balance canvas sits one physical pixel inside that screen border.
+  static const canvasContentInset = horizontalInset - screenBorderWidth;
+  static const contentWidth = SpendeeBalanceB3mA3Manifest.contentWidth;
+  static const stackGap = SpendeeBalanceB3mA3Manifest.stackGap;
 
   static const brandTop = 48.0;
   static const brandHeight = 49.0;
   static const logoSize = 56.0;
 
-  static const heroTop = 104.0;
-  static const heroExpandedHeight = 126.0;
+  static const heroTop = SpendeeBalanceB3mA3Manifest.heroTop;
+  static const heroExpandedHeight = SpendeeBalanceB3mA3Manifest.heroHeight;
   static const heroCollapsedHeight = 104.0;
   static const heroRadius = 24.0;
   static const heroPadding = EdgeInsets.fromLTRB(20, 16, 20, 12);
   static const menuTop = 118.0;
   static const menuRight = 36.0;
 
-  static const insightTop = 241.0;
-  static const insightHeight = 104.0;
-  static const insightGap = 9.0;
+  static const insightTop = SpendeeBalanceB3mA3Manifest.fastInfoTop;
+  static const insightHeight = SpendeeBalanceB3mA3Manifest.fastInfoHeight;
+  static const insightGap = SpendeeBalanceB3mA3Manifest.fastInfoGap;
 
-  static const detailTop = 356.0;
+  static const detailTop = SpendeeBalanceB3mA3Manifest.detailTop;
 
   /// `balance_latest_layout.html`: 208px card + 4px gap + 6px pagination.
-  static const detailStageHeight = 218.0;
-  static const detailCardHeight = 208.0;
-  static const detailPaginationHeight = 6.0;
-  static const detailPaginationGap = 4.0;
+  static const detailStageHeight =
+      SpendeeBalanceB3mA3Manifest.detailStageHeight;
+  static const detailCardHeight = SpendeeBalanceB3mA3Manifest.detailCardHeight;
+  static const detailPaginationHeight =
+      SpendeeBalanceB3mA3Manifest.detailPaginationHeight;
+  static const detailPaginationGap =
+      SpendeeBalanceB3mA3Manifest.detailPaginationGap;
   static const detailDotInactive = 4.0;
   static const detailDotActive = 6.0;
   static const detailDotColor = Color(0xFFE1E4EC);
   static const detailDotActiveColor = Color(0xFFE84CAE);
 
-  static const actionTop = 585.0;
+  static const actionTop = SpendeeBalanceB3mA3Manifest.actionTop;
   static const actionHeight = 42.0;
   static const actionSideInset = 4.0;
   static const actionGap = 10.0;
   static const actionRadius = 16.0;
   static const actionPulseDuration = Duration(milliseconds: 420);
 
-  static const summaryTop = 638.0;
+  static const summaryTop = SpendeeBalanceB3mA3Manifest.summaryTop;
   static const summaryHeight = 59.0;
   static const summaryRadius = 20.0;
   static const summaryHorizontalPadding = 15.0;
@@ -140,19 +148,25 @@ abstract final class SpendeeBalanceVisualSpec {
     ),
   ];
 
-  static const searchTop = 708.0;
+  static const searchTop = SpendeeBalanceB3mA3Manifest.searchTop;
   static const searchHeight = 39.0;
   static const searchGap = 9.0;
   static const searchFieldRadius = 21.0;
+  static const searchContentHorizontalPadding = 14.0;
+  static const searchEditableHeight = 34.0;
+  static const searchTextSize = 13.0;
+  static const searchFocusColor = Color(0xFF2F80ED);
   static const filterWidth = 40.0;
   static const filterRadius = 17.0;
 
-  static const timeRailTop = 758.0;
+  static const timeRailTop = SpendeeBalanceB3mA3Manifest.timeRailTop;
   static const timeRailHeight = 79.0;
   static const timeRailControlHeight = 21.0;
   static const timeRailViewportHeight = 37.0;
   static const timeRailSlotDistance = 69.2;
-  static const timeRailVisibleLogicalDistance = 2;
+
+  /// Five visible slots plus one already-built entering neighbour per side.
+  static const timeRailVisibleLogicalDistance = 3;
   static const handleSize = Size(92, 21);
   static const handleBarSize = Size(22, 3);
   static const yearPillSize = Size(49, 30);

@@ -150,6 +150,8 @@ class _StatsPageState extends State<StatsPage>
   TransactionType? _snapshotPendingType;
   final _prewarmFrameKeys = <StatsRenderFrameKey>{};
   final _inactiveStoreListenable = ChangeNotifier();
+  Timer? _inactivePrewarmTimer;
+  var _inactivePrewarmGeneration = 0;
   var _pageActive = true;
 
   @override
@@ -224,11 +226,13 @@ class _StatsPageState extends State<StatsPage>
     if (_pageActive == active) return;
     _pageActive = active;
     if (!active) return;
+    _cancelInactiveStorePrewarm();
     _syncSummaryFromStore();
   }
 
   @override
   void dispose() {
+    _cancelInactiveStorePrewarm();
     _inactiveStoreListenable.dispose();
     _fastInfoExtent.dispose();
     _headerPullController.dispose();
@@ -244,14 +248,41 @@ class _StatsPageState extends State<StatsPage>
     _discardPendingThresholdStep();
     final changed = _syncSummaryFromStore();
     if (!_pageActive) {
+      _scheduleInactiveStorePrewarm();
+      return;
+    }
+    if (changed && mounted) setState(() {});
+  }
+
+  /// The retained Stats page must not serialise two 15k-row frame requests on
+  /// the UI interaction that changed Balance. Coalesce rapid type/rail/search
+  /// updates and warm the inactive tab only once the current animation has
+  /// settled. Activation still takes the normal immediate frame path.
+  void _scheduleInactiveStorePrewarm() {
+    _inactivePrewarmTimer?.cancel();
+    final generation = ++_inactivePrewarmGeneration;
+    DebugConsole.log(
+      '[Perf] Stats inactive prewarm deferred generation=$generation delay_ms=420',
+    );
+    _inactivePrewarmTimer = Timer(const Duration(milliseconds: 420), () {
+      if (!mounted || _pageActive || generation != _inactivePrewarmGeneration) {
+        return;
+      }
+      DebugConsole.log(
+        '[Perf] Stats inactive prewarm dispatch generation=$generation',
+      );
       _prewarmStatsFrames(
         'inactive-store',
         includeCurrent: true,
         allowInactive: true,
       );
-      return;
-    }
-    if (changed && mounted) setState(() {});
+    });
+  }
+
+  void _cancelInactiveStorePrewarm() {
+    _inactivePrewarmGeneration += 1;
+    _inactivePrewarmTimer?.cancel();
+    _inactivePrewarmTimer = null;
   }
 
   void _refreshForLifecycle() {

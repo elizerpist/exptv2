@@ -38,9 +38,9 @@ void main() {
       final expectations =
           <SpendeeBalanceFastInfoKind, _FastSurfaceExpectation>{
             SpendeeBalanceFastInfoKind.noSpend: const _FastSurfaceExpectation(
-              border: Color(0x1C6770B0),
-              outerShadow: Color(0x1A524B93),
-              innerShadow: Color(0xF0FFFFFF),
+              border: Color(0x305F55EC),
+              outerShadow: Color(0x1F5F55EC),
+              innerShadow: Color(0xF5FFFFFF),
             ),
             SpendeeBalanceFastInfoKind.categoryChange:
                 const _FastSurfaceExpectation(
@@ -50,21 +50,20 @@ void main() {
                 ),
             SpendeeBalanceFastInfoKind.latestTransaction:
                 const _FastSurfaceExpectation(
-                  border: Color(0x2E527ED5),
-                  outerShadow: Color(0x1C527ED5),
+                  border: Color(0x305277D3),
+                  outerShadow: Color(0x1F5277D3),
                   innerShadow: Color(0xF5FFFFFF),
                 ),
             SpendeeBalanceFastInfoKind.trendComparison:
                 const _FastSurfaceExpectation(
-                  border: Color(0x2E7657D9),
-                  outerShadow: Color(0x1A7657D9),
-                  innerShadow: Color(0xF5FFFFFF),
-                  gradientColors: [Color(0xFAF8F6FF), Color(0xF2FFFFFF)],
+                  border: Color(0x1C6770B0),
+                  outerShadow: Color(0x1A524B93),
+                  innerShadow: Color(0xF0FFFFFF),
                 ),
             SpendeeBalanceFastInfoKind.upcomingRecurring:
                 const _FastSurfaceExpectation(
-                  border: Color(0x2E8B5CF6),
-                  outerShadow: Color(0x1C8B5CF6),
+                  border: Color(0x308B5CF6),
+                  outerShadow: Color(0x1F8B5CF6),
                   innerShadow: Color(0xF5FFFFFF),
                   gradientColors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
                 ),
@@ -123,7 +122,7 @@ void main() {
       }
     });
 
-    testWidgets('is 104px high and authors exactly three card slots', (
+    testWidgets('is 72px high and authors exactly three card slots', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -139,7 +138,7 @@ void main() {
         tester.getSize(
           find.byKey(const ValueKey('spendee-balance-fast-info-belt')),
         ),
-        const Size(378, 104),
+        const Size(378, 72),
       );
       expect(
         SpendeeBalanceFastInfoBelt.cardWidthFor(378),
@@ -206,8 +205,12 @@ void main() {
             expect(find.byType(SvgPicture), findsNWidgets(2));
             expect(find.text('18%'), findsOneWidget);
             expect(find.text('↑'), findsOneWidget);
+            expect(
+              tester.getTopLeft(find.text('↑')).dx,
+              lessThan(tester.getTopLeft(find.text('18%')).dx),
+            );
           case SpendeeBalanceUpcomingRecurringCardModel():
-            expect(find.byType(SvgPicture), findsNWidgets(2));
+            expect(find.byType(SvgPicture), findsOneWidget);
             expect(
               find.byKey(
                 const ValueKey('spendee-balance-upcoming-recurring-glyph'),
@@ -216,8 +219,7 @@ void main() {
             );
             expect(find.text('↻'), findsOneWidget);
             expect(find.text('Netflix'), findsOneWidget);
-            expect(find.text('-3 490 Ft'), findsOneWidget);
-            expect(find.text('aug. 4.'), findsOneWidget);
+            expect(find.text('-3 490 Ft · aug. 4.'), findsOneWidget);
         }
       }
     });
@@ -390,59 +392,33 @@ void main() {
       expect(decoration.boxShadow, isNull);
     });
 
-    testWidgets('upcoming card keeps the compact 11/14/flexible row grid', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        host(
-          SpendeeBalanceFastInfoCard(
-            model: fastInfoModels().last,
-            onGhostChanged: (_, _) {},
+    testWidgets(
+      'upcoming card uses the source compact shared value and metadata rows',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceFastInfoCard(
+              model: fastInfoModels().last,
+              onGhostChanged: (_, _) {},
+            ),
+            width: 120,
           ),
-          width: 120,
-        ),
-      );
+        );
 
-      expect(
-        tester.getSize(
-          find.byKey(
-            const ValueKey('spendee-balance-upcoming-recurring-value-slot'),
-          ),
-        ),
-        const Size(96, 11),
-      );
-      expect(
-        tester.getSize(
+        final name = tester.widget<Text>(find.text('Netflix'));
+        final metadata = tester.widget<Text>(find.text('-3 490 Ft · aug. 4.'));
+        expect(name.style!.fontSize, 13);
+        expect(name.style!.height, 1.05);
+        expect(metadata.style!.fontSize, 6.5);
+        expect(metadata.style!.height, 1.1);
+        expect(
           find.byKey(
             const ValueKey('spendee-balance-upcoming-recurring-avatar-slot'),
           ),
-        ),
-        const Size(96, 14),
-      );
-      expect(
-        tester.getSize(
-          find.byKey(
-            const ValueKey('spendee-balance-upcoming-recurring-date-slot'),
-          ),
-        ),
-        const Size(96, 13),
-      );
-      final avatarDecoration = _firstContainerDecoration(
-        tester,
-        find.byKey(
-          const ValueKey('spendee-balance-upcoming-recurring-avatar-slot'),
-        ),
-      );
-      expect(avatarDecoration.shape, BoxShape.circle);
-      expect(avatarDecoration.border, isNull);
-      expect(avatarDecoration.boxShadow, const [
-        BoxShadow(
-          color: Color(0x3DFFFFFF),
-          spreadRadius: 1,
-          blurStyle: BlurStyle.inner,
-        ),
-      ]);
-    });
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('upcoming value row ellipsizes both live-data fields safely', (
       tester,
@@ -469,7 +445,7 @@ void main() {
       expect(tester.takeException(), isNull);
       for (final value in [
         'Rendkívül hosszú ismétlődő szolgáltatásnév',
-        '-123 456 789 Ft',
+        '-123 456 789 Ft · aug. 4.',
       ]) {
         final text = tester.widget<Text>(find.text(value));
         expect(text.maxLines, 1);

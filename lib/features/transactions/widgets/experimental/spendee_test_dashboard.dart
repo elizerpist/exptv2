@@ -4346,6 +4346,10 @@ class _SpendeeTestDashboardState extends State<SpendeeTestDashboard>
           widget.logBottomPadding,
           widget.onEditTransaction,
           widget.onDeleteTransactionRequested,
+          // Category edits replace this central snapshot. The bounded log
+          // cache must rebuild so every mounted row resolves the new live
+          // icon/colour rather than retaining a row-order palette.
+          store.categoriesById,
         ),
         transactionLogBuilder: (context, frame) {
           return SpendeeBalanceTransactionLog(

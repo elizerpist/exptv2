@@ -44,6 +44,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.semanticLabel,
     this.maxVisibleLogicalDistance,
     this.itemScaleBuilder,
+    this.clipToViewport = false,
   }) : assert(itemCount > 0),
        assert(initialIndex >= 0 && initialIndex < itemCount),
        assert(
@@ -68,6 +69,10 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   final String? semanticLabel;
   final int? maxVisibleLogicalDistance;
   final SpendeeBalanceTickingItemScaleBuilder? itemScaleBuilder;
+
+  /// B3M-A3 FastInfo/detail surfaces must not paint a virtual neighbour into
+  /// the page gutter. Generic callers retain the old shadow-friendly policy.
+  final bool clipToViewport;
 
   @override
   State<SpendeeBalanceTickingViewport> createState() =>
@@ -287,7 +292,7 @@ class _SpendeeBalanceTickingViewportState
         height: widget.height,
         child: Stack(
           key: const ValueKey('spendee-balance-ticking-stack'),
-          clipBehavior: Clip.none,
+          clipBehavior: widget.clipToViewport ? Clip.hardEdge : Clip.none,
           children: [
             for (final slot in slots)
               _positionedItem(

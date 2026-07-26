@@ -75,7 +75,11 @@ class SpendeeBalanceDashboard extends StatefulWidget {
 class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     with SingleTickerProviderStateMixin {
   static const _collapseSettleDuration = Duration(milliseconds: 260);
-  static const _frameHistoryCapacity = 8;
+  // Annual rail navigation spans more than the prior eight query states once
+  // both income/expense and a bounded log window are involved. Retaining the
+  // recent query frames prevents a return tap from recomputing all FastInfo
+  // aggregates on the UI isolate.
+  static const _frameHistoryCapacity = 32;
 
   late final SpendeeBalanceCollapseController _collapseController;
   late final AnimationController _collapseSettleController;
@@ -98,6 +102,11 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   BalanceRenderFrame? _cachedTransactionLogFrame;
   Object? _cachedTransactionLogRevision;
   String? _scheduledFallbackKey;
+  var _lastFrameCacheOutcome = 'cold';
+  var _lastTransactionLogCacheOutcome = 'cold';
+  BalanceDebugTraceToken? _pendingScopeTrace;
+  String? _pendingScopeTraceKey;
+  var _scopeTraceFinishScheduled = false;
 
   @override
   void initState() {
@@ -112,6 +121,13 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
 
   @override
   void dispose() {
+    final pendingScopeTrace = _pendingScopeTrace;
+    if (pendingScopeTrace != null) {
+      BalanceDebugTrace.finish(
+        pendingScopeTrace,
+        fields: const <String, Object?>{'reason': 'dispose'},
+      );
+    }
     _collapseSettleController
       ..removeListener(_handleCollapseAnimation)
       ..dispose();
@@ -263,6 +279,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         (identical(cachedInput, widget.input) ||
             cachedInput.sameRevisionAs(widget.input))) {
       _cachedInput = widget.input;
+      _lastFrameCacheOutcome = 'same';
+      _settleScopeTraceIfReady(cached);
       return cached;
     }
     for (final entry in _frameHistory) {
@@ -272,9 +290,24 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       _cachedTransactionLog = null;
       _cachedTransactionLogFrame = null;
       _cachedTransactionLogRevision = null;
+      _lastFrameCacheOutcome = 'history';
+      _settleScopeTraceIfReady(entry.frame);
       return entry.frame;
     }
-    final trace = BalanceDebugTrace.begin('balance-frame-resolve');
+    _lastFrameCacheOutcome = 'miss';
+    final BalanceDebugTraceToken? trace;
+    if (BalanceDebugTrace.enabled) {
+      trace = BalanceDebugTrace.begin(
+        'balance-frame-resolve',
+        fields: <String, Object?>{
+          'type': widget.input.activeType.name,
+          'window': widget.input.summaryWindow.name,
+          'visible_rows': widget.input.visibleLogEntryLimit ?? 0,
+        },
+      );
+    } else {
+      trace = null;
+    }
     late final BalanceRenderFrame frame;
     try {
       frame = BalanceFrameResolver.resolve(
@@ -285,13 +318,23 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       BalanceDebugTrace.finish(trace, error: error);
       rethrow;
     }
-    BalanceDebugTrace.finish(trace);
+    if (trace != null) {
+      BalanceDebugTrace.finish(
+        trace,
+        fields: <String, Object?>{
+          'cache': _lastFrameCacheOutcome,
+          'scope_options': frame.query.scopeOptions.length,
+          'visible_rows': frame.visibleLogRowCount,
+        },
+      );
+    }
     _cachedInput = widget.input;
     _cachedFrame = frame;
     _rememberFrame(widget.input, frame);
     _cachedTransactionLog = null;
     _cachedTransactionLogFrame = null;
     _cachedTransactionLogRevision = null;
+    _settleScopeTraceIfReady(frame);
     return frame;
   }
 
@@ -336,8 +379,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     return Positioned(
       key: const ValueKey('spendee-balance-collapse-content-region'),
       top: SpendeeBalanceVisualSpec.heroTop,
-      right: SpendeeBalanceVisualSpec.horizontalInset,
-      left: SpendeeBalanceVisualSpec.horizontalInset,
+      right: SpendeeBalanceVisualSpec.canvasContentInset,
+      left: SpendeeBalanceVisualSpec.canvasContentInset,
       height:
           SpendeeBalanceVisualSpec.detailTop -
           SpendeeBalanceVisualSpec.heroTop +
@@ -432,19 +475,44 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                               pages: _detailModels(frame),
                               onGhostChanged: _setGhostSection,
                               onBudgetDimensionChanged: (value) {
-                                setState(() => _budgetDimension = value);
+                                _changeFastInfoDimension(
+                                  card: 'variable_budget',
+                                  previous: _budgetDimension.name,
+                                  next: value.name,
+                                  apply: () => _budgetDimension = value,
+                                );
                               },
                               onMerchantDimensionChanged: (value) {
-                                setState(() => _merchantDimension = value);
+                                _changeFastInfoDimension(
+                                  card: 'top_merchants',
+                                  previous: _merchantDimension.name,
+                                  next: value.name,
+                                  apply: () => _merchantDimension = value,
+                                );
                               },
                               onCategoryRankDimensionChanged: (value) {
-                                setState(() => _categoryRankDimension = value);
+                                _changeFastInfoDimension(
+                                  card: 'top_categories',
+                                  previous: _categoryRankDimension.name,
+                                  next: value.name,
+                                  apply: () => _categoryRankDimension = value,
+                                );
                               },
                               onVendorRankDimensionChanged: (value) {
-                                setState(() => _vendorRankDimension = value);
+                                _changeFastInfoDimension(
+                                  card: 'top_vendors',
+                                  previous: _vendorRankDimension.name,
+                                  next: value.name,
+                                  apply: () => _vendorRankDimension = value,
+                                );
                               },
                               onAverageDimensionChanged: (value) {
-                                setState(() => _averageDimension = value);
+                                _changeFastInfoDimension(
+                                  card: 'average_daily',
+                                  previous: _averageDimension.name,
+                                  next: value.name,
+                                  apply: () => _averageDimension = value,
+                                );
                               },
                             ),
                           ),
@@ -467,8 +535,8 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   ) {
     return Positioned(
       top: SpendeeBalanceVisualSpec.actionTop,
-      right: SpendeeBalanceVisualSpec.horizontalInset,
-      left: SpendeeBalanceVisualSpec.horizontalInset,
+      right: SpendeeBalanceVisualSpec.canvasContentInset,
+      left: SpendeeBalanceVisualSpec.canvasContentInset,
       child: Transform.translate(
         offset: Offset(0, visuals.scrollContentTranslateY),
         child: Transform.translate(
@@ -594,7 +662,12 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   void _toggleTimeRail() {
-    final trace = BalanceDebugTrace.begin('balance-rail-toggle');
+    final trace = BalanceDebugTrace.enabled
+        ? BalanceDebugTrace.begin(
+            'balance-rail-toggle',
+            fields: <String, Object?>{'expanded': !_timeRailExpanded},
+          )
+        : null;
     try {
       setState(() => _timeRailExpanded = !_timeRailExpanded);
     } catch (error) {
@@ -604,17 +677,59 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     _finishTraceAfterNextFrame(trace);
   }
 
-  void _finishTraceAfterNextFrame(BalanceDebugTraceToken? trace) {
+  void _finishTraceAfterNextFrame(
+    BalanceDebugTraceToken? trace, {
+    String? selectedScope,
+    int? prebuiltSlots,
+    String? metricCache,
+  }) {
     if (trace == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      BalanceDebugTrace.finish(trace);
+      if (!mounted) {
+        BalanceDebugTrace.finish(
+          trace,
+          fields: const <String, Object?>{'reason': 'dispose'},
+        );
+        return;
+      }
+      BalanceDebugTrace.finish(
+        trace,
+        fields: <String, Object?>{
+          'frame_cache': _lastFrameCacheOutcome,
+          'log_cache': _lastTransactionLogCacheOutcome,
+          ...switch (selectedScope) {
+            final selectedScope? => <String, Object?>{
+              'selected_scope': selectedScope,
+            },
+            null => const <String, Object?>{},
+          },
+          ...switch (prebuiltSlots) {
+            final prebuiltSlots? => <String, Object?>{
+              'prebuilt_slots': prebuiltSlots,
+            },
+            null => const <String, Object?>{},
+          },
+          ...switch (metricCache) {
+            final metricCache? => <String, Object?>{
+              'metric_cache': metricCache,
+            },
+            null => const <String, Object?>{},
+          },
+        },
+      );
     });
   }
 
   void _cycleNoSpendDimension() {
     final dimensions = SpendeeBalanceNoSpendDimension.values;
-    final next = (_noSpendDimension.index + 1) % dimensions.length;
-    setState(() => _noSpendDimension = dimensions[next]);
+    final previous = _noSpendDimension;
+    final next = dimensions[(previous.index + 1) % dimensions.length];
+    _changeFastInfoDimension(
+      card: 'no_spend',
+      previous: previous.name,
+      next: next.name,
+      apply: () => _noSpendDimension = next,
+    );
   }
 
   Widget _transactionLog(BuildContext context, BalanceRenderFrame frame) {
@@ -624,9 +739,20 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     if (cached != null &&
         identical(_cachedTransactionLogFrame, frame) &&
         _cachedTransactionLogRevision == revision) {
+      _lastTransactionLogCacheOutcome = 'reused';
       return cached;
     }
-    final trace = BalanceDebugTrace.begin('balance-transaction-log-build');
+    _lastTransactionLogCacheOutcome = 'rebuilt';
+    final trace = BalanceDebugTrace.enabled
+        ? BalanceDebugTrace.begin(
+            'balance-transaction-log-build',
+            fields: <String, Object?>{
+              'groups': frame.logGroups.length,
+              'visible_rows': frame.visibleLogRowCount,
+              'has_more': frame.hasMoreLogEntries,
+            },
+          )
+        : null;
     late final Widget result;
     try {
       result = widget.transactionLogBuilder(context, frame);
@@ -634,7 +760,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       BalanceDebugTrace.finish(trace, error: error);
       rethrow;
     }
-    BalanceDebugTrace.finish(trace);
+    if (trace != null) {
+      BalanceDebugTrace.finish(
+        trace,
+        fields: <String, Object?>{
+          'cache': _lastTransactionLogCacheOutcome,
+          'groups': frame.logGroups.length,
+        },
+      );
+    }
     _cachedTransactionLogFrame = frame;
     _cachedTransactionLogRevision = revision;
     _cachedTransactionLog = result;
@@ -642,7 +776,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   void _changeType(TransactionType type) {
-    final trace = BalanceDebugTrace.begin('balance-action-type-change');
+    final trace = BalanceDebugTrace.enabled
+        ? BalanceDebugTrace.begin(
+            'balance-type-switch',
+            fields: <String, Object?>{
+              'from_type': widget.input.activeType.name,
+              'to_type': type.name,
+            },
+          )
+        : null;
     try {
       widget.onTypeChanged?.call(type);
     } catch (error) {
@@ -653,14 +795,99 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   void _selectScope(BalanceTimeScopeOption option) {
-    final trace = BalanceDebugTrace.begin('balance-rail-select');
+    final trace = BalanceDebugTrace.enabled
+        ? BalanceDebugTrace.begin(
+            'balance-rail-load',
+            fields: <String, Object?>{
+              'requested_scope': option.key,
+              'window': option.window.name,
+            },
+          )
+        : null;
     try {
       widget.onScopeSelected?.call(option);
     } catch (error) {
       BalanceDebugTrace.finish(trace, error: error);
       rethrow;
     }
-    _finishTraceAfterNextFrame(trace);
+    if (trace == null) return;
+    final previousTrace = _pendingScopeTrace;
+    if (previousTrace != null) {
+      BalanceDebugTrace.finish(
+        previousTrace,
+        fields: const <String, Object?>{'reason': 'superseded'},
+      );
+    }
+    _pendingScopeTrace = trace;
+    _pendingScopeTraceKey = option.key;
+    _scopeTraceFinishScheduled = false;
+  }
+
+  /// A summary selection has a two-phase store update when recurring ghosts
+  /// are projected. Complete its trace only once the requested rail item has
+  /// rendered with the settled projection, rather than on the first optimistic
+  /// post-frame callback.
+  void _settleScopeTraceIfReady(BalanceRenderFrame frame) {
+    final trace = _pendingScopeTrace;
+    final requestedKey = _pendingScopeTraceKey;
+    if (trace == null || requestedKey == null || _scopeTraceFinishScheduled) {
+      return;
+    }
+    if (widget.input.ghostProjectionInFlight ||
+        frame.query.selectedScope?.key != requestedKey) {
+      return;
+    }
+    _scopeTraceFinishScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final latestTrace = _pendingScopeTrace;
+      if (!identical(latestTrace, trace)) return;
+      _pendingScopeTrace = null;
+      _pendingScopeTraceKey = null;
+      _scopeTraceFinishScheduled = false;
+      if (!mounted) {
+        BalanceDebugTrace.finish(
+          trace,
+          fields: const <String, Object?>{'reason': 'dispose'},
+        );
+        return;
+      }
+      BalanceDebugTrace.finish(
+        trace,
+        fields: <String, Object?>{
+          'selected_scope': requestedKey,
+          'frame_cache': _lastFrameCacheOutcome,
+          'log_cache': _lastTransactionLogCacheOutcome,
+          'prebuilt_slots':
+              SpendeeBalanceVisualSpec.timeRailVisibleLogicalDistance * 2 + 1,
+        },
+      );
+    });
+  }
+
+  void _changeFastInfoDimension({
+    required String card,
+    required String previous,
+    required String next,
+    required VoidCallback apply,
+  }) {
+    if (previous == next) return;
+    final trace = BalanceDebugTrace.enabled
+        ? BalanceDebugTrace.begin(
+            'balance-fast-info-dimension',
+            fields: <String, Object?>{
+              'card': card,
+              'from_dimension': previous,
+              'to_dimension': next,
+            },
+          )
+        : null;
+    try {
+      setState(apply);
+    } catch (error) {
+      BalanceDebugTrace.finish(trace, error: error);
+      rethrow;
+    }
+    _finishTraceAfterNextFrame(trace, metricCache: 'frame_local');
   }
 
   List<SpendeeBalanceFastInfoCardModel> _fastInfoModels(

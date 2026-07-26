@@ -194,104 +194,115 @@ class _ActionButtonState extends State<_ActionButton> {
       excludeSemantics: true,
       label: _income ? 'Bevétel hozzáadása' : 'Kiadás hozzáadása',
       onTap: widget.onPressed,
-      child: Material(
-        key: ValueKey('spendee-balance-${widget.type.name}-action'),
-        color: Colors.transparent,
-        borderRadius: radius,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: widget.active
-                ? null
-                : SpendeeBalanceVisualSpec.summarySurfaceColor,
-            border: widget.active
-                ? null
-                : SpendeeBalanceVisualSpec.summarySurfaceBorder,
-            gradient: _gradient,
-            boxShadow: widget.active
-                ? [
-                    BoxShadow(
-                      color: _income
-                          ? const Color(0x4D7054ED)
-                          : const Color(0x4DF5368D),
-                      offset: const Offset(0, 11),
-                      blurRadius: 20,
-                    ),
-                  ]
-                : SpendeeBalanceVisualSpec.summarySurfaceShadows,
-          ),
-          child: InkWell(
-            borderRadius: radius,
-            splashFactory: NoSplash.splashFactory,
-            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-            onFocusChange: _handleFocusChange,
-            onTap: widget.onPressed,
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                Center(
-                  child: Text(
-                    widget.type.label,
-                    style: TextStyle(
-                      color: widget.active
-                          ? Colors.white
-                          : const Color(0xFF4F4F4F),
-                      fontSize: 15,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                    ),
+      child: DecoratedBox(
+        // Shadows live outside the clip. The coloured paint below is clipped
+        // independently, so neither the active gradient nor the inactive
+        // summary surface can leak a square corner onto Grey 100.
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: widget.active
+              ? [
+                  BoxShadow(
+                    color: _income
+                        ? const Color(0x4D7054ED)
+                        : const Color(0x4DF5368D),
+                    offset: const Offset(0, 11),
+                    blurRadius: 20,
                   ),
-                ),
-                Positioned(
-                  top: _income ? -4 : -3,
-                  left: _income ? 4 : null,
-                  right: _income ? null : 4,
-                  width: _income ? 50 : 48,
-                  height: _income ? 50 : 48,
-                  child: Transform.scale(
-                    key: ValueKey(
-                      'spendee-balance-${widget.type.name}-icon-transform',
-                    ),
-                    scale: widget.iconScale,
-                    child: Image(
-                      image: _income
-                          ? _incomeActionRaster
-                          : _expenseActionRaster,
-                      key: ValueKey(
-                        _income
-                            ? 'spendee-balance-income-wallet-raster'
-                            : 'spendee-balance-expense-bag-raster',
+                ]
+              : SpendeeBalanceVisualSpec.summarySurfaceShadows,
+        ),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Material(
+            key: ValueKey('spendee-balance-${widget.type.name}-action'),
+            color: Colors.transparent,
+            clipBehavior: Clip.hardEdge,
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                color: widget.active
+                    ? null
+                    : SpendeeBalanceVisualSpec.summarySurfaceColor,
+                border: widget.active
+                    ? null
+                    : SpendeeBalanceVisualSpec.summarySurfaceBorder,
+                gradient: _gradient,
+              ),
+              child: InkWell(
+                borderRadius: radius,
+                splashFactory: NoSplash.splashFactory,
+                overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+                onFocusChange: _handleFocusChange,
+                onTap: widget.onPressed,
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    Center(
+                      child: Text(
+                        widget.type.label,
+                        style: TextStyle(
+                          color: widget.active
+                              ? Colors.white
+                              : const Color(0xFF4F4F4F),
+                          fontSize: 15,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
                     ),
-                  ),
-                ),
-                if (_showFocusOutline)
-                  Positioned.fill(
-                    child: Padding(
-                      // CSS `outline: 2px` with `outline-offset: -3px`
-                      // occupies the 1…3px inset inside the authored edge.
-                      padding: const EdgeInsets.all(1),
-                      child: IgnorePointer(
-                        child: DecoratedBox(
+                    Positioned(
+                      top: _income ? -4 : -3,
+                      left: _income ? 4 : null,
+                      right: _income ? null : 4,
+                      width: _income ? 50 : 48,
+                      height: _income ? 50 : 48,
+                      child: Transform.scale(
+                        key: ValueKey(
+                          'spendee-balance-${widget.type.name}-icon-transform',
+                        ),
+                        scale: widget.iconScale,
+                        child: Image(
+                          image: _income
+                              ? _incomeActionRaster
+                              : _expenseActionRaster,
                           key: ValueKey(
-                            'spendee-balance-${widget.type.name}-action-focus-outline',
+                            _income
+                                ? 'spendee-balance-income-wallet-raster'
+                                : 'spendee-balance-expense-bag-raster',
                           ),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: const Color(0xF0FFFFFF),
-                              width: 2,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              SpendeeBalanceVisualSpec.actionRadius - 1,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                    ),
+                    if (_showFocusOutline)
+                      Positioned.fill(
+                        child: Padding(
+                          // CSS `outline: 2px` with `outline-offset: -3px`
+                          // occupies the 1…3px inset inside the authored edge.
+                          padding: const EdgeInsets.all(1),
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              key: ValueKey(
+                                'spendee-balance-${widget.type.name}-action-focus-outline',
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: const Color(0xF0FFFFFF),
+                                  width: 2,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  SpendeeBalanceVisualSpec.actionRadius - 1,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -797,7 +808,13 @@ class _SpendeeBalanceSearchFilterState
         height: SpendeeBalanceVisualSpec.searchHeight,
         decoration: BoxDecoration(
           color: const Color(0xF0FFFFFF),
-          border: Border.all(color: const Color(0x17666FAB)),
+          // The focused search pill has a single blue outer stroke. Keeping
+          // the resting grey border underneath would read as a double frame.
+          border: Border.all(
+            color: _searchShowsFocusOutline
+                ? Colors.transparent
+                : const Color(0x17666FAB),
+          ),
           borderRadius: radius,
           boxShadow: const [
             BoxShadow(
@@ -816,7 +833,10 @@ class _SpendeeBalanceSearchFilterState
         child: Stack(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 17),
+              padding: const EdgeInsets.symmetric(
+                horizontal:
+                    SpendeeBalanceVisualSpec.searchContentHorizontalPadding,
+              ),
               child: Row(
                 children: [
                   SvgPicture.asset(
@@ -881,7 +901,7 @@ class _SpendeeBalanceSearchFilterState
                     ),
                   Expanded(
                     child: SizedBox(
-                      height: 30,
+                      height: SpendeeBalanceVisualSpec.searchEditableHeight,
                       child: TextField(
                         key: const ValueKey('spendee-balance-search-editable'),
                         focusNode: _searchFocusNode,
@@ -889,9 +909,11 @@ class _SpendeeBalanceSearchFilterState
                         onChanged: widget.onQueryChanged,
                         maxLines: 1,
                         textAlignVertical: TextAlignVertical.center,
+                        cursorHeight: 16,
+                        cursorColor: SpendeeBalanceVisualSpec.searchFocusColor,
                         style: const TextStyle(
                           color: Color(0xFF1D2B50),
-                          fontSize: 11,
+                          fontSize: SpendeeBalanceVisualSpec.searchTextSize,
                           height: 1,
                           fontWeight: FontWeight.w700,
                           fontVariations: SpendeeBalanceVisualSpec.weight750,
@@ -906,7 +928,7 @@ class _SpendeeBalanceSearchFilterState
                               : null,
                           hintStyle: const TextStyle(
                             color: Color(0xFF7E89A4),
-                            fontSize: 11,
+                            fontSize: SpendeeBalanceVisualSpec.searchTextSize,
                             height: 1,
                             fontWeight: FontWeight.w700,
                             fontVariations: SpendeeBalanceVisualSpec.weight750,
@@ -920,13 +942,19 @@ class _SpendeeBalanceSearchFilterState
             ),
             if (_searchShowsFocusOutline)
               Positioned.fill(
+                left: -1,
+                top: -1,
+                right: -1,
+                bottom: -1,
                 child: _TraditionalFocusOutline(
                   outlineKey: const ValueKey(
                     'spendee-balance-search-field-focus-outline',
                   ),
                   borderRadius: BorderRadius.circular(
-                    SpendeeBalanceVisualSpec.searchFieldRadius - 1,
+                    SpendeeBalanceVisualSpec.searchFieldRadius,
                   ),
+                  inset: 0,
+                  color: SpendeeBalanceVisualSpec.searchFocusColor,
                 ),
               ),
           ],
@@ -1051,6 +1079,7 @@ class _SpendeeBalanceTimeScopeRailState
               onIndexChanged: _previewIndex,
               onIndexSettled: _commitIndex,
               semanticLabel: 'Választható időszakok',
+              clipToViewport: true,
               itemSizeBuilder: (_, _) =>
                   SpendeeBalanceVisualSpec.activeYearPillSize,
               itemScaleBuilder: (_, _, centeredness) {
@@ -1459,11 +1488,13 @@ class _TraditionalFocusOutline extends StatelessWidget {
     required this.outlineKey,
     required this.borderRadius,
     this.inset = 1,
+    this.color = _traditionalFocusOutlineColor,
   });
 
   final Key outlineKey;
   final BorderRadius borderRadius;
   final double inset;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1473,7 +1504,7 @@ class _TraditionalFocusOutline extends StatelessWidget {
         child: DecoratedBox(
           key: outlineKey,
           decoration: BoxDecoration(
-            border: Border.all(color: _traditionalFocusOutlineColor, width: 2),
+            border: Border.all(color: color, width: 2),
             borderRadius: borderRadius,
           ),
         ),

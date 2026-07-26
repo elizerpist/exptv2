@@ -139,7 +139,7 @@ void main() {
       expect(collapsed.heroStatsOpacity, 0);
       expect(collapsed.heroStatsTranslateY, 10);
       expect(collapsed.scrollContentTranslateY, -202);
-      expect(collapsed.postTranslateY, -164);
+      expect(collapsed.postTranslateY, -132);
     });
 
     test('progress is clamped and pointer thresholds follow frozen JS', () {
