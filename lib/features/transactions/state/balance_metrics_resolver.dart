@@ -327,6 +327,7 @@ class _BalanceMetricScope {
         primaryText: categoryChangePrimary,
         secondaryText: 'előző 30 naphoz képest',
         numericValue: changedDelta,
+        comparisonValue: previousByCategory[changedCategoryId] ?? 0,
         category: data.categoriesById[changedCategoryId],
         sourceMetric: _withExactPrimary(
           metric('legnagyobb_novekedo_kategoria'),

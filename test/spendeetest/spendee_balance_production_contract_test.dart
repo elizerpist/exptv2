@@ -21,7 +21,7 @@ void main() {
       );
 
       final belt = find.byKey(const ValueKey('spendee-balance-fast-info-belt'));
-      expect(tester.getSize(belt), const Size(378, 128));
+      expect(tester.getSize(belt), const Size(378, 72));
       expect(
         coloredAncestorsOf(
           tester,
@@ -78,7 +78,7 @@ void main() {
 
         expect(surface, findsOneWidget);
         expect(card, findsOneWidget);
-        expect(tester.getSize(surface), const Size(120, 128));
+        expect(tester.getSize(surface), const Size(120, 72));
         final decoration =
             tester.widget<DecoratedBox>(surface).decoration as BoxDecoration;
         expect(
@@ -123,7 +123,7 @@ void main() {
           matching: find.byWidgetPredicate(
             (widget) =>
                 widget is Padding &&
-                widget.padding == const EdgeInsets.fromLTRB(13, 14, 13, 30),
+                widget.padding == const EdgeInsets.fromLTRB(9, 7, 9, 18),
           ),
         );
         expect(contentPadding, findsOneWidget);
@@ -132,20 +132,20 @@ void main() {
           matching: find.byWidgetPredicate(
             (widget) =>
                 widget is Container &&
-                widget.constraints?.maxWidth == 27 &&
-                widget.constraints?.maxHeight == 27,
+                widget.constraints?.maxWidth == 20 &&
+                widget.constraints?.maxHeight == 20,
           ),
         );
         expect(headerDisc, findsOneWidget);
-        expect(tester.getSize(headerDisc), const Size.square(27));
-        expect(tester.getSize(ghost), const Size.square(22));
+        expect(tester.getSize(headerDisc), const Size.square(20));
+        expect(tester.getSize(ghost), const Size.square(17));
         expect(
           tester.getRect(ghost).right,
-          closeTo(tester.getRect(surface).right - 9, .01),
+          closeTo(tester.getRect(surface).right - 8, .01),
         );
         expect(
           tester.getRect(ghost).bottom,
-          closeTo(tester.getRect(surface).bottom - 8, .01),
+          closeTo(tester.getRect(surface).bottom - 4, .01),
         );
         final onGhostDecoration = decorationOf(tester, ghost);
         expect(onGhostDecoration.color, const Color(0xEBF0EFFF));
@@ -174,53 +174,25 @@ void main() {
             );
           case SpendeeBalanceFastInfoKind.categoryChange:
             final value = tester.widget<Text>(
-              find.byKey(
-                const ValueKey('spendee-balance-category-change-value'),
+              find.descendant(
+                of: find.byKey(
+                  const ValueKey('spendee-balance-category-change-value'),
+                ),
+                matching: find.byType(Text),
               ),
             );
             expect(value.style!.color, contract.hue);
-            expect(value.style!.fontSize, 14);
-            expect(SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight, 22);
+            expect(value.style!.fontSize, 13);
+            expect(SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight, 14);
             expect(
               find.descendant(
                 of: card,
                 matching: find.byWidgetPredicate(
-                  (widget) => widget is SizedBox && widget.height == 22,
+                  (widget) => widget is SizedBox && widget.height == 14,
                 ),
               ),
               findsOneWidget,
             );
-            expect(
-              find.descendant(
-                of: card,
-                matching: find.byWidgetPredicate(
-                  (widget) =>
-                      widget is Row &&
-                      widget.crossAxisAlignment ==
-                          CrossAxisAlignment.baseline &&
-                      widget.textBaseline == TextBaseline.alphabetic,
-                ),
-              ),
-              findsOneWidget,
-            );
-            final valueFinder = find.byKey(
-              const ValueKey('spendee-balance-category-change-value'),
-            );
-            final directionFinder = find.descendant(
-              of: find.byKey(
-                const ValueKey('spendee-balance-category-change-direction'),
-              ),
-              matching: find.byType(Text),
-            );
-            final valueBaseline = _renderedAlphabeticBaseline(
-              tester,
-              valueFinder,
-            );
-            final directionBaseline = _renderedAlphabeticBaseline(
-              tester,
-              directionFinder,
-            );
-            expect(directionBaseline, closeTo(valueBaseline, .01));
             expect(
               find.descendant(of: card, matching: find.byType(SvgPicture)),
               findsOneWidget,
@@ -244,7 +216,7 @@ void main() {
                   )
                   .style!
                   .fontSize,
-              16,
+              13,
             );
           case SpendeeBalanceFastInfoKind.trendComparison:
             final percentage = tester.widget<Text>(
@@ -447,7 +419,7 @@ void main() {
         tester.getSize(
           find.byKey(const ValueKey('spendee-balance-detail-stage')),
         ),
-        const Size(378, 258),
+        const Size(378, 218),
       );
       for (final id in const [
         'variable-budget',
@@ -459,7 +431,7 @@ void main() {
           tester.getSize(
             find.byKey(ValueKey('spendee-balance-detail-page-$id')).first,
           ),
-          const Size(378, 248),
+          const Size(378, 208),
         );
         expect(
           tester.getSize(
@@ -595,15 +567,4 @@ class _FastInfoProductionContract {
   final Color hue;
   final Color iconBackground;
   final bool gradient;
-}
-
-double _renderedAlphabeticBaseline(WidgetTester tester, Finder finder) {
-  final text = tester.widget<Text>(finder);
-  final painter = TextPainter(
-    text: TextSpan(text: text.data, style: text.style),
-    textDirection: TextDirection.ltr,
-    maxLines: text.maxLines,
-  )..layout(maxWidth: tester.getSize(finder).width);
-  return tester.getTopLeft(finder).dy +
-      painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
 }

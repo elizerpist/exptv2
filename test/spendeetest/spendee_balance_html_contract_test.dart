@@ -15,24 +15,24 @@ void main() {
       expect(parsed.sha256, SpendeeBalanceB3mA3Manifest.sourceSha256);
       expect(
         parsed.finalValue('.stage2-redesign-insight-grid', 'height'),
-        '128px',
+        '72px',
       );
       expect(
-        parsed.valuesFor('.stage2-redesign-top-categories-detail', 'height'),
-        containsAll(<String>['208px', '248px']),
+        parsed.finalValue('.stage2-redesign-detail-carousel', 'height'),
+        '208px',
       );
       expect(
         parsed.finalValue('.stage2-redesign-top-categories-detail', 'height'),
         '208px',
       );
-      expect(SpendeeBalanceV3DetailResolution.finalCardHeight, 248);
-      expect(SpendeeBalanceV3DetailResolution.detailStageHeight, 258);
+      expect(SpendeeBalanceV3DetailResolution.finalCardHeight, 208);
+      expect(SpendeeBalanceV3DetailResolution.detailStageHeight, 218);
       expect(SpendeeBalanceB3mA3Manifest.v3Metrics, isNotEmpty);
     },
   );
 
-  test('FastInfo manifest height resolves the frozen final cascade', () {
-    expect(SpendeeBalanceB3mA3Manifest.fastInfoHeight, 128);
+  test('FastInfo manifest height resolves the active compact cascade', () {
+    expect(SpendeeBalanceB3mA3Manifest.fastInfoHeight, 72);
   });
 
   test('detail-card manifest height resolves the final specific cascade', () {
@@ -40,7 +40,7 @@ void main() {
       SpendeeBalanceB3mA3Manifest.detailCardHeight,
       same(SpendeeBalanceV3DetailResolution.finalCardHeight),
     );
-    expect(SpendeeBalanceB3mA3Manifest.detailCardHeight, 248);
+    expect(SpendeeBalanceB3mA3Manifest.detailCardHeight, 208);
   });
 
   test(
@@ -56,17 +56,17 @@ void main() {
             SpendeeBalanceV3DetailResolution.paginationGap +
             SpendeeBalanceV3DetailResolution.paginationHeight,
       );
-      expect(SpendeeBalanceB3mA3Manifest.detailStageHeight, 258);
+      expect(SpendeeBalanceB3mA3Manifest.detailStageHeight, 218);
     },
   );
 
   test('a changed final declaration is rejected', () {
     final frozenHtml = File('balance_latest_layout.html').readAsStringSync();
     final changed = frozenHtml.replaceFirst(
-      '''.stage2-redesign-detail-stage .stage2-redesign-today-detail {
-            height: 248px;''',
-      '''.stage2-redesign-detail-stage .stage2-redesign-today-detail {
-            height: 247px;''',
+      '''[data-today-redesign-screen="true"][data-today-time-scope-mode="permanent"] .stage2-redesign-detail-stage .stage2-redesign-detail-carousel {
+            height: 208px;''',
+      '''[data-today-redesign-screen="true"][data-today-time-scope-mode="permanent"] .stage2-redesign-detail-stage .stage2-redesign-detail-carousel {
+            height: 207px;''',
     );
 
     expect(
@@ -78,7 +78,7 @@ void main() {
         isA<BalanceHtmlContractError>().having(
           (error) => error.message,
           'message',
-          contains('.stage2-redesign-today-detail height'),
+          contains('.stage2-redesign-detail-carousel height'),
         ),
       ),
     );
@@ -296,9 +296,7 @@ bool _isFrozenScreenRule(String selector) {
   if (!selector.contains('[data-today-redesign-screen="true"]')) {
     return !selector.contains('[data-');
   }
-  return !selector.contains('data-today-redesign-density') &&
-      !selector.contains('data-budget-') &&
-      !selector.contains('data-mind-');
+  return !selector.contains('data-budget-') && !selector.contains('data-mind-');
 }
 
 String _sha256(String source) {

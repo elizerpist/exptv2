@@ -539,7 +539,11 @@ class _BalanceTransactionRow extends StatefulWidget {
 }
 
 class _BalanceTransactionRowState extends State<_BalanceTransactionRow> {
-  static const _maxVisualOffset = 44.0;
+  // The day list has a 2px viewport inset and a 1px row inset. A left drag
+  // may expose its affordance, but its painted LogBox may never cross the
+  // authored 17px content gutter.
+  static const _maxLeftVisualOffset = 3.0;
+  static const _maxRightVisualOffset = 44.0;
   static const _filterThreshold = -80.0;
   static const _deleteThreshold = 70.0;
   static const _flingVelocityThreshold = 800.0;
@@ -575,7 +579,7 @@ class _BalanceTransactionRowState extends State<_BalanceTransactionRow> {
     if (_triggered || _deletePending || _deleteFrozen) return;
     _dragDx += details.delta.dx;
     _visualOffset.value = _dragDx
-        .clamp(-_maxVisualOffset, _maxVisualOffset)
+        .clamp(-_maxLeftVisualOffset, _maxRightVisualOffset)
         .toDouble();
     final record = _record;
     if (_dragDx < _filterThreshold && record != null) {
@@ -614,7 +618,7 @@ class _BalanceTransactionRowState extends State<_BalanceTransactionRow> {
     _triggered = true;
     _deletePending = true;
     _deleteFrozen = true;
-    _visualOffset.value = _maxVisualOffset;
+    _visualOffset.value = _maxRightVisualOffset;
     unawaited(_requestDelete(record));
   }
 

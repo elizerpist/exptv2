@@ -913,22 +913,27 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     final recurringCategory = recurring.category;
     final recurringGhost = recurring.ghost;
     final noSpendFrame = frame.noSpendFor(_noSpendDimension);
+    final categoryPercent = _categoryChangePercent(categoryChange);
+    final latestMerchant =
+        latest.record?.displayMerchant.trim().isNotEmpty == true
+        ? latest.record!.displayMerchant
+        : latest.ghost?.name ?? latest.secondaryText.split(' · ').first;
     return [
       SpendeeBalanceNoSpendCardModel(
         id: 'no-spend',
         title: noSpend.title,
         value: '${noSpendFrame.noSpendDays} nap',
-        secondary: '${noSpendFrame.observedDays} megfigyelt napból',
+        secondary: _noSpendDimension.fastInfoViewLabel,
         dimension: _noSpendDimension,
-        dimensionLabel: _noSpendDimension.label,
+        dimensionLabel: _noSpendDimension.fastInfoViewLabel,
         includeGhostTransactions: _ghostIncluded(BalanceGhostSection.noSpend),
       ),
       SpendeeBalanceCategoryChangeCardModel(
         id: 'category-change',
-        title: categoryChange.title,
-        value: categoryChange.primaryText,
+        title: categoryChange.category?.name ?? categoryChange.title,
+        value: categoryPercent,
         category: categoryChange.category?.name ?? 'Nincs kategória',
-        secondary: categoryChange.secondaryText,
+        secondary: 'az elmúlt 30 naphoz képest',
         iconAsset: _categoryIcon(categoryChange.category),
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.categoryChange,
@@ -938,7 +943,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         id: 'latest-transaction',
         title: latest.title,
         amount: latest.primaryText,
-        merchantAndTime: latest.secondaryText,
+        merchantAndTime: latestMerchant,
         iconAsset: _categoryIcon(latest.category),
         includeGhostTransactions: _ghostIncluded(
           BalanceGhostSection.latestTransaction,
@@ -972,6 +977,16 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         ),
       ),
     ];
+  }
+
+  String _categoryChangePercent(BalanceInsightFrame insight) {
+    final delta = insight.numericValue;
+    final previous = insight.comparisonValue;
+    if (delta == null || previous == null || previous == 0) {
+      return insight.primaryText;
+    }
+    final percent = (delta / previous * 100).round();
+    return '${percent >= 0 ? '+' : ''}$percent%';
   }
 
   List<SpendeeBalanceDetailPageModel> _detailModels(BalanceRenderFrame frame) {

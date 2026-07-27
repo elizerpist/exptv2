@@ -125,7 +125,7 @@ void main() {
       }
     });
 
-    testWidgets('is 128px high and authors exactly three card slots', (
+    testWidgets('is 72px high and authors exactly three card slots', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -141,7 +141,7 @@ void main() {
         tester.getSize(
           find.byKey(const ValueKey('spendee-balance-fast-info-belt')),
         ),
-        const Size(378, 128),
+        const Size(378, 72),
       );
       expect(
         SpendeeBalanceFastInfoBelt.cardWidthFor(378),
@@ -294,14 +294,14 @@ void main() {
       final ghost = find.byKey(
         const ValueKey('spendee-balance-fast-info-ghost-no-spend'),
       );
-      expect(tester.getSize(surface), const Size(120, 128));
+      expect(tester.getSize(surface), const Size(120, 72));
       expect(
         find.descendant(
           of: surface,
           matching: find.byWidgetPredicate(
             (widget) =>
                 widget is Padding &&
-                widget.padding == const EdgeInsets.fromLTRB(13, 14, 13, 30),
+                widget.padding == const EdgeInsets.fromLTRB(9, 7, 9, 18),
           ),
         ),
         findsOneWidget,
@@ -312,11 +312,11 @@ void main() {
             const ValueKey('spendee-balance-fast-info-header-disc-noSpend'),
           ),
         ),
-        const Size.square(27),
+        const Size.square(20),
       );
-      expect(tester.getSize(ghost), const Size.square(22));
-      expect(tester.getRect(ghost).right, tester.getRect(surface).right - 9);
-      expect(tester.getRect(ghost).bottom, tester.getRect(surface).bottom - 8);
+      expect(tester.getSize(ghost), const Size.square(17));
+      expect(tester.getRect(ghost).right, tester.getRect(surface).right - 8);
+      expect(tester.getRect(ghost).bottom, tester.getRect(surface).bottom - 4);
       final label = tester.widget<Text>(
         find.byKey(const ValueKey('spendee-balance-no-spend-view-label')),
       );
@@ -342,7 +342,7 @@ void main() {
     ) async {
       final models = fastInfoModels();
 
-      expect(SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight, 22);
+      expect(SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight, 14);
 
       await tester.pumpWidget(
         host(
@@ -354,39 +354,16 @@ void main() {
         ),
       );
       final categoryValue = tester.widget<Text>(
-        find.byKey(const ValueKey('spendee-balance-category-change-value')),
-      );
-      final categoryDirection = find.byKey(
-        const ValueKey('spendee-balance-category-change-direction'),
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-category-change-value'),
+          ),
+          matching: find.byType(Text),
+        ),
       );
       expect(categoryValue.style!.color, const Color(0xFFEF4173));
-      expect(categoryValue.style!.fontSize, 14);
-      expect(categoryValue.style!.height, 1);
-      expect(tester.getSize(categoryDirection), const Size.square(9));
-      expect(
-        tester
-            .widget<Text>(
-              find.descendant(
-                of: categoryDirection,
-                matching: find.byType(Text),
-              ),
-            )
-            .style!
-            .fontSize,
-        8,
-      );
-      final categoryMetricRow = find.descendant(
-        of: find.byKey(
-          const ValueKey('spendee-balance-fast-info-categoryChange'),
-        ),
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is Row &&
-              widget.crossAxisAlignment == CrossAxisAlignment.baseline &&
-              widget.textBaseline == TextBaseline.alphabetic,
-        ),
-      );
-      expect(categoryMetricRow, findsOneWidget);
+      expect(categoryValue.style!.fontSize, 13);
+      expect(categoryValue.style!.height, 1.05);
 
       await tester.pumpWidget(
         host(
@@ -406,7 +383,7 @@ void main() {
         ),
       );
       expect(latestValue.style!.color, const Color(0xFF526FC5));
-      expect(latestValue.style!.fontSize, 16);
+      expect(latestValue.style!.fontSize, 13);
       final latestAsset = tester.widget<SvgPicture>(
         find.descendant(
           of: find.byKey(
@@ -498,23 +475,19 @@ void main() {
               findsOneWidget,
             );
             expect(find.byType(SvgPicture), findsOneWidget);
-            expect(find.text('3 / 7 nap'), findsOneWidget);
+            expect(find.text('3 nap'), findsOneWidget);
+            expect(find.text('7 napos nézet'), findsOneWidget);
           case SpendeeBalanceCategoryChangeCardModel():
             expect(find.byType(SvgPicture), findsNWidgets(2));
-            expect(find.text('+14 200 Ft'), findsOneWidget);
-            expect(
-              find.text('Közlekedés · előző 30 naphoz képest'),
-              findsOneWidget,
-            );
-            final title = tester.widget<Text>(
-              find.text('Legnagyobb kategóriaváltozás'),
-            );
+            expect(find.text('+245%'), findsOneWidget);
+            expect(find.text('az elmúlt 30 naphoz képest'), findsOneWidget);
+            final title = tester.widget<Text>(find.text('Közlekedés'));
             expect(title.maxLines, isNull);
             expect(title.overflow, isNull);
           case SpendeeBalanceLatestTransactionCardModel():
             expect(find.byType(SvgPicture), findsNWidgets(2));
             expect(find.text('-4 250 Ft'), findsOneWidget);
-            expect(find.text('Lidl · ma, 11:42'), findsOneWidget);
+            expect(find.text('Lidl'), findsOneWidget);
           case SpendeeBalanceTrendComparisonCardModel():
             expect(find.byType(SvgPicture), findsNWidgets(2));
             expect(find.text('18%'), findsOneWidget);
@@ -721,10 +694,10 @@ void main() {
 
       final name = tester.widget<Text>(find.text('Netflix'));
       final metadata = tester.widget<Text>(find.text('-3 490 Ft · aug. 4.'));
-      expect(name.style!.fontSize, 16);
+      expect(name.style!.fontSize, 13);
       expect(name.style!.height, 1.05);
-      expect(metadata.style!.fontSize, 7.8);
-      expect(metadata.style!.height, 1.2);
+      expect(metadata.style!.fontSize, 6.5);
+      expect(metadata.style!.height, 1.1);
       expect(
         find.byKey(
           const ValueKey('spendee-balance-upcoming-recurring-avatar-slot'),
@@ -924,7 +897,7 @@ void main() {
     });
 
     testWidgets(
-      '0726 uses the approved 248px page plus 4px gap and 6px pagination',
+      'uses the HTML-visible 208px page plus 4px gap and 6px pagination',
       (tester) async {
         await tester.pumpWidget(
           host(
@@ -941,7 +914,7 @@ void main() {
           tester.getSize(
             find.byKey(const ValueKey('spendee-balance-detail-stage')),
           ),
-          const Size(378, 258),
+          const Size(378, 218),
         );
         expect(
           find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
@@ -954,7 +927,7 @@ void main() {
                 .byKey(const ValueKey('spendee-balance-detail-page-variable'))
                 .first,
           ),
-          const Size(378, 248),
+          const Size(378, 208),
         );
         expect(
           tester.getSize(
@@ -1656,82 +1629,84 @@ void main() {
       },
     );
 
-    testWidgets('D3 renders only the first four supplied ranked rows', (
-      tester,
-    ) async {
-      final model = SpendeeBalanceTopCategoriesModel(
-        id: 'ranked-categories',
-        title: 'Top kategóriák',
-        featuredCategory: 'Vezető',
-        featuredMeta: '1. hely',
-        featuredAmount: '50 000 Ft',
-        featuredIconAsset: 'assets/icons/lucide/utensils.svg',
-        rows: const [
-          SpendeeBalanceTopCategoryRowModel(
-            scope: '2. hely',
-            category: 'C1',
-            amount: '40 Ft',
-            iconAsset: 'assets/icons/lucide/store.svg',
-            color: Color(0xFFF24CAE),
-          ),
-          SpendeeBalanceTopCategoryRowModel(
-            scope: '3. hely',
-            category: 'C2',
-            amount: '30 Ft',
-            iconAsset: 'assets/icons/lucide/store.svg',
-            color: Color(0xFFF24CAE),
-          ),
-          SpendeeBalanceTopCategoryRowModel(
-            scope: '4. hely',
-            category: 'C3',
-            amount: '20 Ft',
-            iconAsset: 'assets/icons/lucide/store.svg',
-            color: Color(0xFFF24CAE),
-          ),
-          SpendeeBalanceTopCategoryRowModel(
-            scope: '5. hely',
-            category: 'C4',
-            amount: '10 Ft',
-            iconAsset: 'assets/icons/lucide/store.svg',
-            color: Color(0xFFF24CAE),
-          ),
-          SpendeeBalanceTopCategoryRowModel(
-            scope: '6. hely',
-            category: 'C5',
-            amount: '5 Ft',
-            iconAsset: 'assets/icons/lucide/store.svg',
-            color: Color(0xFFF24CAE),
-          ),
-        ],
-        includeGhostTransactions: true,
-      );
-      await tester.pumpWidget(
-        host(
-          SpendeeBalanceDetailPage(
-            model: model,
-            onGhostChanged: (_, _) {},
-            onBudgetDimensionChanged: (_) {},
-            onMerchantDimensionChanged: (_) {},
-          ),
-        ),
-      );
-
-      for (var index = 0; index < 4; index++) {
-        expect(
-          find.byKey(ValueKey('spendee-balance-top-category-row-$index')),
-          findsOneWidget,
+    testWidgets(
+      'D3 renders the three following rows visible in the HTML card',
+      (tester) async {
+        final model = SpendeeBalanceTopCategoriesModel(
+          id: 'ranked-categories',
+          title: 'Top kategóriák',
+          featuredCategory: 'Vezető',
+          featuredMeta: '1. hely',
+          featuredAmount: '50 000 Ft',
+          featuredIconAsset: 'assets/icons/lucide/utensils.svg',
+          rows: const [
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '2. hely',
+              category: 'C1',
+              amount: '40 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '3. hely',
+              category: 'C2',
+              amount: '30 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '4. hely',
+              category: 'C3',
+              amount: '20 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '5. hely',
+              category: 'C4',
+              amount: '10 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+            SpendeeBalanceTopCategoryRowModel(
+              scope: '6. hely',
+              category: 'C5',
+              amount: '5 Ft',
+              iconAsset: 'assets/icons/lucide/store.svg',
+              color: Color(0xFFF24CAE),
+            ),
+          ],
+          includeGhostTransactions: true,
         );
-      }
-      expect(
-        find.byKey(const ValueKey('spendee-balance-top-category-row-4')),
-        findsNothing,
-      );
-      expect(find.text('C5'), findsNothing);
-      expect(
-        tester.getRect(find.text('C1')).top,
-        lessThan(tester.getRect(find.text('C4')).top),
-      );
-    });
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: model,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+            ),
+          ),
+        );
+
+        for (var index = 0; index < 3; index++) {
+          expect(
+            find.byKey(ValueKey('spendee-balance-top-category-row-$index')),
+            findsOneWidget,
+          );
+        }
+        expect(
+          find.byKey(const ValueKey('spendee-balance-top-category-row-3')),
+          findsNothing,
+        );
+        expect(find.text('C4'), findsNothing);
+        expect(find.text('C5'), findsNothing);
+        expect(
+          tester.getRect(find.text('C1')).top,
+          lessThan(tester.getRect(find.text('C3')).top),
+        );
+      },
+    );
 
     testWidgets('D4 renders only the first four supplied ranked rows', (
       tester,
@@ -1906,16 +1881,17 @@ List<SpendeeBalanceFastInfoCardModel> fastInfoModels() {
     SpendeeBalanceNoSpendCardModel(
       id: 'no-spend',
       title: 'No-spend napok',
-      value: '3 / 7 nap',
-      secondary: 'Elmúlt 7 nap',
+      value: '3 nap',
+      secondary: '7 napos nézet',
+      dimensionLabel: '7 napos nézet',
       includeGhostTransactions: true,
     ),
     SpendeeBalanceCategoryChangeCardModel(
       id: 'category-change',
-      title: 'Legnagyobb kategóriaváltozás',
-      value: '+14 200 Ft',
+      title: 'Közlekedés',
+      value: '+245%',
       category: 'Közlekedés',
-      secondary: 'előző 30 naphoz képest',
+      secondary: 'az elmúlt 30 naphoz képest',
       iconAsset: 'assets/icons/lucide/bus-front.svg',
       includeGhostTransactions: true,
     ),
@@ -1923,7 +1899,7 @@ List<SpendeeBalanceFastInfoCardModel> fastInfoModels() {
       id: 'latest-transaction',
       title: 'Utolsó tranzakció',
       amount: '-4 250 Ft',
-      merchantAndTime: 'Lidl · ma, 11:42',
+      merchantAndTime: 'Lidl',
       iconAsset: 'assets/icons/lucide/store.svg',
       includeGhostTransactions: true,
     ),

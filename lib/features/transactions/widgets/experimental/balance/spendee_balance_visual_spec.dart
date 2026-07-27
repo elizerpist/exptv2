@@ -108,7 +108,8 @@ abstract final class SpendeeBalanceVisualSpec {
 
   static const detailTop = SpendeeBalanceB3mA3Manifest.detailTop;
 
-  /// V3 resolves the final 248px detail card plus 4px gap and 6px pagination.
+  /// The permanent carousel visibly clips its children to 208px; the stage
+  /// adds the authored 4px gap and 6px pagination row.
   static const detailStageHeight =
       SpendeeBalanceB3mA3Manifest.detailStageHeight;
   static const detailCardHeight = SpendeeBalanceB3mA3Manifest.detailCardHeight;

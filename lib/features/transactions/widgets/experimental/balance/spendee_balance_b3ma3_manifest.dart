@@ -17,17 +17,20 @@ class BalanceHtmlMetric {
   final String finalValue;
 }
 
-/// Canonical V3 semantic resolution of D's intentional compact/final conflict.
-/// Raw HTML candidates remain independently verified; Flutter deliberately
-/// chooses the individual 248px card override and derives 248 + 4 + 6 = 258.
+/// Resolution of the active compact/permanent cascade.
+///
+/// The permanent carousel is 208px high. Its individual children retain a
+/// later 248px rule, but the carousel clips them to its own 208px viewport;
+/// the visible Balance card must therefore use 208 + 4 + 6 = 218px.
 abstract final class SpendeeBalanceV3DetailResolution {
   static const rawGenericCardHeight = 208.0;
-  static const finalCardHeight = 248.0;
+  static const rawSpecificCardHeight = 248.0;
+  static const finalCardHeight = rawGenericCardHeight;
   static const paginationGap = 4.0;
   static const paginationHeight = 6.0;
   static const detailStageHeight =
       finalCardHeight + paginationGap + paginationHeight;
-  static const rationale = 'D intentional explicit conflict resolution';
+  static const rationale = 'permanent carousel viewport clips 248px children';
 }
 
 /// Versioned metrics extracted from the active B3M-A3 source cascade in
@@ -46,43 +49,42 @@ abstract final class SpendeeBalanceB3mA3Manifest {
     BalanceHtmlMetric(
       name: 'fast-info belt',
       selector: '.stage2-redesign-insight-grid',
-      lineRange: (start: 3559, end: 3568),
+      lineRange: (start: 3620, end: 3626),
       declarations: {
-        'height': ['128px'],
-        'min-height': ['128px'],
+        'height': ['72px'],
+        'min-height': ['72px'],
       },
-      finalValue: '128px',
+      finalValue: '72px',
     ),
     BalanceHtmlMetric(
       name: 'fast-info card',
       selector: '.stage2-redesign-insight-card',
-      lineRange: (start: 1953, end: 1970),
+      lineRange: (start: 3628, end: 3633),
       declarations: {
-        'min-height': ['128px'],
-        'padding': ['14px 13px 30px'],
+        'min-height': ['72px'],
+        'padding': ['7px 9px 18px'],
       },
-      finalValue: '128px',
+      finalValue: '72px',
     ),
     BalanceHtmlMetric(
       name: 'fast-info header',
       selector: '.stage2-redesign-insight-head',
-      lineRange: (start: 1936, end: 2239),
+      lineRange: (start: 3635, end: 3639),
       declarations: {
-        'grid-template-columns': ['27px minmax(0, 1fr)'],
-        'column-gap': ['7px'],
+        'grid-template-columns': ['20px minmax(0, 1fr)'],
+        'column-gap': ['5px'],
       },
-      finalValue: '27px minmax(0, 1fr)',
+      finalValue: '20px minmax(0, 1fr)',
     ),
     BalanceHtmlMetric(
       name: 'fast-info icon',
       selector: '.stage2-redesign-insight-icon',
-      lineRange: (start: 2002, end: 2012),
+      lineRange: (start: 3641, end: 3645),
       declarations: {
-        'width': ['27px'],
-        'height': ['27px'],
-        'border-radius': ['50%'],
+        'width': ['20px'],
+        'height': ['20px'],
       },
-      finalValue: '27px',
+      finalValue: '20px',
     ),
     BalanceHtmlMetric(
       name: 'fast-info title',
@@ -109,14 +111,14 @@ abstract final class SpendeeBalanceB3mA3Manifest {
     BalanceHtmlMetric(
       name: 'fast-info ghost',
       selector: '.stage2-redesign-insight-ghost-toggle',
-      lineRange: (start: 2149, end: 2162),
+      lineRange: (start: 3682, end: 3687),
       declarations: {
-        'right': ['9px'],
-        'bottom': ['8px'],
-        'width': ['22px'],
-        'height': ['22px'],
+        'right': ['8px'],
+        'bottom': ['4px'],
+        'width': ['17px'],
+        'height': ['17px'],
       },
-      finalValue: '9px',
+      finalValue: '8px',
     ),
     BalanceHtmlMetric(
       name: 'fast-info no-spend label',
@@ -168,6 +170,17 @@ abstract final class SpendeeBalanceB3mA3Manifest {
         'gap': ['4px'],
       },
       finalValue: '218px',
+    ),
+    BalanceHtmlMetric(
+      name: 'detail carousel visible viewport',
+      selector:
+          '.stage2-redesign-detail-stage .stage2-redesign-detail-carousel',
+      lineRange: (start: 3866, end: 3869),
+      declarations: {
+        'height': ['208px'],
+        'min-height': ['208px'],
+      },
+      finalValue: '208px',
     ),
     BalanceHtmlMetric(
       name: 'generic permanent top-categories card source',
@@ -498,9 +511,9 @@ abstract final class SpendeeBalanceB3mA3Manifest {
   static const heroTop = 104.0;
   static const heroHeight = 126.0;
 
-  // `.stage2-redesign-insight-grid` after `time-rail-compact`.
+  // Active `.stage2-redesign-insight-grid` compact cascade.
   static const fastInfoTop = 241.0;
-  static const fastInfoHeight = 128.0;
+  static const fastInfoHeight = 72.0;
   static const fastInfoGap = 9.0;
   static const fastInfoCardRadius = 26.0;
   static const fastInfoPadding = EdgeInsets.fromLTRB(9, 7, 9, 18);
@@ -509,7 +522,7 @@ abstract final class SpendeeBalanceB3mA3Manifest {
   static const fastInfoIconSize = 12.0;
   static const fastInfoTitleSize = 8.0;
   static const fastInfoTitleLineHeight = 1.18;
-  static const fastInfoBodyValueRowHeight = 22.0;
+  static const fastInfoBodyValueRowHeight = 14.0;
   static const fastInfoValueSize = 13.0;
   static const fastInfoTwoLineValueSize = 17.0;
   static const fastInfoTrendValueSize = 20.0;
@@ -521,7 +534,7 @@ abstract final class SpendeeBalanceB3mA3Manifest {
   static const fastInfoGhostRight = 8.0;
   static const fastInfoGhostBottom = 4.0;
 
-  // `.stage2-redesign-detail-stage` after the permanent scope selector.
+  // The permanent stage contains a 208px clipped carousel plus pagination.
   static const detailTop = 324.0;
   static const detailStageHeight =
       SpendeeBalanceV3DetailResolution.detailStageHeight;

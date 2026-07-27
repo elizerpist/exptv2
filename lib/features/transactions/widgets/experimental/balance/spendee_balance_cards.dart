@@ -372,6 +372,7 @@ class _NoSpendFastInfo extends StatelessWidget {
           child: _FastInfoValueBody(
             value: model.value,
             secondary: model.secondary,
+            showSecondary: false,
           ),
         ),
       ],
@@ -402,7 +403,13 @@ class _CategoryChangeFastInfo extends StatelessWidget {
         ),
         const SizedBox(height: _FastInfoLayout.headerBodyGap),
         Expanded(
-          child: _CategoryChangeMetricBody(model: model, hue: style.iconHue),
+          child: _FastInfoValueBody(
+            value: model.value,
+            secondary: model.secondary,
+            valueColor: style.iconHue,
+            valueSize: _FastInfoLayout.valueSize,
+            valueKey: const ValueKey('spendee-balance-category-change-value'),
+          ),
         ),
       ],
     );
@@ -712,113 +719,26 @@ class _FastInfoValue extends StatelessWidget {
   }
 }
 
-class _CategoryChangeMetricBody extends StatelessWidget {
-  const _CategoryChangeMetricBody({required this.model, required this.hue});
-
-  final SpendeeBalanceCategoryChangeCardModel model;
-  final Color hue;
-
-  @override
-  Widget build(BuildContext context) {
-    final direction = model.value.trimLeft().startsWith('-') ? '↓' : '↑';
-    return Column(
-      children: [
-        const SizedBox(height: 5),
-        SizedBox(
-          height: SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight,
-          child: Center(
-            child: Row(
-              key: const ValueKey('spendee-balance-category-change-metric-row'),
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Flexible(
-                  child: Text(
-                    model.value,
-                    key: const ValueKey(
-                      'spendee-balance-category-change-value',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: hue,
-                      fontSize: 14,
-                      height: 1,
-                      fontWeight: FontWeight.w900,
-                      fontVariations: SpendeeBalanceVisualSpec.weight950,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Baseline(
-                    baseline: 7,
-                    baselineType: TextBaseline.alphabetic,
-                    child: SizedBox(
-                      key: const ValueKey(
-                        'spendee-balance-category-change-direction',
-                      ),
-                      width: 9,
-                      height: 9,
-                      child: Center(
-                        child: Text(
-                          direction,
-                          style: TextStyle(
-                            color: hue,
-                            fontSize: 8,
-                            height: 1,
-                            fontWeight: FontWeight.w900,
-                            fontVariations: SpendeeBalanceVisualSpec.weight950,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Text(
-              '${model.category} · ${model.secondary}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF65718E),
-                fontSize: _FastInfoLayout.metaSize,
-                height: _FastInfoLayout.metaLineHeight,
-                fontWeight: FontWeight.w700,
-                fontVariations: SpendeeBalanceVisualSpec.weight750,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 abstract final class _FastInfoLayout {
-  static const padding = EdgeInsets.fromLTRB(13, 14, 13, 30);
-  static const headerSize = 27.0;
-  static const headerGap = 7.0;
-  static const headerBodyGap = 10.0;
-  static const iconSize = 15.0;
-  static const valueSize = 16.0;
-  static const valueLineHeight = 1.05;
-  static const metaSize = 7.8;
-  static const metaLineHeight = 1.2;
-  static const trendValueSize = 20.0;
-  static const trendGlyphSize = 17.0;
-  static const ghostSize = 22.0;
-  static const ghostIconSize = 12.0;
-  static const ghostRight = 9.0;
-  static const ghostBottom = 8.0;
+  static const padding = SpendeeBalanceB3mA3Manifest.fastInfoPadding;
+  static const headerSize = SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize;
+  static const headerGap = SpendeeBalanceB3mA3Manifest.fastInfoHeaderGap;
+  static const headerBodyGap = 3.0;
+  static const iconSize = SpendeeBalanceB3mA3Manifest.fastInfoIconSize;
+  static const valueSize = SpendeeBalanceB3mA3Manifest.fastInfoValueSize;
+  static const valueLineHeight =
+      SpendeeBalanceB3mA3Manifest.fastInfoValueLineHeight;
+  static const metaSize = SpendeeBalanceB3mA3Manifest.fastInfoMetaSize;
+  static const metaLineHeight = 1.1;
+  static const trendValueSize =
+      SpendeeBalanceB3mA3Manifest.fastInfoTrendValueSize;
+  static const trendGlyphSize =
+      SpendeeBalanceB3mA3Manifest.fastInfoTrendGlyphSize;
+  static const ghostSize = SpendeeBalanceB3mA3Manifest.fastInfoGhostSize;
+  static const ghostIconSize =
+      SpendeeBalanceB3mA3Manifest.fastInfoGhostIconSize;
+  static const ghostRight = SpendeeBalanceB3mA3Manifest.fastInfoGhostRight;
+  static const ghostBottom = SpendeeBalanceB3mA3Manifest.fastInfoGhostBottom;
 }
 
 @immutable
@@ -948,6 +868,13 @@ extension SpendeeBalanceNoSpendDimensionLabel
     SpendeeBalanceNoSpendDimension.month => 'Havi',
     SpendeeBalanceNoSpendDimension.year => 'Éves',
     SpendeeBalanceNoSpendDimension.all => 'Össz.',
+  };
+
+  String get fastInfoViewLabel => switch (this) {
+    SpendeeBalanceNoSpendDimension.week => '7 napos nézet',
+    SpendeeBalanceNoSpendDimension.month => 'Havi nézet',
+    SpendeeBalanceNoSpendDimension.year => 'Éves nézet',
+    SpendeeBalanceNoSpendDimension.all => 'Összes nézet',
   };
 }
 
@@ -1491,7 +1418,10 @@ class _TopCategoriesDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rankedRows = model.rows.take(4).toList(growable: false);
+    // The HTML card has one featured category plus exactly three following
+    // rows. Keeping that bound prevents a fourth row from overflowing the
+    // 208px visible carousel viewport.
+    final rankedRows = model.rows.take(3).toList(growable: false);
     return _DetailCardShell(
       model: model,
       onGhostChanged: onGhostChanged,

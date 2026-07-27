@@ -1163,12 +1163,12 @@ void main() {
     await gesture.moveBy(const Offset(-20, 0));
     await gesture.moveBy(const Offset(-30, 0));
     await tester.pump();
-    expect(transformDx(tester, 1), closeTo(-30, .001));
+    expect(transformDx(tester, 1), closeTo(-3, .001));
     expect(fastFilterCalls, 0);
 
     await gesture.moveBy(const Offset(-51, 0));
     await tester.pump();
-    expect(transformDx(tester, 1), -44);
+    expect(transformDx(tester, 1), -3);
     expect(fastFilterCalls, 1);
     await gesture.moveBy(const Offset(-40, 0));
     await tester.pump();
@@ -1176,6 +1176,38 @@ void main() {
     await gesture.up();
     await tester.pump();
     expect(transformDx(tester, 1), 0);
+  });
+
+  testWidgets('left swipe remains inside the authored Balance gutter', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        SpendeeBalanceTransactionLog(
+          groups: oneGroup(),
+          categoriesById: {7: category()},
+          viewportHeight: 100,
+          onFastFilter: (_, _) {},
+          onRecordTap: (_) {},
+          onDeleteRequested: (_) => false,
+          onCategoryFilter: (_) {},
+          onEditTransaction: (_) {},
+        ),
+      ),
+    );
+
+    final row = find.byKey(
+      const ValueKey('spendee-balance-transaction-row-record-1'),
+    );
+    final surface = find.byKey(
+      const ValueKey('spendee-balance-transaction-surface-record-1'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(row));
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+
+    expect(tester.getRect(surface).left, greaterThanOrEqualTo(17));
+    await gesture.up();
   });
 
   testWidgets(
@@ -1218,7 +1250,7 @@ void main() {
       await gesture.moveBy(const Offset(-20, 0));
       await tester.pump();
 
-      expect(transformDx(tester, 1), closeTo(-20, .01));
+      expect(transformDx(tester, 1), closeTo(-3, .01));
       final decoration =
           tester.widget<DecoratedBox>(surface).decoration as BoxDecoration;
       expect(decoration.color, const Color(0xF5FFFFFF));
