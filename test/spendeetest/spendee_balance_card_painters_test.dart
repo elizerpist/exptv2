@@ -27,7 +27,7 @@ void main() {
 
   group('B3M-A3 permanent variable-budget progress painter', () {
     test('normalizes 0%, 1%, 50%, 100%, and overflow geometry', () {
-      const size = Size(100, 16);
+      const size = Size(100, 22);
       final cases = <(double, double)>[
         (0, 0),
         (.01, 1),
@@ -43,36 +43,36 @@ void main() {
 
         expect(
           geometry.trackRect,
-          const Rect.fromLTWH(0, 5, 100, 6),
+          const Rect.fromLTWH(0, 5, 100, 12),
           reason: 'track geometry at progress $progress',
         );
         expect(
           geometry.fillRect,
-          Rect.fromLTWH(0, 5, expectedX, 6),
+          Rect.fromLTWH(0, 5, expectedX, 12),
           reason: 'fill geometry at progress $progress',
         );
         expect(
           geometry.markerCenter,
-          Offset(expectedX, 8),
+          Offset(expectedX, 11),
           reason: 'marker center at progress $progress',
         );
         expect(
           geometry.markerOuterRect,
-          Rect.fromCircle(center: Offset(expectedX, 8), radius: 8),
-          reason: '16px marker at progress $progress',
+          Rect.fromCircle(center: Offset(expectedX, 11), radius: 11),
+          reason: '22px marker at progress $progress',
         );
         expect(
           geometry.markerInnerRect,
-          Rect.fromCircle(center: Offset(expectedX, 8), radius: 4),
-          reason: '4px marker border at progress $progress',
+          Rect.fromCircle(center: Offset(expectedX, 11), radius: 6),
+          reason: '5px marker border at progress $progress',
         );
       }
     });
 
     test('keeps the frozen permanent visual layer specification', () {
-      expect(SpendeeBalanceBudgetProgressPainter.trackHeight, 6);
-      expect(SpendeeBalanceBudgetProgressPainter.markerDiameter, 16);
-      expect(SpendeeBalanceBudgetProgressPainter.markerBorderWidth, 4);
+      expect(SpendeeBalanceBudgetProgressPainter.trackHeight, 12);
+      expect(SpendeeBalanceBudgetProgressPainter.markerDiameter, 22);
+      expect(SpendeeBalanceBudgetProgressPainter.markerBorderWidth, 5);
       expect(
         SpendeeBalanceBudgetProgressPainter.trackColor,
         const Color(0xFFEEF0F7),
@@ -117,14 +117,14 @@ void main() {
     });
 
     test('builds a hollow shifted mask for the true inset track shadow', () {
-      const size = Size(100, 16);
+      const size = Size(100, 22);
       const painter = SpendeeBalanceBudgetProgressPainter(progress: .5);
       final mask = painter.trackInsetShadowPathForSize(size);
 
       expect(mask.fillType, PathFillType.evenOdd);
       expect(mask.contains(const Offset(50, 5)), isTrue);
-      expect(mask.contains(const Offset(50, 8)), isFalse);
-      expect(mask.contains(const Offset(50, 10)), isFalse);
+      expect(mask.contains(const Offset(50, 11)), isFalse);
+      expect(mask.contains(const Offset(50, 17)), isFalse);
     });
 
     test('repaints only when the source progress changes', () {

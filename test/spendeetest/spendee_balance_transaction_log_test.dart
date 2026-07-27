@@ -1,16 +1,20 @@
 import 'dart:async';
 
+import 'package:exptv2/core/debug/debug_console.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_transaction_log.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/balance_production_host.dart';
 
 void main() {
   Widget host(Widget child, {double width = 378, double height = 892}) {
@@ -27,6 +31,287 @@ void main() {
       ),
     );
   }
+
+  testWidgets(
+    'L1-L8 renders the complete LogBox in a no-recovery collapsed production dashboard',
+    (tester) async {
+      await pumpBalanceProductionHost(tester, expanded: false, settle: false);
+      await tester.pump();
+
+      final viewport = find.byKey(
+        const ValueKey('spendee-balance-transaction-viewport'),
+      );
+      final dayMaterial = find.byKey(
+        const ValueKey('spendee-balance-transaction-day-decoration-2026-07-17'),
+      );
+      final row = find.byKey(
+        const ValueKey('spendee-balance-transaction-row-record-1'),
+      );
+      final edit = find.byKey(
+        const ValueKey('spendee-balance-transaction-edit-record-1'),
+      );
+
+      expect(tester.getSize(viewport), const Size(378, 422));
+      expect(SpendeeBalanceTransactionLog.visibleRowBound(422), 8);
+      expect(SpendeeBalanceTransactionLog.mountedRowBound(422), 21);
+      final list = tester.widget<CustomScrollView>(
+        find.descendant(of: viewport, matching: find.byType(CustomScrollView)),
+      );
+      expect(list.physics, isA<ClampingScrollPhysics>());
+      // Flutter 3.41 still exposes only this legacy name.
+      // ignore: deprecated_member_use
+      expect(list.cacheExtent, 360);
+
+      final dayDecoration =
+          tester.widget<DecoratedSliver>(dayMaterial).decoration
+              as BoxDecoration;
+      expect(dayDecoration.color, isNull);
+      expect(dayDecoration.border, isNull);
+      expect(dayDecoration.boxShadow, isNull);
+
+      expect(tester.getSize(row), const Size(372, 55));
+      final movingDecoration =
+          tester
+                  .widget<DecoratedBox>(
+                    find.byKey(
+                      const ValueKey(
+                        'spendee-balance-transaction-surface-record-2',
+                      ),
+                    ),
+                  )
+                  .decoration
+              as BoxDecoration;
+      expect(movingDecoration.color, const Color(0xF5FFFFFF));
+      final movingBorder = movingDecoration.border! as Border;
+      expect(movingBorder.top.color, const Color(0x1A666FAB));
+      expect(movingBorder.left.color, const Color(0x1A666FAB));
+      expect(movingBorder.right.color, const Color(0x1A666FAB));
+      expect(movingDecoration.boxShadow, hasLength(2));
+      expect(movingDecoration.boxShadow!.first.color, const Color(0x14524B93));
+      expect(movingDecoration.boxShadow!.first.offset, const Offset(0, 9));
+      expect(movingDecoration.boxShadow!.first.blurRadius, 19);
+      expect(movingDecoration.boxShadow!.last.color, const Color(0xF5FFFFFF));
+      expect(movingDecoration.boxShadow!.last.offset, const Offset(0, 1));
+      expect(movingDecoration.boxShadow!.last.blurStyle, BlurStyle.inner);
+      expect(edit, findsOneWidget);
+      expect(tester.getSize(edit), const Size.square(24));
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('spendee-balance-transaction-edit-glyph-record-1'),
+          ),
+        ),
+        const Size.square(13),
+      );
+      final editDecoration = decorationOf(tester, edit);
+      expect(editDecoration.color, const Color(0x1A7D8798));
+      expect(editDecoration.borderRadius, BorderRadius.circular(8));
+      expect(
+        tester.getRect(edit).right,
+        tester.getRect(row).right -
+            SpendeeBalanceVisualSpec.transactionRowPadding.right,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-transaction-merchant-record-1'),
+          ),
+          matching: find.byType(SvgPicture),
+        ),
+        findsNothing,
+      );
+      expect(
+        find
+            .descendant(
+              of: find.byKey(
+                const ValueKey('spendee-balance-transaction-avatar-record-1'),
+              ),
+              matching: find.byType(SvgPicture),
+            )
+            .evaluate()
+            .where((element) {
+              final picture = element.widget as SvgPicture;
+              return picture.bytesLoader.toString().contains('pencil.svg');
+            }),
+        isEmpty,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('L7 uses the literal compact empty-log state', (tester) async {
+    await tester.pumpWidget(
+      host(
+        SpendeeBalanceTransactionLog(
+          groups: const [],
+          categoriesById: const {},
+          viewportHeight: 100,
+          onFastFilter: (_, _) {},
+          onRecordTap: (_) {},
+          onDeleteRequested: (_) => false,
+          onCategoryFilter: (_) {},
+          onEditTransaction: (_) {},
+        ),
+      ),
+    );
+
+    final message = find.text('Nincs megjeleníthető tranzakció');
+    expect(message, findsOneWidget);
+    final text = tester.widget<Text>(message);
+    expect(text.style!.color, const Color(0xFF7D88A4));
+    expect(text.style!.fontSize, 9);
+    expect(text.style!.height, 1);
+    expect(text.style!.fontWeight, FontWeight.w700);
+    expect(
+      find.ancestor(
+        of: message,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Padding &&
+              widget.padding == const EdgeInsets.only(top: 20),
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'L6 production swipe leaves no opaque day material at the origin',
+    (tester) async {
+      await pumpBalanceProductionHost(tester);
+
+      final day = find.byKey(
+        const ValueKey('spendee-balance-transaction-day-decoration-2026-07-17'),
+      );
+      final surface = find.byKey(
+        const ValueKey('spendee-balance-transaction-surface-record-1'),
+      );
+      final avatar = find.byKey(
+        const ValueKey('spendee-balance-transaction-avatar-record-1'),
+      );
+      final edit = find.byKey(
+        const ValueKey('spendee-balance-transaction-edit-record-1'),
+      );
+      final transform = find.byKey(
+        const ValueKey('spendee-balance-transaction-transform-record-1'),
+      );
+
+      final dayDecoration =
+          tester.widget<DecoratedSliver>(day).decoration as BoxDecoration;
+      expect(dayDecoration.color, isNull);
+      expect(dayDecoration.border, isNull);
+      expect(dayDecoration.boxShadow, isNull);
+      for (final descendant in <Finder>[surface, avatar, edit]) {
+        expect(
+          find.ancestor(of: descendant, matching: transform),
+          findsOneWidget,
+        );
+      }
+      expect(
+        coloredAncestorsOf(
+          tester,
+          surface,
+        ).where((color) => color != balanceProductionPageColor),
+        isEmpty,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('L8 production host renders multiple all-time day groups', (
+    tester,
+  ) async {
+    await pumpBalanceProductionHost(
+      tester,
+      transactions: productionLogFixture(3),
+      allTime: true,
+      expanded: false,
+      settle: false,
+    );
+    await tester.pump();
+
+    for (final dateKey in <String>['2026-07-17', '2026-07-16', '2026-07-15']) {
+      expect(
+        find.byKey(ValueKey('spendee-balance-transaction-day-title-$dateKey')),
+        findsOneWidget,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('L8 production host publishes the ordered load-more trace', (
+    tester,
+  ) async {
+    await pumpBalanceProductionHost(
+      tester,
+      transactions: productionLogFixture(97, multipleDays: false),
+      expanded: false,
+      settle: false,
+    );
+    await tester.pump();
+
+    final viewport = find.byKey(
+      const ValueKey('spendee-balance-transaction-viewport'),
+    );
+    DebugConsole.clear();
+    await tester.drag(viewport, const Offset(0, -10000));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      balanceLogTracePhases(),
+      containsAllInOrder(<String>[
+        'scroll_start',
+        'first_mounted_row_change',
+        'near_end',
+        'window_request',
+        'load_more_publish',
+        'first_frame_after_publish',
+        'scroll_end',
+      ]),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'L8 production query change cancels a queued stale load-more callback',
+    (tester) async {
+      final store = await pumpBalanceProductionHost(
+        tester,
+        transactions: productionLogFixture(97, multipleDays: false),
+        expanded: false,
+        settle: false,
+      );
+      await tester.pump();
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-transaction-viewport'),
+          ),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+      await tester.pump();
+      DebugConsole.clear();
+
+      ScrollStartNotification(
+        metrics: scrollable.position,
+        context: scrollable.context,
+      ).dispatch(scrollable.context);
+      ScrollEndNotification(
+        metrics: scrollable.position,
+        context: scrollable.context,
+      ).dispatch(scrollable.context);
+      store.setMerchantFilter('Merchant 1');
+      await tester.pump();
+      await tester.pump();
+
+      expect(balanceLogTracePhases(), isNot(contains('load_more_publish')));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     '0726 ports the exact title-free grouped HTML transaction geometry',
@@ -113,7 +398,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         tester.getSize(
@@ -141,12 +426,10 @@ void main() {
                   )
                   .decoration
               as BoxDecoration;
-      expect(decoration.borderRadius, BorderRadius.circular(18));
+      expect(decoration.borderRadius, isNull);
       expect(decoration.color, isNull);
       expect(decoration.border, isNull);
-      expect(decoration.boxShadow, hasLength(1));
-      expect(decoration.boxShadow!.first.offset, const Offset(0, 9));
-      expect(decoration.boxShadow!.first.blurRadius, 19);
+      expect(decoration.boxShadow, isNull);
 
       final rowSurface = tester.widget<DecoratedBox>(
         find.byKey(
@@ -163,6 +446,7 @@ void main() {
       expect(rowBorder.top.color, const Color(0x1A666FAB));
       expect(rowBorder.left.color, const Color(0x1A666FAB));
       expect(rowBorder.right.color, const Color(0x1A666FAB));
+      expect(rowDecoration.boxShadow, hasLength(2));
     },
   );
 
@@ -248,7 +532,7 @@ void main() {
     expect((avatarCalls, rowCalls), (1, 0));
     expect(
       find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
-      findsNothing,
+      findsOneWidget,
     );
 
     final row = find.byKey(
@@ -334,6 +618,7 @@ void main() {
       var deleteCalls = 0;
       var avatarCalls = 0;
       var rowCalls = 0;
+      var editCalls = 0;
       await tester.pumpWidget(
         host(
           SpendeeBalanceTransactionLog(
@@ -347,7 +632,7 @@ void main() {
               return false;
             },
             onCategoryFilter: (_) => avatarCalls += 1,
-            onEditTransaction: (_) {},
+            onEditTransaction: (_) => editCalls += 1,
           ),
         ),
       );
@@ -360,8 +645,8 @@ void main() {
       expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(
         node.childrenCount,
-        1,
-        reason: 'the category avatar is the only nested action',
+        2,
+        reason: 'the category avatar and right edit are nested actions',
       );
       final actionIds =
           node.getSemanticsData().customSemanticsActionIds ?? const <int>[];
@@ -399,10 +684,19 @@ void main() {
       await tester.pump();
       expect((avatarCalls, rowCalls), (1, 0));
 
-      expect(
-        find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
-        findsNothing,
+      final edit = find.byKey(
+        const ValueKey('spendee-balance-transaction-edit-record-1'),
       );
+      expect(edit, findsOneWidget);
+      expect(tester.getSemantics(edit).label, 'Tranzakció szerkesztése');
+      await tester.tap(edit);
+      await tester.pump();
+      expect((editCalls, rowCalls), (1, 0));
+      Focus.of(tester.element(edit)).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect((editCalls, rowCalls), (2, 0));
 
       final row = find.byKey(
         const ValueKey('spendee-balance-transaction-row-record-1'),
@@ -550,9 +844,7 @@ void main() {
     },
   );
 
-  testWidgets('log rows expose no redundant right-edge edit target', (
-    tester,
-  ) async {
+  testWidgets('log rows expose one right-edge edit target', (tester) async {
     await tester.pumpWidget(
       host(
         SpendeeBalanceTransactionLog(
@@ -570,7 +862,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('spendee-balance-transaction-edit-record-1')),
-      findsNothing,
+      findsOneWidget,
     );
   });
 
@@ -1275,6 +1567,36 @@ void main() {
 List<BalanceLogGroup> oneGroup() => [
   BalanceLogGroup(date: '2026.07.25.', rows: [BalanceLogRow.record(record(1))]),
 ];
+
+List<TransactionRecord> productionLogFixture(
+  int count, {
+  bool multipleDays = true,
+}) => [
+  for (var index = 0; index < count; index += 1)
+    balanceProductionRecord(
+      index + 1,
+      categoryId: index.isEven ? 1 : 2,
+      amount: -1000.0 - index,
+      merchant: 'Merchant ${index + 1}',
+      date: multipleDays
+          ? switch (count <= 3 ? index : index ~/ 40) {
+              0 => '2026.07.17',
+              1 => '2026.07.16',
+              _ => '2026.07.15',
+            }
+          : '2026.07.17',
+      time: '10:${(index % 60).toString().padLeft(2, '0')}',
+    ),
+];
+
+List<String> balanceLogTracePhases() {
+  final phase = RegExp(r'phase=([a-z_]+)');
+  return DebugConsole.entries
+      .where((entry) => entry.contains('operation=balance-log-scroll'))
+      .map((entry) => phase.firstMatch(entry)?.group(1))
+      .whereType<String>()
+      .toList();
+}
 
 TransactionRecord record(
   int id, {

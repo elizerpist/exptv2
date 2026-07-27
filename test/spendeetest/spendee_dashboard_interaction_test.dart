@@ -21,6 +21,7 @@ import 'package:exptv2/features/transactions/widgets/experimental/spendee_header
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_mind_stats_adapter.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_test_dashboard.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_collapse_controller.dart';
 import 'package:exptv2/features/transactions/widgets/glossy_category_avatar.dart';
 import 'package:exptv2/features/transactions/widgets/header_card/magnet_strip.dart';
 import 'package:flutter/material.dart';
@@ -615,7 +616,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -132,
+        SpendeeBalanceCollapseVisuals.forProgress(1).postTranslateY,
       );
 
       Future<void> selectMode(ValueKey<String> key) async {
@@ -653,7 +654,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -132,
+        SpendeeBalanceCollapseVisuals.forProgress(1).postTranslateY,
       );
       await tester.tap(
         find.byKey(const ValueKey('spendee-balance-collapse-handle')),
@@ -729,7 +730,7 @@ void main() {
             .transform
             .getTranslation()
             .y,
-        -132,
+        SpendeeBalanceCollapseVisuals.forProgress(1).postTranslateY,
       );
       for (final (menuKey, surfaceKey) in surfaces) {
         await selectSurface(menuKey, surfaceKey);
@@ -743,7 +744,7 @@ void main() {
               .transform
               .getTranslation()
               .y,
-          -132,
+          SpendeeBalanceCollapseVisuals.forProgress(1).postTranslateY,
         );
       }
     },

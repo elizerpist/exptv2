@@ -52,6 +52,9 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest --no-daemon
 
+      - name: Enforce Balance V3 release gate before APK build
+        run: tool/check_balance_v3_gate.sh --check docs/superpowers/checklists/bugfix20260726v3.md
+
       - name: Configure Android signing
         env:
           KEYSTORE_BASE64: ${{ secrets.EXPTV2_ANDROID_KEYSTORE_BASE64 }}
@@ -77,6 +80,9 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
+      - name: Enforce Balance V3 release gate before artifact preparation
+        run: tool/check_balance_v3_gate.sh --check docs/superpowers/checklists/bugfix20260726v3.md
+
       - name: Prepare debug APK release file
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
@@ -88,6 +94,9 @@ jobs:
             echo "APK_NAME=$APK_NAME"
             echo "APK_PATH=$APK_PATH"
           } >> "$GITHUB_ENV"
+
+      - name: Enforce Balance V3 release gate before release upload
+        run: tool/check_balance_v3_gate.sh --check docs/superpowers/checklists/bugfix20260726v3.md
 
       - name: Publish latest debug APK release
         env:

@@ -12,6 +12,7 @@ import 'spendee_balance_collapse_controller.dart';
 import 'spendee_balance_debug_trace.dart';
 import 'spendee_balance_header.dart';
 import 'spendee_balance_post_content.dart';
+import 'spendee_balance_rail_publication_coordinator.dart';
 import 'spendee_balance_visual_spec.dart';
 
 typedef SpendeeBalanceTransactionLogBuilder =
@@ -107,6 +108,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   BalanceDebugTraceToken? _pendingScopeTrace;
   String? _pendingScopeTraceKey;
   var _scopeTraceFinishScheduled = false;
+  final _railPublication = BalanceRailPublicationCoordinator();
 
   @override
   void initState() {
@@ -215,6 +217,9 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   @override
   Widget build(BuildContext context) {
     final frame = _resolveFrame();
+    if (frame.query.selectedScope case final selected?) {
+      _railPublication.reconcileCommitted(selected.key);
+    }
     _scheduleScopeFallback(frame.query);
     final visuals = SpendeeBalanceCollapseVisuals.forProgress(
       _collapseController.progress,
@@ -224,46 +229,42 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
       policy: ReadingOrderTraversalPolicy(),
       child: ColoredBox(
         color: SpendeeBalanceVisualSpec.pageBackground,
-        child: ClipRect(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: SizedBox(
-              key: const ValueKey('spendee-balance-dashboard'),
-              width: SpendeeBalanceVisualSpec.canvas.width,
-              height: SpendeeBalanceVisualSpec.canvas.height,
-              child: Stack(
-                clipBehavior: Clip.hardEdge,
-                children: [
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            key: const ValueKey('spendee-balance-dashboard'),
+            width: SpendeeBalanceVisualSpec.canvas.width,
+            height: SpendeeBalanceVisualSpec.canvas.height,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  top: 33.3,
+                  right: 0,
+                  left: 0,
+                  height: 70,
+                  child: widget.brand,
+                ),
+                _buildCollapsibleContent(frame, visuals),
+                _buildPostContent(frame, visuals),
+                if (widget.menuButton case final menu?)
                   Positioned(
-                    top: 33.3,
-                    right: 0,
-                    left: 0,
-                    height: 70,
-                    child: widget.brand,
+                    top: SpendeeBalanceVisualSpec.menuTop,
+                    right: SpendeeBalanceVisualSpec.menuRight,
+                    child: menu,
                   ),
-                  _buildCollapsibleContent(frame, visuals),
-                  _buildPostContent(frame, visuals),
-                  if (widget.menuButton case final menu?)
-                    Positioned(
-                      top: SpendeeBalanceVisualSpec.menuTop,
-                      right: SpendeeBalanceVisualSpec.menuRight,
-                      child: menu,
+                if (widget.onOpenDebugPanel case final onOpenDebugPanel?)
+                  Positioned(
+                    top: 43,
+                    left: 8,
+                    child: IconButton(
+                      key: const ValueKey('spendee-balance-debug-panel-button'),
+                      tooltip: 'Debug log',
+                      icon: const Icon(Icons.terminal, size: 18),
+                      onPressed: onOpenDebugPanel,
                     ),
-                  if (widget.onOpenDebugPanel case final onOpenDebugPanel?)
-                    Positioned(
-                      top: 43,
-                      left: 8,
-                      child: IconButton(
-                        key: const ValueKey(
-                          'spendee-balance-debug-panel-button',
-                        ),
-                        tooltip: 'Debug log',
-                        icon: const Icon(Icons.terminal, size: 18),
-                        onPressed: onOpenDebugPanel,
-                      ),
-                    ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -356,7 +357,9 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   void _scheduleScopeFallback(BalanceQueryFrame query) {
-    if (!query.hasPendingScopeFallback || widget.onScopeFallback == null) {
+    if (_railPublication.isDragging ||
+        !query.hasPendingScopeFallback ||
+        widget.onScopeFallback == null) {
       _scheduledFallbackKey = null;
       return;
     }
@@ -611,6 +614,11 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
                                   );
                               _selectScope(selected);
                             },
+                            onPreview: (item) =>
+                                _railPublication.preview(item.key),
+                            onRailDragStart: () => _railPublication.beginDrag(
+                              frame.query.selectedScope?.key ?? '',
+                            ),
                             onCollapseDragStart: _beginCollapseDrag,
                             onCollapseDragUpdate: _updateCollapseDrag,
                             onCollapseDragEnd: _endCollapseDrag,
@@ -795,12 +803,18 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   }
 
   void _selectScope(BalanceTimeScopeOption option) {
+    if (!_railPublication.settle(option.key)) return;
     final trace = BalanceDebugTrace.enabled
         ? BalanceDebugTrace.begin(
             'balance-rail-load',
             fields: <String, Object?>{
               'requested_scope': option.key,
               'window': option.window.name,
+              'superseded': _railPublication.superseded,
+              'duplicate_final_loads': 0,
+              'discarded_frame_resolves': 0,
+              'recurring_during_drag': 0,
+              'inactive_stats_during_drag': 0,
             },
           )
         : null;
@@ -823,18 +837,16 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     _scopeTraceFinishScheduled = false;
   }
 
-  /// A summary selection has a two-phase store update when recurring ghosts
-  /// are projected. Complete its trace only once the requested rail item has
-  /// rendered with the settled projection, rather than on the first optimistic
-  /// post-frame callback.
+  /// Complete the rail load at the first frame carrying its settled scope.
+  /// Recurring ghosts continue as background work; making them part of the
+  /// rail completion would turn a visual drag settle into an unbounded wait.
   void _settleScopeTraceIfReady(BalanceRenderFrame frame) {
     final trace = _pendingScopeTrace;
     final requestedKey = _pendingScopeTraceKey;
     if (trace == null || requestedKey == null || _scopeTraceFinishScheduled) {
       return;
     }
-    if (widget.input.ghostProjectionInFlight ||
-        frame.query.selectedScope?.key != requestedKey) {
+    if (frame.query.selectedScope?.key != requestedKey) {
       return;
     }
     _scopeTraceFinishScheduled = true;
@@ -1159,10 +1171,19 @@ class _BalanceFrameHistoryEntry {
   bool matches(
     BalanceFrameInput candidate,
     Set<BalanceGhostSection> candidateSections,
-  ) =>
-      input.sameHistoryRevisionAs(candidate) &&
-      includedGhostSections.length == candidateSections.length &&
-      includedGhostSections.containsAll(candidateSections);
+  ) {
+    final sameGhostProjectionContent =
+        input.ghostProjectionInFlight != candidate.ghostProjectionInFlight &&
+        candidate.summaryWindow == SummaryWindow.monthly &&
+        frame.query.selectedScope?.key ==
+            '${candidate.summaryReferenceDate.year}-${candidate.summaryReferenceDate.month.toString().padLeft(2, '0')}';
+    return input.sameHistoryRevisionAs(
+          candidate,
+          ignoreGhostProjectionInFlight: sameGhostProjectionContent,
+        ) &&
+        includedGhostSections.length == candidateSections.length &&
+        includedGhostSections.containsAll(candidateSections);
+  }
 }
 
 BalanceGhostSection? _ghostSectionForId(String id) => switch (id) {

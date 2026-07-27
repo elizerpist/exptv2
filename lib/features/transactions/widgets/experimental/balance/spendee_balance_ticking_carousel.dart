@@ -40,6 +40,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
     this.centerOffsetBuilder,
     this.onIndexChanged,
     this.onIndexSettled,
+    this.onDragStarted,
     this.onTick,
     this.semanticLabel,
     this.maxVisibleLogicalDistance,
@@ -65,6 +66,7 @@ class SpendeeBalanceTickingViewport extends StatefulWidget {
   final SpendeeBalanceTickingCenterOffsetBuilder? centerOffsetBuilder;
   final ValueChanged<int>? onIndexChanged;
   final ValueChanged<int>? onIndexSettled;
+  final VoidCallback? onDragStarted;
   final VoidCallback? onTick;
   final String? semanticLabel;
   final int? maxVisibleLogicalDistance;
@@ -140,6 +142,7 @@ class _SpendeeBalanceTickingViewportState
     _stopMotion();
     _controller.beginDragFromCurrentMotion();
     _liveTicked = false;
+    widget.onDragStarted?.call();
   }
 
   void _updateDrag(DragUpdateDetails details) {

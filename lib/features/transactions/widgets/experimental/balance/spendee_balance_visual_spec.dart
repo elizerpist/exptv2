@@ -108,7 +108,7 @@ abstract final class SpendeeBalanceVisualSpec {
 
   static const detailTop = SpendeeBalanceB3mA3Manifest.detailTop;
 
-  /// `balance_latest_layout.html`: 208px card + 4px gap + 6px pagination.
+  /// V3 resolves the final 248px detail card plus 4px gap and 6px pagination.
   static const detailStageHeight =
       SpendeeBalanceB3mA3Manifest.detailStageHeight;
   static const detailCardHeight = SpendeeBalanceB3mA3Manifest.detailCardHeight;
@@ -134,7 +134,10 @@ abstract final class SpendeeBalanceVisualSpec {
   static const summaryHorizontalPadding = 15.0;
   static const summaryColumnGap = 9.0;
   static const summarySettleDuration = Duration(milliseconds: 160);
-  static const summarySurfaceColor = Color(0xF0FFFFFF);
+
+  /// Opaque Summary material. It sits directly on [pageBackground], rather
+  /// than compositing a translucent white through a coloured ancestor.
+  static const summarySurfaceColor = Color(0xFFFEFEFF);
   static const summarySurfaceBorder = Border.fromBorderSide(
     BorderSide(color: Color(0x1A666FAB)),
   );

@@ -82,6 +82,7 @@ class _SpendeeBalanceTransactionLogState
   bool _loadMoreScheduled = false;
   int? _lastRequestedRowCount;
   int _queryGeneration = 0;
+  int? _firstMountedRowAtScrollStart;
   BalanceDebugTraceToken? _scrollTrace;
 
   ScrollController get _controller =>
@@ -113,8 +114,13 @@ class _SpendeeBalanceTransactionLogState
       _loadMorePending = false;
       _loadMoreScheduled = false;
       _lastRequestedRowCount = null;
+      final requestedGeneration = _queryGeneration;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_controller.hasClients) return;
+        if (!mounted ||
+            requestedGeneration != _queryGeneration ||
+            !_controller.hasClients) {
+          return;
+        }
         _controller.jumpTo(_controller.position.minScrollExtent);
       });
     }
@@ -165,6 +171,7 @@ class _SpendeeBalanceTransactionLogState
                           onRecordTap: widget.onRecordTap,
                           onDeleteRequested: widget.onDeleteRequested,
                           onCategoryFilter: widget.onCategoryFilter,
+                          onEditTransaction: widget.onEditTransaction,
                           onRenameMerchantRequested:
                               widget.onRenameMerchantRequested,
                           onResetMerchantName: widget.onResetMerchantName,
@@ -188,6 +195,9 @@ class _SpendeeBalanceTransactionLogState
     final rowCount = _rowCount;
     if (notification is ScrollStartNotification) {
       _finishScrollTrace(reason: 'replaced');
+      _firstMountedRowAtScrollStart =
+          (notification.metrics.pixels / SpendeeBalanceTransactionLog.rowHeight)
+              .floor();
       if (BalanceDebugTrace.enabled) {
         _scrollTrace = BalanceDebugTrace.begin(
           'balance-log-scroll',
@@ -203,6 +213,17 @@ class _SpendeeBalanceTransactionLogState
             'cache_extent': SpendeeBalanceTransactionLog.cacheExtent,
           },
         );
+        BalanceDebugTrace.mark(_scrollTrace, 'scroll_start');
+      }
+    }
+    if (notification is ScrollUpdateNotification) {
+      final mountedRow =
+          (notification.metrics.pixels / SpendeeBalanceTransactionLog.rowHeight)
+              .floor();
+      if (_firstMountedRowAtScrollStart != null &&
+          mountedRow != _firstMountedRowAtScrollStart) {
+        _firstMountedRowAtScrollStart = null;
+        BalanceDebugTrace.mark(_scrollTrace, 'first_mounted_row_change');
       }
     }
     if (notification is ScrollEndNotification && _loadMorePending) {
@@ -220,6 +241,7 @@ class _SpendeeBalanceTransactionLogState
       return false;
     }
     if (notification is ScrollEndNotification) {
+      BalanceDebugTrace.mark(_scrollTrace, 'scroll_end');
       _finishScrollTrace(
         extentAfter: notification.metrics.extentAfter,
         loadMore: false,
@@ -248,7 +270,13 @@ class _SpendeeBalanceTransactionLogState
       if (!widget.hasMore || requestedRowCount != _rowCount) return;
       _markScrollWindowRequest(requestedRowCount);
       widget.onLoadMore?.call();
-      _finishScrollTrace(requestedRows: requestedRowCount, loadMore: true);
+      BalanceDebugTrace.mark(_scrollTrace, 'load_more_publish');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || requestedGeneration != _queryGeneration) return;
+        BalanceDebugTrace.mark(_scrollTrace, 'first_frame_after_publish');
+        BalanceDebugTrace.mark(_scrollTrace, 'scroll_end');
+        _finishScrollTrace(requestedRows: requestedRowCount, loadMore: true);
+      });
     });
   }
 
@@ -359,6 +387,7 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
     required this.onRecordTap,
     required this.onDeleteRequested,
     required this.onCategoryFilter,
+    required this.onEditTransaction,
     required this.onRenameMerchantRequested,
     required this.onResetMerchantName,
   });
@@ -370,6 +399,7 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
   final ValueChanged<TransactionRecord> onRecordTap;
   final SpendeeBalanceTransactionDeleteRequest onDeleteRequested;
   final ValueChanged<TransactionCategory> onCategoryFilter;
+  final ValueChanged<TransactionRecord> onEditTransaction;
   final ValueChanged<TransactionRecord>? onRenameMerchantRequested;
   final ValueChanged<TransactionRecord>? onResetMerchantName;
 
@@ -404,16 +434,9 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
           key: ValueKey(
             'spendee-balance-transaction-day-decoration-${layout.key}',
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14524B93),
-                offset: Offset(0, 9),
-                blurRadius: 19,
-              ),
-            ],
-          ),
+          // A group wrapper must not paint a stationary white/card surface:
+          // every opaque LogBox pixel belongs to one translated row.
+          decoration: const BoxDecoration(),
           sliver: SliverPadding(
             key: ValueKey('spendee-balance-transaction-day-card-${layout.key}'),
             padding: const EdgeInsets.all(1),
@@ -444,6 +467,7 @@ class _BalanceTransactionDaySliver extends StatelessWidget {
                   onRecordTap: onRecordTap,
                   onDeleteRequested: onDeleteRequested,
                   onCategoryFilter: onCategoryFilter,
+                  onEditTransaction: onEditTransaction,
                   onRenameMerchantRequested: onRenameMerchantRequested,
                   onResetMerchantName: onResetMerchantName,
                 );
@@ -491,6 +515,7 @@ class _BalanceTransactionRow extends StatefulWidget {
     required this.onRecordTap,
     required this.onDeleteRequested,
     required this.onCategoryFilter,
+    required this.onEditTransaction,
     required this.onRenameMerchantRequested,
     required this.onResetMerchantName,
   });
@@ -505,6 +530,7 @@ class _BalanceTransactionRow extends StatefulWidget {
   final ValueChanged<TransactionRecord> onRecordTap;
   final SpendeeBalanceTransactionDeleteRequest onDeleteRequested;
   final ValueChanged<TransactionCategory> onCategoryFilter;
+  final ValueChanged<TransactionRecord> onEditTransaction;
   final ValueChanged<TransactionRecord>? onRenameMerchantRequested;
   final ValueChanged<TransactionRecord>? onResetMerchantName;
 
@@ -716,6 +742,9 @@ class _BalanceTransactionRowState extends State<_BalanceTransactionRow> {
                     onCategoryFilter: widget.category == null
                         ? null
                         : () => widget.onCategoryFilter(widget.category!),
+                    onEdit: record == null
+                        ? null
+                        : () => widget.onEditTransaction(record),
                     onRename:
                         record == null ||
                             widget.onRenameMerchantRequested == null
@@ -752,6 +781,8 @@ BoxDecoration _transactionRowSurfaceDecoration({
   const edge = BorderSide(color: Color(0x1A666FAB));
   return BoxDecoration(
     color: const Color(0xF5FFFFFF),
+    // Day material is deliberately row-owned so a horizontal swipe translates
+    // its fill, edge, radii and shadow together with its content.
     border: Border(
       top: isFirst ? edge : BorderSide.none,
       right: edge,
@@ -762,6 +793,21 @@ BoxDecoration _transactionRowSurfaceDecoration({
       top: isFirst ? const Radius.circular(17) : Radius.zero,
       bottom: isLast ? const Radius.circular(17) : Radius.zero,
     ),
+    boxShadow: isFirst
+        ? const [
+            BoxShadow(
+              color: Color(0x14524B93),
+              offset: Offset(0, 9),
+              blurRadius: 19,
+            ),
+            BoxShadow(
+              color: Color(0xF5FFFFFF),
+              offset: Offset(0, 1),
+              blurRadius: 0,
+              blurStyle: BlurStyle.inner,
+            ),
+          ]
+        : null,
   );
 }
 
@@ -777,6 +823,7 @@ class _BalanceTransactionRowContents extends StatelessWidget {
     required this.showSeparator,
     required this.hasCustomName,
     required this.onCategoryFilter,
+    required this.onEdit,
     required this.onRename,
     required this.onReset,
   });
@@ -791,6 +838,7 @@ class _BalanceTransactionRowContents extends StatelessWidget {
   final bool showSeparator;
   final bool hasCustomName;
   final VoidCallback? onCategoryFilter;
+  final VoidCallback? onEdit;
   final VoidCallback? onRename;
   final VoidCallback? onReset;
 
@@ -832,12 +880,119 @@ class _BalanceTransactionRowContents extends StatelessWidget {
               ),
               const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
               _BalanceTransactionValue(amount: amount, time: time),
+              const SizedBox(width: SpendeeBalanceVisualSpec.transactionRowGap),
+              _BalanceTransactionEditButton(token: token, onPressed: onEdit),
             ],
           ),
         ),
       ],
     );
   }
+}
+
+class _BalanceTransactionEditButton extends StatefulWidget {
+  const _BalanceTransactionEditButton({
+    required this.token,
+    required this.onPressed,
+  });
+
+  final String token;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_BalanceTransactionEditButton> createState() =>
+      _BalanceTransactionEditButtonState();
+}
+
+class _BalanceTransactionEditButtonState
+    extends State<_BalanceTransactionEditButton> {
+  bool _focused = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final onPressed = widget.onPressed;
+    if (onPressed == null) return const SizedBox.square(dimension: 24);
+    const label = 'Tranzakció szerkesztése';
+    return Tooltip(
+      message: label,
+      excludeFromSemantics: true,
+      child: _BalanceKeyboardTapTarget(
+        onActivate: onPressed,
+        onFocusChange: (value) => setState(() => _focused = value),
+        child: Semantics(
+          key: ValueKey('spendee-balance-transaction-edit-${widget.token}'),
+          button: true,
+          enabled: true,
+          label: label,
+          onTap: onPressed,
+          excludeSemantics: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapCancel: () => setState(() => _pressed = false),
+            onTapUp: (_) => setState(() => _pressed = false),
+            child: Transform.scale(
+              scale: _pressed ? .92 : 1,
+              child: CustomPaint(
+                foregroundPainter: _focused
+                    ? const _BalanceEditFocusOutlinePainter()
+                    : null,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0x1A7D8798),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SizedBox.square(
+                    dimension: 24,
+                    child: Center(
+                      child: SvgPicture.asset(
+                        'assets/icons/lucide/pencil.svg',
+                        key: ValueKey(
+                          'spendee-balance-transaction-edit-glyph-${widget.token}',
+                        ),
+                        width: 13,
+                        height: 13,
+                        fit: BoxFit.contain,
+                        colorFilter: ColorFilter.mode(
+                          Color(0xFF7D8798),
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceEditFocusOutlinePainter extends CustomPainter {
+  const _BalanceEditFocusOutlinePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outline = Paint()
+      ..color = const Color(0x6B7D8798)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(-1, -1, size.width + 2, size.height + 2),
+        const Radius.circular(9),
+      ),
+      outline,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BalanceEditFocusOutlinePainter oldDelegate) =>
+      false;
 }
 
 class _BalanceTransactionAvatar extends StatelessWidget {
@@ -1072,22 +1227,6 @@ class _BalanceMerchantRenameTargetState
             ),
           ),
         ),
-        if (onPressed != null) ...[
-          const SizedBox(width: 2),
-          SvgPicture.asset(
-            'assets/icons/lucide/pencil.svg',
-            key: ValueKey(
-              'spendee-balance-transaction-rename-glyph-${widget.token}',
-            ),
-            width: 7,
-            height: 7,
-            fit: BoxFit.contain,
-            colorFilter: const ColorFilter.mode(
-              Color(0xFF7D8798),
-              BlendMode.srcIn,
-            ),
-          ),
-        ],
       ],
     );
     if (onPressed == null) {

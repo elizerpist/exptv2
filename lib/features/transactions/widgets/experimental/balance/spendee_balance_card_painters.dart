@@ -91,9 +91,9 @@ class SpendeeBalanceMoonGeometry {
 class SpendeeBalanceBudgetProgressPainter extends CustomPainter {
   const SpendeeBalanceBudgetProgressPainter({required this.progress});
 
-  static const trackHeight = 6.0;
-  static const markerDiameter = 16.0;
-  static const markerBorderWidth = 4.0;
+  static const trackHeight = 12.0;
+  static const markerDiameter = 22.0;
+  static const markerBorderWidth = 5.0;
   static const trackColor = Color(0xFFEEF0F7);
   static const markerColor = Color(0xFFFF4677);
   static const markerRingColor = Color(0x38FF5F91);

@@ -259,7 +259,8 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final decoration = _fastInfoDecoration(model.kind);
+    final style = SpendeeBalanceFastInfoVisualStyle.resolve(model.kind, model);
+    final decoration = _fastInfoDecoration(style);
     final surface = SizedBox(
       height: SpendeeBalanceVisualSpec.insightHeight,
       child: DecoratedBox(
@@ -274,30 +275,48 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: Padding(
-                  padding: SpendeeBalanceB3mA3Manifest.fastInfoPadding,
+                  padding: _FastInfoLayout.padding,
                   child: switch (model) {
                     final SpendeeBalanceNoSpendCardModel value =>
-                      _NoSpendFastInfo(model: value),
+                      _NoSpendFastInfo(model: value, style: style),
                     final SpendeeBalanceCategoryChangeCardModel value =>
-                      _CategoryChangeFastInfo(model: value),
+                      _CategoryChangeFastInfo(model: value, style: style),
                     final SpendeeBalanceLatestTransactionCardModel value =>
-                      _LatestTransactionFastInfo(model: value),
+                      _LatestTransactionFastInfo(model: value, style: style),
                     final SpendeeBalanceTrendComparisonCardModel value =>
-                      _TrendComparisonFastInfo(model: value),
+                      _TrendComparisonFastInfo(model: value, style: style),
                     final SpendeeBalanceUpcomingRecurringCardModel value =>
-                      _UpcomingRecurringFastInfo(model: value),
+                      _UpcomingRecurringFastInfo(model: value, style: style),
                   },
                 ),
               ),
+              if (model case final SpendeeBalanceNoSpendCardModel noSpend)
+                Positioned(
+                  left: 9,
+                  right: 31,
+                  bottom: 7,
+                  child: Text(
+                    noSpend.dimensionLabel,
+                    key: const ValueKey('spendee-balance-no-spend-view-label'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF7A86A3),
+                      fontSize: 6.5,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
               Positioned(
-                right: SpendeeBalanceB3mA3Manifest.fastInfoGhostRight,
-                bottom: SpendeeBalanceB3mA3Manifest.fastInfoGhostBottom,
+                right: _FastInfoLayout.ghostRight,
+                bottom: _FastInfoLayout.ghostBottom,
                 child: _GhostToggle(
                   key: ValueKey('spendee-balance-fast-info-ghost-${model.id}'),
                   included: model.includeGhostTransactions,
-                  size: SpendeeBalanceB3mA3Manifest.fastInfoGhostSize,
-                  radius: SpendeeBalanceB3mA3Manifest.fastInfoGhostSize / 2,
-                  iconSize: SpendeeBalanceB3mA3Manifest.fastInfoGhostIconSize,
+                  size: _FastInfoLayout.ghostSize,
+                  radius: _FastInfoLayout.ghostSize / 2,
+                  iconSize: _FastInfoLayout.ghostIconSize,
                   circular: true,
                   onTap: () =>
                       onGhostChanged(model.id, !model.includeGhostTransactions),
@@ -328,35 +347,27 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
 }
 
 class _NoSpendFastInfo extends StatelessWidget {
-  const _NoSpendFastInfo({required this.model});
+  const _NoSpendFastInfo({required this.model, required this.style});
 
   final SpendeeBalanceNoSpendCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final style = _fastInfoVisualStyle(SpendeeBalanceFastInfoKind.noSpend);
     return Column(
       key: const ValueKey('spendee-balance-fast-info-noSpend'),
       children: [
         _FastInfoHeader(
           title: model.title,
-          trailing: Text(
-            model.dimensionLabel,
-            key: const ValueKey('spendee-balance-no-spend-view-label'),
-            style: const TextStyle(
-              color: Color(0xFF1EA8A0),
-              fontSize: 6.4,
-              height: 1,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          kind: model.kind,
+          iconBackground: style.iconBackground,
           icon: CustomPaint(
             key: ValueKey('spendee-balance-no-spend-moon'),
-            painter: SpendeeBalanceMoonPainter(moonColor: style.iconColor),
+            painter: SpendeeBalanceMoonPainter(moonColor: style.iconHue),
             size: const Size.square(15),
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: _FastInfoLayout.headerBodyGap),
         Expanded(
           child: _FastInfoValueBody(
             value: model.value,
@@ -369,34 +380,29 @@ class _NoSpendFastInfo extends StatelessWidget {
 }
 
 class _CategoryChangeFastInfo extends StatelessWidget {
-  const _CategoryChangeFastInfo({required this.model});
+  const _CategoryChangeFastInfo({required this.model, required this.style});
 
   final SpendeeBalanceCategoryChangeCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final style = _fastInfoVisualStyle(
-      SpendeeBalanceFastInfoKind.categoryChange,
-    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-categoryChange'),
       children: [
         _FastInfoHeader(
           title: model.title,
+          kind: model.kind,
           iconBackground: style.iconBackground,
           icon: _LucideIcon(
             asset: model.iconAsset,
-            color: style.iconColor,
-            size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
+            color: style.iconHue,
+            size: _FastInfoLayout.iconSize,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: _FastInfoLayout.headerBodyGap),
         Expanded(
-          child: _FastInfoValueBody(
-            value: model.value,
-            valueColor: const Color(0xFFEF4173),
-            secondary: '${model.category} · ${model.secondary}',
-          ),
+          child: _CategoryChangeMetricBody(model: model, hue: style.iconHue),
         ),
       ],
     );
@@ -404,32 +410,35 @@ class _CategoryChangeFastInfo extends StatelessWidget {
 }
 
 class _LatestTransactionFastInfo extends StatelessWidget {
-  const _LatestTransactionFastInfo({required this.model});
+  const _LatestTransactionFastInfo({required this.model, required this.style});
 
   final SpendeeBalanceLatestTransactionCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final style = _fastInfoVisualStyle(
-      SpendeeBalanceFastInfoKind.latestTransaction,
-    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-latestTransaction'),
       children: [
         _FastInfoHeader(
           title: model.title,
+          kind: model.kind,
           iconBackground: style.iconBackground,
           icon: _LucideIcon(
             asset: model.iconAsset,
-            color: style.iconColor,
-            size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
+            color: style.iconHue,
+            size: _FastInfoLayout.iconSize,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: _FastInfoLayout.headerBodyGap),
         Expanded(
           child: _FastInfoValueBody(
             value: model.amount,
             valueColor: const Color(0xFF526FC5),
+            valueSize: _FastInfoLayout.valueSize,
+            valueKey: const ValueKey(
+              'spendee-balance-latest-transaction-value',
+            ),
             secondary: model.merchantAndTime,
           ),
         ),
@@ -439,9 +448,10 @@ class _LatestTransactionFastInfo extends StatelessWidget {
 }
 
 class _TrendComparisonFastInfo extends StatelessWidget {
-  const _TrendComparisonFastInfo({required this.model});
+  const _TrendComparisonFastInfo({required this.model, required this.style});
 
   final SpendeeBalanceTrendComparisonCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
 
   Color get _color => switch (model.direction) {
     SpendeeBalanceTrendDirection.up => const Color(0xFFEF4173),
@@ -457,33 +467,33 @@ class _TrendComparisonFastInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = _fastInfoVisualStyle(
-      SpendeeBalanceFastInfoKind.trendComparison,
-    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-trendComparison'),
       children: [
         _FastInfoHeader(
           title: model.title,
+          kind: model.kind,
           iconBackground: style.iconBackground,
           icon: _LucideIcon(
             asset: model.iconAsset,
-            color: style.iconColor,
-            size: SpendeeBalanceB3mA3Manifest.fastInfoIconSize,
+            color: style.iconHue,
+            size: _FastInfoLayout.iconSize,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: _FastInfoLayout.headerBodyGap),
         Expanded(
           child: _FastInfoValueBody(
             value: model.percentage,
             valueColor: _color,
-            valueSize: SpendeeBalanceB3mA3Manifest.fastInfoTrendValueSize,
+            valueSize: _FastInfoLayout.trendValueSize,
+            valueLineHeight: 1,
+            valueKey: const ValueKey('spendee-balance-trend-comparison-value'),
             showSecondary: false,
             leading: Text(
               _directionGlyph,
               style: TextStyle(
                 color: _color,
-                fontSize: SpendeeBalanceB3mA3Manifest.fastInfoTrendGlyphSize,
+                fontSize: _FastInfoLayout.trendGlyphSize,
                 height: 1,
                 fontWeight: FontWeight.w900,
                 fontVariations: SpendeeBalanceVisualSpec.weight950,
@@ -498,26 +508,25 @@ class _TrendComparisonFastInfo extends StatelessWidget {
 }
 
 class _UpcomingRecurringFastInfo extends StatelessWidget {
-  const _UpcomingRecurringFastInfo({required this.model});
+  const _UpcomingRecurringFastInfo({required this.model, required this.style});
 
   final SpendeeBalanceUpcomingRecurringCardModel model;
+  final SpendeeBalanceFastInfoVisualStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final style = _fastInfoVisualStyle(
-      SpendeeBalanceFastInfoKind.upcomingRecurring,
-    );
     return Column(
       key: const ValueKey('spendee-balance-fast-info-upcomingRecurring'),
       children: [
         _FastInfoHeader(
           title: model.title,
+          kind: model.kind,
           iconBackground: style.iconBackground,
-          icon: const Text(
+          icon: Text(
             '↻',
             key: ValueKey('spendee-balance-upcoming-recurring-glyph'),
             style: TextStyle(
-              color: Color(0xFF5F55EC),
+              color: style.iconHue,
               fontSize: 17,
               height: 1,
               fontWeight: FontWeight.w900,
@@ -525,7 +534,7 @@ class _UpcomingRecurringFastInfo extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: _FastInfoLayout.headerBodyGap),
         Expanded(
           child: _FastInfoValueBody(
             value: model.name,
@@ -540,25 +549,26 @@ class _UpcomingRecurringFastInfo extends StatelessWidget {
 class _FastInfoHeader extends StatelessWidget {
   const _FastInfoHeader({
     required this.title,
+    required this.kind,
     required this.icon,
     this.iconBackground = const Color(0xFFF0EFFF),
-    this.trailing,
   });
 
   final String title;
+  final SpendeeBalanceFastInfoKind kind;
   final Widget icon;
   final Color iconBackground;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize,
+      height: _FastInfoLayout.headerSize,
       child: Row(
         children: [
           Container(
-            width: SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize,
-            height: SpendeeBalanceB3mA3Manifest.fastInfoHeaderSize,
+            key: ValueKey('spendee-balance-fast-info-header-disc-${kind.name}'),
+            width: _FastInfoLayout.headerSize,
+            height: _FastInfoLayout.headerSize,
             decoration: BoxDecoration(
               color: iconBackground,
               shape: BoxShape.circle,
@@ -566,7 +576,7 @@ class _FastInfoHeader extends StatelessWidget {
             alignment: Alignment.center,
             child: icon,
           ),
-          const SizedBox(width: SpendeeBalanceB3mA3Manifest.fastInfoHeaderGap),
+          const SizedBox(width: _FastInfoLayout.headerGap),
           Expanded(
             child: Text(
               title,
@@ -578,10 +588,6 @@ class _FastInfoHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (trailing case final trailing?) ...[
-            const SizedBox(width: 3),
-            trailing,
-          ],
         ],
       ),
     );
@@ -594,7 +600,9 @@ class _FastInfoValueBody extends StatelessWidget {
     required this.secondary,
     this.valueColor = const Color(0xFF19274C),
     this.leading,
-    this.valueSize = SpendeeBalanceB3mA3Manifest.fastInfoValueSize,
+    this.valueSize = _FastInfoLayout.valueSize,
+    this.valueLineHeight = _FastInfoLayout.valueLineHeight,
+    this.valueKey,
     this.showSecondary = true,
   });
 
@@ -603,6 +611,8 @@ class _FastInfoValueBody extends StatelessWidget {
   final Color valueColor;
   final Widget? leading;
   final double valueSize;
+  final double valueLineHeight;
+  final Key? valueKey;
   final bool showSecondary;
 
   @override
@@ -614,9 +624,11 @@ class _FastInfoValueBody extends StatelessWidget {
             height: SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight,
             child: Center(
               child: _FastInfoValue(
+                key: valueKey,
                 value: value,
                 valueColor: valueColor,
                 valueSize: valueSize,
+                valueLineHeight: valueLineHeight,
                 leading: leading,
               ),
             ),
@@ -632,8 +644,8 @@ class _FastInfoValueBody extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFF65718E),
-                  fontSize: SpendeeBalanceB3mA3Manifest.fastInfoMetaSize,
-                  height: 1.1,
+                  fontSize: _FastInfoLayout.metaSize,
+                  height: _FastInfoLayout.metaLineHeight,
                   fontWeight: FontWeight.w700,
                   fontVariations: SpendeeBalanceVisualSpec.weight750,
                 ),
@@ -644,9 +656,11 @@ class _FastInfoValueBody extends StatelessWidget {
           Expanded(
             child: Center(
               child: _FastInfoValue(
+                key: valueKey,
                 value: value,
                 valueColor: valueColor,
                 valueSize: valueSize,
+                valueLineHeight: valueLineHeight,
                 leading: leading,
               ),
             ),
@@ -658,15 +672,18 @@ class _FastInfoValueBody extends StatelessWidget {
 
 class _FastInfoValue extends StatelessWidget {
   const _FastInfoValue({
+    super.key,
     required this.value,
     required this.valueColor,
     required this.valueSize,
+    required this.valueLineHeight,
     required this.leading,
   });
 
   final String value;
   final Color valueColor;
   final double valueSize;
+  final double valueLineHeight;
   final Widget? leading;
 
   @override
@@ -684,7 +701,7 @@ class _FastInfoValue extends StatelessWidget {
             style: TextStyle(
               color: valueColor,
               fontSize: valueSize,
-              height: SpendeeBalanceB3mA3Manifest.fastInfoValueLineHeight,
+              height: valueLineHeight,
               fontWeight: FontWeight.w900,
               fontVariations: SpendeeBalanceVisualSpec.weight950,
             ),
@@ -695,63 +712,184 @@ class _FastInfoValue extends StatelessWidget {
   }
 }
 
-class _FastInfoVisualStyle {
-  const _FastInfoVisualStyle({
-    required this.iconColor,
+class _CategoryChangeMetricBody extends StatelessWidget {
+  const _CategoryChangeMetricBody({required this.model, required this.hue});
+
+  final SpendeeBalanceCategoryChangeCardModel model;
+  final Color hue;
+
+  @override
+  Widget build(BuildContext context) {
+    final direction = model.value.trimLeft().startsWith('-') ? '↓' : '↑';
+    return Column(
+      children: [
+        const SizedBox(height: 5),
+        SizedBox(
+          height: SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight,
+          child: Center(
+            child: Row(
+              key: const ValueKey('spendee-balance-category-change-metric-row'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: Text(
+                    model.value,
+                    key: const ValueKey(
+                      'spendee-balance-category-change-value',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: hue,
+                      fontSize: 14,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      fontVariations: SpendeeBalanceVisualSpec.weight950,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Baseline(
+                    baseline: 7,
+                    baselineType: TextBaseline.alphabetic,
+                    child: SizedBox(
+                      key: const ValueKey(
+                        'spendee-balance-category-change-direction',
+                      ),
+                      width: 9,
+                      height: 9,
+                      child: Center(
+                        child: Text(
+                          direction,
+                          style: TextStyle(
+                            color: hue,
+                            fontSize: 8,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                            fontVariations: SpendeeBalanceVisualSpec.weight950,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Text(
+              '${model.category} · ${model.secondary}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF65718E),
+                fontSize: _FastInfoLayout.metaSize,
+                height: _FastInfoLayout.metaLineHeight,
+                fontWeight: FontWeight.w700,
+                fontVariations: SpendeeBalanceVisualSpec.weight750,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+abstract final class _FastInfoLayout {
+  static const padding = EdgeInsets.fromLTRB(13, 14, 13, 30);
+  static const headerSize = 27.0;
+  static const headerGap = 7.0;
+  static const headerBodyGap = 10.0;
+  static const iconSize = 15.0;
+  static const valueSize = 16.0;
+  static const valueLineHeight = 1.05;
+  static const metaSize = 7.8;
+  static const metaLineHeight = 1.2;
+  static const trendValueSize = 20.0;
+  static const trendGlyphSize = 17.0;
+  static const ghostSize = 22.0;
+  static const ghostIconSize = 12.0;
+  static const ghostRight = 9.0;
+  static const ghostBottom = 8.0;
+}
+
+@immutable
+class SpendeeBalanceFastInfoVisualStyle {
+  const SpendeeBalanceFastInfoVisualStyle({
+    required this.iconHue,
     required this.iconBackground,
     required this.inset,
     this.gradient,
   });
 
-  final Color iconColor;
+  final Color iconHue;
   final Color iconBackground;
   final Color inset;
   final Gradient? gradient;
 
-  Color get border => iconColor.withValues(alpha: 0x30 / 0xFF);
-  Color get glow => iconColor.withValues(alpha: 0x1F / 0xFF);
+  Color get edge => iconHue.withValues(alpha: 0x30 / 0xFF);
+  Color get glow => iconHue.withValues(alpha: 0x1F / 0xFF);
+
+  static SpendeeBalanceFastInfoVisualStyle resolve(
+    SpendeeBalanceFastInfoKind kind,
+    SpendeeBalanceFastInfoCardModel model,
+  ) {
+    return switch (kind) {
+      SpendeeBalanceFastInfoKind.categoryChange =>
+        const SpendeeBalanceFastInfoVisualStyle(
+          iconHue: Color(0xFFEF4173),
+          iconBackground: Color(0xFFFFF0F4),
+          inset: Color(0xF5FFFFFF),
+        ),
+      SpendeeBalanceFastInfoKind.latestTransaction =>
+        const SpendeeBalanceFastInfoVisualStyle(
+          iconHue: Color(0xFF5277D3),
+          iconBackground: Color(0xFFEDF3FF),
+          inset: Color(0xF5FFFFFF),
+        ),
+      SpendeeBalanceFastInfoKind.trendComparison =>
+        const SpendeeBalanceFastInfoVisualStyle(
+          iconHue: Color(0xFF7657D9),
+          iconBackground: Color(0xFFEEEAFF),
+          inset: Color(0xF5FFFFFF),
+          gradient: CssLinearGradient(
+            cssDegrees: 145,
+            colors: [Color(0xFFFAF8F6), Color(0xF2FFFFFF)],
+          ),
+        ),
+      SpendeeBalanceFastInfoKind.upcomingRecurring =>
+        const SpendeeBalanceFastInfoVisualStyle(
+          iconHue: Color(0xFF8B5CF6),
+          iconBackground: Color(0xFFF0EFFF),
+          inset: Color(0xF5FFFFFF),
+          gradient: CssLinearGradient(
+            cssDegrees: 145,
+            colors: [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
+          ),
+        ),
+      SpendeeBalanceFastInfoKind.noSpend =>
+        const SpendeeBalanceFastInfoVisualStyle(
+          iconHue: Color(0xFF5F55EC),
+          iconBackground: Color(0xFFF0EFFF),
+          inset: Color(0xF5FFFFFF),
+        ),
+    };
+  }
 }
 
-_FastInfoVisualStyle _fastInfoVisualStyle(SpendeeBalanceFastInfoKind kind) {
-  return switch (kind) {
-    SpendeeBalanceFastInfoKind.categoryChange => const _FastInfoVisualStyle(
-      iconColor: Color(0xFFEF4173),
-      iconBackground: Color(0xFFFFF0F4),
-      inset: Color(0xF5FFFFFF),
-    ),
-    SpendeeBalanceFastInfoKind.latestTransaction => const _FastInfoVisualStyle(
-      iconColor: Color(0xFF5277D3),
-      iconBackground: Color(0xFFEDF3FF),
-      inset: Color(0xF5FFFFFF),
-    ),
-    SpendeeBalanceFastInfoKind.trendComparison => const _FastInfoVisualStyle(
-      iconColor: Color(0xFF7657D9),
-      iconBackground: Color(0xFFEEEAFF),
-      inset: Color(0xF0FFFFFF),
-    ),
-    SpendeeBalanceFastInfoKind.upcomingRecurring => const _FastInfoVisualStyle(
-      iconColor: Color(0xFF5F55EC),
-      iconBackground: Color(0xFFF0EFFF),
-      inset: Color(0xF5FFFFFF),
-      gradient: CssLinearGradient(
-        cssDegrees: 145,
-        colors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
-      ),
-    ),
-    SpendeeBalanceFastInfoKind.noSpend => const _FastInfoVisualStyle(
-      iconColor: Color(0xFF5F55EC),
-      iconBackground: Color(0xFFF0EFFF),
-      inset: Color(0xF5FFFFFF),
-    ),
-  };
-}
-
-BoxDecoration _fastInfoDecoration(SpendeeBalanceFastInfoKind kind) {
-  final style = _fastInfoVisualStyle(kind);
+BoxDecoration _fastInfoDecoration(SpendeeBalanceFastInfoVisualStyle style) {
   return BoxDecoration(
     color: style.gradient == null ? const Color(0xF0FFFFFF) : null,
     gradient: style.gradient,
-    border: Border.all(color: style.border),
+    border: Border.all(color: style.edge),
     borderRadius: BorderRadius.circular(26),
     boxShadow: [
       BoxShadow(color: style.glow, offset: const Offset(0, 12), blurRadius: 25),
@@ -781,7 +919,7 @@ extension SpendeeBalanceMerchantDimensionLabel
   String get label => switch (this) {
     SpendeeBalanceMerchantDimension.year => 'Éves',
     SpendeeBalanceMerchantDimension.month => 'Havi',
-    SpendeeBalanceMerchantDimension.all => 'Összesen',
+    SpendeeBalanceMerchantDimension.all => 'Összes',
   };
 }
 
@@ -1202,47 +1340,42 @@ class _VariableBudgetDetail extends StatelessWidget {
       onGhostChanged: onGhostChanged,
       child: Column(
         children: [
-          SizedBox(
-            height: 15,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _DetailTitle(model.title)),
-                _BudgetDimensionSelector(
-                  selected: model.selectedDimension,
-                  onChanged: onDimensionChanged,
-                ),
-              ],
+          _DetailHeader(
+            id: model.id,
+            title: model.title,
+            selector: _BudgetDimensionSelector(
+              selected: model.selectedDimension,
+              onChanged: onDimensionChanged,
             ),
           ),
           SizedBox(
-            height: 36,
+            height: 52,
             child: Row(
               children: [
                 const _LucideTile(
                   key: ValueKey('spendee-balance-variable-budget-tile'),
-                  size: 36,
-                  radius: 11,
-                  iconSize: 19,
+                  size: 46,
+                  radius: 14,
+                  iconSize: 24,
                   iconAsset: 'assets/icons/lucide/shopping-cart.svg',
                   colors: [Color(0xFFFF4C79), Color(0xFFFB3D76)],
                   shadowColor: Color(0x3DFB3D76),
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 11),
                 Expanded(
                   child: _DetailMainCopy(
                     title: selected.remainingLabel,
                     subtitle: 'Fix tételek kizárva',
                   ),
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 11),
                 _DetailAmount(selected.remaining),
               ],
             ),
           ),
           const _DetailDivider(),
           SizedBox(
-            height: 36,
+            height: 47,
             child: Row(
               children: [
                 Expanded(
@@ -1270,11 +1403,11 @@ class _VariableBudgetDetail extends StatelessWidget {
           const _DetailDivider(),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(right: 23),
+              padding: const EdgeInsets.only(right: 25),
               child: Column(
                 children: [
                   SizedBox(
-                    height: 15,
+                    height: 20,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1286,7 +1419,7 @@ class _VariableBudgetDetail extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF1D2B50),
-                              fontSize: 8,
+                              fontSize: 10,
                               height: 1,
                               fontWeight: FontWeight.w900,
                               fontVariations:
@@ -1299,7 +1432,7 @@ class _VariableBudgetDetail extends StatelessWidget {
                           selected.budgetLabel,
                           style: const TextStyle(
                             color: Color(0xFF8791AA),
-                            fontSize: 7,
+                            fontSize: 7.6,
                             height: 1,
                             fontWeight: FontWeight.w800,
                           ),
@@ -1308,13 +1441,13 @@ class _VariableBudgetDetail extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
-                    height: 16,
+                    height: 22,
                     child: CustomPaint(
                       key: const ValueKey('spendee-balance-budget-progress'),
                       painter: SpendeeBalanceBudgetProgressPainter(
                         progress: selected.progress,
                       ),
-                      size: const Size(double.infinity, 16),
+                      size: const Size(double.infinity, 22),
                     ),
                   ),
                   Expanded(
@@ -1327,7 +1460,7 @@ class _VariableBudgetDetail extends StatelessWidget {
                           maxLines: 1,
                           style: const TextStyle(
                             color: Color(0xFF7F8BA5),
-                            fontSize: 6.5,
+                            fontSize: 7.6,
                             height: 1.1,
                             fontWeight: FontWeight.w800,
                           ),
@@ -1358,46 +1491,44 @@ class _TopCategoriesDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rankedRows = model.rows.take(4).toList(growable: false);
     return _DetailCardShell(
       model: model,
       onGhostChanged: onGhostChanged,
       child: Column(
         children: [
-          SizedBox(
-            height: 15,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _DetailTitle(model.title)),
-                if (model.rankDimension case final selected?)
-                  _RankDimensionSelector(
-                    keyPrefix: 'spendee-balance-top-category-dimension',
-                    selected: selected,
-                    onChanged: onDimensionChanged ?? (_) {},
-                  ),
-              ],
-            ),
+          _DetailHeader(
+            id: model.id,
+            title: model.title,
+            selector: switch (model.rankDimension) {
+              final selected? => _RankDimensionSelector(
+                keyPrefix: 'spendee-balance-top-category-dimension',
+                selected: selected,
+                onChanged: onDimensionChanged ?? (_) {},
+              ),
+              null => null,
+            },
           ),
           SizedBox(
-            height: 36,
+            height: 52,
             child: Row(
               children: [
                 _LucideTile(
-                  size: 36,
-                  radius: 11,
-                  iconSize: 19,
+                  size: 46,
+                  radius: 14,
+                  iconSize: 24,
                   iconAsset: model.featuredIconAsset,
                   colors: const [Color(0xFF31CE91), Color(0xFF1FBF86)],
                   shadowColor: const Color(0x381FBF86),
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 11),
                 Expanded(
                   child: _DetailMainCopy(
                     title: model.featuredCategory,
                     subtitle: model.featuredMeta,
                   ),
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 11),
                 _DetailAmount(model.featuredAmount),
               ],
             ),
@@ -1405,26 +1536,24 @@ class _TopCategoriesDetail extends StatelessWidget {
           const _DetailDivider(),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 2, right: 23),
-              child: model.rows.isEmpty
+              padding: const EdgeInsets.only(top: 6),
+              child: rankedRows.isEmpty
                   ? const SizedBox.shrink()
                   : Column(
                       children: List<Widget>.generate(
-                        model.rows.length * 2 - 1,
+                        rankedRows.length * 2 - 1,
                         (index) {
                           if (index.isOdd) {
-                            return const SizedBox(
-                              height: 1,
-                              child: ColoredBox(color: Color(0xFFF0F2F7)),
-                            );
+                            return const SizedBox(height: 8);
                           }
                           final rowIndex = index ~/ 2;
-                          return Expanded(
+                          return SizedBox(
+                            height: 22,
                             child: _TopCategoryRow(
                               key: ValueKey(
                                 'spendee-balance-top-category-row-$rowIndex',
                               ),
-                              model: model.rows[rowIndex],
+                              model: rankedRows[rowIndex],
                             ),
                           );
                         },
@@ -1455,7 +1584,8 @@ class _TopMerchantsDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     final rankDimension = model.rankDimension;
     if (rankDimension != null) {
-      final leader = model.rows.isEmpty
+      final rankedRows = model.rows.take(4).toList(growable: false);
+      final leader = rankedRows.isEmpty
           ? const SpendeeBalanceMerchantRowModel(
               merchant: 'Nincs adat',
               transactionCount: '0 tranzakció',
@@ -1463,48 +1593,43 @@ class _TopMerchantsDetail extends StatelessWidget {
               iconAsset: 'assets/icons/lucide/store.svg',
               color: Color(0xFFF24CAE),
             )
-          : model.rows.first;
-      final following = model.rows.skip(1).toList(growable: false);
+          : rankedRows.first;
+      final following = rankedRows.skip(1).toList(growable: false);
       return _DetailCardShell(
         model: model,
         onGhostChanged: onGhostChanged,
         child: Column(
           children: [
-            SizedBox(
-              height: 15,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _DetailTitle(model.title)),
-                  _RankDimensionSelector(
-                    keyPrefix: 'spendee-balance-top-vendor-dimension',
-                    selected: rankDimension,
-                    onChanged: onRankDimensionChanged ?? (_) {},
-                  ),
-                ],
+            _DetailHeader(
+              id: model.id,
+              title: 'Top 4 kereskedő',
+              selector: _RankDimensionSelector(
+                keyPrefix: 'spendee-balance-top-vendor-dimension',
+                selected: rankDimension,
+                onChanged: onRankDimensionChanged ?? (_) {},
               ),
             ),
             SizedBox(
-              height: 36,
+              height: 52,
               child: Row(
                 key: const ValueKey('spendee-balance-top-merchant-row-0'),
                 children: [
                   _LucideTile(
-                    size: 36,
-                    radius: 11,
-                    iconSize: 19,
+                    size: 46,
+                    radius: 14,
+                    iconSize: 24,
                     iconAsset: leader.iconAsset,
                     colors: const [Color(0xFFF571B8), Color(0xFFF24CAE)],
                     shadowColor: const Color(0x3DF24CAE),
                   ),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: 11),
                   Expanded(
                     child: _DetailMainCopy(
                       title: leader.merchant,
                       subtitle: '${leader.transactionCount} · 1. hely',
                     ),
                   ),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: 11),
                   _DetailAmount(leader.amount),
                 ],
               ),
@@ -1512,78 +1637,98 @@ class _TopMerchantsDetail extends StatelessWidget {
             const _DetailDivider(),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(top: 2, right: 23),
-                child: following.isEmpty
-                    ? const SizedBox.shrink()
-                    : Column(
-                        children: List<Widget>.generate(
-                          following.length * 2 - 1,
-                          (index) {
-                            if (index.isOdd) {
-                              return const SizedBox(
-                                height: 1,
-                                child: ColoredBox(color: Color(0xFFF0F2F7)),
-                              );
-                            }
-                            final rowIndex = index ~/ 2;
-                            return Expanded(
-                              child: _TopMerchantRow(
-                                key: ValueKey(
-                                  'spendee-balance-top-merchant-row-${rowIndex + 1}',
-                                ),
-                                model: following[rowIndex],
-                              ),
-                            );
-                          },
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  children: [
+                    for (var index = 0; index < following.length; index++) ...[
+                      SizedBox(
+                        height: 22,
+                        child: _TopMerchantRow(
+                          key: ValueKey(
+                            'spendee-balance-top-merchant-row-${index + 1}',
+                          ),
+                          model: following[index],
                         ),
                       ),
+                      if (index < following.length - 1)
+                        const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
         ),
       );
     }
+    final rankedRows = model.rows.take(4).toList(growable: false);
+    final leader = rankedRows.isEmpty
+        ? const SpendeeBalanceMerchantRowModel(
+            merchant: 'Nincs adat',
+            transactionCount: '0 tranzakció',
+            amount: '0 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          )
+        : rankedRows.first;
+    final following = rankedRows.skip(1).toList(growable: false);
     return _DetailCardShell(
       model: model,
       onGhostChanged: onGhostChanged,
       child: Column(
         children: [
+          _DetailHeader(
+            id: model.id,
+            title: 'Top 4 kereskedő',
+            selector: _MerchantDimensionSelector(
+              selected: model.selectedDimension,
+              onChanged: onDimensionChanged,
+            ),
+          ),
           SizedBox(
-            height: 15,
+            height: 52,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              key: const ValueKey('spendee-balance-top-merchant-row-0'),
               children: [
-                Expanded(child: _DetailTitle(model.title)),
-                _MerchantDimensionSelector(
-                  selected: model.selectedDimension,
-                  onChanged: onDimensionChanged,
+                _LucideTile(
+                  size: 46,
+                  radius: 14,
+                  iconSize: 24,
+                  iconAsset: leader.iconAsset,
+                  colors: const [Color(0xFFF571B8), Color(0xFFF24CAE)],
+                  shadowColor: const Color(0x3DF24CAE),
                 ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: _DetailMainCopy(
+                    title: leader.merchant,
+                    subtitle: '${leader.transactionCount} · 1. hely',
+                  ),
+                ),
+                const SizedBox(width: 11),
+                _DetailAmount(leader.amount),
               ],
             ),
           ),
+          const _DetailDivider(),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 2, right: 23),
+              padding: const EdgeInsets.only(top: 6),
               child: Column(
-                children: List<Widget>.generate(model.rows.length * 2 - 1, (
-                  index,
-                ) {
-                  if (index.isOdd) {
-                    return const SizedBox(
-                      height: 1,
-                      child: ColoredBox(color: Color(0xFFF0F2F7)),
-                    );
-                  }
-                  final rowIndex = index ~/ 2;
-                  return Expanded(
-                    child: _TopMerchantRow(
-                      key: ValueKey(
-                        'spendee-balance-top-merchant-row-$rowIndex',
+                children: [
+                  for (var index = 0; index < following.length; index++) ...[
+                    SizedBox(
+                      height: 22,
+                      child: _TopMerchantRow(
+                        key: ValueKey(
+                          'spendee-balance-top-merchant-row-${index + 1}',
+                        ),
+                        model: following[index],
                       ),
-                      model: model.rows[rowIndex],
                     ),
-                  );
-                }),
+                    if (index < following.length - 1) const SizedBox(height: 8),
+                  ],
+                ],
               ),
             ),
           ),
@@ -1611,49 +1756,49 @@ class _AverageDailyDetail extends StatelessWidget {
       onGhostChanged: onGhostChanged,
       child: Column(
         children: [
-          SizedBox(
-            height: 15,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _DetailTitle(model.title)),
-                if (model.selectedDimension case final selected?)
-                  _AverageDimensionSelector(
-                    selected: selected,
-                    onChanged: onDimensionChanged ?? (_) {},
-                  ),
-              ],
-            ),
+          _DetailHeader(
+            id: model.id,
+            title: model.title,
+            selector: switch (model.selectedDimension) {
+              final selected? => _AverageDimensionSelector(
+                selected: selected,
+                onChanged: onDimensionChanged ?? (_) {},
+              ),
+              null => null,
+            },
           ),
           SizedBox(
-            height: 32,
+            height: 52,
             child: Row(
               children: [
                 _LucideTile(
-                  size: 32,
-                  radius: 10,
-                  iconSize: 17,
+                  size: 46,
+                  radius: 14,
+                  iconSize: 24,
                   iconAsset: model.iconAsset,
                   colors: const [Color(0xFF9B8FFF), Color(0xFF8B7DFA)],
                   shadowColor: const Color(0x388B7DFA),
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: 11),
                 Expanded(
                   child: _AverageDailyCopy(
                     title: model.periodLabel,
                     subtitle: model.rollingTotalLabel,
                   ),
                 ),
-                const SizedBox(width: 7),
-                Text(
-                  model.averageLabel,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    color: Color(0xFF8B7DFA),
-                    fontSize: 12,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
-                    fontVariations: SpendeeBalanceVisualSpec.weight950,
+                const SizedBox(width: 11),
+                Flexible(
+                  child: Text(
+                    model.averageLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF8B7DFA),
+                      fontSize: 21,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      fontVariations: SpendeeBalanceVisualSpec.weight950,
+                    ),
                   ),
                 ),
               ],
@@ -1661,18 +1806,24 @@ class _AverageDailyDetail extends StatelessWidget {
           ),
           const _DetailDivider(),
           SizedBox(
-            height: 64,
-            child: CustomPaint(
-              key: const ValueKey('spendee-balance-average-daily-chart'),
-              painter: SpendeeBalanceDailyChartPainter(
-                dailyValues: _thirtyColumnChartValues(model.dailyValues),
+            height: 72,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                height: 64,
+                child: CustomPaint(
+                  key: const ValueKey('spendee-balance-average-daily-chart'),
+                  painter: SpendeeBalanceDailyChartPainter(
+                    dailyValues: _thirtyColumnChartValues(model.dailyValues),
+                  ),
+                  size: const Size(double.infinity, 64),
+                ),
               ),
-              size: const Size(double.infinity, 64),
             ),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 1, right: 23),
+              padding: const EdgeInsets.only(top: 4, right: 25),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: List<Widget>.generate(model.facts.length * 2 - 1, (
@@ -1688,7 +1839,7 @@ class _AverageDailyDetail extends StatelessWidget {
                   final fact = model.facts[index ~/ 2];
                   return Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 7),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1699,21 +1850,21 @@ class _AverageDailyDetail extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF7A859F),
-                              fontSize: 5.3,
+                              fontSize: 6.5,
                               height: 1.08,
                               fontWeight: FontWeight.w800,
                               fontVariations:
                                   SpendeeBalanceVisualSpec.weight850,
                             ),
                           ),
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 3),
                           Text(
                             fact.value,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF26355A),
-                              fontSize: 6.8,
+                              fontSize: 9,
                               height: 1.08,
                               fontWeight: FontWeight.w900,
                               fontVariations:
@@ -1740,6 +1891,30 @@ List<double> _thirtyColumnChartValues(List<double> values) {
       ? values.sublist(values.length - 30)
       : values;
   return <double>[...List<double>.filled(30 - latest.length, 0), ...latest];
+}
+
+class _DetailHeader extends StatelessWidget {
+  const _DetailHeader({required this.id, required this.title, this.selector});
+
+  final String id;
+  final String title;
+  final Widget? selector;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: ValueKey('spendee-balance-detail-header-$id'),
+      height: SpendeeBalanceB3mA3Manifest.detailTitleRowHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Align(alignment: Alignment.topLeft, child: _DetailTitle(title)),
+          if (selector case final selector?)
+            Positioned(top: 0, right: 0, height: 26, child: selector),
+        ],
+      ),
+    );
+  }
 }
 
 class _DetailCardShell extends StatelessWidget {
@@ -1782,7 +1957,7 @@ class _DetailCardShell extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 7),
+                  padding: SpendeeBalanceB3mA3Manifest.detailPadding,
                   child: child,
                 ),
               ),
@@ -1820,6 +1995,13 @@ class _BudgetDimensionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DimensionRail(
+      gap: 3,
+      padding: 2,
+      radius: 9,
+      chipMinHeight: 20,
+      chipHorizontalPadding: 7,
+      chipRadius: 8,
+      fontSize: 7.2,
       children: [
         for (final dimension in SpendeeBalanceBudgetDimension.values)
           _DimensionChip(
@@ -1845,6 +2027,13 @@ class _MerchantDimensionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DimensionRail(
+      gap: 3,
+      padding: 2,
+      radius: 9,
+      chipMinHeight: 20,
+      chipHorizontalPadding: 7,
+      chipRadius: 8,
+      fontSize: 7.2,
       children: [
         for (final dimension in SpendeeBalanceMerchantDimension.values)
           _DimensionChip(
@@ -1874,6 +2063,13 @@ class _RankDimensionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DimensionRail(
+      gap: 3,
+      padding: 2,
+      radius: 9,
+      chipMinHeight: 20,
+      chipHorizontalPadding: 7,
+      chipRadius: 8,
+      fontSize: 7.2,
       children: [
         for (final dimension in SpendeeBalanceRankDimension.values)
           _DimensionChip(
@@ -1899,6 +2095,13 @@ class _AverageDimensionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DimensionRail(
+      gap: 2,
+      padding: 2,
+      radius: 9,
+      chipMinHeight: 20,
+      chipHorizontalPadding: 5,
+      chipRadius: 8,
+      fontSize: 6.8,
       children: [
         for (final dimension in SpendeeBalanceAverageDimension.values)
           _DimensionChip(
@@ -1915,26 +2118,50 @@ class _AverageDimensionSelector extends StatelessWidget {
 }
 
 class _DimensionRail extends StatelessWidget {
-  const _DimensionRail({required this.children});
+  const _DimensionRail({
+    required this.children,
+    required this.gap,
+    required this.padding,
+    required this.radius,
+    required this.chipMinHeight,
+    required this.chipHorizontalPadding,
+    required this.chipRadius,
+    required this.fontSize,
+  });
 
   final List<Widget> children;
+  final double gap;
+  final double padding;
+  final double radius;
+  final double chipMinHeight;
+  final double chipHorizontalPadding;
+  final double chipRadius;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 15,
-      padding: const EdgeInsets.all(1),
+      padding: EdgeInsets.all(padding),
       decoration: BoxDecoration(
         color: const Color(0xEBF8F9FD),
         border: Border.all(color: const Color(0xFFEDF0F6)),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var index = 0; index < children.length; index++) ...[
-            if (index > 0) const SizedBox(width: 2),
-            children[index],
+            if (index > 0) SizedBox(width: gap),
+            _DimensionChip(
+              key: children[index].key,
+              label: (children[index] as _DimensionChip).label,
+              selected: (children[index] as _DimensionChip).selected,
+              onTap: (children[index] as _DimensionChip).onTap,
+              minHeight: chipMinHeight,
+              horizontalPadding: chipHorizontalPadding,
+              radius: chipRadius,
+              fontSize: fontSize,
+            ),
           ],
         ],
       ),
@@ -1948,11 +2175,19 @@ class _DimensionChip extends StatefulWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.minHeight = 11,
+    this.horizontalPadding = 4,
+    this.radius = 5,
+    this.fontSize = 5.2,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final double minHeight;
+  final double horizontalPadding;
+  final double radius;
+  final double fontSize;
 
   @override
   State<_DimensionChip> createState() => _DimensionChipState();
@@ -1988,17 +2223,19 @@ class _DimensionChipState extends State<_DimensionChip> {
         overlayColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
         onFocusChange: _handleFocusChange,
         onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(widget.radius),
         child: Stack(
           children: [
             Container(
-              constraints: const BoxConstraints(minHeight: 11),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              constraints: BoxConstraints(minHeight: widget.minHeight),
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.horizontalPadding,
+              ),
               decoration: BoxDecoration(
                 color: widget.selected
                     ? const Color(0xFFF24CAE)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(widget.radius),
                 boxShadow: widget.selected
                     ? const [
                         BoxShadow(
@@ -2017,7 +2254,7 @@ class _DimensionChipState extends State<_DimensionChip> {
                     color: widget.selected
                         ? Colors.white
                         : const Color(0xFF7D88A2),
-                    fontSize: 5.2,
+                    fontSize: widget.fontSize,
                     height: 1,
                     fontWeight: FontWeight.w900,
                   ),
@@ -2048,7 +2285,7 @@ class _TopCategoryRow extends StatelessWidget {
     return Row(
       children: [
         _RoundAvatar(color: model.color, iconAsset: model.iconAsset),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         Expanded(
           child: _RankedCopy(
             primary: model.scope,
@@ -2072,7 +2309,7 @@ class _TopMerchantRow extends StatelessWidget {
     return Row(
       children: [
         _RoundAvatar(color: model.color, iconAsset: model.iconAsset),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         Expanded(
           child: _RankedCopy(
             primary: model.merchant,
@@ -2095,8 +2332,8 @@ class _RoundAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 17,
-      height: 17,
+      width: 22,
+      height: 22,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
@@ -2109,7 +2346,7 @@ class _RoundAvatar extends StatelessWidget {
         ],
       ),
       alignment: Alignment.center,
-      child: _LucideIcon(asset: iconAsset, color: Colors.white, size: 9),
+      child: _LucideIcon(asset: iconAsset, color: Colors.white, size: 12),
     );
   }
 }
@@ -2133,7 +2370,7 @@ class _RankedCopy extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: primaryFirst ? const Color(0xFF7D88A2) : const Color(0xFF26355A),
-        fontSize: primaryFirst ? 6 : 7.4,
+        fontSize: 10,
         height: 1,
         fontWeight: FontWeight.w900,
       ),
@@ -2144,7 +2381,7 @@ class _RankedCopy extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: primaryFirst ? const Color(0xFF26355A) : const Color(0xFF7D88A2),
-        fontSize: primaryFirst ? 7.4 : 6,
+        fontSize: 7.2,
         height: 1,
         fontWeight: FontWeight.w900,
       ),
@@ -2152,7 +2389,7 @@ class _RankedCopy extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [primaryWidget, const SizedBox(height: 1), secondaryWidget],
+      children: [primaryWidget, const SizedBox(height: 2), secondaryWidget],
     );
   }
 }
@@ -2183,7 +2420,7 @@ class _BudgetFact extends StatelessWidget {
                 height: 5,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
                   label,
@@ -2191,7 +2428,7 @@ class _BudgetFact extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF6F7B97),
-                    fontSize: 6.2,
+                    fontSize: 7.6,
                     height: 1.15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2199,15 +2436,15 @@ class _BudgetFact extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Padding(
-            padding: const EdgeInsets.only(left: 10),
+            padding: const EdgeInsets.only(left: 12),
             child: Text(
               value,
               maxLines: 1,
               style: const TextStyle(
                 color: Color(0xFF1D2B50),
-                fontSize: 8,
+                fontSize: 11,
                 height: 1,
                 fontWeight: FontWeight.w900,
                 fontVariations: SpendeeBalanceVisualSpec.weight950,
@@ -2233,7 +2470,7 @@ class _DetailTitle extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
         color: Color(0xFF5E6B9D),
-        fontSize: 9,
+        fontSize: 12,
         height: 1,
         fontWeight: FontWeight.w900,
         fontVariations: SpendeeBalanceVisualSpec.weight950,
@@ -2260,20 +2497,20 @@ class _DetailMainCopy extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF1D2B50),
-            fontSize: 10,
+            fontSize: 13,
             height: 1.05,
             fontWeight: FontWeight.w900,
             fontVariations: SpendeeBalanceVisualSpec.weight950,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         Text(
           subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF77829D),
-            fontSize: 6.6,
+            fontSize: 8,
             height: 1.08,
             fontWeight: FontWeight.w700,
           ),
@@ -2301,20 +2538,20 @@ class _AverageDailyCopy extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF1D2B50),
-            fontSize: 9,
+            fontSize: 13,
             height: 1,
             fontWeight: FontWeight.w900,
             fontVariations: SpendeeBalanceVisualSpec.weight950,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 5),
         Text(
           subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF77829D),
-            fontSize: 6.5,
+            fontSize: 8,
             height: 1,
             fontWeight: FontWeight.w800,
           ),
@@ -2336,7 +2573,7 @@ class _DetailAmount extends StatelessWidget {
       maxLines: 1,
       style: const TextStyle(
         color: Color(0xFFFB4276),
-        fontSize: 15,
+        fontSize: 21,
         height: 1,
         fontWeight: FontWeight.w900,
         fontVariations: SpendeeBalanceVisualSpec.weight950,
@@ -2582,7 +2819,7 @@ class _TraditionalFocusOutline extends StatelessWidget {
 
 const _rankedAmountStyle = TextStyle(
   color: Color(0xFF26355A),
-  fontSize: 7.4,
+  fontSize: 10,
   height: 1,
   fontWeight: FontWeight.w900,
   fontVariations: SpendeeBalanceVisualSpec.weight950,

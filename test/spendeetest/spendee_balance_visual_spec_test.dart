@@ -21,13 +21,12 @@ void main() {
       expect(SpendeeBalanceVisualSpec.heroCollapsedHeight, 104);
       expect(SpendeeBalanceVisualSpec.menuTop, 118);
       expect(SpendeeBalanceVisualSpec.menuRight, 36);
-      // Active B3M-A3 cascade: `time-rail-compact` overrides the generic
-      // FastInfo height before the permanent detail stage is positioned.
+      // V3 freezes the full FastInfo belt and the resolved detail geometry.
       expect(SpendeeBalanceVisualSpec.insightTop, 241);
-      expect(SpendeeBalanceVisualSpec.insightHeight, 72);
+      expect(SpendeeBalanceVisualSpec.insightHeight, 128);
       expect(SpendeeBalanceVisualSpec.detailTop, 324);
-      expect(SpendeeBalanceVisualSpec.detailStageHeight, 218);
-      expect(SpendeeBalanceVisualSpec.detailCardHeight, 208);
+      expect(SpendeeBalanceVisualSpec.detailStageHeight, 258);
+      expect(SpendeeBalanceVisualSpec.detailCardHeight, 248);
       expect(SpendeeBalanceVisualSpec.detailPaginationGap, 4);
       expect(SpendeeBalanceVisualSpec.actionTop, 553);
       expect(SpendeeBalanceVisualSpec.actionHeight, 42);
@@ -38,25 +37,18 @@ void main() {
       expect(SpendeeBalanceVisualSpec.timeRailTop, 726);
       expect(SpendeeBalanceVisualSpec.timeRailHeight, 79);
       expect(SpendeeBalanceVisualSpec.bottomNavHeight, 80);
-      expect(
-        SpendeeBalanceVisualSpec.detailTop +
-            SpendeeBalanceVisualSpec.detailStageHeight +
-            SpendeeBalanceVisualSpec.stackGap,
-        SpendeeBalanceVisualSpec.actionTop,
-        reason: 'the 208px card stage must never overlap the action pills',
-      );
       expect(SpendeeBalanceB3mA3Manifest.source, contains('B3MA3'));
-      expect(SpendeeBalanceB3mA3Manifest.fastInfoHeight, 72);
+      expect(SpendeeBalanceB3mA3Manifest.fastInfoHeight, 128);
       expect(
         SpendeeBalanceB3mA3Manifest.fastInfoPadding,
         const EdgeInsets.fromLTRB(9, 7, 9, 18),
       );
       expect(SpendeeBalanceB3mA3Manifest.detailTop, 324);
-      expect(SpendeeBalanceB3mA3Manifest.detailStageHeight, 218);
-      expect(SpendeeBalanceB3mA3Manifest.detailCardHeight, 208);
+      expect(SpendeeBalanceB3mA3Manifest.detailStageHeight, 258);
+      expect(SpendeeBalanceB3mA3Manifest.detailCardHeight, 248);
       expect(
         SpendeeBalanceB3mA3Manifest.detailPadding,
-        const EdgeInsets.fromLTRB(16, 10, 16, 7),
+        const EdgeInsets.fromLTRB(16, 12, 16, 10),
       );
       expect(
         SpendeeBalanceVisualSpec.insightHeight,

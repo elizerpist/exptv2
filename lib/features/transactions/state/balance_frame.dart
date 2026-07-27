@@ -175,10 +175,16 @@ class BalanceFrameInput {
   /// list and the obsolete store FastInfo map; neither changes the frame
   /// resolver's result. Generated ghosts remain part of the comparison so a
   /// changed recurring projection can never reuse stale card or log data.
-  bool sameHistoryRevisionAs(BalanceFrameInput other) {
+  bool sameHistoryRevisionAs(
+    BalanceFrameInput other, {
+    bool ignoreGhostProjectionInFlight = false,
+  }) {
     return _sameSourceAndQueryAs(other) &&
         _sameRecurringGhostSnapshot(recurringGhosts, other.recurringGhosts) &&
-        _sameDisplayWindowAs(other);
+        _sameDisplayWindowAs(
+          other,
+          ignoreGhostProjectionInFlight: ignoreGhostProjectionInFlight,
+        );
   }
 
   bool _sameSourceAndQueryAs(BalanceFrameInput other) {
@@ -194,14 +200,18 @@ class BalanceFrameInput {
         identical(limits, other.limits);
   }
 
-  bool _sameDisplayWindowAs(BalanceFrameInput other) {
+  bool _sameDisplayWindowAs(
+    BalanceFrameInput other, {
+    bool ignoreGhostProjectionInFlight = false,
+  }) {
     return displayLogSummaryWindow == other.displayLogSummaryWindow &&
         displayLogSummaryReferenceDate ==
             other.displayLogSummaryReferenceDate &&
         visibleLogEntryLimit == other.visibleLogEntryLimit &&
         totalLogEntryCount == other.totalLogEntryCount &&
         hasMoreLogEntries == other.hasMoreLogEntries &&
-        ghostProjectionInFlight == other.ghostProjectionInFlight;
+        (ignoreGhostProjectionInFlight ||
+            ghostProjectionInFlight == other.ghostProjectionInFlight);
   }
 
   final DateTime now;

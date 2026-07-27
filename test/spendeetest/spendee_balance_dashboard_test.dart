@@ -6,6 +6,9 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_collapse_controller.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_b3ma3_manifest.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -91,27 +94,52 @@ void main() {
 
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-hero'))),
-      const Rect.fromLTWH(17, 104, 378, 126),
+      Rect.fromLTWH(
+        SpendeeBalanceB3mA3Manifest.horizontalInset,
+        SpendeeBalanceVisualSpec.heroTop,
+        SpendeeBalanceVisualSpec.contentWidth,
+        SpendeeBalanceVisualSpec.heroExpandedHeight,
+      ),
     );
     expect(
       tester.getRect(
         find.byKey(const ValueKey('spendee-balance-fast-info-belt')),
       ),
-      const Rect.fromLTWH(17, 241, 378, 72),
+      Rect.fromLTWH(
+        SpendeeBalanceB3mA3Manifest.horizontalInset,
+        SpendeeBalanceVisualSpec.insightTop,
+        SpendeeBalanceVisualSpec.contentWidth,
+        SpendeeBalanceVisualSpec.insightHeight,
+      ),
     );
     expect(
       tester.getRect(
         find.byKey(const ValueKey('spendee-balance-detail-stage')),
       ),
-      const Rect.fromLTWH(17, 324, 378, 218),
+      Rect.fromLTWH(
+        SpendeeBalanceB3mA3Manifest.horizontalInset,
+        SpendeeBalanceVisualSpec.detailTop,
+        SpendeeBalanceVisualSpec.contentWidth,
+        SpendeeBalanceVisualSpec.detailStageHeight,
+      ),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-actions'))),
-      const Rect.fromLTWH(17, 553, 378, 42),
+      Rect.fromLTWH(
+        SpendeeBalanceB3mA3Manifest.horizontalInset,
+        SpendeeBalanceVisualSpec.actionTop,
+        SpendeeBalanceVisualSpec.contentWidth,
+        SpendeeBalanceVisualSpec.actionHeight,
+      ),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-summary'))),
-      const Rect.fromLTWH(17, 606, 378, 59),
+      Rect.fromLTWH(
+        SpendeeBalanceB3mA3Manifest.horizontalInset,
+        SpendeeBalanceVisualSpec.summaryTop,
+        SpendeeBalanceVisualSpec.contentWidth,
+        SpendeeBalanceVisualSpec.summaryHeight,
+      ),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('spendee-balance-search-row'))),
@@ -209,31 +237,65 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
+    final collapsed = SpendeeBalanceCollapseVisuals.forProgress(1);
+    final collapsedPostTop =
+        SpendeeBalanceVisualSpec.actionTop +
+        collapsed.scrollContentTranslateY +
+        collapsed.postTranslateY;
     expect(
       tester.getSize(find.byKey(const ValueKey('spendee-balance-hero'))).height,
-      104,
+      SpendeeBalanceVisualSpec.heroCollapsedHeight,
     );
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-actions')))
           .dy,
-      closeTo(219, .01),
+      closeTo(collapsedPostTop, .01),
     );
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-summary')))
           .dy,
-      closeTo(272, .01),
+      closeTo(
+        collapsedPostTop +
+            SpendeeBalanceVisualSpec.actionHeight +
+            SpendeeBalanceVisualSpec.stackGap,
+        .01,
+      ),
     );
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-search-row')))
           .dy,
-      closeTo(342, .01),
+      closeTo(
+        collapsedPostTop +
+            SpendeeBalanceVisualSpec.actionHeight +
+            SpendeeBalanceVisualSpec.stackGap +
+            SpendeeBalanceVisualSpec.summaryHeight +
+            SpendeeBalanceVisualSpec.stackGap,
+        .01,
+      ),
     );
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('balance-test-log'))).dy,
-      closeTo(435, .01),
+      closeTo(
+        collapsedPostTop +
+            SpendeeBalanceVisualSpec.actionHeight +
+            SpendeeBalanceVisualSpec.stackGap +
+            SpendeeBalanceVisualSpec.summaryHeight +
+            SpendeeBalanceVisualSpec.stackGap +
+            SpendeeBalanceVisualSpec.searchHeight +
+            SpendeeBalanceVisualSpec.stackGap +
+            tester
+                .getSize(
+                  find.byKey(
+                    const ValueKey('spendee-balance-collapse-control'),
+                  ),
+                )
+                .height +
+            SpendeeBalanceVisualSpec.stackGap,
+        .01,
+      ),
     );
     final insightOpacity = tester.widget<Opacity>(
       find.byKey(const ValueKey('spendee-balance-insight-opacity')),
@@ -314,13 +376,20 @@ void main() {
         tester
             .getSize(find.byKey(const ValueKey('spendee-balance-hero')))
             .height,
-        104,
+        SpendeeBalanceVisualSpec.heroCollapsedHeight,
       );
       expect(
         tester
             .getTopLeft(find.byKey(const ValueKey('spendee-balance-actions')))
             .dy,
-        closeTo(219, .01),
+        closeTo(
+          SpendeeBalanceVisualSpec.actionTop +
+              SpendeeBalanceCollapseVisuals.forProgress(
+                1,
+              ).scrollContentTranslateY +
+              SpendeeBalanceCollapseVisuals.forProgress(1).postTranslateY,
+          .01,
+        ),
       );
     },
   );

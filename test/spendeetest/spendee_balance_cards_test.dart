@@ -2,6 +2,7 @@ import 'dart:ui' show BlurStyle, SemanticsAction, Tristate;
 
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_card_painters.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_b3ma3_manifest.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_cards.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
@@ -59,14 +60,15 @@ void main() {
                 const _FastSurfaceExpectation(
                   border: Color(0x307657D9),
                   outerShadow: Color(0x1F7657D9),
-                  innerShadow: Color(0xF0FFFFFF),
+                  innerShadow: Color(0xF5FFFFFF),
+                  gradientColors: [Color(0xFFFAF8F6), Color(0xF2FFFFFF)],
                 ),
             SpendeeBalanceFastInfoKind.upcomingRecurring:
                 const _FastSurfaceExpectation(
-                  border: Color(0x305F55EC),
-                  outerShadow: Color(0x1F5F55EC),
+                  border: Color(0x308B5CF6),
+                  outerShadow: Color(0x1F8B5CF6),
                   innerShadow: Color(0xF5FFFFFF),
-                  gradientColors: [Color(0xFAF9F7FF), Color(0xF2FFFFFF)],
+                  gradientColors: [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
                 ),
           };
 
@@ -123,7 +125,7 @@ void main() {
       }
     });
 
-    testWidgets('is 72px high and authors exactly three card slots', (
+    testWidgets('is 128px high and authors exactly three card slots', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -139,7 +141,7 @@ void main() {
         tester.getSize(
           find.byKey(const ValueKey('spendee-balance-fast-info-belt')),
         ),
-        const Size(378, 72),
+        const Size(378, 128),
       );
       expect(
         SpendeeBalanceFastInfoBelt.cardWidthFor(378),
@@ -170,7 +172,7 @@ void main() {
           SpendeeBalanceFastInfoKind.categoryChange: Color(0xFFEF4173),
           SpendeeBalanceFastInfoKind.latestTransaction: Color(0xFF5277D3),
           SpendeeBalanceFastInfoKind.trendComparison: Color(0xFF7657D9),
-          SpendeeBalanceFastInfoKind.upcomingRecurring: Color(0xFF5F55EC),
+          SpendeeBalanceFastInfoKind.upcomingRecurring: Color(0xFF8B5CF6),
         };
 
         for (final model in fastInfoModels()) {
@@ -218,6 +220,260 @@ void main() {
         }
       },
     );
+
+    test(
+      'F1/V3-012 resolves one literal hue for every glyph, edge and glow',
+      () {
+        const expected =
+            <SpendeeBalanceFastInfoKind, _FastInfoStyleExpectation>{
+              SpendeeBalanceFastInfoKind.noSpend: _FastInfoStyleExpectation(
+                hue: Color(0xFF5F55EC),
+                iconBackground: Color(0xFFF0EFFF),
+              ),
+              SpendeeBalanceFastInfoKind.categoryChange:
+                  _FastInfoStyleExpectation(
+                    hue: Color(0xFFEF4173),
+                    iconBackground: Color(0xFFFFF0F4),
+                  ),
+              SpendeeBalanceFastInfoKind.latestTransaction:
+                  _FastInfoStyleExpectation(
+                    hue: Color(0xFF5277D3),
+                    iconBackground: Color(0xFFEDF3FF),
+                  ),
+              SpendeeBalanceFastInfoKind.trendComparison:
+                  _FastInfoStyleExpectation(
+                    hue: Color(0xFF7657D9),
+                    iconBackground: Color(0xFFEEEAFF),
+                    gradient: [Color(0xFFFAF8F6), Color(0xF2FFFFFF)],
+                  ),
+              SpendeeBalanceFastInfoKind.upcomingRecurring:
+                  _FastInfoStyleExpectation(
+                    hue: Color(0xFF8B5CF6),
+                    iconBackground: Color(0xFFF0EFFF),
+                    gradient: [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
+                  ),
+            };
+
+        for (final model in fastInfoModels()) {
+          final style = SpendeeBalanceFastInfoVisualStyle.resolve(
+            model.kind,
+            model,
+          );
+          final expectation = expected[model.kind]!;
+          expect(style.iconHue, expectation.hue);
+          expect(style.iconBackground, expectation.iconBackground);
+          expect(style.edge, expectation.hue.withValues(alpha: 0x30 / 0xFF));
+          expect(style.glow, expectation.hue.withValues(alpha: 0x1F / 0xFF));
+          if (expectation.gradient case final gradient?) {
+            expect(style.gradient, isA<CssLinearGradient>());
+            expect((style.gradient! as CssLinearGradient).cssDegrees, 145);
+            expect((style.gradient! as CssLinearGradient).colors, gradient);
+          } else {
+            expect(style.gradient, isNull);
+          }
+        }
+      },
+    );
+
+    testWidgets('F1 shell and F2 moon keep their literal geometry', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceFastInfoCard(
+            model: fastInfoModels().first,
+            onGhostChanged: (_, _) {},
+          ),
+          width: 120,
+        ),
+      );
+
+      final surface = find.byKey(
+        const ValueKey('spendee-balance-fast-info-surface-noSpend'),
+      );
+      final ghost = find.byKey(
+        const ValueKey('spendee-balance-fast-info-ghost-no-spend'),
+      );
+      expect(tester.getSize(surface), const Size(120, 128));
+      expect(
+        find.descendant(
+          of: surface,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Padding &&
+                widget.padding == const EdgeInsets.fromLTRB(13, 14, 13, 30),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey('spendee-balance-fast-info-header-disc-noSpend'),
+          ),
+        ),
+        const Size.square(27),
+      );
+      expect(tester.getSize(ghost), const Size.square(22));
+      expect(tester.getRect(ghost).right, tester.getRect(surface).right - 9);
+      expect(tester.getRect(ghost).bottom, tester.getRect(surface).bottom - 8);
+      final label = tester.widget<Text>(
+        find.byKey(const ValueKey('spendee-balance-no-spend-view-label')),
+      );
+      expect(label.style!.color, const Color(0xFF7A86A3));
+      expect(label.style!.fontSize, 6.5);
+      expect(label.style!.height, 1);
+      final painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(const ValueKey('spendee-balance-no-spend-moon')),
+                  )
+                  .painter!
+              as SpendeeBalanceMoonPainter;
+      final geometry = painter.geometryForSize(const Size.square(15));
+      expect(geometry.moonCircle, const Rect.fromLTWH(0, 0, 15, 15));
+      expect(geometry.insetShadowCircle, const Rect.fromLTWH(6, -2, 15, 15));
+      expect(geometry.plusHorizontalBar, const Rect.fromLTWH(5, 6.25, 5, 1.5));
+      expect(geometry.plusVerticalBar, const Rect.fromLTWH(6.75, 4.5, 1.5, 5));
+    });
+
+    testWidgets('F3-F6 retain their separate literal body contracts', (
+      tester,
+    ) async {
+      final models = fastInfoModels();
+
+      expect(SpendeeBalanceB3mA3Manifest.fastInfoBodyValueRowHeight, 22);
+
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceFastInfoCard(
+            model: models[1],
+            onGhostChanged: (_, _) {},
+          ),
+          width: 120,
+        ),
+      );
+      final categoryValue = tester.widget<Text>(
+        find.byKey(const ValueKey('spendee-balance-category-change-value')),
+      );
+      final categoryDirection = find.byKey(
+        const ValueKey('spendee-balance-category-change-direction'),
+      );
+      expect(categoryValue.style!.color, const Color(0xFFEF4173));
+      expect(categoryValue.style!.fontSize, 14);
+      expect(categoryValue.style!.height, 1);
+      expect(tester.getSize(categoryDirection), const Size.square(9));
+      expect(
+        tester
+            .widget<Text>(
+              find.descendant(
+                of: categoryDirection,
+                matching: find.byType(Text),
+              ),
+            )
+            .style!
+            .fontSize,
+        8,
+      );
+      final categoryMetricRow = find.descendant(
+        of: find.byKey(
+          const ValueKey('spendee-balance-fast-info-categoryChange'),
+        ),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Row &&
+              widget.crossAxisAlignment == CrossAxisAlignment.baseline &&
+              widget.textBaseline == TextBaseline.alphabetic,
+        ),
+      );
+      expect(categoryMetricRow, findsOneWidget);
+
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceFastInfoCard(
+            model: models[2],
+            onGhostChanged: (_, _) {},
+          ),
+          width: 120,
+        ),
+      );
+      final latestValue = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-latest-transaction-value'),
+          ),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(latestValue.style!.color, const Color(0xFF526FC5));
+      expect(latestValue.style!.fontSize, 16);
+      final latestAsset = tester.widget<SvgPicture>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-fast-info-latestTransaction'),
+          ),
+          matching: find.byType(SvgPicture),
+        ),
+      );
+      expect(latestAsset.bytesLoader.toString(), contains('store.svg'));
+
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceFastInfoCard(
+            model: models[3],
+            onGhostChanged: (_, _) {},
+          ),
+          width: 120,
+        ),
+      );
+      final trendValue = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-trend-comparison-value'),
+          ),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Text && widget.style?.fontSize == 20,
+          ),
+        ),
+      );
+      final trendDirection = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-balance-trend-comparison-value'),
+          ),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Text && widget.style?.fontSize == 17,
+          ),
+        ),
+      );
+      expect(trendValue.style!.height, 1);
+      expect(trendDirection.style!.height, 1);
+      expect(trendDirection.data, anyOf('↑', '↓', '→'));
+
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceFastInfoCard(
+            model: models[4],
+            onGhostChanged: (_, _) {},
+          ),
+          width: 120,
+        ),
+      );
+      final recurringGlyph = tester.widget<Text>(
+        find.byKey(const ValueKey('spendee-balance-upcoming-recurring-glyph')),
+      );
+      expect(recurringGlyph.style!.color, const Color(0xFF8B5CF6));
+      expect(recurringGlyph.style!.fontSize, 17);
+      expect(
+        (models[4] as SpendeeBalanceUpcomingRecurringCardModel)
+            .categoryIconAsset,
+        'assets/icons/lucide/clapperboard.svg',
+      );
+      expect(
+        (models[4] as SpendeeBalanceUpcomingRecurringCardModel).categoryColor,
+        const Color(0xFF8B5CF6),
+      );
+    });
 
     testWidgets('renders five distinct internal card hierarchies', (
       tester,
@@ -450,33 +706,32 @@ void main() {
       expect(decoration.boxShadow, isNull);
     });
 
-    testWidgets(
-      'upcoming card uses the source compact shared value and metadata rows',
-      (tester) async {
-        await tester.pumpWidget(
-          host(
-            SpendeeBalanceFastInfoCard(
-              model: fastInfoModels().last,
-              onGhostChanged: (_, _) {},
-            ),
-            width: 120,
+    testWidgets('upcoming card uses the F1 shared value and metadata rows', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceFastInfoCard(
+            model: fastInfoModels().last,
+            onGhostChanged: (_, _) {},
           ),
-        );
+          width: 120,
+        ),
+      );
 
-        final name = tester.widget<Text>(find.text('Netflix'));
-        final metadata = tester.widget<Text>(find.text('-3 490 Ft · aug. 4.'));
-        expect(name.style!.fontSize, 13);
-        expect(name.style!.height, 1.05);
-        expect(metadata.style!.fontSize, 6.5);
-        expect(metadata.style!.height, 1.1);
-        expect(
-          find.byKey(
-            const ValueKey('spendee-balance-upcoming-recurring-avatar-slot'),
-          ),
-          findsNothing,
-        );
-      },
-    );
+      final name = tester.widget<Text>(find.text('Netflix'));
+      final metadata = tester.widget<Text>(find.text('-3 490 Ft · aug. 4.'));
+      expect(name.style!.fontSize, 16);
+      expect(name.style!.height, 1.05);
+      expect(metadata.style!.fontSize, 7.8);
+      expect(metadata.style!.height, 1.2);
+      expect(
+        find.byKey(
+          const ValueKey('spendee-balance-upcoming-recurring-avatar-slot'),
+        ),
+        findsNothing,
+      );
+    });
 
     testWidgets('upcoming value row ellipsizes both live-data fields safely', (
       tester,
@@ -629,7 +884,7 @@ void main() {
         tester,
         find.byKey(const ValueKey('spendee-balance-variable-budget-tile')),
       );
-      expect(decoration.borderRadius, BorderRadius.circular(11));
+      expect(decoration.borderRadius, BorderRadius.circular(14));
       expect(decoration.boxShadow, const [
         BoxShadow(
           color: Color(0x3DFB3D76),
@@ -669,7 +924,7 @@ void main() {
     });
 
     testWidgets(
-      '0726 uses the approved 208px page plus 4px gap and 6px pagination',
+      '0726 uses the approved 248px page plus 4px gap and 6px pagination',
       (tester) async {
         await tester.pumpWidget(
           host(
@@ -686,7 +941,7 @@ void main() {
           tester.getSize(
             find.byKey(const ValueKey('spendee-balance-detail-stage')),
           ),
-          const Size(378, 218),
+          const Size(378, 258),
         );
         expect(
           find.byKey(const ValueKey('spendee-balance-detail-ticking-viewport')),
@@ -699,7 +954,7 @@ void main() {
                 .byKey(const ValueKey('spendee-balance-detail-page-variable'))
                 .first,
           ),
-          const Size(378, 208),
+          const Size(378, 248),
         );
         expect(
           tester.getSize(
@@ -820,13 +1075,83 @@ void main() {
       expect(selected, SpendeeBalanceBudgetDimension.week);
     });
 
+    testWidgets(
+      'D2 threshold typography keeps the final 10px and 7.6px literals',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: detailModels().first,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+            ),
+          ),
+        );
+
+        expect(
+          tester
+              .widget<Text>(find.text('Mai költés a kerethez képest'))
+              .style!
+              .fontSize,
+          10,
+        );
+        expect(
+          tester.widget<Text>(find.text('Keret: 15 400 Ft')).style!.fontSize,
+          7.6,
+        );
+        expect(
+          tester
+              .widget<Text>(find.text('30 napos napi átlag: 10 100 Ft'))
+              .style!
+              .fontSize,
+          7.6,
+        );
+      },
+    );
+
+    testWidgets('D2-D5 retain the literal 21px header grid with 20px chips', (
+      tester,
+    ) async {
+      for (final model in detailModels()) {
+        await tester.pumpWidget(
+          host(
+            SpendeeBalanceDetailPage(
+              model: model,
+              onGhostChanged: (_, _) {},
+              onBudgetDimensionChanged: (_) {},
+              onMerchantDimensionChanged: (_) {},
+            ),
+          ),
+        );
+        expect(
+          tester.getSize(
+            find.byKey(ValueKey('spendee-balance-detail-header-${model.id}')),
+          ),
+          const Size(346, 21),
+        );
+        if (model is SpendeeBalanceVariableBudgetModel) {
+          expect(
+            tester
+                .getSize(
+                  find.byKey(
+                    const ValueKey('spendee-balance-budget-dimension-day'),
+                  ),
+                )
+                .height,
+            20,
+          );
+        }
+      }
+    });
+
     testWidgets('detail main rows keep the frozen amount-side gaps', (
       tester,
     ) async {
       final cases = <(int, String, List<double>)>[
-        (0, '6 500 Ft', const [9, 9]),
-        (1, '12 400 Ft', const [9, 9]),
-        (3, '6 370 Ft / nap', const [7, 7]),
+        (0, '6 500 Ft', const [11, 11]),
+        (1, '12 400 Ft', const [11, 11]),
+        (3, '6 370 Ft / nap', const [11, 11]),
       ];
 
       for (final (pageIndex, amount, expectedGaps) in cases) {
@@ -849,7 +1174,9 @@ void main() {
       }
     });
 
-    testWidgets('dimension rail keeps the frozen 2px chip gap', (tester) async {
+    testWidgets('dimension rail keeps the final 3px D2-D4 chip gap', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         host(
           SpendeeBalanceDetailPage(
@@ -871,8 +1198,8 @@ void main() {
         find.byKey(const ValueKey('spendee-balance-budget-dimension-month')),
       );
 
-      expect(week.left - day.right, 2);
-      expect(month.left - week.right, 2);
+      expect(week.left - day.right, 3);
+      expect(month.left - week.right, 3);
     });
 
     testWidgets(
@@ -935,7 +1262,7 @@ void main() {
         _expectDimensionSemantics(
           tester,
           find.byKey(const ValueKey('spendee-balance-merchant-dimension-all')),
-          label: 'Összesen',
+          label: 'Összes',
           selected: false,
         );
       },
@@ -1087,12 +1414,12 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Top 5 kereskedő'), findsOneWidget);
+      expect(find.text('Top 4 kereskedő'), findsOneWidget);
       expect(find.text('Éves'), findsOneWidget);
       expect(find.text('Havi'), findsOneWidget);
-      expect(find.text('Összesen'), findsOneWidget);
+      expect(find.text('Összes'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('spendee-balance-top-merchant-row-4')),
+        find.byKey(const ValueKey('spendee-balance-top-merchant-row-3')),
         findsOneWidget,
       );
 
@@ -1329,6 +1656,157 @@ void main() {
       },
     );
 
+    testWidgets('D3 renders only the first four supplied ranked rows', (
+      tester,
+    ) async {
+      final model = SpendeeBalanceTopCategoriesModel(
+        id: 'ranked-categories',
+        title: 'Top kategóriák',
+        featuredCategory: 'Vezető',
+        featuredMeta: '1. hely',
+        featuredAmount: '50 000 Ft',
+        featuredIconAsset: 'assets/icons/lucide/utensils.svg',
+        rows: const [
+          SpendeeBalanceTopCategoryRowModel(
+            scope: '2. hely',
+            category: 'C1',
+            amount: '40 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceTopCategoryRowModel(
+            scope: '3. hely',
+            category: 'C2',
+            amount: '30 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceTopCategoryRowModel(
+            scope: '4. hely',
+            category: 'C3',
+            amount: '20 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceTopCategoryRowModel(
+            scope: '5. hely',
+            category: 'C4',
+            amount: '10 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceTopCategoryRowModel(
+            scope: '6. hely',
+            category: 'C5',
+            amount: '5 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+        ],
+        includeGhostTransactions: true,
+      );
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceDetailPage(
+            model: model,
+            onGhostChanged: (_, _) {},
+            onBudgetDimensionChanged: (_) {},
+            onMerchantDimensionChanged: (_) {},
+          ),
+        ),
+      );
+
+      for (var index = 0; index < 4; index++) {
+        expect(
+          find.byKey(ValueKey('spendee-balance-top-category-row-$index')),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.byKey(const ValueKey('spendee-balance-top-category-row-4')),
+        findsNothing,
+      );
+      expect(find.text('C5'), findsNothing);
+      expect(
+        tester.getRect(find.text('C1')).top,
+        lessThan(tester.getRect(find.text('C4')).top),
+      );
+    });
+
+    testWidgets('D4 renders only the first four supplied ranked rows', (
+      tester,
+    ) async {
+      final model = SpendeeBalanceTopMerchantsModel(
+        id: 'ranked-merchants',
+        title: 'Top 4 kereskedő',
+        selectedDimension: SpendeeBalanceMerchantDimension.month,
+        rows: const [
+          SpendeeBalanceMerchantRowModel(
+            merchant: 'M1',
+            transactionCount: '5 tranzakció',
+            amount: '50 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceMerchantRowModel(
+            merchant: 'M2',
+            transactionCount: '4 tranzakció',
+            amount: '40 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceMerchantRowModel(
+            merchant: 'M3',
+            transactionCount: '3 tranzakció',
+            amount: '30 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceMerchantRowModel(
+            merchant: 'M4',
+            transactionCount: '2 tranzakció',
+            amount: '20 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+          SpendeeBalanceMerchantRowModel(
+            merchant: 'M5',
+            transactionCount: '1 tranzakció',
+            amount: '10 Ft',
+            iconAsset: 'assets/icons/lucide/store.svg',
+            color: Color(0xFFF24CAE),
+          ),
+        ],
+        includeGhostTransactions: true,
+      );
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceDetailPage(
+            model: model,
+            onGhostChanged: (_, _) {},
+            onBudgetDimensionChanged: (_) {},
+            onMerchantDimensionChanged: (_) {},
+          ),
+        ),
+      );
+
+      for (var index = 0; index < 4; index++) {
+        expect(
+          find.byKey(ValueKey('spendee-balance-top-merchant-row-$index')),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.byKey(const ValueKey('spendee-balance-top-merchant-row-4')),
+        findsNothing,
+      );
+      expect(find.text('M5'), findsNothing);
+      expect(
+        tester.getRect(find.text('M1')).top,
+        lessThan(tester.getRect(find.text('M4')).top),
+      );
+    });
+
     testWidgets('every detail page has an independent semantic ghost toggle', (
       tester,
     ) async {
@@ -1409,6 +1887,18 @@ void main() {
       },
     );
   });
+}
+
+class _FastInfoStyleExpectation {
+  const _FastInfoStyleExpectation({
+    required this.hue,
+    required this.iconBackground,
+    this.gradient,
+  });
+
+  final Color hue;
+  final Color iconBackground;
+  final List<Color>? gradient;
 }
 
 List<SpendeeBalanceFastInfoCardModel> fastInfoModels() {

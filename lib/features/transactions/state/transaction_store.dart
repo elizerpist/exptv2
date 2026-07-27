@@ -1143,14 +1143,22 @@ class TransactionStore extends ChangeNotifier {
   }
 
   Future<void> _loadInitialData() async {
+    final railPerf = Stopwatch()..start();
+    print('[RailPerfDiag] store.start');
     var success = false;
     _loading = true;
     _error = null;
     _notifyListenersOrDefer();
     try {
       final payload = await _repository.loadBootstrap();
+      print(
+        '[RailPerfDiag] store.bootstrap rows=${payload.transactions.length} ms=${railPerf.elapsedMilliseconds}',
+      );
       _categories = payload.categories;
       _transactions = _sort(payload.transactions);
+      print(
+        '[RailPerfDiag] store.sort rows=${_transactions.length} ms=${railPerf.elapsedMilliseconds}',
+      );
       _replaceRecurringGhostTransactions(
         payload.recurringGhostTransactions,
         resetBalancePool: true,
@@ -1164,6 +1172,7 @@ class TransactionStore extends ChangeNotifier {
       _invalidateViewCaches();
       _invalidateFastInfoMetrics();
       _prewarmCriticalCachesOrDefer('start');
+      print('[RailPerfDiag] store.prewarm ms=${railPerf.elapsedMilliseconds}');
       success = true;
     } catch (error) {
       _error = error.toString();
@@ -1172,6 +1181,9 @@ class TransactionStore extends ChangeNotifier {
       _startFuture = null;
       _loading = false;
       _notifyListenersOrDefer();
+      print(
+        '[RailPerfDiag] store.complete success=$success ms=${railPerf.elapsedMilliseconds}',
+      );
     }
   }
 

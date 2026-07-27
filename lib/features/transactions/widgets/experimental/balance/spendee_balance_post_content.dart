@@ -215,10 +215,10 @@ class _ActionButtonState extends State<_ActionButton> {
         child: ClipRRect(
           borderRadius: radius,
           child: Material(
-            key: ValueKey('spendee-balance-${widget.type.name}-action'),
             color: Colors.transparent,
             clipBehavior: Clip.hardEdge,
             child: Ink(
+              key: ValueKey('spendee-balance-${widget.type.name}-action'),
               decoration: BoxDecoration(
                 borderRadius: radius,
                 color: widget.active
@@ -808,11 +808,11 @@ class _SpendeeBalanceSearchFilterState
         height: SpendeeBalanceVisualSpec.searchHeight,
         decoration: BoxDecoration(
           color: const Color(0xF0FFFFFF),
-          // The focused search pill has a single blue outer stroke. Keeping
-          // the resting grey border underneath would read as a double frame.
+          // The keyed outer pill owns the only focus stroke; the TextField
+          // itself has no border in any effective InputDecoration state.
           border: Border.all(
             color: _searchShowsFocusOutline
-                ? Colors.transparent
+                ? SpendeeBalanceVisualSpec.searchFocusColor
                 : const Color(0x17666FAB),
           ),
           borderRadius: radius,
@@ -900,38 +900,53 @@ class _SpendeeBalanceSearchFilterState
                       ),
                     ),
                   Expanded(
-                    child: SizedBox(
-                      height: SpendeeBalanceVisualSpec.searchEditableHeight,
-                      child: TextField(
-                        key: const ValueKey('spendee-balance-search-editable'),
-                        focusNode: _searchFocusNode,
-                        controller: _controller,
-                        onChanged: widget.onQueryChanged,
-                        maxLines: 1,
-                        textAlignVertical: TextAlignVertical.center,
-                        cursorHeight: 16,
-                        cursorColor: SpendeeBalanceVisualSpec.searchFocusColor,
-                        style: const TextStyle(
-                          color: Color(0xFF1D2B50),
-                          fontSize: SpendeeBalanceVisualSpec.searchTextSize,
-                          height: 1,
-                          fontWeight: FontWeight.w700,
-                          fontVariations: SpendeeBalanceVisualSpec.weight750,
-                        ),
-                        decoration: InputDecoration(
-                          isCollapsed: true,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                          border: InputBorder.none,
-                          hintText: widget.filters.isEmpty
-                              ? 'Keresés tranzakciók között...'
-                              : null,
-                          hintStyle: const TextStyle(
-                            color: Color(0xFF7E89A4),
+                    child: Semantics(
+                      key: const ValueKey(
+                        'spendee-balance-search-focus-semantics',
+                      ),
+                      focused: _searchFocusNode.hasFocus,
+                      child: SizedBox(
+                        height: SpendeeBalanceVisualSpec.searchEditableHeight,
+                        child: TextField(
+                          key: const ValueKey(
+                            'spendee-balance-search-editable',
+                          ),
+                          focusNode: _searchFocusNode,
+                          controller: _controller,
+                          onChanged: widget.onQueryChanged,
+                          maxLines: 1,
+                          textAlignVertical: TextAlignVertical.center,
+                          cursorHeight: 16,
+                          cursorColor:
+                              SpendeeBalanceVisualSpec.searchFocusColor,
+                          style: const TextStyle(
+                            color: Color(0xFF1D2B50),
                             fontSize: SpendeeBalanceVisualSpec.searchTextSize,
                             height: 1,
                             fontWeight: FontWeight.w700,
                             fontVariations: SpendeeBalanceVisualSpec.weight750,
+                          ),
+                          decoration: InputDecoration(
+                            isCollapsed: true,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            hintText: widget.filters.isEmpty
+                                ? 'Keresés tranzakciók között...'
+                                : null,
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF7E89A4),
+                              fontSize: SpendeeBalanceVisualSpec.searchTextSize,
+                              height: 1,
+                              fontWeight: FontWeight.w700,
+                              fontVariations:
+                                  SpendeeBalanceVisualSpec.weight750,
+                            ),
                           ),
                         ),
                       ),
@@ -940,23 +955,6 @@ class _SpendeeBalanceSearchFilterState
                 ],
               ),
             ),
-            if (_searchShowsFocusOutline)
-              Positioned.fill(
-                left: -1,
-                top: -1,
-                right: -1,
-                bottom: -1,
-                child: _TraditionalFocusOutline(
-                  outlineKey: const ValueKey(
-                    'spendee-balance-search-field-focus-outline',
-                  ),
-                  borderRadius: BorderRadius.circular(
-                    SpendeeBalanceVisualSpec.searchFieldRadius,
-                  ),
-                  inset: 0,
-                  color: SpendeeBalanceVisualSpec.searchFocusColor,
-                ),
-              ),
           ],
         ),
       ),
@@ -982,6 +980,8 @@ class SpendeeBalanceTimeScopeRail extends StatefulWidget {
     required this.collapseProgress,
     this.dragging = false,
     required this.onSelected,
+    this.onPreview,
+    this.onRailDragStart,
     required this.onCollapseDragStart,
     required this.onCollapseDragUpdate,
     required this.onCollapseDragEnd,
@@ -996,6 +996,8 @@ class SpendeeBalanceTimeScopeRail extends StatefulWidget {
   final double collapseProgress;
   final bool dragging;
   final ValueChanged<SpendeeBalanceTimeScopeItem> onSelected;
+  final ValueChanged<SpendeeBalanceTimeScopeItem>? onPreview;
+  final VoidCallback? onRailDragStart;
   final VoidCallback onCollapseDragStart;
   final ValueChanged<double> onCollapseDragUpdate;
   final VoidCallback onCollapseDragEnd;
@@ -1042,6 +1044,7 @@ class _SpendeeBalanceTimeScopeRailState
     if (_activeKey != option.key) {
       setState(() => _activeKey = option.key);
     }
+    widget.onPreview?.call(option);
   }
 
   void _commitIndex(int index) {
@@ -1078,8 +1081,9 @@ class _SpendeeBalanceTimeScopeRailState
                   SpendeeBalanceVisualSpec.timeRailVisibleLogicalDistance,
               onIndexChanged: _previewIndex,
               onIndexSettled: _commitIndex,
+              onDragStarted: widget.onRailDragStart,
               semanticLabel: 'Választható időszakok',
-              clipToViewport: true,
+              clipToViewport: false,
               itemSizeBuilder: (_, _) =>
                   SpendeeBalanceVisualSpec.activeYearPillSize,
               itemScaleBuilder: (_, _, centeredness) {

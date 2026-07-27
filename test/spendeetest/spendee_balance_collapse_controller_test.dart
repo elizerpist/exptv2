@@ -139,7 +139,12 @@ void main() {
       expect(collapsed.heroStatsOpacity, 0);
       expect(collapsed.heroStatsTranslateY, 10);
       expect(collapsed.scrollContentTranslateY, -202);
-      expect(collapsed.postTranslateY, -132);
+      final collapsedPostShift =
+          -(SpendeeBalanceVisualSpec.insightHeight +
+              SpendeeBalanceVisualSpec.stackGap * 2 +
+              SpendeeBalanceVisualSpec.detailStageHeight -
+              SpendeeBalanceCollapseController.maxOffset);
+      expect(collapsed.postTranslateY, collapsedPostShift);
     });
 
     test('progress is clamped and pointer thresholds follow frozen JS', () {

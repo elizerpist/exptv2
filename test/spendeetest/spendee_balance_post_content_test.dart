@@ -116,7 +116,7 @@ void main() {
       ),
     ]);
     final inactiveExpenseDecoration = _actionDecoration(tester, expense);
-    expect(inactiveExpenseDecoration.color, const Color(0xF0FFFFFF));
+    expect(inactiveExpenseDecoration.color, const Color(0xFFFEFEFF));
     expect(
       inactiveExpenseDecoration.border,
       Border.all(color: const Color(0x1A666FAB)),
@@ -772,15 +772,14 @@ void main() {
         find.byKey(
           const ValueKey('spendee-balance-search-field-focus-outline'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       final fieldDecoration =
           tester.widget<Container>(field).decoration! as BoxDecoration;
-      expect(fieldDecoration.border, Border.all(color: Colors.transparent));
-      final outline = find.byKey(
-        const ValueKey('spendee-balance-search-field-focus-outline'),
+      expect(
+        fieldDecoration.border,
+        Border.all(color: const Color(0xFF2F80ED)),
       );
-      expect(tester.getRect(outline), tester.getRect(field));
       expect(
         tester.widget<TextField>(editable).decoration!.border,
         InputBorder.none,
@@ -1511,6 +1510,8 @@ double _iconScale(WidgetTester tester, TransactionType type) {
 }
 
 BoxDecoration _actionDecoration(WidgetTester tester, Finder action) {
+  final direct = tester.widget(action);
+  if (direct is Ink) return direct.decoration! as BoxDecoration;
   final ink = find.descendant(of: action, matching: find.byType(Ink));
   return tester.widget<Ink>(ink).decoration! as BoxDecoration;
 }
