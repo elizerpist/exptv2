@@ -4,7 +4,6 @@ import 'package:exptv2/features/transactions/data/transaction_repository.dart';
 import 'package:exptv2/features/transactions/models/category_limit.dart';
 import 'package:exptv2/features/transactions/models/recurring_ghost_record.dart';
 import 'package:exptv2/features/transactions/models/recurring_rule.dart';
-import 'package:exptv2/features/transactions/models/summary_window.dart';
 import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
@@ -49,8 +48,10 @@ Future<TransactionStore> pumpBalanceProductionHost(
 
   final activeStore =
       store ?? createBalanceProductionStore(transactions: transactions);
+  // ignore: avoid_print
   print('[RailPerfDiag] host.store_start');
   await activeStore.start();
+  // ignore: avoid_print
   print('[RailPerfDiag] host.store_complete');
   // The store publishes the all-time query synchronously before beginning its
   // unrelated recurring-ghost projection. The production host needs that
@@ -68,6 +69,7 @@ Future<TransactionStore> pumpBalanceProductionHost(
   final settings = AppThemeSettings.defaults().copyWith(
     dashboardDesignMode: DashboardDesignMode.spendeeTest,
   );
+  // ignore: avoid_print
   print('[RailPerfDiag] host.pumpWidget_start');
   await tester.pumpWidget(
     MaterialApp(
@@ -89,6 +91,7 @@ Future<TransactionStore> pumpBalanceProductionHost(
       ),
     ),
   );
+  // ignore: avoid_print
   print('[RailPerfDiag] host.pumpWidget_complete');
   if (recoverKnownDetailCardOverflows) {
     // Task 5 owns D1–D5. Until those card layouts are corrected, the real

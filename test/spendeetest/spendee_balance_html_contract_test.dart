@@ -277,10 +277,6 @@ class BalanceHtmlContractParser {
   }
 }
 
-bool _selectorMatches(String ruleLine, String selector) {
-  return _matchingSelector(ruleLine, selector) != null;
-}
-
 String? _matchingSelector(String ruleLine, String selector) {
   for (final rawSelector in ruleLine.split(',')) {
     final candidate = rawSelector.replaceAll(RegExp(r'\s+'), ' ').trim();

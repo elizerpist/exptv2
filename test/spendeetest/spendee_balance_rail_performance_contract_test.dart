@@ -26,12 +26,14 @@ void main() {
           date: '2026.${months[index % months.length]}.17',
         );
       });
+      // ignore: avoid_print
       print(
         '[RailPerfDiag] fixture rows=$recordCount ms=${timing.elapsedMilliseconds}',
       );
       expect(transactions, hasLength(recordCount));
       final store = createBalanceProductionStore(transactions: transactions);
       await store.start();
+      // ignore: avoid_print
       print(
         '[RailPerfDiag] test.store_started ms=${timing.elapsedMilliseconds}',
       );
@@ -42,10 +44,12 @@ void main() {
           month: 7,
         ),
       );
+      // ignore: avoid_print
       print(
         '[RailPerfDiag] test.monthly_committed ms=${timing.elapsedMilliseconds}',
       );
       await pumpBalanceProductionHost(tester, store: store, settle: false);
+      // ignore: avoid_print
       print('[RailPerfDiag] test.host_pumped ms=${timing.elapsedMilliseconds}');
       await tester.pump(const Duration(seconds: 1));
 
@@ -53,6 +57,7 @@ void main() {
         find.byKey(const ValueKey('spendee-balance-summary-chevron')),
       );
       await tester.pumpAndSettle();
+      // ignore: avoid_print
       print('[RailPerfDiag] test.rail_open ms=${timing.elapsedMilliseconds}');
 
       final viewport = find.byKey(
@@ -71,6 +76,7 @@ void main() {
         Offset(-SpendeeBalanceVisualSpec.timeRailSlotDistance * 2, 0),
       );
       await tester.pumpAndSettle();
+      // ignore: avoid_print
       print(
         '[RailPerfDiag] test.drag_settled ms=${timing.elapsedMilliseconds}',
       );
@@ -102,12 +108,14 @@ void main() {
                     entry.contains('operation=balance-rail-load')),
           )
           .toList(growable: false);
+      // ignore: avoid_print
       print(
         '[RailPerfDiag] balance_trace_count=${diagnosticEntries.length} '
         'frame_resolves=${diagnosticEntries.where((entry) => entry.contains('operation=balance-frame-resolve') && entry.contains('phase=complete')).length} '
         'log_builds=${diagnosticEntries.where((entry) => entry.contains('operation=balance-transaction-log-build') && entry.contains('phase=complete')).length}',
       );
       for (final entry in diagnosticEntries) {
+        // ignore: avoid_print
         print('[RailPerfDiag] $entry');
       }
       expect(tester.takeException(), isNull);

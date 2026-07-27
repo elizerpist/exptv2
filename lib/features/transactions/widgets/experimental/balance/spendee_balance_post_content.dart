@@ -1492,13 +1492,11 @@ class _TraditionalFocusOutline extends StatelessWidget {
     required this.outlineKey,
     required this.borderRadius,
     this.inset = 1,
-    this.color = _traditionalFocusOutlineColor,
   });
 
   final Key outlineKey;
   final BorderRadius borderRadius;
   final double inset;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1508,7 +1506,7 @@ class _TraditionalFocusOutline extends StatelessWidget {
         child: DecoratedBox(
           key: outlineKey,
           decoration: BoxDecoration(
-            border: Border.all(color: color, width: 2),
+            border: Border.all(color: _traditionalFocusOutlineColor, width: 2),
             borderRadius: borderRadius,
           ),
         ),

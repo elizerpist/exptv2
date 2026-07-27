@@ -374,7 +374,8 @@ void main() {
               ),
             )
             .getSemanticsData()
-            .hasFlag(SemanticsFlag.isFocused),
+            .flagsCollection
+            .isFocused,
         isTrue,
       );
       expect(decoration.border, InputBorder.none);
@@ -517,9 +518,7 @@ void main() {
     final pageIndex = railColors.indexOf(balanceProductionPageColor);
     expect(pageIndex, greaterThanOrEqualTo(0));
     expect(railColors.take(pageIndex), isEmpty);
-    final pill = find.byKey(
-      const ValueKey('spendee-balance-year-pill-2026'),
-    );
+    final pill = find.byKey(const ValueKey('spendee-balance-year-pill-2026'));
     expect(pill, findsOneWidget);
     final railRect = tester.getRect(rail);
     final pillRect = tester.getRect(pill);
