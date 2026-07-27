@@ -113,7 +113,7 @@ void main() {
     expect(SpendeeBalanceVisualSpec.handleBarSize, const Size(22, 3));
     expect(SpendeeBalanceVisualSpec.timeRailViewportHeight, 37);
     expect(SpendeeBalanceVisualSpec.timeRailSlotDistance, 69.2);
-    expect(SpendeeBalanceVisualSpec.timeRailVisibleLogicalDistance, 3);
+    expect(SpendeeBalanceVisualSpec.timeRailVisibleLogicalDistance, 2);
     expect(SpendeeBalanceVisualSpec.yearPillSize, const Size(49, 30));
     expect(SpendeeBalanceVisualSpec.activeYearPillSize, const Size(68, 37));
     expect(SpendeeBalanceVisualSpec.railDotSize, 5);

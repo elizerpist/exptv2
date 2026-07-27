@@ -89,6 +89,11 @@ class _SpendeeBalanceTickingViewportState
   var _motionSerial = 0;
   var _liveTicked = false;
 
+  /// Direction of the in-flight visual travel. The active belt owns five
+  /// stable slots; this lets it prepare exactly one entering neighbour before
+  /// an existing slot leaves the viewport.
+  var _motionDirection = 0;
+
   int get _requestedIndex => widget.selectedIndex ?? widget.initialIndex;
   bool get _reducedMotion =>
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -109,12 +114,14 @@ class _SpendeeBalanceTickingViewportState
       _controller = _newController(
         _requestedIndex.clamp(0, widget.itemCount - 1),
       );
+      _motionDirection = 0;
       return;
     }
     final selectedIndex = widget.selectedIndex;
     if (selectedIndex != null && selectedIndex != _controller.index) {
       _stopMotion();
       _controller.reset(index: selectedIndex);
+      _motionDirection = 0;
     }
   }
 
@@ -142,6 +149,9 @@ class _SpendeeBalanceTickingViewportState
     _stopMotion();
     _controller.beginDragFromCurrentMotion();
     _liveTicked = false;
+    if (_motionDirection != 0) {
+      setState(() => _motionDirection = 0);
+    }
     widget.onDragStarted?.call();
   }
 
@@ -156,14 +166,19 @@ class _SpendeeBalanceTickingViewportState
 
   void _cancelDrag() {
     final serial = ++_motionSerial;
-    unawaited(
-      _animateTravel(
-        _controller.cancelTravel(),
-        const Duration(milliseconds: 120),
-        Curves.easeOutCubic,
-        serial,
-      ),
+    unawaited(_cancelDragAndReset(serial));
+  }
+
+  Future<void> _cancelDragAndReset(int serial) async {
+    await _animateTravel(
+      _controller.cancelTravel(),
+      const Duration(milliseconds: 120),
+      Curves.easeOutCubic,
+      serial,
     );
+    if (mounted && serial == _motionSerial && _motionDirection != 0) {
+      setState(() => _motionDirection = 0);
+    }
   }
 
   Future<void> _release(double velocityDx) async {
@@ -190,6 +205,9 @@ class _SpendeeBalanceTickingViewportState
       serial,
     );
     if (mounted && serial == _motionSerial) {
+      if (_motionDirection != 0) {
+        setState(() => _motionDirection = 0);
+      }
       widget.onIndexSettled?.call(_controller.index);
     }
   }
@@ -202,6 +220,7 @@ class _SpendeeBalanceTickingViewportState
     _stopMotion();
     _controller.beginDragFromCurrentMotion();
     _liveTicked = false;
+    _motionDirection = 0;
     final serial = ++_motionSerial;
     final travel = _controller.travelToIndex(targetIndex);
     unawaited(
@@ -212,6 +231,9 @@ class _SpendeeBalanceTickingViewportState
         serial,
       ).then((_) {
         if (mounted && serial == _motionSerial) {
+          if (_motionDirection != 0) {
+            setState(() => _motionDirection = 0);
+          }
           widget.onIndexSettled?.call(_controller.index);
         }
       }),
@@ -268,6 +290,7 @@ class _SpendeeBalanceTickingViewportState
 
   void _applyMotionDelta(double deltaDx) {
     if (!mounted || deltaDx == 0) return;
+    _motionDirection = deltaDx.isNegative ? -1 : 1;
     final update = _controller.applyDragDelta(deltaDx);
     if (update.tickedIndexes.isNotEmpty) {
       _liveTicked = true;
@@ -348,12 +371,18 @@ class _SpendeeBalanceTickingViewportState
     }
     final maxDistance = widget.maxVisibleLogicalDistance;
     if (maxDistance != null && widget.itemCount > maxDistance * 2 + 1) {
-      return [
+      final logicalOffsets = <int>[
         for (
           var logicalOffset = -maxDistance;
           logicalOffset <= maxDistance;
           logicalOffset += 1
         )
+          logicalOffset,
+        if (_motionDirection < 0) maxDistance + 1,
+        if (_motionDirection > 0) -maxDistance - 1,
+      ];
+      return [
+        for (final logicalOffset in logicalOffsets)
           (
             index:
                 (activeIndex + logicalOffset + widget.itemCount) %

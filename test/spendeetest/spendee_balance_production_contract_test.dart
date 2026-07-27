@@ -110,11 +110,11 @@ void main() {
           expect(
             gradient.colors,
             contract.kind == SpendeeBalanceFastInfoKind.trendComparison
-                ? const [Color(0xFFFAF8F6), Color(0xF2FFFFFF)]
-                : const [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
+                ? const [Color(0xFFFAF8F6), Color(0xFFFFFFFF)]
+                : const [Color(0xFFFAF9F7), Color(0xFFFFFFFF)],
           );
         } else {
-          expect(decoration.color, const Color(0xF0FFFFFF));
+          expect(decoration.color, const Color(0xFFFEFEFF));
           expect(decoration.gradient, isNull);
         }
 
@@ -170,7 +170,7 @@ void main() {
             );
             expect(
               tester.getRect(label).bottom,
-              closeTo(tester.getRect(surface).bottom - 7, .01),
+              closeTo(tester.getRect(ghost).top - 2, .01),
             );
           case SpendeeBalanceFastInfoKind.categoryChange:
             final value = tester.widget<Text>(
@@ -349,7 +349,7 @@ void main() {
       await tester.pump();
       final decoration = effectiveInputDecoration(tester);
       final border = decorationOf(tester, outer).border! as Border;
-      expect(border.top, const BorderSide(color: Color(0xFF2F80ED)));
+      expect(border.top, const BorderSide(color: Color(0xFF06B6D4)));
       expect(border.right, border.top);
       expect(border.bottom, border.top);
       expect(border.left, border.top);

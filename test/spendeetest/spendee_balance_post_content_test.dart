@@ -796,7 +796,7 @@ void main() {
           tester.widget<Container>(field).decoration! as BoxDecoration;
       expect(
         fieldDecoration.border,
-        Border.all(color: const Color(0xFF2F80ED)),
+        Border.all(color: const Color(0xFF06B6D4)),
       );
       expect(
         tester.widget<TextField>(editable).decoration!.border,
@@ -1064,7 +1064,7 @@ void main() {
   });
 
   testWidgets(
-    '0726 bare rail prebuilds both entering neighbours while preserving the five visible slots',
+    'time rail keeps five pills visible and prebuilds only the entering side during motion',
     (tester) async {
       await tester.pumpWidget(
         host(
@@ -1110,13 +1110,13 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-ticking-slot-1--3')),
-        findsOneWidget,
-        reason: 'the next left pill must exist before it enters the viewport',
+        findsNothing,
+        reason: 'a sixth idle pill may not peek from the left viewport edge',
       );
       expect(
         find.byKey(const ValueKey('spendee-balance-ticking-slot-7-3')),
-        findsOneWidget,
-        reason: 'the next right pill must exist before it enters the viewport',
+        findsNothing,
+        reason: 'a sixth idle pill may not peek from the right viewport edge',
       );
 
       final viewport = find.byKey(
@@ -1127,9 +1127,21 @@ void main() {
       );
       final activeCenterBeforeDrag = tester.getCenter(activeSlot).dx;
       final gesture = await tester.startGesture(tester.getCenter(viewport));
+      // The first delta resolves Flutter's horizontal gesture arena. The
+      // second is the first delta owned by the ticking viewport itself.
       await gesture.moveBy(const Offset(-20, 0));
-      await gesture.moveBy(const Offset(-45, 0));
+      await gesture.moveBy(const Offset(-20, 0));
       await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-7-3')),
+        findsOneWidget,
+        reason: 'the right entering pill must be built before the fifth exits',
+      );
+      expect(
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-1--3')),
+        findsNothing,
+      );
 
       expect(tester.getCenter(activeSlot).dx, lessThan(activeCenterBeforeDrag));
 
@@ -1141,7 +1153,7 @@ void main() {
       );
       expect(
         oldScale.transform.entry(0, 0),
-        lessThan(newScale.transform.entry(0, 0)),
+        greaterThan(newScale.transform.entry(0, 0)),
       );
       final oldPill = tester.widget<Container>(
         find.byKey(const ValueKey('spendee-balance-year-pill-2024')),
@@ -1149,8 +1161,8 @@ void main() {
       final newPill = tester.widget<Container>(
         find.byKey(const ValueKey('spendee-balance-year-pill-2025')),
       );
-      expect((oldPill.decoration! as BoxDecoration).gradient, isNull);
-      expect((newPill.decoration! as BoxDecoration).gradient, isNotNull);
+      expect((oldPill.decoration! as BoxDecoration).gradient, isNotNull);
+      expect((newPill.decoration! as BoxDecoration).gradient, isNull);
       await gesture.cancel();
       await tester.pumpAndSettle();
     },

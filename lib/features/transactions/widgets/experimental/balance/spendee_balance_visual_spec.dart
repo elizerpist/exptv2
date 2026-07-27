@@ -159,7 +159,10 @@ abstract final class SpendeeBalanceVisualSpec {
   static const searchContentHorizontalPadding = 14.0;
   static const searchEditableHeight = 34.0;
   static const searchTextSize = 14.0;
-  static const searchFocusColor = Color(0xFF2F80ED);
+
+  /// Focus ring shares the active bottom-navigation cyan, rather than a
+  /// second unrelated blue accent.
+  static const searchFocusColor = Color(0xFF06B6D4);
   static const filterWidth = 40.0;
   static const filterRadius = 17.0;
 
@@ -169,8 +172,9 @@ abstract final class SpendeeBalanceVisualSpec {
   static const timeRailViewportHeight = 37.0;
   static const timeRailSlotDistance = 69.2;
 
-  /// Five visible slots plus one already-built entering neighbour per side.
-  static const timeRailVisibleLogicalDistance = 3;
+  /// Exactly five stable slots. The ticking viewport adds only the entering
+  /// neighbour for the active travel direction while motion is in progress.
+  static const timeRailVisibleLogicalDistance = 2;
   static const handleSize = Size(92, 21);
   static const handleBarSize = Size(22, 3);
   static const yearPillSize = Size(49, 30);

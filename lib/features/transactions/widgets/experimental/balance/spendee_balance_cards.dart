@@ -293,13 +293,17 @@ class SpendeeBalanceFastInfoCard extends StatelessWidget {
               if (model case final SpendeeBalanceNoSpendCardModel noSpend)
                 Positioned(
                   left: 9,
-                  right: 31,
-                  bottom: 7,
+                  right: 9,
+                  bottom:
+                      _FastInfoLayout.ghostBottom +
+                      _FastInfoLayout.ghostSize +
+                      2,
                   child: Text(
                     noSpend.dimensionLabel,
                     key: const ValueKey('spendee-balance-no-spend-view-label'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Color(0xFF7A86A3),
                       fontSize: 6.5,
@@ -782,7 +786,7 @@ class SpendeeBalanceFastInfoVisualStyle {
           inset: Color(0xF5FFFFFF),
           gradient: CssLinearGradient(
             cssDegrees: 145,
-            colors: [Color(0xFFFAF8F6), Color(0xF2FFFFFF)],
+            colors: [Color(0xFFFAF8F6), Color(0xFFFFFFFF)],
           ),
         ),
       SpendeeBalanceFastInfoKind.upcomingRecurring =>
@@ -792,7 +796,7 @@ class SpendeeBalanceFastInfoVisualStyle {
           inset: Color(0xF5FFFFFF),
           gradient: CssLinearGradient(
             cssDegrees: 145,
-            colors: [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
+            colors: [Color(0xFFFAF9F7), Color(0xFFFFFFFF)],
           ),
         ),
       SpendeeBalanceFastInfoKind.noSpend =>
@@ -807,7 +811,7 @@ class SpendeeBalanceFastInfoVisualStyle {
 
 BoxDecoration _fastInfoDecoration(SpendeeBalanceFastInfoVisualStyle style) {
   return BoxDecoration(
-    color: style.gradient == null ? const Color(0xF0FFFFFF) : null,
+    color: style.gradient == null ? const Color(0xFFFEFEFF) : null,
     gradient: style.gradient,
     border: Border.all(color: style.edge),
     borderRadius: BorderRadius.circular(26),
@@ -1474,11 +1478,11 @@ class _TopCategoriesDetail extends StatelessWidget {
                         rankedRows.length * 2 - 1,
                         (index) {
                           if (index.isOdd) {
-                            return const SizedBox(height: 8);
+                            return const SizedBox(height: 4);
                           }
                           final rowIndex = index ~/ 2;
                           return SizedBox(
-                            height: 22,
+                            height: 28,
                             child: _TopCategoryRow(
                               key: ValueKey(
                                 'spendee-balance-top-category-row-$rowIndex',
@@ -1572,7 +1576,7 @@ class _TopMerchantsDetail extends StatelessWidget {
                   children: [
                     for (var index = 0; index < following.length; index++) ...[
                       SizedBox(
-                        height: 22,
+                        height: 28,
                         child: _TopMerchantRow(
                           key: ValueKey(
                             'spendee-balance-top-merchant-row-${index + 1}',
@@ -1581,7 +1585,7 @@ class _TopMerchantsDetail extends StatelessWidget {
                         ),
                       ),
                       if (index < following.length - 1)
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                     ],
                   ],
                 ),
@@ -1648,7 +1652,7 @@ class _TopMerchantsDetail extends StatelessWidget {
                 children: [
                   for (var index = 0; index < following.length; index++) ...[
                     SizedBox(
-                      height: 22,
+                      height: 28,
                       child: _TopMerchantRow(
                         key: ValueKey(
                           'spendee-balance-top-merchant-row-${index + 1}',
@@ -1656,7 +1660,7 @@ class _TopMerchantsDetail extends StatelessWidget {
                         model: following[index],
                       ),
                     ),
-                    if (index < following.length - 1) const SizedBox(height: 8),
+                    if (index < following.length - 1) const SizedBox(height: 4),
                   ],
                 ],
               ),
@@ -1865,7 +1869,7 @@ class _DetailCardShell extends StatelessWidget {
       height: SpendeeBalanceVisualSpec.detailCardHeight,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xF0FFFFFF),
+          color: const Color(0xFFFEFEFF),
           border: Border.all(color: const Color(0x1C666FAB)),
           borderRadius: BorderRadius.circular(26),
           boxShadow: const [
@@ -2125,6 +2129,25 @@ class _DimensionChip extends StatefulWidget {
 
 class _DimensionChipState extends State<_DimensionChip> {
   var _showFocusOutline = false;
+  var _pointerActivated = false;
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (_pointerActivated) return;
+    _pointerActivated = true;
+    widget.onTap();
+  }
+
+  void _handleTap() {
+    if (_pointerActivated) {
+      _pointerActivated = false;
+      return;
+    }
+    widget.onTap();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _pointerActivated = false;
+  }
 
   void _handleFocusChange(bool focused) {
     final show =
@@ -2147,58 +2170,63 @@ class _DimensionChipState extends State<_DimensionChip> {
       selected: widget.selected,
       label: widget.label,
       onTap: widget.onTap,
-      child: InkWell(
-        excludeFromSemantics: true,
-        splashFactory: NoSplash.splashFactory,
-        overlayColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
-        onFocusChange: _handleFocusChange,
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(widget.radius),
-        child: Stack(
-          children: [
-            Container(
-              constraints: BoxConstraints(minHeight: widget.minHeight),
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.horizontalPadding,
-              ),
-              decoration: BoxDecoration(
-                color: widget.selected
-                    ? const Color(0xFFF24CAE)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(widget.radius),
-                boxShadow: widget.selected
-                    ? const [
-                        BoxShadow(
-                          color: Color(0x3DF24CAE),
-                          offset: Offset(0, 3),
-                          blurRadius: 6,
-                        ),
-                      ]
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: ExcludeSemantics(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: widget.selected
-                        ? Colors.white
-                        : const Color(0xFF7D88A2),
-                    fontSize: widget.fontSize,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _handlePointerDown,
+        onPointerCancel: _handlePointerCancel,
+        child: InkWell(
+          excludeFromSemantics: true,
+          splashFactory: NoSplash.splashFactory,
+          overlayColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+          onFocusChange: _handleFocusChange,
+          onTap: _handleTap,
+          borderRadius: BorderRadius.circular(widget.radius),
+          child: Stack(
+            children: [
+              Container(
+                constraints: BoxConstraints(minHeight: widget.minHeight),
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.horizontalPadding,
+                ),
+                decoration: BoxDecoration(
+                  color: widget.selected
+                      ? const Color(0xFFF24CAE)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(widget.radius),
+                  boxShadow: widget.selected
+                      ? const [
+                          BoxShadow(
+                            color: Color(0x3DF24CAE),
+                            offset: Offset(0, 3),
+                            blurRadius: 6,
+                          ),
+                        ]
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: ExcludeSemantics(
+                  child: Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: widget.selected
+                          ? Colors.white
+                          : const Color(0xFF7D88A2),
+                      fontSize: widget.fontSize,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
-            ),
-            if (_showFocusOutline)
-              Positioned.fill(
-                child: _TraditionalFocusOutline(
-                  outlineKey: outlineKey,
-                  borderRadius: BorderRadius.circular(4),
+              if (_showFocusOutline)
+                Positioned.fill(
+                  child: _TraditionalFocusOutline(
+                    outlineKey: outlineKey,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2215,12 +2243,12 @@ class _TopCategoryRow extends StatelessWidget {
     return Row(
       children: [
         _RoundAvatar(color: model.color, iconAsset: model.iconAsset),
-        const SizedBox(width: 8),
+        const SizedBox(width: 9),
         Expanded(
           child: _RankedCopy(
-            primary: model.scope,
-            secondary: model.category,
-            primaryFirst: true,
+            primary: model.category,
+            secondary: model.scope,
+            primaryFirst: false,
           ),
         ),
         Text(model.amount, style: _rankedAmountStyle),
@@ -2239,7 +2267,7 @@ class _TopMerchantRow extends StatelessWidget {
     return Row(
       children: [
         _RoundAvatar(color: model.color, iconAsset: model.iconAsset),
-        const SizedBox(width: 8),
+        const SizedBox(width: 9),
         Expanded(
           child: _RankedCopy(
             primary: model.merchant,
@@ -2262,8 +2290,8 @@ class _RoundAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 22,
-      height: 22,
+      width: 26,
+      height: 26,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
@@ -2276,7 +2304,7 @@ class _RoundAvatar extends StatelessWidget {
         ],
       ),
       alignment: Alignment.center,
-      child: _LucideIcon(asset: iconAsset, color: Colors.white, size: 12),
+      child: _LucideIcon(asset: iconAsset, color: Colors.white, size: 14),
     );
   }
 }
@@ -2300,7 +2328,7 @@ class _RankedCopy extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: primaryFirst ? const Color(0xFF7D88A2) : const Color(0xFF26355A),
-        fontSize: 10,
+        fontSize: 11.5,
         height: 1,
         fontWeight: FontWeight.w900,
       ),
@@ -2311,7 +2339,7 @@ class _RankedCopy extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: primaryFirst ? const Color(0xFF26355A) : const Color(0xFF7D88A2),
-        fontSize: 7.2,
+        fontSize: 8.2,
         height: 1,
         fontWeight: FontWeight.w900,
       ),
@@ -2749,7 +2777,7 @@ class _TraditionalFocusOutline extends StatelessWidget {
 
 const _rankedAmountStyle = TextStyle(
   color: Color(0xFF26355A),
-  fontSize: 10,
+  fontSize: 12.5,
   height: 1,
   fontWeight: FontWeight.w900,
   fontVariations: SpendeeBalanceVisualSpec.weight950,

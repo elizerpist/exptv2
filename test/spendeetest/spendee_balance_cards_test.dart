@@ -34,7 +34,7 @@ void main() {
   }
 
   group('B3M-A3 FastInfo belt', () {
-    testWidgets('uses the frozen translucent surfaces and true inset light', (
+    testWidgets('uses opaque FastInfo material directly over the page', (
       tester,
     ) async {
       final expectations =
@@ -61,14 +61,14 @@ void main() {
                   border: Color(0x307657D9),
                   outerShadow: Color(0x1F7657D9),
                   innerShadow: Color(0xF5FFFFFF),
-                  gradientColors: [Color(0xFFFAF8F6), Color(0xF2FFFFFF)],
+                  gradientColors: [Color(0xFFFAF8F6), Color(0xFFFFFFFF)],
                 ),
             SpendeeBalanceFastInfoKind.upcomingRecurring:
                 const _FastSurfaceExpectation(
                   border: Color(0x308B5CF6),
                   outerShadow: Color(0x1F8B5CF6),
                   innerShadow: Color(0xF5FFFFFF),
-                  gradientColors: [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
+                  gradientColors: [Color(0xFFFAF9F7), Color(0xFFFFFFFF)],
                 ),
           };
 
@@ -95,7 +95,7 @@ void main() {
         expect(decoration.borderRadius, BorderRadius.circular(26));
         expect(
           decoration.color,
-          expected.gradientColors == null ? const Color(0xF0FFFFFF) : null,
+          expected.gradientColors == null ? const Color(0xFFFEFEFF) : null,
         );
         if (expected.gradientColors == null) {
           expect(decoration.gradient, isNull);
@@ -244,13 +244,13 @@ void main() {
                   _FastInfoStyleExpectation(
                     hue: Color(0xFF7657D9),
                     iconBackground: Color(0xFFEEEAFF),
-                    gradient: [Color(0xFFFAF8F6), Color(0xF2FFFFFF)],
+                    gradient: [Color(0xFFFAF8F6), Color(0xFFFFFFFF)],
                   ),
               SpendeeBalanceFastInfoKind.upcomingRecurring:
                   _FastInfoStyleExpectation(
                     hue: Color(0xFF8B5CF6),
                     iconBackground: Color(0xFFF0EFFF),
-                    gradient: [Color(0xFFFAF9F7), Color(0xF2FFFFFF)],
+                    gradient: [Color(0xFFFAF9F7), Color(0xFFFFFFFF)],
                   ),
             };
 
@@ -323,6 +323,15 @@ void main() {
       expect(label.style!.color, const Color(0xFF7A86A3));
       expect(label.style!.fontSize, 6.5);
       expect(label.style!.height, 1);
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('spendee-balance-no-spend-view-label')),
+            )
+            .bottom,
+        lessThanOrEqualTo(tester.getRect(ghost).top - 2),
+        reason: 'the no-spend tertiary label belongs above the ghost row',
+      );
       final painter =
           tester
                   .widget<CustomPaint>(
@@ -775,7 +784,7 @@ void main() {
   });
 
   group('B3M-A3 detail carousel', () {
-    testWidgets('detail shell uses the frozen glass surface and inset light', (
+    testWidgets('detail shell uses opaque material directly over the page', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -793,7 +802,7 @@ void main() {
         tester,
         find.byKey(const ValueKey('spendee-balance-detail-page-variable')),
       );
-      expect(decoration.color, const Color(0xF0FFFFFF));
+      expect(decoration.color, const Color(0xFFFEFEFF));
       expect(decoration.border, Border.all(color: const Color(0x1C666FAB)));
       expect(decoration.borderRadius, BorderRadius.circular(26));
       expect(decoration.boxShadow, const [
@@ -1294,6 +1303,32 @@ void main() {
       await tester.pump(const Duration(milliseconds: 101));
     });
 
+    testWidgets('dimension chips publish immediately on pointer down', (
+      tester,
+    ) async {
+      final selections = <SpendeeBalanceBudgetDimension>[];
+      await tester.pumpWidget(
+        host(
+          SpendeeBalanceDetailPage(
+            model: detailModels().first,
+            onGhostChanged: (_, _) {},
+            onBudgetDimensionChanged: selections.add,
+            onMerchantDimensionChanged: (_) {},
+          ),
+        ),
+      );
+
+      final week = find.byKey(
+        const ValueKey('spendee-balance-budget-dimension-week'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(week));
+      await tester.pump();
+      expect(selections, [SpendeeBalanceBudgetDimension.week]);
+      await gesture.up();
+      await tester.pump();
+      expect(selections, [SpendeeBalanceBudgetDimension.week]);
+    });
+
     testWidgets(
       'dimension traversal paints a 2px inset outline and keeps chip geometry',
       (tester) async {
@@ -1509,6 +1544,16 @@ void main() {
           find.byKey(const ValueKey('spendee-balance-top-category-row-2')),
           findsOneWidget,
         );
+        expect(
+          tester.getSize(
+            find.byKey(const ValueKey('spendee-balance-top-category-row-0')),
+          ),
+          const Size(346, 28),
+        );
+        expect(
+          tester.widget<Text>(find.text('Közlekedés')).style!.fontSize,
+          11.5,
+        );
         await tester.tap(
           find.byKey(
             const ValueKey('spendee-balance-top-category-dimension-year'),
@@ -1571,6 +1616,17 @@ void main() {
         expect(
           find.byKey(const ValueKey('spendee-balance-top-merchant-row-3')),
           findsOneWidget,
+        );
+        expect(
+          tester.getSize(
+            find.byKey(const ValueKey('spendee-balance-top-merchant-row-1')),
+          ),
+          const Size(346, 28),
+        );
+        expect(tester.widget<Text>(find.text('Tesco')).style!.fontSize, 11.5);
+        expect(
+          tester.widget<Text>(find.text('9 220 Ft')).style!.fontSize,
+          12.5,
         );
         await tester.tap(
           find.byKey(
