@@ -5,6 +5,7 @@ import 'package:exptv2/features/transactions/widgets/experimental/balance/spende
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_cards.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -340,7 +341,14 @@ void main() {
         decorationOf(tester, outer).borderRadius,
         BorderRadius.circular(21),
       );
-      expect(tester.widget<TextField>(editable).style!.fontSize, 13);
+      final textField = tester.widget<TextField>(editable);
+      expect(textField.style!.fontSize, 14);
+      expect(textField.decoration!.hintStyle!.fontSize, 14);
+      expect(textField.textAlignVertical, TextAlignVertical.center);
+      expect(
+        textField.decoration!.contentPadding,
+        const EdgeInsets.only(top: 10, bottom: 8),
+      );
       final contentPadding = find.descendant(
         of: outer,
         matching: find.byWidgetPredicate(
@@ -351,6 +359,19 @@ void main() {
       );
       expect(contentPadding, findsOneWidget);
       expect(centerDelta(tester, glyph, editable), lessThanOrEqualTo(.5));
+
+      await tester.enterText(editable, 'Keresés');
+      await tester.pump();
+      final renderEditable = tester.allRenderObjects
+          .whereType<RenderEditable>()
+          .single;
+      final caret = renderEditable.getLocalRectForCaret(
+        const TextPosition(offset: 1),
+      );
+      expect(
+        renderEditable.localToGlobal(caret.center).dy,
+        closeTo(tester.getRect(editable).center.dy, .5),
+      );
 
       await tester.tap(editable);
       await tester.pump();

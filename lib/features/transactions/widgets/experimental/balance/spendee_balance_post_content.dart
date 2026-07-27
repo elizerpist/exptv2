@@ -927,9 +927,12 @@ class _SpendeeBalanceSearchFilterState
                             fontVariations: SpendeeBalanceVisualSpec.weight750,
                           ),
                           decoration: InputDecoration(
-                            isCollapsed: true,
+                            isCollapsed: false,
                             isDense: true,
-                            contentPadding: EdgeInsets.zero,
+                            contentPadding: const EdgeInsets.only(
+                              top: 10,
+                              bottom: 8,
+                            ),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,

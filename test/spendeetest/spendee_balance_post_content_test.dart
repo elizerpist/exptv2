@@ -4,6 +4,7 @@ import 'package:exptv2/features/transactions/models/transaction_category.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_post_content.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -740,7 +741,7 @@ void main() {
   });
 
   testWidgets(
-    '0726 SearchPill centers a readable editable area and paints one outer blue focus ring',
+    'SearchPill renders its larger transaction-search text centered in the pill',
     (tester) async {
       await tester.pumpWidget(
         host(
@@ -760,10 +761,27 @@ void main() {
         const ValueKey('spendee-balance-search-editable'),
       );
       expect(tester.getSize(editable).height, 34);
-      expect(tester.widget<TextField>(editable).style?.fontSize, 13);
+      final textField = tester.widget<TextField>(editable);
+      expect(textField.style?.fontSize, 14);
+      expect(textField.decoration?.hintStyle?.fontSize, 14);
+      expect(textField.textAlignVertical, TextAlignVertical.center);
       expect(
         find.byKey(const ValueKey('spendee-balance-search-glyph')),
         findsOneWidget,
+      );
+
+      await tester.enterText(editable, 'Keresés');
+      await tester.pump();
+      final renderEditable = tester.allRenderObjects
+          .whereType<RenderEditable>()
+          .single;
+      final caret = renderEditable.getLocalRectForCaret(
+        const TextPosition(offset: 1),
+      );
+      final editableRect = tester.getRect(editable);
+      expect(
+        renderEditable.localToGlobal(caret.center).dy,
+        closeTo(editableRect.center.dy, .5),
       );
 
       await tester.tap(field);

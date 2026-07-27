@@ -157,7 +157,7 @@ abstract final class SpendeeBalanceVisualSpec {
   static const searchFieldRadius = 21.0;
   static const searchContentHorizontalPadding = 14.0;
   static const searchEditableHeight = 34.0;
-  static const searchTextSize = 13.0;
+  static const searchTextSize = 14.0;
   static const searchFocusColor = Color(0xFF2F80ED);
   static const filterWidth = 40.0;
   static const filterRadius = 17.0;
