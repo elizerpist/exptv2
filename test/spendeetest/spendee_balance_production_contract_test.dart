@@ -1,4 +1,4 @@
-import 'dart:ui' show BlurStyle, SemanticsAction;
+import 'dart:ui' show BlurStyle, SemanticsAction, Tristate;
 
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_card_painters.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_b3ma3_manifest.dart';
@@ -376,7 +376,7 @@ void main() {
             .getSemanticsData()
             .flagsCollection
             .isFocused,
-        isTrue,
+        Tristate.isTrue,
       );
       expect(decoration.border, InputBorder.none);
       expect(decoration.enabledBorder, InputBorder.none);

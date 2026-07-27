@@ -590,7 +590,12 @@ void main() {
       final ghost = find.byKey(
         const ValueKey('spendee-balance-fast-info-ghost-no-spend'),
       );
-      await tester.tap(ghost);
+      final ghostNode = tester.getSemantics(ghost);
+      expect(
+        ghostNode.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+      );
+      ghostNode.owner!.performAction(ghostNode.id, ui.SemanticsAction.tap);
       await tester.pump();
       expect(
         tester.getSemantics(ghost).flagsCollection.isToggled,
