@@ -84,7 +84,7 @@ void main() {
   });
 
   group('B3M-A3 collapse visual cascade', () {
-    test('expanded, midpoint and collapsed values match frozen JS', () {
+    test('expanded, midpoint and collapsed values keep actions below the header', () {
       final expanded = SpendeeBalanceCollapseVisuals.forProgress(0);
       final midpoint = SpendeeBalanceCollapseVisuals.forProgress(.5);
       final collapsed = SpendeeBalanceCollapseVisuals.forProgress(1);
@@ -124,9 +124,28 @@ void main() {
               SpendeeBalanceCollapseController.maxOffset * .5 +
               SpendeeBalanceVisualSpec.stackGap -
               SpendeeBalanceVisualSpec.stackGap);
+      final sourceCollapsedPostShift =
+          -(SpendeeBalanceVisualSpec.insightHeight +
+              SpendeeBalanceVisualSpec.stackGap * 2 +
+              SpendeeBalanceVisualSpec.detailStageHeight -
+              SpendeeBalanceCollapseController.maxOffset);
+      final collapsedActionTop =
+          SpendeeBalanceVisualSpec.heroTop +
+          SpendeeBalanceVisualSpec.heroCollapsedHeight +
+          SpendeeBalanceVisualSpec.stackGap;
+      final anchoredCollapsedPostShift =
+          collapsedActionTop -
+          SpendeeBalanceVisualSpec.actionTop +
+          SpendeeBalanceCollapseController.maxOffset +
+          22;
+      final postAnchorAdjustment =
+          anchoredCollapsedPostShift - sourceCollapsedPostShift;
       expect(
         midpoint.postTranslateY,
-        closeTo(midpointPostShift * midpointDetail, 1e-9),
+        closeTo(
+          (midpointPostShift + postAnchorAdjustment) * midpointDetail,
+          1e-9,
+        ),
       );
 
       expect(collapsed.heroHeight, 104);
@@ -139,12 +158,13 @@ void main() {
       expect(collapsed.heroStatsOpacity, 0);
       expect(collapsed.heroStatsTranslateY, 10);
       expect(collapsed.scrollContentTranslateY, -202);
-      final collapsedPostShift =
-          -(SpendeeBalanceVisualSpec.insightHeight +
-              SpendeeBalanceVisualSpec.stackGap * 2 +
-              SpendeeBalanceVisualSpec.detailStageHeight -
-              SpendeeBalanceCollapseController.maxOffset);
-      expect(collapsed.postTranslateY, collapsedPostShift);
+      expect(collapsed.postTranslateY, anchoredCollapsedPostShift);
+      expect(
+        SpendeeBalanceVisualSpec.actionTop +
+            collapsed.scrollContentTranslateY +
+            collapsed.postTranslateY,
+        collapsedActionTop,
+      );
     });
 
     test('progress is clamped and pointer thresholds follow frozen JS', () {
@@ -176,7 +196,7 @@ void main() {
       );
     });
 
-    test('post flow matches the five frozen DOM collapse samples', () {
+    test('post flow keeps the five collapse samples anchored under the header', () {
       const samples = <double>[0, .25, .5, .75, 1];
 
       for (final progress in samples) {
@@ -191,10 +211,27 @@ void main() {
                 SpendeeBalanceCollapseController.maxOffset * progress +
                 SpendeeBalanceVisualSpec.stackGap -
                 SpendeeBalanceVisualSpec.stackGap);
+        final sourceCollapsedPostShift =
+            -(SpendeeBalanceVisualSpec.insightHeight +
+                SpendeeBalanceVisualSpec.stackGap * 2 +
+                SpendeeBalanceVisualSpec.detailStageHeight -
+                SpendeeBalanceCollapseController.maxOffset);
+        final collapsedActionTop =
+            SpendeeBalanceVisualSpec.heroTop +
+            SpendeeBalanceVisualSpec.heroCollapsedHeight +
+            SpendeeBalanceVisualSpec.stackGap;
+        final anchoredCollapsedPostShift =
+            collapsedActionTop -
+            SpendeeBalanceVisualSpec.actionTop +
+            SpendeeBalanceCollapseController.maxOffset +
+            22;
         final expectedActionY =
             SpendeeBalanceVisualSpec.actionTop +
             expectedFlow +
-            sourcePostShift * detailProgress;
+            (sourcePostShift +
+                    anchoredCollapsedPostShift -
+                    sourceCollapsedPostShift) *
+                detailProgress;
         expect(
           visuals.scrollContentTranslateY,
           closeTo(expectedFlow, .001),
