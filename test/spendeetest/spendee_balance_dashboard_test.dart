@@ -219,7 +219,7 @@ void main() {
     expect(DebugConsole.allText, contains('to_dimension=month'));
   });
 
-  testWidgets('handle follows the 180px path and snaps to collapsed layout', (
+  testWidgets('collapsed action toggle stays directly below the header card', (
     tester,
   ) async {
     configureReferenceViewport(tester);
@@ -237,11 +237,10 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    final collapsed = SpendeeBalanceCollapseVisuals.forProgress(1);
-    final collapsedPostTop =
-        SpendeeBalanceVisualSpec.actionTop +
-        collapsed.scrollContentTranslateY +
-        collapsed.postTranslateY;
+    final collapsedActionTop =
+        SpendeeBalanceVisualSpec.heroTop +
+        SpendeeBalanceVisualSpec.heroCollapsedHeight +
+        SpendeeBalanceVisualSpec.stackGap;
     expect(
       tester.getSize(find.byKey(const ValueKey('spendee-balance-hero'))).height,
       SpendeeBalanceVisualSpec.heroCollapsedHeight,
@@ -250,14 +249,14 @@ void main() {
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-actions')))
           .dy,
-      closeTo(collapsedPostTop, .01),
+      closeTo(collapsedActionTop, .01),
     );
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-summary')))
           .dy,
       closeTo(
-        collapsedPostTop +
+        collapsedActionTop +
             SpendeeBalanceVisualSpec.actionHeight +
             SpendeeBalanceVisualSpec.stackGap,
         .01,
@@ -268,7 +267,7 @@ void main() {
           .getTopLeft(find.byKey(const ValueKey('spendee-balance-search-row')))
           .dy,
       closeTo(
-        collapsedPostTop +
+        collapsedActionTop +
             SpendeeBalanceVisualSpec.actionHeight +
             SpendeeBalanceVisualSpec.stackGap +
             SpendeeBalanceVisualSpec.summaryHeight +
@@ -279,7 +278,7 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('balance-test-log'))).dy,
       closeTo(
-        collapsedPostTop +
+        collapsedActionTop +
             SpendeeBalanceVisualSpec.actionHeight +
             SpendeeBalanceVisualSpec.stackGap +
             SpendeeBalanceVisualSpec.summaryHeight +

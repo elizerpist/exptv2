@@ -124,11 +124,33 @@ class SpendeeBalanceCollapseVisuals {
     const stackGapCount = 2;
     const heroGap = 11.0;
     const disappearingPillActionGap = heroGap;
-    final postBudgetShift =
+    final unanchoredPostBudgetShift =
         -((insightHeight + stackGap * stackGapCount + detailHeight) -
             scrollTop +
             heroGap -
             disappearingPillActionGap);
+    // The post-content stack has its own collapse anchor: its first action
+    // must settle below the collapsed header rather than inherit V3's taller
+    // FastInfo/detail surface heights. Keep the original curve shape, then
+    // correct its endpoint to that fixed header-adjacent position.
+    final collapsedActionTop =
+        SpendeeBalanceVisualSpec.heroTop +
+        SpendeeBalanceVisualSpec.heroCollapsedHeight +
+        SpendeeBalanceVisualSpec.stackGap;
+    final collapsedScrollTranslateY =
+        -(SpendeeBalanceCollapseController.maxOffset + 22);
+    final anchoredEndpointShift =
+        collapsedActionTop -
+        SpendeeBalanceVisualSpec.actionTop -
+        collapsedScrollTranslateY;
+    final unanchoredEndpointShift =
+        -((insightHeight + stackGap * stackGapCount + detailHeight) -
+            SpendeeBalanceCollapseController.maxOffset +
+            heroGap -
+            disappearingPillActionGap);
+    final postBudgetShift =
+        unanchoredPostBudgetShift +
+        (anchoredEndpointShift - unanchoredEndpointShift);
 
     return SpendeeBalanceCollapseVisuals._(
       progress: progress,
