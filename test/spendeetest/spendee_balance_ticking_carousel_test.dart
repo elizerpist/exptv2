@@ -103,6 +103,81 @@ void main() {
   });
 
   testWidgets(
+    'prebuilds fully offscreen slots without letting their bodies paint at rest',
+    (tester) async {
+      await tester.pumpWidget(
+        host(itemCount: 5, onIndexChanged: (_) {}, onTick: () {}),
+      );
+
+      final incomingStage = find.byKey(
+        const ValueKey('spendee-balance-ticking-offstage-item-2'),
+        skipOffstage: false,
+      );
+
+      expect(
+        tester.widget<Offstage>(incomingStage).offstage,
+        isTrue,
+        reason:
+            'A fully offscreen page stays built and laid out, but its material and shadow must not leak into the page gutter while the belt is idle.',
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('ticking-test-viewport'))),
+      );
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-55, 0));
+      await tester.pump();
+
+      expect(
+        tester.widget<Offstage>(incomingStage).offstage,
+        isFalse,
+        reason:
+            'The entering page must already be live before the outgoing page has left the physical viewport.',
+      );
+      expect(
+        tester
+            .widget<Offstage>(
+              find.byKey(
+                const ValueKey('spendee-balance-ticking-offstage-item-0'),
+              ),
+            )
+            .offstage,
+        isFalse,
+      );
+
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('keeps a real item subtree through a boundary tick', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(itemCount: 5, onIndexChanged: (_) {}, onTick: () {}),
+    );
+
+    final recycledItem = find.byKey(const ValueKey('ticking-test-item-1'));
+    final beforeTick = tester.element(recycledItem);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('ticking-test-viewport'))),
+    );
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+
+    expect(
+      identical(beforeTick, tester.element(recycledItem)),
+      isTrue,
+      reason:
+          'A selected incoming card changes logical position at the tick, not widget identity; retaining it avoids rebuilding a detail page in the middle of a slide.',
+    );
+
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
     'two-item viewport materializes the other option on both wrap sides',
     (tester) async {
       await tester.pumpWidget(
@@ -110,13 +185,13 @@ void main() {
       );
 
       final left = find.byKey(
-        const ValueKey('spendee-balance-ticking-slot-1--1'),
+        const ValueKey('spendee-balance-ticking-slot-decorative-1--1'),
       );
       final center = find.byKey(
-        const ValueKey('spendee-balance-ticking-slot-0-0'),
+        const ValueKey('spendee-balance-ticking-slot-item-0'),
       );
       final right = find.byKey(
-        const ValueKey('spendee-balance-ticking-slot-1-1'),
+        const ValueKey('spendee-balance-ticking-slot-item-1'),
       );
       expect(left, findsOneWidget);
       expect(center, findsOneWidget);
@@ -445,7 +520,10 @@ void main() {
         find.byKey(const ValueKey('ticking-test-viewport')),
       );
       final partialItem = find.byKey(const ValueKey('ticking-test-item-1'));
-      final offscreenItem = find.byKey(const ValueKey('ticking-test-item-2'));
+      final offscreenItem = find.byKey(
+        const ValueKey('ticking-test-item-2'),
+        skipOffstage: false,
+      );
       final partialRect = tester.getRect(partialItem);
       final offscreenRect = tester.getRect(offscreenItem);
       expect(partialRect.left, lessThan(viewport.right));
@@ -453,7 +531,19 @@ void main() {
       expect(offscreenRect.right, lessThanOrEqualTo(viewport.left));
 
       _expectViewportAccessGate(tester, partialItem, excluded: false);
-      _expectViewportAccessGate(tester, offscreenItem, excluded: true);
+      expect(
+        tester
+            .widget<Offstage>(
+              find.byKey(
+                const ValueKey('spendee-balance-ticking-offstage-item-2'),
+                skipOffstage: false,
+              ),
+            )
+            .offstage,
+        isTrue,
+        reason:
+            'Offstage is the stronger access gate: the prebuilt item cannot paint, receive a hit, focus, or semantics until it reaches the physical viewport.',
+      );
       expect(find.bySemanticsLabel('Ticking card 1'), findsOneWidget);
       expect(find.bySemanticsLabel('Ticking card 2'), findsNothing);
     },

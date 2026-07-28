@@ -879,7 +879,7 @@ void main() {
         await tester.pump();
 
         final incoming = find.byKey(
-          const ValueKey('spendee-balance-ticking-slot-3-3'),
+          const ValueKey('spendee-balance-ticking-slot-decorative-3-3'),
         );
         expect(incoming, findsOneWidget);
         final beltRect = tester.getRect(belt);
@@ -1101,13 +1101,14 @@ void main() {
         );
         final inactivePage = find.byKey(
           const ValueKey('spendee-balance-detail-virtual-1'),
+          skipOffstage: false,
         );
         expect(
           tester
               .widget<ExcludeFocus>(
                 find.descendant(
                   of: activePage,
-                  matching: find.byType(ExcludeFocus),
+                  matching: find.byType(ExcludeFocus, skipOffstage: false),
                 ),
               )
               .excluding,
@@ -1118,7 +1119,7 @@ void main() {
               .widget<ExcludeFocus>(
                 find.descendant(
                   of: inactivePage,
-                  matching: find.byType(ExcludeFocus),
+                  matching: find.byType(ExcludeFocus, skipOffstage: false),
                 ),
               )
               .excluding,
@@ -1130,7 +1131,10 @@ void main() {
                 find
                     .descendant(
                       of: inactivePage,
-                      matching: find.byType(ExcludeSemantics),
+                      matching: find.byType(
+                        ExcludeSemantics,
+                        skipOffstage: false,
+                      ),
                     )
                     .first,
               )

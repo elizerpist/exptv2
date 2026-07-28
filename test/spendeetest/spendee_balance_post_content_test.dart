@@ -1109,24 +1109,24 @@ void main() {
       final rail = find.byKey(const ValueKey('spendee-balance-time-rail'));
       expect(tester.getSize(rail), const Size(378, 37));
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-4-0')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-4')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-2--2')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-2')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-6-2')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-6')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-1--3')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-1')),
         findsNothing,
         reason: 'a sixth idle pill may not peek from the left viewport edge',
       );
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-7-3')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-7')),
         findsNothing,
         reason: 'a sixth idle pill may not peek from the right viewport edge',
       );
@@ -1135,7 +1135,7 @@ void main() {
         const ValueKey('spendee-balance-rail-ticking-viewport'),
       );
       final activeSlot = find.byKey(
-        const ValueKey('spendee-balance-ticking-slot-4-0'),
+        const ValueKey('spendee-balance-ticking-slot-item-4'),
       );
       final activeCenterBeforeDrag = tester.getCenter(activeSlot).dx;
       final gesture = await tester.startGesture(tester.getCenter(viewport));
@@ -1146,22 +1146,22 @@ void main() {
       await tester.pump();
 
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-7-3')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-7')),
         findsOneWidget,
         reason: 'the right entering pill must be built before the fifth exits',
       );
       expect(
-        find.byKey(const ValueKey('spendee-balance-ticking-slot-1--3')),
+        find.byKey(const ValueKey('spendee-balance-ticking-slot-item-1')),
         findsNothing,
       );
 
       expect(tester.getCenter(activeSlot).dx, lessThan(activeCenterBeforeDrag));
 
       final oldScale = tester.widget<Transform>(
-        find.byKey(const ValueKey('spendee-balance-ticking-scale-4-0')),
+        find.byKey(const ValueKey('spendee-balance-ticking-scale-item-4')),
       );
       final newScale = tester.widget<Transform>(
-        find.byKey(const ValueKey('spendee-balance-ticking-scale-5-1')),
+        find.byKey(const ValueKey('spendee-balance-ticking-scale-item-5')),
       );
       expect(
         oldScale.transform.entry(0, 0),
@@ -1257,7 +1257,7 @@ void main() {
     );
 
     final decorativeSlot = find.byKey(
-      const ValueKey('spendee-balance-ticking-slot-0--1'),
+      const ValueKey('spendee-balance-ticking-slot-decorative-0--1'),
     );
     expect(decorativeSlot, findsOneWidget);
     for (final key in [

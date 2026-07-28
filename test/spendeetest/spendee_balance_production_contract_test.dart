@@ -430,13 +430,21 @@ void main() {
       ]) {
         expect(
           tester.getSize(
-            find.byKey(ValueKey('spendee-balance-detail-page-$id')).first,
+            find
+                .byKey(
+                  ValueKey('spendee-balance-detail-page-$id'),
+                  skipOffstage: false,
+                )
+                .first,
           ),
           const Size(378, 208),
         );
         expect(
           tester.getSize(
-            find.byKey(ValueKey('spendee-balance-detail-header-$id')),
+            find.byKey(
+              ValueKey('spendee-balance-detail-header-$id'),
+              skipOffstage: false,
+            ),
           ),
           const Size(346, 21),
         );
@@ -599,7 +607,12 @@ void main() {
           'top-merchants',
           'average-daily',
         ])
-          find.byKey(ValueKey('spendee-balance-detail-page-$id')).first,
+          find
+              .byKey(
+                ValueKey('spendee-balance-detail-page-$id'),
+                skipOffstage: false,
+              )
+              .first,
       ]) {
         final colors = coloredAncestorsOf(tester, finder);
         final index = colors.indexOf(balanceProductionPageColor);

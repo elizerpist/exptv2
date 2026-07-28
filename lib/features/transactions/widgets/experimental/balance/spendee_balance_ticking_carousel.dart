@@ -486,35 +486,47 @@ class _SpendeeBalanceTickingViewportState
     final visible = itemRect.overlaps(
       Rect.fromLTWH(0, 0, widget.width, widget.height),
     );
+    final slotKey = decorativeClone
+        ? 'decorative-$index-$logicalOffset'
+        : 'item-$index';
     return Positioned(
-      key: ValueKey('spendee-balance-ticking-slot-$index-$logicalOffset'),
+      // A real item keeps this identity when it crosses the centre boundary.
+      // Its logical offset changes, but recreating a full Detail page at that
+      // exact animation frame causes the visible stall on low-end devices.
+      key: ValueKey('spendee-balance-ticking-slot-$slotKey'),
       left: itemRect.left,
       top: itemRect.top,
       width: size.width,
       height: size.height,
-      child: IgnorePointer(
-        ignoring: decorativeClone || !visible,
-        child: ExcludeFocus(
-          excluding: decorativeClone || !visible,
-          child: ExcludeSemantics(
+      // This is intentionally *not* a clip: a partially visible island and
+      // its authored glow can still travel naturally over F1.  A fully
+      // offscreen slot remains built and laid out, ready for the next frame,
+      // but does not paint a stray card or its shadow into either gutter.
+      child: Offstage(
+        key: ValueKey('spendee-balance-ticking-offstage-$slotKey'),
+        offstage: !visible,
+        child: IgnorePointer(
+          ignoring: decorativeClone || !visible,
+          child: ExcludeFocus(
             excluding: decorativeClone || !visible,
-            child: Transform.scale(
-              key: decorativeClone
-                  ? null
-                  : ValueKey(
-                      'spendee-balance-ticking-scale-$index-$logicalOffset',
-                    ),
-              alignment: Alignment.center,
-              scale: scale,
-              child:
-                  (decorativeClone
-                  ? widget.decorativeItemBuilder ?? widget.itemBuilder
-                  : widget.itemBuilder)(
-                    context,
-                    index,
-                    visuallySelected,
-                    () => _select(index),
-                  ),
+            child: ExcludeSemantics(
+              excluding: decorativeClone || !visible,
+              child: RepaintBoundary(
+                child: Transform.scale(
+                  key: ValueKey('spendee-balance-ticking-scale-$slotKey'),
+                  alignment: Alignment.center,
+                  scale: scale,
+                  child:
+                      (decorativeClone
+                      ? widget.decorativeItemBuilder ?? widget.itemBuilder
+                      : widget.itemBuilder)(
+                        context,
+                        index,
+                        visuallySelected,
+                        () => _select(index),
+                      ),
+                ),
+              ),
             ),
           ),
         ),
