@@ -133,10 +133,15 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   bool get _isBudgetV2 =>
       widget.presentation == SpendeeBalancePresentation.budgetV2;
 
-  List<CategoryBudgetBarData> get _budgetV2Bars => widget.budgetV2Bars
+  List<CategoryBudgetBarData> get _budgetV2AllBars => widget.budgetV2Bars
       .where((bar) => bar.hasLimit && bar.limitAmount > 0)
-      .take(5)
       .toList(growable: false);
+
+  /// The B3M-B avatar belt has exactly five visible Fluvi discs, while the
+  /// distribution donut must retain every supplied limited category so its
+  /// real spending proportions cannot collapse into equal five-slot slices.
+  List<CategoryBudgetBarData> get _budgetV2Bars =>
+      _budgetV2AllBars.take(5).toList(growable: false);
 
   int get _budgetV2SelectedIndex {
     final bars = _budgetV2Bars;
@@ -574,7 +579,7 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
               left: 0,
               child: isBudgetV2
                   ? SpendeeBudgetV2Header(
-                      bars: _budgetV2Bars,
+                      bars: _budgetV2AllBars,
                       collapseProgress: visuals.progress,
                     )
                   : SpendeeBalanceHeader(
@@ -605,7 +610,12 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     return SpendeeBudgetV2MotherCard(
       key: ValueKey('spendee-budget-v2-mother-card-${selected.key}'),
       bar: selected,
-      allBars: bars,
+      allBars: _budgetV2AllBars,
+      weeklyRhythmValues: BudgetV2WeeklyRhythmValues.resolve(
+        bar: selected,
+        records: widget.input.transactions,
+        endDate: widget.input.summaryReferenceDate,
+      ),
       onLimitChanged: (amount) =>
           widget.onBudgetV2LimitChanged?.call(selected, amount),
     );

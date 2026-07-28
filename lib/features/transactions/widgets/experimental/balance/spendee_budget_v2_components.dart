@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../models/category_budget_bar_data.dart';
+import '../../../models/category_limit.dart';
+import '../../../models/transaction_record.dart';
 import '../../../slots/category_color_resolver.dart';
 import '../../category_slot_icon.dart';
 import 'spendee_balance_collapse_controller.dart';
@@ -388,7 +390,9 @@ class _BudgetV2FluviAvatarDisc extends StatelessWidget {
         Positioned.fill(
           child: ExcludeSemantics(
             child: SvgPicture.string(
-              BudgetV2FluviSvg.avatarDisc(color, index),
+              BudgetV2FluviSvg.flutterRenderable(
+                BudgetV2FluviSvg.avatarDisc(color, index),
+              ),
               key: ValueKey('spendee-budget-v2-avatar-svg-${bar.key}'),
               fit: BoxFit.contain,
             ),
@@ -412,11 +416,13 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
     super.key,
     required this.bar,
     required this.allBars,
+    required this.weeklyRhythmValues,
     this.onLimitChanged,
   });
 
   final CategoryBudgetBarData bar;
   final List<CategoryBudgetBarData> allBars;
+  final List<int> weeklyRhythmValues;
   final ValueChanged<double>? onLimitChanged;
 
   @override
@@ -505,7 +511,9 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
                           const SizedBox(height: 6),
                           SizedBox(
                             height: 52,
-                            child: _BudgetV2WeeklyRhythm(bar: bar),
+                            child: _BudgetV2WeeklyRhythm(
+                              values: widget.weeklyRhythmValues,
+                            ),
                           ),
                         ],
                       ),
@@ -725,7 +733,9 @@ class _BudgetV2LimitProgress extends StatelessWidget {
                   width: 70,
                   height: 70,
                   child: SvgPicture.string(
-                    BudgetV2FluviSvg.circleProgress(percent),
+                    BudgetV2FluviSvg.flutterRenderable(
+                      BudgetV2FluviSvg.circleProgress(percent),
+                    ),
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -763,22 +773,12 @@ class _BudgetV2LimitProgress extends StatelessWidget {
 }
 
 class _BudgetV2WeeklyRhythm extends StatelessWidget {
-  const _BudgetV2WeeklyRhythm({required this.bar});
+  const _BudgetV2WeeklyRhythm({required this.values});
 
-  final CategoryBudgetBarData bar;
+  final List<int> values;
 
   @override
   Widget build(BuildContext context) {
-    final seed = math.max(1, bar.progress * 100).round();
-    final values = <int>[
-      seed ~/ 2,
-      seed,
-      seed ~/ 3,
-      seed * 3 ~/ 4,
-      seed * 2 ~/ 3,
-      seed ~/ 4,
-      seed * 4 ~/ 5,
-    ];
     return _BudgetV2InnerPanel(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(9, 7, 9, 6),
@@ -800,7 +800,9 @@ class _BudgetV2WeeklyRhythm extends StatelessWidget {
             const SizedBox(height: 4),
             Expanded(
               child: SvgPicture.string(
-                BudgetV2FluviSvg.weeklyRhythm(values),
+                BudgetV2FluviSvg.flutterRenderable(
+                  BudgetV2FluviSvg.weeklyRhythm(values),
+                ),
                 key: const ValueKey('spendee-budget-v2-weekly-rhythm'),
                 fit: BoxFit.fill,
               ),
@@ -927,10 +929,13 @@ class _BudgetV2PiePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = [...bars]..sort((a, b) => b.spent.compareTo(a.spent));
-    final total = top.fold<double>(0, (sum, item) => sum + item.spent);
-    final selectedShare = total == 0
-        ? 0
-        : (selected.spent / total * 100).round();
+    final pieBars = top.where((bar) => bar.spent > 0).toList(growable: false);
+    final total = pieBars.fold<double>(0, (sum, item) => sum + item.spent);
+    final selectedIndex = pieBars.indexWhere((bar) => bar.key == selected.key);
+    final highlightedIndexes = <int>{
+      if (selectedIndex >= 0) selectedIndex,
+      if (selectedIndex != 0 && pieBars.isNotEmpty) 0,
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(9, 6, 9, 6),
       child: Column(
@@ -954,15 +959,23 @@ class _BudgetV2PiePage extends StatelessWidget {
               width: 90,
               height: 90,
               child: SvgPicture.string(
-                BudgetV2FluviSvg.clayDonut(
-                  selectedShare: selectedShare,
-                  selectedColor: _resolvedColor(selected),
-                  segments: top
-                      .take(5)
-                      .map(_resolvedColor)
-                      .toList(growable: false),
+                BudgetV2FluviSvg.flutterRenderable(
+                  BudgetV2FluviSvg.clayDonut(
+                    slices: pieBars
+                        .map(
+                          (bar) => BudgetV2FluviDonutSlice(
+                            label: bar.title,
+                            value: bar.spent,
+                            color: _resolvedColor(bar),
+                          ),
+                        )
+                        .toList(growable: false),
+                    selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+                    highlightedIndexes: highlightedIndexes,
+                  ),
                 ),
                 key: const ValueKey('spendee-budget-v2-clay-donut'),
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -977,7 +990,7 @@ class _BudgetV2PiePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          for (final item in top.take(3))
+          for (final item in pieBars.take(3))
             _BudgetV2LegendRow(
               title: item.title,
               color: _resolvedColor(item),
@@ -1154,10 +1167,83 @@ String formatBudgetV2Forint(double value) {
   return '$sign${groups.reversed.join(' ')} Ft';
 }
 
+/// The B3M-B donut consumes the actual category total, not a count of colour
+/// slots.  Keeping label/value/colour together makes an accidental equal-slice
+/// fallback impossible at the rendering boundary.
+class BudgetV2FluviDonutSlice {
+  const BudgetV2FluviDonutSlice({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final double value;
+  final Color color;
+}
+
+/// Resolves the exact seven B3M-B daily rhythm inputs for the selected
+/// category. The SVG receives percentages of the live category limit, as the
+/// source prototype does; it never synthesizes a decorative pattern.
+abstract final class BudgetV2WeeklyRhythmValues {
+  static List<int> resolve({
+    required CategoryBudgetBarData bar,
+    required Iterable<TransactionRecord> records,
+    required DateTime endDate,
+  }) {
+    final end = DateTime(endDate.year, endDate.month, endDate.day);
+    final start = end.subtract(const Duration(days: 6));
+    final amounts = List<double>.filled(7, 0);
+    if (bar.limitAmount <= 0) {
+      return List<int>.unmodifiable(List<int>.filled(7, 0));
+    }
+    for (final record in records) {
+      if (record.type != bar.transactionType ||
+          record.transactionCategoryID != bar.targetId) {
+        continue;
+      }
+      final isInBudgetWindow = switch (bar.window) {
+        LimitWindow.monthly => record.yearMonthKey == bar.periodKey,
+        LimitWindow.yearly => record.yearMonthKey.startsWith(
+          '${bar.periodKey}-',
+        ),
+        LimitWindow.allTime => true,
+      };
+      if (!isInBudgetWindow) {
+        continue;
+      }
+      final date = DateTime.tryParse(record.normalizedDate);
+      if (date == null || date.isBefore(start) || date.isAfter(end)) {
+        continue;
+      }
+      amounts[date.difference(start).inDays] += record.amount.abs();
+    }
+    return List<int>.unmodifiable(
+      amounts
+          .map(
+            (amount) =>
+                ((amount / bar.limitAmount) * 100).round().clamp(0, 100),
+          )
+          .cast<int>()
+          .toList(growable: false),
+    );
+  }
+}
+
 /// Literal B3M-B Fluvi SVG templates. Dynamic data only changes the intended
 /// segments/values; the SVG geometry, gradients and filters remain the HTML
 /// source-of-truth vectors rather than a Flutter approximation.
 abstract final class BudgetV2FluviSvg {
+  /// flutter_svg/vector_graphics deliberately does not implement SVG filter
+  /// primitives (the renderer reports an unhandled `<filter/>` and can drop
+  /// the containing layer). Keep the full B3M-B source vector as the data
+  /// contract, then remove only those unsupported effect nodes for Flutter's
+  /// vector parser. The authored geometry, gradients, highlights, depths and
+  /// all dynamic values remain exactly the source SVG.
+  static String flutterRenderable(String source) => source
+      .replaceAll(RegExp(r'<filter\b[^>]*>.*?</filter>', dotAll: true), '')
+      .replaceAll(RegExp(r'\sfilter="url\(#[^)]+\)"'), '');
+
   static String circleProgress(int percent) {
     final safe = percent.clamp(1, 100);
     return '''<svg class="budget-fluvi-circle-progress" viewBox="102 102 308 308" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -1166,70 +1252,176 @@ abstract final class BudgetV2FluviSvg {
   }
 
   static String weeklyRhythm(List<int> values) {
-    final maximum = values.fold<int>(1, math.max);
+    final supplied = values
+        .take(7)
+        .map((value) => math.max(0, value))
+        .toList(growable: true);
+    while (supplied.length < 7) {
+      supplied.insert(0, 0);
+    }
+    final maximum = supplied.fold<int>(1, math.max);
     final bars = <String>[];
     for (var index = 0; index < 7; index += 1) {
-      final value = values[index];
-      final height = math.max(12, 204 * value / maximum);
-      final x = 56 + index * 79.6;
+      final value = supplied[index];
+      final x = 56 + index * ((544 - (14 * 6)) / 7 + 14);
+      if (value <= 0) {
+        bars.add('<g data-weekly-rhythm-day="$index" data-value="0"></g>');
+        continue;
+      }
+      final height = math.max(12, 204 * value / maximum).toDouble();
       final y = 270 - height;
+      const barWidth = (544 - (14 * 6)) / 7;
+      final radius = barWidth / 2;
       bars.add(
-        '''<g data-weekly-rhythm-day="$index" data-value="$value"><rect x="$x" y="${y + 7}" width="65.6" height="$height" rx="32.8" fill="#b53bc8" opacity=".16" filter="url(#budgetFluviWeeklyBlur6)"/><rect x="$x" y="$y" width="65.6" height="$height" rx="32.8" fill="url(#budgetFluviWeeklyBarGrad)" stroke="#fff" stroke-opacity=".55" stroke-width="2" filter="url(#budgetFluviWeeklyBarShadow)"/><rect x="${x + 11.808}" y="${y + 4}" width="23.616" height="${math.max(10, height * .5)}" rx="11.808" fill="#fff" opacity=".22" filter="url(#budgetFluviWeeklyBlur2)"/></g>''',
+        '''<g data-weekly-rhythm-day="$index" data-value="$value"><rect x="${_svgNumber(x)}" y="${_svgNumber(y + 7)}" width="${_svgNumber(barWidth)}" height="${_svgNumber(height)}" rx="${_svgNumber(radius)}" fill="#b53bc8" opacity=".16" filter="url(#budgetFluviWeeklyBlur6)"/><rect x="${_svgNumber(x)}" y="${_svgNumber(y)}" width="${_svgNumber(barWidth)}" height="${_svgNumber(height)}" rx="${_svgNumber(radius)}" fill="url(#budgetFluviWeeklyBarGrad)" stroke="#fff" stroke-opacity=".55" stroke-width="2" filter="url(#budgetFluviWeeklyBarShadow)"/><rect x="${_svgNumber(x + (barWidth * .18))}" y="${_svgNumber(y + 4)}" width="${_svgNumber(barWidth * .36)}" height="${_svgNumber(math.max(10, height * .5).toDouble())}" rx="${_svgNumber(barWidth * .18)}" fill="#fff" opacity=".22" filter="url(#budgetFluviWeeklyBlur2)"/></g>''',
       );
     }
-    final average = (values.fold<int>(0, (sum, value) => sum + value) / 7)
+    final average = (supplied.fold<int>(0, (sum, value) => sum + value) / 7)
         .round();
     return '''<svg class="budget-fluvi-weekly-rhythm" viewBox="46 60 564 226" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Heti költési ritmus, átlag: $average%"><defs><linearGradient id="budgetFluviWeeklyBarGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7bd7"/><stop offset=".45" stop-color="#ef4bc5"/><stop offset="1" stop-color="#ba45ee"/></linearGradient><linearGradient id="budgetFluviWeeklyBaseGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f5effb"/><stop offset=".5" stop-color="#ebe4f4"/><stop offset="1" stop-color="#f7f3fb"/></linearGradient><filter id="budgetFluviWeeklyBarShadow" x="-100%" y="-50%" width="300%" height="250%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4" result="b"/><feOffset in="b" dx="0" dy="7" result="o"/><feFlood flood-color="#a633cf" flood-opacity=".22" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="budgetFluviWeeklyBlur6"><feGaussianBlur stdDeviation="6"/></filter><filter id="budgetFluviWeeklyBlur2"><feGaussianBlur stdDeviation="2.2"/></filter></defs><rect x="46" y="270" width="564" height="12" rx="6" fill="url(#budgetFluviWeeklyBaseGrad)"/><g id="budgetFluviWeeklyRhythmBars" data-fluvi-weekly-rhythm-bars="true">${bars.join()}</g><text id="budgetFluviWeeklyAverage" data-fluvi-weekly-rhythm-average="true" x="600" y="49" text-anchor="end" opacity="0">átlag: $average%</text></svg>''';
   }
 
   static String avatarDisc(Color color, int index) {
-    final hex = _hex(color);
+    final hex = _hex(color).toLowerCase();
     final id = 'budgetAvatarDisc$index';
-    return '''<svg class="budget-fluvi-avatar-disc" viewBox="94 78 324 342" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="#ffffff"/><stop offset=".38" stop-color="$hex" stop-opacity=".72"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="#24113f" stop-opacity=".72"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="#24113f" stop-opacity=".55"/></linearGradient><filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="#24113f" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true" filter="url(#${id}Shadow)"><ellipse cx="256" cy="382" rx="126" ry="34" fill="#24113f" opacity=".10" filter="url(#${id}SoftBlur)"/><circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="#24113f" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
+    final light = _mixBudgetAvatarDiscColor(hex, '#ffffff', .78);
+    final main = _mixBudgetAvatarDiscColor(hex, '#ffffff', .18);
+    final depth = _mixBudgetAvatarDiscColor(hex, '#24113f', .32);
+    final shadow = _mixBudgetAvatarDiscColor(hex, '#24113f', .18);
+    return '''<svg class="budget-fluvi-avatar-disc" viewBox="94 78 324 342" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" data-fluvi-avatar-disc="true" data-budget-avatar-disc-color="$hex"><defs><radialGradient id="${id}Face" cx="32%" cy="26%" r="82%"><stop offset="0" stop-color="$light"/><stop offset=".38" stop-color="$main"/><stop offset=".72" stop-color="$hex"/><stop offset="1" stop-color="$depth"/></radialGradient><linearGradient id="${id}Rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".38"/><stop offset="1" stop-color="$depth" stop-opacity=".55"/></linearGradient><filter id="${id}Shadow" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b"/><feOffset in="b" dx="0" dy="22" result="o"/><feFlood flood-color="$shadow" flood-opacity=".28" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="${id}SoftBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter></defs><g data-fluvi-avatar-disc-body="true" filter="url(#${id}Shadow)"><ellipse cx="256" cy="382" rx="126" ry="34" fill="$shadow" opacity=".10" filter="url(#${id}SoftBlur)"/><circle cx="256" cy="240" r="142" fill="url(#${id}Face)" stroke="url(#${id}Rim)" stroke-width="8"/><path d="M166 190 C205 132 300 118 353 174" fill="none" stroke="#ffffff" stroke-opacity=".42" stroke-width="20" stroke-linecap="round" filter="url(#${id}SoftBlur)"/><path d="M181 315 C233 357 307 355 350 311" fill="none" stroke="$depth" stroke-opacity=".18" stroke-width="24" stroke-linecap="round" filter="url(#${id}SoftBlur)"/></g></svg>''';
   }
 
   static String clayDonut({
-    required int selectedShare,
-    required Color selectedColor,
-    required List<Color> segments,
+    required List<BudgetV2FluviDonutSlice> slices,
+    required int selectedIndex,
+    Set<int> highlightedIndexes = const <int>{},
   }) {
-    final selected = _hex(selectedColor);
-    final colors = segments.isEmpty
-        ? <String>[selected]
-        : segments.map(_hex).toList();
-    final slices = <String>[];
-    for (var index = 0; index < colors.length; index += 1) {
-      final start = index * (360 / colors.length);
-      final end = (index + 1) * (360 / colors.length) - 2;
-      slices.add(_donutSlice(colors[index], start, end, index == 0));
+    final items = slices
+        .where((slice) => slice.value.isFinite && slice.value > 0)
+        .toList(growable: false);
+    final selected = selectedIndex
+        .clamp(0, math.max(0, items.length - 1))
+        .toInt();
+    final highlighted = <int>{
+      selected,
+      ...highlightedIndexes.where(
+        (index) => index >= 0 && index < items.length,
+      ),
+    };
+    final total = items.fold<double>(0, (sum, item) => sum + item.value);
+    final sidePaths = <String>[];
+    final topPaths = <String>[];
+    var angle = 0.0;
+    final gap = items.length > 12
+        ? .5
+        : items.length > 7
+        ? .9
+        : 1.7;
+    for (var index = 0; index < items.length; index += 1) {
+      final item = items[index];
+      final sweep = item.value / total * 360;
+      final start = angle + gap / 2;
+      final end = angle + sweep - gap / 2;
+      angle += sweep;
+      if (end <= start) continue;
+      final isHighlighted = highlighted.contains(index);
+      final isSelected = index == selected;
+      final radius = isHighlighted ? 198.0 : 164.0;
+      final midpoint = (start + end) / 2;
+      final offset = isHighlighted ? _point(0, 0, 10, midpoint) : (0.0, 0.0);
+      final transform = isHighlighted
+          ? ' transform="translate(${_svgNumber(offset.$1.roundToDouble())} ${_svgNumber(offset.$2.roundToDouble())})"'
+          : '';
+      final selectedAttribute = isSelected
+          ? ' data-fluvi-donut-selected="true"'
+          : '';
+      final highlightedAttribute = isHighlighted
+          ? ' data-fluvi-donut-highlighted="true"'
+          : '';
+      sidePaths.add(
+        '<path d="${_donutOuterSidePath(radius, start, end)}" fill="${_hex(item.color)}" opacity=".84" aria-hidden="true"$transform$highlightedAttribute$selectedAttribute/>',
+      );
+      final topPath = _donutRingSlicePath(radius, start, end);
+      topPaths.add(
+        '<path d="$topPath" fill="${_hex(item.color)}" stroke="#ffffff" stroke-opacity=".58" stroke-width="3" data-fluvi-donut-slice="$index" data-label="${_xmlEscape(item.label)}" data-value="${_svgNumber(item.value)}"$transform$highlightedAttribute$selectedAttribute/>',
+      );
+      final glossTransform = isHighlighted
+          ? 'translate(${_svgNumber(offset.$1.roundToDouble() - 4)} ${_svgNumber(offset.$2.roundToDouble() - 5)})'
+          : 'translate(-4 -5)';
+      topPaths.add(
+        '<path d="$topPath" fill="#ffffff" opacity=".08" transform="$glossTransform" aria-hidden="true"/>',
+      );
     }
-    return '''<svg class="budget-fluvi-clay-donut" viewBox="44 44 424 424" preserveAspectRatio="xMidYMid meet" role="img"><defs><radialGradient id="budgetFluviDonutCenterPlate" cx="34%" cy="28%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".48" stop-color="#fbf9ff"/><stop offset="1" stop-color="#e9e3f4"/></radialGradient><filter id="budgetFluviDonutSoftShadow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur in="SourceAlpha" stdDeviation="13" result="b"/><feOffset in="b" dx="0" dy="16" result="o"/><feFlood flood-color="#75569c" flood-opacity=".22" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="256" cy="426" rx="188" ry="38" fill="#8a6ab5" opacity=".11"/><g id="donut-chart" filter="url(#budgetFluviDonutSoftShadow)">$slices<circle cx="256" cy="256" r="106" fill="url(#budgetFluviDonutCenterPlate)" stroke="#ffffff" stroke-opacity=".75" stroke-width="6"/><text id="center-value" x="256" y="252" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="750" fill="#303358">$selectedShare%</text><text id="center-label" x="256" y="285" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" fill="#7a7e9a">kiválasztva</text></g></svg>''';
+    final centerValue = items.isEmpty
+        ? '0%'
+        : '${(items[selected].value / total * 100).round()}%';
+    final centerLabel = items.isEmpty ? 'nincs adat' : items[selected].label;
+    return '''<svg class="budget-fluvi-clay-donut" viewBox="44 44 424 424" preserveAspectRatio="xMidYMid meet" role="img" data-budget-fluvi-clay-donut="true" data-budget-fluvi-donut-count="${items.length}"><defs><radialGradient id="budgetFluviDonutCenterPlate" cx="34%" cy="28%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".48" stop-color="#fbf9ff"/><stop offset="1" stop-color="#e9e3f4"/></radialGradient><linearGradient id="budgetFluviDonutCenterRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".52" stop-color="#f1ecfa" stop-opacity=".72"/><stop offset="1" stop-color="#cfc5df" stop-opacity=".82"/></linearGradient><filter id="budgetFluviDonutSoftShadow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur in="SourceAlpha" stdDeviation="13" result="b"/><feOffset in="b" dx="0" dy="16" result="o"/><feFlood flood-color="#75569c" flood-opacity=".22" result="c"/><feComposite in="c" in2="o" operator="in" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="budgetFluviDonutBlur8" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="8"/></filter><clipPath id="budgetFluviDonutFrontSideClip"><rect x="44" y="256" width="424" height="212"/></clipPath></defs><ellipse cx="256" cy="426" rx="188" ry="38" fill="#8a6ab5" opacity=".11" filter="url(#budgetFluviDonutBlur8)"/><g id="donut-chart" filter="url(#budgetFluviDonutSoftShadow)"><g id="segment-sides" data-fluvi-donut-segment-sides="true" clip-path="url(#budgetFluviDonutFrontSideClip)">${sidePaths.join()}</g><g id="segment-tops" data-fluvi-donut-segment-tops="true">${topPaths.join()}</g><circle cx="256" cy="256" r="106" fill="url(#budgetFluviDonutCenterPlate)" stroke="url(#budgetFluviDonutCenterRim)" stroke-width="6"/><path d="M188 212 C224 170 291 164 329 202" fill="none" stroke="#ffffff" stroke-opacity=".50" stroke-width="13" stroke-linecap="round" filter="url(#budgetFluviDonutBlur8)"/><text id="center-value" x="256" y="252" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="750" fill="#303358">$centerValue</text><text id="center-label" x="256" y="285" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" fill="#7a7e9a">${_xmlEscape(centerLabel)}</text></g></svg>''';
   }
 
-  static String _donutSlice(
-    String color,
-    double start,
-    double end,
-    bool selected,
-  ) {
-    final outerStart = _point(256, 256, selected ? 198 : 164, start);
-    final outerEnd = _point(256, 256, selected ? 198 : 164, end);
+  static String _donutRingSlicePath(double radius, double start, double end) {
+    final outerStart = _point(256, 256, radius, start);
+    final outerEnd = _point(256, 256, radius, end);
     final innerEnd = _point(256, 256, 92, end);
     final innerStart = _point(256, 256, 92, start);
     final large = end - start > 180 ? 1 : 0;
-    return '<path d="M ${outerStart.$1} ${outerStart.$2} A ${selected ? 198 : 164} ${selected ? 198 : 164} 0 $large 1 ${outerEnd.$1} ${outerEnd.$2} L ${innerEnd.$1} ${innerEnd.$2} A 92 92 0 $large 0 ${innerStart.$1} ${innerStart.$2} Z" fill="$color" stroke="#ffffff" stroke-opacity=".58" stroke-width="3"/>';
+    return 'M ${_svgNumber(outerStart.$1)} ${_svgNumber(outerStart.$2)} A ${_svgNumber(radius)} ${_svgNumber(radius)} 0 $large 1 ${_svgNumber(outerEnd.$1)} ${_svgNumber(outerEnd.$2)} L ${_svgNumber(innerEnd.$1)} ${_svgNumber(innerEnd.$2)} A 92 92 0 $large 0 ${_svgNumber(innerStart.$1)} ${_svgNumber(innerStart.$2)} Z';
+  }
+
+  static String _donutOuterSidePath(double radius, double start, double end) {
+    final topStart = _point(256, 256, radius, start);
+    final topEnd = _point(256, 256, radius, end);
+    final bottomEnd = _point(256, 256, radius, end, yOffset: 14);
+    final bottomStart = _point(256, 256, radius, start, yOffset: 14);
+    final large = end - start > 180 ? 1 : 0;
+    return 'M ${_svgNumber(topStart.$1)} ${_svgNumber(topStart.$2)} A ${_svgNumber(radius)} ${_svgNumber(radius)} 0 $large 1 ${_svgNumber(topEnd.$1)} ${_svgNumber(topEnd.$2)} L ${_svgNumber(bottomEnd.$1)} ${_svgNumber(bottomEnd.$2)} A ${_svgNumber(radius)} ${_svgNumber(radius)} 0 $large 0 ${_svgNumber(bottomStart.$1)} ${_svgNumber(bottomStart.$2)} Z';
   }
 
   static (double, double) _point(
     double cx,
     double cy,
     double radius,
-    double degrees,
-  ) {
+    double degrees, {
+    double yOffset = 0,
+  }) {
     final radians = (degrees - 90) * math.pi / 180;
-    return (cx + radius * math.cos(radians), cy + radius * math.sin(radians));
+    return (
+      cx + radius * math.cos(radians),
+      cy + radius * math.sin(radians) + yOffset,
+    );
   }
 }
+
+String _mixBudgetAvatarDiscColor(String source, String target, double amount) {
+  final ratio = amount.clamp(0.0, 1.0);
+  final channels = List<int>.generate(3, (index) {
+    final start = int.parse(
+      source.substring(1 + index * 2, 3 + index * 2),
+      radix: 16,
+    );
+    final end = int.parse(
+      target.substring(1 + index * 2, 3 + index * 2),
+      radix: 16,
+    );
+    return (start + (end - start) * ratio).round();
+  });
+  return '#${channels.map((channel) => channel.toRadixString(16).padLeft(2, '0')).join()}';
+}
+
+String _svgNumber(double value) {
+  final rounded = value.roundToDouble();
+  if ((value - rounded).abs() < .000001) return rounded.toInt().toString();
+  return value
+      .toStringAsFixed(6)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
+String _xmlEscape(String value) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 
 String _hex(Color color) =>
     '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';

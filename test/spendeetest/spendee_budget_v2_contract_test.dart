@@ -8,6 +8,7 @@ import 'package:exptv2/features/transactions/models/transaction_record.dart';
 import 'package:exptv2/features/transactions/state/balance_frame.dart';
 import 'package:exptv2/features/transactions/widgets/category_slot_icon.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_balance_dashboard.dart';
+import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +63,81 @@ void main() {
     ]) {
       expect(implementation, contains(literal));
     }
+  });
+
+  test('BudgetV2 Fluvi SVGs map live category data to the B3M-B geometry', () {
+    final donut = BudgetV2FluviSvg.clayDonut(
+      slices: const <BudgetV2FluviDonutSlice>[
+        BudgetV2FluviDonutSlice(
+          label: 'Élelmiszer',
+          value: 60,
+          color: Color(0xFF22C55E),
+        ),
+        BudgetV2FluviDonutSlice(
+          label: 'Lakás',
+          value: 30,
+          color: Color(0xFF60A5FA),
+        ),
+        BudgetV2FluviDonutSlice(
+          label: 'Rezsi',
+          value: 10,
+          color: Color(0xFFA855F7),
+        ),
+      ],
+      selectedIndex: 1,
+      highlightedIndexes: const <int>{0, 1},
+    );
+
+    expect(donut, contains('data-budget-fluvi-donut-count="3"'));
+    expect(donut, contains('data-fluvi-donut-slice="0"'));
+    expect(donut, contains('data-label="Élelmiszer"'));
+    expect(donut, contains('data-value="60"'));
+    expect(donut, contains('data-label="Lakás"'));
+    expect(donut, contains('data-value="30"'));
+    expect(donut, contains('data-fluvi-donut-selected="true"'));
+    expect(donut, contains('30%'));
+    // The 60% arc is a large arc. Equal-count thirds would never use the
+    // large-arc flag for any segment.
+    expect(donut, contains('A 198 198 0 1 1'));
+    final flutterDonut = BudgetV2FluviSvg.flutterRenderable(donut);
+    expect(flutterDonut, isNot(contains('<filter')));
+    expect(flutterDonut, contains('data-fluvi-donut-slice="0"'));
+    expect(flutterDonut, contains('data-value="60"'));
+
+    final progress = BudgetV2FluviSvg.circleProgress(51);
+    expect(progress, contains('stroke-dashoffset="49"'));
+    expect(progress, contains('stroke-dasharray="51 49"'));
+    expect(progress, contains('>51%</text>'));
+
+    final rhythm = BudgetV2FluviSvg.weeklyRhythm(const <int>[
+      0,
+      20,
+      0,
+      40,
+      0,
+      60,
+      80,
+    ]);
+    expect(rhythm, contains('data-weekly-rhythm-day="0" data-value="0"></g>'));
+    expect(rhythm, contains('data-weekly-rhythm-day="6" data-value="80"'));
+    expect(rhythm, contains('y="73"'));
+    expect(rhythm, contains('átlag: 29%'));
+
+    expect(
+      BudgetV2WeeklyRhythmValues.resolve(
+        bar: _bars.first,
+        records: _input().transactions,
+        endDate: DateTime(2026, 7, 25),
+      ),
+      const <int>[0, 0, 0, 0, 0, 0, 51],
+    );
+
+    final avatar = BudgetV2FluviSvg.avatarDisc(const Color(0xFF22C55E), 2);
+    expect(avatar, contains('stop-color="#cef2dc"'));
+    expect(avatar, contains('stop-color="#4acf7b"'));
+    expect(avatar, contains('stop-color="#238b54"'));
+    expect(avatar, contains('flood-color="#22a558"'));
+    expect(avatar, contains('M181 315 C233 357 307 355 350 311'));
   });
 
   testWidgets('BudgetV2 keeps the Balance shell and mounts B3M-B islands', (
