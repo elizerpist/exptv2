@@ -109,7 +109,7 @@ void main() {
     expect(donut, contains('30%'));
     // The 60% arc is a large arc. Equal-count thirds would never use the
     // large-arc flag for any segment.
-    expect(donut, contains('A 178.2 178.2 0 1 1'));
+    expect(donut, contains('A 160.38 160.38 0 1 1'));
     expect(donut, contains('font-weight="750"'));
     final flutterDonut = BudgetV2FluviSvg.flutterRenderable(donut);
     expect(flutterDonut, isNot(contains('<filter')));
@@ -464,7 +464,7 @@ void main() {
     },
   );
 
-  test('BudgetV2 uses the reduced active donut-slice radius', () {
+  test('BudgetV2 uses the further-reduced active donut-slice radius', () {
     final donut = BudgetV2FluviSvg.clayDonut(
       slices: const <BudgetV2FluviDonutSlice>[
         BudgetV2FluviDonutSlice(
@@ -481,8 +481,8 @@ void main() {
       selectedIndex: 1,
     );
 
-    expect(donut, contains('A 178.2 178.2'));
-    expect(donut, isNot(contains('A 198 198')));
+    expect(donut, contains('A 160.38 160.38'));
+    expect(donut, isNot(contains('A 178.2 178.2')));
     expect(
       RegExp('data-fluvi-donut-selected="true"').allMatches(donut).length,
       2,
@@ -490,7 +490,7 @@ void main() {
   });
 
   testWidgets(
-    'BudgetV2 mother-card background toggles the readable distribution view',
+    'BudgetV2 mother-card cycles readable pages and keeps its page on category selection',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -520,9 +520,7 @@ void main() {
       // The edit control belongs to the heading, not to the mother-card
       // background. It may enter its own editing state but must never open
       // the distribution alternative.
-      final edit = find.byKey(
-        const ValueKey('spendee-budget-v2-limit-edit'),
-      );
+      final edit = find.byKey(const ValueKey('spendee-budget-v2-limit-edit'));
       await tester.tap(edit);
       await tester.pumpAndSettle();
       expect(
@@ -560,6 +558,15 @@ void main() {
       expect(overviewDonut, findsOneWidget);
       expect(tester.getSize(overviewDonut).height, greaterThanOrEqualTo(160));
       expect(find.text('Kategóriák'), findsOneWidget);
+      final overviewLegendTitle = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('spendee-budget-v2-overview-legend-budget-v2-1'),
+          ),
+          matching: find.text('Élelmiszer'),
+        ),
+      );
+      expect(overviewLegendTitle.style?.fontSize, 9);
       for (final bar in _bars) {
         expect(
           find.byKey(
@@ -574,6 +581,50 @@ void main() {
       expect(svg, contains('data-value="63240"'));
       expect(svg, contains('data-value="31700"'));
       expect(svg, contains('>Élelmiszer</text>'));
+
+      // The selected-avatar change must feed the same readable page; it may
+      // update its data but must not recreate the mother card at page zero.
+      await tester.tap(
+        find.byKey(const ValueKey('spendee-budget-v2-avatar-budget-v2-2')),
+      );
+      await tester.pumpAndSettle();
+      expect(overview, findsOneWidget);
+      final switchedPicture = tester.widget<SvgPicture>(overviewDonut);
+      final switchedSvg = (switchedPicture.bytesLoader as SvgStringLoader)
+          .provideSvg(null);
+      expect(switchedSvg, contains('>Közlekedés</text>'));
+
+      // Page three retains the mother-card geometry but gives the active
+      // category's live native ring, current limit/editing control and rhythm
+      // their own readable allocation.
+      await tester.tapAt(tester.getTopLeft(motherCard) + const Offset(4, 92));
+      await tester.pumpAndSettle();
+      final details = find.byKey(
+        const ValueKey('spendee-budget-v2-limit-details-page'),
+      );
+      expect(details, findsOneWidget);
+      final detailsRing = find.descendant(
+        of: details,
+        matching: find.byKey(const ValueKey('spendee-budget-v2-limit-circle')),
+      );
+      expect(detailsRing, findsOneWidget);
+      expect(tester.getSize(detailsRing).width, greaterThanOrEqualTo(100));
+      expect(
+        find.descendant(
+          of: details,
+          matching: find.byKey(const ValueKey('spendee-budget-v2-limit-edit')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: details,
+          matching: find.byKey(
+            const ValueKey('spendee-budget-v2-weekly-rhythm'),
+          ),
+        ),
+        findsOneWidget,
+      );
     },
   );
 

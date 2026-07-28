@@ -444,7 +444,7 @@ class SpendeeBudgetV2MotherCard extends StatefulWidget {
 class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
   var _vendorsPage = false;
   var _editingLimit = false;
-  var _distributionOverview = false;
+  var _page = _BudgetV2MotherCardPage.compact;
   late final TextEditingController _limitController;
 
   @override
@@ -477,8 +477,22 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
     setState(() => _editingLimit = !_editingLimit);
   }
 
-  void _toggleDistributionOverview() =>
-      setState(() => _distributionOverview = !_distributionOverview);
+  void _advancePage() => setState(() {
+    _page = switch (_page) {
+      _BudgetV2MotherCardPage.compact => _BudgetV2MotherCardPage.distribution,
+      _BudgetV2MotherCardPage.distribution =>
+        _BudgetV2MotherCardPage.limitDetails,
+      _BudgetV2MotherCardPage.limitDetails => _BudgetV2MotherCardPage.compact,
+    };
+  });
+
+  String get _pageActionLabel => switch (_page) {
+    _BudgetV2MotherCardPage.compact => 'Kategóriaeloszlás áttekintő megnyitása',
+    _BudgetV2MotherCardPage.distribution =>
+      'Kategória limitrészletek megnyitása',
+    _BudgetV2MotherCardPage.limitDetails =>
+      'Kompakt kategóriakártya megnyitása',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -490,13 +504,11 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
       height: 210,
       child: Semantics(
         button: true,
-        label: _distributionOverview
-            ? 'Kategóriaeloszlás áttekintő bezárása'
-            : 'Kategóriaeloszlás áttekintő megnyitása',
+        label: _pageActionLabel,
         child: GestureDetector(
           key: const ValueKey('spendee-budget-v2-mother-card-background'),
           behavior: HitTestBehavior.opaque,
-          onTap: _toggleDistributionOverview,
+          onTap: _advancePage,
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: const Color(0xF0FFFFFF),
@@ -515,80 +527,87 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
               reverseDuration: const Duration(milliseconds: 140),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
-              child: _distributionOverview
-                  ? _BudgetV2DistributionOverview(
-                      key: const ValueKey(
-                        'spendee-budget-v2-distribution-overview',
+              child: switch (_page) {
+                _BudgetV2MotherCardPage.distribution =>
+                  _BudgetV2DistributionOverview(
+                    key: const ValueKey(
+                      'spendee-budget-v2-distribution-overview',
+                    ),
+                    selected: bar,
+                    bars: widget.allBars,
+                  ),
+                _BudgetV2MotherCardPage.limitDetails =>
+                  _BudgetV2LimitDetailsPage(
+                    key: const ValueKey('spendee-budget-v2-limit-details-page'),
+                    bar: bar,
+                    weeklyRhythmValues: widget.weeklyRhythmValues,
+                    editing: _editingLimit,
+                    controller: _limitController,
+                    onEdit: _toggleLimitEdit,
+                  ),
+                _BudgetV2MotherCardPage.compact => Padding(
+                  key: const ValueKey('spendee-budget-v2-mother-card-normal'),
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: <Widget>[
+                      SizedBox(
+                        height: 23,
+                        child: _BudgetV2CategoryHeading(
+                          bar: bar,
+                          editing: _editingLimit,
+                          controller: _limitController,
+                          onEdit: _toggleLimitEdit,
+                        ),
                       ),
-                      selected: bar,
-                      bars: widget.allBars,
-                    )
-                  : Padding(
-                      key: const ValueKey(
-                        'spendee-budget-v2-mother-card-normal',
-                      ),
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        children: <Widget>[
-                          SizedBox(
-                            height: 23,
-                            child: _BudgetV2CategoryHeading(
-                              bar: bar,
-                              editing: _editingLimit,
-                              controller: _limitController,
-                              onEdit: _toggleLimitEdit,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Expanded(
-                            child: Row(
-                              children: <Widget>[
-                                Expanded(
-                                  flex: 96,
-                                  child: Column(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: _BudgetV2TapIsland(
-                                          child: _BudgetV2LimitProgress(
-                                            bar: bar,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      SizedBox(
-                                        height: 52,
-                                        child: _BudgetV2TapIsland(
-                                          child: _BudgetV2WeeklyRhythm(
-                                            values: widget.weeklyRhythmValues,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 104,
-                                  child: _BudgetV2TapIsland(
-                                    child: _BudgetV2DistributionPager(
-                                      key: ValueKey(
-                                        'spendee-budget-v2-summary-pager-${bar.key}',
-                                      ),
-                                      bar: bar,
-                                      bars: widget.allBars,
-                                      page: _vendorsPage,
-                                      onPageChanged: (value) =>
-                                          setState(() => _vendorsPage = value),
-                                      color: color,
+                      const SizedBox(height: 6),
+                      Expanded(
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              flex: 96,
+                              child: Column(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: _BudgetV2TapIsland(
+                                      child: _BudgetV2LimitProgress(bar: bar),
                                     ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 6),
+                                  SizedBox(
+                                    height: 52,
+                                    child: _BudgetV2TapIsland(
+                                      child: _BudgetV2WeeklyRhythm(
+                                        values: widget.weeklyRhythmValues,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 104,
+                              child: _BudgetV2TapIsland(
+                                child: _BudgetV2DistributionPager(
+                                  key: ValueKey(
+                                    'spendee-budget-v2-summary-pager-${bar.key}',
+                                  ),
+                                  bar: bar,
+                                  bars: widget.allBars,
+                                  page: _vendorsPage,
+                                  onPageChanged: (value) =>
+                                      setState(() => _vendorsPage = value),
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
+                ),
+              },
             ),
           ),
         ),
@@ -596,6 +615,8 @@ class _SpendeeBudgetV2MotherCardState extends State<SpendeeBudgetV2MotherCard> {
     );
   }
 }
+
+enum _BudgetV2MotherCardPage { compact, distribution, limitDetails }
 
 /// A tap island wins the gesture arena inside a mother-card sub-card so that
 /// only the visible outer gutter and heading background toggle the alternate
@@ -767,9 +788,10 @@ class _BudgetV2InnerPanel extends StatelessWidget {
 }
 
 class _BudgetV2LimitProgress extends StatelessWidget {
-  const _BudgetV2LimitProgress({required this.bar});
+  const _BudgetV2LimitProgress({required this.bar, this.ringSize = 70});
 
   final CategoryBudgetBarData bar;
+  final double ringSize;
 
   @override
   Widget build(BuildContext context) {
@@ -812,8 +834,8 @@ class _BudgetV2LimitProgress extends StatelessWidget {
             Expanded(
               child: Center(
                 child: SizedBox(
-                  width: 70,
-                  height: 70,
+                  width: ringSize,
+                  height: ringSize,
                   child: BudgetV2LimitProgressRing(
                     key: const ValueKey('spendee-budget-v2-limit-circle'),
                     rawProgress: rawProgress,
@@ -1567,6 +1589,64 @@ class _BudgetV2DistributionOverview extends StatelessWidget {
   }
 }
 
+/// Third readable mother-card page. The active category keeps the one native
+/// live progress ring, its current editable limit, and the seven-day rhythm
+/// together without introducing a separate coloured scroll host.
+class _BudgetV2LimitDetailsPage extends StatelessWidget {
+  const _BudgetV2LimitDetailsPage({
+    super.key,
+    required this.bar,
+    required this.weeklyRhythmValues,
+    required this.editing,
+    required this.controller,
+    required this.onEdit,
+  });
+
+  final CategoryBudgetBarData bar;
+  final List<int> weeklyRhythmValues;
+  final bool editing;
+  final TextEditingController controller;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(10),
+    child: Column(
+      children: <Widget>[
+        SizedBox(
+          height: 23,
+          child: _BudgetV2CategoryHeading(
+            bar: bar,
+            editing: editing,
+            controller: controller,
+            onEdit: onEdit,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                flex: 190,
+                child: _BudgetV2TapIsland(
+                  child: _BudgetV2LimitProgress(bar: bar, ringSize: 122),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                flex: 188,
+                child: _BudgetV2TapIsland(
+                  child: _BudgetV2WeeklyRhythm(values: weeklyRhythmValues),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _BudgetV2OverviewLegendRow extends StatelessWidget {
   const _BudgetV2OverviewLegendRow({
     super.key,
@@ -1596,7 +1676,7 @@ class _BudgetV2OverviewLegendRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFF66738D),
-              fontSize: 8.2,
+              fontSize: 9,
               height: 1,
               fontWeight: FontWeight.w800,
             ),
@@ -2079,10 +2159,10 @@ abstract final class BudgetV2FluviSvg {
       if (end <= start) continue;
       final isHighlighted = highlighted.contains(index);
       final isSelected = index == selected;
-      // The active sector remains visibly selected, but its previous 198px
-      // radius was too dominant. 178.2px is precisely 10% smaller while
-      // retaining a readable lift over the ordinary 164px sectors.
-      final radius = isHighlighted ? 178.2 : 164.0;
+      // The active sector remains selected by colour, depth and offset, but
+      // its prior 178.2px outer radius was still too dominant. 160.38px is
+      // another precise 10% reduction; the ordinary sectors stay at 164px.
+      final radius = isHighlighted ? 160.38 : 164.0;
       final midpoint = (start + end) / 2;
       final offset = isHighlighted ? _point(0, 0, 10, midpoint) : (0.0, 0.0);
       final transform = isHighlighted

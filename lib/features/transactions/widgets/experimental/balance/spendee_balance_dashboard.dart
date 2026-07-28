@@ -607,7 +607,10 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
     }
     final selected = bars[_budgetV2SelectedIndex];
     return SpendeeBudgetV2MotherCard(
-      key: ValueKey('spendee-budget-v2-mother-card-${selected.key}'),
+      // The selected bar is input, not the identity of the card. Keeping this
+      // key stable preserves the readable mother-card page while a ticking
+      // avatar selects a different category.
+      key: const ValueKey('spendee-budget-v2-mother-card-state'),
       bar: selected,
       allBars: _budgetV2AllBars,
       weeklyRhythmValues: BudgetV2WeeklyRhythmValues.resolve(
