@@ -739,14 +739,17 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
   Widget _transactionLog(BuildContext context, BalanceRenderFrame frame) {
     final revision =
         widget.transactionLogRevision ?? widget.transactionLogBuilder;
-    if (_transactionLogCacheRevision != revision) {
-      _clearTransactionLogCache();
-      _transactionLogCacheRevision = revision;
-    }
+    // A parent AnimatedBuilder commonly recreates this callback after a
+    // page-load notify. Keep the cache entry's token in that case: the new
+    // child below refreshes callbacks and rows, while the token preserves the
+    // ScrollableState that emitted the load-more notification.
+    final revisionChanged = _transactionLogCacheRevision != revision;
+    _transactionLogCacheRevision = revision;
+    final cacheKey = _BalanceTransactionLogCacheKey.fromFrame(frame);
     final cached = _transactionLogCaches
-        .where((entry) => identical(entry.frame, frame))
+        .where((entry) => entry.key == cacheKey)
         .firstOrNull;
-    if (cached != null) {
+    if (cached != null && !revisionChanged && identical(cached.frame, frame)) {
       _lastTransactionLogCacheOutcome = 'reused';
       return _RetainedBalanceTransactionLogs(
         activeToken: cached.token,
@@ -780,7 +783,21 @@ class _SpendeeBalanceDashboardState extends State<SpendeeBalanceDashboard>
         },
       );
     }
-    final entry = _BalanceTransactionLogCacheEntry(frame: frame, child: result);
+    if (cached != null) {
+      // Paging changes the frame's bounded rows but not the user's logical
+      // query. Replace the child under its stable token so ScrollableState and
+      // its current offset survive the next page without keeping stale rows.
+      cached.replace(frame: frame, child: result);
+      return _RetainedBalanceTransactionLogs(
+        activeToken: cached.token,
+        entries: _transactionLogCaches,
+      );
+    }
+    final entry = _BalanceTransactionLogCacheEntry(
+      key: cacheKey,
+      frame: frame,
+      child: result,
+    );
     _transactionLogCaches.add(entry);
     if (_transactionLogCaches.length > _transactionLogCacheCapacity) {
       _transactionLogCaches.removeAt(0);
@@ -1215,11 +1232,78 @@ class _BalanceFrameHistoryEntry {
 }
 
 class _BalanceTransactionLogCacheEntry {
-  _BalanceTransactionLogCacheEntry({required this.frame, required this.child});
+  _BalanceTransactionLogCacheEntry({
+    required this.key,
+    required this.frame,
+    required this.child,
+  });
 
-  final BalanceRenderFrame frame;
-  final Widget child;
+  final _BalanceTransactionLogCacheKey key;
+  BalanceRenderFrame frame;
+  Widget child;
   final Object token = Object();
+
+  void replace({required BalanceRenderFrame frame, required Widget child}) {
+    this.frame = frame;
+    this.child = child;
+  }
+}
+
+class _BalanceTransactionLogCacheKey {
+  const _BalanceTransactionLogCacheKey({
+    required this.type,
+    required this.window,
+    required this.requestedReferenceDate,
+    required this.effectiveReferenceDate,
+    required this.searchQuery,
+    required this.merchantFilters,
+    required this.categoryIds,
+  });
+
+  factory _BalanceTransactionLogCacheKey.fromFrame(BalanceRenderFrame frame) {
+    final query = frame.query;
+    final merchants = query.merchantFilters.toList()..sort();
+    final categories = query.categoryIds.toList()..sort();
+    return _BalanceTransactionLogCacheKey(
+      type: query.activeType,
+      window: query.summaryWindow,
+      requestedReferenceDate: query.requestedReferenceDate,
+      effectiveReferenceDate: query.effectiveReferenceDate,
+      searchQuery: query.searchQuery,
+      merchantFilters: merchants.join('\u001f'),
+      categoryIds: categories.join(','),
+    );
+  }
+
+  final TransactionType type;
+  final SummaryWindow window;
+  final DateTime requestedReferenceDate;
+  final DateTime effectiveReferenceDate;
+  final String searchQuery;
+  final String merchantFilters;
+  final String categoryIds;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BalanceTransactionLogCacheKey &&
+      type == other.type &&
+      window == other.window &&
+      requestedReferenceDate == other.requestedReferenceDate &&
+      effectiveReferenceDate == other.effectiveReferenceDate &&
+      searchQuery == other.searchQuery &&
+      merchantFilters == other.merchantFilters &&
+      categoryIds == other.categoryIds;
+
+  @override
+  int get hashCode => Object.hash(
+    type,
+    window,
+    requestedReferenceDate,
+    effectiveReferenceDate,
+    searchQuery,
+    merchantFilters,
+    categoryIds,
+  );
 }
 
 /// Keeps the two most recent type-specific logs in the element tree. The
