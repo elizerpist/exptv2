@@ -11,6 +11,7 @@ import 'package:exptv2/features/transactions/widgets/experimental/balance/spende
 import 'package:exptv2/features/transactions/widgets/experimental/balance/spendee_budget_v2_components.dart';
 import 'package:exptv2/features/transactions/widgets/experimental/spendee_dashboard_mode.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/balance_production_host.dart';
@@ -99,14 +100,17 @@ void main() {
     // The 60% arc is a large arc. Equal-count thirds would never use the
     // large-arc flag for any segment.
     expect(donut, contains('A 198 198 0 1 1'));
+    expect(donut, contains('font-weight="750"'));
     final flutterDonut = BudgetV2FluviSvg.flutterRenderable(donut);
     expect(flutterDonut, isNot(contains('<filter')));
+    expect(flutterDonut, isNot(contains('font-weight="750"')));
+    expect(flutterDonut, contains('font-weight="700"'));
     expect(flutterDonut, contains('data-fluvi-donut-slice="0"'));
     expect(flutterDonut, contains('data-value="60"'));
 
     final progress = BudgetV2FluviSvg.circleProgress(51);
-    expect(progress, contains('stroke-dashoffset="49"'));
-    expect(progress, contains('stroke-dasharray="51 49"'));
+    expect(progress, contains('stroke-dashoffset="295.561037"'));
+    expect(progress, contains('stroke-dasharray="307.624753 295.561037"'));
     expect(progress, contains('>51%</text>'));
 
     final rhythm = BudgetV2FluviSvg.weeklyRhythm(const <int>[
@@ -139,6 +143,64 @@ void main() {
     expect(avatar, contains('flood-color="#22a558"'));
     expect(avatar, contains('M181 315 C233 357 307 355 350 311'));
   });
+
+  test('BudgetV2 full limit ring uses Flutter-resolvable circle lengths', () {
+    final rendered = BudgetV2FluviSvg.flutterRenderable(
+      BudgetV2FluviSvg.circleProgress(100),
+    );
+
+    expect(rendered, isNot(contains('pathLength=')));
+    expect(rendered, contains('stroke-dasharray="603.185789 0"'));
+    expect(rendered, contains('stroke-dashoffset="0"'));
+  });
+
+  testWidgets(
+    'BudgetV2 distribution SVG parses without a Flutter renderer error',
+    (tester) async {
+      Object? renderError;
+      final donut = BudgetV2FluviSvg.flutterRenderable(
+        BudgetV2FluviSvg.clayDonut(
+          slices: const <BudgetV2FluviDonutSlice>[
+            BudgetV2FluviDonutSlice(
+              label: 'Élelmiszer',
+              value: 60,
+              color: Color(0xFF22C55E),
+            ),
+            BudgetV2FluviDonutSlice(
+              label: 'Lakás',
+              value: 30,
+              color: Color(0xFF60A5FA),
+            ),
+            BudgetV2FluviDonutSlice(
+              label: 'Rezsi',
+              value: 10,
+              color: Color(0xFFA855F7),
+            ),
+          ],
+          selectedIndex: 0,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 90,
+            height: 90,
+            child: SvgPicture.string(
+              donut,
+              errorBuilder: (_, error, _) {
+                renderError = error;
+                return const Text('distribution-render-error');
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(renderError, isNull);
+      expect(find.text('distribution-render-error'), findsNothing);
+    },
+  );
 
   testWidgets('BudgetV2 keeps the Balance shell and mounts B3M-B islands', (
     tester,

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../../../core/debug/debug_console.dart';
 import '../../../models/category_budget_bar_data.dart';
 import '../../../models/category_limit.dart';
 import '../../../models/transaction_record.dart';
@@ -705,6 +706,14 @@ class _BudgetV2LimitProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percent = (bar.progress * 100).round().clamp(1, 100);
+    final progressSvg = BudgetV2FluviSvg.flutterRenderable(
+      BudgetV2FluviSvg.circleProgress(percent),
+    );
+    BudgetV2ChartDiagnostics.limitProgress(
+      bar: bar,
+      percent: percent,
+      svg: progressSvg,
+    );
     return _BudgetV2InnerPanel(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
@@ -733,9 +742,17 @@ class _BudgetV2LimitProgress extends StatelessWidget {
                   width: 70,
                   height: 70,
                   child: SvgPicture.string(
-                    BudgetV2FluviSvg.flutterRenderable(
-                      BudgetV2FluviSvg.circleProgress(percent),
-                    ),
+                    progressSvg,
+                    errorBuilder: (_, error, stackTrace) {
+                      BudgetV2ChartDiagnostics.rendererError(
+                        chart: 'limit-circle',
+                        scope: '${bar.window.name}:${bar.periodKey}',
+                        categoryKey: bar.key,
+                        error: error,
+                        stackTrace: stackTrace,
+                      );
+                      return const SizedBox.expand();
+                    },
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -936,6 +953,28 @@ class _BudgetV2PiePage extends StatelessWidget {
       if (selectedIndex >= 0) selectedIndex,
       if (selectedIndex != 0 && pieBars.isNotEmpty) 0,
     };
+    final slices = pieBars
+        .map(
+          (bar) => BudgetV2FluviDonutSlice(
+            label: bar.title,
+            value: bar.spent,
+            color: _resolvedColor(bar),
+          ),
+        )
+        .toList(growable: false);
+    final donutSvg = BudgetV2FluviSvg.flutterRenderable(
+      BudgetV2FluviSvg.clayDonut(
+        slices: slices,
+        selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+        highlightedIndexes: highlightedIndexes,
+      ),
+    );
+    BudgetV2ChartDiagnostics.distribution(
+      selected: selected,
+      bars: pieBars,
+      total: total,
+      svg: donutSvg,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(9, 6, 9, 6),
       child: Column(
@@ -959,21 +998,17 @@ class _BudgetV2PiePage extends StatelessWidget {
               width: 90,
               height: 90,
               child: SvgPicture.string(
-                BudgetV2FluviSvg.flutterRenderable(
-                  BudgetV2FluviSvg.clayDonut(
-                    slices: pieBars
-                        .map(
-                          (bar) => BudgetV2FluviDonutSlice(
-                            label: bar.title,
-                            value: bar.spent,
-                            color: _resolvedColor(bar),
-                          ),
-                        )
-                        .toList(growable: false),
-                    selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-                    highlightedIndexes: highlightedIndexes,
-                  ),
-                ),
+                donutSvg,
+                errorBuilder: (_, error, stackTrace) {
+                  BudgetV2ChartDiagnostics.rendererError(
+                    chart: 'distribution',
+                    scope: '${selected.window.name}:${selected.periodKey}',
+                    categoryKey: selected.key,
+                    error: error,
+                    stackTrace: stackTrace,
+                  );
+                  return const SizedBox.expand();
+                },
                 key: const ValueKey('spendee-budget-v2-clay-donut'),
                 fit: BoxFit.contain,
               ),
@@ -1167,6 +1202,82 @@ String formatBudgetV2Forint(double value) {
   return '$sign${groups.reversed.join(' ')} Ft';
 }
 
+/// Bounded production diagnostics for the two BudgetV2 SVG data boundaries.
+/// Rebuilds are frequent during a ticking belt, therefore each distinct chart
+/// input is emitted once while renderer failures remain separately visible.
+abstract final class BudgetV2ChartDiagnostics {
+  static String? _lastDistributionSignature;
+  static String? _lastLimitSignature;
+  static final Set<String> _rendererErrors = <String>{};
+
+  static void distribution({
+    required CategoryBudgetBarData selected,
+    required List<CategoryBudgetBarData> bars,
+    required double total,
+    required String svg,
+  }) {
+    final slices = bars
+        .map(
+          (bar) =>
+              '${bar.targetId}:${_svgNumber(bar.spent)}:${_hex(_resolvedColor(bar))}',
+        )
+        .join('|');
+    final signature =
+        '${selected.window.name}:${selected.periodKey}:${selected.key}:$slices';
+    if (_lastDistributionSignature == signature) return;
+    _lastDistributionSignature = signature;
+    DebugConsole.log(
+      '[BudgetV2Chart] distribution '
+      'scope=${selected.window.name}:${selected.periodKey} '
+      'selected=${selected.key} '
+      'input_categories=${bars.length} '
+      'slice_total=${_svgNumber(total)} '
+      'slices=$slices '
+      'resolver=CategoryColorResolver '
+      'svg_paths=${RegExp(r'<path\b').allMatches(svg).length} '
+      'flutter_font_weight_750=${svg.contains('font-weight="750"')}',
+    );
+  }
+
+  static void limitProgress({
+    required CategoryBudgetBarData bar,
+    required int percent,
+    required String svg,
+  }) {
+    final signature =
+        '${bar.key}:${_svgNumber(bar.spent)}:${_svgNumber(bar.limitAmount)}:$percent';
+    if (_lastLimitSignature == signature) return;
+    _lastLimitSignature = signature;
+    DebugConsole.log(
+      '[BudgetV2Chart] limit-circle '
+      'scope=${bar.window.name}:${bar.periodKey} '
+      'category=${bar.key} '
+      'spent=${_svgNumber(bar.spent)} '
+      'limit=${_svgNumber(bar.limitAmount)} '
+      'raw_ratio=${_svgNumber(bar.rawProgress)} '
+      'percent=$percent '
+      'path_length=${svg.contains('pathLength=')} '
+      'full_ring=${percent == 100 && svg.contains('stroke-dasharray="603.185789 0"')}',
+    );
+  }
+
+  static void rendererError({
+    required String chart,
+    required String scope,
+    required String categoryKey,
+    required Object error,
+    StackTrace? stackTrace,
+  }) {
+    final signature = '$chart:$scope:$categoryKey:$error';
+    if (!_rendererErrors.add(signature)) return;
+    DebugConsole.log(
+      '[BudgetV2Chart] renderer_error '
+      'chart=$chart scope=$scope category=$categoryKey error=$error '
+      'stack=${stackTrace == null ? 'none' : stackTrace.toString().split('\n').first}',
+    );
+  }
+}
+
 /// The B3M-B donut consumes the actual category total, not a count of colour
 /// slots.  Keeping label/value/colour together makes an accidental equal-slice
 /// fallback impossible at the rendering boundary.
@@ -1242,13 +1353,30 @@ abstract final class BudgetV2FluviSvg {
   /// all dynamic values remain exactly the source SVG.
   static String flutterRenderable(String source) => source
       .replaceAll(RegExp(r'<filter\b[^>]*>.*?</filter>', dotAll: true), '')
-      .replaceAll(RegExp(r'\sfilter="url\(#[^)]+\)"'), '');
+      .replaceAll(RegExp(r'\sfilter="url\(#[^)]+\)"'), '')
+      // The source prototype's 750 maps to Flutter's nearest supported
+      // numeric SVG weight. Leaving 750 in the string makes flutter_svg
+      // reject the entire donut picture rather than only its center label.
+      .replaceAll('font-weight="750"', 'font-weight="700"');
 
   static String circleProgress(int percent) {
     final safe = percent.clamp(1, 100);
+    // flutter_svg does not apply SVG's `pathLength` normalization to stroke
+    // dashes. The source prototype uses a 0..100 dash domain, so convert it
+    // to the actual r=96 circumference before the vector reaches Flutter.
+    final circumference = 2 * math.pi * 96;
+    final progressLength = circumference * safe / 100;
+    final progressGap = circumference - progressLength;
+    final highlightLength = circumference * .24;
+    final highlightGap = circumference - highlightLength;
+    final circleLength = _svgNumber(circumference);
+    final progressDashLength = _svgNumber(progressLength);
+    final progressDashGap = _svgNumber(progressGap);
+    final highlightDashLength = _svgNumber(highlightLength);
+    final highlightDashGap = _svgNumber(highlightGap);
     return '''<svg class="budget-fluvi-circle-progress" viewBox="102 102 308 308" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
 <defs><linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8f4ff"/><stop offset="0.48" stop-color="#ece8f8"/><stop offset="1" stop-color="#dcd6ec"/></linearGradient><linearGradient id="progressGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5ac8"/><stop offset="0.45" stop-color="#ef42c4"/><stop offset="1" stop-color="#a948f5"/></linearGradient><radialGradient id="centerGrad" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.48" stop-color="#fbf9ff"/><stop offset="1" stop-color="#efeaf8"/></radialGradient><radialGradient id="knobGrad" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#fff6ff"/><stop offset="0.35" stop-color="#ff8cdd"/><stop offset="0.72" stop-color="#ef44c2"/><stop offset="1" stop-color="#ae35e9"/></radialGradient><filter id="softShadow" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="10" result="blur"/><feOffset in="blur" dx="0" dy="12" result="offset"/><feFlood flood-color="#a763d7" flood-opacity="0.20" result="color"/><feComposite in="color" in2="offset" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="smallShadow" x="-80%" y="-80%" width="260%" height="260%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="4.5" result="blur"/><feOffset in="blur" dx="0" dy="5" result="offset"/><feFlood flood-color="#8d39d8" flood-opacity="0.30" result="color"/><feComposite in="color" in2="offset" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="innerGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter><filter id="blur2" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4"/></filter></defs>
-<g id="circle-progress" transform="translate(256 256)"><ellipse cx="0" cy="112" rx="126" ry="34" fill="#bd7ce8" opacity="0.10" filter="url(#innerGlow)"/><circle cx="0" cy="0" r="122" fill="url(#centerGrad)" stroke="#ffffff" stroke-opacity="0.72" stroke-width="4" filter="url(#softShadow)"/><path d="M-82,-68 C-40,-106 35,-112 82,-70" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="12" stroke-linecap="round" filter="url(#blur2)"/><circle cx="0" cy="0" r="96" fill="none" stroke="#cfc7df" stroke-opacity="0.45" stroke-width="28" transform="rotate(-90)" stroke-linecap="round"/><circle id="track" cx="0" cy="0" r="96" fill="none" stroke="url(#trackGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/><circle cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.52" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" pathLength="100" stroke-dasharray="24 76" stroke-dashoffset="0"/><circle id="progress" cx="0" cy="0" r="96" fill="none" stroke="url(#progressGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${100 - safe}" filter="url(#smallShadow)"/><circle id="progress-highlight" cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.24" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" pathLength="100" stroke-dasharray="$safe ${100 - safe}" stroke-dashoffset="0"/><text id="value" x="0" y="10" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="58" font-weight="700" fill="#2f3154">$safe%</text><text x="0" y="53" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" fill="#7b7e9a">limit állása</text></g></svg>''';
+<g id="circle-progress" transform="translate(256 256)"><ellipse cx="0" cy="112" rx="126" ry="34" fill="#bd7ce8" opacity="0.10" filter="url(#innerGlow)"/><circle cx="0" cy="0" r="122" fill="url(#centerGrad)" stroke="#ffffff" stroke-opacity="0.72" stroke-width="4" filter="url(#softShadow)"/><path d="M-82,-68 C-40,-106 35,-112 82,-70" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="12" stroke-linecap="round" filter="url(#blur2)"/><circle cx="0" cy="0" r="96" fill="none" stroke="#cfc7df" stroke-opacity="0.45" stroke-width="28" transform="rotate(-90)" stroke-linecap="round"/><circle id="track" cx="0" cy="0" r="96" fill="none" stroke="url(#trackGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$circleLength 0" stroke-dashoffset="0"/><circle cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.52" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$highlightDashLength $highlightDashGap" stroke-dashoffset="0"/><circle id="progress" cx="0" cy="0" r="96" fill="none" stroke="url(#progressGrad)" stroke-width="24" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$circleLength 0" stroke-dashoffset="$progressDashGap" filter="url(#smallShadow)"/><circle id="progress-highlight" cx="0" cy="0" r="96" fill="none" stroke="#ffffff" stroke-opacity="0.24" stroke-width="5" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="$progressDashLength $progressDashGap" stroke-dashoffset="0"/><text id="value" x="0" y="10" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="58" font-weight="700" fill="#2f3154">$safe%</text><text x="0" y="53" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" fill="#7b7e9a">limit állása</text></g></svg>''';
   }
 
   static String weeklyRhythm(List<int> values) {
